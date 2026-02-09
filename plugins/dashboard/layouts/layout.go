@@ -2,6 +2,7 @@ package layouts
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/xraph/authsome/core/app"
@@ -68,7 +69,7 @@ type LayoutManager struct {
 	ogLocaleAlternateType string
 }
 
-// ExtensionRegistryInterface defines the minimal interface needed from the extension registry
+// ExtensionRegistryInterface defines the minimal interface needed from the extension registry.
 type ExtensionRegistryInterface interface {
 	GetNavigationItems(position ui.NavigationPosition, enabledPlugins map[string]bool) []ui.NavigationItem
 	List() []ui.DashboardExtension
@@ -83,7 +84,7 @@ func NewLayoutManager(fuiApp *forgeui.App, baseUIPath string, isMultiAppMode boo
 	}
 }
 
-// SetExtensionRegistry sets the extension registry for dynamic plugin navigation
+// SetExtensionRegistry sets the extension registry for dynamic plugin navigation.
 func (l *LayoutManager) SetExtensionRegistry(registry ExtensionRegistryInterface) {
 	l.extensionRegistry = registry
 }
@@ -108,7 +109,7 @@ func (l *LayoutManager) RegisterLayouts() error {
 }
 
 // RootLayout - THE ONLY layout with full HTML structure
-// This is the single source of truth for head/body configuration
+// This is the single source of truth for head/body configuration.
 func (l *LayoutManager) RootLayout(ctx *router.PageContext, content g.Node) g.Node {
 	// Type assert to get app (interface{} to avoid circular dependency)
 	app := ctx.App().(*forgeui.App)
@@ -334,7 +335,6 @@ func (l *LayoutManager) AppLayout(ctx *router.PageContext, content g.Node) g.Nod
 }
 
 func (l *LayoutManager) dashboardSidebar(ctx *router.PageContext) g.Node {
-
 	// Build URLs with appId if we have a current app
 	var dashURL, usersURL, environmentsURL, sessionsURL, pluginsURL, settingsURL string
 
@@ -676,7 +676,7 @@ func (l *LayoutManager) appNavbar(ctx *router.PageContext, appID string) g.Node 
 	)
 }
 
-// navLink creates a navigation link for desktop
+// navLink creates a navigation link for desktop.
 func (l *LayoutManager) navLink(label, href string, active bool) g.Node {
 	activeClass := ""
 	if active {
@@ -690,7 +690,7 @@ func (l *LayoutManager) navLink(label, href string, active bool) g.Node {
 	)
 }
 
-// mobileNavLink creates a navigation link for mobile menu
+// mobileNavLink creates a navigation link for mobile menu.
 func (l *LayoutManager) mobileNavLink(label, href string, active bool) g.Node {
 	activeClass := ""
 	if active {
@@ -704,7 +704,7 @@ func (l *LayoutManager) mobileNavLink(label, href string, active bool) g.Node {
 	)
 }
 
-// dropdownMenuItem creates a dropdown menu item
+// dropdownMenuItem creates a dropdown menu item.
 func (l *LayoutManager) dropdownMenuItem(href, label string, icon g.Node) g.Node {
 	return html.A(
 		html.Href(href),
@@ -718,7 +718,7 @@ func (l *LayoutManager) SetBaseUIPath(baseUIPath string) {
 	l.baseUIPath = baseUIPath
 }
 
-// renderPluginsSection renders the plugins section with dynamic navigation items from extensions
+// renderPluginsSection renders the plugins section with dynamic navigation items from extensions.
 func (l *LayoutManager) renderPluginsSection(pluginsURL string, currentApp *app.App) g.Node {
 	// Default "Overview" menu item - always shown
 	pluginMenuItems := []g.Node{
@@ -770,7 +770,7 @@ func (l *LayoutManager) renderPluginsSection(pluginsURL string, currentApp *app.
 	)
 }
 
-// settingsHorizontalNav renders horizontal tab navigation for settings pages
+// settingsHorizontalNav renders horizontal tab navigation for settings pages.
 func (l *LayoutManager) settingsHorizontalNav(ctx *router.PageContext) g.Node {
 	// Get current app from context
 	var currentApp *app.App
@@ -794,6 +794,7 @@ func (l *LayoutManager) settingsHorizontalNav(ctx *router.PageContext) g.Node {
 			if item.URLBuilder != nil {
 				itemURL = item.URLBuilder(l.baseUIPath, currentApp)
 			}
+
 			isActive := l.isActiveSettingsTab(ctx, item.ID)
 			navItems = append(navItems, l.settingsTab(item.Label, itemURL, isActive))
 		}
@@ -803,7 +804,7 @@ func (l *LayoutManager) settingsHorizontalNav(ctx *router.PageContext) g.Node {
 		type settingsPagesRegistry interface {
 			GetSettingsPages(enabledPlugins map[string]bool) []ui.SettingsPage
 		}
-		if spRegistry, ok := interface{}(l.extensionRegistry).(settingsPagesRegistry); ok {
+		if spRegistry, ok := any(l.extensionRegistry).(settingsPagesRegistry); ok {
 			settingsPages := spRegistry.GetSettingsPages(l.enabledPlugins)
 			for _, page := range settingsPages {
 				pageURL := l.buildSettingsURL(currentApp, page.Path)
@@ -884,7 +885,7 @@ func (l *LayoutManager) settingsHorizontalNav(ctx *router.PageContext) g.Node {
 
 // settingsTab creates a link-based tab using ForgeUI tab styling
 // Note: ForgeUI tabs.Tab() uses buttons for state switching, but we need links for navigation
-// This creates an <a> tag with the exact same styling as ForgeUI tabs.Tab()
+// This creates an <a> tag with the exact same styling as ForgeUI tabs.Tab().
 func (l *LayoutManager) settingsTab(label, href string, active bool) g.Node {
 	// ForgeUI tab classes from tabs.Tab() - line 155 of tabs.go
 	baseClasses := "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
@@ -900,32 +901,24 @@ func (l *LayoutManager) settingsTab(label, href string, active bool) g.Node {
 		tabs.WithHref(href),
 		tabs.WithTabClass(baseClasses),
 		tabs.WithTabAttrs(g.Attr("role", "tab")),
-		tabs.WithTabAttrs(g.Attr("aria-selected", fmt.Sprintf("%t", active))),
+		tabs.WithTabAttrs(g.Attr("aria-selected", strconv.FormatBool(active))),
 		tabs.WithTabAttrs(g.Attr("data-state", state)),
 		tabs.WithActive(active),
 		tabs.WithTabVariant(tabs.TabVariantUnderline),
 		tabs.WithShrink(),
 	)
-
-	return html.A(
-		html.Href(href),
-		html.Class(baseClasses),
-		g.Attr("role", "tab"),
-		g.Attr("aria-selected", fmt.Sprintf("%t", active)),
-		g.Attr("data-state", state),
-		g.Text(label),
-	)
 }
 
-// buildSettingsURL builds a settings page URL based on current app context
+// buildSettingsURL builds a settings page URL based on current app context.
 func (l *LayoutManager) buildSettingsURL(currentApp *app.App, page string) string {
 	if currentApp != nil {
 		return l.baseUIPath + "/app/" + currentApp.ID.String() + "/settings/" + page
 	}
+
 	return l.baseUIPath + "/settings/" + page
 }
 
-// buildBreadcrumbs generates breadcrumb items from URL path
+// buildBreadcrumbs generates breadcrumb items from URL path.
 func (l *LayoutManager) buildBreadcrumbs(ctx *router.PageContext) []g.Node {
 	// Check for custom breadcrumbs override first
 	if customCrumbs, ok := ctx.Get("breadcrumbs"); ok {
@@ -942,9 +935,10 @@ func (l *LayoutManager) buildBreadcrumbs(ctx *router.PageContext) []g.Node {
 	}
 
 	// Remove base UI path prefix
-	if strings.HasPrefix(path, l.baseUIPath) {
-		path = strings.TrimPrefix(path, l.baseUIPath)
+	if after, ok := strings.CutPrefix(path, l.baseUIPath); ok {
+		path = after
 	}
+
 	if path == "" {
 		path = "/"
 	}
@@ -1011,13 +1005,14 @@ func (l *LayoutManager) buildBreadcrumbs(ctx *router.PageContext) []g.Node {
 		truncated := []g.Node{items[0]}
 		truncated = append(truncated, breadcrumb.Item("", g.Text("...")))
 		truncated = append(truncated, items[len(items)-4:]...)
+
 		return truncated
 	}
 
 	return items
 }
 
-// getEntityLabel attempts to get a friendly label for an entity ID
+// getEntityLabel attempts to get a friendly label for an entity ID.
 func (l *LayoutManager) getEntityLabel(ctx *router.PageContext, segments []string, index int, currentApp *app.App) string {
 	segment := segments[index]
 
@@ -1031,6 +1026,7 @@ func (l *LayoutManager) getEntityLabel(ctx *router.PageContext, segments []strin
 			if currentApp != nil && currentApp.ID.String() == segment {
 				return currentApp.Name
 			}
+
 			return "App"
 
 		case "users":
@@ -1040,6 +1036,7 @@ func (l *LayoutManager) getEntityLabel(ctx *router.PageContext, segments []strin
 					return user.Name
 				}
 			}
+
 			return "User"
 
 		case "organizations":
@@ -1059,7 +1056,7 @@ func (l *LayoutManager) getEntityLabel(ctx *router.PageContext, segments []strin
 	return segment
 }
 
-// humanizeSegment converts URL segments to human-readable labels
+// humanizeSegment converts URL segments to human-readable labels.
 func humanizeSegment(segment string) string {
 	// Replace hyphens and underscores with spaces
 	s := strings.ReplaceAll(segment, "-", " ")
@@ -1076,7 +1073,7 @@ func humanizeSegment(segment string) string {
 	return strings.Join(words, " ")
 }
 
-// isID checks if a segment looks like an ID (UUID/XID)
+// isID checks if a segment looks like an ID (UUID/XID).
 func isID(segment string) bool {
 	// XID is 20 characters alphanumeric
 	if len(segment) == 20 {
@@ -1085,6 +1082,7 @@ func isID(segment string) bool {
 				return false
 			}
 		}
+
 		return true
 	}
 
@@ -1096,7 +1094,7 @@ func isID(segment string) bool {
 	return false
 }
 
-// buildUserDropdown creates a rich user account dropdown
+// buildUserDropdown creates a rich user account dropdown.
 func (l *LayoutManager) buildUserDropdown(ctx *router.PageContext, currentApp *app.App) g.Node {
 	// Get user from context
 	userRaw, ok := ctx.Get("user")
@@ -1117,6 +1115,7 @@ func (l *LayoutManager) buildUserDropdown(ctx *router.PageContext, currentApp *a
 	if userName == "" {
 		userName = currentUser.Email // Fallback to email if name is empty
 	}
+
 	userEmail := currentUser.Email
 	userImage := currentUser.Image
 
@@ -1194,7 +1193,7 @@ func (l *LayoutManager) buildUserDropdown(ctx *router.PageContext, currentApp *a
 	)
 }
 
-// buildUserAvatar creates a small avatar for the sidebar button (8x8)
+// buildUserAvatar creates a small avatar for the sidebar button (8x8).
 func (l *LayoutManager) buildUserAvatar(userName, userImage string) g.Node {
 	if userImage != "" {
 		// Return image avatar
@@ -1207,13 +1206,14 @@ func (l *LayoutManager) buildUserAvatar(userName, userImage string) g.Node {
 
 	// Return initials avatar
 	initials := getInitials(userName)
+
 	return html.Div(
 		html.Class("flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold shrink-0"),
 		g.Text(initials),
 	)
 }
 
-// buildUserAvatarLarge creates a larger avatar for the dropdown (10x10)
+// buildUserAvatarLarge creates a larger avatar for the dropdown (10x10).
 func (l *LayoutManager) buildUserAvatarLarge(userName, userImage string) g.Node {
 	if userImage != "" {
 		// Return image avatar
@@ -1226,13 +1226,14 @@ func (l *LayoutManager) buildUserAvatarLarge(userName, userImage string) g.Node 
 
 	// Return initials avatar
 	initials := getInitials(userName)
+
 	return html.Div(
 		html.Class("flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground text-base font-semibold shrink-0"),
 		g.Text(initials),
 	)
 }
 
-// getInitials extracts initials from full name
+// getInitials extracts initials from full name.
 func getInitials(name string) string {
 	// Trim whitespace
 	name = strings.TrimSpace(name)
@@ -1249,11 +1250,14 @@ func getInitials(name string) string {
 
 	// Get first letter of first two words
 	initials := ""
+	var initialsSb1252 strings.Builder
+
 	for i := 0; i < len(words) && i < 2; i++ {
 		if len(words[i]) > 0 {
-			initials += strings.ToUpper(string([]rune(words[i])[0]))
+			initialsSb1252.WriteString(strings.ToUpper(string([]rune(words[i])[0])))
 		}
 	}
+	initials += initialsSb1252.String()
 
 	if initials == "" {
 		return "?"
@@ -1262,7 +1266,7 @@ func getInitials(name string) string {
 	return initials
 }
 
-// buildGuestDropdown creates dropdown for non-authenticated users
+// buildGuestDropdown creates dropdown for non-authenticated users.
 func (l *LayoutManager) buildGuestDropdown() g.Node {
 	loginURL := l.baseUIPath + "/login"
 	signupURL := l.baseUIPath + "/signup"
@@ -1286,7 +1290,7 @@ func (l *LayoutManager) buildGuestDropdown() g.Node {
 	)
 }
 
-// buildNavbarUserDropdown creates the user dropdown for the top navbar
+// buildNavbarUserDropdown creates the user dropdown for the top navbar.
 func (l *LayoutManager) buildNavbarUserDropdown(ctx *router.PageContext, settingsURL string) g.Node {
 	// Get user from context
 	userRaw, ok := ctx.Get("user")
@@ -1322,6 +1326,7 @@ func (l *LayoutManager) buildNavbarUserDropdown(ctx *router.PageContext, setting
 	if userName == "" {
 		userName = currentUser.Email
 	}
+
 	userEmail := currentUser.Email
 	userImage := currentUser.Image
 
@@ -1376,7 +1381,7 @@ func (l *LayoutManager) buildNavbarUserDropdown(ctx *router.PageContext, setting
 	)
 }
 
-// isActiveSettingsTab checks if a settings tab is currently active based on URL path
+// isActiveSettingsTab checks if a settings tab is currently active based on URL path.
 func (l *LayoutManager) isActiveSettingsTab(ctx *router.PageContext, tabID string) bool {
 	path := ctx.Request.URL.Path
 
@@ -1388,9 +1393,11 @@ func (l *LayoutManager) isActiveSettingsTab(ctx *router.PageContext, tabID strin
 
 	// Extract the last segment after /settings/
 	settingsIndex := -1
+
 	for i := len(path) - 1; i >= 0; i-- {
 		if i >= 9 && path[i-8:i+1] == "/settings" {
 			settingsIndex = i + 1
+
 			break
 		}
 	}
@@ -1414,7 +1421,7 @@ func (l *LayoutManager) isActiveSettingsTab(ctx *router.PageContext, tabID strin
 	return false
 }
 
-// buildAppSwitcher creates a polished app switcher dropdown
+// buildAppSwitcher creates a polished app switcher dropdown.
 func (l *LayoutManager) buildAppSwitcher(currentApp *app.App) g.Node {
 	// Get current app name or use default
 	appName := "Select App"

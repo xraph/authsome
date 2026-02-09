@@ -12,19 +12,19 @@ import (
 	"github.com/xraph/forge"
 )
 
-// WebhookHandler handles webhook-related HTTP requests
+// WebhookHandler handles webhook-related HTTP requests.
 type WebhookHandler struct {
 	service *webhook.Service
 }
 
-// NewWebhookHandler creates a new webhook handler
+// NewWebhookHandler creates a new webhook handler.
 func NewWebhookHandler(service *webhook.Service) *WebhookHandler {
 	return &WebhookHandler{
 		service: service,
 	}
 }
 
-// CreateWebhook creates a new webhook
+// CreateWebhook creates a new webhook.
 func (h *WebhookHandler) CreateWebhook(c forge.Context) error {
 	var req struct {
 		URL          string            `json:"url"`
@@ -42,12 +42,14 @@ func (h *WebhookHandler) CreateWebhook(c forge.Context) error {
 	appID, err := contexts.RequireAppID(c.Request().Context())
 	if err != nil {
 		authErr := webhook.MissingAppContext()
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	envID, err := contexts.RequireEnvironmentID(c.Request().Context())
 	if err != nil {
 		authErr := webhook.MissingEnvironmentContext()
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -55,6 +57,7 @@ func (h *WebhookHandler) CreateWebhook(c forge.Context) error {
 	if req.MaxRetries == 0 {
 		req.MaxRetries = 3
 	}
+
 	if req.RetryBackoff == "" {
 		req.RetryBackoff = "exponential"
 	}
@@ -72,52 +75,60 @@ func (h *WebhookHandler) CreateWebhook(c forge.Context) error {
 
 	webhookObj, err := h.service.CreateWebhook(c.Request().Context(), createReq)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusBadRequest, err)
 	}
 
 	return c.JSON(http.StatusOK, webhookObj)
 }
 
-// GetWebhook retrieves a webhook by ID
+// GetWebhook retrieves a webhook by ID.
 func (h *WebhookHandler) GetWebhook(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		authErr := errs.New("INVALID_REQUEST", "webhook ID is required", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	id, err := xid.FromString(webhookID)
 	if err != nil {
 		authErr := errs.New("INVALID_REQUEST", "invalid webhook ID format", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	webhookObj, err := h.service.GetWebhook(c.Request().Context(), id)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusOK, webhookObj)
 }
 
-// ListWebhooks lists webhooks for an app environment
+// ListWebhooks lists webhooks for an app environment.
 func (h *WebhookHandler) ListWebhooks(c forge.Context) error {
 	// Extract required context values
 	appID, err := contexts.RequireAppID(c.Request().Context())
 	if err != nil {
 		authErr := webhook.MissingAppContext()
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	envID, err := contexts.RequireEnvironmentID(c.Request().Context())
 	if err != nil {
 		authErr := webhook.MissingEnvironmentContext()
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -151,26 +162,30 @@ func (h *WebhookHandler) ListWebhooks(c forge.Context) error {
 
 	response, err := h.service.ListWebhooks(c.Request().Context(), filter)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	return c.JSON(http.StatusOK, response)
 }
 
-// UpdateWebhook updates a webhook
+// UpdateWebhook updates a webhook.
 func (h *WebhookHandler) UpdateWebhook(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		authErr := errs.New("INVALID_REQUEST", "webhook ID is required", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	id, err := xid.FromString(webhookID)
 	if err != nil {
 		authErr := errs.New("INVALID_REQUEST", "invalid webhook ID format", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -185,6 +200,7 @@ func (h *WebhookHandler) UpdateWebhook(c forge.Context) error {
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		authErr := errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -199,51 +215,59 @@ func (h *WebhookHandler) UpdateWebhook(c forge.Context) error {
 
 	webhookObj, err := h.service.UpdateWebhook(c.Request().Context(), id, updateReq)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusBadRequest, err)
 	}
 
 	return c.JSON(http.StatusOK, webhookObj)
 }
 
-// DeleteWebhook deletes a webhook
+// DeleteWebhook deletes a webhook.
 func (h *WebhookHandler) DeleteWebhook(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		authErr := errs.New("INVALID_REQUEST", "webhook ID is required", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	id, err := xid.FromString(webhookID)
 	if err != nil {
 		authErr := errs.New("INVALID_REQUEST", "invalid webhook ID format", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	err = h.service.DeleteWebhook(c.Request().Context(), id)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusBadRequest, err)
 	}
 
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "webhook deleted successfully"})
 }
 
-// GetWebhookDeliveries retrieves delivery logs for a webhook
+// GetWebhookDeliveries retrieves delivery logs for a webhook.
 func (h *WebhookHandler) GetWebhookDeliveries(c forge.Context) error {
 	webhookID := c.Param("id")
 	if webhookID == "" {
 		authErr := errs.New("INVALID_REQUEST", "webhook ID is required", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	id, err := xid.FromString(webhookID)
 	if err != nil {
 		authErr := errs.New("INVALID_REQUEST", "invalid webhook ID format", http.StatusBadRequest)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -270,9 +294,11 @@ func (h *WebhookHandler) GetWebhookDeliveries(c forge.Context) error {
 
 	response, err := h.service.ListDeliveries(c.Request().Context(), filter)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 

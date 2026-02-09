@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -18,7 +19,7 @@ const (
 	PluginVersion = "1.0.0"
 )
 
-// Plugin implements the AuthSome plugin interface for step-up authentication
+// Plugin implements the AuthSome plugin interface for step-up authentication.
 type Plugin struct {
 	config     *Config
 	service    *Service
@@ -28,38 +29,39 @@ type Plugin struct {
 	db         *bun.DB
 }
 
-// NewPlugin creates a new step-up authentication plugin instance
+// NewPlugin creates a new step-up authentication plugin instance.
 func NewPlugin(config *Config) *Plugin {
 	if config == nil {
 		config = DefaultConfig()
 	}
+
 	return &Plugin{
 		config: config,
 	}
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Context-aware step-up authentication for high-value operations with route, amount, and resource-based rules"
 }
 
-// Init initializes the plugin with the auth instance
-func (p *Plugin) Init(auth interface{}) error {
+// Init initializes the plugin with the auth instance.
+func (p *Plugin) Init(auth any) error {
 	// Extract database and service registry from auth instance
 	type authInterface interface {
 		GetDB() *bun.DB
@@ -68,18 +70,18 @@ func (p *Plugin) Init(auth interface{}) error {
 
 	authInstance, ok := auth.(authInterface)
 	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.BadRequest("invalid auth instance type")
 	}
 
 	p.db = authInstance.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerErrorWithMessage("database not available")
 	}
 
 	// Get service registry
 	serviceRegistry := authInstance.GetServiceRegistry()
 	if serviceRegistry == nil {
-		return fmt.Errorf("service registry not available")
+		return errs.InternalServerErrorWithMessage("service registry not available")
 	}
 
 	// Get audit service and wrap it with adapter
@@ -108,10 +110,10 @@ func (p *Plugin) Init(auth interface{}) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized, Init must be called first")
+		return errs.InternalServerErrorWithMessage("service not initialized, Init must be called first")
 	}
 
 	// Create a group for step-up routes
@@ -235,10 +237,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers step-up lifecycle hooks
+// RegisterHooks registers step-up lifecycle hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	// Register cleanup hook to run periodically
@@ -248,23 +250,23 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows step-up to enhance core services
+// RegisterServiceDecorators allows step-up to enhance core services.
 func (p *Plugin) RegisterServiceDecorators(serviceRegistry *registry.ServiceRegistry) error {
 	// Step-up plugin doesn't need to decorate core services
 	// It provides its own middleware for enforcement
 	return nil
 }
 
-// Migrate creates required database tables and indexes
+// Migrate creates required database tables and indexes.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	ctx := context.Background()
 
 	// Create tables
-	tables := []interface{}{
+	tables := []any{
 		(*StepUpVerification)(nil),
 		(*StepUpRequirement)(nil),
 		(*StepUpRememberedDevice)(nil),
@@ -290,7 +292,7 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// createIndexes creates database indexes for step-up tables
+// createIndexes creates database indexes for step-up tables.
 func (p *Plugin) createIndexes(ctx context.Context) error {
 	indexes := []string{
 		// Verifications indexes
@@ -337,28 +339,29 @@ func (p *Plugin) createIndexes(ctx context.Context) error {
 	return nil
 }
 
-// Service returns the step-up service (for programmatic access)
+// Service returns the step-up service (for programmatic access).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// Middleware returns the step-up middleware (for route protection)
+// Middleware returns the step-up middleware (for route protection).
 func (p *Plugin) Middleware() *Middleware {
 	return p.middleware
 }
 
-// Config returns the plugin configuration
+// Config returns the plugin configuration.
 func (p *Plugin) Config() *Config {
 	return p.config
 }
 
-// WithConfig sets custom configuration
+// WithConfig sets custom configuration.
 func (p *Plugin) WithConfig(config *Config) *Plugin {
 	p.config = config
+
 	return p
 }
 
-// StartCleanupScheduler starts a background task to cleanup expired records
+// StartCleanupScheduler starts a background task to cleanup expired records.
 func (p *Plugin) StartCleanupScheduler(interval time.Duration) {
 	if p.service == nil {
 		return
@@ -375,17 +378,16 @@ func (p *Plugin) StartCleanupScheduler(interval time.Duration) {
 			}
 		}
 	}()
-
 }
 
-// Health checks the plugin health
+// Health checks the plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	if p.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	// Test database connection
@@ -396,9 +398,8 @@ func (p *Plugin) Health(ctx context.Context) error {
 	return nil
 }
 
-// Shutdown gracefully shuts down the plugin
+// Shutdown gracefully shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
-
 	// Perform any cleanup needed
 	if p.service != nil {
 		if err := p.service.CleanupExpired(ctx); err != nil {
@@ -408,12 +409,12 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// auditServiceAdapter adapts the core audit service to match the plugin's expected interface
+// auditServiceAdapter adapts the core audit service to match the plugin's expected interface.
 type auditServiceAdapter struct {
 	svc *audit.Service
 }
 
-// Log implements AuditServiceInterface by converting Event to the core audit service's signature
+// Log implements AuditServiceInterface by converting Event to the core audit service's signature.
 func (a *auditServiceAdapter) Log(ctx context.Context, event *audit.Event) error {
 	if a.svc == nil {
 		return nil // No-op if audit service not available
@@ -432,45 +433,45 @@ func (a *auditServiceAdapter) Log(ctx context.Context, event *audit.Event) error
 	)
 }
 
-// DTOs for step-up routes
+// DTOs for step-up routes.
 type StepUpErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type StepUpStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type StepUpEvaluationResponse struct {
-	Required bool   `json:"required" example:"true"`
-	Reason   string `json:"reason,omitempty" example:"High-value transaction"`
+	Required bool   `example:"true"                   json:"required"`
+	Reason   string `example:"High-value transaction" json:"reason,omitempty"`
 }
 
 type StepUpVerificationResponse struct {
-	Verified  bool   `json:"verified" example:"true"`
-	ExpiresAt string `json:"expires_at,omitempty" example:"2024-01-01T00:00:00Z"`
+	Verified  bool   `example:"true"                 json:"verified"`
+	ExpiresAt string `example:"2024-01-01T00:00:00Z" json:"expires_at,omitempty"`
 }
 
 type StepUpRequirementResponse struct {
-	ID string `json:"id" example:"req_123"`
+	ID string `example:"req_123" json:"id"`
 }
 
 type StepUpRequirementsResponse struct {
-	Requirements []interface{} `json:"requirements"`
+	Requirements []any `json:"requirements"`
 }
 
 type StepUpVerificationsResponse struct {
-	Verifications []interface{} `json:"verifications"`
+	Verifications []any `json:"verifications"`
 }
 
 type StepUpPolicyResponse struct {
-	ID string `json:"id" example:"policy_123"`
+	ID string `example:"policy_123" json:"id"`
 }
 
 type StepUpPoliciesResponse struct {
-	Policies []interface{} `json:"policies"`
+	Policies []any `json:"policies"`
 }
 
 type StepUpAuditLogsResponse struct {
-	AuditLogs []interface{} `json:"audit_logs"`
+	AuditLogs []any `json:"audit_logs"`
 }

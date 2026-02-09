@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
 )
 
-// Provider implements a mock payment provider for testing
+// Provider implements a mock payment provider for testing.
 type Provider struct {
 	mu                sync.RWMutex
 	customers         map[string]*mockCustomer
@@ -37,7 +38,7 @@ type mockCustomer struct {
 	ID       string
 	Email    string
 	Name     string
-	Metadata map[string]interface{}
+	Metadata map[string]any
 }
 
 type mockSubscription struct {
@@ -51,7 +52,7 @@ type mockSubscription struct {
 	TrialStart         *int64
 	TrialEnd           *int64
 	CancelAt           *int64
-	Metadata           map[string]interface{}
+	Metadata           map[string]any
 }
 
 type mockPrice struct {
@@ -67,7 +68,7 @@ type mockSubscriptionItem struct {
 	SubscriptionID string
 	PriceID        string
 	Quantity       int
-	Metadata       map[string]interface{}
+	Metadata       map[string]any
 }
 
 type mockFeature struct {
@@ -75,7 +76,7 @@ type mockFeature struct {
 	Name      string
 	LookupKey string
 	Active    bool
-	Metadata  map[string]interface{}
+	Metadata  map[string]any
 }
 
 type mockInvoice struct {
@@ -105,7 +106,7 @@ type mockPaymentMethod struct {
 	CardExpYear  int
 }
 
-// NewMockProvider creates a new mock provider
+// NewMockProvider creates a new mock provider.
 func NewMockProvider() *Provider {
 	return &Provider{
 		customers:         make(map[string]*mockCustomer),
@@ -119,14 +120,14 @@ func NewMockProvider() *Provider {
 	}
 }
 
-// Ensure Provider implements types.PaymentProvider
+// Ensure Provider implements types.PaymentProvider.
 var _ types.PaymentProvider = (*Provider)(nil)
 
 func (p *Provider) Name() string {
 	return "mock"
 }
 
-func (p *Provider) CreateCustomer(ctx context.Context, email, name string, metadata map[string]interface{}) (string, error) {
+func (p *Provider) CreateCustomer(ctx context.Context, email, name string, metadata map[string]any) (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -137,10 +138,11 @@ func (p *Provider) CreateCustomer(ctx context.Context, email, name string, metad
 		Name:     name,
 		Metadata: metadata,
 	}
+
 	return id, nil
 }
 
-func (p *Provider) UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]interface{}) error {
+func (p *Provider) UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]any) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -149,6 +151,7 @@ func (p *Provider) UpdateCustomer(ctx context.Context, customerID, email, name s
 		c.Name = name
 		c.Metadata = metadata
 	}
+
 	return nil
 }
 
@@ -157,6 +160,7 @@ func (p *Provider) DeleteCustomer(ctx context.Context, customerID string) error 
 	defer p.mu.Unlock()
 
 	delete(p.customers, customerID)
+
 	return nil
 }
 
@@ -193,6 +197,7 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 
 	plan.ProviderPlanID = productID
 	plan.ProviderPriceID = priceID
+
 	return nil
 }
 
@@ -229,10 +234,11 @@ func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
 	}
 
 	addon.ProviderPriceID = priceID
+
 	return nil
 }
 
-func (p *Provider) CreateSubscription(ctx context.Context, customerID, priceID string, quantity, trialDays int, metadata map[string]interface{}) (string, error) {
+func (p *Provider) CreateSubscription(ctx context.Context, customerID, priceID string, quantity, trialDays int, metadata map[string]any) (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -258,6 +264,7 @@ func (p *Provider) CreateSubscription(ctx context.Context, customerID, priceID s
 	}
 
 	p.subscriptions[id] = sub
+
 	return id, nil
 }
 
@@ -269,6 +276,7 @@ func (p *Provider) UpdateSubscription(ctx context.Context, subscriptionID, price
 		sub.PriceID = priceID
 		sub.Quantity = quantity
 	}
+
 	return nil
 }
 
@@ -284,6 +292,7 @@ func (p *Provider) CancelSubscription(ctx context.Context, subscriptionID string
 			sub.CancelAt = &cancelAt
 		}
 	}
+
 	return nil
 }
 
@@ -294,6 +303,7 @@ func (p *Provider) PauseSubscription(ctx context.Context, subscriptionID string)
 	if sub, ok := p.subscriptions[subscriptionID]; ok {
 		sub.Status = "paused"
 	}
+
 	return nil
 }
 
@@ -304,6 +314,7 @@ func (p *Provider) ResumeSubscription(ctx context.Context, subscriptionID string
 	if sub, ok := p.subscriptions[subscriptionID]; ok {
 		sub.Status = "active"
 	}
+
 	return nil
 }
 
@@ -313,7 +324,7 @@ func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (
 
 	sub, ok := p.subscriptions[subscriptionID]
 	if !ok {
-		return nil, fmt.Errorf("subscription not found")
+		return nil, errs.NotFound("subscription not found")
 	}
 
 	return &types.ProviderSubscription{
@@ -331,13 +342,13 @@ func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (
 	}, nil
 }
 
-// AddSubscriptionItem adds an item to a subscription
+// AddSubscriptionItem adds an item to a subscription.
 func (p *Provider) AddSubscriptionItem(ctx context.Context, subscriptionID string, priceID string, quantity int) (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if _, ok := p.subscriptions[subscriptionID]; !ok {
-		return "", fmt.Errorf("subscription not found")
+		return "", errs.NotFound("subscription not found")
 	}
 
 	itemID := "si_mock_" + xid.New().String()
@@ -346,26 +357,26 @@ func (p *Provider) AddSubscriptionItem(ctx context.Context, subscriptionID strin
 	return itemID, nil
 }
 
-// RemoveSubscriptionItem removes an item from a subscription
+// RemoveSubscriptionItem removes an item from a subscription.
 func (p *Provider) RemoveSubscriptionItem(ctx context.Context, subscriptionID string, itemID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if _, ok := p.subscriptions[subscriptionID]; !ok {
-		return fmt.Errorf("subscription not found")
+		return errs.NotFound("subscription not found")
 	}
 
 	// In mock, just return success
 	return nil
 }
 
-// UpdateSubscriptionItem updates the quantity of a subscription item
+// UpdateSubscriptionItem updates the quantity of a subscription item.
 func (p *Provider) UpdateSubscriptionItem(ctx context.Context, subscriptionID string, itemID string, quantity int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if _, ok := p.subscriptions[subscriptionID]; !ok {
-		return fmt.Errorf("subscription not found")
+		return errs.NotFound("subscription not found")
 	}
 
 	// In mock, just return success
@@ -374,6 +385,7 @@ func (p *Provider) UpdateSubscriptionItem(ctx context.Context, subscriptionID st
 
 func (p *Provider) CreateCheckoutSession(ctx context.Context, req *types.CheckoutRequest) (*types.CheckoutSession, error) {
 	id := "cs_mock_" + xid.New().String()
+
 	return &types.CheckoutSession{
 		ID:            id,
 		URL:           "https://mock.stripe.com/checkout/" + id,
@@ -456,13 +468,15 @@ func (p *Provider) VoidInvoice(ctx context.Context, invoiceID string) error {
 	return nil
 }
 
-// ListInvoices lists invoices for a customer
+// ListInvoices lists invoices for a customer.
 func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit int) ([]*types.ProviderInvoice, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	var result []*types.ProviderInvoice
+
 	count := 0
+
 	for _, inv := range p.invoices {
 		if inv.CustomerID == customerID {
 			result = append(result, &types.ProviderInvoice{
@@ -481,22 +495,26 @@ func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit in
 				PDFURL:         inv.PDFURL,
 				HostedURL:      inv.HostedURL,
 			})
+
 			count++
 			if limit > 0 && count >= limit {
 				break
 			}
 		}
 	}
+
 	return result, nil
 }
 
-// ListSubscriptionInvoices lists invoices for a subscription
+// ListSubscriptionInvoices lists invoices for a subscription.
 func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID string, limit int) ([]*types.ProviderInvoice, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	var result []*types.ProviderInvoice
+
 	count := 0
+
 	for _, inv := range p.invoices {
 		if inv.SubscriptionID == subscriptionID {
 			result = append(result, &types.ProviderInvoice{
@@ -515,16 +533,18 @@ func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID 
 				PDFURL:         inv.PDFURL,
 				HostedURL:      inv.HostedURL,
 			})
+
 			count++
 			if limit > 0 && count >= limit {
 				break
 			}
 		}
 	}
+
 	return result, nil
 }
 
-// SyncFeature syncs a feature to the mock provider
+// SyncFeature syncs a feature to the mock provider.
 func (p *Provider) SyncFeature(ctx context.Context, feature *core.Feature) (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -554,7 +574,7 @@ func (p *Provider) SyncFeature(ctx context.Context, feature *core.Feature) (stri
 	return featureID, nil
 }
 
-// ListProviderFeatures lists all features from the mock provider
+// ListProviderFeatures lists all features from the mock provider.
 func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) ([]*types.ProviderFeature, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -569,17 +589,18 @@ func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) (
 			Metadata:  f.Metadata,
 		})
 	}
+
 	return result, nil
 }
 
-// GetProviderFeature gets a specific feature from the mock provider
+// GetProviderFeature gets a specific feature from the mock provider.
 func (p *Provider) GetProviderFeature(ctx context.Context, featureID string) (*types.ProviderFeature, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	f, ok := p.features[featureID]
 	if !ok {
-		return nil, fmt.Errorf("feature not found")
+		return nil, errs.NotFound("feature not found")
 	}
 
 	return &types.ProviderFeature{
@@ -591,12 +612,13 @@ func (p *Provider) GetProviderFeature(ctx context.Context, featureID string) (*t
 	}, nil
 }
 
-// DeleteProviderFeature deletes a feature from the mock provider
+// DeleteProviderFeature deletes a feature from the mock provider.
 func (p *Provider) DeleteProviderFeature(ctx context.Context, featureID string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	delete(p.features, featureID)
+
 	return nil
 }
 
@@ -614,6 +636,7 @@ func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, 
 			Metadata:    prod.Metadata,
 		})
 	}
+
 	return products, nil
 }
 
@@ -655,9 +678,11 @@ func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.P
 					IntervalCount: 1,
 				}
 			}
+
 			prices = append(prices, providerPrice)
 		}
 	}
+
 	return prices, nil
 }
 

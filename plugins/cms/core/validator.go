@@ -6,11 +6,14 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// FieldValidator validates a field value against its type and options
+// FieldValidator validates a field value against its type and options.
 type FieldValidator struct {
 	FieldName string
 	FieldType FieldType
@@ -19,20 +22,20 @@ type FieldValidator struct {
 	Options   *FieldOptionsDTO
 }
 
-// ValidationError represents a validation error for a field
+// ValidationError represents a validation error for a field.
 type ValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 	Code    string `json:"code,omitempty"`
 }
 
-// ValidationResult holds the result of validation
+// ValidationResult holds the result of validation.
 type ValidationResult struct {
 	Valid  bool              `json:"valid"`
 	Errors []ValidationError `json:"errors,omitempty"`
 }
 
-// NewFieldValidator creates a new field validator
+// NewFieldValidator creates a new field validator.
 func NewFieldValidator(name string, fieldType FieldType, required, unique bool, options *FieldOptionsDTO) *FieldValidator {
 	return &FieldValidator{
 		FieldName: name,
@@ -43,8 +46,8 @@ func NewFieldValidator(name string, fieldType FieldType, required, unique bool, 
 	}
 }
 
-// Validate validates a value against the field's type and options
-func (v *FieldValidator) Validate(value interface{}) *ValidationResult {
+// Validate validates a value against the field's type and options.
+func (v *FieldValidator) Validate(value any) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
 	// Check required
@@ -55,6 +58,7 @@ func (v *FieldValidator) Validate(value interface{}) *ValidationResult {
 			Message: "this field is required",
 			Code:    "required",
 		})
+
 		return result
 	}
 
@@ -65,6 +69,7 @@ func (v *FieldValidator) Validate(value interface{}) *ValidationResult {
 
 	// Type-specific validation
 	var err error
+
 	switch v.FieldType {
 	case FieldTypeText, FieldTypeTextarea:
 		err = v.validateText(value)
@@ -128,26 +133,29 @@ func (v *FieldValidator) Validate(value interface{}) *ValidationResult {
 // Type-specific validators
 // =============================================================================
 
-func (v *FieldValidator) validateText(value interface{}) error {
+func (v *FieldValidator) validateText(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	if v.Options != nil {
 		if v.Options.MinLength > 0 && len(str) < v.Options.MinLength {
 			return fmt.Errorf("must be at least %d characters", v.Options.MinLength)
 		}
+
 		if v.Options.MaxLength > 0 && len(str) > v.Options.MaxLength {
 			return fmt.Errorf("must be at most %d characters", v.Options.MaxLength)
 		}
+
 		if v.Options.Pattern != "" {
 			matched, err := regexp.MatchString(v.Options.Pattern, str)
 			if err != nil {
-				return fmt.Errorf("invalid pattern: %v", err)
+				return fmt.Errorf("invalid pattern: %w", err)
 			}
+
 			if !matched {
-				return fmt.Errorf("does not match required pattern")
+				return errs.BadRequest("does not match required pattern")
 			}
 		}
 	}
@@ -155,10 +163,10 @@ func (v *FieldValidator) validateText(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateRichText(value interface{}) error {
+func (v *FieldValidator) validateRichText(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	if v.Options != nil {
@@ -173,25 +181,28 @@ func (v *FieldValidator) validateRichText(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateNumber(value interface{}) error {
+func (v *FieldValidator) validateNumber(value any) error {
 	num, ok := toFloat64(value)
 	if !ok {
-		return fmt.Errorf("must be a number")
+		return errs.BadRequest("must be a number")
 	}
 
 	if v.Options != nil {
 		if v.Options.Min != nil && num < *v.Options.Min {
 			return fmt.Errorf("must be at least %v", *v.Options.Min)
 		}
+
 		if v.Options.Max != nil && num > *v.Options.Max {
 			return fmt.Errorf("must be at most %v", *v.Options.Max)
 		}
+
 		if v.Options.Step != nil && *v.Options.Step > 0 {
 			// Check if value is a multiple of step
 			remainder := num - (*v.Options.Min)
 			if v.Options.Min == nil {
 				remainder = num
 			}
+
 			if remainder != 0 && int(remainder*1000000)%int(*v.Options.Step*1000000) != 0 {
 				return fmt.Errorf("must be a multiple of %v", *v.Options.Step)
 			}
@@ -201,7 +212,7 @@ func (v *FieldValidator) validateNumber(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateInteger(value interface{}) error {
+func (v *FieldValidator) validateInteger(value any) error {
 	// First validate as number
 	if err := v.validateNumber(value); err != nil {
 		return err
@@ -210,31 +221,32 @@ func (v *FieldValidator) validateInteger(value interface{}) error {
 	// Then check it's an integer
 	num, _ := toFloat64(value)
 	if num != float64(int64(num)) {
-		return fmt.Errorf("must be a whole number")
+		return errs.BadRequest("must be a whole number")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validateBoolean(value interface{}) error {
-	switch value.(type) {
+func (v *FieldValidator) validateBoolean(value any) error {
+	switch value := value.(type) {
 	case bool:
 		return nil
 	case string:
-		str := strings.ToLower(value.(string))
+		str := strings.ToLower(value)
 		if str == "true" || str == "false" || str == "1" || str == "0" {
 			return nil
 		}
 	case int, int64, float64:
 		return nil // 0 or 1 are valid
 	}
-	return fmt.Errorf("must be a boolean")
+
+	return errs.BadRequest("must be a boolean")
 }
 
-func (v *FieldValidator) validateDate(value interface{}) error {
+func (v *FieldValidator) validateDate(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a date string")
+		return errs.BadRequest("must be a date string")
 	}
 
 	// Try parsing date formats
@@ -244,8 +256,11 @@ func (v *FieldValidator) validateDate(value interface{}) error {
 		"02-01-2006",
 	}
 
-	var parsedDate time.Time
-	var parseErr error
+	var (
+		parsedDate time.Time
+		parseErr   error
+	)
+
 	for _, format := range formats {
 		parsedDate, parseErr = time.Parse(format, str)
 		if parseErr == nil {
@@ -254,13 +269,14 @@ func (v *FieldValidator) validateDate(value interface{}) error {
 	}
 
 	if parseErr != nil {
-		return fmt.Errorf("invalid date format")
+		return errs.BadRequest("invalid date format")
 	}
 
 	if v.Options != nil {
 		if v.Options.MinDate != nil && parsedDate.Before(*v.Options.MinDate) {
 			return fmt.Errorf("must be on or after %s", v.Options.MinDate.Format("2006-01-02"))
 		}
+
 		if v.Options.MaxDate != nil && parsedDate.After(*v.Options.MaxDate) {
 			return fmt.Errorf("must be on or before %s", v.Options.MaxDate.Format("2006-01-02"))
 		}
@@ -269,10 +285,10 @@ func (v *FieldValidator) validateDate(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateDateTime(value interface{}) error {
+func (v *FieldValidator) validateDateTime(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a datetime string")
+		return errs.BadRequest("must be a datetime string")
 	}
 
 	// Try parsing datetime formats
@@ -283,8 +299,11 @@ func (v *FieldValidator) validateDateTime(value interface{}) error {
 		"2006-01-02 15:04:05",
 	}
 
-	var parsedTime time.Time
-	var parseErr error
+	var (
+		parsedTime time.Time
+		parseErr   error
+	)
+
 	for _, format := range formats {
 		parsedTime, parseErr = time.Parse(format, str)
 		if parseErr == nil {
@@ -293,13 +312,14 @@ func (v *FieldValidator) validateDateTime(value interface{}) error {
 	}
 
 	if parseErr != nil {
-		return fmt.Errorf("invalid datetime format")
+		return errs.BadRequest("invalid datetime format")
 	}
 
 	if v.Options != nil {
 		if v.Options.MinDate != nil && parsedTime.Before(*v.Options.MinDate) {
 			return fmt.Errorf("must be on or after %s", v.Options.MinDate.Format(time.RFC3339))
 		}
+
 		if v.Options.MaxDate != nil && parsedTime.After(*v.Options.MaxDate) {
 			return fmt.Errorf("must be on or before %s", v.Options.MaxDate.Format(time.RFC3339))
 		}
@@ -308,10 +328,10 @@ func (v *FieldValidator) validateDateTime(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateTime(value interface{}) error {
+func (v *FieldValidator) validateTime(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a time string")
+		return errs.BadRequest("must be a time string")
 	}
 
 	// Try parsing time formats
@@ -330,94 +350,94 @@ func (v *FieldValidator) validateTime(value interface{}) error {
 		}
 	}
 
-	return fmt.Errorf("invalid time format")
+	return errs.BadRequest("invalid time format")
 }
 
-func (v *FieldValidator) validateEmail(value interface{}) error {
+func (v *FieldValidator) validateEmail(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	_, err := mail.ParseAddress(str)
 	if err != nil {
-		return fmt.Errorf("invalid email address")
+		return errs.BadRequest("invalid email address")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validateURL(value interface{}) error {
+func (v *FieldValidator) validateURL(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	u, err := url.Parse(str)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("invalid URL")
+		return errs.BadRequest("invalid URL")
 	}
 
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("URL must use http or https")
+		return errs.BadRequest("URL must use http or https")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validatePhone(value interface{}) error {
+func (v *FieldValidator) validatePhone(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	// Basic phone number validation (allows +, digits, spaces, dashes, parentheses)
 	phonePattern := regexp.MustCompile(`^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$`)
 	if !phonePattern.MatchString(str) {
-		return fmt.Errorf("invalid phone number format")
+		return errs.BadRequest("invalid phone number format")
 	}
 
 	// Check minimum digits
 	digits := regexp.MustCompile(`\d`).FindAllString(str, -1)
 	if len(digits) < 7 {
-		return fmt.Errorf("phone number must have at least 7 digits")
+		return errs.BadRequest("phone number must have at least 7 digits")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validateSlug(value interface{}) error {
+func (v *FieldValidator) validateSlug(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	slugPattern := regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	if !slugPattern.MatchString(str) {
-		return fmt.Errorf("must be lowercase with hyphens only (e.g., my-slug)")
+		return errs.BadRequest("must be lowercase with hyphens only (e.g., my-slug)")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validateUUID(value interface{}) error {
+func (v *FieldValidator) validateUUID(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	uuidPattern := regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	if !uuidPattern.MatchString(str) {
-		return fmt.Errorf("invalid UUID format")
+		return errs.BadRequest("invalid UUID format")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validateColor(value interface{}) error {
+func (v *FieldValidator) validateColor(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	// Allow hex colors (#RGB, #RRGGBB, #RGBA, #RRGGBBAA)
@@ -428,33 +448,34 @@ func (v *FieldValidator) validateColor(value interface{}) error {
 	hslPattern := regexp.MustCompile(`^hsla?\(\s*\d{1,3}\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%\s*(,\s*(0|1|0?\.\d+))?\s*\)$`)
 
 	if !hexPattern.MatchString(str) && !rgbPattern.MatchString(str) && !hslPattern.MatchString(str) {
-		return fmt.Errorf("invalid color format (use hex, rgb, or hsl)")
+		return errs.BadRequest("invalid color format (use hex, rgb, or hsl)")
 	}
 
 	return nil
 }
 
-func (v *FieldValidator) validateJSON(value interface{}) error {
+func (v *FieldValidator) validateJSON(value any) error {
 	// If it's already a map or slice, it's valid JSON structure
-	switch value.(type) {
-	case map[string]interface{}, []interface{}:
+	switch value := value.(type) {
+	case map[string]any, []any:
 		// TODO: Validate against JSON schema if provided in options
 		return nil
 	case string:
-		var js interface{}
-		if err := json.Unmarshal([]byte(value.(string)), &js); err != nil {
-			return fmt.Errorf("invalid JSON")
+		var js any
+		if err := json.Unmarshal([]byte(value), &js); err != nil {
+			return errs.BadRequest("invalid JSON")
 		}
+
 		return nil
 	default:
-		return fmt.Errorf("must be a valid JSON object or array")
+		return errs.BadRequest("must be a valid JSON object or array")
 	}
 }
 
-func (v *FieldValidator) validateSelect(value interface{}) error {
+func (v *FieldValidator) validateSelect(value any) error {
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a string")
+		return errs.BadRequest("must be a string")
 	}
 
 	if v.Options == nil || len(v.Options.Choices) == 0 {
@@ -464,32 +485,34 @@ func (v *FieldValidator) validateSelect(value interface{}) error {
 	for _, choice := range v.Options.Choices {
 		if choice.Value == str {
 			if choice.Disabled {
-				return fmt.Errorf("this option is not available")
+				return errs.BadRequest("this option is not available")
 			}
+
 			return nil
 		}
 	}
 
-	return fmt.Errorf("invalid selection")
+	return errs.BadRequest("invalid selection")
 }
 
-func (v *FieldValidator) validateMultiSelect(value interface{}) error {
+func (v *FieldValidator) validateMultiSelect(value any) error {
 	// Value should be a slice/array
 	var values []string
 
 	switch val := value.(type) {
-	case []interface{}:
+	case []any:
 		for _, item := range val {
 			str, ok := toString(item)
 			if !ok {
-				return fmt.Errorf("each selection must be a string")
+				return errs.BadRequest("each selection must be a string")
 			}
+
 			values = append(values, str)
 		}
 	case []string:
 		values = val
 	default:
-		return fmt.Errorf("must be an array of values")
+		return errs.BadRequest("must be an array of values")
 	}
 
 	if v.Options == nil || len(v.Options.Choices) == 0 {
@@ -498,6 +521,7 @@ func (v *FieldValidator) validateMultiSelect(value interface{}) error {
 
 	// Validate each selection
 	validValues := make(map[string]bool)
+
 	for _, choice := range v.Options.Choices {
 		if !choice.Disabled {
 			validValues[choice.Value] = true
@@ -513,7 +537,7 @@ func (v *FieldValidator) validateMultiSelect(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateRelation(value interface{}) error {
+func (v *FieldValidator) validateRelation(value any) error {
 	// Relation value should be an ID or array of IDs
 	switch val := value.(type) {
 	case string:
@@ -522,27 +546,28 @@ func (v *FieldValidator) validateRelation(value interface{}) error {
 		}
 		// Single relation - just needs to be a non-empty string ID
 		return nil
-	case []interface{}:
+	case []any:
 		// Multiple relations
 		for _, item := range val {
 			str, ok := toString(item)
 			if !ok || str == "" {
-				return fmt.Errorf("each related item must be a valid ID")
+				return errs.BadRequest("each related item must be a valid ID")
 			}
 		}
+
 		return nil
 	case []string:
 		return nil
 	default:
-		return fmt.Errorf("must be an ID or array of IDs")
+		return errs.BadRequest("must be an ID or array of IDs")
 	}
 }
 
-func (v *FieldValidator) validateMedia(value interface{}) error {
+func (v *FieldValidator) validateMedia(value any) error {
 	// Media value should be a file reference (URL or ID)
 	str, ok := toString(value)
 	if !ok {
-		return fmt.Errorf("must be a file reference")
+		return errs.BadRequest("must be a file reference")
 	}
 
 	// TODO: Validate mime type if provided in options
@@ -551,11 +576,11 @@ func (v *FieldValidator) validateMedia(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateObject(value interface{}) error {
+func (v *FieldValidator) validateObject(value any) error {
 	// Object value should be a map
-	obj, ok := value.(map[string]interface{})
+	obj, ok := value.(map[string]any)
 	if !ok {
-		return fmt.Errorf("must be an object")
+		return errs.BadRequest("must be an object")
 	}
 
 	// Validate nested fields if defined
@@ -566,11 +591,11 @@ func (v *FieldValidator) validateObject(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateArray(value interface{}) error {
+func (v *FieldValidator) validateArray(value any) error {
 	// Array value should be a slice
-	arr, ok := value.([]interface{})
+	arr, ok := value.([]any)
 	if !ok {
-		return fmt.Errorf("must be an array")
+		return errs.BadRequest("must be an array")
 	}
 
 	// Validate array constraints
@@ -578,6 +603,7 @@ func (v *FieldValidator) validateArray(value interface{}) error {
 		if v.Options.MinItems != nil && len(arr) < *v.Options.MinItems {
 			return fmt.Errorf("must have at least %d items", *v.Options.MinItems)
 		}
+
 		if v.Options.MaxItems != nil && len(arr) > *v.Options.MaxItems {
 			return fmt.Errorf("must have at most %d items", *v.Options.MaxItems)
 		}
@@ -585,10 +611,11 @@ func (v *FieldValidator) validateArray(value interface{}) error {
 		// Validate each item if nested fields are defined
 		if len(v.Options.NestedFields) > 0 {
 			for i, item := range arr {
-				obj, ok := item.(map[string]interface{})
+				obj, ok := item.(map[string]any)
 				if !ok {
 					return fmt.Errorf("item %d must be an object", i+1)
 				}
+
 				if err := v.validateNestedFields(obj, v.Options.NestedFields); err != nil {
 					return fmt.Errorf("item %d: %w", i+1, err)
 				}
@@ -599,24 +626,24 @@ func (v *FieldValidator) validateArray(value interface{}) error {
 	return nil
 }
 
-func (v *FieldValidator) validateOneOf(value interface{}) error {
+func (v *FieldValidator) validateOneOf(value any) error {
 	// OneOf value should be a map with the data
-	obj, ok := value.(map[string]interface{})
+	obj, ok := value.(map[string]any)
 	if !ok {
-		return fmt.Errorf("must be an object")
+		return errs.BadRequest("must be an object")
 	}
 
 	// OneOf requires options with discriminator field and schemas
 	if v.Options == nil {
-		return fmt.Errorf("oneOf field requires options configuration")
+		return errs.BadRequest("oneOf field requires options configuration")
 	}
 
 	if v.Options.DiscriminatorField == "" {
-		return fmt.Errorf("oneOf field requires discriminatorField in options")
+		return errs.BadRequest("oneOf field requires discriminatorField in options")
 	}
 
 	if len(v.Options.Schemas) == 0 {
-		return fmt.Errorf("oneOf field requires schemas in options")
+		return errs.BadRequest("oneOf field requires schemas in options")
 	}
 
 	// The discriminator value is used to select which schema to validate against
@@ -634,8 +661,8 @@ func (v *FieldValidator) validateOneOf(value interface{}) error {
 	return nil
 }
 
-// ValidateOneOfWithDiscriminator validates oneOf data with a specific discriminator value
-func ValidateOneOfWithDiscriminator(data map[string]interface{}, discriminatorValue string, options *FieldOptionsDTO) *ValidationResult {
+// ValidateOneOfWithDiscriminator validates oneOf data with a specific discriminator value.
+func ValidateOneOfWithDiscriminator(data map[string]any, discriminatorValue string, options *FieldOptionsDTO) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
 	if options == nil || len(options.Schemas) == 0 {
@@ -651,6 +678,7 @@ func ValidateOneOfWithDiscriminator(data map[string]interface{}, discriminatorVa
 			Message: fmt.Sprintf("no schema defined for discriminator value '%s'", discriminatorValue),
 			Code:    "invalid_discriminator",
 		})
+
 		return result
 	}
 
@@ -675,8 +703,8 @@ func ValidateOneOfWithDiscriminator(data map[string]interface{}, discriminatorVa
 	return result
 }
 
-// validateNestedFields validates nested field values against their definitions
-func (v *FieldValidator) validateNestedFields(data map[string]interface{}, fields []NestedFieldDefDTO) error {
+// validateNestedFields validates nested field values against their definitions.
+func (v *FieldValidator) validateNestedFields(data map[string]any, fields []NestedFieldDefDTO) error {
 	for _, field := range fields {
 		value, exists := data[field.Name]
 
@@ -713,8 +741,8 @@ func (v *FieldValidator) validateNestedFields(data map[string]interface{}, field
 	return nil
 }
 
-// ValidateNestedData validates data against nested field definitions (exported for use by services)
-func ValidateNestedData(data map[string]interface{}, fields []NestedFieldDefDTO) *ValidationResult {
+// ValidateNestedData validates data against nested field definitions (exported for use by services).
+func ValidateNestedData(data map[string]any, fields []NestedFieldDefDTO) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
 	validator := &FieldValidator{}
@@ -730,8 +758,8 @@ func ValidateNestedData(data map[string]interface{}, fields []NestedFieldDefDTO)
 	return result
 }
 
-// ValidateArrayData validates an array of data against nested field definitions
-func ValidateArrayData(items []map[string]interface{}, fields []NestedFieldDefDTO, minItems, maxItems *int) *ValidationResult {
+// ValidateArrayData validates an array of data against nested field definitions.
+func ValidateArrayData(items []map[string]any, fields []NestedFieldDefDTO, minItems, maxItems *int) *ValidationResult {
 	result := &ValidationResult{Valid: true}
 
 	// Validate array constraints
@@ -742,8 +770,10 @@ func ValidateArrayData(items []map[string]interface{}, fields []NestedFieldDefDT
 			Message: fmt.Sprintf("must have at least %d items", *minItems),
 			Code:    "min_items",
 		})
+
 		return result
 	}
+
 	if maxItems != nil && len(items) > *maxItems {
 		result.Valid = false
 		result.Errors = append(result.Errors, ValidationError{
@@ -751,6 +781,7 @@ func ValidateArrayData(items []map[string]interface{}, fields []NestedFieldDefDT
 			Message: fmt.Sprintf("must have at most %d items", *maxItems),
 			Code:    "max_items",
 		})
+
 		return result
 	}
 
@@ -774,40 +805,41 @@ func ValidateArrayData(items []map[string]interface{}, fields []NestedFieldDefDT
 // Helper functions
 // =============================================================================
 
-func isEmptyValue(value interface{}) bool {
+func isEmptyValue(value any) bool {
 	if value == nil {
 		return true
 	}
+
 	switch v := value.(type) {
 	case string:
 		return v == ""
-	case []interface{}:
+	case []any:
 		return len(v) == 0
-	case map[string]interface{}:
+	case map[string]any:
 		return len(v) == 0
 	default:
 		return false
 	}
 }
 
-func toString(value interface{}) (string, bool) {
+func toString(value any) (string, bool) {
 	switch v := value.(type) {
 	case string:
 		return v, true
 	case float64:
 		return fmt.Sprintf("%v", v), true
 	case int:
-		return fmt.Sprintf("%d", v), true
+		return strconv.Itoa(v), true
 	case int64:
-		return fmt.Sprintf("%d", v), true
+		return strconv.FormatInt(v, 10), true
 	case bool:
-		return fmt.Sprintf("%v", v), true
+		return strconv.FormatBool(v), true
 	default:
 		return "", false
 	}
 }
 
-func toFloat64(value interface{}) (float64, bool) {
+func toFloat64(value any) (float64, bool) {
 	switch v := value.(type) {
 	case float64:
 		return v, true
@@ -821,7 +853,9 @@ func toFloat64(value interface{}) (float64, bool) {
 		return float64(v), true
 	case string:
 		var f float64
+
 		_, err := fmt.Sscanf(v, "%f", &f)
+
 		return f, err == nil
 	default:
 		return 0, false
@@ -831,5 +865,6 @@ func toFloat64(value interface{}) (float64, bool) {
 func stripHTML(s string) string {
 	// Simple HTML tag removal
 	re := regexp.MustCompile(`<[^>]*>`)
+
 	return re.ReplaceAllString(s, "")
 }

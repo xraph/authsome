@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -20,7 +21,7 @@ import (
 // MEMORY CACHE WITH LRU
 // =============================================================================
 
-// cacheEntry represents a cached item with expiration
+// cacheEntry represents a cached item with expiration.
 type cacheEntry struct {
 	policy     *engine.CompiledPolicy
 	expiration time.Time
@@ -28,7 +29,7 @@ type cacheEntry struct {
 }
 
 // MemoryCache is an in-memory LRU cache implementation
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type MemoryCache struct {
 	data       map[string]*cacheEntry
 	mu         sync.RWMutex
@@ -41,15 +42,15 @@ type MemoryCache struct {
 	evictions int64
 }
 
-// CacheConfig holds cache configuration
+// CacheConfig holds cache configuration.
 type CacheConfig struct {
-	MaxSize    int           `json:"maxSize" yaml:"maxSize"`
+	MaxSize    int           `json:"maxSize"    yaml:"maxSize"`
 	DefaultTTL time.Duration `json:"defaultTtl" yaml:"defaultTtl"`
-	Backend    string        `json:"backend" yaml:"backend"` // memory, redis, hybrid
+	Backend    string        `json:"backend"    yaml:"backend"` // memory, redis, hybrid
 }
 
-// NewMemoryCache creates a new memory cache
-func NewMemoryCache(config interface{}) Cache {
+// NewMemoryCache creates a new memory cache.
+func NewMemoryCache(config any) Cache {
 	cfg, ok := config.(CacheConfig)
 	if !ok {
 		cfg = CacheConfig{
@@ -61,6 +62,7 @@ func NewMemoryCache(config interface{}) Cache {
 	if cfg.MaxSize == 0 {
 		cfg.MaxSize = 10000
 	}
+
 	if cfg.DefaultTTL == 0 {
 		cfg.DefaultTTL = 5 * time.Minute
 	}
@@ -72,7 +74,7 @@ func NewMemoryCache(config interface{}) Cache {
 	}
 }
 
-// Get retrieves a compiled policy from cache
+// Get retrieves a compiled policy from cache.
 func (c *MemoryCache) Get(ctx context.Context, key string) (*engine.CompiledPolicy, error) {
 	c.mu.RLock()
 	entry, ok := c.data[key]
@@ -80,6 +82,7 @@ func (c *MemoryCache) Get(ctx context.Context, key string) (*engine.CompiledPoli
 
 	if !ok {
 		atomic.AddInt64(&c.misses, 1)
+
 		return nil, nil
 	}
 
@@ -90,19 +93,23 @@ func (c *MemoryCache) Get(ctx context.Context, key string) (*engine.CompiledPoli
 		c.mu.Unlock()
 		atomic.AddInt64(&c.misses, 1)
 		atomic.AddInt64(&c.evictions, 1)
+
 		return nil, nil
 	}
 
 	// Update last access time for LRU
 	c.mu.Lock()
+
 	entry.lastAccess = time.Now()
+
 	c.mu.Unlock()
 
 	atomic.AddInt64(&c.hits, 1)
+
 	return entry.policy, nil
 }
 
-// Set stores a compiled policy in cache
+// Set stores a compiled policy in cache.
 func (c *MemoryCache) Set(ctx context.Context, key string, policy *engine.CompiledPolicy, ttl time.Duration) error {
 	if policy == nil {
 		return nil
@@ -129,15 +136,16 @@ func (c *MemoryCache) Set(ctx context.Context, key string, policy *engine.Compil
 	return nil
 }
 
-// Delete removes a policy from cache
+// Delete removes a policy from cache.
 func (c *MemoryCache) Delete(ctx context.Context, key string) error {
 	c.mu.Lock()
 	delete(c.data, key)
 	c.mu.Unlock()
+
 	return nil
 }
 
-// DeleteByApp removes all policies for an app
+// DeleteByApp removes all policies for an app.
 func (c *MemoryCache) DeleteByApp(ctx context.Context, appID xid.ID) error {
 	prefix := appID.String() + ":"
 
@@ -154,7 +162,7 @@ func (c *MemoryCache) DeleteByApp(ctx context.Context, appID xid.ID) error {
 	return nil
 }
 
-// DeleteByEnvironment removes all policies for an environment
+// DeleteByEnvironment removes all policies for an environment.
 func (c *MemoryCache) DeleteByEnvironment(ctx context.Context, appID, envID xid.ID) error {
 	prefix := appID.String() + ":" + envID.String() + ":"
 
@@ -171,7 +179,7 @@ func (c *MemoryCache) DeleteByEnvironment(ctx context.Context, appID, envID xid.
 	return nil
 }
 
-// DeleteByOrganization removes all policies for an organization
+// DeleteByOrganization removes all policies for an organization.
 func (c *MemoryCache) DeleteByOrganization(ctx context.Context, appID, envID, userOrgID xid.ID) error {
 	prefix := appID.String() + ":" + envID.String() + ":" + userOrgID.String() + ":"
 
@@ -188,7 +196,7 @@ func (c *MemoryCache) DeleteByOrganization(ctx context.Context, appID, envID, us
 	return nil
 }
 
-// GetMulti retrieves multiple policies
+// GetMulti retrieves multiple policies.
 func (c *MemoryCache) GetMulti(ctx context.Context, keys []string) (map[string]*engine.CompiledPolicy, error) {
 	result := make(map[string]*engine.CompiledPolicy, len(keys))
 
@@ -197,6 +205,7 @@ func (c *MemoryCache) GetMulti(ctx context.Context, keys []string) (map[string]*
 		if err != nil {
 			continue
 		}
+
 		if policy != nil {
 			result[key] = policy
 		}
@@ -205,17 +214,18 @@ func (c *MemoryCache) GetMulti(ctx context.Context, keys []string) (map[string]*
 	return result, nil
 }
 
-// SetMulti stores multiple policies
+// SetMulti stores multiple policies.
 func (c *MemoryCache) SetMulti(ctx context.Context, policies map[string]*engine.CompiledPolicy, ttl time.Duration) error {
 	for key, policy := range policies {
 		if err := c.Set(ctx, key, policy, ttl); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-// Stats returns cache statistics
+// Stats returns cache statistics.
 func (c *MemoryCache) Stats() CacheStats {
 	c.mu.RLock()
 	size := int64(len(c.data))
@@ -226,6 +236,7 @@ func (c *MemoryCache) Stats() CacheStats {
 	evictions := atomic.LoadInt64(&c.evictions)
 
 	var hitRate float64
+
 	total := hits + misses
 	if total > 0 {
 		hitRate = float64(hits) / float64(total)
@@ -241,10 +252,12 @@ func (c *MemoryCache) Stats() CacheStats {
 	}
 }
 
-// evictLRU removes the least recently used entry
+// evictLRU removes the least recently used entry.
 func (c *MemoryCache) evictLRU() {
-	var oldestKey string
-	var oldestTime time.Time
+	var (
+		oldestKey  string
+		oldestTime time.Time
+	)
 
 	for key, entry := range c.data {
 		if oldestKey == "" || entry.lastAccess.Before(oldestTime) {
@@ -264,7 +277,7 @@ func (c *MemoryCache) evictLRU() {
 // =============================================================================
 
 // RedisCache is a Redis-backed cache implementation
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type RedisCache struct {
 	client     *redis.Client
 	keyPrefix  string
@@ -276,8 +289,8 @@ type RedisCache struct {
 	evictions int64
 }
 
-// NewRedisCache creates a new Redis cache
-func NewRedisCache(client *redis.Client, config interface{}) Cache {
+// NewRedisCache creates a new Redis cache.
+func NewRedisCache(client *redis.Client, config any) Cache {
 	cfg, ok := config.(CacheConfig)
 	if !ok {
 		cfg = CacheConfig{
@@ -296,7 +309,7 @@ func NewRedisCache(client *redis.Client, config interface{}) Cache {
 	}
 }
 
-// compiledPolicyJSON is a JSON-serializable version of CompiledPolicy
+// compiledPolicyJSON is a JSON-serializable version of CompiledPolicy.
 type compiledPolicyJSON struct {
 	PolicyID           string    `json:"policyId"`
 	AppID              string    `json:"appId"`
@@ -316,17 +329,19 @@ type compiledPolicyJSON struct {
 
 // Get retrieves a compiled policy from Redis
 // Note: This returns nil because CEL programs cannot be serialized
-// Use Redis cache for metadata caching only
+// Use Redis cache for metadata caching only.
 func (c *RedisCache) Get(ctx context.Context, key string) (*engine.CompiledPolicy, error) {
 	if c.client == nil {
 		return nil, nil
 	}
 
 	result, err := c.client.Get(ctx, c.keyPrefix+key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		atomic.AddInt64(&c.misses, 1)
+
 		return nil, nil
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("redis get failed: %w", err)
 	}
@@ -355,15 +370,19 @@ func (c *RedisCache) Get(ctx context.Context, key string) (*engine.CompiledPolic
 	if id, err := xid.FromString(data.PolicyID); err == nil {
 		policy.PolicyID = id
 	}
+
 	if id, err := xid.FromString(data.AppID); err == nil {
 		policy.AppID = id
 	}
+
 	if id, err := xid.FromString(data.EnvironmentID); err == nil {
 		policy.EnvironmentID = id
 	}
+
 	if id, err := xid.FromString(data.NamespaceID); err == nil {
 		policy.NamespaceID = id
 	}
+
 	if data.UserOrganizationID != nil {
 		if id, err := xid.FromString(*data.UserOrganizationID); err == nil {
 			policy.UserOrganizationID = &id
@@ -371,10 +390,11 @@ func (c *RedisCache) Get(ctx context.Context, key string) (*engine.CompiledPolic
 	}
 
 	atomic.AddInt64(&c.hits, 1)
+
 	return policy, nil
 }
 
-// Set stores policy metadata in Redis
+// Set stores policy metadata in Redis.
 func (c *RedisCache) Set(ctx context.Context, key string, policy *engine.CompiledPolicy, ttl time.Duration) error {
 	if c.client == nil || policy == nil {
 		return nil
@@ -412,51 +432,58 @@ func (c *RedisCache) Set(ctx context.Context, key string, policy *engine.Compile
 	return c.client.Set(ctx, c.keyPrefix+key, jsonData, ttl).Err()
 }
 
-// Delete removes a policy from Redis
+// Delete removes a policy from Redis.
 func (c *RedisCache) Delete(ctx context.Context, key string) error {
 	if c.client == nil {
 		return nil
 	}
+
 	return c.client.Del(ctx, c.keyPrefix+key).Err()
 }
 
-// DeleteByApp removes all policies for an app using pattern matching
+// DeleteByApp removes all policies for an app using pattern matching.
 func (c *RedisCache) DeleteByApp(ctx context.Context, appID xid.ID) error {
 	if c.client == nil {
 		return nil
 	}
 
 	pattern := c.keyPrefix + appID.String() + ":*"
+
 	return c.deleteByPattern(ctx, pattern)
 }
 
-// DeleteByEnvironment removes all policies for an environment
+// DeleteByEnvironment removes all policies for an environment.
 func (c *RedisCache) DeleteByEnvironment(ctx context.Context, appID, envID xid.ID) error {
 	if c.client == nil {
 		return nil
 	}
 
 	pattern := c.keyPrefix + appID.String() + ":" + envID.String() + ":*"
+
 	return c.deleteByPattern(ctx, pattern)
 }
 
-// DeleteByOrganization removes all policies for an organization
+// DeleteByOrganization removes all policies for an organization.
 func (c *RedisCache) DeleteByOrganization(ctx context.Context, appID, envID, userOrgID xid.ID) error {
 	if c.client == nil {
 		return nil
 	}
 
 	pattern := c.keyPrefix + appID.String() + ":" + envID.String() + ":" + userOrgID.String() + ":*"
+
 	return c.deleteByPattern(ctx, pattern)
 }
 
-// deleteByPattern deletes all keys matching a pattern
+// deleteByPattern deletes all keys matching a pattern.
 func (c *RedisCache) deleteByPattern(ctx context.Context, pattern string) error {
-	var cursor uint64
-	var err error
+	var (
+		cursor uint64
+		err    error
+	)
 
 	for {
 		var keys []string
+
 		keys, cursor, err = c.client.Scan(ctx, cursor, pattern, 100).Result()
 		if err != nil {
 			return fmt.Errorf("redis scan failed: %w", err)
@@ -466,6 +493,7 @@ func (c *RedisCache) deleteByPattern(ctx context.Context, pattern string) error 
 			if err := c.client.Del(ctx, keys...).Err(); err != nil {
 				return fmt.Errorf("redis delete failed: %w", err)
 			}
+
 			atomic.AddInt64(&c.evictions, int64(len(keys)))
 		}
 
@@ -477,7 +505,7 @@ func (c *RedisCache) deleteByPattern(ctx context.Context, pattern string) error 
 	return nil
 }
 
-// GetMulti retrieves multiple policies from Redis
+// GetMulti retrieves multiple policies from Redis.
 func (c *RedisCache) GetMulti(ctx context.Context, keys []string) (map[string]*engine.CompiledPolicy, error) {
 	result := make(map[string]*engine.CompiledPolicy, len(keys))
 
@@ -486,6 +514,7 @@ func (c *RedisCache) GetMulti(ctx context.Context, keys []string) (map[string]*e
 		if err != nil {
 			continue
 		}
+
 		if policy != nil {
 			result[key] = policy
 		}
@@ -494,23 +523,25 @@ func (c *RedisCache) GetMulti(ctx context.Context, keys []string) (map[string]*e
 	return result, nil
 }
 
-// SetMulti stores multiple policies in Redis
+// SetMulti stores multiple policies in Redis.
 func (c *RedisCache) SetMulti(ctx context.Context, policies map[string]*engine.CompiledPolicy, ttl time.Duration) error {
 	for key, policy := range policies {
 		if err := c.Set(ctx, key, policy, ttl); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-// Stats returns cache statistics
+// Stats returns cache statistics.
 func (c *RedisCache) Stats() CacheStats {
 	hits := atomic.LoadInt64(&c.hits)
 	misses := atomic.LoadInt64(&c.misses)
 	evictions := atomic.LoadInt64(&c.evictions)
 
 	var hitRate float64
+
 	total := hits + misses
 	if total > 0 {
 		hitRate = float64(hits) / float64(total)
@@ -518,8 +549,10 @@ func (c *RedisCache) Stats() CacheStats {
 
 	// Try to get size from Redis
 	var size int64
+
 	if c.client != nil {
 		ctx := context.Background()
+
 		keys, err := c.client.Keys(ctx, c.keyPrefix+"*").Result()
 		if err == nil {
 			size = int64(len(keys))
@@ -540,21 +573,21 @@ func (c *RedisCache) Stats() CacheStats {
 // HYBRID CACHE (Memory + Redis)
 // =============================================================================
 
-// HybridCache combines memory and Redis caching
+// HybridCache combines memory and Redis caching.
 type HybridCache struct {
 	memory *MemoryCache
 	redis  *RedisCache
 }
 
-// NewHybridCache creates a new hybrid cache
-func NewHybridCache(redisClient *redis.Client, config interface{}) Cache {
+// NewHybridCache creates a new hybrid cache.
+func NewHybridCache(redisClient *redis.Client, config any) Cache {
 	return &HybridCache{
 		memory: NewMemoryCache(config).(*MemoryCache),
 		redis:  NewRedisCache(redisClient, config).(*RedisCache),
 	}
 }
 
-// Get retrieves from memory first, then Redis
+// Get retrieves from memory first, then Redis.
 func (c *HybridCache) Get(ctx context.Context, key string) (*engine.CompiledPolicy, error) {
 	// Try memory first
 	policy, err := c.memory.Get(ctx, key)
@@ -572,7 +605,7 @@ func (c *HybridCache) Get(ctx context.Context, key string) (*engine.CompiledPoli
 	return policy, err
 }
 
-// Set stores in both memory and Redis
+// Set stores in both memory and Redis.
 func (c *HybridCache) Set(ctx context.Context, key string, policy *engine.CompiledPolicy, ttl time.Duration) error {
 	// Store in memory
 	if err := c.memory.Set(ctx, key, policy, ttl); err != nil {
@@ -583,33 +616,38 @@ func (c *HybridCache) Set(ctx context.Context, key string, policy *engine.Compil
 	return c.redis.Set(ctx, key, policy, ttl)
 }
 
-// Delete removes from both caches
+// Delete removes from both caches.
 func (c *HybridCache) Delete(ctx context.Context, key string) error {
 	_ = c.memory.Delete(ctx, key)
+
 	return c.redis.Delete(ctx, key)
 }
 
-// DeleteByApp removes from both caches
+// DeleteByApp removes from both caches.
 func (c *HybridCache) DeleteByApp(ctx context.Context, appID xid.ID) error {
 	_ = c.memory.DeleteByApp(ctx, appID)
+
 	return c.redis.DeleteByApp(ctx, appID)
 }
 
-// DeleteByEnvironment removes from both caches
+// DeleteByEnvironment removes from both caches.
 func (c *HybridCache) DeleteByEnvironment(ctx context.Context, appID, envID xid.ID) error {
 	_ = c.memory.DeleteByEnvironment(ctx, appID, envID)
+
 	return c.redis.DeleteByEnvironment(ctx, appID, envID)
 }
 
-// DeleteByOrganization removes from both caches
+// DeleteByOrganization removes from both caches.
 func (c *HybridCache) DeleteByOrganization(ctx context.Context, appID, envID, userOrgID xid.ID) error {
 	_ = c.memory.DeleteByOrganization(ctx, appID, envID, userOrgID)
+
 	return c.redis.DeleteByOrganization(ctx, appID, envID, userOrgID)
 }
 
-// GetMulti retrieves from memory first, then Redis
+// GetMulti retrieves from memory first, then Redis.
 func (c *HybridCache) GetMulti(ctx context.Context, keys []string) (map[string]*engine.CompiledPolicy, error) {
 	result := make(map[string]*engine.CompiledPolicy, len(keys))
+
 	var missingKeys []string
 
 	// Try memory first
@@ -635,17 +673,18 @@ func (c *HybridCache) GetMulti(ctx context.Context, keys []string) (map[string]*
 	return result, nil
 }
 
-// SetMulti stores in both caches
+// SetMulti stores in both caches.
 func (c *HybridCache) SetMulti(ctx context.Context, policies map[string]*engine.CompiledPolicy, ttl time.Duration) error {
 	for key, policy := range policies {
 		if err := c.Set(ctx, key, policy, ttl); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-// Stats returns combined cache statistics
+// Stats returns combined cache statistics.
 func (c *HybridCache) Stats() CacheStats {
 	memStats := c.memory.Stats()
 	redisStats := c.redis.Stats()

@@ -7,15 +7,17 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// DetectionProvider defines the interface for VPN/Proxy/Tor detection
+// DetectionProvider defines the interface for VPN/Proxy/Tor detection.
 type DetectionProvider interface {
 	Check(ctx context.Context, ip string) (*DetectionResult, error)
 	Name() string
 }
 
-// DetectionResult represents VPN/proxy detection results
+// DetectionResult represents VPN/proxy detection results.
 type DetectionResult struct {
 	IPAddress    string
 	IsVPN        bool
@@ -27,7 +29,7 @@ type DetectionResult struct {
 	Provider     string
 }
 
-// IPQSProvider implements DetectionProvider using IPQualityScore
+// IPQSProvider implements DetectionProvider using IPQualityScore.
 type IPQSProvider struct {
 	apiKey     string
 	strictness int     // 0-3
@@ -35,7 +37,7 @@ type IPQSProvider struct {
 	client     *http.Client
 }
 
-// NewIPQSProvider creates a new IPQualityScore provider
+// NewIPQSProvider creates a new IPQualityScore provider.
 func NewIPQSProvider(apiKey string, strictness int, minScore float64) *IPQSProvider {
 	return &IPQSProvider{
 		apiKey:     apiKey,
@@ -57,7 +59,7 @@ func (p *IPQSProvider) Check(ctx context.Context, ip string) (*DetectionResult, 
 		p.apiKey, ip, p.strictness,
 	)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -70,6 +72,7 @@ func (p *IPQSProvider) Check(ctx context.Context, ip string) (*DetectionResult, 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("IPQS returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -95,7 +98,7 @@ func (p *IPQSProvider) Check(ctx context.Context, ip string) (*DetectionResult, 
 	}
 
 	if !result.Success {
-		return nil, fmt.Errorf("IPQS query was not successful")
+		return nil, errs.InternalServerErrorWithMessage("IPQS query was not successful")
 	}
 
 	fraudScore := result.FraudScore
@@ -112,13 +115,13 @@ func (p *IPQSProvider) Check(ctx context.Context, ip string) (*DetectionResult, 
 	}, nil
 }
 
-// ProxyCheckProvider implements DetectionProvider using proxycheck.io
+// ProxyCheckProvider implements DetectionProvider using proxycheck.io.
 type ProxyCheckProvider struct {
 	apiKey string
 	client *http.Client
 }
 
-// NewProxyCheckProvider creates a new proxycheck.io provider
+// NewProxyCheckProvider creates a new proxycheck.io provider.
 func NewProxyCheckProvider(apiKey string) *ProxyCheckProvider {
 	return &ProxyCheckProvider{
 		apiKey: apiKey,
@@ -135,7 +138,7 @@ func (p *ProxyCheckProvider) Name() string {
 func (p *ProxyCheckProvider) Check(ctx context.Context, ip string) (*DetectionResult, error) {
 	url := fmt.Sprintf("https://proxycheck.io/v2/%s?key=%s&vpn=1&asn=1", ip, p.apiKey)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -148,18 +151,19 @@ func (p *ProxyCheckProvider) Check(ctx context.Context, ip string) (*DetectionRe
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("proxycheck returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// proxycheck returns a nested structure with the IP as key
-	ipData, ok := result[ip].(map[string]interface{})
+	ipData, ok := result[ip].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("unexpected response format from proxycheck")
+		return nil, errs.InternalServerErrorWithMessage("unexpected response format from proxycheck")
 	}
 
 	proxy, _ := ipData["proxy"].(string)
@@ -181,13 +185,13 @@ func (p *ProxyCheckProvider) Check(ctx context.Context, ip string) (*DetectionRe
 	}, nil
 }
 
-// VPNAPIProvider implements DetectionProvider using vpnapi.io
+// VPNAPIProvider implements DetectionProvider using vpnapi.io.
 type VPNAPIProvider struct {
 	apiKey string
 	client *http.Client
 }
 
-// NewVPNAPIProvider creates a new vpnapi.io provider
+// NewVPNAPIProvider creates a new vpnapi.io provider.
 func NewVPNAPIProvider(apiKey string) *VPNAPIProvider {
 	return &VPNAPIProvider{
 		apiKey: apiKey,
@@ -204,7 +208,7 @@ func (p *VPNAPIProvider) Name() string {
 func (p *VPNAPIProvider) Check(ctx context.Context, ip string) (*DetectionResult, error) {
 	url := fmt.Sprintf("https://vpnapi.io/api/%s?key=%s", ip, p.apiKey)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -217,6 +221,7 @@ func (p *VPNAPIProvider) Check(ctx context.Context, ip string) (*DetectionResult
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("vpnapi returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -250,7 +255,7 @@ func (p *VPNAPIProvider) Check(ctx context.Context, ip string) (*DetectionResult
 }
 
 // StaticDetectionProvider implements a simple rule-based detection
-// Useful for testing or when external APIs are not available
+// Useful for testing or when external APIs are not available.
 type StaticDetectionProvider struct {
 	vpnIPs        map[string]bool
 	proxyIPs      map[string]bool
@@ -258,7 +263,7 @@ type StaticDetectionProvider struct {
 	datacenterIPs map[string]bool
 }
 
-// NewStaticDetectionProvider creates a new static detection provider
+// NewStaticDetectionProvider creates a new static detection provider.
 func NewStaticDetectionProvider() *StaticDetectionProvider {
 	return &StaticDetectionProvider{
 		vpnIPs:        make(map[string]bool),
@@ -283,22 +288,22 @@ func (p *StaticDetectionProvider) Check(ctx context.Context, ip string) (*Detect
 	}, nil
 }
 
-// AddVPN marks an IP as a VPN
+// AddVPN marks an IP as a VPN.
 func (p *StaticDetectionProvider) AddVPN(ip string) {
 	p.vpnIPs[ip] = true
 }
 
-// AddProxy marks an IP as a proxy
+// AddProxy marks an IP as a proxy.
 func (p *StaticDetectionProvider) AddProxy(ip string) {
 	p.proxyIPs[ip] = true
 }
 
-// AddTor marks an IP as Tor
+// AddTor marks an IP as Tor.
 func (p *StaticDetectionProvider) AddTor(ip string) {
 	p.torIPs[ip] = true
 }
 
-// AddDatacenter marks an IP as datacenter
+// AddDatacenter marks an IP as datacenter.
 func (p *StaticDetectionProvider) AddDatacenter(ip string) {
 	p.datacenterIPs[ip] = true
 }

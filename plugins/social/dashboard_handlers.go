@@ -12,14 +12,13 @@ import (
 	"github.com/xraph/forgeui/router"
 )
 
-// parseXID parses an xid string
+// parseXID parses an xid string.
 func parseXID(s string) (xid.ID, error) {
 	return xid.FromString(s)
 }
 
-// HandleCreateProvider creates a new social provider configuration
+// HandleCreateProvider creates a new social provider configuration.
 func (e *DashboardExtension) HandleCreateProvider(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -46,12 +45,14 @@ func (e *DashboardExtension) HandleCreateProvider(ctx *router.PageContext) (g.No
 	// Validate required fields
 	if providerName == "" || clientID == "" || clientSecret == "" {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Missing+required+fields", http.StatusFound)
+
 		return nil, nil
 	}
 
 	// Validate provider name
 	if !schema.IsValidProvider(providerName) {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Invalid+provider+name", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -59,10 +60,13 @@ func (e *DashboardExtension) HandleCreateProvider(ctx *router.PageContext) (g.No
 	exists, err := e.configRepo.ExistsByProvider(reqCtx, currentApp.ID, envID, providerName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+check+existing+provider", http.StatusFound)
+
 		return nil, nil
 	}
+
 	if exists {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+already+configured", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -87,6 +91,7 @@ func (e *DashboardExtension) HandleCreateProvider(ctx *router.PageContext) (g.No
 
 	if err := e.configRepo.Create(reqCtx, config); err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+create+provider", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -96,12 +101,12 @@ func (e *DashboardExtension) HandleCreateProvider(ctx *router.PageContext) (g.No
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+created+successfully", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleUpdateProvider updates an existing social provider configuration
+// HandleUpdateProvider updates an existing social provider configuration.
 func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -120,6 +125,7 @@ func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.No
 	config, err := e.configRepo.FindByID(reqCtx, configID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+not+found", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -134,6 +140,7 @@ func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.No
 	// Validate required fields
 	if clientID == "" {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Client+ID+is+required", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -158,6 +165,7 @@ func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.No
 
 	if err := e.configRepo.Update(reqCtx, config); err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+update+provider", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -167,12 +175,12 @@ func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.No
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+updated+successfully", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleToggleProvider toggles a social provider's enabled status
+// HandleToggleProvider toggles a social provider's enabled status.
 func (e *DashboardExtension) HandleToggleProvider(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -191,6 +199,7 @@ func (e *DashboardExtension) HandleToggleProvider(ctx *router.PageContext) (g.No
 	config, err := e.configRepo.FindByID(reqCtx, configID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+not+found", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -198,6 +207,7 @@ func (e *DashboardExtension) HandleToggleProvider(ctx *router.PageContext) (g.No
 	newEnabled := !config.IsEnabled
 	if err := e.configRepo.SetEnabled(reqCtx, configID, newEnabled); err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+toggle+provider", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -212,12 +222,12 @@ func (e *DashboardExtension) HandleToggleProvider(ctx *router.PageContext) (g.No
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+"+status+"+successfully", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleDeleteProvider deletes a social provider configuration
+// HandleDeleteProvider deletes a social provider configuration.
 func (e *DashboardExtension) HandleDeleteProvider(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -236,12 +246,14 @@ func (e *DashboardExtension) HandleDeleteProvider(ctx *router.PageContext) (g.No
 	config, err := e.configRepo.FindByID(reqCtx, configID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Provider+not+found", http.StatusFound)
+
 		return nil, nil
 	}
 
 	// Delete the config (soft delete)
 	if err := e.configRepo.Delete(reqCtx, configID); err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?error=Failed+to+delete+provider", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -251,5 +263,6 @@ func (e *DashboardExtension) HandleDeleteProvider(ctx *router.PageContext) (g.No
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL+"?success=Provider+deleted+successfully", http.StatusFound)
+
 	return nil, nil
 }

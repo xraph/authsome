@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/repository"
 )
 
-// AlertService handles usage alerts and notifications
+// AlertService handles usage alerts and notifications.
 type AlertService struct {
 	repo      repository.AlertRepository
 	usageRepo repository.UsageRepository
@@ -18,7 +19,7 @@ type AlertService struct {
 	// notificationService would be injected here for actual sending
 }
 
-// NewAlertService creates a new alert service
+// NewAlertService creates a new alert service.
 func NewAlertService(repo repository.AlertRepository, usageRepo repository.UsageRepository, subRepo repository.SubscriptionRepository) *AlertService {
 	return &AlertService{
 		repo:      repo,
@@ -27,7 +28,7 @@ func NewAlertService(repo repository.AlertRepository, usageRepo repository.Usage
 	}
 }
 
-// CreateAlertConfig creates a new alert configuration
+// CreateAlertConfig creates a new alert configuration.
 func (s *AlertService) CreateAlertConfig(ctx context.Context, appID xid.ID, req *core.CreateAlertConfigRequest) (*core.AlertConfig, error) {
 	config := &core.AlertConfig{
 		ID:               xid.New(),
@@ -51,6 +52,7 @@ func (s *AlertService) CreateAlertConfig(ctx context.Context, appID xid.ID, req 
 	if config.MinInterval == 0 {
 		config.MinInterval = 60 // Default 1 hour
 	}
+
 	if config.MaxAlertsPerDay == 0 {
 		config.MaxAlertsPerDay = 5
 	}
@@ -62,50 +64,59 @@ func (s *AlertService) CreateAlertConfig(ctx context.Context, appID xid.ID, req 
 	return config, nil
 }
 
-// GetAlertConfig returns an alert config by ID
+// GetAlertConfig returns an alert config by ID.
 func (s *AlertService) GetAlertConfig(ctx context.Context, id xid.ID) (*core.AlertConfig, error) {
 	return s.repo.GetAlertConfig(ctx, id)
 }
 
-// ListAlertConfigs returns all alert configs for an organization
+// ListAlertConfigs returns all alert configs for an organization.
 func (s *AlertService) ListAlertConfigs(ctx context.Context, orgID xid.ID) ([]*core.AlertConfig, error) {
 	return s.repo.ListAlertConfigs(ctx, orgID)
 }
 
-// UpdateAlertConfig updates an alert config
+// UpdateAlertConfig updates an alert config.
 func (s *AlertService) UpdateAlertConfig(ctx context.Context, id xid.ID, req *core.UpdateAlertConfigRequest) (*core.AlertConfig, error) {
 	config, err := s.repo.GetAlertConfig(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	if config == nil {
-		return nil, fmt.Errorf("alert config not found")
+		return nil, errs.NotFound("alert config not found")
 	}
 
 	if req.IsEnabled != nil {
 		config.IsEnabled = *req.IsEnabled
 	}
+
 	if req.ThresholdPercent != nil {
 		config.ThresholdPercent = *req.ThresholdPercent
 	}
+
 	if req.DaysBeforeEnd != nil {
 		config.DaysBeforeEnd = *req.DaysBeforeEnd
 	}
+
 	if len(req.Channels) > 0 {
 		config.Channels = req.Channels
 	}
+
 	if len(req.Recipients) > 0 {
 		config.Recipients = req.Recipients
 	}
+
 	if req.WebhookURL != nil {
 		config.WebhookURL = *req.WebhookURL
 	}
+
 	if req.SlackChannel != nil {
 		config.SlackChannel = *req.SlackChannel
 	}
+
 	if req.MinInterval != nil {
 		config.MinInterval = *req.MinInterval
 	}
+
 	if req.MaxAlertsPerDay != nil {
 		config.MaxAlertsPerDay = *req.MaxAlertsPerDay
 	}
@@ -119,19 +130,20 @@ func (s *AlertService) UpdateAlertConfig(ctx context.Context, id xid.ID, req *co
 	return config, nil
 }
 
-// DeleteAlertConfig deletes an alert config
+// DeleteAlertConfig deletes an alert config.
 func (s *AlertService) DeleteAlertConfig(ctx context.Context, id xid.ID) error {
 	return s.repo.DeleteAlertConfig(ctx, id)
 }
 
-// SnoozeAlertConfig snoozes alerts for a config
+// SnoozeAlertConfig snoozes alerts for a config.
 func (s *AlertService) SnoozeAlertConfig(ctx context.Context, id xid.ID, until time.Time) error {
 	config, err := s.repo.GetAlertConfig(ctx, id)
 	if err != nil {
 		return err
 	}
+
 	if config == nil {
-		return fmt.Errorf("alert config not found")
+		return errs.NotFound("alert config not found")
 	}
 
 	config.SnoozedUntil = &until
@@ -140,11 +152,12 @@ func (s *AlertService) SnoozeAlertConfig(ctx context.Context, id xid.ID, until t
 	return s.repo.UpdateAlertConfig(ctx, config)
 }
 
-// CreateAlert creates a new alert
+// CreateAlert creates a new alert.
 func (s *AlertService) CreateAlert(ctx context.Context, alert *core.Alert) error {
 	if alert.ID.IsNil() {
 		alert.ID = xid.New()
 	}
+
 	alert.Status = core.AlertStatusPending
 	alert.CreatedAt = time.Now()
 	alert.UpdatedAt = time.Now()
@@ -152,24 +165,25 @@ func (s *AlertService) CreateAlert(ctx context.Context, alert *core.Alert) error
 	return s.repo.CreateAlert(ctx, alert)
 }
 
-// GetAlert returns an alert by ID
+// GetAlert returns an alert by ID.
 func (s *AlertService) GetAlert(ctx context.Context, id xid.ID) (*core.Alert, error) {
 	return s.repo.GetAlert(ctx, id)
 }
 
-// ListAlerts returns alerts for an organization
+// ListAlerts returns alerts for an organization.
 func (s *AlertService) ListAlerts(ctx context.Context, orgID xid.ID, status *core.AlertStatus, page, pageSize int) ([]*core.Alert, int, error) {
 	return s.repo.ListAlerts(ctx, orgID, status, page, pageSize)
 }
 
-// AcknowledgeAlert marks an alert as acknowledged
+// AcknowledgeAlert marks an alert as acknowledged.
 func (s *AlertService) AcknowledgeAlert(ctx context.Context, req *core.AcknowledgeAlertRequest) error {
 	alert, err := s.repo.GetAlert(ctx, req.AlertID)
 	if err != nil {
 		return err
 	}
+
 	if alert == nil {
-		return fmt.Errorf("alert not found")
+		return errs.NotFound("alert not found")
 	}
 
 	now := time.Now()
@@ -181,14 +195,15 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, req *core.Acknowled
 	return s.repo.UpdateAlert(ctx, alert)
 }
 
-// ResolveAlert marks an alert as resolved
+// ResolveAlert marks an alert as resolved.
 func (s *AlertService) ResolveAlert(ctx context.Context, req *core.ResolveAlertRequest) error {
 	alert, err := s.repo.GetAlert(ctx, req.AlertID)
 	if err != nil {
 		return err
 	}
+
 	if alert == nil {
-		return fmt.Errorf("alert not found")
+		return errs.NotFound("alert not found")
 	}
 
 	now := time.Now()
@@ -200,7 +215,7 @@ func (s *AlertService) ResolveAlert(ctx context.Context, req *core.ResolveAlertR
 	return s.repo.UpdateAlert(ctx, alert)
 }
 
-// TriggerAlert manually triggers an alert
+// TriggerAlert manually triggers an alert.
 func (s *AlertService) TriggerAlert(ctx context.Context, appID xid.ID, req *core.TriggerAlertRequest) (*core.Alert, error) {
 	alert := &core.Alert{
 		ID:             xid.New(),
@@ -231,7 +246,7 @@ func (s *AlertService) TriggerAlert(ctx context.Context, appID xid.ID, req *core
 }
 
 // CheckUsageThresholds checks all organizations for usage threshold alerts
-// This would typically be called by a scheduled job
+// This would typically be called by a scheduled job.
 func (s *AlertService) CheckUsageThresholds(ctx context.Context, appID xid.ID) error {
 	// This is a stub - in production would:
 	// 1. List all active subscriptions
@@ -242,7 +257,7 @@ func (s *AlertService) CheckUsageThresholds(ctx context.Context, appID xid.ID) e
 }
 
 // CheckTrialEndings checks for subscriptions with trials ending soon
-// This would typically be called by a scheduled job
+// This would typically be called by a scheduled job.
 func (s *AlertService) CheckTrialEndings(ctx context.Context, appID xid.ID) error {
 	// This is a stub - in production would:
 	// 1. List subscriptions with trials ending in next X days
@@ -253,7 +268,7 @@ func (s *AlertService) CheckTrialEndings(ctx context.Context, appID xid.ID) erro
 }
 
 // ProcessPendingAlerts processes and sends pending alerts
-// This would typically be called by a scheduled job
+// This would typically be called by a scheduled job.
 func (s *AlertService) ProcessPendingAlerts(ctx context.Context) error {
 	alerts, err := s.repo.ListPendingAlerts(ctx)
 	if err != nil {
@@ -277,7 +292,7 @@ func (s *AlertService) ProcessPendingAlerts(ctx context.Context) error {
 	return nil
 }
 
-// GetAlertSummary returns an alert summary for an organization
+// GetAlertSummary returns an alert summary for an organization.
 func (s *AlertService) GetAlertSummary(ctx context.Context, orgID xid.ID) (*core.AlertSummary, error) {
 	// Get all alerts for the org
 	pending, _ := core.AlertStatusPending, error(nil)
@@ -311,6 +326,7 @@ func (s *AlertService) GetAlertSummary(ctx context.Context, orgID xid.ID) (*core
 	if len(allAlerts) > 10 {
 		allAlerts = allAlerts[:10]
 	}
+
 	for _, alert := range allAlerts {
 		summary.RecentAlerts = append(summary.RecentAlerts, *alert)
 	}
@@ -318,17 +334,19 @@ func (s *AlertService) GetAlertSummary(ctx context.Context, orgID xid.ID) (*core
 	return summary, nil
 }
 
-// SetupDefaultAlerts creates default alert configs for a new organization
+// SetupDefaultAlerts creates default alert configs for a new organization.
 func (s *AlertService) SetupDefaultAlerts(ctx context.Context, appID, orgID xid.ID) error {
 	defaults := core.DefaultAlertConfigs(appID, orgID)
 	for _, config := range defaults {
 		config.ID = xid.New()
 		config.CreatedAt = time.Now()
+
 		config.UpdatedAt = time.Now()
 		if err := s.repo.CreateAlertConfig(ctx, &config); err != nil {
 			// Log but continue - non-critical
 			continue
 		}
 	}
+
 	return nil
 }

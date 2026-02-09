@@ -8,9 +8,10 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// TeamService handles team aggregate operations
+// TeamService handles team aggregate operations.
 type TeamService struct {
 	repo       TeamRepository
 	memberRepo MemberRepository // For authorization checks
@@ -18,7 +19,7 @@ type TeamService struct {
 	rbacSvc    *rbac.Service
 }
 
-// NewTeamService creates a new team service
+// NewTeamService creates a new team service.
 func NewTeamService(repo TeamRepository, memberRepo MemberRepository, cfg Config, rbacSvc *rbac.Service) *TeamService {
 	return &TeamService{
 		repo:       repo,
@@ -28,14 +29,14 @@ func NewTeamService(repo TeamRepository, memberRepo MemberRepository, cfg Config
 	}
 }
 
-// CreateTeam creates a new team in an organization
+// CreateTeam creates a new team in an organization.
 func (s *TeamService) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateTeamRequest, creatorUserID xid.ID) (*Team, error) {
 	// Allow system operations (zero user ID) for SCIM and automated provisioning
 	// For regular user operations, verify creator is a member
 	if !creatorUserID.IsNil() {
 		member, err := s.memberRepo.FindByUserAndOrg(ctx, creatorUserID, orgID)
 		if err != nil || member == nil {
-			return nil, fmt.Errorf("only organization members can create teams")
+			return nil, errs.NotMember()
 		}
 	}
 
@@ -44,6 +45,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateT
 	if err != nil {
 		return nil, fmt.Errorf("failed to count teams: %w", err)
 	}
+
 	if count >= s.config.MaxTeamsPerOrganization {
 		return nil, MaxTeamsReached(s.config.MaxTeamsPerOrganization)
 	}
@@ -74,25 +76,27 @@ func (s *TeamService) CreateTeam(ctx context.Context, orgID xid.ID, req *CreateT
 	return team, nil
 }
 
-// FindTeamByID retrieves a team by ID
+// FindTeamByID retrieves a team by ID.
 func (s *TeamService) FindTeamByID(ctx context.Context, id xid.ID) (*Team, error) {
 	team, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, TeamNotFound()
 	}
+
 	return team, nil
 }
 
-// FindTeamByName retrieves a team by name within an organization
+// FindTeamByName retrieves a team by name within an organization.
 func (s *TeamService) FindTeamByName(ctx context.Context, orgID xid.ID, name string) (*Team, error) {
 	team, err := s.repo.FindByName(ctx, orgID, name)
 	if err != nil {
 		return nil, TeamNotFound()
 	}
+
 	return team, nil
 }
 
-// ListTeams lists teams in an organization
+// ListTeams lists teams in an organization.
 func (s *TeamService) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*pagination.PageResponse[*Team], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -102,7 +106,7 @@ func (s *TeamService) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*
 	return s.repo.ListByOrganization(ctx, filter)
 }
 
-// UpdateTeam updates a team
+// UpdateTeam updates a team.
 func (s *TeamService) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeamRequest, updaterUserID xid.ID) (*Team, error) {
 	team, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -116,6 +120,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeam
 		if err != nil || member == nil {
 			return nil, NotAdmin()
 		}
+
 		if member.Role != RoleOwner && member.Role != RoleAdmin {
 			return nil, NotAdmin()
 		}
@@ -125,18 +130,23 @@ func (s *TeamService) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeam
 	if req.Name != nil {
 		team.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		team.Description = *req.Description
 	}
+
 	if req.Metadata != nil {
 		team.Metadata = req.Metadata
 	}
+
 	if req.ProvisionedBy != nil {
 		team.ProvisionedBy = req.ProvisionedBy
 	}
+
 	if req.ExternalID != nil {
 		team.ExternalID = req.ExternalID
 	}
+
 	team.UpdatedAt = time.Now().UTC()
 
 	if err := s.repo.Update(ctx, team); err != nil {
@@ -146,7 +156,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, id xid.ID, req *UpdateTeam
 	return team, nil
 }
 
-// DeleteTeam deletes a team
+// DeleteTeam deletes a team.
 func (s *TeamService) DeleteTeam(ctx context.Context, id, deleterUserID xid.ID) error {
 	team, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -160,6 +170,7 @@ func (s *TeamService) DeleteTeam(ctx context.Context, id, deleterUserID xid.ID) 
 		if err != nil || member == nil {
 			return NotAdmin()
 		}
+
 		if member.Role != RoleOwner && member.Role != RoleAdmin {
 			return NotAdmin()
 		}
@@ -168,7 +179,7 @@ func (s *TeamService) DeleteTeam(ctx context.Context, id, deleterUserID xid.ID) 
 	return s.repo.Delete(ctx, id)
 }
 
-// AddTeamMember adds a member to a team
+// AddTeamMember adds a member to a team.
 func (s *TeamService) AddTeamMember(ctx context.Context, teamID, memberID, adderUserID xid.ID) error {
 	team, err := s.repo.FindByID(ctx, teamID)
 	if err != nil {
@@ -182,6 +193,7 @@ func (s *TeamService) AddTeamMember(ctx context.Context, teamID, memberID, adder
 		if err != nil || member == nil {
 			return NotAdmin()
 		}
+
 		if member.Role != RoleOwner && member.Role != RoleAdmin {
 			return NotAdmin()
 		}
@@ -196,10 +208,11 @@ func (s *TeamService) AddTeamMember(ctx context.Context, teamID, memberID, adder
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+
 	return s.repo.AddMember(ctx, teamMember)
 }
 
-// RemoveTeamMember removes a member from a team
+// RemoveTeamMember removes a member from a team.
 func (s *TeamService) RemoveTeamMember(ctx context.Context, teamID, memberID, removerUserID xid.ID) error {
 	team, err := s.repo.FindByID(ctx, teamID)
 	if err != nil {
@@ -213,6 +226,7 @@ func (s *TeamService) RemoveTeamMember(ctx context.Context, teamID, memberID, re
 		if err != nil || member == nil {
 			return NotAdmin()
 		}
+
 		if member.Role != RoleOwner && member.Role != RoleAdmin {
 			return NotAdmin()
 		}
@@ -221,7 +235,7 @@ func (s *TeamService) RemoveTeamMember(ctx context.Context, teamID, memberID, re
 	return s.repo.RemoveMember(ctx, teamID, memberID)
 }
 
-// ListTeamMembers lists members of a team
+// ListTeamMembers lists members of a team.
 func (s *TeamService) ListTeamMembers(ctx context.Context, filter *ListTeamMembersFilter) (*pagination.PageResponse[*TeamMember], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -231,46 +245,49 @@ func (s *TeamService) ListTeamMembers(ctx context.Context, filter *ListTeamMembe
 	return s.repo.ListMembers(ctx, filter)
 }
 
-// IsTeamMember checks if a member belongs to a team
+// IsTeamMember checks if a member belongs to a team.
 func (s *TeamService) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
 	return s.repo.IsTeamMember(ctx, teamID, memberID)
 }
 
-// FindTeamMemberByID retrieves a team member by its ID
+// FindTeamMemberByID retrieves a team member by its ID.
 func (s *TeamService) FindTeamMemberByID(ctx context.Context, id xid.ID) (*TeamMember, error) {
 	teamMember, err := s.repo.FindTeamMemberByID(ctx, id)
 	if err != nil {
 		return nil, TeamMemberNotFound()
 	}
+
 	return teamMember, nil
 }
 
-// FindTeamMember retrieves a team member by team ID and member ID
+// FindTeamMember retrieves a team member by team ID and member ID.
 func (s *TeamService) FindTeamMember(ctx context.Context, teamID, memberID xid.ID) (*TeamMember, error) {
 	teamMember, err := s.repo.FindTeamMember(ctx, teamID, memberID)
 	if err != nil {
 		return nil, TeamMemberNotFound()
 	}
+
 	return teamMember, nil
 }
 
-// ListMemberTeams retrieves all teams that a member belongs to
+// ListMemberTeams retrieves all teams that a member belongs to.
 func (s *TeamService) ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error) {
 	if err := filter.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid pagination params: %w", err)
 	}
+
 	return s.repo.ListMemberTeams(ctx, memberID, filter)
 }
 
-// IsSCIMManaged checks if a team is managed via SCIM provisioning
+// IsSCIMManaged checks if a team is managed via SCIM provisioning.
 func (s *TeamService) IsSCIMManaged(team *Team) bool {
 	return team.ProvisionedBy != nil && *team.ProvisionedBy == "scim"
 }
 
-// IsTeamMemberSCIMManaged checks if a team membership is managed via SCIM provisioning
+// IsTeamMemberSCIMManaged checks if a team membership is managed via SCIM provisioning.
 func (s *TeamService) IsTeamMemberSCIMManaged(teamMember *TeamMember) bool {
 	return teamMember.ProvisionedBy != nil && *teamMember.ProvisionedBy == "scim"
 }
 
-// Type assertion to ensure TeamService implements TeamOperations
+// Type assertion to ensure TeamService implements TeamOperations.
 var _ TeamOperations = (*TeamService)(nil)

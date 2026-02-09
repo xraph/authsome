@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 	"github.com/xraph/forgeui/router"
 )
@@ -27,7 +28,7 @@ func (s *Services) CheckExistingPageSession(c *router.PageContext) (*user.User, 
 	// Extract session token from cookie
 	cookie, err := c.Request.Cookie(sessionCookieName)
 	if err != nil || cookie == nil || cookie.Value == "" {
-		return nil, nil, fmt.Errorf("no session cookie found")
+		return nil, nil, errs.SessionNotFound()
 	}
 
 	sessionToken := cookie.Value
@@ -35,12 +36,12 @@ func (s *Services) CheckExistingPageSession(c *router.PageContext) (*user.User, 
 	// Validate session
 	sess, err := s.SessionService().FindByToken(c.Request.Context(), sessionToken)
 	if err != nil || sess == nil {
-		return nil, nil, fmt.Errorf("invalid session")
+		return nil, nil, errs.SessionInvalid()
 	}
 
 	// Check if session is expired
 	if time.Now().After(sess.ExpiresAt) {
-		return nil, nil, fmt.Errorf("session expired")
+		return nil, nil, errs.SessionExpired()
 	}
 
 	// Set app context from session for user lookup (required for multi-tenancy)
@@ -53,14 +54,14 @@ func (s *Services) CheckExistingPageSession(c *router.PageContext) (*user.User, 
 	// Get user information
 	user, err := s.UserService().FindByID(ctx, sess.UserID)
 	if err != nil || user == nil {
-		return nil, nil, fmt.Errorf("user not found")
+		return nil, nil, errs.UserNotFound()
 	}
 
 	return user, sess, nil
 }
 
 // checkExistingSession checks if there's a valid session without middleware
-// Returns user if authenticated, nil otherwise
+// Returns user if authenticated, nil otherwise.
 func (s *Services) checkExistingSession(c forge.Context) *user.User {
 	// Extract session token from cookie
 	cookie, err := c.Request().Cookie(sessionCookieName)
@@ -98,7 +99,7 @@ func (s *Services) checkExistingSession(c forge.Context) *user.User {
 }
 
 // isFirstUser checks if there are any users in the system
-// This is a global check that bypasses organization context for the first system user
+// This is a global check that bypasses organization context for the first system user.
 func (s *Services) IsFirstUser(ctx context.Context) (bool, error) {
 	// Check if platform app exists and has any members
 	platformApp, err := s.AppService().GetPlatformApp(ctx)
@@ -117,7 +118,7 @@ func (s *Services) IsFirstUser(ctx context.Context) (bool, error) {
 	return count == 0, nil
 }
 
-// generateCSRFToken generates a simple CSRF token
+// generateCSRFToken generates a simple CSRF token.
 func (s *Services) GenerateCSRFToken() string {
 	return xid.New().String()
 }

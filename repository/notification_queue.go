@@ -8,10 +8,11 @@ import (
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// NotificationQueueRepository defines the interface for notification queue operations
+// NotificationQueueRepository defines the interface for notification queue operations.
 type NotificationQueueRepository interface {
 	// Enqueue adds an item to the retry queue
 	Enqueue(ctx context.Context, item *schema.NotificationQueue) error
@@ -33,32 +34,35 @@ type NotificationQueueRepository interface {
 	CleanupOld(ctx context.Context, olderThan time.Time) error
 }
 
-// notificationQueueRepository implements NotificationQueueRepository
+// notificationQueueRepository implements NotificationQueueRepository.
 type notificationQueueRepository struct {
 	db *bun.DB
 }
 
-// NewNotificationQueueRepository creates a new notification queue repository
+// NewNotificationQueueRepository creates a new notification queue repository.
 func NewNotificationQueueRepository(db *bun.DB) NotificationQueueRepository {
 	return &notificationQueueRepository{db: db}
 }
 
-// Enqueue adds an item to the retry queue
+// Enqueue adds an item to the retry queue.
 func (r *notificationQueueRepository) Enqueue(ctx context.Context, item *schema.NotificationQueue) error {
 	if item.ID.IsNil() {
 		item.ID = xid.New()
 	}
+
 	if item.Status == "" {
 		item.Status = schema.NotificationQueueStatusPending
 	}
+
 	item.CreatedAt = time.Now()
 	item.UpdatedAt = time.Now()
 
 	_, err := r.db.NewInsert().Model(item).Exec(ctx)
+
 	return err
 }
 
-// Dequeue retrieves items ready for retry
+// Dequeue retrieves items ready for retry.
 func (r *notificationQueueRepository) Dequeue(ctx context.Context, limit int) ([]*schema.NotificationQueue, error) {
 	var items []*schema.NotificationQueue
 
@@ -77,7 +81,6 @@ func (r *notificationQueueRepository) Dequeue(ctx context.Context, limit int) ([
 		Order("created_at ASC").
 		Limit(limit).
 		Scan(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +99,7 @@ func (r *notificationQueueRepository) Dequeue(ctx context.Context, limit int) ([
 	return items, nil
 }
 
-// Update updates an item's retry state
+// Update updates an item's retry state.
 func (r *notificationQueueRepository) Update(ctx context.Context, item *schema.NotificationQueue) error {
 	item.UpdatedAt = time.Now()
 
@@ -105,19 +108,21 @@ func (r *notificationQueueRepository) Update(ctx context.Context, item *schema.N
 		Column("attempts", "last_error", "status", "next_retry_at", "updated_at").
 		Where("id = ?", item.ID).
 		Exec(ctx)
+
 	return err
 }
 
-// Delete removes an item from the queue
+// Delete removes an item from the queue.
 func (r *notificationQueueRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.NotificationQueue)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// MarkFailed marks an item as permanently failed
+// MarkFailed marks an item as permanently failed.
 func (r *notificationQueueRepository) MarkFailed(ctx context.Context, id xid.ID, lastError string) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -128,10 +133,11 @@ func (r *notificationQueueRepository) MarkFailed(ctx context.Context, id xid.ID,
 		Set("updated_at = ?", now).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// MarkSucceeded marks an item as succeeded
+// MarkSucceeded marks an item as succeeded.
 func (r *notificationQueueRepository) MarkSucceeded(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -141,10 +147,11 @@ func (r *notificationQueueRepository) MarkSucceeded(ctx context.Context, id xid.
 		Set("updated_at = ?", now).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// GetStats returns queue statistics
+// GetStats returns queue statistics.
 func (r *notificationQueueRepository) GetStats(ctx context.Context) (*schema.NotificationQueueStats, error) {
 	stats := &schema.NotificationQueueStats{}
 
@@ -156,6 +163,7 @@ func (r *notificationQueueRepository) GetStats(ctx context.Context) (*schema.Not
 	if err != nil {
 		return nil, err
 	}
+
 	stats.PendingCount = int64(pending)
 
 	// Count processing
@@ -166,6 +174,7 @@ func (r *notificationQueueRepository) GetStats(ctx context.Context) (*schema.Not
 	if err != nil {
 		return nil, err
 	}
+
 	stats.ProcessingCount = int64(processing)
 
 	// Count succeeded
@@ -176,6 +185,7 @@ func (r *notificationQueueRepository) GetStats(ctx context.Context) (*schema.Not
 	if err != nil {
 		return nil, err
 	}
+
 	stats.SucceededCount = int64(succeeded)
 
 	// Count failed
@@ -186,6 +196,7 @@ func (r *notificationQueueRepository) GetStats(ctx context.Context) (*schema.Not
 	if err != nil {
 		return nil, err
 	}
+
 	stats.FailedCount = int64(failed)
 
 	stats.TotalCount = stats.PendingCount + stats.ProcessingCount + stats.SucceededCount + stats.FailedCount
@@ -193,43 +204,47 @@ func (r *notificationQueueRepository) GetStats(ctx context.Context) (*schema.Not
 	return stats, nil
 }
 
-// GetByID retrieves a queue item by ID
+// GetByID retrieves a queue item by ID.
 func (r *notificationQueueRepository) GetByID(ctx context.Context, id xid.ID) (*schema.NotificationQueue, error) {
 	item := &schema.NotificationQueue{}
+
 	err := r.db.NewSelect().
 		Model(item).
 		Where("id = ?", id).
 		Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errs.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return item, nil
 }
 
-// CleanupOld removes old completed/failed items
+// CleanupOld removes old completed/failed items.
 func (r *notificationQueueRepository) CleanupOld(ctx context.Context, olderThan time.Time) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.NotificationQueue)(nil)).
 		Where("status IN (?, ?)", schema.NotificationQueueStatusSucceeded, schema.NotificationQueueStatusFailed).
 		Where("processed_at < ?", olderThan).
 		Exec(ctx)
+
 	return err
 }
 
-// DatabaseRetryStorage implements notification.RetryStorage using the database repository
+// DatabaseRetryStorage implements notification.RetryStorage using the database repository.
 type DatabaseRetryStorage struct {
 	repo NotificationQueueRepository
 }
 
-// NewDatabaseRetryStorage creates a new database-backed retry storage
+// NewDatabaseRetryStorage creates a new database-backed retry storage.
 func NewDatabaseRetryStorage(repo NotificationQueueRepository) notification.RetryStorage {
 	return &DatabaseRetryStorage{repo: repo}
 }
 
-// Enqueue adds an item to the retry queue
+// Enqueue adds an item to the retry queue.
 func (s *DatabaseRetryStorage) Enqueue(ctx context.Context, item *notification.RetryItem) error {
 	queueItem := &schema.NotificationQueue{
 		ID:          item.ID,
@@ -247,10 +262,11 @@ func (s *DatabaseRetryStorage) Enqueue(ctx context.Context, item *notification.R
 		NextRetryAt: &item.NextRetry,
 		CreatedAt:   item.CreatedAt,
 	}
+
 	return s.repo.Enqueue(ctx, queueItem)
 }
 
-// Dequeue retrieves items ready for retry
+// Dequeue retrieves items ready for retry.
 func (s *DatabaseRetryStorage) Dequeue(ctx context.Context, limit int) ([]*notification.RetryItem, error) {
 	queueItems, err := s.repo.Dequeue(ctx, limit)
 	if err != nil {
@@ -263,6 +279,7 @@ func (s *DatabaseRetryStorage) Dequeue(ctx context.Context, limit int) ([]*notif
 		if qi.NextRetryAt != nil {
 			nextRetry = *qi.NextRetryAt
 		}
+
 		items[i] = &notification.RetryItem{
 			ID:          qi.ID,
 			AppID:       qi.AppID,
@@ -278,10 +295,11 @@ func (s *DatabaseRetryStorage) Dequeue(ctx context.Context, limit int) ([]*notif
 			CreatedAt:   qi.CreatedAt,
 		}
 	}
+
 	return items, nil
 }
 
-// Update updates an item's retry state
+// Update updates an item's retry state.
 func (s *DatabaseRetryStorage) Update(ctx context.Context, item *notification.RetryItem) error {
 	queueItem := &schema.NotificationQueue{
 		ID:          item.ID,
@@ -290,25 +308,27 @@ func (s *DatabaseRetryStorage) Update(ctx context.Context, item *notification.Re
 		Status:      schema.NotificationQueueStatusPending,
 		NextRetryAt: &item.NextRetry,
 	}
+
 	return s.repo.Update(ctx, queueItem)
 }
 
-// Delete removes an item from the queue
+// Delete removes an item from the queue.
 func (s *DatabaseRetryStorage) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.MarkSucceeded(ctx, id)
 }
 
-// MarkFailed marks an item as permanently failed
+// MarkFailed marks an item as permanently failed.
 func (s *DatabaseRetryStorage) MarkFailed(ctx context.Context, item *notification.RetryItem) error {
 	return s.repo.MarkFailed(ctx, item.ID, item.LastError)
 }
 
-// GetStats returns queue statistics
+// GetStats returns queue statistics.
 func (s *DatabaseRetryStorage) GetStats(ctx context.Context) (*notification.RetryStats, error) {
 	stats, err := s.repo.GetStats(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return &notification.RetryStats{
 		PendingCount:   stats.PendingCount,
 		FailedCount:    stats.FailedCount,

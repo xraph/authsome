@@ -3,6 +3,7 @@ package bridge
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/xid"
@@ -12,9 +13,9 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// SessionsListInput represents sessions list request
+// SessionsListInput represents sessions list request.
 type SessionsListInput struct {
-	AppID       string  `json:"appId" validate:"required"`
+	AppID       string  `json:"appId"                 validate:"required"`
 	UserID      string  `json:"userId,omitempty"`
 	Page        int     `json:"page"`
 	PageSize    int     `json:"pageSize"`
@@ -22,7 +23,7 @@ type SessionsListInput struct {
 	SearchEmail string  `json:"searchEmail,omitempty"` // Email search filter
 }
 
-// SessionsListOutput represents sessions list response
+// SessionsListOutput represents sessions list response.
 type SessionsListOutput struct {
 	Sessions   []SessionItem `json:"sessions"`
 	Total      int           `json:"total"`
@@ -31,7 +32,7 @@ type SessionsListOutput struct {
 	TotalPages int           `json:"totalPages"`
 }
 
-// SessionItem represents a session in the list
+// SessionItem represents a session in the list.
 type SessionItem struct {
 	ID        string `json:"id"`
 	UserID    string `json:"userId"`
@@ -46,17 +47,17 @@ type SessionItem struct {
 	IsActive  bool   `json:"isActive"`
 }
 
-// RevokeSessionInput represents session revoke request
+// RevokeSessionInput represents session revoke request.
 type RevokeSessionInput struct {
 	SessionID string `json:"sessionId" validate:"required"`
 }
 
-// RevokeAllSessionsInput represents revoke all sessions request
+// RevokeAllSessionsInput represents revoke all sessions request.
 type RevokeAllSessionsInput struct {
 	UserID string `json:"userId" validate:"required"`
 }
 
-// registerSessionFunctions registers session management bridge functions
+// registerSessionFunctions registers session management bridge functions.
 func (bm *BridgeManager) registerSessionFunctions() error {
 	// List sessions
 	if err := bm.bridge.Register("getSessionsList", bm.getSessionsList,
@@ -80,10 +81,11 @@ func (bm *BridgeManager) registerSessionFunctions() error {
 	}
 
 	bm.log.Info("session bridge functions registered")
+
 	return nil
 }
 
-// getSessionsList retrieves list of sessions
+// getSessionsList retrieves list of sessions.
 func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListInput) (*SessionsListOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -93,6 +95,7 @@ func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListI
 	if input.Page == 0 {
 		input.Page = 1
 	}
+
 	if input.PageSize == 0 {
 		input.PageSize = 20
 	}
@@ -120,6 +123,7 @@ func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListI
 		if err != nil {
 			return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid userId")
 		}
+
 		filter.UserID = &userID
 	}
 
@@ -127,15 +131,18 @@ func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListI
 	response, err := bm.sessionSvc.ListSessions(goCtx, filter)
 	if err != nil {
 		bm.log.Error("failed to list sessions", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch sessions")
 	}
 
 	// Transform sessions to SessionItem DTOs
 	now := time.Now()
+
 	sessions := make([]SessionItem, 0, len(response.Data))
 	for _, s := range response.Data {
 		// Look up user email
 		userEmail := ""
+
 		if bm.userSvc != nil {
 			user, err := bm.userSvc.FindByID(goCtx, s.UserID)
 			if err == nil && user != nil {
@@ -151,6 +158,7 @@ func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListI
 			if *input.Status == "active" && !isActive {
 				continue
 			}
+
 			if *input.Status == "expired" && isActive {
 				continue
 			}
@@ -183,6 +191,7 @@ func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListI
 
 	// Calculate totals based on filtered results
 	totalFiltered := len(sessions)
+
 	totalPages := 0
 	if totalFiltered > 0 && input.PageSize > 0 {
 		totalPages = (totalFiltered + input.PageSize - 1) / input.PageSize
@@ -197,7 +206,7 @@ func (bm *BridgeManager) getSessionsList(ctx bridge.Context, input SessionsListI
 	}, nil
 }
 
-// containsIgnoreCase checks if s contains substr (case insensitive)
+// containsIgnoreCase checks if s contains substr (case insensitive).
 func containsIgnoreCase(s, substr string) bool {
 	return len(s) >= len(substr) &&
 		(s == substr ||
@@ -205,33 +214,41 @@ func containsIgnoreCase(s, substr string) bool {
 			indexIgnoreCase(s, substr) >= 0)
 }
 
-// indexIgnoreCase returns the index of substr in s (case insensitive)
+// indexIgnoreCase returns the index of substr in s (case insensitive).
 func indexIgnoreCase(s, substr string) int {
 	sLower := ""
 	substrLower := ""
+	var sLowerSb212 strings.Builder
+
 	for _, r := range s {
 		if r >= 'A' && r <= 'Z' {
-			sLower += string(r + 32)
+			sLowerSb212.WriteString(string(r + 32))
 		} else {
-			sLower += string(r)
+			sLowerSb212.WriteString(string(r))
 		}
 	}
+	sLower += sLowerSb212.String()
+	var substrLowerSb219 strings.Builder
+
 	for _, r := range substr {
 		if r >= 'A' && r <= 'Z' {
-			substrLower += string(r + 32)
+			substrLowerSb219.WriteString(string(r + 32))
 		} else {
-			substrLower += string(r)
+			substrLowerSb219.WriteString(string(r))
 		}
 	}
+	substrLower += substrLowerSb219.String()
+
 	for i := 0; i <= len(sLower)-len(substrLower); i++ {
 		if sLower[i:i+len(substrLower)] == substrLower {
 			return i
 		}
 	}
+
 	return -1
 }
 
-// parseUserAgent extracts device info from user agent string
+// parseUserAgent extracts device info from user agent string.
 func parseUserAgent(ua string) string {
 	// Simple parsing - in production, use a proper UA parser library
 	if ua == "" {
@@ -242,10 +259,11 @@ func parseUserAgent(ua string) string {
 	if len(ua) > 50 {
 		return ua[:50] + "..."
 	}
+
 	return ua
 }
 
-// revokeSession revokes a specific session
+// revokeSession revokes a specific session.
 func (bm *BridgeManager) revokeSession(ctx bridge.Context, input RevokeSessionInput) (*GenericSuccessOutput, error) {
 	if input.SessionID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "sessionId is required")
@@ -263,6 +281,7 @@ func (bm *BridgeManager) revokeSession(ctx bridge.Context, input RevokeSessionIn
 	err = bm.sessionSvc.RevokeByID(goCtx, sessionID)
 	if err != nil {
 		bm.log.Error("failed to revoke session", forge.F("error", err.Error()), forge.F("sessionId", input.SessionID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to revoke session")
 	}
 
@@ -277,7 +296,7 @@ func (bm *BridgeManager) revokeSession(ctx bridge.Context, input RevokeSessionIn
 	}, nil
 }
 
-// revokeAllSessions revokes all sessions for a user
+// revokeAllSessions revokes all sessions for a user.
 func (bm *BridgeManager) revokeAllSessions(ctx bridge.Context, input RevokeAllSessionsInput) (*GenericSuccessOutput, error) {
 	if input.UserID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "userId is required")
@@ -299,14 +318,17 @@ func (bm *BridgeManager) revokeAllSessions(ctx bridge.Context, input RevokeAllSe
 		},
 		UserID: &userID,
 	}
+
 	sessionResponse, err := bm.sessionSvc.ListSessions(goCtx, sessionFilter)
 	if err != nil {
 		bm.log.Error("failed to list user sessions", forge.F("error", err.Error()), forge.F("userId", input.UserID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to revoke sessions")
 	}
 
 	// Revoke each session
 	revokedCount := 0
+
 	if sessionResponse != nil {
 		for _, sess := range sessionResponse.Data {
 			err := bm.sessionSvc.RevokeByID(goCtx, sess.ID)

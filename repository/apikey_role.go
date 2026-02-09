@@ -4,24 +4,26 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// APIKeyRoleRepository handles API key to role assignments
+// APIKeyRoleRepository handles API key to role assignments.
 type APIKeyRoleRepository struct {
 	db *bun.DB
 }
 
-// NewAPIKeyRoleRepository creates a new API key role repository
+// NewAPIKeyRoleRepository creates a new API key role repository.
 func NewAPIKeyRoleRepository(db *bun.DB) *APIKeyRoleRepository {
 	return &APIKeyRoleRepository{db: db}
 }
 
-// AssignRole assigns a role to an API key
+// AssignRole assigns a role to an API key.
 func (r *APIKeyRoleRepository) AssignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
 	assignment := &schema.APIKeyRole{
 		ID:             xid.New(),
@@ -42,7 +44,7 @@ func (r *APIKeyRoleRepository) AssignRole(ctx context.Context, apiKeyID, roleID 
 	return nil
 }
 
-// UnassignRole removes a role from an API key (soft delete)
+// UnassignRole removes a role from an API key (soft delete).
 func (r *APIKeyRoleRepository) UnassignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID) error {
 	query := r.db.NewUpdate().
 		Model((*schema.APIKeyRole)(nil)).
@@ -64,13 +66,13 @@ func (r *APIKeyRoleRepository) UnassignRole(ctx context.Context, apiKeyID, roleI
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		return fmt.Errorf("role assignment not found")
+		return errs.New(errs.CodeNotFound, "role assignment not found", http.StatusNotFound)
 	}
 
 	return nil
 }
 
-// GetRoles retrieves all roles assigned to an API key
+// GetRoles retrieves all roles assigned to an API key.
 func (r *APIKeyRoleRepository) GetRoles(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) ([]*schema.Role, error) {
 	var roles []*schema.Role
 
@@ -95,7 +97,7 @@ func (r *APIKeyRoleRepository) GetRoles(ctx context.Context, apiKeyID xid.ID, or
 	return roles, nil
 }
 
-// GetPermissions retrieves all permissions for an API key through its roles
+// GetPermissions retrieves all permissions for an API key through its roles.
 func (r *APIKeyRoleRepository) GetPermissions(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) ([]*schema.Permission, error) {
 	var permissions []*schema.Permission
 
@@ -123,7 +125,7 @@ func (r *APIKeyRoleRepository) GetPermissions(ctx context.Context, apiKeyID xid.
 	return permissions, nil
 }
 
-// HasRole checks if an API key has a specific role
+// HasRole checks if an API key has a specific role.
 func (r *APIKeyRoleRepository) HasRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID) (bool, error) {
 	query := r.db.NewSelect().
 		Model((*schema.APIKeyRole)(nil)).
@@ -145,7 +147,7 @@ func (r *APIKeyRoleRepository) HasRole(ctx context.Context, apiKeyID, roleID xid
 	return exists, nil
 }
 
-// GetAPIKeysWithRole retrieves all API keys that have a specific role
+// GetAPIKeysWithRole retrieves all API keys that have a specific role.
 func (r *APIKeyRoleRepository) GetAPIKeysWithRole(ctx context.Context, roleID xid.ID, orgID *xid.ID) ([]*schema.APIKey, error) {
 	var apiKeys []*schema.APIKey
 
@@ -170,7 +172,7 @@ func (r *APIKeyRoleRepository) GetAPIKeysWithRole(ctx context.Context, roleID xi
 	return apiKeys, nil
 }
 
-// GetCreatorPermissions retrieves the permissions of the user who created the API key
+// GetCreatorPermissions retrieves the permissions of the user who created the API key.
 func (r *APIKeyRoleRepository) GetCreatorPermissions(ctx context.Context, creatorID xid.ID, orgID *xid.ID) ([]*schema.Permission, error) {
 	var permissions []*schema.Permission
 
@@ -198,7 +200,7 @@ func (r *APIKeyRoleRepository) GetCreatorPermissions(ctx context.Context, creato
 	return permissions, nil
 }
 
-// GetCreatorRoles retrieves the roles of the user who created the API key
+// GetCreatorRoles retrieves the roles of the user who created the API key.
 func (r *APIKeyRoleRepository) GetCreatorRoles(ctx context.Context, creatorID xid.ID, orgID *xid.ID) ([]*schema.Role, error) {
 	var roles []*schema.Role
 
@@ -223,7 +225,7 @@ func (r *APIKeyRoleRepository) GetCreatorRoles(ctx context.Context, creatorID xi
 	return roles, nil
 }
 
-// BulkAssignRoles assigns multiple roles to an API key in a single transaction
+// BulkAssignRoles assigns multiple roles to an API key in a single transaction.
 func (r *APIKeyRoleRepository) BulkAssignRoles(ctx context.Context, apiKeyID xid.ID, roleIDs []xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
 	if len(roleIDs) == 0 {
 		return nil
@@ -247,11 +249,12 @@ func (r *APIKeyRoleRepository) BulkAssignRoles(ctx context.Context, apiKeyID xid
 				return fmt.Errorf("failed to assign role %s: %w", roleID, err)
 			}
 		}
+
 		return nil
 	})
 }
 
-// BulkUnassignRoles removes multiple roles from an API key in a single transaction
+// BulkUnassignRoles removes multiple roles from an API key in a single transaction.
 func (r *APIKeyRoleRepository) BulkUnassignRoles(ctx context.Context, apiKeyID xid.ID, roleIDs []xid.ID, orgID *xid.ID) error {
 	if len(roleIDs) == 0 {
 		return nil
@@ -278,7 +281,7 @@ func (r *APIKeyRoleRepository) BulkUnassignRoles(ctx context.Context, apiKeyID x
 	return nil
 }
 
-// ReplaceRoles replaces all roles for an API key with a new set (in a transaction)
+// ReplaceRoles replaces all roles for an API key with a new set (in a transaction).
 func (r *APIKeyRoleRepository) ReplaceRoles(ctx context.Context, apiKeyID xid.ID, roleIDs []xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
 	return r.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
 		// First, soft delete all existing assignments

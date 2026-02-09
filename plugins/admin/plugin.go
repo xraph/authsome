@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/rbac"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -15,52 +16,52 @@ const (
 	PluginVersion = "1.0.0"
 )
 
-// Plugin implements the AuthSome plugin interface for admin operations
+// Plugin implements the AuthSome plugin interface for admin operations.
 type Plugin struct {
 	service *Service
 	handler *Handler
 }
 
-// NewPlugin creates a new admin plugin instance
+// NewPlugin creates a new admin plugin instance.
 func NewPlugin() *Plugin {
 	return &Plugin{}
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Cross-cutting administrative operations for platform management"
 }
 
-// Init initializes the plugin
-func (p *Plugin) Init(auth interface{}) error {
+// Init initializes the plugin.
+func (p *Plugin) Init(auth any) error {
 	// Type assert to get Auth instance
 	authInstance, ok := auth.(interface {
 		GetServiceRegistry() interface {
-			UserService() interface{}
-			SessionService() interface{}
+			UserService() any
+			SessionService() any
 			RBACService() *rbac.Service
-			AuditService() interface{}
-			BanService() interface{}
+			AuditService() any
+			BanService() any
 		}
-		GetConfig() interface{}
+		GetConfig() any
 	})
 	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.BadRequest("invalid auth instance type")
 	}
 
 	serviceRegistry := authInstance.GetServiceRegistry()
@@ -68,31 +69,31 @@ func (p *Plugin) Init(auth interface{}) error {
 	// Get required services
 	rbacService := serviceRegistry.RBACService()
 	if rbacService == nil {
-		return fmt.Errorf("rbac service not found")
+		return errs.InternalServerErrorWithMessage("rbac service not found")
 	}
 
 	// Get user service
 	userServiceRaw := serviceRegistry.UserService()
 	if userServiceRaw == nil {
-		return fmt.Errorf("user service not found")
+		return errs.InternalServerErrorWithMessage("user service not found")
 	}
 
 	// Get session service
 	sessionServiceRaw := serviceRegistry.SessionService()
 	if sessionServiceRaw == nil {
-		return fmt.Errorf("session service not found")
+		return errs.InternalServerErrorWithMessage("session service not found")
 	}
 
 	// Get audit service
 	auditServiceRaw := serviceRegistry.AuditService()
 	if auditServiceRaw == nil {
-		return fmt.Errorf("audit service not found")
+		return errs.InternalServerErrorWithMessage("audit service not found")
 	}
 
 	// Get ban service
 	banServiceRaw := serviceRegistry.BanService()
 	if banServiceRaw == nil {
-		return fmt.Errorf("ban service not found")
+		return errs.InternalServerErrorWithMessage("ban service not found")
 	}
 
 	// Initialize admin service with all dependencies (services are returned as interfaces)
@@ -112,11 +113,11 @@ func (p *Plugin) Init(auth interface{}) error {
 }
 
 // RegisterRoles implements the PluginWithRoles optional interface
-// This is called automatically during server initialization to register admin permissions
-func (p *Plugin) RegisterRoles(registry interface{}) error {
+// This is called automatically during server initialization to register admin permissions.
+func (p *Plugin) RegisterRoles(registry any) error {
 	roleRegistry, ok := registry.(rbac.RoleRegistryInterface)
 	if !ok {
-		return fmt.Errorf("invalid role registry type")
+		return errs.BadRequest("invalid role registry type")
 	}
 
 	// Register Admin Role - Platform-level administrative operations
@@ -173,22 +174,22 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 	return nil
 }
 
-// RegisterHooks implements the hooks registration (placeholder)
-func (p *Plugin) RegisterHooks(registry interface{}) error {
+// RegisterHooks implements the hooks registration (placeholder).
+func (p *Plugin) RegisterHooks(registry any) error {
 	return nil
 }
 
-// RegisterServiceDecorators implements service decoration (not needed for admin)
-func (p *Plugin) RegisterServiceDecorators(registry interface{}) error {
+// RegisterServiceDecorators implements service decoration (not needed for admin).
+func (p *Plugin) RegisterServiceDecorators(registry any) error {
 	return nil
 }
 
-// Migrate runs database migrations (placeholder)
+// Migrate runs database migrations (placeholder).
 func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Admin API group
 	admin := router.Group("/admin")
@@ -217,10 +218,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// checkPermission is a helper to verify user has the required permission
+// checkPermission is a helper to verify user has the required permission.
 func (p *Plugin) checkPermission(ctx context.Context, userID xid.ID, permission string) bool {
 	if p.service == nil || p.service.rbacService == nil {
 		return false
 	}
+
 	return p.service.checkAdminPermission(ctx, userID, permission) == nil
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// TestValidatePassword tests password validation rules
+// TestValidatePassword tests password validation rules.
 func TestValidatePassword(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -155,17 +155,21 @@ func TestValidatePassword(t *testing.T) {
 
 			if tt.expectError {
 				assert.Error(t, err)
+
 				if tt.errorMsg != "" {
 					// Check if it's an AuthsomeError and verify the context contains the message
-					if authErr, ok := err.(*errs.AuthsomeError); ok {
+					authErr := &errs.AuthsomeError{}
+					if errs.As(err, &authErr) {
 						// The specific reason is in the context
 						assert.Contains(t, authErr.Message, "Password does not meet security requirements")
 						// Check that the underlying error or context contains our specific message
 						if authErr.Context != nil {
 							reasonFound := false
+
 							for _, v := range authErr.Context {
 								if str, ok := v.(string); ok && strings.Contains(str, tt.errorMsg) {
 									reasonFound = true
+
 									break
 								}
 							}
@@ -186,7 +190,7 @@ func TestValidatePassword(t *testing.T) {
 	}
 }
 
-// TestDefaultConfig tests the default configuration
+// TestDefaultConfig tests the default configuration.
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
@@ -220,7 +224,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, 0, cfg.RateLimit.RedisDB)
 }
 
-// TestPluginOptions tests functional options
+// TestPluginOptions tests functional options.
 func TestPluginOptions(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -336,14 +340,14 @@ func TestPluginOptions(t *testing.T) {
 	}
 }
 
-// TestPluginID tests plugin ID
+// TestPluginID tests plugin ID.
 func TestPluginID(t *testing.T) {
 	plugin := NewPlugin()
 	assert.Equal(t, "username", plugin.ID())
 }
 
 // TestPasswordExpiryCalculation tests password expiry logic
-// Note: Uses account creation date as password change tracking is not in current schema
+// Note: Uses account creation date as password change tracking is not in current schema.
 func TestPasswordExpiryCalculation(t *testing.T) {
 	svc := &Service{
 		config: Config{
@@ -401,7 +405,7 @@ func TestPasswordExpiryCalculation(t *testing.T) {
 	}
 }
 
-// TestAccountLockoutError tests the AccountLockoutError type
+// TestAccountLockoutError tests the AccountLockoutError type.
 func TestAccountLockoutError(t *testing.T) {
 	lockedUntil := time.Now().Add(15 * time.Minute)
 	err := &AccountLockoutError{

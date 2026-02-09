@@ -8,9 +8,10 @@ import (
 	"net/http"
 
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// SendGridConfig holds SendGrid configuration
+// SendGridConfig holds SendGrid configuration.
 type SendGridConfig struct {
 	APIKey   string `json:"api_key"`
 	From     string `json:"from"`
@@ -18,13 +19,13 @@ type SendGridConfig struct {
 	BaseURL  string `json:"base_url"`
 }
 
-// SendGridProvider implements notification.Provider for SendGrid
+// SendGridProvider implements notification.Provider for SendGrid.
 type SendGridProvider struct {
 	config     SendGridConfig
 	httpClient *http.Client
 }
 
-// NewSendGridProvider creates a new SendGrid email provider
+// NewSendGridProvider creates a new SendGrid email provider.
 func NewSendGridProvider(config SendGridConfig) *SendGridProvider {
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.sendgrid.com"
@@ -36,17 +37,17 @@ func NewSendGridProvider(config SendGridConfig) *SendGridProvider {
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *SendGridProvider) ID() string {
 	return "sendgrid"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *SendGridProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeEmail
 }
 
-// Send sends an email notification via SendGrid
+// Send sends an email notification via SendGrid.
 func (p *SendGridProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Build SendGrid API request
 	payload := SendGridRequest{
@@ -76,8 +77,9 @@ func (p *SendGridProvider) Send(ctx context.Context, notif *notification.Notific
 	}
 
 	// Create HTTP request
-	apiURL := fmt.Sprintf("%s/v3/mail/send", p.config.BaseURL)
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonData))
+	apiURL := p.config.BaseURL + "/v3/mail/send"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -99,14 +101,16 @@ func (p *SendGridProvider) Send(ctx context.Context, notif *notification.Notific
 		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
 			return fmt.Errorf("email failed with status %d", resp.StatusCode)
 		}
+
 		return fmt.Errorf("email failed: %v", errorResp.Errors)
 	}
 
 	// Extract message ID from response headers
 	if messageID := resp.Header.Get("X-Message-Id"); messageID != "" {
 		if notif.Metadata == nil {
-			notif.Metadata = make(map[string]interface{})
+			notif.Metadata = make(map[string]any)
 		}
+
 		notif.Metadata["sendgrid_message_id"] = messageID
 		notif.ProviderID = messageID
 	}
@@ -114,12 +118,12 @@ func (p *SendGridProvider) Send(ctx context.Context, notif *notification.Notific
 	return nil
 }
 
-// GetStatus gets the delivery status from SendGrid
+// GetStatus gets the delivery status from SendGrid.
 func (p *SendGridProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// SendGrid Activity Feed API
 	apiURL := fmt.Sprintf("%s/v3/messages/%s", p.config.BaseURL, providerID)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -151,14 +155,16 @@ func (p *SendGridProvider) GetStatus(ctx context.Context, providerID string) (no
 	}
 }
 
-// ValidateConfig validates the provider configuration
+// ValidateConfig validates the provider configuration.
 func (p *SendGridProvider) ValidateConfig() error {
 	if p.config.APIKey == "" {
-		return fmt.Errorf("SendGrid API key is required")
+		return errs.RequiredField("api_key")
 	}
+
 	if p.config.From == "" {
-		return fmt.Errorf("from email address is required")
+		return errs.RequiredField("from")
 	}
+
 	return nil
 }
 

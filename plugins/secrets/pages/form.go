@@ -1,7 +1,7 @@
 package pages
 
 import (
-	"fmt"
+	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// CreateSecretPage renders the create secret form
+// CreateSecretPage renders the create secret form.
 func CreateSecretPage(
 	currentApp *app.App,
 	basePath string,
@@ -72,7 +72,7 @@ func CreateSecretPage(
 	)
 }
 
-// EditSecretPage renders the edit secret form
+// EditSecretPage renders the edit secret form.
 func EditSecretPage(
 	currentApp *app.App,
 	basePath string,
@@ -147,11 +147,14 @@ func EditSecretPage(
 	)
 }
 
-// secretForm renders the actual form for creating/editing secrets
+// secretForm renders the actual form for creating/editing secrets.
 func secretForm(appBase string, secret *core.SecretDTO, prefill *core.CreateSecretRequest, isEdit bool) g.Node {
 	// Determine initial values
-	var path, description, schema, valueType string
-	var tags []string
+	var (
+		path, description, schema, valueType string
+		tags                                 []string
+	)
+
 	hasExpiry := false
 
 	if isEdit && secret != nil {
@@ -515,13 +518,19 @@ func joinTags(tags []string) string {
 	if len(tags) == 0 {
 		return ""
 	}
+
 	result := ""
+	var resultSb519 strings.Builder
+
 	for i, tag := range tags {
 		if i > 0 {
-			result += ", "
+			resultSb519.WriteString(", ")
 		}
-		result += tag
+
+		resultSb519.WriteString(tag)
 	}
+	result += resultSb519.String()
+
 	return result
 }
 
@@ -601,7 +610,7 @@ func formScript() g.Node {
 	`))
 }
 
-// SecretFormValidation renders client-side validation hints
+// SecretFormValidation renders client-side validation hints.
 func SecretFormValidation() g.Node {
 	return Div(
 		Class("bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4 mb-6"),
@@ -622,7 +631,7 @@ func SecretFormValidation() g.Node {
 	)
 }
 
-// SecretImportForm renders a bulk import form
+// SecretImportForm renders a bulk import form.
 func SecretImportForm(appBase string) g.Node {
 	return Div(
 		Class("bg-white rounded-lg border border-slate-200 dark:bg-gray-900 dark:border-gray-800 p-6"),
@@ -675,7 +684,7 @@ func SecretImportForm(appBase string) g.Node {
 	)
 }
 
-// Format template for JSON secrets
+// Format template for JSON secrets.
 const jsonTemplate = `{
   "secrets": [
     {
@@ -688,7 +697,7 @@ const jsonTemplate = `{
   ]
 }`
 
-// Format template for YAML secrets
+// Format template for YAML secrets.
 const yamlTemplate = `secrets:
   - path: database/postgres/password
     value: your-password
@@ -698,18 +707,18 @@ const yamlTemplate = `secrets:
       - database
       - production`
 
-// ImportTemplateDownload renders download links for import templates
+// ImportTemplateDownload renders download links for import templates.
 func ImportTemplateDownload() g.Node {
 	return Div(
 		Class("flex items-center gap-4 mt-4"),
 		A(
-			Href(fmt.Sprintf("data:application/json,%s", jsonTemplate)),
+			Href("data:application/json,"+jsonTemplate),
 			Download("secrets-template.json"),
 			Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 			g.Text("Download JSON template"),
 		),
 		A(
-			Href(fmt.Sprintf("data:text/yaml,%s", yamlTemplate)),
+			Href("data:text/yaml,"+yamlTemplate),
 			Download("secrets-template.yaml"),
 			Class("text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400"),
 			g.Text("Download YAML template"),

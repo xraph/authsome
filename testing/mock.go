@@ -31,6 +31,7 @@ package testing
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -94,7 +96,7 @@ func NewMock(t *testing.T) *Mock {
 		EnvironmentID: defaultEnv.ID,
 		Name:          "Test Organization",
 		Slug:          "test-org",
-		Metadata:      map[string]interface{}{},
+		Metadata:      map[string]any{},
 	}
 
 	m := &Mock{
@@ -122,6 +124,7 @@ func NewMock(t *testing.T) *Mock {
 // The user is automatically added to the default organization.
 func (m *Mock) CreateUser(email, name string) *schema.User {
 	m.t.Helper()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -150,6 +153,7 @@ func (m *Mock) CreateUser(email, name string) *schema.User {
 // CreateUserWithRole creates a test user with a specific role in the default organization.
 func (m *Mock) CreateUserWithRole(email, name, role string) *schema.User {
 	m.t.Helper()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -178,6 +182,7 @@ func (m *Mock) CreateUserWithRole(email, name, role string) *schema.User {
 // CreateOrganization creates a test organization.
 func (m *Mock) CreateOrganization(name, slug string) *schema.Organization {
 	m.t.Helper()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -187,16 +192,18 @@ func (m *Mock) CreateOrganization(name, slug string) *schema.Organization {
 		EnvironmentID: m.defaultEnv.ID,
 		Name:          name,
 		Slug:          slug,
-		Metadata:      map[string]interface{}{},
+		Metadata:      map[string]any{},
 	}
 
 	m.orgs[org.ID] = org
+
 	return org
 }
 
 // AddUserToOrg adds a user to an organization with the specified role.
 func (m *Mock) AddUserToOrg(userID, orgID xid.ID, role string) *schema.OrganizationMember {
 	m.t.Helper()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -209,12 +216,14 @@ func (m *Mock) AddUserToOrg(userID, orgID xid.ID, role string) *schema.Organizat
 	}
 
 	m.members[orgID] = append(m.members[orgID], member)
+
 	return member
 }
 
 // CreateSession creates a test session for the given user and organization.
 func (m *Mock) CreateSession(userID, orgID xid.ID) *schema.Session {
 	m.t.Helper()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -226,12 +235,14 @@ func (m *Mock) CreateSession(userID, orgID xid.ID) *schema.Session {
 	}
 
 	m.sessions[session.ID] = session
+
 	return session
 }
 
 // CreateExpiredSession creates an expired session for testing expiration scenarios.
 func (m *Mock) CreateExpiredSession(userID, orgID xid.ID) *schema.Session {
 	m.t.Helper()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -243,6 +254,7 @@ func (m *Mock) CreateExpiredSession(userID, orgID xid.ID) *schema.Session {
 	}
 
 	m.sessions[session.ID] = session
+
 	return session
 }
 
@@ -260,6 +272,7 @@ func (m *Mock) GetUser(userID xid.ID) (*schema.User, error) {
 	if !ok {
 		return nil, fmt.Errorf("user not found: %s", userID)
 	}
+
 	return user, nil
 }
 
@@ -272,6 +285,7 @@ func (m *Mock) GetSession(sessionID xid.ID) (*schema.Session, error) {
 	if !ok {
 		return nil, fmt.Errorf("session not found: %s", sessionID)
 	}
+
 	return session, nil
 }
 
@@ -284,6 +298,7 @@ func (m *Mock) GetApp(appID xid.ID) (*schema.App, error) {
 	if !ok {
 		return nil, fmt.Errorf("app not found: %s", appID)
 	}
+
 	return app, nil
 }
 
@@ -296,6 +311,7 @@ func (m *Mock) GetEnvironment(envID xid.ID) (*schema.Environment, error) {
 	if !ok {
 		return nil, fmt.Errorf("environment not found: %s", envID)
 	}
+
 	return env, nil
 }
 
@@ -308,6 +324,7 @@ func (m *Mock) GetOrganization(orgID xid.ID) (*schema.Organization, error) {
 	if !ok {
 		return nil, fmt.Errorf("organization not found: %s", orgID)
 	}
+
 	return org, nil
 }
 
@@ -317,16 +334,19 @@ func (m *Mock) GetUserOrgs(userID xid.ID) ([]*schema.Organization, error) {
 	defer m.mu.RUnlock()
 
 	var orgs []*schema.Organization
+
 	for orgID, members := range m.members {
 		for _, member := range members {
 			if member.UserID == userID {
 				if org, ok := m.orgs[orgID]; ok {
 					orgs = append(orgs, org)
 				}
+
 				break
 			}
 		}
 	}
+
 	return orgs, nil
 }
 
@@ -340,38 +360,39 @@ func (m *Mock) GetDefaultEnvironment() *schema.Environment {
 	return m.defaultEnv
 }
 
-// WithUser sets user in context using core/contexts
+// WithUser sets user in context using core/contexts.
 func (m *Mock) WithUser(ctx context.Context, userID xid.ID) context.Context {
 	return contexts.SetUserID(ctx, userID)
 }
 
-// WithApp sets app in context using core/contexts
+// WithApp sets app in context using core/contexts.
 func (m *Mock) WithApp(ctx context.Context, appID xid.ID) context.Context {
 	return contexts.SetAppID(ctx, appID)
 }
 
-// WithEnvironment sets environment in context using core/contexts
+// WithEnvironment sets environment in context using core/contexts.
 func (m *Mock) WithEnvironment(ctx context.Context, envID xid.ID) context.Context {
 	return contexts.SetEnvironmentID(ctx, envID)
 }
 
-// WithOrganization sets organization in context using core/contexts
+// WithOrganization sets organization in context using core/contexts.
 func (m *Mock) WithOrganization(ctx context.Context, orgID xid.ID) context.Context {
 	return contexts.SetOrganizationID(ctx, orgID)
 }
 
-// WithSession adds session and user to context
+// WithSession adds session and user to context.
 func (m *Mock) WithSession(ctx context.Context, sessionID xid.ID) context.Context {
 	session, err := m.GetSession(sessionID)
 	if err != nil {
 		m.t.Fatalf("failed to get session: %v", err)
 	}
+
 	ctx = contexts.SetUserID(ctx, session.UserID)
 	// Store session object separately for retrieval
 	return context.WithValue(ctx, sessionContextKey, session)
 }
 
-// NewTestContext creates fully authenticated context with all tenancy levels
+// NewTestContext creates fully authenticated context with all tenancy levels.
 func (m *Mock) NewTestContext() context.Context {
 	user := m.CreateUser("test@example.com", "Test User")
 	session := m.CreateSession(user.ID, m.defaultOrg.ID)
@@ -386,7 +407,7 @@ func (m *Mock) NewTestContext() context.Context {
 	return ctx
 }
 
-// NewTestContextWithUser creates authenticated context for specific user
+// NewTestContextWithUser creates authenticated context for specific user.
 func (m *Mock) NewTestContextWithUser(user *schema.User) context.Context {
 	session := m.CreateSession(user.ID, m.defaultOrg.ID)
 
@@ -427,7 +448,7 @@ func (m *Mock) Reset() {
 		EnvironmentID: m.defaultEnv.ID,
 		Name:          "Test Organization",
 		Slug:          "test-org",
-		Metadata:      map[string]interface{}{},
+		Metadata:      map[string]any{},
 	}
 
 	m.users = make(map[xid.ID]*schema.User)
@@ -455,6 +476,7 @@ func (s *MockUserService) Create(ctx context.Context, req *user.CreateUserReques
 	}
 
 	s.mock.users[user.ID] = user
+
 	return user, nil
 }
 
@@ -471,6 +493,7 @@ func (s *MockUserService) GetByEmail(ctx context.Context, email string) (*schema
 			return user, nil
 		}
 	}
+
 	return nil, fmt.Errorf("user not found with email: %s", email)
 }
 
@@ -486,6 +509,7 @@ func (s *MockUserService) Update(ctx context.Context, userID xid.ID, req *user.U
 	if req.Name != nil {
 		user.Name = *req.Name
 	}
+
 	if req.Email != nil {
 		user.Email = *req.Email
 	}
@@ -498,6 +522,7 @@ func (s *MockUserService) Delete(ctx context.Context, userID xid.ID) error {
 	defer s.mock.mu.Unlock()
 
 	delete(s.mock.users, userID)
+
 	return nil
 }
 
@@ -523,7 +548,8 @@ func (s *MockSessionService) GetByToken(ctx context.Context, token string) (*sch
 			return session, nil
 		}
 	}
-	return nil, fmt.Errorf("session not found with token")
+
+	return nil, errs.New(errs.CodeSessionNotFound, "session not found with token", http.StatusNotFound)
 }
 
 func (s *MockSessionService) Delete(ctx context.Context, sessionID xid.ID) error {
@@ -531,6 +557,7 @@ func (s *MockSessionService) Delete(ctx context.Context, sessionID xid.ID) error
 	defer s.mock.mu.Unlock()
 
 	delete(s.mock.sessions, sessionID)
+
 	return nil
 }
 
@@ -541,7 +568,7 @@ func (s *MockSessionService) Validate(ctx context.Context, token string) (*schem
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		return nil, fmt.Errorf("session expired")
+		return nil, errs.New(errs.CodeSessionExpired, "session expired", http.StatusUnauthorized)
 	}
 
 	return session, nil

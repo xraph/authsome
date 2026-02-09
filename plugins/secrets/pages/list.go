@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SecretsListPage renders the secrets list page
+// SecretsListPage renders the secrets list page.
 func SecretsListPage(
 	currentApp *app.App,
 	basePath string,
@@ -64,7 +65,7 @@ func SecretsListPage(
 	)
 }
 
-// searchAndFilters renders the search and filter controls
+// searchAndFilters renders the search and filter controls.
 func searchAndFilters(appBase string, query *core.ListSecretsQuery) g.Node {
 	return Div(
 		Class("flex flex-wrap gap-3"),
@@ -138,7 +139,7 @@ func searchAndFilters(appBase string, query *core.ListSecretsQuery) g.Node {
 	)
 }
 
-// statsCards renders statistics cards
+// statsCards renders statistics cards.
 func statsCards(secrets []*core.SecretDTO, total int) g.Node {
 	// Count by type
 	typeCounts := make(map[string]int)
@@ -155,10 +156,10 @@ func statsCards(secrets []*core.SecretDTO, total int) g.Node {
 
 	return Div(
 		Class("grid grid-cols-2 md:grid-cols-4 gap-4"),
-		statCard("Total Secrets", fmt.Sprintf("%d", total), lucide.KeyRound(Class("size-5 text-violet-600"))),
-		statCard("Plain Text", fmt.Sprintf("%d", typeCounts["plain"]), lucide.Type(Class("size-5 text-blue-600"))),
-		statCard("Structured", fmt.Sprintf("%d", typeCounts["json"]+typeCounts["yaml"]), lucide.Braces(Class("size-5 text-green-600"))),
-		statCard("Expiring Soon", fmt.Sprintf("%d", expiringCount), lucide.Clock(Class("size-5 text-orange-600"))),
+		statCard("Total Secrets", strconv.Itoa(total), lucide.KeyRound(Class("size-5 text-violet-600"))),
+		statCard("Plain Text", strconv.Itoa(typeCounts["plain"]), lucide.Type(Class("size-5 text-blue-600"))),
+		statCard("Structured", strconv.Itoa(typeCounts["json"]+typeCounts["yaml"]), lucide.Braces(Class("size-5 text-green-600"))),
+		statCard("Expiring Soon", strconv.Itoa(expiringCount), lucide.Clock(Class("size-5 text-orange-600"))),
 	)
 }
 
@@ -179,7 +180,7 @@ func statCard(title, value string, icon g.Node) g.Node {
 	)
 }
 
-// secretsTable renders the secrets table
+// secretsTable renders the secrets table.
 func secretsTable(
 	currentApp *app.App,
 	basePath string,
@@ -240,6 +241,7 @@ func secretRow(currentApp *app.App, basePath string, secret *core.SecretDTO) g.N
 
 	// Determine status
 	status := "active"
+
 	if secret.HasExpiry && secret.ExpiresAt != nil {
 		if secret.ExpiresAt.Before(time.Now()) {
 			status = "expired"
@@ -270,6 +272,7 @@ func secretRow(currentApp *app.App, basePath string, secret *core.SecretDTO) g.N
 							if len(desc) > 50 {
 								desc = desc[:50] + "..."
 							}
+
 							return Div(
 								Class("text-xs text-slate-500 dark:text-gray-400"),
 								g.Text(desc),
@@ -380,13 +383,13 @@ func paginationControls(baseURL string, currentPage, totalPages int) g.Node {
 		if i == currentPage {
 			items = append(items, Span(
 				Class("px-3 py-2 text-sm font-medium text-white bg-violet-600 border border-violet-600 rounded-md"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			items = append(items, A(
 				Href(fmt.Sprintf("%s?page=%d", baseURL, i)),
 				Class("px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			items = append(items, Span(Class("px-2 py-2 text-slate-400"), g.Text("...")))
@@ -408,9 +411,10 @@ func paginationControls(baseURL string, currentPage, totalPages int) g.Node {
 	)
 }
 
-// Helper functions
+// Helper functions.
 func valueTypeBadge(valueType string) g.Node {
 	var classes, icon string
+
 	switch valueType {
 	case "json":
 		classes = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
@@ -435,6 +439,7 @@ func valueTypeBadge(valueType string) g.Node {
 
 func statusBadge(status string) g.Node {
 	var classes string
+
 	switch status {
 	case "active":
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
@@ -445,6 +450,7 @@ func statusBadge(status string) g.Node {
 	default:
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 	}
+
 	return Span(Class(classes), g.Text(status))
 }
 
@@ -455,19 +461,22 @@ func timeAgo(t time.Time) string {
 		return "just now"
 	case duration < time.Hour:
 		mins := int(duration.Minutes())
+
 		return fmt.Sprintf("%dm ago", mins)
 	case duration < 24*time.Hour:
 		hours := int(duration.Hours())
+
 		return fmt.Sprintf("%dh ago", hours)
 	case duration < 7*24*time.Hour:
 		days := int(duration.Hours() / 24)
+
 		return fmt.Sprintf("%dd ago", days)
 	default:
 		return t.Format("Jan 2, 2006")
 	}
 }
 
-// TreeNode represents a node in the secrets tree
+// TreeNode represents a node in the secrets tree.
 type TreeNode struct {
 	Name     string
 	Path     string
@@ -476,7 +485,7 @@ type TreeNode struct {
 	Children []*TreeNode
 }
 
-// SecretsTreeView renders a tree view of secrets
+// SecretsTreeView renders a tree view of secrets.
 func SecretsTreeView(
 	currentApp *app.App,
 	basePath string,
@@ -536,7 +545,7 @@ func renderTreeNodes(currentApp *app.App, basePath string, nodes []*core.SecretT
 	return result
 }
 
-// SecretsPath renders breadcrumb-style path navigation
+// SecretsPath renders breadcrumb-style path navigation.
 func SecretsPath(path string) g.Node {
 	parts := strings.Split(path, "/")
 	items := make([]g.Node, 0, len(parts)*2-1)
@@ -550,6 +559,7 @@ func SecretsPath(path string) g.Node {
 		}
 
 		isLast := i == len(parts)-1
+
 		classes := "text-slate-600 dark:text-gray-400"
 		if isLast {
 			classes = "text-slate-900 font-medium dark:text-white"

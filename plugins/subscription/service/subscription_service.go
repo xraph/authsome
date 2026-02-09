@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	subhooks "github.com/xraph/authsome/plugins/subscription/internal/hooks"
@@ -14,7 +16,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// SubscriptionService handles subscription business logic
+// SubscriptionService handles subscription business logic.
 type SubscriptionService struct {
 	repo         repository.SubscriptionRepository
 	planRepo     repository.PlanRepository
@@ -27,7 +29,7 @@ type SubscriptionService struct {
 	config       core.Config
 }
 
-// NewSubscriptionService creates a new subscription service
+// NewSubscriptionService creates a new subscription service.
 func NewSubscriptionService(
 	repo repository.SubscriptionRepository,
 	planRepo repository.PlanRepository,
@@ -52,7 +54,7 @@ func NewSubscriptionService(
 	}
 }
 
-// Create creates a new subscription
+// Create creates a new subscription.
 func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscriptionRequest) (*core.Subscription, error) {
 	// Execute before hooks
 	if err := s.hookRegistry.ExecuteBeforeSubscriptionCreate(ctx, req.OrganizationID, req.PlanID); err != nil {
@@ -77,6 +79,7 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 
 	// Create subscription
 	now := time.Now()
+
 	quantity := req.Quantity
 	if quantity <= 0 {
 		quantity = 1
@@ -107,7 +110,7 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 	if req.Metadata != nil {
 		sub.Metadata = req.Metadata
 	} else {
-		sub.Metadata = make(map[string]interface{})
+		sub.Metadata = make(map[string]any)
 	}
 
 	// Handle trial
@@ -117,6 +120,7 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 		if req.TrialDays > 0 {
 			trialDays = req.TrialDays
 		}
+
 		trialEnd := now.AddDate(0, 0, trialDays)
 		sub.TrialStart = &now
 		sub.TrialEnd = &trialEnd
@@ -144,16 +148,14 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 		}
 
 		// Prepare metadata for provider
-		providerMetadata := map[string]interface{}{
+		providerMetadata := map[string]any{
 			"authsome":        "true",
 			"subscription_id": sub.ID.String(),
 			"organization_id": req.OrganizationID.String(),
 			"plan_id":         req.PlanID.String(),
 		}
 		// Merge custom metadata
-		for k, v := range req.Metadata {
-			providerMetadata[k] = v
-		}
+		maps.Copy(providerMetadata, req.Metadata)
 
 		providerSubID, err := s.provider.CreateSubscription(
 			ctx,
@@ -193,7 +195,7 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 	}
 
 	// Record event
-	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionCreated), map[string]interface{}{
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionCreated), map[string]any{
 		"planId":   req.PlanID.String(),
 		"quantity": quantity,
 		"trial":    req.StartTrial,
@@ -202,7 +204,7 @@ func (s *SubscriptionService) Create(ctx context.Context, req *core.CreateSubscr
 	return coreSub, nil
 }
 
-// Update updates a subscription
+// Update updates a subscription.
 func (s *SubscriptionService) Update(ctx context.Context, id xid.ID, req *core.UpdateSubscriptionRequest) (*core.Subscription, error) {
 	// Execute before hooks
 	if err := s.hookRegistry.ExecuteBeforeSubscriptionUpdate(ctx, id, req); err != nil {
@@ -223,9 +225,11 @@ func (s *SubscriptionService) Update(ctx context.Context, id xid.ID, req *core.U
 		if err != nil {
 			return nil, suberrors.ErrPlanNotFound
 		}
+
 		if !plan.IsActive {
 			return nil, suberrors.ErrPlanNotActive
 		}
+
 		sub.PlanID = *req.PlanID
 	}
 
@@ -260,7 +264,7 @@ func (s *SubscriptionService) Update(ctx context.Context, id xid.ID, req *core.U
 	return coreSub, nil
 }
 
-// Cancel cancels a subscription
+// Cancel cancels a subscription.
 func (s *SubscriptionService) Cancel(ctx context.Context, id xid.ID, req *core.CancelSubscriptionRequest) error {
 	// Execute before hooks
 	if err := s.hookRegistry.ExecuteBeforeSubscriptionCancel(ctx, id, req.Immediate); err != nil {
@@ -290,8 +294,9 @@ func (s *SubscriptionService) Cancel(ctx context.Context, id xid.ID, req *core.C
 
 	// Store cancellation reason
 	if sub.Metadata == nil {
-		sub.Metadata = make(map[string]interface{})
+		sub.Metadata = make(map[string]any)
 	}
+
 	sub.Metadata["cancellation_reason"] = req.Reason
 
 	if err := s.repo.Update(ctx, sub); err != nil {
@@ -302,7 +307,7 @@ func (s *SubscriptionService) Cancel(ctx context.Context, id xid.ID, req *core.C
 	s.hookRegistry.ExecuteAfterSubscriptionCancel(ctx, id)
 
 	// Record event
-	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionCanceled), map[string]interface{}{
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionCanceled), map[string]any{
 		"immediate": req.Immediate,
 		"reason":    req.Reason,
 	})
@@ -310,7 +315,7 @@ func (s *SubscriptionService) Cancel(ctx context.Context, id xid.ID, req *core.C
 	return nil
 }
 
-// Pause pauses a subscription
+// Pause pauses a subscription.
 func (s *SubscriptionService) Pause(ctx context.Context, id xid.ID, req *core.PauseSubscriptionRequest) error {
 	sub, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -318,7 +323,7 @@ func (s *SubscriptionService) Pause(ctx context.Context, id xid.ID, req *core.Pa
 	}
 
 	if sub.Status != string(core.StatusActive) {
-		return fmt.Errorf("subscription must be active to pause")
+		return errs.BadRequest("subscription must be active to pause")
 	}
 
 	now := time.Now()
@@ -328,8 +333,9 @@ func (s *SubscriptionService) Pause(ctx context.Context, id xid.ID, req *core.Pa
 	sub.UpdatedAt = now
 
 	if sub.Metadata == nil {
-		sub.Metadata = make(map[string]interface{})
+		sub.Metadata = make(map[string]any)
 	}
+
 	sub.Metadata["pause_reason"] = req.Reason
 
 	if err := s.repo.Update(ctx, sub); err != nil {
@@ -337,7 +343,7 @@ func (s *SubscriptionService) Pause(ctx context.Context, id xid.ID, req *core.Pa
 	}
 
 	// Record event
-	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionPaused), map[string]interface{}{
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionPaused), map[string]any{
 		"reason":   req.Reason,
 		"resumeAt": req.ResumeAt,
 	})
@@ -345,7 +351,7 @@ func (s *SubscriptionService) Pause(ctx context.Context, id xid.ID, req *core.Pa
 	return nil
 }
 
-// Resume resumes a paused subscription
+// Resume resumes a paused subscription.
 func (s *SubscriptionService) Resume(ctx context.Context, id xid.ID) error {
 	sub, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -353,7 +359,7 @@ func (s *SubscriptionService) Resume(ctx context.Context, id xid.ID) error {
 	}
 
 	if sub.Status != string(core.StatusPaused) {
-		return fmt.Errorf("subscription is not paused")
+		return errs.BadRequest("subscription is not paused")
 	}
 
 	now := time.Now()
@@ -372,25 +378,27 @@ func (s *SubscriptionService) Resume(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// GetByID retrieves a subscription by ID
+// GetByID retrieves a subscription by ID.
 func (s *SubscriptionService) GetByID(ctx context.Context, id xid.ID) (*core.Subscription, error) {
 	sub, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, suberrors.ErrSubscriptionNotFound
 	}
+
 	return s.schemaToCoreSub(sub), nil
 }
 
-// GetByOrganizationID retrieves the active subscription for an organization
+// GetByOrganizationID retrieves the active subscription for an organization.
 func (s *SubscriptionService) GetByOrganizationID(ctx context.Context, orgID xid.ID) (*core.Subscription, error) {
 	sub, err := s.repo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
 		return nil, suberrors.ErrSubscriptionNotFound
 	}
+
 	return s.schemaToCoreSub(sub), nil
 }
 
-// List retrieves subscriptions with filtering
+// List retrieves subscriptions with filtering.
 func (s *SubscriptionService) List(ctx context.Context, appID, orgID, planID *xid.ID, status string, page, pageSize int) ([]*core.Subscription, int, error) {
 	filter := &repository.SubscriptionFilter{
 		AppID:          appID,
@@ -414,7 +422,7 @@ func (s *SubscriptionService) List(ctx context.Context, appID, orgID, planID *xi
 	return result, count, nil
 }
 
-// ChangePlan changes the subscription plan
+// ChangePlan changes the subscription plan.
 func (s *SubscriptionService) ChangePlan(ctx context.Context, id, newPlanID xid.ID) (*core.Subscription, error) {
 	sub, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -456,7 +464,7 @@ func (s *SubscriptionService) ChangePlan(ctx context.Context, id, newPlanID xid.
 	return coreSub, nil
 }
 
-// UpdateQuantity updates the subscription quantity
+// UpdateQuantity updates the subscription quantity.
 func (s *SubscriptionService) UpdateQuantity(ctx context.Context, id xid.ID, quantity int) (*core.Subscription, error) {
 	if quantity <= 0 {
 		return nil, suberrors.ErrInvalidQuantity
@@ -475,10 +483,11 @@ func (s *SubscriptionService) UpdateQuantity(ctx context.Context, id xid.ID, qua
 	}
 
 	sub, _ = s.repo.FindByID(ctx, id)
+
 	return s.schemaToCoreSub(sub), nil
 }
 
-// AttachAddOn attaches an add-on to a subscription
+// AttachAddOn attaches an add-on to a subscription.
 func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xid.ID, quantity int) error {
 	// Get subscription
 	sub, err := s.repo.FindByID(ctx, subID)
@@ -489,7 +498,7 @@ func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xi
 	// Get add-on
 	addOn, err := s.addOnRepo.FindByID(ctx, addOnID)
 	if err != nil {
-		return fmt.Errorf("add-on not found")
+		return errs.NotFound("add-on not found")
 	}
 
 	// Check existing
@@ -529,11 +538,12 @@ func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xi
 		if providerItemID != "" && s.provider != nil {
 			s.provider.RemoveSubscriptionItem(ctx, sub.ProviderSubID, providerItemID)
 		}
+
 		return fmt.Errorf("failed to create add-on item: %w", err)
 	}
 
 	// Record event
-	s.recordEvent(ctx, subID, sub.OrganizationID, "addon.attached", map[string]interface{}{
+	s.recordEvent(ctx, subID, sub.OrganizationID, "addon.attached", map[string]any{
 		"addOnId":  addOnID.String(),
 		"quantity": quantity,
 	})
@@ -541,7 +551,7 @@ func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xi
 	return nil
 }
 
-// DetachAddOn detaches an add-on from a subscription
+// DetachAddOn detaches an add-on from a subscription.
 func (s *SubscriptionService) DetachAddOn(ctx context.Context, subID, addOnID xid.ID) error {
 	// Get the subscription
 	sub, err := s.repo.FindByID(ctx, subID)
@@ -556,15 +566,17 @@ func (s *SubscriptionService) DetachAddOn(ctx context.Context, subID, addOnID xi
 	}
 
 	var item *schema.SubscriptionAddOnItem
+
 	for _, i := range items {
 		if i.AddOnID == addOnID {
 			item = i
+
 			break
 		}
 	}
 
 	if item == nil {
-		return fmt.Errorf("add-on not attached to subscription")
+		return errs.NotFound("add-on not attached to subscription")
 	}
 
 	// Remove from provider if synced
@@ -581,14 +593,14 @@ func (s *SubscriptionService) DetachAddOn(ctx context.Context, subID, addOnID xi
 	}
 
 	// Record event
-	s.recordEvent(ctx, subID, sub.OrganizationID, "addon.detached", map[string]interface{}{
+	s.recordEvent(ctx, subID, sub.OrganizationID, "addon.detached", map[string]any{
 		"addOnId": addOnID.String(),
 	})
 
 	return nil
 }
 
-// SyncFromProvider syncs subscription data from the provider
+// SyncFromProvider syncs subscription data from the provider.
 func (s *SubscriptionService) SyncFromProvider(ctx context.Context, providerSubID string) (*core.Subscription, error) {
 	sub, err := s.repo.FindByProviderID(ctx, providerSubID)
 	if err != nil {
@@ -597,7 +609,7 @@ func (s *SubscriptionService) SyncFromProvider(ctx context.Context, providerSubI
 
 	// Fetch from provider
 	if s.provider == nil {
-		return nil, fmt.Errorf("provider not available")
+		return nil, errs.InternalServerErrorWithMessage("provider not available")
 	}
 
 	providerSub, err := s.provider.GetSubscription(ctx, providerSubID)
@@ -615,18 +627,22 @@ func (s *SubscriptionService) SyncFromProvider(ctx context.Context, providerSubI
 		trialStart := time.Unix(*providerSub.TrialStart, 0)
 		sub.TrialStart = &trialStart
 	}
+
 	if providerSub.TrialEnd != nil {
 		trialEnd := time.Unix(*providerSub.TrialEnd, 0)
 		sub.TrialEnd = &trialEnd
 	}
+
 	if providerSub.CancelAt != nil {
 		cancelAt := time.Unix(*providerSub.CancelAt, 0)
 		sub.CancelAt = &cancelAt
 	}
+
 	if providerSub.CanceledAt != nil {
 		canceledAt := time.Unix(*providerSub.CanceledAt, 0)
 		sub.CanceledAt = &canceledAt
 	}
+
 	if providerSub.EndedAt != nil {
 		endedAt := time.Unix(*providerSub.EndedAt, 0)
 		sub.EndedAt = &endedAt
@@ -640,7 +656,7 @@ func (s *SubscriptionService) SyncFromProvider(ctx context.Context, providerSubI
 	}
 
 	// Record event
-	s.recordEvent(ctx, sub.ID, sub.OrganizationID, "subscription.synced_from_provider", map[string]interface{}{
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, "subscription.synced_from_provider", map[string]any{
 		"providerSubId": providerSubID,
 		"status":        providerSub.Status,
 	})
@@ -648,7 +664,7 @@ func (s *SubscriptionService) SyncFromProvider(ctx context.Context, providerSubI
 	return s.schemaToCoreSub(sub), nil
 }
 
-// SyncFromProviderByID syncs subscription data from provider using local subscription ID
+// SyncFromProviderByID syncs subscription data from provider using local subscription ID.
 func (s *SubscriptionService) SyncFromProviderByID(ctx context.Context, id xid.ID) (*core.Subscription, error) {
 	sub, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -656,13 +672,13 @@ func (s *SubscriptionService) SyncFromProviderByID(ctx context.Context, id xid.I
 	}
 
 	if sub.ProviderSubID == "" {
-		return nil, fmt.Errorf("subscription not synced to provider yet")
+		return nil, errs.BadRequest("subscription not synced to provider yet")
 	}
 
 	return s.SyncFromProvider(ctx, sub.ProviderSubID)
 }
 
-// SyncToProvider syncs a subscription to the payment provider
+// SyncToProvider syncs a subscription to the payment provider.
 func (s *SubscriptionService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	// Get subscription
 	sub, err := s.repo.FindByID(ctx, id)
@@ -679,12 +695,12 @@ func (s *SubscriptionService) SyncToProvider(ctx context.Context, id xid.ID) err
 	// Get plan
 	plan, err := s.planRepo.FindByID(ctx, sub.PlanID)
 	if err != nil {
-		return fmt.Errorf("plan not found")
+		return errs.NotFound("plan not found")
 	}
 
 	// Check if plan is synced
 	if plan.ProviderPriceID == "" {
-		return fmt.Errorf("plan not synced to provider - sync plan first")
+		return errs.BadRequest("plan not synced to provider - sync plan first")
 	}
 
 	// If already synced, return
@@ -694,22 +710,21 @@ func (s *SubscriptionService) SyncToProvider(ctx context.Context, id xid.ID) err
 
 	// Calculate trial days for provider
 	providerTrialDays := 0
+
 	if sub.TrialEnd != nil && sub.TrialStart != nil {
 		trialDuration := sub.TrialEnd.Sub(*sub.TrialStart)
 		providerTrialDays = int(trialDuration.Hours() / 24)
 	}
 
 	// Prepare metadata
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"authsome":        "true",
 		"subscription_id": sub.ID.String(),
 		"organization_id": sub.OrganizationID.String(),
 		"plan_id":         sub.PlanID.String(),
 	}
 	if sub.Metadata != nil {
-		for k, v := range sub.Metadata {
-			metadata[k] = v
-		}
+		maps.Copy(metadata, sub.Metadata)
 	}
 
 	// Create in provider
@@ -741,7 +756,7 @@ func (s *SubscriptionService) SyncToProvider(ctx context.Context, id xid.ID) err
 	}
 
 	// Record event
-	s.recordEvent(ctx, sub.ID, sub.OrganizationID, "subscription.synced", map[string]interface{}{
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, "subscription.synced", map[string]any{
 		"providerSubId": providerSubID,
 	})
 
@@ -750,7 +765,7 @@ func (s *SubscriptionService) SyncToProvider(ctx context.Context, id xid.ID) err
 
 // Helper methods
 
-func (s *SubscriptionService) recordEvent(ctx context.Context, subID, orgID xid.ID, eventType string, data map[string]interface{}) {
+func (s *SubscriptionService) recordEvent(ctx context.Context, subID, orgID xid.ID, eventType string, data map[string]any) {
 	event := &schema.SubscriptionEvent{
 		ID:             xid.New(),
 		SubscriptionID: &subID,

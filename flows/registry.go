@@ -3,32 +3,34 @@ package flows
 import (
 	"fmt"
 	"sync"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Registry manages all available flows in the system
+// Registry manages all available flows in the system.
 type Registry struct {
 	flows map[string]Flow
 	mutex sync.RWMutex
 }
 
-// NewRegistry creates a new flow registry
+// NewRegistry creates a new flow registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		flows: make(map[string]Flow),
 	}
 }
 
-// Register registers a new flow in the registry
+// Register registers a new flow in the registry.
 func (r *Registry) Register(flow Flow) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
 	if flow == nil {
-		return fmt.Errorf("flow cannot be nil")
+		return errs.BadRequest("flow cannot be nil")
 	}
 
 	if flow.ID() == "" {
-		return fmt.Errorf("flow ID cannot be empty")
+		return errs.RequiredField("flow ID")
 	}
 
 	if _, exists := r.flows[flow.ID()]; exists {
@@ -36,10 +38,11 @@ func (r *Registry) Register(flow Flow) error {
 	}
 
 	r.flows[flow.ID()] = flow
+
 	return nil
 }
 
-// Get retrieves a flow by its ID
+// Get retrieves a flow by its ID.
 func (r *Registry) Get(id string) (Flow, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
@@ -52,7 +55,7 @@ func (r *Registry) Get(id string) (Flow, error) {
 	return flow, nil
 }
 
-// List returns all registered flows
+// List returns all registered flows.
 func (r *Registry) List() []Flow {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
@@ -65,7 +68,7 @@ func (r *Registry) List() []Flow {
 	return flows
 }
 
-// ListIDs returns all registered flow IDs
+// ListIDs returns all registered flow IDs.
 func (r *Registry) ListIDs() []string {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
@@ -78,7 +81,7 @@ func (r *Registry) ListIDs() []string {
 	return ids
 }
 
-// Unregister removes a flow from the registry
+// Unregister removes a flow from the registry.
 func (r *Registry) Unregister(id string) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -88,10 +91,11 @@ func (r *Registry) Unregister(id string) error {
 	}
 
 	delete(r.flows, id)
+
 	return nil
 }
 
-// Clear removes all flows from the registry
+// Clear removes all flows from the registry.
 func (r *Registry) Clear() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -99,7 +103,7 @@ func (r *Registry) Clear() {
 	r.flows = make(map[string]Flow)
 }
 
-// Count returns the number of registered flows
+// Count returns the number of registered flows.
 func (r *Registry) Count() int {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
@@ -107,11 +111,12 @@ func (r *Registry) Count() int {
 	return len(r.flows)
 }
 
-// Exists checks if a flow with the given ID exists
+// Exists checks if a flow with the given ID exists.
 func (r *Registry) Exists(id string) bool {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
 	_, exists := r.flows[id]
+
 	return exists
 }

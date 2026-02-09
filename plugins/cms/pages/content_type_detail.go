@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -20,7 +21,7 @@ import (
 // Content Type Detail Page
 // =============================================================================
 
-// ContentTypeDetailPage renders the content type detail/edit page
+// ContentTypeDetailPage renders the content type detail/edit page.
 func ContentTypeDetailPage(
 	currentApp *app.App,
 	basePath string,
@@ -149,7 +150,7 @@ func ContentTypeDetailPage(
 	)
 }
 
-// alpineTabButton renders a tab button with Alpine.js state
+// alpineTabButton renders a tab button with Alpine.js state.
 func alpineTabButton(id, label string, icon g.Node) g.Node {
 	return Button(
 		Type("button"),
@@ -161,18 +162,18 @@ func alpineTabButton(id, label string, icon g.Node) g.Node {
 	)
 }
 
-// contentTypeStats renders statistics for a content type
+// contentTypeStats renders statistics for a content type.
 func contentTypeStats(stats *core.ContentTypeStatsDTO) g.Node {
 	return Div(
 		Class("grid grid-cols-2 md:grid-cols-5 gap-4"),
-		StatCard("Total Entries", fmt.Sprintf("%d", stats.TotalEntries), lucide.FileText(Class("size-5")), "text-blue-600"),
-		StatCard("Published", fmt.Sprintf("%d", stats.PublishedEntries), lucide.CircleCheck(Class("size-5")), "text-green-600"),
-		StatCard("Drafts", fmt.Sprintf("%d", stats.DraftEntries), lucide.Pencil(Class("size-5")), "text-yellow-600"),
-		StatCard("Archived", fmt.Sprintf("%d", stats.ArchivedEntries), lucide.Archive(Class("size-5")), "text-gray-600"),
+		StatCard("Total Entries", strconv.Itoa(stats.TotalEntries), lucide.FileText(Class("size-5")), "text-blue-600"),
+		StatCard("Published", strconv.Itoa(stats.PublishedEntries), lucide.CircleCheck(Class("size-5")), "text-green-600"),
+		StatCard("Drafts", strconv.Itoa(stats.DraftEntries), lucide.Pencil(Class("size-5")), "text-yellow-600"),
+		StatCard("Archived", strconv.Itoa(stats.ArchivedEntries), lucide.Archive(Class("size-5")), "text-gray-600"),
 	)
 }
 
-// tabButton renders a tab button
+// tabButton renders a tab button.
 func tabButton(label string, active bool) g.Node {
 	activeClass := "border-violet-600 text-violet-600 dark:border-violet-400 dark:text-violet-400"
 	inactiveClass := "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300 dark:text-gray-400 dark:hover:text-white dark:hover:border-gray-600"
@@ -189,7 +190,7 @@ func tabButton(label string, active bool) g.Node {
 	)
 }
 
-// fieldsSection renders the fields management section with Preline/Alpine drawer
+// fieldsSection renders the fields management section with Preline/Alpine drawer.
 func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO, allComponentSchemas []*core.ComponentSchemaSummaryDTO) g.Node {
 	typeBase := appBase + "/cms/types/" + contentType.Name
 
@@ -314,17 +315,19 @@ func fieldsSection(appBase string, contentType *core.ContentTypeDTO, allContentT
 	)
 }
 
-// addFieldForm renders the form for adding a new field using Preline-style components with Alpine.js
+// addFieldForm renders the form for adding a new field using Preline-style components with Alpine.js.
 func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentTypes []*core.ContentTypeSummaryDTO, allComponentSchemas []*core.ComponentSchemaSummaryDTO) g.Node {
 	fieldTypesByCategory := core.GetFieldTypesByCategory()
 
 	// Build content type options for relations (exclude current type)
 	var contentTypeOptions []string
+
 	for _, ct := range allContentTypes {
 		if ct.ID != contentType.ID {
 			contentTypeOptions = append(contentTypeOptions, fmt.Sprintf(`<option value="%s">%s</option>`, ct.Name, ct.Name))
 		}
 	}
+
 	contentTypeOptionsHTML := strings.Join(contentTypeOptions, "\n")
 
 	// Build component schema options for nested fields
@@ -332,6 +335,7 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 	for _, cs := range allComponentSchemas {
 		componentSchemaOptions = append(componentSchemaOptions, fmt.Sprintf(`<option value="%s">%s</option>`, cs.Name, cs.Name))
 	}
+
 	componentSchemaOptionsHTML := strings.Join(componentSchemaOptions, "\n")
 
 	return FormEl(
@@ -402,18 +406,23 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 						"selection": "☑️ Selection", "relation": "🔗 Relations", "media": "🖼️ Media",
 						"nested": "📦 Nested", "advanced": "⚙️ Advanced",
 					}
+
 					var groups []g.Node
+
 					for _, cat := range categories {
 						types, ok := fieldTypesByCategory[cat]
 						if !ok || len(types) == 0 {
 							continue
 						}
+
 						options := make([]g.Node, len(types))
 						for i, ft := range types {
 							options[i] = Option(Value(ft.Type.String()), g.Text(ft.Name))
 						}
+
 						groups = append(groups, OptGroup(g.Attr("label", categoryNames[cat]), g.Group(options)))
 					}
+
 					return groups
 				}()),
 			),
@@ -855,7 +864,7 @@ func addFieldForm(typeBase string, contentType *core.ContentTypeDTO, allContentT
 	)
 }
 
-// drawerFieldFormAlpineData returns the Alpine.js data for the drawer field form
+// drawerFieldFormAlpineData returns the Alpine.js data for the drawer field form.
 func drawerFieldFormAlpineData(appID, typeName string) string {
 	return fmt.Sprintf(`{
 		name: '',
@@ -972,9 +981,10 @@ func drawerFieldFormAlpineData(appID, typeName string) string {
 	}`, appID, typeName)
 }
 
-// prelineCheckbox creates a checkbox with label and description using ForgeUI
+// prelineCheckbox creates a checkbox with label and description using ForgeUI.
 func prelineCheckbox(name, labelText, description string) g.Node {
 	checkboxID := "field-option-" + name
+
 	return Div(
 		Class("flex gap-3"),
 		checkbox.Checkbox(
@@ -1000,9 +1010,10 @@ func prelineCheckbox(name, labelText, description string) g.Node {
 	)
 }
 
-// forgeUICheckboxOption creates a styled checkbox option with icon
+// forgeUICheckboxOption creates a styled checkbox option with icon.
 func forgeUICheckboxOption(name, labelText, description string, iconNode g.Node) g.Node {
 	checkboxID := "field-option-" + name
+
 	return Label(
 		g.Attr("for", checkboxID),
 		Class("flex items-start gap-3 p-3 rounded-lg border border-transparent hover:bg-accent/50 cursor-pointer transition-colors has-[:checked]:bg-accent has-[:checked]:border-border"),
@@ -1032,7 +1043,7 @@ func forgeUICheckboxOption(name, labelText, description string, iconNode g.Node)
 	)
 }
 
-// fieldsTable renders the fields as a table
+// fieldsTable renders the fields as a table.
 func fieldsTable(typeBase string, fields []*core.ContentFieldDTO, appID string, typeName string) g.Node {
 	rows := make([]g.Node, len(fields))
 	for i, field := range fields {
@@ -1045,7 +1056,7 @@ func fieldsTable(typeBase string, fields []*core.ContentFieldDTO, appID string, 
 	)
 }
 
-// fieldRow renders a single field row
+// fieldRow renders a single field row.
 func fieldRow(typeBase string, field *core.ContentFieldDTO, appID string, typeName string) g.Node {
 	return TableRow(
 		// Field name and slug
@@ -1093,7 +1104,7 @@ func fieldRow(typeBase string, field *core.ContentFieldDTO, appID string, typeNa
 	)
 }
 
-// deleteFieldModal renders a ForgeUI confirmDialog-based delete button for a field
+// deleteFieldModal renders a ForgeUI confirmDialog-based delete button for a field.
 func deleteFieldModal(appID string, typeName string, field *core.ContentFieldDTO) g.Node {
 	return Button(
 		Type("button"),
@@ -1125,7 +1136,7 @@ func deleteFieldModal(appID string, typeName string, field *core.ContentFieldDTO
 	)
 }
 
-// fieldTypeIcon returns an icon for a field type
+// fieldTypeIcon returns an icon for a field type.
 func fieldTypeIcon(fieldType string) g.Node {
 	switch fieldType {
 	case "text", "string":
@@ -1161,7 +1172,7 @@ func fieldTypeIcon(fieldType string) g.Node {
 // Settings Section
 // =============================================================================
 
-// settingsSection renders the content type settings management section using Preline-style components
+// settingsSection renders the content type settings management section using Preline-style components.
 func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 	settings := contentType.Settings
 
@@ -1383,7 +1394,7 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 						Type("number"),
 						ID("maxEntries"),
 						Name("maxEntries"),
-						Value(fmt.Sprintf("%d", settings.MaxEntries)),
+						Value(strconv.Itoa(settings.MaxEntries)),
 						g.Attr("min", "0"),
 						Placeholder("0 = unlimited"),
 						Class("py-2 px-3 block w-full max-w-xs border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-800 dark:border-neutral-700 dark:text-neutral-400"),
@@ -1428,23 +1439,28 @@ func settingsSection(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 	)
 }
 
-// fieldSelectOptions generates options for field selection dropdowns
+// fieldSelectOptions generates options for field selection dropdowns.
 func fieldSelectOptions(fields []*core.ContentFieldDTO, selectedValue string, allowedTypes []string) []g.Node {
 	var options []g.Node
+
 	for _, field := range fields {
 		// Filter by allowed types if specified
 		if len(allowedTypes) > 0 {
 			allowed := false
+
 			for _, t := range allowedTypes {
 				if field.Type == t {
 					allowed = true
+
 					break
 				}
 			}
+
 			if !allowed {
 				continue
 			}
 		}
+
 		isSelected := field.Name == selectedValue
 		option := Option(
 			Value(field.Name),
@@ -1453,12 +1469,14 @@ func fieldSelectOptions(fields []*core.ContentFieldDTO, selectedValue string, al
 		)
 		options = append(options, option)
 	}
+
 	return options
 }
 
-// featureToggle renders a Preline-style feature toggle checkbox
+// featureToggle renders a Preline-style feature toggle checkbox.
 func featureToggle(name, label, description string, checked bool) g.Node {
 	checkboxID := "feature-" + name
+
 	return Div(
 		Class("flex"),
 		Input(
@@ -1478,7 +1496,7 @@ func featureToggle(name, label, description string, checked bool) g.Node {
 	)
 }
 
-// deleteContentTypeModal renders a ForgeUI confirmDialog-based delete button
+// deleteContentTypeModal renders a ForgeUI confirmDialog-based delete button.
 func deleteContentTypeModal(typeBase string, contentType *core.ContentTypeDTO) g.Node {
 	// Get the redirect path by removing /types/{typeName} from typeBase
 	redirectPath := typeBase[:len(typeBase)-len("/types/"+contentType.Name)]
@@ -1516,7 +1534,7 @@ func deleteContentTypeModal(typeBase string, contentType *core.ContentTypeDTO) g
 // API Section
 // =============================================================================
 
-// apiSection renders the API documentation section
+// apiSection renders the API documentation section.
 func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 	return Div(
 		Class("space-y-2 mt-6"),
@@ -1659,6 +1677,7 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 							for i, field := range contentType.Fields {
 								rows[i] = schemaFieldRow(field)
 							}
+
 							return rows
 						}()),
 					),
@@ -1671,9 +1690,10 @@ func apiSection(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 	)
 }
 
-// apiEndpointRow renders a row in the API endpoints table
+// apiEndpointRow renders a row in the API endpoints table.
 func apiEndpointRow(method, endpoint, description string) g.Node {
 	methodColor := "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400"
+
 	switch method {
 	case "GET":
 		methodColor = "bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-400"
@@ -1692,7 +1712,7 @@ func apiEndpointRow(method, endpoint, description string) g.Node {
 	)
 }
 
-// filterOpExample renders a filter operator example
+// filterOpExample renders a filter operator example.
 func filterOpExample(op, name, example string) g.Node {
 	return Div(
 		Class("flex items-center gap-2 text-xs"),
@@ -1702,7 +1722,7 @@ func filterOpExample(op, name, example string) g.Node {
 	)
 }
 
-// schemaFieldRow renders a field row in the schema table
+// schemaFieldRow renders a field row in the schema table.
 func schemaFieldRow(field *core.ContentFieldDTO) g.Node {
 	return Tr(
 		Td(
@@ -1725,15 +1745,18 @@ func schemaFieldRow(field *core.ContentFieldDTO) g.Node {
 	)
 }
 
-// apiExamplesCard renders example API requests
+// apiExamplesCard renders example API requests.
 func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 	// Generate sample entry data
 	sampleData := "{\n"
+	var sampleDataSb1732 strings.Builder
+
 	for i, field := range contentType.Fields {
 		if i > 0 {
-			sampleData += ",\n"
+			sampleDataSb1732.WriteString(",\n")
 		}
-		sampleData += fmt.Sprintf(`    "%s": `, field.Name)
+
+		sampleDataSb1732.WriteString(fmt.Sprintf(`    "%s": `, field.Name))
 		switch field.Type {
 		case "text", "string", "email", "url", "richtext", "markdown":
 			sampleData += `"sample value"`
@@ -1753,6 +1776,8 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 			sampleData += `"value"`
 		}
 	}
+	sampleData += sampleDataSb1732.String()
+
 	sampleData += "\n}"
 
 	return CardWithHeader("Example Requests", nil,
@@ -1831,7 +1856,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 // Playground Section
 // =============================================================================
 
-// playgroundSection renders the API playground with Monaco Editor
+// playgroundSection renders the API playground with Monaco Editor.
 func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID string, environmentID string) g.Node {
 	// Default query example
 	defaultQuery := `{
@@ -2208,6 +2233,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID s
 							Span(Class("text-slate-400 text-xs"), g.Text("("+field.Type+")")),
 						)
 					}
+
 					return nodes
 				}()),
 			),
@@ -2215,7 +2241,7 @@ func playgroundSection(apiBase string, contentType *core.ContentTypeDTO, appID s
 	)
 }
 
-// monacoEditor renders the Monaco Editor component
+// monacoEditor renders the Monaco Editor component.
 func monacoEditor(defaultValue string) g.Node {
 	// Build the x-data attribute
 	xData := fmt.Sprintf(`{
@@ -2311,7 +2337,7 @@ func monacoEditor(defaultValue string) g.Node {
 // Add Field Page
 // =============================================================================
 
-// AddFieldPage renders the add field form
+// AddFieldPage renders the add field form.
 func AddFieldPage(
 	currentApp *app.App,
 	basePath string,
@@ -2322,7 +2348,7 @@ func AddFieldPage(
 	return fieldFormPage(currentApp, basePath, contentType, allContentTypes, nil, err, false)
 }
 
-// EditFieldPage renders the edit field form
+// EditFieldPage renders the edit field form.
 func EditFieldPage(
 	currentApp *app.App,
 	basePath string,
@@ -2334,7 +2360,7 @@ func EditFieldPage(
 	return fieldFormPage(currentApp, basePath, contentType, allContentTypes, field, err, true)
 }
 
-// fieldFormPage renders the add/edit field form
+// fieldFormPage renders the add/edit field form.
 func fieldFormPage(
 	currentApp *app.App,
 	basePath string,
@@ -2353,8 +2379,9 @@ func fieldFormPage(
 	// Determine action URL and title
 	actionURL := typeBase + "/fields/create"
 	pageTitle := "Add Field"
-	pageDesc := fmt.Sprintf("Configure a new field for %s", contentType.Name)
+	pageDesc := "Configure a new field for " + contentType.Name
 	submitText := "Add Field"
+
 	if isEdit && field != nil {
 		actionURL = typeBase + "/fields/" + field.Name + "/update"
 		pageTitle = "Edit Field"
@@ -2365,6 +2392,7 @@ func fieldFormPage(
 	// Build content types options for relations
 	contentTypeOptions := make([]selectOption, 0, len(allContentTypes)+1)
 	contentTypeOptions = append(contentTypeOptions, selectOption{Value: "", Label: "Select content type..."})
+
 	for _, ct := range allContentTypes {
 		if ct.ID != contentType.ID {
 			contentTypeOptions = append(contentTypeOptions, selectOption{Value: ct.Name, Label: ct.Name})
@@ -2460,18 +2488,23 @@ func fieldFormPage(
 											"selection": "☑️ Selection Fields", "relation": "🔗 Relations", "media": "🖼️ Media",
 											"nested": "📦 Nested Fields", "advanced": "⚙️ Advanced",
 										}
+
 										var groups []g.Node
+
 										for _, cat := range categories {
 											types, ok := fieldTypesByCategory[cat]
 											if !ok || len(types) == 0 {
 												continue
 											}
+
 											options := make([]g.Node, len(types))
 											for i, ft := range types {
 												options[i] = Option(Value(ft.Type.String()), g.Text(ft.Name))
 											}
+
 											groups = append(groups, OptGroup(g.Attr("label", categoryNames[cat]), g.Group(options)))
 										}
+
 										return groups
 									}()),
 								),
@@ -2855,7 +2888,7 @@ func fieldFormPage(
 	)
 }
 
-// fieldBuilderAlpineData returns the Alpine.js data for the field builder
+// fieldBuilderAlpineData returns the Alpine.js data for the field builder.
 func fieldBuilderAlpineData(field *core.ContentFieldDTO) string {
 	// Default values
 	name := ""
@@ -2878,11 +2911,15 @@ func fieldBuilderAlpineData(field *core.ContentFieldDTO) string {
 			for _, c := range field.Options.Choices {
 				opts = append(opts, fmt.Sprintf("{label: '%s', value: '%s'}", c.Label, c.Value))
 			}
+
 			if len(opts) > 0 {
 				enumOptionsJSON = "[" + opts[0]
+				var enumOptionsJSONSb2883 strings.Builder
 				for i := 1; i < len(opts); i++ {
-					enumOptionsJSON += ", " + opts[i]
+					enumOptionsJSONSb2883.WriteString(", " + opts[i])
 				}
+				enumOptionsJSON += enumOptionsJSONSb2883.String()
+
 				enumOptionsJSON += "]"
 			}
 		}
@@ -2972,7 +3009,7 @@ func fieldBuilderAlpineData(field *core.ContentFieldDTO) string {
 	}`, name, slug, fieldType, relationType, slugManuallyEdited, enumOptionsJSON)
 }
 
-// fieldInput creates a styled input field with optional Alpine bindings
+// fieldInput creates a styled input field with optional Alpine bindings.
 func fieldInput(name, label, inputType, placeholder string, required bool, xModel, eventName, eventHandler string) g.Node {
 	return Div(
 		Label(
@@ -2994,7 +3031,7 @@ func fieldInput(name, label, inputType, placeholder string, required bool, xMode
 	)
 }
 
-// numberInputPreline creates a Preline-styled number input with increment/decrement
+// numberInputPreline creates a Preline-styled number input with increment/decrement.
 func numberInputPreline(name, label string, min, max, defaultVal int) g.Node {
 	return Div(
 		Label(
@@ -3019,7 +3056,7 @@ func numberInputPreline(name, label string, min, max, defaultVal int) g.Node {
 					ID(name),
 					Name(name),
 					Class("p-0 w-12 bg-transparent border-0 text-gray-800 text-center text-sm focus:ring-0 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"),
-					Value(fmt.Sprintf("%d", defaultVal)),
+					Value(strconv.Itoa(defaultVal)),
 					g.Attr("data-hs-input-number-input", ""),
 				),
 				Button(
@@ -3034,13 +3071,13 @@ func numberInputPreline(name, label string, min, max, defaultVal int) g.Node {
 	)
 }
 
-// selectOption represents an option for select fields
+// selectOption represents an option for select fields.
 type selectOption struct {
 	Value string
 	Label string
 }
 
-// selectField creates a styled select dropdown
+// selectField creates a styled select dropdown.
 func selectField(name, label string, options []selectOption) g.Node {
 	return Div(
 		Label(
@@ -3057,13 +3094,14 @@ func selectField(name, label string, options []selectOption) g.Node {
 				for i, opt := range options {
 					opts[i] = Option(Value(opt.Value), g.Text(opt.Label))
 				}
+
 				return opts
 			}()),
 		),
 	)
 }
 
-// switchField creates a toggle switch
+// switchField creates a toggle switch.
 func switchField(name, label string) g.Node {
 	return Div(
 		Class("flex items-center justify-between"),
@@ -3085,7 +3123,7 @@ func switchField(name, label string) g.Node {
 	)
 }
 
-// toggleOption creates a toggle option for the sidebar
+// toggleOption creates a toggle option for the sidebar.
 func toggleOption(name, label, description, iconColor string) g.Node {
 	return Div(
 		Class("flex items-start gap-3"),
@@ -3108,7 +3146,7 @@ func toggleOption(name, label, description, iconColor string) g.Node {
 	)
 }
 
-// inputNumber creates a numeric input with increment/decrement buttons (Preline style)
+// inputNumber creates a numeric input with increment/decrement buttons (Preline style).
 func inputNumber(name, label string, min, max, step int, help string) g.Node {
 	return Div(
 		Label(
@@ -3151,7 +3189,7 @@ func inputNumber(name, label string, min, max, step int, help string) g.Node {
 	)
 }
 
-// checkboxField creates a checkbox field
+// checkboxField creates a checkbox field.
 func checkboxField(name, label, description string) g.Node {
 	return Div(
 		Class("flex items-start gap-3"),

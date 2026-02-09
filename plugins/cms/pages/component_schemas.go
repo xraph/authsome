@@ -3,6 +3,7 @@ package pages
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -15,7 +16,7 @@ import (
 // Component Schemas List Page
 // =============================================================================
 
-// ComponentSchemasPage renders the component schemas list page
+// ComponentSchemasPage renders the component schemas list page.
 func ComponentSchemasPage(
 	currentApp *app.App,
 	basePath string,
@@ -53,7 +54,7 @@ func ComponentSchemasPage(
 	)
 }
 
-// componentSchemasTable renders component schemas as a table
+// componentSchemasTable renders component schemas as a table.
 func componentSchemasTable(currentApp *app.App, basePath string, components []*core.ComponentSchemaSummaryDTO, page, totalPages int) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 
@@ -83,7 +84,7 @@ func componentSchemasTable(currentApp *app.App, basePath string, components []*c
 	)
 }
 
-// componentSchemaRow renders a single component schema table row
+// componentSchemaRow renders a single component schema table row.
 func componentSchemaRow(appBase string, cs *core.ComponentSchemaSummaryDTO) g.Node {
 	return TableRow(
 		// Name
@@ -116,7 +117,7 @@ func componentSchemaRow(appBase string, cs *core.ComponentSchemaSummaryDTO) g.No
 		)),
 
 		// Fields
-		TableCellSecondary(g.Text(fmt.Sprintf("%d", cs.FieldCount))),
+		TableCellSecondary(g.Text(strconv.Itoa(cs.FieldCount))),
 
 		// Usage
 		TableCell(Div(
@@ -159,7 +160,7 @@ func componentSchemaRow(appBase string, cs *core.ComponentSchemaSummaryDTO) g.No
 // Create Component Schema Page
 // =============================================================================
 
-// CreateComponentSchemaPage renders the create component schema form
+// CreateComponentSchemaPage renders the create component schema form.
 func CreateComponentSchemaPage(
 	currentApp *app.App,
 	basePath string,
@@ -343,7 +344,7 @@ func CreateComponentSchemaPage(
 // Edit Component Schema Page
 // =============================================================================
 
-// EditComponentSchemaPage renders the edit component schema form
+// EditComponentSchemaPage renders the edit component schema form.
 func EditComponentSchemaPage(
 	currentApp *app.App,
 	basePath string,
@@ -532,7 +533,7 @@ func EditComponentSchemaPage(
 // Alpine.js Data and Field Editor
 // =============================================================================
 
-// componentSchemaFormData returns the Alpine.js data for the component schema form
+// componentSchemaFormData returns the Alpine.js data for the component schema form.
 func componentSchemaFormData() string {
 	return `{
 		name: '',
@@ -579,7 +580,7 @@ func componentSchemaFormData() string {
 	}`
 }
 
-// componentSchemaFormDataWithValues returns Alpine.js data with initial values
+// componentSchemaFormDataWithValues returns Alpine.js data with initial values.
 func componentSchemaFormDataWithValues(name, slug, fieldsJSON string) string {
 	return fmt.Sprintf(`{
 		name: '%s',
@@ -621,7 +622,7 @@ func componentSchemaFormDataWithValues(name, slug, fieldsJSON string) string {
 	}`, name, slug, fieldsJSON)
 }
 
-// nestedFieldEditor renders the field editor for a single nested field
+// nestedFieldEditor renders the field editor for a single nested field.
 func nestedFieldEditor() g.Node {
 	return Div(
 		Class("p-4 border border-slate-200 rounded-lg dark:border-gray-700 bg-slate-50 dark:bg-gray-800/50"),
@@ -742,7 +743,7 @@ func nestedFieldEditor() g.Node {
 // Component Schema Selector (for field creation forms)
 // =============================================================================
 
-// ComponentSchemaSelector renders a select dropdown for choosing a component schema
+// ComponentSchemaSelector renders a select dropdown for choosing a component schema.
 func ComponentSchemaSelector(components []*core.ComponentSchemaSummaryDTO, selectedName string) g.Node {
 	options := make([]g.Node, len(components)+1)
 	options[0] = Option(Value(""), g.Text("-- Select a component schema --"))

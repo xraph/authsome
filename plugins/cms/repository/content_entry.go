@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ContentEntryRepository defines the interface for content entry storage operations
+// ContentEntryRepository defines the interface for content entry storage operations.
 type ContentEntryRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, entry *schema.ContentEntry) error
@@ -29,8 +30,8 @@ type ContentEntryRepository interface {
 	BulkDelete(ctx context.Context, ids []xid.ID) error
 
 	// Query operations
-	FindByFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value interface{}) ([]*schema.ContentEntry, error)
-	ExistsWithFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value interface{}, excludeID *xid.ID) (bool, error)
+	FindByFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value any) ([]*schema.ContentEntry, error)
+	ExistsWithFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value any, excludeID *xid.ID) (bool, error)
 
 	// Scheduled entries
 	FindScheduledForPublish(ctx context.Context, before time.Time) ([]*schema.ContentEntry, error)
@@ -42,7 +43,7 @@ type ContentEntryRepository interface {
 	CountByAppEnvAndStatus(ctx context.Context, appID, envID xid.ID) (map[string]int, error)
 }
 
-// EntryListQuery defines query parameters for listing entries
+// EntryListQuery defines query parameters for listing entries.
 type EntryListQuery struct {
 	Status      string
 	Search      string
@@ -55,18 +56,18 @@ type EntryListQuery struct {
 	IncludeType bool
 }
 
-// FilterCondition represents a filter condition
+// FilterCondition represents a filter condition.
 type FilterCondition struct {
 	Operator string
-	Value    interface{}
+	Value    any
 }
 
-// contentEntryRepository implements ContentEntryRepository using Bun ORM
+// contentEntryRepository implements ContentEntryRepository using Bun ORM.
 type contentEntryRepository struct {
 	db *bun.DB
 }
 
-// NewContentEntryRepository creates a new content entry repository instance
+// NewContentEntryRepository creates a new content entry repository instance.
 func NewContentEntryRepository(db *bun.DB) ContentEntryRepository {
 	return &contentEntryRepository{db: db}
 }
@@ -75,20 +76,24 @@ func NewContentEntryRepository(db *bun.DB) ContentEntryRepository {
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content entry
+// Create creates a new content entry.
 func (r *contentEntryRepository) Create(ctx context.Context, entry *schema.ContentEntry) error {
 	if entry.ID.IsNil() {
 		entry.ID = xid.New()
 	}
+
 	now := time.Now()
 	entry.CreatedAt = now
+
 	entry.UpdatedAt = now
 	if entry.Status == "" {
 		entry.Status = "draft"
 	}
+
 	if entry.Version == 0 {
 		entry.Version = 1
 	}
+
 	if entry.Data == nil {
 		entry.Data = make(schema.EntryData)
 	}
@@ -96,29 +101,34 @@ func (r *contentEntryRepository) Create(ctx context.Context, entry *schema.Conte
 	_, err := r.db.NewInsert().
 		Model(entry).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a content entry by ID
+// FindByID finds a content entry by ID.
 func (r *contentEntryRepository) FindByID(ctx context.Context, id xid.ID) (*schema.ContentEntry, error) {
 	entry := new(schema.ContentEntry)
+
 	err := r.db.NewSelect().
 		Model(entry).
 		Where("ce.id = ?", id).
 		Where("ce.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrEntryNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return entry, nil
 }
 
-// FindByIDWithType finds a content entry by ID with its content type loaded
+// FindByIDWithType finds a content entry by ID with its content type loaded.
 func (r *contentEntryRepository) FindByIDWithType(ctx context.Context, id xid.ID) (*schema.ContentEntry, error) {
 	entry := new(schema.ContentEntry)
+
 	err := r.db.NewSelect().
 		Model(entry).
 		Relation("ContentType").
@@ -129,15 +139,17 @@ func (r *contentEntryRepository) FindByIDWithType(ctx context.Context, id xid.ID
 		Where("ce.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrEntryNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return entry, nil
 }
 
-// List lists content entries with filtering and pagination
+// List lists content entries with filtering and pagination.
 func (r *contentEntryRepository) List(ctx context.Context, contentTypeID xid.ID, query *EntryListQuery) ([]*schema.ContentEntry, int, error) {
 	if query == nil {
 		query = &EntryListQuery{}
@@ -147,9 +159,11 @@ func (r *contentEntryRepository) List(ctx context.Context, contentTypeID xid.ID,
 	if query.PageSize <= 0 {
 		query.PageSize = 20
 	}
+
 	if query.Page <= 0 {
 		query.Page = 1
 	}
+
 	if query.PageSize > 100 {
 		query.PageSize = 100
 	}
@@ -220,6 +234,7 @@ func (r *contentEntryRepository) List(ctx context.Context, contentTypeID xid.ID,
 
 	// Execute query
 	var entries []*schema.ContentEntry
+
 	err = q.Scan(ctx, &entries)
 	if err != nil {
 		return nil, 0, err
@@ -228,7 +243,7 @@ func (r *contentEntryRepository) List(ctx context.Context, contentTypeID xid.ID,
 	return entries, total, nil
 }
 
-// applyJSONBFilter applies a JSONB filter condition
+// applyJSONBFilter applies a JSONB filter condition.
 func (r *contentEntryRepository) applyJSONBFilter(q *bun.SelectQuery, field string, cond FilterCondition) *bun.SelectQuery {
 	// Convert value to string for text comparisons
 	valueStr := fmt.Sprintf("%v", cond.Value)
@@ -265,11 +280,13 @@ func (r *contentEntryRepository) applyJSONBFilter(q *bun.SelectQuery, field stri
 		if cond.Value == true || cond.Value == "true" {
 			return q.Where("ce.data->>? IS NULL OR ce.data->>? = 'null'", field, field)
 		}
+
 		return q.Where("ce.data->>? IS NOT NULL AND ce.data->>? != 'null'", field, field)
 	case "exists":
 		if cond.Value == true || cond.Value == "true" {
 			return q.Where("ce.data ? ?", field)
 		}
+
 		return q.Where("NOT (ce.data ? ?)", field)
 	case "jsonContains":
 		return q.Where("ce.data->? @> ?", field, cond.Value)
@@ -280,7 +297,7 @@ func (r *contentEntryRepository) applyJSONBFilter(q *bun.SelectQuery, field stri
 	}
 }
 
-// Update updates a content entry
+// Update updates a content entry.
 func (r *contentEntryRepository) Update(ctx context.Context, entry *schema.ContentEntry) error {
 	entry.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
@@ -288,10 +305,11 @@ func (r *contentEntryRepository) Update(ctx context.Context, entry *schema.Conte
 		WherePK().
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// Delete soft-deletes a content entry
+// Delete soft-deletes a content entry.
 func (r *contentEntryRepository) Delete(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -301,15 +319,17 @@ func (r *contentEntryRepository) Delete(ctx context.Context, id xid.ID) error {
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// HardDelete permanently deletes a content entry
+// HardDelete permanently deletes a content entry.
 func (r *contentEntryRepository) HardDelete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentEntry)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -317,7 +337,7 @@ func (r *contentEntryRepository) HardDelete(ctx context.Context, id xid.ID) erro
 // Bulk Operations
 // =============================================================================
 
-// BulkUpdateStatus updates the status of multiple entries
+// BulkUpdateStatus updates the status of multiple entries.
 func (r *contentEntryRepository) BulkUpdateStatus(ctx context.Context, ids []xid.ID, status string) error {
 	now := time.Now()
 	update := r.db.NewUpdate().
@@ -332,10 +352,11 @@ func (r *contentEntryRepository) BulkUpdateStatus(ctx context.Context, ids []xid
 	}
 
 	_, err := update.Exec(ctx)
+
 	return err
 }
 
-// BulkDelete soft-deletes multiple entries
+// BulkDelete soft-deletes multiple entries.
 func (r *contentEntryRepository) BulkDelete(ctx context.Context, ids []xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -345,6 +366,7 @@ func (r *contentEntryRepository) BulkDelete(ctx context.Context, ids []xid.ID) e
 		Where("id IN (?)", bun.In(ids)).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
@@ -352,9 +374,10 @@ func (r *contentEntryRepository) BulkDelete(ctx context.Context, ids []xid.ID) e
 // Query Operations
 // =============================================================================
 
-// FindByFieldValue finds entries with a specific field value
-func (r *contentEntryRepository) FindByFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value interface{}) ([]*schema.ContentEntry, error) {
+// FindByFieldValue finds entries with a specific field value.
+func (r *contentEntryRepository) FindByFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value any) ([]*schema.ContentEntry, error) {
 	var entries []*schema.ContentEntry
+
 	err := r.db.NewSelect().
 		Model(&entries).
 		Where("content_type_id = ?", contentTypeID).
@@ -364,11 +387,12 @@ func (r *contentEntryRepository) FindByFieldValue(ctx context.Context, contentTy
 	if err != nil {
 		return nil, err
 	}
+
 	return entries, nil
 }
 
-// ExistsWithFieldValue checks if an entry exists with a specific field value
-func (r *contentEntryRepository) ExistsWithFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value interface{}, excludeID *xid.ID) (bool, error) {
+// ExistsWithFieldValue checks if an entry exists with a specific field value.
+func (r *contentEntryRepository) ExistsWithFieldValue(ctx context.Context, contentTypeID xid.ID, field string, value any, excludeID *xid.ID) (bool, error) {
 	q := r.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
 		Where("content_type_id = ?", contentTypeID).
@@ -383,12 +407,14 @@ func (r *contentEntryRepository) ExistsWithFieldValue(ctx context.Context, conte
 	if err != nil {
 		return false, err
 	}
+
 	return count > 0, nil
 }
 
-// FindScheduledForPublish finds entries scheduled to be published before the given time
+// FindScheduledForPublish finds entries scheduled to be published before the given time.
 func (r *contentEntryRepository) FindScheduledForPublish(ctx context.Context, before time.Time) ([]*schema.ContentEntry, error) {
 	var entries []*schema.ContentEntry
+
 	err := r.db.NewSelect().
 		Model(&entries).
 		Where("status = ?", "scheduled").
@@ -398,6 +424,7 @@ func (r *contentEntryRepository) FindScheduledForPublish(ctx context.Context, be
 	if err != nil {
 		return nil, err
 	}
+
 	return entries, nil
 }
 
@@ -405,7 +432,7 @@ func (r *contentEntryRepository) FindScheduledForPublish(ctx context.Context, be
 // Stats Operations
 // =============================================================================
 
-// Count counts total entries for a content type
+// Count counts total entries for a content type.
 func (r *contentEntryRepository) Count(ctx context.Context, contentTypeID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
@@ -414,7 +441,7 @@ func (r *contentEntryRepository) Count(ctx context.Context, contentTypeID xid.ID
 		Count(ctx)
 }
 
-// CountByStatus counts entries grouped by status for a content type
+// CountByStatus counts entries grouped by status for a content type.
 func (r *contentEntryRepository) CountByStatus(ctx context.Context, contentTypeID xid.ID) (map[string]int, error) {
 	var results []struct {
 		Status string `bun:"status"`
@@ -436,10 +463,11 @@ func (r *contentEntryRepository) CountByStatus(ctx context.Context, contentTypeI
 	for _, r := range results {
 		counts[r.Status] = r.Count
 	}
+
 	return counts, nil
 }
 
-// CountByAppEnv counts total entries for an app/environment
+// CountByAppEnv counts total entries for an app/environment.
 func (r *contentEntryRepository) CountByAppEnv(ctx context.Context, appID, envID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
@@ -449,7 +477,7 @@ func (r *contentEntryRepository) CountByAppEnv(ctx context.Context, appID, envID
 		Count(ctx)
 }
 
-// CountByAppEnvAndStatus counts entries grouped by status for an app/environment
+// CountByAppEnvAndStatus counts entries grouped by status for an app/environment.
 func (r *contentEntryRepository) CountByAppEnvAndStatus(ctx context.Context, appID, envID xid.ID) (map[string]int, error) {
 	var results []struct {
 		Status string `bun:"status"`
@@ -472,5 +500,6 @@ func (r *contentEntryRepository) CountByAppEnvAndStatus(ctx context.Context, app
 	for _, r := range results {
 		counts[r.Status] = r.Count
 	}
+
 	return counts, nil
 }

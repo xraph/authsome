@@ -9,9 +9,10 @@ import (
 	"net/http"
 
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// ResendConfig holds Resend API configuration
+// ResendConfig holds Resend API configuration.
 type ResendConfig struct {
 	APIKey   string `json:"api_key"`
 	From     string `json:"from"`
@@ -19,13 +20,13 @@ type ResendConfig struct {
 	ReplyTo  string `json:"reply_to,omitempty"`
 }
 
-// ResendProvider implements notification.Provider for Resend email service
+// ResendProvider implements notification.Provider for Resend email service.
 type ResendProvider struct {
 	config     ResendConfig
 	httpClient *http.Client
 }
 
-// NewResendProvider creates a new Resend email provider
+// NewResendProvider creates a new Resend email provider.
 func NewResendProvider(config ResendConfig) *ResendProvider {
 	return &ResendProvider{
 		config:     config,
@@ -33,17 +34,17 @@ func NewResendProvider(config ResendConfig) *ResendProvider {
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *ResendProvider) ID() string {
 	return "resend"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *ResendProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeEmail
 }
 
-// Send sends an email notification via Resend API
+// Send sends an email notification via Resend API.
 func (p *ResendProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Build request payload
 	from := p.config.From
@@ -51,7 +52,7 @@ func (p *ResendProvider) Send(ctx context.Context, notif *notification.Notificat
 		from = fmt.Sprintf("%s <%s>", p.config.FromName, p.config.From)
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"from":    from,
 		"to":      []string{notif.Recipient},
 		"subject": notif.Subject,
@@ -77,13 +78,13 @@ func (p *ResendProvider) Send(ctx context.Context, notif *notification.Notificat
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.resend.com/emails", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.config.APIKey))
+	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
@@ -105,7 +106,7 @@ func (p *ResendProvider) Send(ctx context.Context, notif *notification.Notificat
 	}
 
 	// Parse response to get email ID
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -118,16 +119,16 @@ func (p *ResendProvider) Send(ctx context.Context, notif *notification.Notificat
 	return nil
 }
 
-// GetStatus gets the delivery status of a notification
+// GetStatus gets the delivery status of a notification.
 func (p *ResendProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// Create HTTP request to get email status
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.resend.com/emails/%s", providerID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.resend.com/emails/"+providerID, nil)
 	if err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.config.APIKey))
+	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 
 	// Send request
 	resp, err := p.httpClient.Do(req)
@@ -147,7 +148,7 @@ func (p *ResendProvider) GetStatus(ctx context.Context, providerID string) (noti
 	}
 
 	// Parse response
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -168,13 +169,15 @@ func (p *ResendProvider) GetStatus(ctx context.Context, providerID string) (noti
 	}
 }
 
-// ValidateConfig validates the provider configuration
+// ValidateConfig validates the provider configuration.
 func (p *ResendProvider) ValidateConfig() error {
 	if p.config.APIKey == "" {
-		return fmt.Errorf("resend API key is required")
+		return errs.RequiredField("api_key")
 	}
+
 	if p.config.From == "" {
-		return fmt.Errorf("from email address is required")
+		return errs.RequiredField("from")
 	}
+
 	return nil
 }

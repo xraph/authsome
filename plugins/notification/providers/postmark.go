@@ -9,9 +9,10 @@ import (
 	"net/http"
 
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// PostmarkConfig holds Postmark API configuration
+// PostmarkConfig holds Postmark API configuration.
 type PostmarkConfig struct {
 	ServerToken string `json:"server_token"`
 	From        string `json:"from"`
@@ -21,13 +22,13 @@ type PostmarkConfig struct {
 	TrackLinks  string `json:"track_links"` // None, HtmlAndText, HtmlOnly, TextOnly
 }
 
-// PostmarkProvider implements notification.Provider for Postmark email service
+// PostmarkProvider implements notification.Provider for Postmark email service.
 type PostmarkProvider struct {
 	config     PostmarkConfig
 	httpClient *http.Client
 }
 
-// NewPostmarkProvider creates a new Postmark email provider
+// NewPostmarkProvider creates a new Postmark email provider.
 func NewPostmarkProvider(config PostmarkConfig) *PostmarkProvider {
 	return &PostmarkProvider{
 		config:     config,
@@ -35,17 +36,17 @@ func NewPostmarkProvider(config PostmarkConfig) *PostmarkProvider {
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *PostmarkProvider) ID() string {
 	return "postmark"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *PostmarkProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeEmail
 }
 
-// Send sends an email notification via Postmark API
+// Send sends an email notification via Postmark API.
 func (p *PostmarkProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Build request payload according to Postmark API
 	from := p.config.From
@@ -53,7 +54,7 @@ func (p *PostmarkProvider) Send(ctx context.Context, notif *notification.Notific
 		from = fmt.Sprintf("%s <%s>", p.config.FromName, p.config.From)
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"From":       from,
 		"To":         notif.Recipient,
 		"Subject":    notif.Subject,
@@ -95,7 +96,7 @@ func (p *PostmarkProvider) Send(ctx context.Context, notif *notification.Notific
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.postmarkapp.com/email", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.postmarkapp.com/email", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -124,7 +125,7 @@ func (p *PostmarkProvider) Send(ctx context.Context, notif *notification.Notific
 	}
 
 	// Parse response to get message ID
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -137,10 +138,10 @@ func (p *PostmarkProvider) Send(ctx context.Context, notif *notification.Notific
 	return nil
 }
 
-// GetStatus gets the delivery status of a notification
+// GetStatus gets the delivery status of a notification.
 func (p *PostmarkProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// Create HTTP request to get message details
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.postmarkapp.com/messages/outbound/%s/details", providerID), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.postmarkapp.com/messages/outbound/%s/details", providerID), nil)
 	if err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -167,7 +168,7 @@ func (p *PostmarkProvider) GetStatus(ctx context.Context, providerID string) (no
 	}
 
 	// Parse response
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -186,37 +187,40 @@ func (p *PostmarkProvider) GetStatus(ctx context.Context, providerID string) (no
 	}
 }
 
-// ValidateConfig validates the provider configuration
+// ValidateConfig validates the provider configuration.
 func (p *PostmarkProvider) ValidateConfig() error {
 	if p.config.ServerToken == "" {
-		return fmt.Errorf("postmark server token is required")
+		return errs.RequiredField("server_token")
 	}
+
 	if p.config.From == "" {
-		return fmt.Errorf("from email address is required")
+		return errs.RequiredField("from")
 	}
+
 	return nil
 }
 
-// PostmarkWebhookEvent represents a Postmark webhook event
+// PostmarkWebhookEvent represents a Postmark webhook event.
 type PostmarkWebhookEvent struct {
-	RecordType  string                 `json:"RecordType"`
-	MessageID   string                 `json:"MessageID"`
-	Recipient   string                 `json:"Recipient"`
-	Tag         string                 `json:"Tag"`
-	DeliveredAt string                 `json:"DeliveredAt"`
-	Details     map[string]interface{} `json:"Details"`
+	RecordType  string         `json:"RecordType"`
+	MessageID   string         `json:"MessageID"`
+	Recipient   string         `json:"Recipient"`
+	Tag         string         `json:"Tag"`
+	DeliveredAt string         `json:"DeliveredAt"`
+	Details     map[string]any `json:"Details"`
 }
 
-// ParseWebhookEvent parses a Postmark webhook event
+// ParseWebhookEvent parses a Postmark webhook event.
 func (p *PostmarkProvider) ParseWebhookEvent(body []byte) (*PostmarkWebhookEvent, error) {
 	var event PostmarkWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		return nil, fmt.Errorf("failed to parse webhook event: %w", err)
 	}
+
 	return &event, nil
 }
 
-// MapWebhookEventToStatus maps a Postmark webhook event type to notification status
+// MapWebhookEventToStatus maps a Postmark webhook event type to notification status.
 func (p *PostmarkProvider) MapWebhookEventToStatus(recordType string) notification.NotificationStatus {
 	switch recordType {
 	case "Delivery":

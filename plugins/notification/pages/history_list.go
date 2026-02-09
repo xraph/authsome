@@ -1,8 +1,6 @@
 package pages
 
 import (
-	"fmt"
-
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/forgeui/primitives"
@@ -10,7 +8,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// HistoryListPage renders the notification history/logs page
+// HistoryListPage renders the notification history/logs page.
 func HistoryListPage(currentApp *app.App, basePath string) g.Node {
 	return primitives.Container(
 		Div(
@@ -292,7 +290,7 @@ func HistoryListPage(currentApp *app.App, basePath string) g.Node {
 }
 
 func historyListData(basePath string, appID string) string {
-	return fmt.Sprintf(`{
+	return `{
 		notifications: [],
 		pagination: {
 			currentPage: 1,
@@ -387,5 +385,5 @@ func historyListData(basePath string, appID string) string {
 
 			return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 		}
-	}`)
+	}`
 }

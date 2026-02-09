@@ -8,20 +8,21 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// RequestEmailChangeRequest represents an email change request
+// RequestEmailChangeRequest represents an email change request.
 type RequestEmailChangeRequest struct {
 	NewEmail string `json:"newEmail" validate:"required,email"`
 }
 
-// ConfirmEmailChangeRequest represents an email change confirmation
+// ConfirmEmailChangeRequest represents an email change confirmation.
 type ConfirmEmailChangeRequest struct {
 	Token string `json:"token" validate:"required"`
 }
 
-// RequestEmailChange initiates an email change flow
+// RequestEmailChange initiates an email change flow.
 func (s *Service) RequestEmailChange(ctx context.Context, userID xid.ID, newEmail string) (string, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -38,7 +39,7 @@ func (s *Service) RequestEmailChange(ctx context.Context, userID xid.ID, newEmai
 	// Check if new email is already taken
 	existing, err := s.users.FindByEmail(ctx, newEmail)
 	if err == nil && existing != nil && existing.ID != userID {
-		return "", fmt.Errorf("email already in use")
+		return "", errs.EmailAlreadyExists(newEmail)
 	}
 
 	// Generate change token
@@ -82,7 +83,7 @@ func (s *Service) RequestEmailChange(ctx context.Context, userID xid.ID, newEmai
 	return token, nil
 }
 
-// ConfirmEmailChange completes the email change flow
+// ConfirmEmailChange completes the email change flow.
 func (s *Service) ConfirmEmailChange(ctx context.Context, token string) error {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -93,7 +94,7 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, token string) error {
 	// Find verification token
 	repo, ok := s.getPasswordResetRepo()
 	if !ok {
-		return fmt.Errorf("verification repository not available")
+		return errs.InternalServerErrorWithMessage("verification repository not available")
 	}
 
 	verification, err := repo.FindVerificationByToken(ctx, token)
@@ -132,11 +133,11 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, token string) error {
 	return nil
 }
 
-// ValidateEmailChangeToken checks if an email change token is valid
+// ValidateEmailChangeToken checks if an email change token is valid.
 func (s *Service) ValidateEmailChangeToken(ctx context.Context, token string) (bool, error) {
 	repo, ok := s.getPasswordResetRepo()
 	if !ok {
-		return false, fmt.Errorf("verification repository not available")
+		return false, errs.InternalServerErrorWithMessage("verification repository not available")
 	}
 
 	verification, err := repo.FindVerificationByToken(ctx, token)
@@ -152,9 +153,9 @@ func (s *Service) ValidateEmailChangeToken(ctx context.Context, token string) (b
 	return true, nil
 }
 
-// Email change specific errors
+// Email change specific errors.
 var (
-	ErrInvalidChangeToken     = fmt.Errorf("invalid email change token")
-	ErrChangeTokenExpired     = fmt.Errorf("email change token has expired")
-	ErrChangeTokenAlreadyUsed = fmt.Errorf("email change token has already been used")
+	ErrInvalidChangeToken     = errs.InvalidToken()
+	ErrChangeTokenExpired     = errs.TokenExpired()
+	ErrChangeTokenAlreadyUsed = errs.BadRequest("email change token has already been used")
 )

@@ -2,6 +2,7 @@ package social
 
 import (
 	"fmt"
+	"net/http"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
@@ -10,20 +11,21 @@ import (
 	"github.com/xraph/authsome/core/environment"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardExtension implements ui.DashboardExtension for the social plugin
+// DashboardExtension implements ui.DashboardExtension for the social plugin.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 	configRepo repository.SocialProviderConfigRepository
 }
 
-// NewDashboardExtension creates a new dashboard extension
+// NewDashboardExtension creates a new dashboard extension.
 func NewDashboardExtension(plugin *Plugin, configRepo repository.SocialProviderConfigRepository) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -32,17 +34,17 @@ func NewDashboardExtension(plugin *Plugin, configRepo repository.SocialProviderC
 	}
 }
 
-// SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry interface{}) {
+// SetRegistry sets the extension registry reference (called by dashboard after registration).
+func (e *DashboardExtension) SetRegistry(registry any) {
 	// No longer needed - layout handled by ForgeUI
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "social"
 }
 
-// NavigationItems returns the navigation items for the dashboard
+// NavigationItems returns the navigation items for the dashboard.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -55,6 +57,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp != nil {
 					return basePath + "/app/" + currentApp.ID.String() + "/social"
 				}
+
 				return basePath + "/social"
 			},
 			ActiveChecker: func(currentPage string) bool {
@@ -64,7 +67,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns the dashboard routes
+// Routes returns the dashboard routes.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Social Providers List (Main Page)
@@ -147,18 +150,18 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated, using SettingsPages instead)
+// SettingsSections returns settings sections (deprecated, using SettingsPages instead).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return nil
 }
 
-// SettingsPages returns settings pages for the plugin
+// SettingsPages returns settings pages for the plugin.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	// Social providers now have their own main navigation item, not in settings
 	return nil
 }
 
-// DashboardWidgets returns dashboard widgets
+// DashboardWidgets returns dashboard widgets.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -174,7 +177,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the social plugin
+// BridgeFunctions returns bridge functions for the social plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	// No bridge functions for this plugin yet
 	return nil
@@ -182,19 +185,21 @@ func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 
 // Helper methods
 
-// getUserFromContext extracts the current user from the request context
+// getUserFromContext extracts the current user from the request context.
 func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
 	reqCtx := ctx.Request.Context()
 	if u, ok := reqCtx.Value("user").(*user.User); ok {
 		return u
 	}
+
 	return nil
 }
 
-// extractAppFromURL extracts the app from the URL parameter
+// extractAppFromURL extracts the app from the URL parameter.
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	// First try to extract app from request context (set by middleware)
 	reqCtx := ctx.Request.Context()
+
 	appVal := reqCtx.Value(contexts.AppContextKey)
 	if appVal != nil {
 		if currentApp, ok := appVal.(*app.App); ok {
@@ -212,7 +217,7 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	// Final fallback: parse app ID from URL and create minimal app
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.New(errs.CodeInvalidInput, "app ID is required", http.StatusBadRequest)
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -224,15 +229,16 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	return &app.App{ID: appID}, nil
 }
 
-// getBasePath returns the dashboard base path
+// getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
 	return e.baseUIPath
 }
 
-// getCurrentEnvironmentID gets the current environment ID from the dashboard handler
+// getCurrentEnvironmentID gets the current environment ID from the dashboard handler.
 func (e *DashboardExtension) getCurrentEnvironmentID(ctx *router.PageContext, appID xid.ID) (xid.ID, error) {
 	// First try to get environment from request context (set by middleware)
 	reqCtx := ctx.Request.Context()
+
 	envVal := reqCtx.Value(contexts.EnvironmentContextKey)
 	if envVal != nil {
 		if currentEnv, ok := envVal.(*environment.Environment); ok {

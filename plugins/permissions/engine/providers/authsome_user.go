@@ -5,25 +5,26 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // AUTHSOME SERVICE INTERFACES
 // =============================================================================
 
-// AuthsomeUserService defines the interface for the AuthSome user service
+// AuthsomeUserService defines the interface for the AuthSome user service.
 type AuthsomeUserService interface {
 	// FindByID finds a user by ID
 	FindByID(ctx context.Context, id xid.ID) (AuthsomeUser, error)
 }
 
-// AuthsomeMemberService defines the interface for organization member operations
+// AuthsomeMemberService defines the interface for organization member operations.
 type AuthsomeMemberService interface {
 	// GetUserMemberships returns all organizations a user is a member of
 	GetUserMembershipsForUser(ctx context.Context, userID xid.ID) ([]AuthsomeMembership, error)
 }
 
-// AuthsomeRBACService defines the interface for RBAC operations
+// AuthsomeRBACService defines the interface for RBAC operations.
 type AuthsomeRBACService interface {
 	// GetUserRoles gets the roles for a user in an organization
 	GetUserRoles(ctx context.Context, userID, orgID xid.ID) ([]string, error)
@@ -36,7 +37,7 @@ type AuthsomeRBACService interface {
 // AUTHSOME USER DATA TYPES
 // =============================================================================
 
-// AuthsomeUser represents user data from the core user service
+// AuthsomeUser represents user data from the core user service.
 type AuthsomeUser interface {
 	GetID() xid.ID
 	GetAppID() xid.ID
@@ -48,7 +49,7 @@ type AuthsomeUser interface {
 	GetCreatedAt() string
 }
 
-// AuthsomeMembership represents a user's membership in an organization
+// AuthsomeMembership represents a user's membership in an organization.
 type AuthsomeMembership interface {
 	GetOrganizationID() xid.ID
 	GetRole() string
@@ -59,7 +60,7 @@ type AuthsomeMembership interface {
 // AUTHSOME USER ATTRIBUTE PROVIDER
 // =============================================================================
 
-// AuthsomeUserAttributeProvider provides user attributes from AuthSome services
+// AuthsomeUserAttributeProvider provides user attributes from AuthSome services.
 type AuthsomeUserAttributeProvider struct {
 	userService   AuthsomeUserService
 	memberService AuthsomeMemberService
@@ -67,7 +68,7 @@ type AuthsomeUserAttributeProvider struct {
 	defaultOrgID  *xid.ID // Optional: default organization for context
 }
 
-// AuthsomeUserProviderConfig configures the provider
+// AuthsomeUserProviderConfig configures the provider.
 type AuthsomeUserProviderConfig struct {
 	UserService   AuthsomeUserService
 	MemberService AuthsomeMemberService
@@ -75,7 +76,7 @@ type AuthsomeUserProviderConfig struct {
 	DefaultOrgID  *xid.ID
 }
 
-// NewAuthsomeUserAttributeProvider creates a new AuthSome user attribute provider
+// NewAuthsomeUserAttributeProvider creates a new AuthSome user attribute provider.
 func NewAuthsomeUserAttributeProvider(cfg AuthsomeUserProviderConfig) *AuthsomeUserAttributeProvider {
 	return &AuthsomeUserAttributeProvider{
 		userService:   cfg.UserService,
@@ -85,7 +86,7 @@ func NewAuthsomeUserAttributeProvider(cfg AuthsomeUserProviderConfig) *AuthsomeU
 	}
 }
 
-// Name returns the provider name
+// Name returns the provider name.
 func (p *AuthsomeUserAttributeProvider) Name() string {
 	return "user"
 }
@@ -94,7 +95,7 @@ func (p *AuthsomeUserAttributeProvider) Name() string {
 // The key format can be:
 //   - "userId" - just the user ID (uses default org for roles)
 //   - "userId:orgId" - user ID with specific organization context
-func (p *AuthsomeUserAttributeProvider) GetAttributes(ctx context.Context, key string) (map[string]interface{}, error) {
+func (p *AuthsomeUserAttributeProvider) GetAttributes(ctx context.Context, key string) (map[string]any, error) {
 	userID, orgID, err := p.parseKey(key)
 	if err != nil {
 		return nil, err
@@ -102,7 +103,7 @@ func (p *AuthsomeUserAttributeProvider) GetAttributes(ctx context.Context, key s
 
 	// Fetch user from user service
 	if p.userService == nil {
-		return nil, fmt.Errorf("user service not configured")
+		return nil, errs.InternalServerErrorWithMessage("user service not configured")
 	}
 
 	user, err := p.userService.FindByID(ctx, userID)
@@ -136,9 +137,9 @@ func (p *AuthsomeUserAttributeProvider) GetAttributes(ctx context.Context, key s
 	return attrs, nil
 }
 
-// GetBatchAttributes fetches attributes for multiple users
-func (p *AuthsomeUserAttributeProvider) GetBatchAttributes(ctx context.Context, keys []string) (map[string]map[string]interface{}, error) {
-	result := make(map[string]map[string]interface{})
+// GetBatchAttributes fetches attributes for multiple users.
+func (p *AuthsomeUserAttributeProvider) GetBatchAttributes(ctx context.Context, keys []string) (map[string]map[string]any, error) {
+	result := make(map[string]map[string]any)
 
 	for _, key := range keys {
 		attrs, err := p.GetAttributes(ctx, key)
@@ -146,19 +147,22 @@ func (p *AuthsomeUserAttributeProvider) GetBatchAttributes(ctx context.Context, 
 			// Skip users that can't be fetched
 			continue
 		}
+
 		result[key] = attrs
 	}
 
 	return result, nil
 }
 
-// parseKey parses the key format "userId" or "userId:orgId"
+// parseKey parses the key format "userId" or "userId:orgId".
 func (p *AuthsomeUserAttributeProvider) parseKey(key string) (xid.ID, *xid.ID, error) {
 	// Find separator
 	sepIdx := -1
+
 	for i := range key {
 		if key[i] == ':' {
 			sepIdx = i
+
 			break
 		}
 	}
@@ -179,24 +183,26 @@ func (p *AuthsomeUserAttributeProvider) parseKey(key string) (xid.ID, *xid.ID, e
 
 	// Parse org ID if present
 	var orgID *xid.ID
+
 	if orgIDStr != "" {
 		oid, err := xid.FromString(orgIDStr)
 		if err != nil {
 			return xid.NilID(), nil, fmt.Errorf("invalid org ID: %w", err)
 		}
+
 		orgID = &oid
 	}
 
 	return userID, orgID, nil
 }
 
-// userToAttributes converts an AuthsomeUser to attributes map
-func (p *AuthsomeUserAttributeProvider) userToAttributes(user AuthsomeUser) map[string]interface{} {
+// userToAttributes converts an AuthsomeUser to attributes map.
+func (p *AuthsomeUserAttributeProvider) userToAttributes(user AuthsomeUser) map[string]any {
 	if user == nil {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"id":             user.GetID().String(),
 		"app_id":         user.GetAppID().String(),
 		"email":          user.GetEmail(),
@@ -213,8 +219,8 @@ func (p *AuthsomeUserAttributeProvider) userToAttributes(user AuthsomeUser) map[
 	}
 }
 
-// enrichWithRBAC adds role and permission data to attributes
-func (p *AuthsomeUserAttributeProvider) enrichWithRBAC(ctx context.Context, attrs map[string]interface{}, userID, orgID xid.ID) error {
+// enrichWithRBAC adds role and permission data to attributes.
+func (p *AuthsomeUserAttributeProvider) enrichWithRBAC(ctx context.Context, attrs map[string]any, userID, orgID xid.ID) error {
 	if p.rbacService == nil {
 		return nil
 	}
@@ -237,8 +243,8 @@ func (p *AuthsomeUserAttributeProvider) enrichWithRBAC(ctx context.Context, attr
 	return nil
 }
 
-// enrichWithMemberships adds membership data to attributes
-func (p *AuthsomeUserAttributeProvider) enrichWithMemberships(ctx context.Context, attrs map[string]interface{}, userID xid.ID) error {
+// enrichWithMemberships adds membership data to attributes.
+func (p *AuthsomeUserAttributeProvider) enrichWithMemberships(ctx context.Context, attrs map[string]any, userID xid.ID) error {
 	memberships, err := p.memberService.GetUserMembershipsForUser(ctx, userID)
 	if err != nil {
 		return err
@@ -263,7 +269,7 @@ func (p *AuthsomeUserAttributeProvider) enrichWithMemberships(ctx context.Contex
 // ADAPTER TYPES FOR CORE SERVICES
 // =============================================================================
 
-// UserAdapter adapts the core user.User to AuthsomeUser interface
+// UserAdapter adapts the core user.User to AuthsomeUser interface.
 type UserAdapter struct {
 	ID            xid.ID
 	AppID         xid.ID
@@ -284,7 +290,7 @@ func (u *UserAdapter) GetUsername() string    { return u.Username }
 func (u *UserAdapter) GetImage() string       { return u.Image }
 func (u *UserAdapter) GetCreatedAt() string   { return u.CreatedAt }
 
-// MembershipAdapter adapts membership data to AuthsomeMembership interface
+// MembershipAdapter adapts membership data to AuthsomeMembership interface.
 type MembershipAdapter struct {
 	OrganizationID xid.ID
 	Role           string
@@ -299,47 +305,49 @@ func (m *MembershipAdapter) GetStatus() string         { return m.Status }
 // SERVICE WRAPPER FOR INTEGRATION
 // =============================================================================
 
-// UserServiceWrapper wraps the actual core user service
+// UserServiceWrapper wraps the actual core user service.
 type UserServiceWrapper struct {
 	findByIDFunc func(ctx context.Context, id xid.ID) (AuthsomeUser, error)
 }
 
-// NewUserServiceWrapper creates a wrapper for user service
+// NewUserServiceWrapper creates a wrapper for user service.
 func NewUserServiceWrapper(findByID func(ctx context.Context, id xid.ID) (AuthsomeUser, error)) *UserServiceWrapper {
 	return &UserServiceWrapper{findByIDFunc: findByID}
 }
 
 func (w *UserServiceWrapper) FindByID(ctx context.Context, id xid.ID) (AuthsomeUser, error) {
 	if w.findByIDFunc == nil {
-		return nil, fmt.Errorf("user service not configured")
+		return nil, errs.InternalServerErrorWithMessage("user service not configured")
 	}
+
 	return w.findByIDFunc(ctx, id)
 }
 
-// MemberServiceWrapper wraps the actual member service
+// MemberServiceWrapper wraps the actual member service.
 type MemberServiceWrapper struct {
 	getMembershipsFunc func(ctx context.Context, userID xid.ID) ([]AuthsomeMembership, error)
 }
 
-// NewMemberServiceWrapper creates a wrapper for member service
+// NewMemberServiceWrapper creates a wrapper for member service.
 func NewMemberServiceWrapper(getMemberships func(ctx context.Context, userID xid.ID) ([]AuthsomeMembership, error)) *MemberServiceWrapper {
 	return &MemberServiceWrapper{getMembershipsFunc: getMemberships}
 }
 
 func (w *MemberServiceWrapper) GetUserMembershipsForUser(ctx context.Context, userID xid.ID) ([]AuthsomeMembership, error) {
 	if w.getMembershipsFunc == nil {
-		return nil, fmt.Errorf("member service not configured")
+		return nil, errs.InternalServerErrorWithMessage("member service not configured")
 	}
+
 	return w.getMembershipsFunc(ctx, userID)
 }
 
-// RBACServiceWrapper wraps the actual RBAC service
+// RBACServiceWrapper wraps the actual RBAC service.
 type RBACServiceWrapper struct {
 	getUserRolesFunc       func(ctx context.Context, userID, orgID xid.ID) ([]string, error)
 	getUserPermissionsFunc func(ctx context.Context, userID, orgID xid.ID) ([]string, error)
 }
 
-// NewRBACServiceWrapper creates a wrapper for RBAC service
+// NewRBACServiceWrapper creates a wrapper for RBAC service.
 func NewRBACServiceWrapper(
 	getUserRoles func(ctx context.Context, userID, orgID xid.ID) ([]string, error),
 	getUserPermissions func(ctx context.Context, userID, orgID xid.ID) ([]string, error),
@@ -354,6 +362,7 @@ func (w *RBACServiceWrapper) GetUserRoles(ctx context.Context, userID, orgID xid
 	if w.getUserRolesFunc == nil {
 		return nil, nil
 	}
+
 	return w.getUserRolesFunc(ctx, userID, orgID)
 }
 
@@ -361,5 +370,6 @@ func (w *RBACServiceWrapper) GetUserPermissions(ctx context.Context, userID, org
 	if w.getUserPermissionsFunc == nil {
 		return nil, nil
 	}
+
 	return w.getUserPermissionsFunc(ctx, userID, orgID)
 }

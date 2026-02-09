@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	"github.com/xraph/authsome/core/ui"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/dashboard/layouts"
 	"github.com/xraph/authsome/plugins/dashboard/services"
 	"github.com/xraph/forgeui"
 	"github.com/xraph/forgeui/router"
 )
 
-// ExtensionRegistry is an interface to avoid import cycles
+// ExtensionRegistry is an interface to avoid import cycles.
 type ExtensionRegistry interface {
 	List() []ui.DashboardExtension
 	GetDashboardWidgets() []ui.DashboardWidget
@@ -71,7 +72,6 @@ func (p *PagesManager) registerAuthPages() error {
 }
 
 func (p *PagesManager) registerDashboardPages() error {
-
 	protectedGroup := p.fuiApp.Group("").
 		Middleware(p.services.AuthMiddleware).
 		Layout(layouts.LayoutApp)
@@ -139,7 +139,7 @@ func (p *PagesManager) registerDashboardPages() error {
 	return nil
 }
 
-// registerExtensionPages registers all extension routes as ForgeUI pages
+// registerExtensionPages registers all extension routes as ForgeUI pages.
 func (p *PagesManager) registerExtensionPages() error {
 	extensions := p.extensionRegistry.List()
 
@@ -157,11 +157,11 @@ func (p *PagesManager) registerExtensionPages() error {
 	return nil
 }
 
-// registerExtensionRoute registers a single extension route as a ForgeUI page
+// registerExtensionRoute registers a single extension route as a ForgeUI page.
 func (p *PagesManager) registerExtensionRoute(ext ui.DashboardExtension, route ui.Route) error {
 	// Safety check
 	if p.services == nil {
-		return fmt.Errorf("services not initialized - cannot register routes")
+		return errs.InternalServerErrorWithMessage("services not initialized - cannot register routes")
 	}
 
 	// Determine group based on route requirements
@@ -226,7 +226,7 @@ func (p *PagesManager) registerExtensionRoute(ext ui.DashboardExtension, route u
 
 // registerExtensionSettingsPages registers settings pages from extensions as ForgeUI routes
 // This automatically creates routes for all SettingsPages() declared by extensions
-// that don't have explicit routes defined in Routes()
+// that don't have explicit routes defined in Routes().
 func (p *PagesManager) registerExtensionSettingsPages() error {
 	extensions := p.extensionRegistry.List()
 
@@ -235,6 +235,7 @@ func (p *PagesManager) registerExtensionSettingsPages() error {
 		for _, page := range settingsPages {
 			// Find the matching route from ext.Routes()
 			routes := ext.Routes()
+
 			var routeExists bool
 
 			// Look for a route that matches the settings page path
@@ -242,6 +243,7 @@ func (p *PagesManager) registerExtensionSettingsPages() error {
 			for _, route := range routes {
 				if route.Path == expectedPath {
 					routeExists = true
+
 					break
 				}
 			}

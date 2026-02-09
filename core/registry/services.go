@@ -20,9 +20,10 @@ import (
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// ServiceRegistry manages all core services and allows plugins to replace them
+// ServiceRegistry manages all core services and allows plugins to replace them.
 type ServiceRegistry struct {
 	// Core services (using interfaces to allow decoration)
 	appService          *app.ServiceImpl
@@ -51,20 +52,20 @@ type ServiceRegistry struct {
 	environmentService  environment.EnvironmentService // will be set by multi-tenancy plugin
 
 	// External services registered by key (for plugins and external integrations)
-	externalServices map[string]interface{}
+	externalServices map[string]any
 	externalMu       sync.RWMutex
 }
 
-// NewServiceRegistry creates a new service registry
+// NewServiceRegistry creates a new service registry.
 func NewServiceRegistry() *ServiceRegistry {
 	return &ServiceRegistry{
 		hookRegistry:     hooks.NewHookRegistry(),
 		roleRegistry:     rbac.NewRoleRegistry(),
-		externalServices: make(map[string]interface{}),
+		externalServices: make(map[string]any),
 	}
 }
 
-// Core service setters (used during initialization)
+// Core service setters (used during initialization).
 func (r *ServiceRegistry) SetUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
@@ -113,7 +114,7 @@ func (r *ServiceRegistry) SetRateLimitService(svc *ratelimit.Service) {
 	r.ratelimitService = svc
 }
 
-// Core service getters
+// Core service getters.
 func (r *ServiceRegistry) UserService() user.ServiceInterface {
 	return r.userService
 }
@@ -162,17 +163,17 @@ func (r *ServiceRegistry) RateLimitService() *ratelimit.Service {
 	return r.ratelimitService
 }
 
-// Hook registry getter
+// Hook registry getter.
 func (r *ServiceRegistry) HookRegistry() *hooks.HookRegistry {
 	return r.hookRegistry
 }
 
-// Role registry getter
+// Role registry getter.
 func (r *ServiceRegistry) RoleRegistry() *rbac.RoleRegistry {
 	return r.roleRegistry
 }
 
-// ServiceImpl replacement methods (used by plugins to decorate services)
+// ServiceImpl replacement methods (used by plugins to decorate services).
 func (r *ServiceRegistry) ReplaceUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
@@ -197,7 +198,7 @@ func (r *ServiceRegistry) ReplaceFormsService(svc *forms.Service) {
 	r.formsService = svc
 }
 
-// Plugin service setters (for multi-tenancy plugin)
+// Plugin service setters (for multi-tenancy plugin).
 func (r *ServiceRegistry) SetOrganizationService(svc *organization.Service) {
 	r.organizationService = svc
 }
@@ -214,7 +215,7 @@ func (r *ServiceRegistry) SetEnvironmentService(svc environment.EnvironmentServi
 	r.environmentService = svc
 }
 
-// Plugin service getters (for multi-tenancy plugin)
+// Plugin service getters (for multi-tenancy plugin).
 func (r *ServiceRegistry) OrganizationService() *organization.Service {
 	return r.organizationService
 }
@@ -231,7 +232,7 @@ func (r *ServiceRegistry) EnvironmentService() environment.EnvironmentService {
 	return r.environmentService
 }
 
-// Utility methods for plugins
+// Utility methods for plugins.
 func (r *ServiceRegistry) HasOrganizationService() bool {
 	return r.organizationService != nil
 }
@@ -248,20 +249,21 @@ func (r *ServiceRegistry) HasEnvironmentService() bool {
 	return r.environmentService != nil
 }
 
-// IsMultiTenant returns true if the multi-tenancy plugin is active
+// IsMultiTenant returns true if the multi-tenancy plugin is active.
 func (r *ServiceRegistry) IsMultiTenant() bool {
 	return r.HasAppService()
 }
 
 // Register registers an external service by key
 // This allows plugins and external integrations to register custom services
-// that can be retrieved later by other plugins or components
-func (r *ServiceRegistry) Register(key string, service interface{}) error {
+// that can be retrieved later by other plugins or components.
+func (r *ServiceRegistry) Register(key string, service any) error {
 	if key == "" {
-		return fmt.Errorf("service key cannot be empty")
+		return errs.RequiredField("key")
 	}
+
 	if service == nil {
-		return fmt.Errorf("service cannot be nil")
+		return errs.RequiredField("service")
 	}
 
 	r.externalMu.Lock()
@@ -269,17 +271,18 @@ func (r *ServiceRegistry) Register(key string, service interface{}) error {
 
 	// Check if key already exists
 	if _, exists := r.externalServices[key]; exists {
-		return fmt.Errorf("service with key '%s' already registered", key)
+		return errs.Conflict(fmt.Sprintf("service with key '%s' already registered", key))
 	}
 
 	r.externalServices[key] = service
+
 	return nil
 }
 
 // Get retrieves an external service by key
 // Returns the service and a boolean indicating if it was found
-// The caller must perform type assertion to use the service
-func (r *ServiceRegistry) Get(key string) (interface{}, bool) {
+// The caller must perform type assertion to use the service.
+func (r *ServiceRegistry) Get(key string) (any, bool) {
 	if key == "" {
 		return nil, false
 	}
@@ -288,30 +291,31 @@ func (r *ServiceRegistry) Get(key string) (interface{}, bool) {
 	defer r.externalMu.RUnlock()
 
 	service, exists := r.externalServices[key]
+
 	return service, exists
 }
 
 // GetAs retrieves an external service by key and performs type assertion
 // Returns the service as the requested type and an error if not found or type assertion fails
 // This is a generic function that provides type-safe service retrieval
-// Usage: service, err := registry.GetAs[*MyService](registry, "my-service-key")
+// Usage: service, err := registry.GetAs[*MyService](registry, "my-service-key").
 func GetAs[T any](r *ServiceRegistry, key string) (T, error) {
 	var zero T
 
 	service, exists := r.Get(key)
 	if !exists {
-		return zero, fmt.Errorf("service with key '%s' not found", key)
+		return zero, errs.NotFound(fmt.Sprintf("service with key '%s' not found", key))
 	}
 
 	typed, ok := service.(T)
 	if !ok {
-		return zero, fmt.Errorf("service with key '%s' is not of type %T", key, zero)
+		return zero, errs.InternalServerErrorWithMessage(fmt.Sprintf("service with key '%s' is not of type %T", key, zero))
 	}
 
 	return typed, nil
 }
 
-// Has checks if a service is registered for the given key
+// Has checks if a service is registered for the given key.
 func (r *ServiceRegistry) Has(key string) bool {
 	if key == "" {
 		return false
@@ -321,27 +325,29 @@ func (r *ServiceRegistry) Has(key string) bool {
 	defer r.externalMu.RUnlock()
 
 	_, exists := r.externalServices[key]
+
 	return exists
 }
 
-// Unregister removes a service from the registry by key
+// Unregister removes a service from the registry by key.
 func (r *ServiceRegistry) Unregister(key string) error {
 	if key == "" {
-		return fmt.Errorf("service key cannot be empty")
+		return errs.RequiredField("key")
 	}
 
 	r.externalMu.Lock()
 	defer r.externalMu.Unlock()
 
 	if _, exists := r.externalServices[key]; !exists {
-		return fmt.Errorf("service with key '%s' not found", key)
+		return errs.NotFound(fmt.Sprintf("service with key '%s' not found", key))
 	}
 
 	delete(r.externalServices, key)
+
 	return nil
 }
 
-// ListKeys returns all registered service keys
+// ListKeys returns all registered service keys.
 func (r *ServiceRegistry) ListKeys() []string {
 	r.externalMu.RLock()
 	defer r.externalMu.RUnlock()
@@ -354,7 +360,7 @@ func (r *ServiceRegistry) ListKeys() []string {
 	return keys
 }
 
-// RBAC registry getter
+// RBAC registry getter.
 func (r *ServiceRegistry) RBACRegistry() *rbac.RoleRegistry {
 	return r.roleRegistry
 }

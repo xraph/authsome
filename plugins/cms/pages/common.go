@@ -3,6 +3,7 @@ package pages
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -23,7 +24,7 @@ import (
 // Common Components
 // =============================================================================
 
-// PageHeader renders a standard page header with title, description, and optional actions
+// PageHeader renders a standard page header with title, description, and optional actions.
 func PageHeader(title, description string, actions ...g.Node) g.Node {
 	titleSection := primitives.VStack("gap-1",
 		H1(Class("text-2xl font-bold"), g.Text(title)),
@@ -39,15 +40,17 @@ func PageHeader(title, description string, actions ...g.Node) g.Node {
 			primitives.HStack("gap-2", actions...),
 		)
 	}
+
 	return Div(Class("mb-6"), titleSection)
 }
 
-// PrimaryButton creates a primary action button
+// PrimaryButton creates a primary action button.
 func PrimaryButton(href, text string, icon g.Node) g.Node {
 	content := []g.Node{g.Text(text)}
 	if icon != nil {
 		content = []g.Node{icon, g.Text(text)}
 	}
+
 	return A(
 		Href(href),
 		Class("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium font-semibold transition-all duration-200 outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md h-9 px-4 py-2"),
@@ -55,12 +58,13 @@ func PrimaryButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// SecondaryButton creates a secondary action button
+// SecondaryButton creates a secondary action button.
 func SecondaryButton(href, text string, icon g.Node) g.Node {
 	content := []g.Node{g.Text(text)}
 	if icon != nil {
 		content = []g.Node{icon, g.Text(text)}
 	}
+
 	return A(
 		Href(href),
 		Class("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium font-semibold transition-all duration-200 outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 h-9 px-4 py-2"),
@@ -68,12 +72,13 @@ func SecondaryButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// DangerButton creates a danger/delete action button
+// DangerButton creates a danger/delete action button.
 func DangerButton(href, text string, icon g.Node) g.Node {
 	content := []g.Node{g.Text(text)}
 	if icon != nil {
 		content = []g.Node{icon, g.Text(text)}
 	}
+
 	return A(
 		Href(href),
 		Class("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium font-semibold transition-all duration-200 outline-none ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md h-9 px-4 py-2"),
@@ -81,12 +86,12 @@ func DangerButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// Card creates a basic card container
+// Card creates a basic card container.
 func Card(children ...g.Node) g.Node {
 	return card.Card(children...)
 }
 
-// CardWithHeader creates a card with a header section
+// CardWithHeader creates a card with a header section.
 func CardWithHeader(headerTitle string, headerActions []g.Node, body ...g.Node) g.Node {
 	headerContent := []g.Node{card.Title(headerTitle)}
 	if len(headerActions) > 0 {
@@ -97,13 +102,14 @@ func CardWithHeader(headerTitle string, headerActions []g.Node, body ...g.Node) 
 			),
 		)
 	}
+
 	return card.Card(
 		card.Header(headerContent...),
 		card.Content(g.Group(body)),
 	)
 }
 
-// StatCard creates a statistics card
+// StatCard creates a statistics card.
 func StatCard(title, value string, icon g.Node, colorClass string) g.Node {
 	return card.Card(
 		card.Content(
@@ -118,12 +124,12 @@ func StatCard(title, value string, icon g.Node, colorClass string) g.Node {
 	)
 }
 
-// Badge creates a status badge with custom color classes
+// Badge creates a status badge with custom color classes.
 func Badge(text, colorClass string) g.Node {
 	return badge.Badge(text, badge.WithClass(colorClass))
 }
 
-// StatusBadge creates a status-specific badge
+// StatusBadge creates a status-specific badge.
 func StatusBadge(status string) g.Node {
 	switch status {
 	case "published":
@@ -139,7 +145,7 @@ func StatusBadge(status string) g.Node {
 	}
 }
 
-// EmptyState creates an empty state message
+// EmptyState creates an empty state message.
 func EmptyState(icon g.Node, title, description, actionText, actionHref string) g.Node {
 	opts := []emptystate.Option{
 		emptystate.WithIcon(icon),
@@ -151,10 +157,11 @@ func EmptyState(icon g.Node, title, description, actionText, actionHref string) 
 			PrimaryButton(actionHref, actionText, lucide.Plus(Class("size-4"))),
 		))
 	}
+
 	return emptystate.EmptyState(opts...)
 }
 
-// Breadcrumbs creates a breadcrumb navigation
+// Breadcrumbs creates a breadcrumb navigation.
 func Breadcrumbs(items ...BreadcrumbItem) g.Node {
 	children := make([]g.Node, len(items))
 	for i, item := range items {
@@ -164,16 +171,17 @@ func Breadcrumbs(items ...BreadcrumbItem) g.Node {
 			children[i] = breadcrumb.Page(g.Text(item.Label))
 		}
 	}
+
 	return breadcrumb.Breadcrumb(children...)
 }
 
-// BreadcrumbItem represents a breadcrumb item
+// BreadcrumbItem represents a breadcrumb item.
 type BreadcrumbItem struct {
 	Label string
 	Href  string
 }
 
-// SearchInput creates a search input field
+// SearchInput creates a search input field.
 func SearchInput(placeholder, value, formAction string) g.Node {
 	return FormEl(
 		Method("GET"),
@@ -191,15 +199,16 @@ func SearchInput(placeholder, value, formAction string) g.Node {
 	)
 }
 
-// FormatTime formats a time for display
+// FormatTime formats a time for display.
 func FormatTime(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
+
 	return t.Format("Jan 2, 2006 3:04 PM")
 }
 
-// FormatTimeAgo formats a time as relative time
+// FormatTimeAgo formats a time as relative time.
 func FormatTimeAgo(t time.Time) string {
 	if t.IsZero() {
 		return "-"
@@ -216,32 +225,37 @@ func FormatTimeAgo(t time.Time) string {
 		if mins == 1 {
 			return "1 minute ago"
 		}
+
 		return fmt.Sprintf("%d minutes ago", mins)
 	case diff < 24*time.Hour:
 		hours := int(diff.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
+
 		return fmt.Sprintf("%d hours ago", hours)
 	case diff < 7*24*time.Hour:
 		days := int(diff.Hours() / 24)
 		if days == 1 {
 			return "yesterday"
 		}
+
 		return fmt.Sprintf("%d days ago", days)
 	default:
 		return t.Format("Jan 2, 2006")
 	}
 }
 
-// Pagination renders pagination controls
+// Pagination renders pagination controls.
 func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	if totalPages <= 1 {
 		return nil
 	}
 
-	const btnClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
-	const activeClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 bg-primary text-primary-foreground"
+	const (
+		btnClass    = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+		activeClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 bg-primary text-primary-foreground"
+	)
 
 	pages := make([]g.Node, 0)
 
@@ -259,13 +273,13 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 		if i == currentPage {
 			pages = append(pages, Span(
 				Class(activeClass),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			pages = append(pages, A(
 				Href(fmt.Sprintf("%s?page=%d", baseURL, i)),
 				Class(btnClass),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			pages = append(pages, Span(
@@ -287,7 +301,7 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	return primitives.HStack("gap-2 justify-center mt-6", pages...)
 }
 
-// DataTable renders a data table
+// DataTable renders a data table.
 func DataTable(headers []string, rows []g.Node) g.Node {
 	headerCells := make([]g.Node, len(headers))
 	for i, h := range headers {
@@ -305,29 +319,29 @@ func DataTable(headers []string, rows []g.Node) g.Node {
 	)
 }
 
-// TableRow creates a table row
+// TableRow creates a table row.
 func TableRow(cells ...g.Node) g.Node {
 	return table.TableRow()(cells...)
 }
 
-// TableCell creates a table cell
+// TableCell creates a table cell.
 func TableCell(content g.Node) g.Node {
 	return table.TableCell()(content)
 }
 
-// TableCellSecondary creates a secondary table cell with muted text
+// TableCellSecondary creates a secondary table cell with muted text.
 func TableCellSecondary(content g.Node) g.Node {
 	return table.TableCell(table.WithCellClass("text-muted-foreground"))(content)
 }
 
-// TableCellActions creates a table cell with action buttons
+// TableCellActions creates a table cell with action buttons.
 func TableCellActions(actions ...g.Node) g.Node {
 	return table.TableCell(table.WithAlign(table.AlignRight))(
 		primitives.HStack("gap-2 justify-end", actions...),
 	)
 }
 
-// IconButton creates a small icon button
+// IconButton creates a small icon button.
 func IconButton(href string, icon g.Node, title, colorClass string) g.Node {
 	return A(
 		Href(href),
@@ -337,7 +351,7 @@ func IconButton(href string, icon g.Node, title, colorClass string) g.Node {
 	)
 }
 
-// ConfirmButton creates a button that requires confirmation
+// ConfirmButton creates a button that requires confirmation.
 func ConfirmButton(formAction, method, text, confirmMessage, colorClass string, icon g.Node) g.Node {
 	return FormEl(
 		Action(formAction),

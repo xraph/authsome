@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ContentTypeRepository defines the interface for content type storage operations
+// ContentTypeRepository defines the interface for content type storage operations.
 type ContentTypeRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, contentType *schema.ContentType) error
@@ -35,12 +36,12 @@ type ContentTypeRepository interface {
 	ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error)
 }
 
-// contentTypeRepository implements ContentTypeRepository using Bun ORM
+// contentTypeRepository implements ContentTypeRepository using Bun ORM.
 type contentTypeRepository struct {
 	db *bun.DB
 }
 
-// NewContentTypeRepository creates a new content type repository instance
+// NewContentTypeRepository creates a new content type repository instance.
 func NewContentTypeRepository(db *bun.DB) ContentTypeRepository {
 	return &contentTypeRepository{db: db}
 }
@@ -49,11 +50,12 @@ func NewContentTypeRepository(db *bun.DB) ContentTypeRepository {
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content type
+// Create creates a new content type.
 func (r *contentTypeRepository) Create(ctx context.Context, contentType *schema.ContentType) error {
 	if contentType.ID.IsNil() {
 		contentType.ID = xid.New()
 	}
+
 	now := time.Now()
 	contentType.CreatedAt = now
 	contentType.UpdatedAt = now
@@ -61,29 +63,34 @@ func (r *contentTypeRepository) Create(ctx context.Context, contentType *schema.
 	_, err := r.db.NewInsert().
 		Model(contentType).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a content type by ID
+// FindByID finds a content type by ID.
 func (r *contentTypeRepository) FindByID(ctx context.Context, id xid.ID) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
+
 	err := r.db.NewSelect().
 		Model(contentType).
 		Where("ct.id = ?", id).
 		Where("ct.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrContentTypeNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return contentType, nil
 }
 
-// FindBySlug finds a content type by slug within an app/environment
+// FindBySlug finds a content type by slug within an app/environment.
 func (r *contentTypeRepository) FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
+
 	err := r.db.NewSelect().
 		Model(contentType).
 		Where("ct.app_id = ?", appID).
@@ -92,15 +99,17 @@ func (r *contentTypeRepository) FindByName(ctx context.Context, appID, envID xid
 		Where("ct.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrContentTypeNotFound(name)
 		}
+
 		return nil, err
 	}
+
 	return contentType, nil
 }
 
-// List lists content types with filtering and pagination
+// List lists content types with filtering and pagination.
 func (r *contentTypeRepository) List(ctx context.Context, appID, envID xid.ID, query *core.ListContentTypesQuery) ([]*schema.ContentType, int, error) {
 	if query == nil {
 		query = &core.ListContentTypesQuery{}
@@ -110,9 +119,11 @@ func (r *contentTypeRepository) List(ctx context.Context, appID, envID xid.ID, q
 	if query.PageSize <= 0 {
 		query.PageSize = 20
 	}
+
 	if query.Page <= 0 {
 		query.Page = 1
 	}
+
 	if query.PageSize > 100 {
 		query.PageSize = 100
 	}
@@ -177,6 +188,7 @@ func (r *contentTypeRepository) List(ctx context.Context, appID, envID xid.ID, q
 
 	// Execute query
 	var contentTypes []*schema.ContentType
+
 	err = q.Scan(ctx, &contentTypes)
 	if err != nil {
 		return nil, 0, err
@@ -185,7 +197,7 @@ func (r *contentTypeRepository) List(ctx context.Context, appID, envID xid.ID, q
 	return contentTypes, total, nil
 }
 
-// Update updates a content type
+// Update updates a content type.
 func (r *contentTypeRepository) Update(ctx context.Context, contentType *schema.ContentType) error {
 	contentType.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
@@ -193,10 +205,11 @@ func (r *contentTypeRepository) Update(ctx context.Context, contentType *schema.
 		WherePK().
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// Delete soft-deletes a content type
+// Delete soft-deletes a content type.
 func (r *contentTypeRepository) Delete(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -206,15 +219,17 @@ func (r *contentTypeRepository) Delete(ctx context.Context, id xid.ID) error {
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// HardDelete permanently deletes a content type
+// HardDelete permanently deletes a content type.
 func (r *contentTypeRepository) HardDelete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentType)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -222,9 +237,10 @@ func (r *contentTypeRepository) HardDelete(ctx context.Context, id xid.ID) error
 // Relation Queries
 // =============================================================================
 
-// FindWithFields finds a content type with its fields loaded
+// FindWithFields finds a content type with its fields loaded.
 func (r *contentTypeRepository) FindWithFields(ctx context.Context, id xid.ID) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
+
 	err := r.db.NewSelect().
 		Model(contentType).
 		Relation("Fields", func(q *bun.SelectQuery) *bun.SelectQuery {
@@ -234,17 +250,20 @@ func (r *contentTypeRepository) FindWithFields(ctx context.Context, id xid.ID) (
 		Where("ct.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrContentTypeNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return contentType, nil
 }
 
-// FindBySlugWithFields finds a content type by slug with its fields loaded
+// FindBySlugWithFields finds a content type by slug with its fields loaded.
 func (r *contentTypeRepository) FindByNameWithFields(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
+
 	err := r.db.NewSelect().
 		Model(contentType).
 		Relation("Fields", func(q *bun.SelectQuery) *bun.SelectQuery {
@@ -256,11 +275,13 @@ func (r *contentTypeRepository) FindByNameWithFields(ctx context.Context, appID,
 		Where("ct.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrContentTypeNotFound(name)
 		}
+
 		return nil, err
 	}
+
 	return contentType, nil
 }
 
@@ -268,7 +289,7 @@ func (r *contentTypeRepository) FindByNameWithFields(ctx context.Context, appID,
 // Stats Operations
 // =============================================================================
 
-// Count counts total content types for an app/environment
+// Count counts total content types for an app/environment.
 func (r *contentTypeRepository) Count(ctx context.Context, appID, envID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentType)(nil)).
@@ -278,7 +299,7 @@ func (r *contentTypeRepository) Count(ctx context.Context, appID, envID xid.ID) 
 		Count(ctx)
 }
 
-// CountEntries counts total entries for a content type
+// CountEntries counts total entries for a content type.
 func (r *contentTypeRepository) CountEntries(ctx context.Context, contentTypeID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
@@ -287,7 +308,7 @@ func (r *contentTypeRepository) CountEntries(ctx context.Context, contentTypeID 
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a content type with the given name exists
+// ExistsWithSlug checks if a content type with the given name exists.
 func (r *contentTypeRepository) ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ContentType)(nil)).
@@ -299,5 +320,6 @@ func (r *contentTypeRepository) ExistsWithName(ctx context.Context, appID, envID
 	if err != nil {
 		return false, err
 	}
+
 	return count > 0, nil
 }

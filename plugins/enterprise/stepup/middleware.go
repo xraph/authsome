@@ -2,18 +2,18 @@ package stepup
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// Middleware provides step-up authentication middleware
+// Middleware provides step-up authentication middleware.
 type Middleware struct {
 	service *Service
 	config  *Config
 }
 
-// NewMiddleware creates a new step-up middleware
+// NewMiddleware creates a new step-up middleware.
 func NewMiddleware(service *Service, config *Config) *Middleware {
 	return &Middleware{
 		service: service,
@@ -21,14 +21,14 @@ func NewMiddleware(service *Service, config *Config) *Middleware {
 	}
 }
 
-// RequireLevel returns middleware that enforces a specific security level
+// RequireLevel returns middleware that enforces a specific security level.
 func (m *Middleware) RequireLevel(level SecurityLevel) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			// Extract user context from request
 			userID, orgID, sessionID := m.extractUserContext(c)
 			if userID == "" {
-				return c.JSON(401, map[string]interface{}{
+				return c.JSON(401, map[string]any{
 					"error": "Authentication required",
 				})
 			}
@@ -48,14 +48,14 @@ func (m *Middleware) RequireLevel(level SecurityLevel) forge.Middleware {
 			// Evaluate if step-up is required
 			result, err := m.service.EvaluateRequirement(c.Request().Context(), evalCtx)
 			if err != nil {
-				return c.JSON(500, map[string]interface{}{
+				return c.JSON(500, map[string]any{
 					"error": "Failed to evaluate step-up requirement",
 				})
 			}
 
 			// Check if the current level meets the required level
 			if !m.meetsLevel(result.CurrentLevel, level) {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":           "Step-up authentication required",
 					"required_level":  level,
 					"current_level":   result.CurrentLevel,
@@ -73,7 +73,7 @@ func (m *Middleware) RequireLevel(level SecurityLevel) forge.Middleware {
 	}
 }
 
-// RequireForRoute returns middleware that checks route-based rules
+// RequireForRoute returns middleware that checks route-based rules.
 func (m *Middleware) RequireForRoute() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
@@ -109,7 +109,7 @@ func (m *Middleware) RequireForRoute() forge.Middleware {
 			}
 
 			if result.Required {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":           "Step-up authentication required",
 					"security_level":  result.SecurityLevel,
 					"current_level":   result.CurrentLevel,
@@ -132,13 +132,13 @@ func (m *Middleware) RequireForRoute() forge.Middleware {
 	}
 }
 
-// RequireForAmount returns middleware that checks amount-based rules
+// RequireForAmount returns middleware that checks amount-based rules.
 func (m *Middleware) RequireForAmount(amount float64, currency string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			userID, orgID, sessionID := m.extractUserContext(c)
 			if userID == "" {
-				return c.JSON(401, map[string]interface{}{
+				return c.JSON(401, map[string]any{
 					"error": "Authentication required",
 				})
 			}
@@ -158,13 +158,13 @@ func (m *Middleware) RequireForAmount(amount float64, currency string) forge.Mid
 
 			result, err := m.service.EvaluateRequirement(c.Request().Context(), evalCtx)
 			if err != nil {
-				return c.JSON(500, map[string]interface{}{
+				return c.JSON(500, map[string]any{
 					"error": "Failed to evaluate step-up requirement",
 				})
 			}
 
 			if result.Required {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":           "Step-up authentication required",
 					"security_level":  result.SecurityLevel,
 					"current_level":   result.CurrentLevel,
@@ -183,14 +183,13 @@ func (m *Middleware) RequireForAmount(amount float64, currency string) forge.Mid
 	}
 }
 
-// RequireForResource returns middleware that checks resource-based rules
+// RequireForResource returns middleware that checks resource-based rules.
 func (m *Middleware) RequireForResource(resourceType, action string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
-
 		return func(c forge.Context) error {
 			userID, orgID, sessionID := m.extractUserContext(c)
 			if userID == "" {
-				return c.JSON(401, map[string]interface{}{
+				return c.JSON(401, map[string]any{
 					"error": "Authentication required",
 				})
 			}
@@ -210,13 +209,13 @@ func (m *Middleware) RequireForResource(resourceType, action string) forge.Middl
 
 			result, err := m.service.EvaluateRequirement(c.Request().Context(), evalCtx)
 			if err != nil {
-				return c.JSON(500, map[string]interface{}{
+				return c.JSON(500, map[string]any{
 					"error": "Failed to evaluate step-up requirement",
 				})
 			}
 
 			if result.Required {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":           "Step-up authentication required",
 					"security_level":  result.SecurityLevel,
 					"current_level":   result.CurrentLevel,
@@ -240,13 +239,15 @@ func (m *Middleware) RequireForResource(resourceType, action string) forge.Middl
 func (m *Middleware) extractUserContext(c forge.Context) (userID, orgID, sessionID string) {
 	// Try to extract from session
 	if session := c.Get("session"); session != nil {
-		if sessionMap, ok := session.(map[string]interface{}); ok {
+		if sessionMap, ok := session.(map[string]any); ok {
 			if uid, ok := sessionMap["user_id"].(string); ok {
 				userID = uid
 			}
+
 			if oid, ok := sessionMap["org_id"].(string); ok {
 				orgID = oid
 			}
+
 			if sid, ok := sessionMap["id"].(string); ok {
 				sessionID = sid
 			}
@@ -272,10 +273,11 @@ func (m *Middleware) extractUserContext(c forge.Context) (userID, orgID, session
 
 	// Try to extract from headers (for API keys)
 	if userID == "" {
-		userID = c.Request().Header.Get("X-User-ID")
+		userID = c.Request().Header.Get("X-User-Id")
 	}
+
 	if orgID == "" {
-		orgID = c.Request().Header.Get("X-Org-ID")
+		orgID = c.Request().Header.Get("X-Org-Id")
 	}
 
 	return userID, orgID, sessionID
@@ -288,7 +290,7 @@ func (m *Middleware) extractDeviceID(c forge.Context) string {
 	}
 
 	// Check header
-	if deviceID := c.Request().Header.Get("X-Device-ID"); deviceID != "" {
+	if deviceID := c.Request().Header.Get("X-Device-Id"); deviceID != "" {
 		return deviceID
 	}
 
@@ -310,10 +312,11 @@ func (m *Middleware) meetsLevel(current, required SecurityLevel) bool {
 		SecurityLevelHigh:     3,
 		SecurityLevelCritical: 4,
 	}
+
 	return levels[current] >= levels[required]
 }
 
-// EvaluateMiddleware evaluates but doesn't block - stores result in context
+// EvaluateMiddleware evaluates but doesn't block - stores result in context.
 func (m *Middleware) EvaluateMiddleware() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
@@ -347,12 +350,13 @@ func (m *Middleware) EvaluateMiddleware() forge.Middleware {
 	}
 }
 
-// GetEvaluationFromContext extracts the step-up evaluation result from context
+// GetEvaluationFromContext extracts the step-up evaluation result from context.
 func GetEvaluationFromContext(c forge.Context) (*EvaluationResult, error) {
 	if result := c.Get("stepup_evaluation"); result != nil {
 		if evalResult, ok := result.(*EvaluationResult); ok {
 			return evalResult, nil
 		}
 	}
-	return nil, fmt.Errorf("no step-up evaluation found in context")
+
+	return nil, errs.NotFound("no step-up evaluation found in context")
 }

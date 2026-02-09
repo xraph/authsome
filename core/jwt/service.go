@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -17,22 +18,23 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Config holds JWT service configuration
+// Config holds JWT service configuration.
 type Config struct {
 	EncryptionKey string `json:"encryption_key"`
 	DefaultTTL    string `json:"default_ttl"`
 }
 
-// Service handles JWT operations
+// Service handles JWT operations.
 type Service struct {
 	repo     Repository
 	auditSvc *audit.Service
 	config   Config
 }
 
-// NewService creates a new JWT service
+// NewService creates a new JWT service.
 func NewService(config Config, repo Repository, auditSvc *audit.Service) *Service {
 	return &Service{
 		repo:     repo,
@@ -41,7 +43,7 @@ func NewService(config Config, repo Repository, auditSvc *audit.Service) *Servic
 	}
 }
 
-// CreateJWTKey creates a new JWT signing key
+// CreateJWTKey creates a new JWT signing key.
 func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*JWTKey, error) {
 	// Generate key pair based on algorithm
 	privateKeyBytes, publicKeyBytes, err := s.generateKeyPair(req.Algorithm, req.KeyType)
@@ -105,7 +107,7 @@ func (s *Service) CreateJWTKey(ctx context.Context, req *CreateJWTKeyRequest) (*
 	return jwtKey, nil
 }
 
-// GenerateToken creates a new JWT token
+// GenerateToken creates a new JWT token.
 func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) (*GenerateTokenResponse, error) {
 	// Find an active signing key for the app
 	active := true
@@ -175,7 +177,7 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 		Permissions: req.Permissions,
 		Audience:    req.Audience,
 		Subject:     req.UserID,
-		Issuer:      fmt.Sprintf("authsome:app:%s", req.AppID.String()),
+		Issuer:      "authsome:app:" + req.AppID.String(),
 		IssuedAt:    jwt.NewNumericDate(now),
 		ExpiresAt:   jwt.NewNumericDate(expiresAt),
 		JwtID:       xid.New().String(),
@@ -183,7 +185,7 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 		Metadata:    req.Metadata,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   req.UserID,
-			Issuer:    fmt.Sprintf("authsome:app:%s", req.AppID.String()),
+			Issuer:    "authsome:app:" + req.AppID.String(),
 			Audience:  req.Audience,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -215,10 +217,10 @@ func (s *Service) GenerateToken(ctx context.Context, req *GenerateTokenRequest) 
 	}, nil
 }
 
-// VerifyToken verifies a JWT token
+// VerifyToken verifies a JWT token.
 func (s *Service) VerifyToken(ctx context.Context, req *VerifyTokenRequest) (*VerifyTokenResponse, error) {
 	// Parse token to get kid from header
-	token, err := jwt.Parse(req.Token, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(req.Token, func(token *jwt.Token) (any, error) {
 		// Get kid from header
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
@@ -248,9 +250,9 @@ func (s *Service) VerifyToken(ctx context.Context, req *VerifyTokenRequest) (*Ve
 		if err != nil {
 			return nil, JWTParsingFailed(err)
 		}
+
 		return publicKey, nil
 	})
-
 	if err != nil {
 		return &VerifyTokenResponse{
 			Valid: false,
@@ -323,7 +325,7 @@ func (s *Service) VerifyToken(ctx context.Context, req *VerifyTokenRequest) (*Ve
 	return response, nil
 }
 
-// GetJWKS returns the JSON Web Key Set for an app
+// GetJWKS returns the JSON Web Key Set for an app.
 func (s *Service) GetJWKS(ctx context.Context, appID xid.ID) (*JWKSResponse, error) {
 	// Find all active keys for the app
 	active := true
@@ -354,6 +356,7 @@ func (s *Service) GetJWKS(ctx context.Context, appID xid.ID) (*JWKSResponse, err
 			if err != nil {
 				continue // Skip invalid keys
 			}
+
 			jwks.Data = append(jwks.Data, *jwk)
 		}
 	}
@@ -361,7 +364,7 @@ func (s *Service) GetJWKS(ctx context.Context, appID xid.ID) (*JWKSResponse, err
 	return jwks, nil
 }
 
-// ListJWTKeys lists JWT keys for an organization with pagination
+// ListJWTKeys lists JWT keys for an organization with pagination.
 func (s *Service) ListJWTKeys(ctx context.Context, filter *ListJWTKeysFilter) (*ListJWTKeysResponse, error) {
 	// Get paginated results from repository
 	pageResp, err := s.repo.ListJWTKeys(ctx, filter)
@@ -380,12 +383,12 @@ func (s *Service) ListJWTKeys(ctx context.Context, filter *ListJWTKeysFilter) (*
 	}, nil
 }
 
-// CleanupExpired removes expired JWT keys
+// CleanupExpired removes expired JWT keys.
 func (s *Service) CleanupExpired(ctx context.Context) (int64, error) {
 	return s.repo.CleanupExpiredJWTKeys(ctx)
 }
 
-// generateKeyPair generates a key pair based on algorithm and key type
+// generateKeyPair generates a key pair based on algorithm and key type.
 func (s *Service) generateKeyPair(algorithm, keyType string) ([]byte, []byte, error) {
 	switch keyType {
 	case "RSA":
@@ -407,6 +410,7 @@ func (s *Service) generateKeyPair(algorithm, keyType string) ([]byte, []byte, er
 		if err != nil {
 			return nil, nil, err
 		}
+
 		publicKeyPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "PUBLIC KEY",
 			Bytes: publicKeyBytes,
@@ -431,6 +435,7 @@ func (s *Service) generateKeyPair(algorithm, keyType string) ([]byte, []byte, er
 		if err != nil {
 			return nil, nil, err
 		}
+
 		privateKeyPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "PRIVATE KEY",
 			Bytes: privateKeyBytes,
@@ -441,6 +446,7 @@ func (s *Service) generateKeyPair(algorithm, keyType string) ([]byte, []byte, er
 		if err != nil {
 			return nil, nil, err
 		}
+
 		publicKeyPEM := pem.EncodeToMemory(&pem.Block{
 			Type:  "PUBLIC KEY",
 			Bytes: publicKeyBytes,
@@ -450,11 +456,11 @@ func (s *Service) generateKeyPair(algorithm, keyType string) ([]byte, []byte, er
 	}
 }
 
-// parsePrivateKey parses a private key based on algorithm
-func (s *Service) parsePrivateKey(keyData, algorithm string) (interface{}, error) {
+// parsePrivateKey parses a private key based on algorithm.
+func (s *Service) parsePrivateKey(keyData, algorithm string) (any, error) {
 	block, _ := pem.Decode([]byte(keyData))
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block")
+		return nil, errs.BadRequest("failed to decode PEM block")
 	}
 
 	if strings.HasPrefix(algorithm, "RS") {
@@ -464,17 +470,17 @@ func (s *Service) parsePrivateKey(keyData, algorithm string) (interface{}, error
 	return x509.ParsePKCS8PrivateKey(block.Bytes)
 }
 
-// parsePublicKey parses a public key based on algorithm
-func (s *Service) parsePublicKey(keyData, algorithm string) (interface{}, error) {
+// parsePublicKey parses a public key based on algorithm.
+func (s *Service) parsePublicKey(keyData, algorithm string) (any, error) {
 	block, _ := pem.Decode([]byte(keyData))
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block")
+		return nil, errs.BadRequest("failed to decode PEM block")
 	}
 
 	return x509.ParsePKIXPublicKey(block.Bytes)
 }
 
-// getSigningMethod returns the signing method for an algorithm
+// getSigningMethod returns the signing method for an algorithm.
 func (s *Service) getSigningMethod(algorithm string) jwt.SigningMethod {
 	switch algorithm {
 	case "RS256":
@@ -494,7 +500,7 @@ func (s *Service) getSigningMethod(algorithm string) jwt.SigningMethod {
 	}
 }
 
-// convertToJWK converts a JWT key to JWK format
+// convertToJWK converts a JWT key to JWK format.
 func (s *Service) convertToJWK(key *JWTKey) (*JWK, error) {
 	publicKey, err := s.parsePublicKey(key.PublicKey, key.Algorithm)
 	if err != nil {
@@ -521,45 +527,50 @@ func (s *Service) convertToJWK(key *JWTKey) (*JWK, error) {
 	return jwk, nil
 }
 
-// Helper functions
+// Helper functions.
 func getStringClaim(claims jwt.MapClaims, key string) string {
 	if val, ok := claims[key].(string); ok {
 		return val
 	}
+
 	return ""
 }
 
 func getStringSliceClaim(claims jwt.MapClaims, key string) []string {
-	if val, ok := claims[key].([]interface{}); ok {
+	if val, ok := claims[key].([]any); ok {
 		result := make([]string, len(val))
 		for i, v := range val {
 			if str, ok := v.(string); ok {
 				result[i] = str
 			}
 		}
+
 		return result
 	}
+
 	if val, ok := claims[key].(string); ok {
 		return []string{val}
 	}
+
 	return nil
 }
 
 func getTimeClaim(claims jwt.MapClaims, key string) *time.Time {
 	if val, ok := claims[key].(float64); ok {
 		t := time.Unix(int64(val), 0)
+
 		return &t
 	}
+
 	return nil
 }
 
 func hasIntersection(a, b []string) bool {
 	for _, x := range a {
-		for _, y := range b {
-			if x == y {
-				return true
-			}
+		if slices.Contains(b, x) {
+			return true
 		}
 	}
+
 	return false
 }

@@ -8,18 +8,18 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler exposes HTTP endpoints for 2FA operations
+// Handler exposes HTTP endpoints for 2FA operations.
 type Handler struct{ svc *Service }
 
-// Request types
+// Request types.
 type EnableRequest2FA struct {
 	UserID string `json:"user_id" validate:"required"`
 	Method string `json:"method"`
 }
 
 type VerifyRequest2FA struct {
-	UserID         string `json:"user_id" validate:"required"`
-	Code           string `json:"code" validate:"required"`
+	UserID         string `json:"user_id"         validate:"required"`
+	Code           string `json:"code"            validate:"required"`
 	RememberDevice bool   `json:"remember_device"`
 	DeviceID       string `json:"device_id"`
 }
@@ -38,14 +38,14 @@ type SendOTPRequest struct {
 }
 
 type GetStatusRequest struct {
-	UserID   string `json:"user_id" validate:"required"`
+	UserID   string `json:"user_id"   validate:"required"`
 	DeviceID string `json:"device_id"`
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type StatusResponse = responses.StatusResponse
 
-// Plugin-specific responses
+// Plugin-specific responses.
 type CodesResponse struct {
 	Codes []string `json:"codes"`
 }
@@ -68,11 +68,13 @@ type EnableResponse struct {
 
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errs.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
@@ -91,6 +93,7 @@ func (h *Handler) Enable(c forge.Context) error {
 	if bundle != nil {
 		resp.TOTPURI = bundle.URI
 	}
+
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -108,6 +111,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	if req.RememberDevice && req.DeviceID != "" {
 		_ = h.svc.MarkTrusted(c.Request().Context(), req.UserID, req.DeviceID, 30)
 	}
+
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "verified"})
 }
 
@@ -120,6 +124,7 @@ func (h *Handler) Disable(c forge.Context) error {
 	if err := h.svc.Disable(c.Request().Context(), req.UserID); err != nil {
 		return handleError(c, err, "DISABLE_2FA_FAILED", "Failed to disable 2FA", http.StatusBadRequest)
 	}
+
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "2fa_disabled"})
 }
 
@@ -133,14 +138,16 @@ func (h *Handler) GenerateBackupCodes(c forge.Context) error {
 	if count == 0 {
 		count = 10
 	}
+
 	codes, err := h.svc.GenerateBackupCodes(c.Request().Context(), req.UserID, count)
 	if err != nil {
 		return handleError(c, err, "GENERATE_CODES_FAILED", "Failed to generate backup codes", http.StatusBadRequest)
 	}
+
 	return c.JSON(http.StatusOK, &CodesResponse{Codes: codes})
 }
 
-// SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing)
+// SendOTP triggers generation of an OTP code for a user (returns code in response for dev/testing).
 func (h *Handler) SendOTP(c forge.Context) error {
 	var req SendOTPRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -155,7 +162,7 @@ func (h *Handler) SendOTP(c forge.Context) error {
 	return c.JSON(http.StatusOK, &OTPSentResponse{Status: "otp_sent", Code: code})
 }
 
-// Status returns whether 2FA is enabled and whether the device is trusted
+// Status returns whether 2FA is enabled and whether the device is trusted.
 func (h *Handler) Status(c forge.Context) error {
 	var req GetStatusRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -168,7 +175,9 @@ func (h *Handler) Status(c forge.Context) error {
 		if err.Error() == "xid: invalid ID" {
 			return c.JSON(http.StatusBadRequest, errs.New("INVALID_USER_ID", "Invalid user ID format", http.StatusBadRequest))
 		}
+
 		return handleError(c, err, "GET_STATUS_FAILED", "Failed to get 2FA status", http.StatusBadRequest)
 	}
+
 	return c.JSON(http.StatusOK, &TwoFAStatusResponse{Enabled: st.Enabled, Method: st.Method, Trusted: st.Trusted})
 }

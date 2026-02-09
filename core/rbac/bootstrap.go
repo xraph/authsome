@@ -8,11 +8,12 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
 // RoleDefinition declares a role and its permissions
-// Plugins register these during Init() to contribute to the platform RBAC system
+// Plugins register these during Init() to contribute to the platform RBAC system.
 type RoleDefinition struct {
 	Name         string   // Role name (e.g., "superadmin", "owner", "admin", "member")
 	DisplayName  string   // Human-readable name (e.g., "Super Administrator")
@@ -29,7 +30,7 @@ type RoleDefinition struct {
 // This interface enables:
 // - Mock implementations for testing
 // - Alternative implementations (cached, remote, etc.)
-// - Dependency injection and loose coupling
+// - Dependency injection and loose coupling.
 type RoleRegistryInterface interface {
 	// RegisterRole registers or updates a role definition
 	// Override semantics: If a role with the same name exists, permissions are merged
@@ -57,12 +58,12 @@ type RoleRegistryInterface interface {
 // Supports:
 // - Override semantics (later registrations override earlier ones)
 // - Role inheritance (roles inherit from parent roles)
-// - Cross-plugin modification (plugins can extend other plugins' roles)
+// - Cross-plugin modification (plugins can extend other plugins' roles).
 type RoleRegistry struct {
 	roles map[string]*RoleDefinition
 }
 
-// NewRoleRegistry creates a new role registry
+// NewRoleRegistry creates a new role registry.
 func NewRoleRegistry() *RoleRegistry {
 	return &RoleRegistry{
 		roles: make(map[string]*RoleDefinition),
@@ -71,10 +72,10 @@ func NewRoleRegistry() *RoleRegistry {
 
 // RegisterRole registers or updates a role definition
 // Override semantics: If a role with the same name exists, permissions are merged
-// with the new permissions taking precedence
+// with the new permissions taking precedence.
 func (r *RoleRegistry) RegisterRole(role *RoleDefinition) error {
 	if role.Name == "" {
-		return fmt.Errorf("role name cannot be empty")
+		return errs.RequiredField("name")
 	}
 
 	existingRole, exists := r.roles[role.Name]
@@ -111,18 +112,20 @@ func (r *RoleRegistry) RegisterRole(role *RoleDefinition) error {
 	return nil
 }
 
-// GetRole retrieves a role definition by name
+// GetRole retrieves a role definition by name.
 func (r *RoleRegistry) GetRole(name string) (*RoleDefinition, bool) {
 	role, exists := r.roles[name]
+
 	return role, exists
 }
 
-// ListRoles returns all registered role definitions
+// ListRoles returns all registered role definitions.
 func (r *RoleRegistry) ListRoles() []*RoleDefinition {
 	roles := make([]*RoleDefinition, 0, len(r.roles))
 	for _, role := range r.roles {
 		roles = append(roles, role)
 	}
+
 	return roles
 }
 
@@ -134,10 +137,11 @@ func (r *RoleRegistry) ListRoles() []*RoleDefinition {
 // This creates/updates:
 // 1. Role records in the database
 // 2. Permission records in the database
-// 3. RBAC policy expressions in the policy engine
+// 3. RBAC policy expressions in the policy engine.
 func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *Service, platformAppID xid.ID) error {
 	// Get the default environment for this app
 	var defaultEnvID xid.ID
+
 	err := db.NewSelect().
 		Table("environments").
 		Column("id").
@@ -145,7 +149,6 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 		Where("is_default = ?", true).
 		Limit(1).
 		Scan(ctx, &defaultEnvID)
-
 	if err != nil {
 		// If no default environment found, get the first environment
 		err = db.NewSelect().
@@ -155,7 +158,6 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 			Order("created_at ASC").
 			Limit(1).
 			Scan(ctx, &defaultEnvID)
-
 		if err != nil {
 			return fmt.Errorf("no environment found for app %s: %w", platformAppID.String(), err)
 		}
@@ -169,6 +171,7 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 
 	// Collect all unique permissions across all roles
 	permissionMap := make(map[string]bool)
+
 	for _, roleDef := range resolvedRoles {
 		for _, perm := range roleDef.Permissions {
 			permissionMap[perm] = true
@@ -214,12 +217,13 @@ func (r *RoleRegistry) Bootstrap(ctx context.Context, db *bun.DB, rbacService *S
 // Handles:
 // - Single inheritance (InheritsFrom)
 // - Circular dependency detection
-// - Priority-based ordering
+// - Priority-based ordering.
 func (r *RoleRegistry) resolveInheritance() ([]*RoleDefinition, error) {
 	resolved := make(map[string]*RoleDefinition)
 	visiting := make(map[string]bool) // For cycle detection
 
 	var resolve func(name string) (*RoleDefinition, error)
+
 	resolve = func(name string) (*RoleDefinition, error) {
 		// Already resolved
 		if resolved[name] != nil {
@@ -276,6 +280,7 @@ func (r *RoleRegistry) resolveInheritance() ([]*RoleDefinition, error) {
 		}
 
 		resolved[name] = resolvedRole
+
 		return resolvedRole, nil
 	}
 
@@ -295,10 +300,11 @@ func (r *RoleRegistry) resolveInheritance() ([]*RoleDefinition, error) {
 	return result, nil
 }
 
-// upsertPermission creates or updates a permission in the database
+// upsertPermission creates or updates a permission in the database.
 func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, appID xid.ID, permissionExpr string) error {
 	// Find existing permission
 	var existingPerm schema.Permission
+
 	err := db.NewSelect().
 		Model(&existingPerm).
 		Where("name = ?", permissionExpr).
@@ -313,7 +319,7 @@ func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, appID x
 			ID:          xid.New(),
 			AppID:       &appID,
 			Name:        permissionExpr,
-			Description: fmt.Sprintf("Permission: %s", permissionExpr),
+			Description: "Permission: " + permissionExpr,
 		}
 		newPerm.CreatedAt = now
 		newPerm.UpdatedAt = now
@@ -330,7 +336,7 @@ func (r *RoleRegistry) upsertPermission(ctx context.Context, db *bun.DB, appID x
 	return nil
 }
 
-// upsertRole creates or updates a role in the database
+// upsertRole creates or updates a role in the database.
 func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID xid.ID, def *RoleDefinition) error {
 	// Validate environment ID
 	if envID.IsNil() {
@@ -339,6 +345,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID 
 
 	// Find existing role
 	var existingRole schema.Role
+
 	err := db.NewSelect().
 		Model(&existingRole).
 		Where("name = ?", def.Name).
@@ -392,7 +399,6 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID 
 			Column("display_name", "description", "is_template", "is_owner_role", "updated_at", "updated_by", "version").
 			Where("id = ?", existingRole.ID).
 			Exec(ctx)
-
 		if err != nil {
 			return fmt.Errorf("failed to update role: %w", err)
 		}
@@ -402,7 +408,7 @@ func (r *RoleRegistry) upsertRole(ctx context.Context, db *bun.DB, appID, envID 
 }
 
 // ValidateRoleAssignment checks if a role can be assigned to a user in an app
-// Platform roles (IsPlatform=true) can only be assigned in the platform app
+// Platform roles (IsPlatform=true) can only be assigned in the platform app.
 func (r *RoleRegistry) ValidateRoleAssignment(roleName string, isPlatformApp bool) error {
 	role, exists := r.roles[roleName]
 	if !exists {
@@ -416,12 +422,12 @@ func (r *RoleRegistry) ValidateRoleAssignment(roleName string, isPlatformApp boo
 	return nil
 }
 
-// GetRoleHierarchy returns roles in descending priority order (highest first)
+// GetRoleHierarchy returns roles in descending priority order (highest first).
 func (r *RoleRegistry) GetRoleHierarchy() []*RoleDefinition {
 	roles := r.ListRoles()
 
 	// Sort by priority (descending)
-	for i := 0; i < len(roles); i++ {
+	for i := range roles {
 		for j := i + 1; j < len(roles); j++ {
 			if roles[j].Priority > roles[i].Priority {
 				roles[i], roles[j] = roles[j], roles[i]
@@ -434,7 +440,7 @@ func (r *RoleRegistry) GetRoleHierarchy() []*RoleDefinition {
 
 // RegisterDefaultPlatformRoles registers the default platform-wide roles
 // This is called during AuthSome initialization before plugins register their roles
-// Plugins can then extend or override these default roles
+// Plugins can then extend or override these default roles.
 func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 	// Superadmin - Platform owner with unrestricted access
 	// NOT a template - this is platform-only and cannot be cloned to organizations
@@ -523,7 +529,7 @@ func RegisterDefaultPlatformRoles(registry *RoleRegistry) error {
 
 // expandPermissions is a helper function to parse permission strings like "view,edit,delete on resource"
 // Returns individual permission expressions
-// This is currently unused but may be needed for future permission expansion features
+// This is currently unused but may be needed for future permission expansion features.
 func expandPermissions(permExpr string) []string {
 	parts := strings.Split(permExpr, " on ")
 	if len(parts) != 2 {

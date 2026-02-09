@@ -2,12 +2,14 @@ package generator
 
 import (
 	"fmt"
+	"net/http"
 	"path/filepath"
 
 	"github.com/xraph/authsome/internal/clients/manifest"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Language represents a target language for code generation
+// Language represents a target language for code generation.
 type Language string
 
 const (
@@ -16,14 +18,14 @@ const (
 	LanguageRust       Language = "rust"
 )
 
-// Generator coordinates code generation for all languages
+// Generator coordinates code generation for all languages.
 type Generator struct {
 	parser     *manifest.Parser
 	outputDir  string
 	moduleName string
 }
 
-// NewGenerator creates a new generator
+// NewGenerator creates a new generator.
 func NewGenerator(manifestDir, outputDir, moduleName string) (*Generator, error) {
 	parser := manifest.NewParser()
 	if err := parser.LoadDirectory(manifestDir); err != nil {
@@ -41,7 +43,7 @@ func NewGenerator(manifestDir, outputDir, moduleName string) (*Generator, error)
 	}, nil
 }
 
-// GenerateAll generates clients for all languages
+// GenerateAll generates clients for all languages.
 func (g *Generator) GenerateAll() error {
 	languages := []Language{LanguageGo, LanguageTypeScript, LanguageRust}
 	for _, lang := range languages {
@@ -49,10 +51,11 @@ func (g *Generator) GenerateAll() error {
 			return fmt.Errorf("failed to generate %s client: %w", lang, err)
 		}
 	}
+
 	return nil
 }
 
-// Generate generates a client for a specific language
+// Generate generates a client for a specific language.
 func (g *Generator) Generate(lang Language, pluginIDs []string) error {
 	// Get manifests to generate
 	var manifests []*manifest.Manifest
@@ -63,22 +66,26 @@ func (g *Generator) Generate(lang Language, pluginIDs []string) error {
 	}
 
 	if len(manifests) == 0 {
-		return fmt.Errorf("no manifests found")
+		return errs.New(errs.CodeNotFound, "no manifests found", http.StatusNotFound)
 	}
 
 	// Ensure core is included
 	hasCore := false
+
 	for _, m := range manifests {
 		if m.PluginID == "core" {
 			hasCore = true
+
 			break
 		}
 	}
+
 	if !hasCore {
 		core, err := g.parser.GetCore()
 		if err != nil {
 			return err
 		}
+
 		manifests = append([]*manifest.Manifest{core}, manifests...)
 	}
 
@@ -88,14 +95,17 @@ func (g *Generator) Generate(lang Language, pluginIDs []string) error {
 	switch lang {
 	case LanguageGo:
 		gen := NewGoGenerator(outputDir, manifests, g.moduleName)
+
 		return gen.Generate()
 
 	case LanguageTypeScript:
 		gen := NewTypeScriptGenerator(outputDir, manifests)
+
 		return gen.Generate()
 
 	case LanguageRust:
 		gen := NewRustGenerator(outputDir, manifests)
+
 		return gen.Generate()
 
 	default:
@@ -103,22 +113,25 @@ func (g *Generator) Generate(lang Language, pluginIDs []string) error {
 	}
 }
 
-// ListPlugins returns all available plugin IDs
+// ListPlugins returns all available plugin IDs.
 func (g *Generator) ListPlugins() []string {
 	manifests := g.parser.List()
+
 	plugins := make([]string, 0, len(manifests))
 	for _, m := range manifests {
 		plugins = append(plugins, m.PluginID)
 	}
+
 	return plugins
 }
 
-// ValidateManifests validates all loaded manifests
+// ValidateManifests validates all loaded manifests.
 func (g *Generator) ValidateManifests() error {
 	for _, m := range g.parser.List() {
 		if err := m.Validate(); err != nil {
 			return fmt.Errorf("manifest %s is invalid: %w", m.PluginID, err)
 		}
 	}
+
 	return nil
 }

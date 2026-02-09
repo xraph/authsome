@@ -3,16 +3,18 @@ package definition
 import (
 	"fmt"
 	"strings"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Validate validates the schema for correctness
+// Validate validates the schema for correctness.
 func (s *Schema) Validate() error {
 	if s.Version == "" {
-		return fmt.Errorf("schema version is required")
+		return errs.RequiredField("version")
 	}
 
 	if len(s.Models) == 0 {
-		return fmt.Errorf("schema must contain at least one model")
+		return errs.RequiredField("models")
 	}
 
 	// Validate each model
@@ -30,18 +32,18 @@ func (s *Schema) Validate() error {
 	return nil
 }
 
-// validateModel validates a single model
+// validateModel validates a single model.
 func (s *Schema) validateModel(name string, model Model) error {
 	if model.Name == "" {
-		return fmt.Errorf("model name is required")
+		return errs.RequiredField("name")
 	}
 
 	if model.Table == "" {
-		return fmt.Errorf("table name is required")
+		return errs.RequiredField("table")
 	}
 
 	if len(model.Fields) == 0 {
-		return fmt.Errorf("model must have at least one field")
+		return errs.RequiredField("fields")
 	}
 
 	// Check for primary key
@@ -53,6 +55,7 @@ func (s *Schema) validateModel(name string, model Model) error {
 		if fieldNames[field.Name] {
 			return fmt.Errorf("duplicate field name: %s", field.Name)
 		}
+
 		fieldNames[field.Name] = true
 
 		// Validate field
@@ -62,14 +65,15 @@ func (s *Schema) validateModel(name string, model Model) error {
 
 		if field.Primary {
 			if hasPrimaryKey {
-				return fmt.Errorf("multiple primary keys defined")
+				return errs.BadRequest("multiple primary keys defined")
 			}
+
 			hasPrimaryKey = true
 		}
 	}
 
 	if !hasPrimaryKey {
-		return fmt.Errorf("model must have a primary key")
+		return errs.BadRequest("model must have a primary key")
 	}
 
 	// Validate indexes
@@ -82,18 +86,18 @@ func (s *Schema) validateModel(name string, model Model) error {
 	return nil
 }
 
-// validateField validates a single field
+// validateField validates a single field.
 func validateField(field Field) error {
 	if field.Name == "" {
-		return fmt.Errorf("field name is required")
+		return errs.RequiredField("name")
 	}
 
 	if field.Column == "" {
-		return fmt.Errorf("column name is required")
+		return errs.RequiredField("column")
 	}
 
 	if field.Type == "" {
-		return fmt.Errorf("field type is required")
+		return errs.RequiredField("type")
 	}
 
 	// Validate field type
@@ -105,9 +109,11 @@ func validateField(field Field) error {
 	}
 
 	isValidType := false
+
 	for _, validType := range validTypes {
 		if field.Type == validType {
 			isValidType = true
+
 			break
 		}
 	}
@@ -118,25 +124,25 @@ func validateField(field Field) error {
 
 	// Primary keys must be required
 	if field.Primary && !field.Required {
-		return fmt.Errorf("primary key must be required")
+		return errs.BadRequest("primary key must be required")
 	}
 
 	// Can't be both required and nullable
 	if field.Required && field.Nullable {
-		return fmt.Errorf("field cannot be both required and nullable")
+		return errs.BadRequest("field cannot be both required and nullable")
 	}
 
 	return nil
 }
 
-// validateIndex validates an index
+// validateIndex validates an index.
 func (s *Schema) validateIndex(model Model, idx Index) error {
 	if idx.Name == "" {
-		return fmt.Errorf("index name is required")
+		return errs.RequiredField("name")
 	}
 
 	if len(idx.Columns) == 0 {
-		return fmt.Errorf("index must specify at least one column")
+		return errs.RequiredField("columns")
 	}
 
 	// Verify columns exist in model
@@ -154,7 +160,7 @@ func (s *Schema) validateIndex(model Model, idx Index) error {
 	return nil
 }
 
-// validateReferences validates all foreign key references
+// validateReferences validates all foreign key references.
 func (s *Schema) validateReferences() error {
 	for modelName, model := range s.Models {
 		for _, field := range model.Fields {
@@ -168,9 +174,11 @@ func (s *Schema) validateReferences() error {
 
 				// Check if referenced field exists
 				fieldExists := false
+
 				for _, refField := range refModel.Fields {
 					if refField.Name == field.References.Field {
 						fieldExists = true
+
 						break
 					}
 				}
@@ -194,10 +202,10 @@ func (s *Schema) validateReferences() error {
 	return nil
 }
 
-// ValidateName checks if a name is valid (alphanumeric + underscore)
+// ValidateName checks if a name is valid (alphanumeric + underscore).
 func ValidateName(name string) error {
 	if name == "" {
-		return fmt.Errorf("name cannot be empty")
+		return errs.RequiredField("name")
 	}
 
 	for i, c := range name {
@@ -214,18 +222,21 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// ToSnakeCase converts a string to snake_case
+// ToSnakeCase converts a string to snake_case.
 func ToSnakeCase(s string) string {
 	var result strings.Builder
+
 	for i, c := range s {
 		if c >= 'A' && c <= 'Z' {
 			if i > 0 {
 				result.WriteRune('_')
 			}
+
 			result.WriteRune(c + 32) // Convert to lowercase
 		} else {
 			result.WriteRune(c)
 		}
 	}
+
 	return result.String()
 }

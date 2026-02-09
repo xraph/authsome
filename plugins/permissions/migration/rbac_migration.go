@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/permissions/core"
 	"github.com/xraph/authsome/schema"
 )
@@ -17,7 +18,7 @@ import (
 // =============================================================================
 
 // RBACMigrationService handles migration from the legacy RBAC system to
-// the new CEL-based permissions system
+// the new CEL-based permissions system.
 type RBACMigrationService struct {
 	// Repository for storing migrated policies
 	policyRepo PolicyRepository
@@ -32,7 +33,7 @@ type RBACMigrationService struct {
 	config MigrationConfig
 }
 
-// MigrationConfig configures the migration service
+// MigrationConfig configures the migration service.
 type MigrationConfig struct {
 	// BatchSize for processing policies
 	BatchSize int
@@ -50,7 +51,7 @@ type MigrationConfig struct {
 	DefaultPriority int
 }
 
-// DefaultMigrationConfig returns default configuration
+// DefaultMigrationConfig returns default configuration.
 func DefaultMigrationConfig() MigrationConfig {
 	return MigrationConfig{
 		BatchSize:        100,
@@ -65,13 +66,13 @@ func DefaultMigrationConfig() MigrationConfig {
 // INTERFACES
 // =============================================================================
 
-// PolicyRepository interface for storing migrated policies
+// PolicyRepository interface for storing migrated policies.
 type PolicyRepository interface {
 	CreatePolicy(ctx context.Context, policy *core.Policy) error
 	GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) ([]*core.Policy, error)
 }
 
-// RBACService interface for reading existing RBAC data
+// RBACService interface for reading existing RBAC data.
 type RBACService interface {
 	// GetAllPolicies returns all RBAC policies
 	GetAllPolicies(ctx context.Context) ([]*RBACPolicy, error)
@@ -83,7 +84,7 @@ type RBACService interface {
 	GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*schema.Permission, error)
 }
 
-// RBACPolicy represents a legacy RBAC policy
+// RBACPolicy represents a legacy RBAC policy.
 type RBACPolicy struct {
 	Subject   string   `json:"subject"`   // e.g., "user", "role:admin"
 	Actions   []string `json:"actions"`   // e.g., ["read", "write"]
@@ -91,18 +92,18 @@ type RBACPolicy struct {
 	Condition string   `json:"condition"` // e.g., "owner = true"
 }
 
-// Logger interface for migration logging
+// Logger interface for migration logging.
 type Logger interface {
-	Info(msg string, fields ...interface{})
-	Warn(msg string, fields ...interface{})
-	Error(msg string, fields ...interface{})
+	Info(msg string, fields ...any)
+	Warn(msg string, fields ...any)
+	Error(msg string, fields ...any)
 }
 
 // =============================================================================
 // CONSTRUCTOR
 // =============================================================================
 
-// NewRBACMigrationService creates a new RBAC migration service
+// NewRBACMigrationService creates a new RBAC migration service.
 func NewRBACMigrationService(
 	policyRepo PolicyRepository,
 	rbacService RBACService,
@@ -121,7 +122,7 @@ func NewRBACMigrationService(
 // MIGRATION METHODS
 // =============================================================================
 
-// MigrationResult represents the result of a migration operation
+// MigrationResult represents the result of a migration operation.
 type MigrationResult struct {
 	TotalPolicies     int              `json:"totalPolicies"`
 	MigratedPolicies  int              `json:"migratedPolicies"`
@@ -134,7 +135,7 @@ type MigrationResult struct {
 	DryRun            bool             `json:"dryRun"`
 }
 
-// MigrationError represents an error during migration
+// MigrationError represents an error during migration.
 type MigrationError struct {
 	PolicyIndex int    `json:"policyIndex"`
 	Subject     string `json:"subject"`
@@ -142,7 +143,7 @@ type MigrationError struct {
 	Error       string `json:"error"`
 }
 
-// MigrateAll migrates all RBAC policies to the permissions system
+// MigrateAll migrates all RBAC policies to the permissions system.
 func (s *RBACMigrationService) MigrateAll(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, createdBy xid.ID) (*MigrationResult, error) {
 	result := &MigrationResult{
 		StartedAt: time.Now().UTC(),
@@ -174,6 +175,7 @@ func (s *RBACMigrationService) MigrateAll(ctx context.Context, appID, envID xid.
 				"index", i,
 				"subject", rbacPolicy.Subject,
 				"error", err.Error())
+
 			continue
 		}
 
@@ -187,12 +189,13 @@ func (s *RBACMigrationService) MigrateAll(ctx context.Context, appID, envID xid.
 					PolicyIndex: i,
 					Subject:     rbacPolicy.Subject,
 					Resource:    rbacPolicy.Resource,
-					Error:       fmt.Sprintf("storage error: %s", err.Error()),
+					Error:       "storage error: " + err.Error(),
 				})
 				s.logger.Error("Failed to store migrated policy",
 					"index", i,
 					"name", celPolicy.Name,
 					"error", err.Error())
+
 				continue
 			}
 		}
@@ -210,7 +213,7 @@ func (s *RBACMigrationService) MigrateAll(ctx context.Context, appID, envID xid.
 	return result, nil
 }
 
-// ConvertPolicy converts a single RBAC policy to a CEL policy
+// ConvertPolicy converts a single RBAC policy to a CEL policy.
 func (s *RBACMigrationService) ConvertPolicy(
 	ctx context.Context,
 	rbacPolicy *RBACPolicy,
@@ -219,7 +222,7 @@ func (s *RBACMigrationService) ConvertPolicy(
 	createdBy xid.ID,
 ) (*core.Policy, error) {
 	if rbacPolicy == nil {
-		return nil, fmt.Errorf("rbac policy is nil")
+		return nil, errs.BadRequest("rbac policy is nil")
 	}
 
 	// Extract resource type from resource pattern
@@ -264,7 +267,7 @@ func (s *RBACMigrationService) ConvertPolicy(
 // CEL CONVERSION
 // =============================================================================
 
-// convertToCEL converts an RBAC policy to a CEL expression
+// convertToCEL converts an RBAC policy to a CEL expression.
 func (s *RBACMigrationService) convertToCEL(rbacPolicy *RBACPolicy) (string, error) {
 	var conditions []string
 
@@ -273,6 +276,7 @@ func (s *RBACMigrationService) convertToCEL(rbacPolicy *RBACPolicy) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to convert subject: %w", err)
 	}
+
 	if subjectCond != "" {
 		conditions = append(conditions, subjectCond)
 	}
@@ -282,6 +286,7 @@ func (s *RBACMigrationService) convertToCEL(rbacPolicy *RBACPolicy) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to convert resource: %w", err)
 	}
+
 	if resourceCond != "" {
 		conditions = append(conditions, resourceCond)
 	}
@@ -298,6 +303,7 @@ func (s *RBACMigrationService) convertToCEL(rbacPolicy *RBACPolicy) (string, err
 		if err != nil {
 			return "", fmt.Errorf("failed to convert condition: %w", err)
 		}
+
 		if customCond != "" {
 			conditions = append(conditions, customCond)
 		}
@@ -311,7 +317,7 @@ func (s *RBACMigrationService) convertToCEL(rbacPolicy *RBACPolicy) (string, err
 	return strings.Join(conditions, " && "), nil
 }
 
-// convertSubject converts RBAC subject to CEL condition
+// convertSubject converts RBAC subject to CEL condition.
 func (s *RBACMigrationService) convertSubject(subject string) (string, error) {
 	subject = strings.TrimSpace(subject)
 	if subject == "" || subject == "*" {
@@ -321,6 +327,7 @@ func (s *RBACMigrationService) convertSubject(subject string) (string, error) {
 	// Handle role-based subjects: "role:admin" -> has_role("admin")
 	if strings.HasPrefix(strings.ToLower(subject), "role:") {
 		roleName := strings.TrimPrefix(subject[5:], " ")
+
 		return fmt.Sprintf(`principal.roles.exists(r, r == "%s")`, roleName), nil
 	}
 
@@ -330,18 +337,21 @@ func (s *RBACMigrationService) convertSubject(subject string) (string, error) {
 		if userID == "*" {
 			return "", nil // Any user
 		}
+
 		return fmt.Sprintf(`principal.id == "%s"`, userID), nil
 	}
 
 	// Handle group-based subjects: "group:engineering" -> has_group("engineering")
 	if strings.HasPrefix(strings.ToLower(subject), "group:") {
 		groupName := strings.TrimPrefix(subject[6:], " ")
+
 		return fmt.Sprintf(`principal.groups.exists(g, g == "%s")`, groupName), nil
 	}
 
 	// Handle permission-based subjects: "permission:users.read" -> has_permission("users.read")
 	if strings.HasPrefix(strings.ToLower(subject), "permission:") {
 		permName := strings.TrimPrefix(subject[11:], " ")
+
 		return fmt.Sprintf(`principal.permissions.exists(p, p == "%s")`, permName), nil
 	}
 
@@ -349,7 +359,7 @@ func (s *RBACMigrationService) convertSubject(subject string) (string, error) {
 	return fmt.Sprintf(`principal.id == "%s" || principal.roles.exists(r, r == "%s")`, subject, subject), nil
 }
 
-// convertResource converts RBAC resource to CEL condition
+// convertResource converts RBAC resource to CEL condition.
 func (s *RBACMigrationService) convertResource(resource string) (string, error) {
 	resource = strings.TrimSpace(resource)
 	if resource == "" || resource == "*" {
@@ -374,6 +384,7 @@ func (s *RBACMigrationService) convertResource(resource string) (string, error) 
 	// Prefix wildcard: "doc_*" -> starts with
 	if strings.HasSuffix(resourceID, "*") {
 		prefix := resourceID[:len(resourceID)-1]
+
 		return fmt.Sprintf(`resource.type == "%s" && resource.id.startsWith("%s")`, resourceType, prefix), nil
 	}
 
@@ -381,7 +392,7 @@ func (s *RBACMigrationService) convertResource(resource string) (string, error) 
 	return fmt.Sprintf(`resource.type == "%s" && resource.id == "%s"`, resourceType, resourceID), nil
 }
 
-// convertActions converts RBAC actions to CEL condition
+// convertActions converts RBAC actions to CEL condition.
 func (s *RBACMigrationService) convertActions(actions []string) string {
 	if len(actions) == 0 {
 		return ""
@@ -392,6 +403,7 @@ func (s *RBACMigrationService) convertActions(actions []string) string {
 		if actions[0] == "*" {
 			return "" // Any action allowed
 		}
+
 		return fmt.Sprintf(`action == "%s"`, actions[0])
 	}
 
@@ -404,7 +416,7 @@ func (s *RBACMigrationService) convertActions(actions []string) string {
 	return fmt.Sprintf(`action in [%s]`, strings.Join(quotedActions, ", "))
 }
 
-// convertCondition converts RBAC condition string to CEL expression
+// convertCondition converts RBAC condition string to CEL expression.
 func (s *RBACMigrationService) convertCondition(condition string) (string, error) {
 	condition = strings.TrimSpace(condition)
 	if condition == "" {
@@ -419,6 +431,7 @@ func (s *RBACMigrationService) convertCondition(condition string) (string, error
 		if value == "true" {
 			return "resource.owner == principal.id", nil
 		}
+
 		return "resource.owner != principal.id", nil
 	}
 
@@ -428,12 +441,14 @@ func (s *RBACMigrationService) convertCondition(condition string) (string, error
 		if teamValue == "own" || teamValue == "self" {
 			return "resource.team_id == principal.team_id", nil
 		}
+
 		return fmt.Sprintf(`resource.team_id == "%s"`, teamValue), nil
 	}
 
 	// "visibility = public" -> resource.visibility == "public"
 	if matches := visibilityPattern.FindStringSubmatch(condition); len(matches) > 0 {
 		visibility := matches[1]
+
 		return fmt.Sprintf(`resource.visibility == "%s"`, visibility), nil
 	}
 
@@ -443,6 +458,7 @@ func (s *RBACMigrationService) convertCondition(condition string) (string, error
 		if orgValue == "own" || orgValue == "self" || orgValue == "same" {
 			return "resource.org_id == principal.org_id", nil
 		}
+
 		return fmt.Sprintf(`resource.org_id == "%s"`, orgValue), nil
 	}
 
@@ -453,6 +469,7 @@ func (s *RBACMigrationService) convertCondition(condition string) (string, error
 		value := matches[3]
 
 		celOp := "=="
+
 		switch op {
 		case "=", "==":
 			celOp = "=="
@@ -476,6 +493,7 @@ func (s *RBACMigrationService) convertCondition(condition string) (string, error
 		if isNumeric(value) {
 			return fmt.Sprintf("resource.%s %s %s", field, celOp, value), nil
 		}
+
 		return fmt.Sprintf(`resource.%s %s "%s"`, field, celOp, value), nil
 	}
 
@@ -488,7 +506,7 @@ func (s *RBACMigrationService) convertCondition(condition string) (string, error
 // ROLE MIGRATION
 // =============================================================================
 
-// MigrateRoles migrates role-based permissions to policies
+// MigrateRoles migrates role-based permissions to policies.
 func (s *RBACMigrationService) MigrateRoles(ctx context.Context, appID, envID xid.ID, createdBy xid.ID) (*MigrationResult, error) {
 	result := &MigrationResult{
 		StartedAt: time.Now().UTC(),
@@ -510,6 +528,7 @@ func (s *RBACMigrationService) MigrateRoles(ctx context.Context, appID, envID xi
 			s.logger.Warn("Failed to fetch role permissions",
 				"role_id", role.ID.String(),
 				"error", err.Error())
+
 			continue
 		}
 
@@ -520,9 +539,10 @@ func (s *RBACMigrationService) MigrateRoles(ctx context.Context, appID, envID xi
 				result.FailedPolicies++
 				result.Errors = append(result.Errors, MigrationError{
 					PolicyIndex: i,
-					Subject:     fmt.Sprintf("role:%s", role.Name),
+					Subject:     "role:" + role.Name,
 					Error:       err.Error(),
 				})
+
 				continue
 			}
 
@@ -534,9 +554,10 @@ func (s *RBACMigrationService) MigrateRoles(ctx context.Context, appID, envID xi
 					result.FailedPolicies++
 					result.Errors = append(result.Errors, MigrationError{
 						PolicyIndex: i,
-						Subject:     fmt.Sprintf("role:%s", role.Name),
-						Error:       fmt.Sprintf("storage error: %s", err.Error()),
+						Subject:     "role:" + role.Name,
+						Error:       "storage error: " + err.Error(),
 					})
+
 					continue
 				}
 			}
@@ -553,7 +574,7 @@ func (s *RBACMigrationService) MigrateRoles(ctx context.Context, appID, envID xi
 	return result, nil
 }
 
-// createRolePermissionPolicy creates a CEL policy from a role-permission mapping
+// createRolePermissionPolicy creates a CEL policy from a role-permission mapping.
 func (s *RBACMigrationService) createRolePermissionPolicy(
 	role *schema.Role,
 	permission *schema.Permission,
@@ -600,7 +621,7 @@ func (s *RBACMigrationService) createRolePermissionPolicy(
 // HELPERS
 // =============================================================================
 
-// Regex patterns for condition parsing
+// Regex patterns for condition parsing.
 var (
 	ownerPattern          = regexp.MustCompile(`(?i)owner\s*=\s*(true|false)`)
 	teamPattern           = regexp.MustCompile(`(?i)team\s*=\s*(\S+)`)
@@ -609,7 +630,7 @@ var (
 	genericComparePattern = regexp.MustCompile(`(\w+)\s*(=|==|!=|<>|>|<|>=|<=)\s*(.+)`)
 )
 
-// extractResourceType extracts the resource type from a resource pattern
+// extractResourceType extracts the resource type from a resource pattern.
 func extractResourceType(resource string) (string, string) {
 	if resource == "" || resource == "*" {
 		return "*", ""
@@ -623,7 +644,7 @@ func extractResourceType(resource string) (string, string) {
 	return parts[0], parts[1]
 }
 
-// generatePolicyName generates a unique policy name from RBAC policy
+// generatePolicyName generates a unique policy name from RBAC policy.
 func generatePolicyName(rbacPolicy *RBACPolicy) string {
 	// Sanitize subject and resource for naming
 	subject := sanitizeForName(rbacPolicy.Subject)
@@ -633,7 +654,7 @@ func generatePolicyName(rbacPolicy *RBACPolicy) string {
 	return fmt.Sprintf("migrated_%s_%s_%d", subject, resource, time.Now().UnixNano()%10000)
 }
 
-// sanitizeForName removes/replaces invalid characters for policy names
+// sanitizeForName removes/replaces invalid characters for policy names.
 func sanitizeForName(s string) string {
 	// Replace common separators with underscores
 	s = strings.ReplaceAll(s, ":", "_")
@@ -652,7 +673,7 @@ func sanitizeForName(s string) string {
 	return strings.ToLower(s)
 }
 
-// isNumeric checks if a string represents a number
+// isNumeric checks if a string represents a number.
 func isNumeric(s string) bool {
 	for _, c := range s {
 		if c < '0' || c > '9' {
@@ -661,6 +682,7 @@ func isNumeric(s string) bool {
 			}
 		}
 	}
+
 	return len(s) > 0
 }
 
@@ -668,7 +690,7 @@ func isNumeric(s string) bool {
 // PREVIEW METHODS
 // =============================================================================
 
-// PreviewConversion previews the conversion of an RBAC policy without storing
+// PreviewConversion previews the conversion of an RBAC policy without storing.
 func (s *RBACMigrationService) PreviewConversion(ctx context.Context, rbacPolicy *RBACPolicy) (*ConversionPreview, error) {
 	celExpr, err := s.convertToCEL(rbacPolicy)
 	if err != nil {
@@ -691,7 +713,7 @@ func (s *RBACMigrationService) PreviewConversion(ctx context.Context, rbacPolicy
 	}, nil
 }
 
-// ConversionPreview represents a preview of policy conversion
+// ConversionPreview represents a preview of policy conversion.
 type ConversionPreview struct {
 	Original      *RBACPolicy `json:"original"`
 	Success       bool        `json:"success"`
@@ -706,9 +728,9 @@ type ConversionPreview struct {
 // MOCK LOGGER FOR TESTING
 // =============================================================================
 
-// NoOpLogger is a logger that does nothing (for testing)
+// NoOpLogger is a logger that does nothing (for testing).
 type NoOpLogger struct{}
 
-func (l *NoOpLogger) Info(msg string, fields ...interface{})  {}
-func (l *NoOpLogger) Warn(msg string, fields ...interface{})  {}
-func (l *NoOpLogger) Error(msg string, fields ...interface{}) {}
+func (l *NoOpLogger) Info(msg string, fields ...any)  {}
+func (l *NoOpLogger) Warn(msg string, fields ...any)  {}
+func (l *NoOpLogger) Error(msg string, fields ...any) {}

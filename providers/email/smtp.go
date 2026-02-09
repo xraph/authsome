@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// SMTPConfig holds SMTP configuration
+// SMTPConfig holds SMTP configuration.
 type SMTPConfig struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
@@ -21,29 +22,29 @@ type SMTPConfig struct {
 	UseTLS   bool   `json:"use_tls"`
 }
 
-// SMTPProvider implements notification.Provider for SMTP email
+// SMTPProvider implements notification.Provider for SMTP email.
 type SMTPProvider struct {
 	config SMTPConfig
 }
 
-// NewSMTPProvider creates a new SMTP email provider
+// NewSMTPProvider creates a new SMTP email provider.
 func NewSMTPProvider(config SMTPConfig) *SMTPProvider {
 	return &SMTPProvider{
 		config: config,
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *SMTPProvider) ID() string {
 	return "smtp"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *SMTPProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeEmail
 }
 
-// Send sends an email notification
+// Send sends an email notification.
 func (p *SMTPProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Validate recipient is an email address
 	if !strings.Contains(notif.Recipient, "@") {
@@ -77,18 +78,18 @@ func (p *SMTPProvider) Send(ctx context.Context, notif *notification.Notificatio
 	return smtp.SendMail(addr, auth, p.config.From, []string{notif.Recipient}, []byte(msg))
 }
 
-// GetStatus gets the delivery status of a notification
+// GetStatus gets the delivery status of a notification.
 func (p *SMTPProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// SMTP doesn't provide delivery status tracking
 	return notification.NotificationStatusSent, nil
 }
 
-// ValidateConfig validates the provider configuration
+// ValidateConfig validates the provider configuration.
 func (p *SMTPProvider) ValidateConfig() error {
 	return p.Validate()
 }
 
-// sendWithTLS sends email with TLS encryption
+// sendWithTLS sends email with TLS encryption.
 func (p *SMTPProvider) sendWithTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
 	// Create TLS config
 	tlsConfig := &tls.Config{
@@ -143,19 +144,23 @@ func (p *SMTPProvider) sendWithTLS(addr string, auth smtp.Auth, from string, to 
 	return nil
 }
 
-// Validate validates the provider configuration
+// Validate validates the provider configuration.
 func (p *SMTPProvider) Validate() error {
 	if p.config.Host == "" {
-		return fmt.Errorf("SMTP host is required")
+		return errs.RequiredField("host")
 	}
+
 	if p.config.Port == 0 {
-		return fmt.Errorf("SMTP port is required")
+		return errs.RequiredField("port")
 	}
+
 	if p.config.From == "" {
-		return fmt.Errorf("from email address is required")
+		return errs.RequiredField("from")
 	}
+
 	if !strings.Contains(p.config.From, "@") {
-		return fmt.Errorf("invalid from email address")
+		return errs.InvalidInput("from", "invalid from email address")
 	}
+
 	return nil
 }

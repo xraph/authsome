@@ -1,13 +1,14 @@
 package middleware
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/xraph/forge"
 )
 
-// CORSConfig holds CORS middleware configuration
+// CORSConfig holds CORS middleware configuration.
 type CORSConfig struct {
 	AllowedOrigins   []string
 	AllowCredentials bool
@@ -17,7 +18,7 @@ type CORSConfig struct {
 	MaxAge           int
 }
 
-// CORSMiddleware creates a CORS middleware with the given configuration
+// CORSMiddleware creates a CORS middleware with the given configuration.
 func CORSMiddleware(config CORSConfig) forge.Middleware {
 	// Default methods and headers if not specified
 	allowedMethods := config.AllowedMethods
@@ -55,11 +56,14 @@ func CORSMiddleware(config CORSConfig) forge.Middleware {
 				if allowed == "*" {
 					originAllowed = true
 					allowedOrigin = "*"
+
 					break
 				}
+
 				if allowed == origin {
 					originAllowed = true
 					allowedOrigin = origin
+
 					break
 				}
 			}
@@ -75,13 +79,16 @@ func CORSMiddleware(config CORSConfig) forge.Middleware {
 				}
 
 				// Handle preflight requests
-				if c.Request().Method == "OPTIONS" {
+				if c.Request().Method == http.MethodOptions {
 					c.Response().Header().Set("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
 					c.Response().Header().Set("Access-Control-Allow-Headers", strings.Join(allowedHeaders, ", "))
+
 					if len(config.ExposeHeaders) > 0 {
 						c.Response().Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposeHeaders, ", "))
 					}
+
 					c.Response().Header().Set("Access-Control-Max-Age", strconv.Itoa(maxAge))
+
 					return c.NoContent(204)
 				}
 

@@ -13,12 +13,12 @@ import (
 	"github.com/xraph/forge"
 )
 
-// AuditHandler exposes endpoints to query audit events
+// AuditHandler exposes endpoints to query audit events.
 type AuditHandler struct {
 	service *audit.Service
 }
 
-// NewAuditHandler creates a new audit handler
+// NewAuditHandler creates a new audit handler.
 func NewAuditHandler(service *audit.Service) *AuditHandler {
 	return &AuditHandler{service: service}
 }
@@ -39,9 +39,11 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 	if limit == 0 {
 		limit = 50 // Default limit
 	}
+
 	if limit > 1000 {
 		limit = 1000 // Max limit for performance
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -89,6 +91,7 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 	// ========== Multiple Value Filters ==========
 	if userIDsStr := q.Get("userIds"); userIDsStr != "" {
 		userIDStrs := strings.Split(userIDsStr, ",")
+
 		filter.UserIDs = make([]xid.ID, 0, len(userIDStrs))
 		for _, idStr := range userIDStrs {
 			if id, err := xid.FromString(strings.TrimSpace(idStr)); err == nil {
@@ -138,9 +141,10 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 	// ========== Metadata Filtering ==========
 	// Support simple metadata filters via query params: metadata.key=value
 	metadataFilters := make([]audit.MetadataFilter, 0)
+
 	for key, values := range q {
-		if strings.HasPrefix(key, "metadata.") {
-			metadataKey := strings.TrimPrefix(key, "metadata.")
+		if after, ok := strings.CutPrefix(key, "metadata."); ok {
+			metadataKey := after
 			if len(values) > 0 && values[0] != "" {
 				metadataFilters = append(metadataFilters, audit.MetadataFilter{
 					Key:      metadataKey,
@@ -150,6 +154,7 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 			}
 		}
 	}
+
 	if len(metadataFilters) > 0 {
 		filter.MetadataFilters = metadataFilters
 	}
@@ -180,7 +185,8 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 	resp, err := h.service.List(c.Request().Context(), filter)
 	if err != nil {
 		// Handle structured errors
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
@@ -200,7 +206,7 @@ func (h *AuditHandler) ListEvents(c forge.Context) error {
 }
 
 // SearchEvents performs full-text search on audit events
-// Query params: q (required), fields, fuzzy, environmentId, userId, action, since, until, limit, offset
+// Query params: q (required), fields, fuzzy, environmentId, userId, action, since, until, limit, offset.
 func (h *AuditHandler) SearchEvents(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -237,9 +243,11 @@ func (h *AuditHandler) SearchEvents(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	if limit > 1000 {
 		limit = 1000 // Max limit
 	}
+
 	query.Limit = limit
 
 	offset, _ := strconv.Atoi(q.Get("offset"))
@@ -278,7 +286,8 @@ func (h *AuditHandler) SearchEvents(c forge.Context) error {
 	resp, err := h.service.Search(c.Request().Context(), query)
 	if err != nil {
 		// Handle structured errors
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errs.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
@@ -302,7 +311,7 @@ func (h *AuditHandler) SearchEvents(c forge.Context) error {
 // =============================================================================
 
 // GetAggregations returns all aggregations in one call
-// GET /audit/aggregations
+// GET /audit/aggregations.
 func (h *AuditHandler) GetAggregations(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -319,7 +328,7 @@ func (h *AuditHandler) GetAggregations(c forge.Context) error {
 }
 
 // GetDistinctActions returns distinct actions with counts
-// GET /audit/actions
+// GET /audit/actions.
 func (h *AuditHandler) GetDistinctActions(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -336,7 +345,7 @@ func (h *AuditHandler) GetDistinctActions(c forge.Context) error {
 }
 
 // GetDistinctSources returns distinct sources with counts
-// GET /audit/sources
+// GET /audit/sources.
 func (h *AuditHandler) GetDistinctSources(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -353,7 +362,7 @@ func (h *AuditHandler) GetDistinctSources(c forge.Context) error {
 }
 
 // GetDistinctResources returns distinct resources with counts
-// GET /audit/resources
+// GET /audit/resources.
 func (h *AuditHandler) GetDistinctResources(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -370,7 +379,7 @@ func (h *AuditHandler) GetDistinctResources(c forge.Context) error {
 }
 
 // GetDistinctUsers returns distinct users with counts
-// GET /audit/users
+// GET /audit/users.
 func (h *AuditHandler) GetDistinctUsers(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -387,7 +396,7 @@ func (h *AuditHandler) GetDistinctUsers(c forge.Context) error {
 }
 
 // GetDistinctIPs returns distinct IP addresses with counts
-// GET /audit/ips
+// GET /audit/ips.
 func (h *AuditHandler) GetDistinctIPs(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -404,7 +413,7 @@ func (h *AuditHandler) GetDistinctIPs(c forge.Context) error {
 }
 
 // GetDistinctApps returns distinct apps with counts
-// GET /audit/apps
+// GET /audit/apps.
 func (h *AuditHandler) GetDistinctApps(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -421,7 +430,7 @@ func (h *AuditHandler) GetDistinctApps(c forge.Context) error {
 }
 
 // GetDistinctOrganizations returns distinct organizations with counts
-// GET /audit/organizations
+// GET /audit/organizations.
 func (h *AuditHandler) GetDistinctOrganizations(c forge.Context) error {
 	if h.service == nil {
 		return c.JSON(http.StatusNotImplemented, errs.NotImplemented("audit service"))
@@ -437,7 +446,7 @@ func (h *AuditHandler) GetDistinctOrganizations(c forge.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// parseAggregationFilter parses query parameters into AggregationFilter
+// parseAggregationFilter parses query parameters into AggregationFilter.
 func (h *AuditHandler) parseAggregationFilter(c forge.Context) *audit.AggregationFilter {
 	q := c.Request().URL.Query()
 

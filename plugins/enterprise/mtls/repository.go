@@ -3,13 +3,15 @@ package mtls
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Repository defines the data access interface for mTLS
+// Repository defines the data access interface for mTLS.
 type Repository interface {
 	// Certificates
 	CreateCertificate(ctx context.Context, cert *Certificate) error
@@ -62,7 +64,7 @@ type Repository interface {
 	DeletePolicy(ctx context.Context, id string) error
 }
 
-// CertificateFilters for filtering certificate queries
+// CertificateFilters for filtering certificate queries.
 type CertificateFilters struct {
 	OrganizationID string
 	UserID         string
@@ -73,7 +75,7 @@ type CertificateFilters struct {
 	Offset         int
 }
 
-// AuthEventFilters for filtering auth event queries
+// AuthEventFilters for filtering auth event queries.
 type AuthEventFilters struct {
 	OrganizationID string
 	CertificateID  string
@@ -86,7 +88,7 @@ type AuthEventFilters struct {
 	Offset         int
 }
 
-// AuthEventStats contains authentication event statistics
+// AuthEventStats contains authentication event statistics.
 type AuthEventStats struct {
 	TotalAttempts    int
 	SuccessfulAuths  int
@@ -96,12 +98,12 @@ type AuthEventStats struct {
 	UniqueCerts      int
 }
 
-// BunRepository implements Repository using Bun ORM
+// BunRepository implements Repository using Bun ORM.
 type BunRepository struct {
 	db *bun.DB
 }
 
-// NewBunRepository creates a new Bun repository
+// NewBunRepository creates a new Bun repository.
 func NewBunRepository(db *bun.DB) *BunRepository {
 	return &BunRepository{db: db}
 }
@@ -113,51 +115,61 @@ func (r *BunRepository) CreateCertificate(ctx context.Context, cert *Certificate
 	if err != nil {
 		return fmt.Errorf("failed to create certificate: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetCertificate(ctx context.Context, id string) (*Certificate, error) {
 	cert := new(Certificate)
+
 	err := r.db.NewSelect().
 		Model(cert).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrCertificateNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get certificate: %w", err)
 	}
+
 	return cert, nil
 }
 
 func (r *BunRepository) GetCertificateByFingerprint(ctx context.Context, fingerprint string) (*Certificate, error) {
 	cert := new(Certificate)
+
 	err := r.db.NewSelect().
 		Model(cert).
 		Where("fingerprint = ?", fingerprint).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrCertificateNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get certificate by fingerprint: %w", err)
 	}
+
 	return cert, nil
 }
 
 func (r *BunRepository) GetCertificateBySerialNumber(ctx context.Context, serialNumber string) (*Certificate, error) {
 	cert := new(Certificate)
+
 	err := r.db.NewSelect().
 		Model(cert).
 		Where("serial_number = ?", serialNumber).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrCertificateNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get certificate by serial number: %w", err)
 	}
+
 	return cert, nil
 }
 
@@ -167,15 +179,19 @@ func (r *BunRepository) ListCertificates(ctx context.Context, filters Certificat
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
+
 	if filters.UserID != "" {
 		query = query.Where("user_id = ?", filters.UserID)
 	}
+
 	if filters.DeviceID != "" {
 		query = query.Where("device_id = ?", filters.DeviceID)
 	}
+
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
+
 	if filters.CertType != "" {
 		query = query.Where("certificate_type = ?", filters.CertType)
 	}
@@ -183,6 +199,7 @@ func (r *BunRepository) ListCertificates(ctx context.Context, filters Certificat
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
+
 	if filters.Offset > 0 {
 		query = query.Offset(filters.Offset)
 	}
@@ -190,6 +207,7 @@ func (r *BunRepository) ListCertificates(ctx context.Context, filters Certificat
 	query = query.Order("created_at DESC")
 
 	var certs []*Certificate
+
 	err := query.Scan(ctx, &certs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list certificates: %w", err)
@@ -200,6 +218,7 @@ func (r *BunRepository) ListCertificates(ctx context.Context, filters Certificat
 
 func (r *BunRepository) UpdateCertificate(ctx context.Context, cert *Certificate) error {
 	cert.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(cert).
 		WherePK().
@@ -207,11 +226,13 @@ func (r *BunRepository) UpdateCertificate(ctx context.Context, cert *Certificate
 	if err != nil {
 		return fmt.Errorf("failed to update certificate: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) RevokeCertificate(ctx context.Context, id string, reason string) error {
 	now := time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model((*Certificate)(nil)).
 		Set("status = ?", "revoked").
@@ -223,6 +244,7 @@ func (r *BunRepository) RevokeCertificate(ctx context.Context, id string, reason
 	if err != nil {
 		return fmt.Errorf("failed to revoke certificate: %w", err)
 	}
+
 	return nil
 }
 
@@ -234,11 +256,13 @@ func (r *BunRepository) DeleteCertificate(ctx context.Context, id string) error 
 	if err != nil {
 		return fmt.Errorf("failed to delete certificate: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetUserCertificates(ctx context.Context, userID string) ([]*Certificate, error) {
 	var certs []*Certificate
+
 	err := r.db.NewSelect().
 		Model(&certs).
 		Where("user_id = ?", userID).
@@ -248,11 +272,13 @@ func (r *BunRepository) GetUserCertificates(ctx context.Context, userID string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user certificates: %w", err)
 	}
+
 	return certs, nil
 }
 
 func (r *BunRepository) GetDeviceCertificates(ctx context.Context, deviceID string) ([]*Certificate, error) {
 	var certs []*Certificate
+
 	err := r.db.NewSelect().
 		Model(&certs).
 		Where("device_id = ?", deviceID).
@@ -262,12 +288,15 @@ func (r *BunRepository) GetDeviceCertificates(ctx context.Context, deviceID stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device certificates: %w", err)
 	}
+
 	return certs, nil
 }
 
 func (r *BunRepository) GetExpiringCertificates(ctx context.Context, orgID string, days int) ([]*Certificate, error) {
 	expiryDate := time.Now().AddDate(0, 0, days)
+
 	var certs []*Certificate
+
 	err := r.db.NewSelect().
 		Model(&certs).
 		Where("organization_id = ?", orgID).
@@ -279,6 +308,7 @@ func (r *BunRepository) GetExpiringCertificates(ctx context.Context, orgID strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to get expiring certificates: %w", err)
 	}
+
 	return certs, nil
 }
 
@@ -289,42 +319,50 @@ func (r *BunRepository) CreateTrustAnchor(ctx context.Context, anchor *TrustAnch
 	if err != nil {
 		return fmt.Errorf("failed to create trust anchor: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetTrustAnchor(ctx context.Context, id string) (*TrustAnchor, error) {
 	anchor := new(TrustAnchor)
+
 	err := r.db.NewSelect().
 		Model(anchor).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTrustAnchorNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get trust anchor: %w", err)
 	}
+
 	return anchor, nil
 }
 
 func (r *BunRepository) GetTrustAnchorByFingerprint(ctx context.Context, fingerprint string) (*TrustAnchor, error) {
 	anchor := new(TrustAnchor)
+
 	err := r.db.NewSelect().
 		Model(anchor).
 		Where("fingerprint = ?", fingerprint).
 		Where("status = ?", "active").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTrustAnchorNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get trust anchor by fingerprint: %w", err)
 	}
+
 	return anchor, nil
 }
 
 func (r *BunRepository) ListTrustAnchors(ctx context.Context, orgID string) ([]*TrustAnchor, error) {
 	var anchors []*TrustAnchor
+
 	err := r.db.NewSelect().
 		Model(&anchors).
 		Where("organization_id = ?", orgID).
@@ -334,11 +372,13 @@ func (r *BunRepository) ListTrustAnchors(ctx context.Context, orgID string) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to list trust anchors: %w", err)
 	}
+
 	return anchors, nil
 }
 
 func (r *BunRepository) UpdateTrustAnchor(ctx context.Context, anchor *TrustAnchor) error {
 	anchor.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(anchor).
 		WherePK().
@@ -346,6 +386,7 @@ func (r *BunRepository) UpdateTrustAnchor(ctx context.Context, anchor *TrustAnch
 	if err != nil {
 		return fmt.Errorf("failed to update trust anchor: %w", err)
 	}
+
 	return nil
 }
 
@@ -357,6 +398,7 @@ func (r *BunRepository) DeleteTrustAnchor(ctx context.Context, id string) error 
 	if err != nil {
 		return fmt.Errorf("failed to delete trust anchor: %w", err)
 	}
+
 	return nil
 }
 
@@ -367,26 +409,31 @@ func (r *BunRepository) CreateCRL(ctx context.Context, crl *CertificateRevocatio
 	if err != nil {
 		return fmt.Errorf("failed to create CRL: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetCRL(ctx context.Context, id string) (*CertificateRevocationList, error) {
 	crl := new(CertificateRevocationList)
+
 	err := r.db.NewSelect().
 		Model(crl).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("CRL not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.NotFound("CRL not found")
 		}
+
 		return nil, fmt.Errorf("failed to get CRL: %w", err)
 	}
+
 	return crl, nil
 }
 
 func (r *BunRepository) GetCRLByIssuer(ctx context.Context, issuer string) (*CertificateRevocationList, error) {
 	crl := new(CertificateRevocationList)
+
 	err := r.db.NewSelect().
 		Model(crl).
 		Where("issuer = ?", issuer).
@@ -395,16 +442,19 @@ func (r *BunRepository) GetCRLByIssuer(ctx context.Context, issuer string) (*Cer
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("CRL not found for issuer")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.NotFound("CRL not found for issuer")
 		}
+
 		return nil, fmt.Errorf("failed to get CRL by issuer: %w", err)
 	}
+
 	return crl, nil
 }
 
 func (r *BunRepository) ListCRLs(ctx context.Context, trustAnchorID string) ([]*CertificateRevocationList, error) {
 	var crls []*CertificateRevocationList
+
 	err := r.db.NewSelect().
 		Model(&crls).
 		Where("trust_anchor_id = ?", trustAnchorID).
@@ -413,11 +463,13 @@ func (r *BunRepository) ListCRLs(ctx context.Context, trustAnchorID string) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to list CRLs: %w", err)
 	}
+
 	return crls, nil
 }
 
 func (r *BunRepository) UpdateCRL(ctx context.Context, crl *CertificateRevocationList) error {
 	crl.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(crl).
 		WherePK().
@@ -425,6 +477,7 @@ func (r *BunRepository) UpdateCRL(ctx context.Context, crl *CertificateRevocatio
 	if err != nil {
 		return fmt.Errorf("failed to update CRL: %w", err)
 	}
+
 	return nil
 }
 
@@ -436,6 +489,7 @@ func (r *BunRepository) DeleteCRL(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete CRL: %w", err)
 	}
+
 	return nil
 }
 
@@ -446,11 +500,13 @@ func (r *BunRepository) CreateOCSPResponse(ctx context.Context, resp *OCSPRespon
 	if err != nil {
 		return fmt.Errorf("failed to create OCSP response: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetOCSPResponse(ctx context.Context, certificateID string) (*OCSPResponse, error) {
 	resp := new(OCSPResponse)
+
 	err := r.db.NewSelect().
 		Model(resp).
 		Where("certificate_id = ?", certificateID).
@@ -459,16 +515,19 @@ func (r *BunRepository) GetOCSPResponse(ctx context.Context, certificateID strin
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // No cached response
 		}
+
 		return nil, fmt.Errorf("failed to get OCSP response: %w", err)
 	}
+
 	return resp, nil
 }
 
 func (r *BunRepository) UpdateOCSPResponse(ctx context.Context, resp *OCSPResponse) error {
 	resp.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(resp).
 		WherePK().
@@ -476,6 +535,7 @@ func (r *BunRepository) UpdateOCSPResponse(ctx context.Context, resp *OCSPRespon
 	if err != nil {
 		return fmt.Errorf("failed to update OCSP response: %w", err)
 	}
+
 	return nil
 }
 
@@ -487,6 +547,7 @@ func (r *BunRepository) DeleteExpiredOCSPResponses(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete expired OCSP responses: %w", err)
 	}
+
 	return nil
 }
 
@@ -497,6 +558,7 @@ func (r *BunRepository) CreateAuthEvent(ctx context.Context, event *CertificateA
 	if err != nil {
 		return fmt.Errorf("failed to create auth event: %w", err)
 	}
+
 	return nil
 }
 
@@ -506,21 +568,27 @@ func (r *BunRepository) ListAuthEvents(ctx context.Context, filters AuthEventFil
 	if filters.OrganizationID != "" {
 		query = query.Where("organization_id = ?", filters.OrganizationID)
 	}
+
 	if filters.CertificateID != "" {
 		query = query.Where("certificate_id = ?", filters.CertificateID)
 	}
+
 	if filters.UserID != "" {
 		query = query.Where("user_id = ?", filters.UserID)
 	}
+
 	if filters.EventType != "" {
 		query = query.Where("event_type = ?", filters.EventType)
 	}
+
 	if filters.Status != "" {
 		query = query.Where("status = ?", filters.Status)
 	}
+
 	if !filters.Since.IsZero() {
 		query = query.Where("created_at >= ?", filters.Since)
 	}
+
 	if !filters.Until.IsZero() {
 		query = query.Where("created_at <= ?", filters.Until)
 	}
@@ -528,6 +596,7 @@ func (r *BunRepository) ListAuthEvents(ctx context.Context, filters AuthEventFil
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
+
 	if filters.Offset > 0 {
 		query = query.Offset(filters.Offset)
 	}
@@ -535,6 +604,7 @@ func (r *BunRepository) ListAuthEvents(ctx context.Context, filters AuthEventFil
 	query = query.Order("created_at DESC")
 
 	var events []*CertificateAuthEvent
+
 	err := query.Scan(ctx, &events)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list auth events: %w", err)
@@ -555,6 +625,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 	if err != nil {
 		return nil, fmt.Errorf("failed to count total attempts: %w", err)
 	}
+
 	stats.TotalAttempts = count
 
 	// Successful auths
@@ -567,6 +638,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 	if err != nil {
 		return nil, fmt.Errorf("failed to count successful auths: %w", err)
 	}
+
 	stats.SuccessfulAuths = successCount
 
 	// Failed auths
@@ -579,6 +651,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 	if err != nil {
 		return nil, fmt.Errorf("failed to count failed auths: %w", err)
 	}
+
 	stats.FailedAuths = failedCount
 
 	// Validation errors
@@ -591,6 +664,7 @@ func (r *BunRepository) GetAuthEventStats(ctx context.Context, orgID string, sin
 	if err != nil {
 		return nil, fmt.Errorf("failed to count errors: %w", err)
 	}
+
 	stats.ValidationErrors = errorCount
 
 	return stats, nil
@@ -603,26 +677,31 @@ func (r *BunRepository) CreatePolicy(ctx context.Context, policy *CertificatePol
 	if err != nil {
 		return fmt.Errorf("failed to create policy: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetPolicy(ctx context.Context, id string) (*CertificatePolicy, error) {
 	policy := new(CertificatePolicy)
+
 	err := r.db.NewSelect().
 		Model(policy).
 		Where("id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPolicyNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
+
 	return policy, nil
 }
 
 func (r *BunRepository) GetDefaultPolicy(ctx context.Context, orgID string) (*CertificatePolicy, error) {
 	policy := new(CertificatePolicy)
+
 	err := r.db.NewSelect().
 		Model(policy).
 		Where("organization_id = ?", orgID).
@@ -630,16 +709,19 @@ func (r *BunRepository) GetDefaultPolicy(ctx context.Context, orgID string) (*Ce
 		Where("status = ?", "active").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPolicyNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get default policy: %w", err)
 	}
+
 	return policy, nil
 }
 
 func (r *BunRepository) ListPolicies(ctx context.Context, orgID string) ([]*CertificatePolicy, error) {
 	var policies []*CertificatePolicy
+
 	err := r.db.NewSelect().
 		Model(&policies).
 		Where("organization_id = ?", orgID).
@@ -648,11 +730,13 @@ func (r *BunRepository) ListPolicies(ctx context.Context, orgID string) ([]*Cert
 	if err != nil {
 		return nil, fmt.Errorf("failed to list policies: %w", err)
 	}
+
 	return policies, nil
 }
 
 func (r *BunRepository) UpdatePolicy(ctx context.Context, policy *CertificatePolicy) error {
 	policy.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(policy).
 		WherePK().
@@ -660,6 +744,7 @@ func (r *BunRepository) UpdatePolicy(ctx context.Context, policy *CertificatePol
 	if err != nil {
 		return fmt.Errorf("failed to update policy: %w", err)
 	}
+
 	return nil
 }
 
@@ -671,5 +756,6 @@ func (r *BunRepository) DeletePolicy(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete policy: %w", err)
 	}
+
 	return nil
 }

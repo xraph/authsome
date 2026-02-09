@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/permissions/core"
 	"github.com/xraph/authsome/plugins/permissions/schema"
 )
@@ -14,12 +15,12 @@ import (
 // Repository interface defined in interfaces.go
 
 // bunRepository is a Bun-based repository implementation
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type bunRepository struct {
 	db *bun.DB
 }
 
-// NewRepository creates a new Bun repository
+// NewRepository creates a new Bun repository.
 func NewRepository(db *bun.DB) Repository {
 	return &bunRepository{db: db}
 }
@@ -28,10 +29,10 @@ func NewRepository(db *bun.DB) Repository {
 // POLICY OPERATIONS
 // =============================================================================
 
-// CreatePolicy creates a new policy in the database
+// CreatePolicy creates a new policy in the database.
 func (r *bunRepository) CreatePolicy(ctx context.Context, policy *core.Policy) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbPolicy := &schema.PermissionPolicy{
@@ -61,32 +62,33 @@ func (r *bunRepository) CreatePolicy(ctx context.Context, policy *core.Policy) e
 	return nil
 }
 
-// GetPolicy retrieves a policy by ID
+// GetPolicy retrieves a policy by ID.
 func (r *bunRepository) GetPolicy(ctx context.Context, id xid.ID) (*core.Policy, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbPolicy := new(schema.PermissionPolicy)
+
 	err := r.db.NewSelect().
 		Model(dbPolicy).
 		Where("id = ?", id).
 		Scan(ctx)
-
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
 
 	return toCorePolicy(dbPolicy), nil
 }
 
-// ListPolicies lists policies with filters
+// ListPolicies lists policies with filters.
 func (r *bunRepository) ListPolicies(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, filters PolicyFilters) ([]*core.Policy, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	var dbPolicies []schema.PermissionPolicy
@@ -107,9 +109,11 @@ func (r *bunRepository) ListPolicies(ctx context.Context, appID, envID xid.ID, u
 	if filters.ResourceType != nil && *filters.ResourceType != "" {
 		query = query.Where("resource_type = ?", *filters.ResourceType)
 	}
+
 	if filters.Enabled != nil {
 		query = query.Where("enabled = ?", *filters.Enabled)
 	}
+
 	if filters.NamespaceID != nil && !filters.NamespaceID.IsNil() {
 		query = query.Where("namespace_id = ?", *filters.NamespaceID)
 	}
@@ -118,6 +122,7 @@ func (r *bunRepository) ListPolicies(ctx context.Context, appID, envID xid.ID, u
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
+
 	if filters.Offset > 0 {
 		query = query.Offset(filters.Offset)
 	}
@@ -139,10 +144,10 @@ func (r *bunRepository) ListPolicies(ctx context.Context, appID, envID xid.ID, u
 	return policies, nil
 }
 
-// UpdatePolicy updates an existing policy
+// UpdatePolicy updates an existing policy.
 func (r *bunRepository) UpdatePolicy(ctx context.Context, policy *core.Policy) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbPolicy := &schema.PermissionPolicy{
@@ -168,7 +173,6 @@ func (r *bunRepository) UpdatePolicy(ctx context.Context, policy *core.Policy) e
 		Model(dbPolicy).
 		WherePK().
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to update policy: %w", err)
 	}
@@ -176,17 +180,16 @@ func (r *bunRepository) UpdatePolicy(ctx context.Context, policy *core.Policy) e
 	return nil
 }
 
-// DeletePolicy deletes a policy
+// DeletePolicy deletes a policy.
 func (r *bunRepository) DeletePolicy(ctx context.Context, id xid.ID) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	_, err := r.db.NewDelete().
 		Model((*schema.PermissionPolicy)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete policy: %w", err)
 	}
@@ -194,10 +197,10 @@ func (r *bunRepository) DeletePolicy(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// GetPoliciesByResourceType retrieves active policies for a specific resource type
+// GetPoliciesByResourceType retrieves active policies for a specific resource type.
 func (r *bunRepository) GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) ([]*core.Policy, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	var dbPolicies []schema.PermissionPolicy
@@ -231,13 +234,14 @@ func (r *bunRepository) GetPoliciesByResourceType(ctx context.Context, appID, en
 	return policies, nil
 }
 
-// GetActivePolicies retrieves all active policies for a scope
+// GetActivePolicies retrieves all active policies for a scope.
 func (r *bunRepository) GetActivePolicies(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID) ([]*core.Policy, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	enabled := true
+
 	return r.ListPolicies(ctx, appID, envID, userOrgID, PolicyFilters{
 		Enabled: &enabled,
 		Limit:   1000, // Reasonable limit
@@ -248,10 +252,10 @@ func (r *bunRepository) GetActivePolicies(ctx context.Context, appID, envID xid.
 // NAMESPACE OPERATIONS
 // =============================================================================
 
-// CreateNamespace creates a new namespace
+// CreateNamespace creates a new namespace.
 func (r *bunRepository) CreateNamespace(ctx context.Context, ns *core.Namespace) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbNs := &schema.PermissionNamespace{
@@ -275,32 +279,33 @@ func (r *bunRepository) CreateNamespace(ctx context.Context, ns *core.Namespace)
 	return nil
 }
 
-// GetNamespace retrieves a namespace by ID
+// GetNamespace retrieves a namespace by ID.
 func (r *bunRepository) GetNamespace(ctx context.Context, id xid.ID) (*core.Namespace, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbNs := new(schema.PermissionNamespace)
+
 	err := r.db.NewSelect().
 		Model(dbNs).
 		Where("id = ?", id).
 		Scan(ctx)
-
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get namespace: %w", err)
 	}
 
 	return toCoreNamespace(dbNs), nil
 }
 
-// GetNamespaceByScope retrieves a namespace by scope
+// GetNamespaceByScope retrieves a namespace by scope.
 func (r *bunRepository) GetNamespaceByScope(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID) (*core.Namespace, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbNs := new(schema.PermissionNamespace)
@@ -316,21 +321,21 @@ func (r *bunRepository) GetNamespaceByScope(ctx context.Context, appID, envID xi
 	}
 
 	err := query.Limit(1).Scan(ctx)
-
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get namespace by scope: %w", err)
 	}
 
 	return toCoreNamespace(dbNs), nil
 }
 
-// ListNamespaces lists namespaces for a scope
+// ListNamespaces lists namespaces for a scope.
 func (r *bunRepository) ListNamespaces(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID) ([]*core.Namespace, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	var dbNamespaces []schema.PermissionNamespace
@@ -361,10 +366,10 @@ func (r *bunRepository) ListNamespaces(ctx context.Context, appID, envID xid.ID,
 	return namespaces, nil
 }
 
-// UpdateNamespace updates a namespace
+// UpdateNamespace updates a namespace.
 func (r *bunRepository) UpdateNamespace(ctx context.Context, ns *core.Namespace) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbNs := &schema.PermissionNamespace{
@@ -384,7 +389,6 @@ func (r *bunRepository) UpdateNamespace(ctx context.Context, ns *core.Namespace)
 		Model(dbNs).
 		WherePK().
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to update namespace: %w", err)
 	}
@@ -392,17 +396,16 @@ func (r *bunRepository) UpdateNamespace(ctx context.Context, ns *core.Namespace)
 	return nil
 }
 
-// DeleteNamespace deletes a namespace
+// DeleteNamespace deletes a namespace.
 func (r *bunRepository) DeleteNamespace(ctx context.Context, id xid.ID) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	_, err := r.db.NewDelete().
 		Model((*schema.PermissionNamespace)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete namespace: %w", err)
 	}
@@ -414,10 +417,10 @@ func (r *bunRepository) DeleteNamespace(ctx context.Context, id xid.ID) error {
 // RESOURCE DEFINITION OPERATIONS
 // =============================================================================
 
-// CreateResourceDefinition creates a new resource definition
+// CreateResourceDefinition creates a new resource definition.
 func (r *bunRepository) CreateResourceDefinition(ctx context.Context, res *core.ResourceDefinition) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbRes := &schema.PermissionResource{
@@ -437,32 +440,33 @@ func (r *bunRepository) CreateResourceDefinition(ctx context.Context, res *core.
 	return nil
 }
 
-// GetResourceDefinition retrieves a resource definition by ID
+// GetResourceDefinition retrieves a resource definition by ID.
 func (r *bunRepository) GetResourceDefinition(ctx context.Context, id xid.ID) (*core.ResourceDefinition, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbRes := new(schema.PermissionResource)
+
 	err := r.db.NewSelect().
 		Model(dbRes).
 		Where("id = ?", id).
 		Scan(ctx)
-
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get resource definition: %w", err)
 	}
 
 	return toCoreResourceDefinition(dbRes), nil
 }
 
-// ListResourceDefinitions lists resource definitions for a namespace
+// ListResourceDefinitions lists resource definitions for a namespace.
 func (r *bunRepository) ListResourceDefinitions(ctx context.Context, namespaceID xid.ID) ([]*core.ResourceDefinition, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	var dbResources []schema.PermissionResource
@@ -472,7 +476,6 @@ func (r *bunRepository) ListResourceDefinitions(ctx context.Context, namespaceID
 		Where("namespace_id = ?", namespaceID).
 		Order("type ASC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to list resource definitions: %w", err)
 	}
@@ -485,17 +488,16 @@ func (r *bunRepository) ListResourceDefinitions(ctx context.Context, namespaceID
 	return resources, nil
 }
 
-// DeleteResourceDefinition deletes a resource definition
+// DeleteResourceDefinition deletes a resource definition.
 func (r *bunRepository) DeleteResourceDefinition(ctx context.Context, id xid.ID) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	_, err := r.db.NewDelete().
 		Model((*schema.PermissionResource)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete resource definition: %w", err)
 	}
@@ -507,10 +509,10 @@ func (r *bunRepository) DeleteResourceDefinition(ctx context.Context, id xid.ID)
 // ACTION DEFINITION OPERATIONS
 // =============================================================================
 
-// CreateActionDefinition creates a new action definition
+// CreateActionDefinition creates a new action definition.
 func (r *bunRepository) CreateActionDefinition(ctx context.Context, action *core.ActionDefinition) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbAction := &schema.PermissionAction{
@@ -529,32 +531,33 @@ func (r *bunRepository) CreateActionDefinition(ctx context.Context, action *core
 	return nil
 }
 
-// GetActionDefinition retrieves an action definition by ID
+// GetActionDefinition retrieves an action definition by ID.
 func (r *bunRepository) GetActionDefinition(ctx context.Context, id xid.ID) (*core.ActionDefinition, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbAction := new(schema.PermissionAction)
+
 	err := r.db.NewSelect().
 		Model(dbAction).
 		Where("id = ?", id).
 		Scan(ctx)
-
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
+
 		return nil, fmt.Errorf("failed to get action definition: %w", err)
 	}
 
 	return toCoreActionDefinition(dbAction), nil
 }
 
-// ListActionDefinitions lists action definitions for a namespace
+// ListActionDefinitions lists action definitions for a namespace.
 func (r *bunRepository) ListActionDefinitions(ctx context.Context, namespaceID xid.ID) ([]*core.ActionDefinition, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	var dbActions []schema.PermissionAction
@@ -564,7 +567,6 @@ func (r *bunRepository) ListActionDefinitions(ctx context.Context, namespaceID x
 		Where("namespace_id = ?", namespaceID).
 		Order("name ASC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to list action definitions: %w", err)
 	}
@@ -577,17 +579,16 @@ func (r *bunRepository) ListActionDefinitions(ctx context.Context, namespaceID x
 	return actions, nil
 }
 
-// DeleteActionDefinition deletes an action definition
+// DeleteActionDefinition deletes an action definition.
 func (r *bunRepository) DeleteActionDefinition(ctx context.Context, id xid.ID) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	_, err := r.db.NewDelete().
 		Model((*schema.PermissionAction)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete action definition: %w", err)
 	}
@@ -599,10 +600,10 @@ func (r *bunRepository) DeleteActionDefinition(ctx context.Context, id xid.ID) e
 // AUDIT OPERATIONS
 // =============================================================================
 
-// CreateAuditEvent creates an audit event
+// CreateAuditEvent creates an audit event.
 func (r *bunRepository) CreateAuditEvent(ctx context.Context, event *core.AuditEvent) error {
 	if r.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	dbEvent := &schema.PermissionAuditLog{
@@ -629,10 +630,10 @@ func (r *bunRepository) CreateAuditEvent(ctx context.Context, event *core.AuditE
 	return nil
 }
 
-// ListAuditEvents lists audit events with filters
+// ListAuditEvents lists audit events with filters.
 func (r *bunRepository) ListAuditEvents(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, filters AuditFilters) ([]*core.AuditEvent, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	var dbEvents []schema.PermissionAuditLog
@@ -653,15 +654,19 @@ func (r *bunRepository) ListAuditEvents(ctx context.Context, appID, envID xid.ID
 	if filters.ActorID != nil && !filters.ActorID.IsNil() {
 		query = query.Where("actor_id = ?", *filters.ActorID)
 	}
+
 	if filters.Action != nil && *filters.Action != "" {
 		query = query.Where("action = ?", *filters.Action)
 	}
+
 	if filters.ResourceType != nil && *filters.ResourceType != "" {
 		query = query.Where("resource_type = ?", *filters.ResourceType)
 	}
+
 	if filters.StartTime != nil {
 		query = query.Where("timestamp >= ?", *filters.StartTime)
 	}
+
 	if filters.EndTime != nil {
 		query = query.Where("timestamp <= ?", *filters.EndTime)
 	}
@@ -670,6 +675,7 @@ func (r *bunRepository) ListAuditEvents(ctx context.Context, appID, envID xid.ID
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
+
 	if filters.Offset > 0 {
 		query = query.Offset(filters.Offset)
 	}
@@ -694,7 +700,7 @@ func (r *bunRepository) ListAuditEvents(ctx context.Context, appID, envID xid.ID
 // TYPE CONVERSION HELPERS
 // =============================================================================
 
-// toCorePolicy converts a schema policy to a core policy
+// toCorePolicy converts a schema policy to a core policy.
 func toCorePolicy(p *schema.PermissionPolicy) *core.Policy {
 	return &core.Policy{
 		ID:                 p.ID,
@@ -716,7 +722,7 @@ func toCorePolicy(p *schema.PermissionPolicy) *core.Policy {
 	}
 }
 
-// toCoreNamespace converts a schema namespace to a core namespace
+// toCoreNamespace converts a schema namespace to a core namespace.
 func toCoreNamespace(ns *schema.PermissionNamespace) *core.Namespace {
 	return &core.Namespace{
 		ID:                 ns.ID,
@@ -732,7 +738,7 @@ func toCoreNamespace(ns *schema.PermissionNamespace) *core.Namespace {
 	}
 }
 
-// toCoreResourceDefinition converts a schema resource to a core resource definition
+// toCoreResourceDefinition converts a schema resource to a core resource definition.
 func toCoreResourceDefinition(res *schema.PermissionResource) *core.ResourceDefinition {
 	return &core.ResourceDefinition{
 		ID:          res.ID,
@@ -744,7 +750,7 @@ func toCoreResourceDefinition(res *schema.PermissionResource) *core.ResourceDefi
 	}
 }
 
-// toCoreActionDefinition converts a schema action to a core action definition
+// toCoreActionDefinition converts a schema action to a core action definition.
 func toCoreActionDefinition(action *schema.PermissionAction) *core.ActionDefinition {
 	return &core.ActionDefinition{
 		ID:          action.ID,
@@ -755,7 +761,7 @@ func toCoreActionDefinition(action *schema.PermissionAction) *core.ActionDefinit
 	}
 }
 
-// toCoreAuditEvent converts a schema audit log to a core audit event
+// toCoreAuditEvent converts a schema audit log to a core audit event.
 func toCoreAuditEvent(e *schema.PermissionAuditLog) *core.AuditEvent {
 	return &core.AuditEvent{
 		ID:                 e.ID,
@@ -774,7 +780,7 @@ func toCoreAuditEvent(e *schema.PermissionAuditLog) *core.AuditEvent {
 	}
 }
 
-// toSchemaAttributes converts core attributes to schema attributes
+// toSchemaAttributes converts core attributes to schema attributes.
 func toSchemaAttributes(attrs []core.ResourceAttribute) []schema.ResourceAttribute {
 	result := make([]schema.ResourceAttribute, len(attrs))
 	for i, a := range attrs {
@@ -786,10 +792,11 @@ func toSchemaAttributes(attrs []core.ResourceAttribute) []schema.ResourceAttribu
 			Description: a.Description,
 		}
 	}
+
 	return result
 }
 
-// toCoreAttributes converts schema attributes to core attributes
+// toCoreAttributes converts schema attributes to core attributes.
 func toCoreAttributes(attrs []schema.ResourceAttribute) []core.ResourceAttribute {
 	result := make([]core.ResourceAttribute, len(attrs))
 	for i, a := range attrs {
@@ -801,6 +808,7 @@ func toCoreAttributes(attrs []schema.ResourceAttribute) []core.ResourceAttribute
 			Description: a.Description,
 		}
 	}
+
 	return result
 }
 
@@ -808,10 +816,10 @@ func toCoreAttributes(attrs []schema.ResourceAttribute) []core.ResourceAttribute
 // ANALYTICS OPERATIONS
 // =============================================================================
 
-// GetEvaluationStats retrieves aggregated evaluation statistics
-func (r *bunRepository) GetEvaluationStats(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, timeRange map[string]interface{}) (*EvaluationStats, error) {
+// GetEvaluationStats retrieves aggregated evaluation statistics.
+func (r *bunRepository) GetEvaluationStats(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, timeRange map[string]any) (*EvaluationStats, error) {
 	if r.db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	// Check if the stats table exists - for now return empty stats
@@ -858,6 +866,7 @@ func (r *bunRepository) GetEvaluationStats(ctx context.Context, appID, envID xid
 			query = query.Where("created_at >= ?", parsedTime)
 		}
 	}
+
 	if endTime, ok := timeRange["endTime"].(string); ok && endTime != "" {
 		parsedTime, err := time.Parse(time.RFC3339, endTime)
 		if err == nil {
@@ -881,5 +890,5 @@ func (r *bunRepository) GetEvaluationStats(ctx context.Context, appID, envID xid
 	return stats, nil
 }
 
-// Ensure unused import is used
+// Ensure unused import is used.
 var _ = time.Now

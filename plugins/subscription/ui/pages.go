@@ -3,6 +3,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/xraph/authsome/plugins/subscription/core"
@@ -10,7 +11,7 @@ import (
 	"maragu.dev/gomponents/html"
 )
 
-// PageLayout wraps content in a standard page layout
+// PageLayout wraps content in a standard page layout.
 func PageLayout(title string, breadcrumbs []Breadcrumb, actions g.Node, content ...g.Node) g.Node {
 	return html.Div(
 		html.Class("space-y-6"),
@@ -36,7 +37,7 @@ func PageLayout(title string, breadcrumbs []Breadcrumb, actions g.Node, content 
 	)
 }
 
-// Breadcrumb represents a breadcrumb item
+// Breadcrumb represents a breadcrumb item.
 type Breadcrumb struct {
 	Label string
 	Href  string
@@ -44,6 +45,7 @@ type Breadcrumb struct {
 
 func renderBreadcrumbs(items []Breadcrumb) g.Node {
 	nodes := make([]g.Node, 0)
+
 	for i, item := range items {
 		if i > 0 {
 			nodes = append(nodes, html.Span(
@@ -51,6 +53,7 @@ func renderBreadcrumbs(items []Breadcrumb) g.Node {
 				g.Text("/"),
 			))
 		}
+
 		if item.Href != "" && i < len(items)-1 {
 			nodes = append(nodes, html.A(
 				html.Href(item.Href),
@@ -72,7 +75,7 @@ func renderBreadcrumbs(items []Breadcrumb) g.Node {
 	)
 }
 
-// BillingOverviewPage renders the billing overview dashboard
+// BillingOverviewPage renders the billing overview dashboard.
 func BillingOverviewPage(basePath string, metrics *core.DashboardMetrics, recentSubs []*core.Subscription) g.Node {
 	return PageLayout(
 		"Subscription Overview",
@@ -89,11 +92,11 @@ func BillingOverviewPage(basePath string, metrics *core.DashboardMetrics, recent
 				"", true,
 				html.Span(html.Class("text-indigo-600"), g.Text("📊")),
 			),
-			StatCard("Active Subscriptions", fmt.Sprintf("%d", metrics.ActiveSubscriptions),
+			StatCard("Active Subscriptions", strconv.Itoa(metrics.ActiveSubscriptions),
 				formatGrowth(metrics.SubscriptionGrowth), metrics.SubscriptionGrowth >= 0,
 				html.Span(html.Class("text-indigo-600"), g.Text("✓")),
 			),
-			StatCard("Trial Subscriptions", fmt.Sprintf("%d", metrics.TrialingSubscriptions),
+			StatCard("Trial Subscriptions", strconv.Itoa(metrics.TrialingSubscriptions),
 				"", true,
 				html.Span(html.Class("text-indigo-600"), g.Text("⏱")),
 			),
@@ -142,6 +145,7 @@ func healthMetricRow(label, value string, healthy bool) g.Node {
 	if !healthy {
 		statusClass = "text-yellow-600"
 	}
+
 	return html.Div(
 		html.Class("flex justify-between items-center"),
 		html.Span(html.Class("text-sm text-gray-600 dark:text-gray-400"), g.Text(label)),
@@ -149,7 +153,7 @@ func healthMetricRow(label, value string, healthy bool) g.Node {
 	)
 }
 
-// PlansListPage renders the plans list page
+// PlansListPage renders the plans list page.
 func PlansListPage(basePath string, plans []*core.Plan, total, page, pageSize int) g.Node {
 	totalPages := (total + pageSize - 1) / pageSize
 
@@ -198,10 +202,11 @@ func renderPlanRows(plans []*core.Plan, basePath string) []g.Node {
 			)),
 		)
 	}
+
 	return rows
 }
 
-// SubscriptionsListPage renders the subscriptions list page
+// SubscriptionsListPage renders the subscriptions list page.
 func SubscriptionsListPage(basePath string, subs []*core.Subscription, total, page, pageSize int) g.Node {
 	totalPages := (total + pageSize - 1) / pageSize
 
@@ -246,7 +251,7 @@ func renderSubscriptionTable(subs []*core.Subscription, basePath string) g.Node 
 	)
 }
 
-// CouponsListPage renders the coupons list page
+// CouponsListPage renders the coupons list page.
 func CouponsListPage(basePath string, coupons []*core.Coupon, total, page, pageSize int) g.Node {
 	totalPages := (total + pageSize - 1) / pageSize
 
@@ -271,6 +276,7 @@ func renderCouponRows(coupons []*core.Coupon, basePath string) []g.Node {
 	rows := make([]g.Node, len(coupons))
 	for i, coupon := range coupons {
 		discount := ""
+
 		switch coupon.Type {
 		case core.CouponTypePercentage:
 			discount = fmt.Sprintf("%.0f%% off", coupon.PercentOff)
@@ -282,7 +288,7 @@ func renderCouponRows(coupons []*core.Coupon, basePath string) []g.Node {
 			discount = fmt.Sprintf("%d free months", coupon.FreeMonths)
 		}
 
-		redemptions := fmt.Sprintf("%d", coupon.TimesRedeemed)
+		redemptions := strconv.Itoa(coupon.TimesRedeemed)
 		if coupon.MaxRedemptions > 0 {
 			redemptions = fmt.Sprintf("%d / %d", coupon.TimesRedeemed, coupon.MaxRedemptions)
 		}
@@ -306,10 +312,11 @@ func renderCouponRows(coupons []*core.Coupon, basePath string) []g.Node {
 			)),
 		)
 	}
+
 	return rows
 }
 
-// InvoicesListPage renders the invoices list page
+// InvoicesListPage renders the invoices list page.
 func InvoicesListPage(basePath string, invoices []*core.Invoice, total, page, pageSize int) g.Node {
 	totalPages := (total + pageSize - 1) / pageSize
 
@@ -360,10 +367,11 @@ func renderInvoiceRows(invoices []*core.Invoice, basePath string) []g.Node {
 			)),
 		)
 	}
+
 	return rows
 }
 
-// UsageDashboardPage renders the usage dashboard
+// UsageDashboardPage renders the usage dashboard.
 func UsageDashboardPage(basePath string, usage map[string]*core.UsageLimit) g.Node {
 	return PageLayout(
 		"Usage Dashboard",
@@ -384,6 +392,7 @@ func UsageDashboardPage(basePath string, usage map[string]*core.UsageLimit) g.No
 
 func renderUsageMetrics(usage map[string]*core.UsageLimit) []g.Node {
 	nodes := make([]g.Node, 0)
+
 	for _, limit := range usage {
 		percent := limit.PercentUsed
 		if percent > 100 {
@@ -394,6 +403,7 @@ func renderUsageMetrics(usage map[string]*core.UsageLimit) []g.Node {
 		if percent > 80 {
 			colorClass = "bg-yellow-500"
 		}
+
 		if percent > 95 {
 			colorClass = "bg-red-500"
 		}
@@ -418,6 +428,7 @@ func renderUsageMetrics(usage map[string]*core.UsageLimit) []g.Node {
 			),
 		))
 	}
+
 	return nodes
 }
 
@@ -425,6 +436,7 @@ func renderUsageMetrics(usage map[string]*core.UsageLimit) []g.Node {
 
 func formatMoney(amount int64, currency string) string {
 	symbol := currencySymbol(currency)
+
 	return fmt.Sprintf("%s%.2f", symbol, float64(amount)/100)
 }
 
@@ -432,10 +444,12 @@ func formatGrowth(value float64) string {
 	if value == 0 {
 		return ""
 	}
+
 	sign := "+"
 	if value < 0 {
 		sign = ""
 	}
+
 	return fmt.Sprintf("%s%.1f%%", sign, value)
 }
 

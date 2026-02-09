@@ -3,12 +3,14 @@ package engine
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/permissions/language"
 )
 
-// Evaluator evaluates compiled policies to make authorization decisions
+// Evaluator evaluates compiled policies to make authorization decisions.
 type Evaluator struct {
 	timeout             time.Duration
 	parallelEvaluations int
@@ -16,7 +18,7 @@ type Evaluator struct {
 	resolver            *AttributeResolver // Optional: for automatic attribute resolution
 }
 
-// EvaluatorConfig configures the evaluator
+// EvaluatorConfig configures the evaluator.
 type EvaluatorConfig struct {
 	Timeout             time.Duration
 	ParallelEvaluations int
@@ -24,7 +26,7 @@ type EvaluatorConfig struct {
 	AttributeResolver   *AttributeResolver // Optional: enables automatic attribute enrichment
 }
 
-// DefaultEvaluatorConfig returns default evaluator configuration
+// DefaultEvaluatorConfig returns default evaluator configuration.
 func DefaultEvaluatorConfig() EvaluatorConfig {
 	return EvaluatorConfig{
 		Timeout:             10 * time.Millisecond,
@@ -34,7 +36,7 @@ func DefaultEvaluatorConfig() EvaluatorConfig {
 	}
 }
 
-// NewEvaluator creates a new policy evaluator
+// NewEvaluator creates a new policy evaluator.
 func NewEvaluator(config EvaluatorConfig) *Evaluator {
 	return &Evaluator{
 		timeout:             config.Timeout,
@@ -44,13 +46,13 @@ func NewEvaluator(config EvaluatorConfig) *Evaluator {
 	}
 }
 
-// SetAttributeResolver sets the attribute resolver for automatic attribute enrichment
+// SetAttributeResolver sets the attribute resolver for automatic attribute enrichment.
 func (e *Evaluator) SetAttributeResolver(resolver *AttributeResolver) {
 	e.resolver = resolver
 }
 
 // EnrichEvaluationContext enriches the evaluation context with attributes from the resolver
-// This is called automatically before evaluation if a resolver is configured
+// This is called automatically before evaluation if a resolver is configured.
 func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *EvaluationContext) error {
 	if e.resolver == nil {
 		// No resolver configured, skip enrichment
@@ -87,6 +89,7 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 			if _, hasOwner := evalCtx.Resource["owner"]; !hasOwner {
 				// Fetch resource attributes
 				key := fmt.Sprintf("%s:%s", resourceType, resourceID)
+
 				resourceAttrs, err := e.resolver.Resolve(ctx, "resource", key)
 				if err == nil {
 					// Merge resource attributes (don't overwrite existing)
@@ -102,7 +105,7 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 
 	// Add request context attributes if not present
 	if evalCtx.Request == nil {
-		evalCtx.Request = make(map[string]interface{})
+		evalCtx.Request = make(map[string]any)
 	}
 
 	// Only enrich request context if timestamp is missing
@@ -122,7 +125,7 @@ func (e *Evaluator) EnrichEvaluationContext(ctx context.Context, evalCtx *Evalua
 	return nil
 }
 
-// Evaluate makes an authorization decision based on compiled policies
+// Evaluate makes an authorization decision based on compiled policies.
 func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, evalCtx *EvaluationContext) (*Decision, error) {
 	startTime := time.Now()
 
@@ -136,7 +139,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 	defer cancel()
 
 	// Build CEL evaluation context
-	celCtx := map[string]interface{}{
+	celCtx := map[string]any{
 		"principal": evalCtx.Principal,
 		"resource":  evalCtx.Resource,
 		"request":   evalCtx.Request,
@@ -145,14 +148,13 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 
 	// Add function bindings for custom functions
 	functions := language.CreateFunctionBindings(celCtx)
-	for name, fn := range functions {
-		celCtx[name] = fn
-	}
+	maps.Copy(celCtx, functions)
 
 	// Sort policies by priority (higher priority first)
 	sortedPolicies := sortPoliciesByPriority(policies)
 
 	var matchedPolicies []string
+
 	evaluatedCount := 0
 
 	// Evaluate policies with early exit
@@ -162,6 +164,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 		if err != nil {
 			return nil, err
 		}
+
 		matchedPolicies = result.MatchedPolicies
 		evaluatedCount = result.EvaluatedPolicies
 	} else {
@@ -210,8 +213,8 @@ func (e *Evaluator) Evaluate(ctx context.Context, policies []*CompiledPolicy, ev
 	}, nil
 }
 
-// evaluateParallel evaluates policies concurrently with early exit
-func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPolicy, celCtx map[string]interface{}) (*Decision, error) {
+// evaluateParallel evaluates policies concurrently with early exit.
+func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPolicy, celCtx map[string]any) (*Decision, error) {
 	type result struct {
 		policyID string
 		allowed  bool
@@ -227,6 +230,7 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 			select {
 			case <-ctx.Done():
 				results <- result{policyID: p.PolicyID.String(), err: ctx.Err()}
+
 				return
 			case <-done:
 				// Early exit signaled
@@ -238,22 +242,24 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 			res, _, err := p.Program.Eval(celCtx)
 			if err != nil {
 				results <- result{policyID: p.PolicyID.String(), err: err}
+
 				return
 			}
 
 			if boolResult, ok := res.Value().(bool); ok {
 				results <- result{policyID: p.PolicyID.String(), allowed: boolResult}
 			} else {
-				results <- result{policyID: p.PolicyID.String(), err: fmt.Errorf("invalid result type")}
+				results <- result{policyID: p.PolicyID.String(), err: errs.InternalServerErrorWithMessage("invalid result type")}
 			}
 		}(policy)
 	}
 
 	// Collect results with early exit
 	var matchedPolicies []string
+
 	evaluatedCount := 0
 
-	for i := 0; i < len(policies); i++ {
+	for range policies {
 		select {
 		case <-ctx.Done():
 			return &Decision{
@@ -290,7 +296,7 @@ func (e *Evaluator) evaluateParallel(ctx context.Context, policies []*CompiledPo
 	}, nil
 }
 
-// EvaluateBatch evaluates multiple authorization requests in batch
+// EvaluateBatch evaluates multiple authorization requests in batch.
 func (e *Evaluator) EvaluateBatch(ctx context.Context, policies []*CompiledPolicy, requests []*EvaluationContext) ([]*Decision, error) {
 	decisions := make([]*Decision, len(requests))
 
@@ -299,13 +305,14 @@ func (e *Evaluator) EvaluateBatch(ctx context.Context, policies []*CompiledPolic
 		if err != nil {
 			return nil, fmt.Errorf("request %d failed: %w", i, err)
 		}
+
 		decisions[i] = decision
 	}
 
 	return decisions, nil
 }
 
-// sortPoliciesByPriority sorts policies by priority (higher first)
+// sortPoliciesByPriority sorts policies by priority (higher first).
 func sortPoliciesByPriority(policies []*CompiledPolicy) []*CompiledPolicy {
 	sorted := make([]*CompiledPolicy, len(policies))
 	copy(sorted, policies)
@@ -320,18 +327,19 @@ func sortPoliciesByPriority(policies []*CompiledPolicy) []*CompiledPolicy {
 			sorted[j+1] = sorted[j]
 			j--
 		}
+
 		sorted[j+1] = key
 	}
 
 	return sorted
 }
 
-// GetTimeout returns the evaluation timeout
+// GetTimeout returns the evaluation timeout.
 func (e *Evaluator) GetTimeout() time.Duration {
 	return e.timeout
 }
 
-// SetTimeout updates the evaluation timeout
+// SetTimeout updates the evaluation timeout.
 func (e *Evaluator) SetTimeout(timeout time.Duration) {
 	e.timeout = timeout
 }

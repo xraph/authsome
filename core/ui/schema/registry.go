@@ -3,11 +3,14 @@ package schema
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sort"
 	"sync"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// SettingsProvider is the interface for plugins that provide settings sections
+// SettingsProvider is the interface for plugins that provide settings sections.
 type SettingsProvider interface {
 	// ProviderID returns the unique identifier for this provider
 	ProviderID() string
@@ -18,26 +21,26 @@ type SettingsProvider interface {
 }
 
 // DynamicSettingsProvider is an extended interface for providers that generate
-// schemas dynamically based on context (e.g., per-app configuration)
+// schemas dynamically based on context (e.g., per-app configuration).
 type DynamicSettingsProvider interface {
 	SettingsProvider
 	// GetDynamicSections returns sections that may vary based on context
 	GetDynamicSections(ctx context.Context, appID string) ([]*Section, error)
 }
 
-// SettingsValidator is an optional interface for providers that need async validation
+// SettingsValidator is an optional interface for providers that need async validation.
 type SettingsValidator interface {
 	// ValidateSettings validates settings data for this provider
-	ValidateSettings(ctx context.Context, appID string, sectionID string, data map[string]interface{}) *ValidationResult
+	ValidateSettings(ctx context.Context, appID string, sectionID string, data map[string]any) *ValidationResult
 }
 
-// SettingsMigrator is an optional interface for providers that need to migrate settings
+// SettingsMigrator is an optional interface for providers that need to migrate settings.
 type SettingsMigrator interface {
 	// MigrateSettings migrates settings from one version to another
-	MigrateSettings(ctx context.Context, appID string, data map[string]interface{}, fromVersion, toVersion int) (map[string]interface{}, error)
+	MigrateSettings(ctx context.Context, appID string, data map[string]any, fromVersion, toVersion int) (map[string]any, error)
 }
 
-// Registry manages schema sections and providers
+// Registry manages schema sections and providers.
 type Registry struct {
 	mu        sync.RWMutex
 	sections  map[string]*Section
@@ -45,7 +48,7 @@ type Registry struct {
 	order     []string // Maintains insertion order for sections
 }
 
-// NewRegistry creates a new schema registry
+// NewRegistry creates a new schema registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		sections:  make(map[string]*Section),
@@ -54,16 +57,17 @@ func NewRegistry() *Registry {
 	}
 }
 
-// RegisterSection registers a standalone section
+// RegisterSection registers a standalone section.
 func (r *Registry) RegisterSection(section *Section) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if section == nil {
-		return fmt.Errorf("section cannot be nil")
+		return errs.RequiredField("section")
 	}
+
 	if section.ID == "" {
-		return fmt.Errorf("section ID cannot be empty")
+		return errs.RequiredField("section.id")
 	}
 
 	if _, exists := r.sections[section.ID]; exists {
@@ -72,20 +76,22 @@ func (r *Registry) RegisterSection(section *Section) error {
 
 	r.sections[section.ID] = section
 	r.order = append(r.order, section.ID)
+
 	return nil
 }
 
-// RegisterSections registers multiple sections at once
+// RegisterSections registers multiple sections at once.
 func (r *Registry) RegisterSections(sections ...*Section) error {
 	for _, section := range sections {
 		if err := r.RegisterSection(section); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-// UnregisterSection removes a section from the registry
+// UnregisterSection removes a section from the registry.
 func (r *Registry) UnregisterSection(sectionID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -95,22 +101,24 @@ func (r *Registry) UnregisterSection(sectionID string) {
 	for i, id := range r.order {
 		if id == sectionID {
 			r.order = append(r.order[:i], r.order[i+1:]...)
+
 			break
 		}
 	}
 }
 
-// RegisterProvider registers a settings provider
+// RegisterProvider registers a settings provider.
 func (r *Registry) RegisterProvider(provider SettingsProvider) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if provider == nil {
-		return fmt.Errorf("provider cannot be nil")
+		return errs.RequiredField("provider")
 	}
+
 	providerID := provider.ProviderID()
 	if providerID == "" {
-		return fmt.Errorf("provider ID cannot be empty")
+		return errs.RequiredField("provider.id")
 	}
 
 	if _, exists := r.providers[providerID]; exists {
@@ -123,8 +131,9 @@ func (r *Registry) RegisterProvider(provider SettingsProvider) error {
 	for _, section := range provider.GetSettingsSections() {
 		// Prefix section ID with provider ID to avoid conflicts
 		if section.Metadata == nil {
-			section.Metadata = make(map[string]interface{})
+			section.Metadata = make(map[string]any)
 		}
+
 		section.Metadata["providerID"] = providerID
 
 		// Use the section ID as-is (providers should use unique IDs)
@@ -135,7 +144,7 @@ func (r *Registry) RegisterProvider(provider SettingsProvider) error {
 	return nil
 }
 
-// UnregisterProvider removes a provider and its sections from the registry
+// UnregisterProvider removes a provider and its sections from the registry.
 func (r *Registry) UnregisterProvider(providerID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -144,33 +153,39 @@ func (r *Registry) UnregisterProvider(providerID string) {
 
 	// Remove all sections from this provider
 	var remainingOrder []string
+
 	for id, section := range r.sections {
 		if section.Metadata != nil {
 			if pid, ok := section.Metadata["providerID"].(string); ok && pid == providerID {
 				delete(r.sections, id)
+
 				continue
 			}
 		}
+
 		remainingOrder = append(remainingOrder, id)
 	}
+
 	r.order = remainingOrder
 }
 
-// GetSection returns a section by ID
+// GetSection returns a section by ID.
 func (r *Registry) GetSection(sectionID string) *Section {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.sections[sectionID]
 }
 
-// GetProvider returns a provider by ID
+// GetProvider returns a provider by ID.
 func (r *Registry) GetProvider(providerID string) SettingsProvider {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.providers[providerID]
 }
 
-// ListSections returns all registered sections
+// ListSections returns all registered sections.
 func (r *Registry) ListSections() []*Section {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -181,19 +196,21 @@ func (r *Registry) ListSections() []*Section {
 			sections = append(sections, section)
 		}
 	}
+
 	return sections
 }
 
-// GetSortedSections returns sections sorted by order
+// GetSortedSections returns sections sorted by order.
 func (r *Registry) GetSortedSections() []*Section {
 	sections := r.ListSections()
 	sort.Slice(sections, func(i, j int) bool {
 		return sections[i].Order < sections[j].Order
 	})
+
 	return sections
 }
 
-// ListProviders returns all registered providers
+// ListProviders returns all registered providers.
 func (r *Registry) ListProviders() []SettingsProvider {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -202,20 +219,22 @@ func (r *Registry) ListProviders() []SettingsProvider {
 	for _, provider := range r.providers {
 		providers = append(providers, provider)
 	}
+
 	return providers
 }
 
-// GetSchema builds a complete schema from all registered sections
+// GetSchema builds a complete schema from all registered sections.
 func (r *Registry) GetSchema(schemaID, schemaName string) *Schema {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	schema := NewSchema(schemaID, schemaName)
 	schema.Sections = r.GetSortedSections()
+
 	return schema
 }
 
-// GetDynamicSchema builds a schema including dynamic sections from providers
+// GetDynamicSchema builds a schema including dynamic sections from providers.
 func (r *Registry) GetDynamicSchema(ctx context.Context, appID, schemaID, schemaName string) (*Schema, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -232,6 +251,7 @@ func (r *Registry) GetDynamicSchema(ctx context.Context, appID, schemaID, schema
 			if err != nil {
 				return nil, fmt.Errorf("failed to get dynamic sections from provider %s: %w", provider.ProviderID(), err)
 			}
+
 			schema.Sections = append(schema.Sections, dynamicSections...)
 		}
 	}
@@ -244,19 +264,21 @@ func (r *Registry) GetDynamicSchema(ctx context.Context, appID, schemaID, schema
 	return schema, nil
 }
 
-// ValidateSection validates data for a specific section
-func (r *Registry) ValidateSection(ctx context.Context, sectionID string, data map[string]interface{}) *ValidationResult {
+// ValidateSection validates data for a specific section.
+func (r *Registry) ValidateSection(ctx context.Context, sectionID string, data map[string]any) *ValidationResult {
 	section := r.GetSection(sectionID)
 	if section == nil {
 		result := NewValidationResult()
 		result.AddGlobalError(fmt.Sprintf("section '%s' not found", sectionID))
+
 		return result
 	}
+
 	return section.Validate(ctx, data)
 }
 
-// ValidateSchema validates data for the entire schema
-func (r *Registry) ValidateSchema(ctx context.Context, data map[string]map[string]interface{}) *ValidationResult {
+// ValidateSchema validates data for the entire schema.
+func (r *Registry) ValidateSchema(ctx context.Context, data map[string]map[string]any) *ValidationResult {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -265,7 +287,8 @@ func (r *Registry) ValidateSchema(ctx context.Context, data map[string]map[strin
 	for sectionID, sectionData := range data {
 		section, ok := r.sections[sectionID]
 		if !ok {
-			result.AddGlobalError(fmt.Sprintf("unknown section: %s", sectionID))
+			result.AddGlobalError("unknown section: " + sectionID)
+
 			continue
 		}
 
@@ -276,8 +299,8 @@ func (r *Registry) ValidateSchema(ctx context.Context, data map[string]map[strin
 	return result
 }
 
-// ValidateWithProviders runs provider-specific validation
-func (r *Registry) ValidateWithProviders(ctx context.Context, appID, sectionID string, data map[string]interface{}) *ValidationResult {
+// ValidateWithProviders runs provider-specific validation.
+func (r *Registry) ValidateWithProviders(ctx context.Context, appID, sectionID string, data map[string]any) *ValidationResult {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -303,55 +326,54 @@ func (r *Registry) ValidateWithProviders(ctx context.Context, appID, sectionID s
 	return result
 }
 
-// GetDefaults returns default values for all sections
-func (r *Registry) GetDefaults() map[string]map[string]interface{} {
+// GetDefaults returns default values for all sections.
+func (r *Registry) GetDefaults() map[string]map[string]any {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	defaults := make(map[string]map[string]interface{})
+	defaults := make(map[string]map[string]any)
 	for id, section := range r.sections {
 		defaults[id] = section.GetDefaults()
 	}
+
 	return defaults
 }
 
-// GetSectionDefaults returns default values for a specific section
-func (r *Registry) GetSectionDefaults(sectionID string) map[string]interface{} {
+// GetSectionDefaults returns default values for a specific section.
+func (r *Registry) GetSectionDefaults(sectionID string) map[string]any {
 	section := r.GetSection(sectionID)
 	if section == nil {
 		return nil
 	}
+
 	return section.GetDefaults()
 }
 
-// MergeWithDefaults merges provided data with default values
-func (r *Registry) MergeWithDefaults(data map[string]map[string]interface{}) map[string]map[string]interface{} {
+// MergeWithDefaults merges provided data with default values.
+func (r *Registry) MergeWithDefaults(data map[string]map[string]any) map[string]map[string]any {
 	defaults := r.GetDefaults()
 
-	result := make(map[string]map[string]interface{})
+	result := make(map[string]map[string]any)
 
 	// Start with defaults
 	for sectionID, sectionDefaults := range defaults {
-		result[sectionID] = make(map[string]interface{})
-		for k, v := range sectionDefaults {
-			result[sectionID][k] = v
-		}
+		result[sectionID] = make(map[string]any)
+		maps.Copy(result[sectionID], sectionDefaults)
 	}
 
 	// Overlay provided data
 	for sectionID, sectionData := range data {
 		if result[sectionID] == nil {
-			result[sectionID] = make(map[string]interface{})
+			result[sectionID] = make(map[string]any)
 		}
-		for k, v := range sectionData {
-			result[sectionID][k] = v
-		}
+
+		maps.Copy(result[sectionID], sectionData)
 	}
 
 	return result
 }
 
-// Clone creates a deep copy of the registry
+// Clone creates a deep copy of the registry.
 func (r *Registry) Clone() *Registry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -366,14 +388,12 @@ func (r *Registry) Clone() *Registry {
 	copy(clone.order, r.order)
 
 	// Note: Providers are not cloned as they contain business logic
-	for id, provider := range r.providers {
-		clone.providers[id] = provider
-	}
+	maps.Copy(clone.providers, r.providers)
 
 	return clone
 }
 
-// Clear removes all sections and providers from the registry
+// Clear removes all sections and providers from the registry.
 func (r *Registry) Clear() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -383,7 +403,7 @@ func (r *Registry) Clear() {
 	r.order = make([]string, 0)
 }
 
-// Stats returns registry statistics
+// Stats returns registry statistics.
 func (r *Registry) Stats() RegistryStats {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -400,37 +420,37 @@ func (r *Registry) Stats() RegistryStats {
 	}
 }
 
-// RegistryStats contains registry statistics
+// RegistryStats contains registry statistics.
 type RegistryStats struct {
 	SectionCount  int `json:"sectionCount"`
 	ProviderCount int `json:"providerCount"`
 	FieldCount    int `json:"fieldCount"`
 }
 
-// Global registry instance
+// Global registry instance.
 var globalRegistry = NewRegistry()
 
-// Global returns the global registry instance
+// Global returns the global registry instance.
 func Global() *Registry {
 	return globalRegistry
 }
 
-// RegisterSection registers a section in the global registry
+// RegisterSection registers a section in the global registry.
 func RegisterSection(section *Section) error {
 	return globalRegistry.RegisterSection(section)
 }
 
-// RegisterProvider registers a provider in the global registry
+// RegisterProvider registers a provider in the global registry.
 func RegisterProvider(provider SettingsProvider) error {
 	return globalRegistry.RegisterProvider(provider)
 }
 
-// GetGlobalSection returns a section from the global registry
+// GetGlobalSection returns a section from the global registry.
 func GetGlobalSection(sectionID string) *Section {
 	return globalRegistry.GetSection(sectionID)
 }
 
-// GetGlobalSchema returns the complete schema from the global registry
+// GetGlobalSchema returns the complete schema from the global registry.
 func GetGlobalSchema(schemaID, schemaName string) *Schema {
 	return globalRegistry.GetSchema(schemaID, schemaName)
 }

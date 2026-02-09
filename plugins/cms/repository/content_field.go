@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/rs/xid"
@@ -12,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ContentFieldRepository defines the interface for content field storage operations
+// ContentFieldRepository defines the interface for content field storage operations.
 type ContentFieldRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, field *schema.ContentField) error
@@ -33,18 +34,18 @@ type ContentFieldRepository interface {
 	ExistsWithName(ctx context.Context, contentTypeID xid.ID, name string) (bool, error)
 }
 
-// FieldOrder represents a field ID and its order
+// FieldOrder represents a field ID and its order.
 type FieldOrder struct {
 	FieldID xid.ID
 	Order   int
 }
 
-// contentFieldRepository implements ContentFieldRepository using Bun ORM
+// contentFieldRepository implements ContentFieldRepository using Bun ORM.
 type contentFieldRepository struct {
 	db *bun.DB
 }
 
-// NewContentFieldRepository creates a new content field repository instance
+// NewContentFieldRepository creates a new content field repository instance.
 func NewContentFieldRepository(db *bun.DB) ContentFieldRepository {
 	return &contentFieldRepository{db: db}
 }
@@ -53,11 +54,12 @@ func NewContentFieldRepository(db *bun.DB) ContentFieldRepository {
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content field
+// Create creates a new content field.
 func (r *contentFieldRepository) Create(ctx context.Context, field *schema.ContentField) error {
 	if field.ID.IsNil() {
 		field.ID = xid.New()
 	}
+
 	now := time.Now()
 	field.CreatedAt = now
 	field.UpdatedAt = now
@@ -71,45 +73,53 @@ func (r *contentFieldRepository) Create(ctx context.Context, field *schema.Conte
 	_, err := r.db.NewInsert().
 		Model(field).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a content field by ID
+// FindByID finds a content field by ID.
 func (r *contentFieldRepository) FindByID(ctx context.Context, id xid.ID) (*schema.ContentField, error) {
 	field := new(schema.ContentField)
+
 	err := r.db.NewSelect().
 		Model(field).
 		Where("cf.id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrFieldNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return field, nil
 }
 
-// FindBySlug finds a content field by slug within a content type
+// FindBySlug finds a content field by slug within a content type.
 func (r *contentFieldRepository) FindByName(ctx context.Context, contentTypeID xid.ID, name string) (*schema.ContentField, error) {
 	field := new(schema.ContentField)
+
 	err := r.db.NewSelect().
 		Model(field).
 		Where("cf.content_type_id = ?", contentTypeID).
 		Where("LOWER(cf.name) = LOWER(?)", name).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrFieldNotFound(name)
 		}
+
 		return nil, err
 	}
+
 	return field, nil
 }
 
-// ListByContentType lists all fields for a content type ordered by Order
+// ListByContentType lists all fields for a content type ordered by Order.
 func (r *contentFieldRepository) ListByContentType(ctx context.Context, contentTypeID xid.ID) ([]*schema.ContentField, error) {
 	var fields []*schema.ContentField
+
 	err := r.db.NewSelect().
 		Model(&fields).
 		Where("content_type_id = ?", contentTypeID).
@@ -118,34 +128,38 @@ func (r *contentFieldRepository) ListByContentType(ctx context.Context, contentT
 	if err != nil {
 		return nil, err
 	}
+
 	return fields, nil
 }
 
-// Update updates a content field
+// Update updates a content field.
 func (r *contentFieldRepository) Update(ctx context.Context, field *schema.ContentField) error {
 	field.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
 		Model(field).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// Delete deletes a content field
+// Delete deletes a content field.
 func (r *contentFieldRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentField)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteAllForContentType deletes all fields for a content type
+// DeleteAllForContentType deletes all fields for a content type.
 func (r *contentFieldRepository) DeleteAllForContentType(ctx context.Context, contentTypeID xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentField)(nil)).
 		Where("content_type_id = ?", contentTypeID).
 		Exec(ctx)
+
 	return err
 }
 
@@ -153,7 +167,7 @@ func (r *contentFieldRepository) DeleteAllForContentType(ctx context.Context, co
 // Ordering Operations
 // =============================================================================
 
-// UpdateOrder updates the order of a single field
+// UpdateOrder updates the order of a single field.
 func (r *contentFieldRepository) UpdateOrder(ctx context.Context, id xid.ID, order int) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.ContentField)(nil)).
@@ -161,10 +175,11 @@ func (r *contentFieldRepository) UpdateOrder(ctx context.Context, id xid.ID, ord
 		Set("updated_at = ?", time.Now()).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// ReorderFields reorders multiple fields in a content type
+// ReorderFields reorders multiple fields in a content type.
 func (r *contentFieldRepository) ReorderFields(ctx context.Context, contentTypeID xid.ID, orders []FieldOrder) error {
 	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		now := time.Now()
@@ -180,13 +195,15 @@ func (r *contentFieldRepository) ReorderFields(ctx context.Context, contentTypeI
 				return err
 			}
 		}
+
 		return nil
 	})
 }
 
-// GetMaxOrder returns the maximum order value for fields in a content type
+// GetMaxOrder returns the maximum order value for fields in a content type.
 func (r *contentFieldRepository) GetMaxOrder(ctx context.Context, contentTypeID xid.ID) (int, error) {
 	var maxOrder int
+
 	err := r.db.NewSelect().
 		Model((*schema.ContentField)(nil)).
 		ColumnExpr("COALESCE(MAX(\"order\"), 0)").
@@ -195,6 +212,7 @@ func (r *contentFieldRepository) GetMaxOrder(ctx context.Context, contentTypeID 
 	if err != nil {
 		return 0, err
 	}
+
 	return maxOrder, nil
 }
 
@@ -202,7 +220,7 @@ func (r *contentFieldRepository) GetMaxOrder(ctx context.Context, contentTypeID 
 // Stats Operations
 // =============================================================================
 
-// Count counts total fields for a content type
+// Count counts total fields for a content type.
 func (r *contentFieldRepository) Count(ctx context.Context, contentTypeID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentField)(nil)).
@@ -210,7 +228,7 @@ func (r *contentFieldRepository) Count(ctx context.Context, contentTypeID xid.ID
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a field with the given name exists in a content type
+// ExistsWithSlug checks if a field with the given name exists in a content type.
 func (r *contentFieldRepository) ExistsWithName(ctx context.Context, contentTypeID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ContentField)(nil)).
@@ -220,5 +238,6 @@ func (r *contentFieldRepository) ExistsWithName(ctx context.Context, contentType
 	if err != nil {
 		return false, err
 	}
+
 	return count > 0, nil
 }

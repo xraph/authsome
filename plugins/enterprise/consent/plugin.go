@@ -2,6 +2,7 @@ package consent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -20,7 +22,7 @@ const (
 	PluginVersion = "1.0.0"
 )
 
-// Plugin implements the AuthSome plugin interface for consent and privacy management
+// Plugin implements the AuthSome plugin interface for consent and privacy management.
 type Plugin struct {
 	service       *Service
 	config        *Config
@@ -29,33 +31,33 @@ type Plugin struct {
 	cleanupDone   chan bool
 }
 
-// NewPlugin creates a new consent plugin instance
+// NewPlugin creates a new consent plugin instance.
 func NewPlugin() *Plugin {
 	return &Plugin{}
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Enterprise consent and privacy management with GDPR/CCPA compliance, cookie consent, data portability (Article 20), and right to be forgotten (Article 17)"
 }
 
-// Init initializes the plugin with dependencies from AuthSome
-func (p *Plugin) Init(auth interface{}) error {
+// Init initializes the plugin with dependencies from AuthSome.
+func (p *Plugin) Init(auth any) error {
 	// Type assert to get the auth instance with required methods
 	authInstance, ok := auth.(interface {
 		GetDB() *bun.DB
@@ -63,7 +65,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		GetServiceRegistry() *registry.ServiceRegistry
 	})
 	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.InternalServerErrorWithMessage("invalid auth instance type")
 	}
 
 	db := authInstance.GetDB()
@@ -77,6 +79,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		// Use defaults if binding fails
 		config = *DefaultConfig()
 	}
+
 	config.Validate() // Ensure defaults are set
 	p.config = &config
 
@@ -86,6 +89,7 @@ func (p *Plugin) Init(auth interface{}) error {
 
 	// Get user service (interface type)
 	userSvcInterface := serviceRegistry.UserService()
+
 	var userSvc *user.Service
 	if userSvcInterface != nil {
 		userSvc, _ = userSvcInterface.(*user.Service)
@@ -110,7 +114,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
@@ -285,7 +289,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers plugin hooks with the hook registry
+// RegisterHooks registers plugin hooks with the hook registry.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if !p.config.Enabled || p.service == nil {
 		return nil
@@ -333,7 +337,6 @@ func (p *Plugin) onUserCreated(ctx context.Context, u *user.User) error {
 func (p *Plugin) onBeforeUserDelete(ctx context.Context, u *user.User) error {
 	// Before deleting a user, check if there's a data deletion request
 	// This ensures compliance with GDPR Article 17
-
 	orgID := "default"
 	if orgIDCtx, ok := ctx.Value("organization_id").(string); ok {
 		orgID = orgIDCtx
@@ -341,6 +344,7 @@ func (p *Plugin) onBeforeUserDelete(ctx context.Context, u *user.User) error {
 
 	// Check for pending deletion request
 	userIDStr := u.ID.String()
+
 	deletionReq, err := p.service.repo.GetPendingDeletionRequest(ctx, userIDStr, orgID)
 	if err != nil || deletionReq == nil {
 		// No pending deletion request, create one for audit trail
@@ -359,16 +363,17 @@ func (p *Plugin) onBeforeUserDelete(ctx context.Context, u *user.User) error {
 	return nil
 }
 
-func (p *Plugin) onOrganizationCreated(ctx context.Context, org interface{}) error {
+func (p *Plugin) onOrganizationCreated(ctx context.Context, org any) error {
 	// When a new organization is created in SaaS mode,
 	// initialize default privacy settings for that organization
 
 	// Extract organization ID from interface
 	var orgID string
+
 	switch o := org.(type) {
 	case *organization.Organization:
 		orgID = o.ID.String()
-	case map[string]interface{}:
+	case map[string]any:
 		if id, ok := o["id"].(string); ok {
 			orgID = id
 		} else if id, ok := o["id"].(xid.ID); ok {
@@ -377,7 +382,7 @@ func (p *Plugin) onOrganizationCreated(ctx context.Context, org interface{}) err
 	}
 
 	if orgID == "" {
-		return fmt.Errorf("failed to extract organization ID")
+		return errs.InternalServerErrorWithMessage("failed to extract organization ID")
 	}
 
 	// Create default privacy settings for the new organization
@@ -389,21 +394,21 @@ func (p *Plugin) onOrganizationCreated(ctx context.Context, org interface{}) err
 	return nil
 }
 
-// RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// RegisterServiceDecorators allows plugins to replace core services with decorated versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Consent plugin doesn't decorate core services
 	// It provides its own service that's accessed via the plugin
 	return nil
 }
 
-// Migrate performs database migrations
+// Migrate performs database migrations.
 func (p *Plugin) Migrate() error {
 	// Database migrations will be handled by the migration system
 	// The schema is defined in schema.go and will be registered in migrations/bun/
 	return nil
 }
 
-// startBackgroundTasks starts background tasks for the plugin
+// startBackgroundTasks starts background tasks for the plugin.
 func (p *Plugin) startBackgroundTasks() {
 	if !p.config.Enabled {
 		return
@@ -428,7 +433,7 @@ func (p *Plugin) startBackgroundTasks() {
 	}
 }
 
-// runExpiryCheck checks and expires consents that have passed their expiry date
+// runExpiryCheck checks and expires consents that have passed their expiry date.
 func (p *Plugin) runExpiryCheck() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -443,7 +448,7 @@ func (p *Plugin) runExpiryCheck() {
 	}
 }
 
-// cleanupExpiredExports removes expired data export files
+// cleanupExpiredExports removes expired data export files.
 func (p *Plugin) cleanupExpiredExports() {
 	if !p.config.DataExport.AutoCleanup {
 		return
@@ -461,7 +466,7 @@ func (p *Plugin) cleanupExpiredExports() {
 	}
 }
 
-// Shutdown gracefully shuts down the plugin
+// Shutdown gracefully shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	// Stop background tasks
 	if p.cleanupTicker != nil {
@@ -472,33 +477,34 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Health checks plugin health
+// Health checks plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	// Check if database is accessible
 	settings, err := p.service.GetPrivacySettings(ctx, "default")
 	if err != nil {
 		// It's okay if settings don't exist yet
-		if err != ErrPrivacySettingsNotFound {
+		if !errors.Is(err, ErrPrivacySettingsNotFound) {
 			return fmt.Errorf("database health check failed: %w", err)
 		}
 	}
+
 	_ = settings
 
 	return nil
 }
 
-// Service returns the consent service for programmatic access (optional public method)
+// Service returns the consent service for programmatic access (optional public method).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
 // ====== Helper Methods for Integration ======
 
-// RequireConsent middleware that checks if user has granted required consent
+// RequireConsent middleware that checks if user has granted required consent.
 func (p *Plugin) RequireConsent(consentType, purpose string) func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -508,7 +514,7 @@ func (p *Plugin) RequireConsent(consentType, purpose string) func(next func(forg
 			orgID, _ := val.(string)
 
 			if userID == "" || orgID == "" {
-				return c.JSON(401, map[string]interface{}{
+				return c.JSON(401, map[string]any{
 					"error": "unauthorized",
 				})
 			}
@@ -516,7 +522,7 @@ func (p *Plugin) RequireConsent(consentType, purpose string) func(next func(forg
 			// Check if consent exists and is granted
 			consent, err := p.service.repo.GetConsentByUserAndType(c.Request().Context(), userID, orgID, consentType, purpose)
 			if err != nil || consent == nil || !consent.Granted {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":       "consent required",
 					"consentType": consentType,
 					"purpose":     purpose,
@@ -525,7 +531,7 @@ func (p *Plugin) RequireConsent(consentType, purpose string) func(next func(forg
 
 			// Check if consent has expired
 			if consent.ExpiresAt != nil && consent.ExpiresAt.Before(time.Now()) {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":       "consent expired",
 					"consentType": consentType,
 					"purpose":     purpose,
@@ -537,7 +543,7 @@ func (p *Plugin) RequireConsent(consentType, purpose string) func(next func(forg
 	}
 }
 
-// GetUserConsentStatus returns consent status for a user (for use by other plugins)
+// GetUserConsentStatus returns consent status for a user (for use by other plugins).
 func (p *Plugin) GetUserConsentStatus(ctx context.Context, userID, orgID, consentType, purpose string) (bool, error) {
 	consent, err := p.service.repo.GetConsentByUserAndType(ctx, userID, orgID, consentType, purpose)
 	if err != nil || consent == nil {
@@ -552,46 +558,46 @@ func (p *Plugin) GetUserConsentStatus(ctx context.Context, userID, orgID, consen
 	return consent.Granted, nil
 }
 
-// DTOs for consent routes
+// DTOs for consent routes.
 type ConsentStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type ConsentRecordResponse struct {
-	ID string `json:"id" example:"consent_123"`
+	ID string `example:"consent_123" json:"id"`
 }
 
 type ConsentPolicyResponse struct {
-	ID string `json:"id" example:"policy_123"`
+	ID string `example:"policy_123" json:"id"`
 }
 
 type ConsentCookieResponse struct {
-	Preferences interface{} `json:"preferences"`
+	Preferences any `json:"preferences"`
 }
 
 type ConsentExportResponse struct {
-	ID     string `json:"id" example:"export_123"`
-	Status string `json:"status" example:"processing"`
+	ID     string `example:"export_123" json:"id"`
+	Status string `example:"processing" json:"status"`
 }
 
 type ConsentExportFileResponse struct {
-	ContentType string `json:"content_type" example:"application/zip"`
+	ContentType string `example:"application/zip" json:"content_type"`
 	Data        []byte `json:"data"`
 }
 
 type ConsentDeletionResponse struct {
-	ID     string `json:"id" example:"deletion_123"`
-	Status string `json:"status" example:"pending"`
+	ID     string `example:"deletion_123" json:"id"`
+	Status string `example:"pending"      json:"status"`
 }
 
 type ConsentSettingsResponse struct {
-	Settings interface{} `json:"settings"`
+	Settings any `json:"settings"`
 }
 
 type ConsentAuditLogsResponse struct {
-	AuditLogs []interface{} `json:"audit_logs"`
+	AuditLogs []any `json:"audit_logs"`
 }
 
 type ConsentReportResponse struct {
-	ID string `json:"id" example:"report_123"`
+	ID string `example:"report_123" json:"id"`
 }

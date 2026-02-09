@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strconv"
 
@@ -12,15 +13,16 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// handleError handles errors and returns appropriate HTTP responses
+// handleError handles errors and returns appropriate HTTP responses.
 func handleError(c forge.Context, err error) error {
 	if err == nil {
 		return nil
 	}
 
 	// Check if it's an AuthsomeError
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
-		return c.JSON(authErr.HTTPStatus, map[string]interface{}{
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
+		return c.JSON(authErr.HTTPStatus, map[string]any{
 			"error":   authErr.Message,
 			"code":    authErr.Code,
 			"details": authErr.Details,
@@ -42,7 +44,7 @@ func getContextWithHeaders(c forge.Context) context.Context {
 	// Check if context already has app ID
 	if _, ok := contexts.GetAppID(ctx); !ok {
 		// Try to get from X-App-ID header
-		if appIDStr := c.Request().Header.Get("X-App-ID"); appIDStr != "" {
+		if appIDStr := c.Request().Header.Get("X-App-Id"); appIDStr != "" {
 			if appID, err := xid.FromString(appIDStr); err == nil {
 				ctx = contexts.SetAppID(ctx, appID)
 			}
@@ -52,7 +54,7 @@ func getContextWithHeaders(c forge.Context) context.Context {
 	// Check if context already has environment ID
 	if _, ok := contexts.GetEnvironmentID(ctx); !ok {
 		// Try to get from X-Environment-ID header
-		if envIDStr := c.Request().Header.Get("X-Environment-ID"); envIDStr != "" {
+		if envIDStr := c.Request().Header.Get("X-Environment-Id"); envIDStr != "" {
 			if envID, err := xid.FromString(envIDStr); err == nil {
 				ctx = contexts.SetEnvironmentID(ctx, envID)
 			}
@@ -62,32 +64,34 @@ func getContextWithHeaders(c forge.Context) context.Context {
 	return ctx
 }
 
-// ErrorResponse represents an error response
+// ErrorResponse represents an error response.
 type ErrorResponse struct {
-	Error   string      `json:"error"`
-	Code    string      `json:"code,omitempty"`
-	Details interface{} `json:"details,omitempty"`
+	Error   string `json:"error"`
+	Code    string `json:"code,omitempty"`
+	Details any    `json:"details,omitempty"`
 }
 
-// SuccessResponse represents a success response
+// SuccessResponse represents a success response.
 type SuccessResponse struct {
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
-// parseIntDefault parses an int from a string with a default value
+// parseIntDefault parses an int from a string with a default value.
 func parseIntDefault(s string, defaultVal int) int {
 	if s == "" {
 		return defaultVal
 	}
+
 	val, err := strconv.Atoi(s)
 	if err != nil {
 		return defaultVal
 	}
+
 	return val
 }
 
-// readBody reads the request body and returns it as bytes
+// readBody reads the request body and returns it as bytes.
 func readBody(c forge.Context) ([]byte, error) {
 	return io.ReadAll(c.Request().Body)
 }

@@ -3,18 +3,20 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/organization"
 	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// memberWithUser holds a member joined with user data
+// memberWithUser holds a member joined with user data.
 type memberWithUser struct {
 	schema.OrganizationMember
+
 	UserID          xid.ID `bun:"user_id"`
 	UserName        string `bun:"user_name"`
 	UserEmail       string `bun:"user_email"`
@@ -23,7 +25,7 @@ type memberWithUser struct {
 	UserDisplayName string `bun:"user_display_username"`
 }
 
-// toMemberWithUserInfo converts memberWithUser to organization.Member with UserInfo populated
+// toMemberWithUserInfo converts memberWithUser to organization.Member with UserInfo populated.
 func (m *memberWithUser) toMemberWithUserInfo() *organization.Member {
 	member := organization.FromSchemaMember(&m.OrganizationMember)
 	if member != nil {
@@ -45,29 +47,31 @@ func (m *memberWithUser) toMemberWithUserInfo() *organization.Member {
 			DisplayUsername: m.UserDisplayName,
 		}
 	}
+
 	return member
 }
 
-// organizationMemberRepository implements organization.MemberRepository using Bun
+// organizationMemberRepository implements organization.MemberRepository using Bun.
 type organizationMemberRepository struct {
 	db *bun.DB
 }
 
-// NewOrganizationMemberRepository creates a new organization member repository
+// NewOrganizationMemberRepository creates a new organization member repository.
 func NewOrganizationMemberRepository(db *bun.DB) organization.MemberRepository {
 	return &organizationMemberRepository{db: db}
 }
 
-// Create creates a new organization member
+// Create creates a new organization member.
 func (r *organizationMemberRepository) Create(ctx context.Context, member *organization.Member) error {
 	schemaMember := member.ToSchema()
 	_, err := r.db.NewInsert().
 		Model(schemaMember).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID retrieves a member by ID
+// FindByID retrieves a member by ID.
 func (r *organizationMemberRepository) FindByID(ctx context.Context, id xid.ID) (*organization.Member, error) {
 	schemaMember := new(schema.OrganizationMember)
 	err := r.db.NewSelect().
@@ -75,9 +79,10 @@ func (r *organizationMemberRepository) FindByID(ctx context.Context, id xid.ID) 
 		Where("uom.id = ?", id).
 		Scan(ctx)
 
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("member not found")
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errs.NotFound("member not found")
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +90,7 @@ func (r *organizationMemberRepository) FindByID(ctx context.Context, id xid.ID) 
 	return organization.FromSchemaMember(schemaMember), nil
 }
 
-// FindByUserAndOrg retrieves a member by user ID and organization ID
+// FindByUserAndOrg retrieves a member by user ID and organization ID.
 func (r *organizationMemberRepository) FindByUserAndOrg(ctx context.Context, userID, orgID xid.ID) (*organization.Member, error) {
 	schemaMember := new(schema.OrganizationMember)
 	err := r.db.NewSelect().
@@ -93,9 +98,10 @@ func (r *organizationMemberRepository) FindByUserAndOrg(ctx context.Context, use
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Scan(ctx)
 
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("member not found")
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errs.NotFound("member not found")
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +109,7 @@ func (r *organizationMemberRepository) FindByUserAndOrg(ctx context.Context, use
 	return organization.FromSchemaMember(schemaMember), nil
 }
 
-// ListByOrganization lists members of an organization with pagination and filtering
+// ListByOrganization lists members of an organization with pagination and filtering.
 func (r *organizationMemberRepository) ListByOrganization(ctx context.Context, filter *organization.ListMembersFilter) (*pagination.PageResponse[*organization.Member], error) {
 	var membersWithUsers []*memberWithUser
 
@@ -123,6 +129,7 @@ func (r *organizationMemberRepository) ListByOrganization(ctx context.Context, f
 	if filter.Role != nil {
 		query = query.Where("uom.role = ?", *filter.Role)
 	}
+
 	if filter.Status != nil {
 		query = query.Where("uom.status = ?", *filter.Status)
 	}
@@ -136,9 +143,11 @@ func (r *organizationMemberRepository) ListByOrganization(ctx context.Context, f
 	if filter.Role != nil {
 		countQuery = countQuery.Where("role = ?", *filter.Role)
 	}
+
 	if filter.Status != nil {
 		countQuery = countQuery.Where("status = ?", *filter.Status)
 	}
+
 	total, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, err
@@ -160,7 +169,7 @@ func (r *organizationMemberRepository) ListByOrganization(ctx context.Context, f
 	return pagination.NewPageResponse(members, int64(total), &filter.PaginationParams), nil
 }
 
-// ListByUser lists all organization memberships for a user with pagination
+// ListByUser lists all organization memberships for a user with pagination.
 func (r *organizationMemberRepository) ListByUser(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Member], error) {
 	var schemaMembers []*schema.OrganizationMember
 
@@ -188,42 +197,46 @@ func (r *organizationMemberRepository) ListByUser(ctx context.Context, userID xi
 	return pagination.NewPageResponse(members, int64(total), filter), nil
 }
 
-// Update updates a member
+// Update updates a member.
 func (r *organizationMemberRepository) Update(ctx context.Context, member *organization.Member) error {
 	schemaMember := member.ToSchema()
 	_, err := r.db.NewUpdate().
 		Model(schemaMember).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// Delete deletes a member
+// Delete deletes a member.
 func (r *organizationMemberRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.OrganizationMember)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteByUserAndOrg deletes a member by user ID and organization ID
+// DeleteByUserAndOrg deletes a member by user ID and organization ID.
 func (r *organizationMemberRepository) DeleteByUserAndOrg(ctx context.Context, userID, orgID xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.OrganizationMember)(nil)).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Exec(ctx)
+
 	return err
 }
 
-// CountByOrganization counts members in an organization
+// CountByOrganization counts members in an organization.
 func (r *organizationMemberRepository) CountByOrganization(ctx context.Context, orgID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.OrganizationMember)(nil)).
 		Where("organization_id = ?", orgID).
 		Count(ctx)
+
 	return count, err
 }
 
-// Type assertion to ensure organizationMemberRepository implements organization.MemberRepository
+// Type assertion to ensure organizationMemberRepository implements organization.MemberRepository.
 var _ organization.MemberRepository = (*organizationMemberRepository)(nil)

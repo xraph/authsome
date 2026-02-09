@@ -4,20 +4,23 @@ import (
 	"context"
 	"crypto/rsa"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/xraph/authsome/internal/errs"
 	"golang.org/x/oauth2"
 )
 
-// AppleProvider implements Sign in with Apple
+// AppleProvider implements Sign in with Apple.
 type AppleProvider struct {
 	*BaseProvider
+
 	teamID string
 	keyID  string
 }
 
-// NewAppleProvider creates a new Apple OAuth provider
+// NewAppleProvider creates a new Apple OAuth provider.
 func NewAppleProvider(config ProviderConfig) *AppleProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -41,17 +44,18 @@ func NewAppleProvider(config ProviderConfig) *AppleProvider {
 	}
 }
 
-// GetUserInfo extracts user information from Apple's ID token
+// GetUserInfo extracts user information from Apple's ID token.
 func (a *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	// Apple provides user info in the ID token
 	idToken, ok := token.Extra("id_token").(string)
 	if !ok || idToken == "" {
-		return nil, fmt.Errorf("no ID token provided by Apple")
+		return nil, errs.New(errs.CodeInvalidInput, "no ID token provided by Apple", http.StatusBadRequest)
 	}
 
 	// Parse the ID token (without verification for now - in production, verify!)
 	claims := jwt.MapClaims{}
 	parser := jwt.NewParser()
+
 	_, _, err := parser.ParseUnverified(idToken, claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Apple ID token: %w", err)
@@ -65,6 +69,7 @@ func (a *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*
 	if sub, ok := claims["sub"].(string); ok {
 		userInfo.ID = sub
 	}
+
 	if email, ok := claims["email"].(string); ok {
 		userInfo.Email = email
 	}
@@ -76,7 +81,7 @@ func (a *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*
 }
 
 // GenerateClientSecret generates a client secret JWT for Apple
-// Required for Apple's OAuth flow
+// Required for Apple's OAuth flow.
 func GenerateAppleClientSecret(teamID, clientID, keyID string, privateKey *rsa.PrivateKey) (string, error) {
 	now := jwt.NewNumericDate(time.Now())
 	expiresAt := jwt.NewNumericDate(time.Now().Add(6 * 30 * 24 * time.Hour)) // 6 months

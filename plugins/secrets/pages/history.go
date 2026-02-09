@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -11,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// VersionHistoryPage renders the version history page for a secret
+// VersionHistoryPage renders the version history page for a secret.
 func VersionHistoryPage(
 	currentApp *app.App,
 	basePath string,
@@ -87,7 +88,7 @@ func VersionHistoryPage(
 	)
 }
 
-// currentVersionCard shows the current active version
+// currentVersionCard shows the current active version.
 func currentVersionCard(secret *core.SecretDTO) g.Node {
 	return Div(
 		Class("bg-violet-50 dark:bg-violet-900/20 rounded-lg border border-violet-200 dark:border-violet-800 p-4"),
@@ -111,7 +112,7 @@ func currentVersionCard(secret *core.SecretDTO) g.Node {
 	)
 }
 
-// versionTimeline renders the timeline of versions
+// versionTimeline renders the timeline of versions.
 func versionTimeline(
 	currentApp *app.App,
 	basePath string,
@@ -212,7 +213,7 @@ func versionTimelineItem(appBase string, secret *core.SecretDTO, version *core.S
 					g.If(!isCurrent, func() g.Node {
 						return FormEl(
 							Method("POST"),
-							Action(appBase+"/secrets/"+secret.ID+"/rollback/"+fmt.Sprint(version.Version)),
+							Action(appBase+"/secrets/"+secret.ID+"/rollback/"+strconv.Itoa(version.Version)),
 							Button(
 								Type("submit"),
 								Class("inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20 dark:border-orange-800 dark:hover:bg-orange-900/30 transition-colors"),
@@ -285,7 +286,7 @@ func historyPagination(baseURL string, currentPage, totalPages int) g.Node {
 	)
 }
 
-// RollbackConfirmationModal renders a confirmation modal for rollback
+// RollbackConfirmationModal renders a confirmation modal for rollback.
 func RollbackConfirmationModal(secret *core.SecretDTO, targetVersion int) g.Node {
 	return Div(
 		Class("fixed inset-0 z-50 flex items-center justify-center bg-black/50"),
@@ -341,7 +342,7 @@ func RollbackConfirmationModal(secret *core.SecretDTO, targetVersion int) g.Node
 	)
 }
 
-// VersionDiff renders a comparison between two versions
+// VersionDiff renders a comparison between two versions.
 func VersionDiff(oldVersion, newVersion *core.SecretVersionDTO) g.Node {
 	return Div(
 		Class("bg-white rounded-lg border border-slate-200 dark:bg-gray-900 dark:border-gray-800 overflow-hidden"),

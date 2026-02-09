@@ -3,9 +3,12 @@ package notification
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"net/http"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -13,7 +16,7 @@ import (
 // TEMPLATE INITIALIZATION & RESET
 // =============================================================================
 
-// InitializeDefaultTemplates creates default templates for an app
+// InitializeDefaultTemplates creates default templates for an app.
 func (s *Service) InitializeDefaultTemplates(ctx context.Context, appID xid.ID) error {
 	// Get all default template metadata
 	defaultTemplates := GetDefaultTemplateMetadata()
@@ -51,7 +54,7 @@ func (s *Service) InitializeDefaultTemplates(ctx context.Context, appID xid.ID) 
 			Subject:     metadata.DefaultSubject,
 			Body:        body,
 			Variables:   metadata.Variables,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"description": metadata.Description,
 			},
 			Active:      true,
@@ -68,7 +71,7 @@ func (s *Service) InitializeDefaultTemplates(ctx context.Context, appID xid.ID) 
 	return nil
 }
 
-// ResetTemplate resets a template to its default values
+// ResetTemplate resets a template to its default values.
 func (s *Service) ResetTemplate(ctx context.Context, templateID xid.ID) error {
 	// Find the template
 	template, err := s.repo.FindTemplateByID(ctx, templateID)
@@ -97,7 +100,7 @@ func (s *Service) ResetTemplate(ctx context.Context, templateID xid.ID) error {
 		Subject:   &defaultMeta.DefaultSubject,
 		Body:      &body,
 		Variables: defaultMeta.Variables,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"description": defaultMeta.Description,
 		},
 		Active: boolPtr(true),
@@ -115,7 +118,7 @@ func (s *Service) ResetTemplate(ctx context.Context, templateID xid.ID) error {
 	return nil
 }
 
-// ResetAllTemplates resets all templates for an app to defaults
+// ResetAllTemplates resets all templates for an app to defaults.
 func (s *Service) ResetAllTemplates(ctx context.Context, appID xid.ID) error {
 	// First, ensure all default templates exist
 	// InitializeDefaultTemplates is idempotent - it only creates missing templates
@@ -144,7 +147,7 @@ func (s *Service) ResetAllTemplates(ctx context.Context, appID xid.ID) error {
 	return nil
 }
 
-// TemplateExists checks if a template exists
+// TemplateExists checks if a template exists.
 func (s *Service) TemplateExists(ctx context.Context, appID xid.ID, templateKey string) (bool, error) {
 	// Try to find template by key
 	template, err := s.repo.FindTemplateByKey(ctx, appID, templateKey, "", "")
@@ -153,6 +156,7 @@ func (s *Service) TemplateExists(ctx context.Context, appID xid.ID, templateKey 
 		if IsTemplateNotFoundError(err) {
 			return false, nil
 		}
+
 		return false, fmt.Errorf("failed to check template existence: %w", err)
 	}
 
@@ -164,7 +168,7 @@ func (s *Service) TemplateExists(ctx context.Context, appID xid.ID, templateKey 
 	return true, nil
 }
 
-// CompareWithDefault checks if template differs from default
+// CompareWithDefault checks if template differs from default.
 func (s *Service) CompareWithDefault(ctx context.Context, templateID xid.ID) (bool, error) {
 	// Find the template
 	template, err := s.repo.FindTemplateByID(ctx, templateID)
@@ -174,7 +178,7 @@ func (s *Service) CompareWithDefault(ctx context.Context, templateID xid.ID) (bo
 
 	// If not a default template, can't compare
 	if !template.IsDefault {
-		return false, fmt.Errorf("template is not a default template")
+		return false, errs.New(errs.CodeBadRequest, "template is not a default template", http.StatusBadRequest)
 	}
 
 	// Get the default template metadata
@@ -202,23 +206,24 @@ func (s *Service) CompareWithDefault(ctx context.Context, templateID xid.ID) (bo
 // HELPER FUNCTIONS
 // =============================================================================
 
-// calculateTemplateHash calculates a SHA256 hash of template content
+// calculateTemplateHash calculates a SHA256 hash of template content.
 func calculateTemplateHash(subject, body string) string {
 	content := subject + "|" + body
 	hash := sha256.Sum256([]byte(content))
-	return fmt.Sprintf("%x", hash)
+
+	return hex.EncodeToString(hash[:])
 }
 
-// boolPtr returns a pointer to a bool value
+// boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool {
 	return &b
 }
 
-// IsTemplateNotFoundError checks if an error is a template not found error
+// IsTemplateNotFoundError checks if an error is a template not found error.
 func IsTemplateNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
 	// Check if error is our template not found error
-	return err.Error() == ErrTemplateNotFound.Error() || err == ErrTemplateNotFound
+	return err.Error() == ErrTemplateNotFound.Error() || errs.Is(err, ErrTemplateNotFound)
 }

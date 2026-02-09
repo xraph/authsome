@@ -5,16 +5,17 @@ import (
 	"testing"
 
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// mockStrategy is a test authentication strategy
+// mockStrategy is a test authentication strategy.
 type mockStrategy struct {
 	id            string
 	priority      int
 	shouldExtract bool
 	shouldAuth    bool
-	extractValue  interface{}
+	extractValue  any
 }
 
 func (m *mockStrategy) ID() string {
@@ -25,20 +26,22 @@ func (m *mockStrategy) Priority() int {
 	return m.priority
 }
 
-func (m *mockStrategy) Extract(c forge.Context) (interface{}, bool) {
+func (m *mockStrategy) Extract(c forge.Context) (any, bool) {
 	if m.shouldExtract {
 		return m.extractValue, true
 	}
+
 	return nil, false
 }
 
-func (m *mockStrategy) Authenticate(ctx context.Context, credentials interface{}) (*contexts.AuthContext, error) {
+func (m *mockStrategy) Authenticate(ctx context.Context, credentials any) (*contexts.AuthContext, error) {
 	if m.shouldAuth {
 		return &contexts.AuthContext{
 			Method:          contexts.AuthMethodSession,
 			IsAuthenticated: true,
 		}, nil
 	}
+
 	return nil, &AuthStrategyError{Strategy: m.id, Message: "auth failed"}
 }
 
@@ -83,6 +86,7 @@ func TestAuthStrategyRegistry_Get(t *testing.T) {
 	if !ok {
 		t.Fatal("Expected to find strategy")
 	}
+
 	if found.ID() != "test-strategy" {
 		t.Fatalf("Expected strategy ID 'test-strategy', got %s", found.ID())
 	}
@@ -122,6 +126,7 @@ func TestAuthStrategyError(t *testing.T) {
 		Strategy: "test",
 		Message:  "test message",
 	}
+
 	expected := "test: test message"
 	if err.Error() != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, err.Error())
@@ -129,12 +134,13 @@ func TestAuthStrategyError(t *testing.T) {
 
 	// Test error with wrapped error
 	innerErr := &AuthStrategyError{Strategy: "inner", Message: "inner error"}
+
 	err = &AuthStrategyError{
 		Strategy: "outer",
 		Message:  "outer error",
 		Err:      innerErr,
 	}
-	if err.Unwrap() != innerErr {
+	if !errs.Is(err.Unwrap(), innerErr) {
 		t.Error("Expected Unwrap to return inner error")
 	}
 }

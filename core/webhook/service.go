@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rs/xid"
@@ -17,7 +18,7 @@ import (
 	"github.com/xraph/authsome/internal/crypto"
 )
 
-// Config holds the webhook service configuration
+// Config holds the webhook service configuration.
 type Config struct {
 	MaxRetries       int           `json:"max_retries"`
 	DefaultTimeout   time.Duration `json:"default_timeout"`
@@ -26,7 +27,7 @@ type Config struct {
 	BatchSize        int           `json:"batch_size"`
 }
 
-// Service provides webhook functionality
+// Service provides webhook functionality.
 type Service struct {
 	repo     Repository
 	auditSvc *audit.Service
@@ -35,21 +36,25 @@ type Service struct {
 	workers  chan struct{}
 }
 
-// NewService creates a new webhook service
+// NewService creates a new webhook service.
 func NewService(config Config, repo Repository, auditSvc *audit.Service) *Service {
 	// Set defaults
 	if config.MaxRetries == 0 {
 		config.MaxRetries = 3
 	}
+
 	if config.DefaultTimeout == 0 {
 		config.DefaultTimeout = 30 * time.Second
 	}
+
 	if config.MaxDeliveryDelay == 0 {
 		config.MaxDeliveryDelay = 24 * time.Hour
 	}
+
 	if config.WorkerCount == 0 {
 		config.WorkerCount = 10
 	}
+
 	if config.BatchSize == 0 {
 		config.BatchSize = 100
 	}
@@ -72,12 +77,13 @@ func NewService(config Config, repo Repository, auditSvc *audit.Service) *Servic
 	return service
 }
 
-// CreateWebhook creates a new webhook subscription
+// CreateWebhook creates a new webhook subscription.
 func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*Webhook, error) {
 	// Validate app and environment context
 	if req.AppID.IsNil() {
 		return nil, MissingAppContext()
 	}
+
 	if req.EnvironmentID.IsNil() {
 		return nil, MissingEnvironmentContext()
 	}
@@ -114,6 +120,7 @@ func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) 
 	if webhook.MaxRetries == 0 {
 		webhook.MaxRetries = s.config.MaxRetries
 	}
+
 	if webhook.RetryBackoff == "" {
 		webhook.RetryBackoff = RetryBackoffExponential
 	}
@@ -133,7 +140,7 @@ func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) 
 	return webhook, nil
 }
 
-// UpdateWebhook updates an existing webhook
+// UpdateWebhook updates an existing webhook.
 func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebhookRequest) (*Webhook, error) {
 	schemaWebhook, err := s.repo.FindWebhookByID(ctx, id)
 	if err != nil {
@@ -146,6 +153,7 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 	if req.URL != nil {
 		webhook.URL = *req.URL
 	}
+
 	if req.Events != nil {
 		// Validate event types
 		for _, eventType := range req.Events {
@@ -153,17 +161,22 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 				return nil, InvalidEventType(eventType)
 			}
 		}
+
 		webhook.Events = req.Events
 	}
+
 	if req.Enabled != nil {
 		webhook.Enabled = *req.Enabled
 	}
+
 	if req.MaxRetries != nil {
 		webhook.MaxRetries = *req.MaxRetries
 	}
+
 	if req.RetryBackoff != nil {
 		webhook.RetryBackoff = *req.RetryBackoff
 	}
+
 	if req.Headers != nil {
 		webhook.Headers = req.Headers
 	}
@@ -184,7 +197,7 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 	return webhook, nil
 }
 
-// DeleteWebhook deletes a webhook
+// DeleteWebhook deletes a webhook.
 func (s *Service) DeleteWebhook(ctx context.Context, id xid.ID) error {
 	schemaWebhook, err := s.repo.FindWebhookByID(ctx, id)
 	if err != nil {
@@ -205,16 +218,17 @@ func (s *Service) DeleteWebhook(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// GetWebhook retrieves a webhook by ID
+// GetWebhook retrieves a webhook by ID.
 func (s *Service) GetWebhook(ctx context.Context, id xid.ID) (*Webhook, error) {
 	schemaWebhook, err := s.repo.FindWebhookByID(ctx, id)
 	if err != nil {
 		return nil, WebhookNotFound()
 	}
+
 	return FromSchemaWebhook(schemaWebhook), nil
 }
 
-// ListWebhooks lists webhooks with filtering and pagination
+// ListWebhooks lists webhooks with filtering and pagination.
 func (s *Service) ListWebhooks(ctx context.Context, filter *ListWebhooksFilter) (*ListWebhooksResponse, error) {
 	pageResp, err := s.repo.ListWebhooks(ctx, filter)
 	if err != nil {
@@ -230,14 +244,16 @@ func (s *Service) ListWebhooks(ctx context.Context, filter *ListWebhooksFilter) 
 	}, nil
 }
 
-// EmitEvent emits an event to all subscribed webhooks
-func (s *Service) EmitEvent(ctx context.Context, appID, envID xid.ID, eventType string, data map[string]interface{}) error {
+// EmitEvent emits an event to all subscribed webhooks.
+func (s *Service) EmitEvent(ctx context.Context, appID, envID xid.ID, eventType string, data map[string]any) error {
 	if appID.IsNil() {
 		return MissingAppContext()
 	}
+
 	if envID.IsNil() {
 		return MissingEnvironmentContext()
 	}
+
 	if !IsValidEventType(eventType) {
 		return InvalidEventType(eventType)
 	}
@@ -274,10 +290,11 @@ func (s *Service) EmitEvent(ctx context.Context, appID, envID xid.ID, eventType 
 	return nil
 }
 
-// deliverToWebhook delivers an event to a specific webhook
+// deliverToWebhook delivers an event to a specific webhook.
 func (s *Service) deliverToWebhook(ctx context.Context, webhook *Webhook, event *Event) {
 	// Acquire worker slot
 	s.workers <- struct{}{}
+
 	defer func() { <-s.workers }()
 
 	delivery := &Delivery{
@@ -298,7 +315,7 @@ func (s *Service) deliverToWebhook(ctx context.Context, webhook *Webhook, event 
 	s.attemptDelivery(ctx, webhook, event, delivery)
 }
 
-// attemptDelivery attempts to deliver an event to a webhook
+// attemptDelivery attempts to deliver an event to a webhook.
 func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *Event, delivery *Delivery) {
 	// Prepare payload
 	payload, err := json.Marshal(event)
@@ -307,6 +324,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		delivery.Error = fmt.Sprintf("failed to marshal event: %v", err)
 		delivery.UpdatedAt = time.Now()
 		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+
 		return
 	}
 
@@ -314,12 +332,13 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 	signature := s.generateSignature(payload, webhook.Secret)
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", webhook.URL, bytes.NewBuffer(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhook.URL, bytes.NewBuffer(payload))
 	if err != nil {
 		delivery.Status = DeliveryStatusFailed
 		delivery.Error = fmt.Sprintf("failed to create request: %v", err)
 		delivery.UpdatedAt = time.Now()
 		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+
 		return
 	}
 
@@ -327,8 +346,8 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-Signature", "sha256="+signature)
 	req.Header.Set("X-Webhook-Event", event.Type)
-	req.Header.Set("X-Webhook-ID", event.ID.String())
-	req.Header.Set("X-Webhook-Timestamp", fmt.Sprintf("%d", event.OccurredAt.Unix()))
+	req.Header.Set("X-Webhook-Id", event.ID.String())
+	req.Header.Set("X-Webhook-Timestamp", strconv.FormatInt(event.OccurredAt.Unix(), 10))
 
 	// Add custom headers
 	for key, value := range webhook.Headers {
@@ -339,6 +358,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 	resp, err := s.client.Do(req)
 	if err != nil {
 		s.handleDeliveryFailure(ctx, webhook, event, delivery, 0, err.Error())
+
 		return
 	}
 	defer resp.Body.Close()
@@ -367,13 +387,14 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 	} else {
 		// Failure
 		s.handleDeliveryFailure(ctx, webhook, event, delivery, resp.StatusCode, delivery.Response)
+
 		return
 	}
 
 	s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 }
 
-// handleDeliveryFailure handles a failed delivery attempt
+// handleDeliveryFailure handles a failed delivery attempt.
 func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, event *Event, delivery *Delivery, statusCode int, errorMsg string) {
 	delivery.StatusCode = statusCode
 	delivery.Error = errorMsg
@@ -386,6 +407,7 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 
 		// Increment webhook failure count
 		s.repo.UpdateFailureCount(ctx, webhook.ID, webhook.FailureCount+1)
+
 		return
 	}
 
@@ -416,7 +438,7 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 	}()
 }
 
-// calculateRetryDelay calculates the delay for retry attempts
+// calculateRetryDelay calculates the delay for retry attempts.
 func (s *Service) calculateRetryDelay(backoffType string, attempt int) time.Duration {
 	var delay time.Duration
 
@@ -437,20 +459,22 @@ func (s *Service) calculateRetryDelay(backoffType string, attempt int) time.Dura
 	return delay
 }
 
-// generateSignature generates HMAC signature for webhook payload
+// generateSignature generates HMAC signature for webhook payload.
 func (s *Service) generateSignature(payload []byte, secret string) string {
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write(payload)
+
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// VerifySignature verifies webhook signature
+// VerifySignature verifies webhook signature.
 func (s *Service) VerifySignature(payload []byte, signature, secret string) bool {
 	expectedSignature := s.generateSignature(payload, secret)
+
 	return hmac.Equal([]byte(signature), []byte("sha256="+expectedSignature))
 }
 
-// ListDeliveries lists deliveries with filtering and pagination
+// ListDeliveries lists deliveries with filtering and pagination.
 func (s *Service) ListDeliveries(ctx context.Context, filter *ListDeliveriesFilter) (*ListDeliveriesResponse, error) {
 	pageResp, err := s.repo.ListDeliveries(ctx, filter)
 	if err != nil {
@@ -466,7 +490,7 @@ func (s *Service) ListDeliveries(ctx context.Context, filter *ListDeliveriesFilt
 	}, nil
 }
 
-// startDeliveryWorkers starts background workers for processing failed deliveries
+// startDeliveryWorkers starts background workers for processing failed deliveries.
 func (s *Service) startDeliveryWorkers() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -476,7 +500,7 @@ func (s *Service) startDeliveryWorkers() {
 	}
 }
 
-// processFailedDeliveries processes failed deliveries for retry
+// processFailedDeliveries processes failed deliveries for retry.
 func (s *Service) processFailedDeliveries() {
 	ctx := context.Background()
 
@@ -504,11 +528,12 @@ func (s *Service) processFailedDeliveries() {
 	}
 }
 
-// mustMarshal marshals data to JSON, panicking on error (for internal use)
-func mustMarshal(v interface{}) string {
+// mustMarshal marshals data to JSON, panicking on error (for internal use).
+func mustMarshal(v any) string {
 	data, err := json.Marshal(v)
 	if err != nil {
 		panic(err)
 	}
+
 	return string(data)
 }

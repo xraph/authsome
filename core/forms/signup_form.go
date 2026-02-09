@@ -5,14 +5,15 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// SignupFormService handles signup form management with Smartform integration
+// SignupFormService handles signup form management with Smartform integration.
 type SignupFormService struct {
 	service *Service
 }
 
-// NewSignupFormService creates a new signup form service
+// NewSignupFormService creates a new signup form service.
 func NewSignupFormService(service *Service) *SignupFormService {
 	return &SignupFormService{
 		service: service,
@@ -20,7 +21,7 @@ func NewSignupFormService(service *Service) *SignupFormService {
 }
 
 // GetSignupForm retrieves the signup form for an organization
-// Returns custom form if exists, otherwise returns default form
+// Returns custom form if exists, otherwise returns default form.
 func (s *SignupFormService) GetSignupForm(ctx context.Context, orgID xid.ID) (*Form, error) {
 	// Try to get custom form first
 	customForm, err := s.service.GetFormByOrganization(ctx, orgID, "signup")
@@ -32,7 +33,7 @@ func (s *SignupFormService) GetSignupForm(ctx context.Context, orgID xid.ID) (*F
 	return s.getDefaultForm(ctx, orgID)
 }
 
-// SaveFormSchema saves a custom signup form schema for an organization
+// SaveFormSchema saves a custom signup form schema for an organization.
 func (s *SignupFormService) SaveFormSchema(ctx context.Context, req *SaveFormSchemaRequest) (*Form, error) {
 	// Validate the form schema
 	if err := s.validateSignupFormSchema(req.Schema); err != nil {
@@ -59,25 +60,26 @@ func (s *SignupFormService) SaveFormSchema(ctx context.Context, req *SaveFormSch
 	})
 }
 
-// GetCustomForm retrieves a custom signup form for an organization
+// GetCustomForm retrieves a custom signup form for an organization.
 func (s *SignupFormService) GetCustomForm(ctx context.Context, orgID xid.ID) (*Form, error) {
 	return s.service.GetFormByOrganization(ctx, orgID, "signup")
 }
 
-// DeleteCustomForm removes a custom signup form for an organization
+// DeleteCustomForm removes a custom signup form for an organization.
 func (s *SignupFormService) DeleteCustomForm(ctx context.Context, orgID xid.ID) error {
 	form, err := s.GetCustomForm(ctx, orgID)
 	if err != nil {
 		return err
 	}
+
 	if form == nil {
-		return fmt.Errorf("no custom signup form found for organization")
+		return errs.NotFound("no custom signup form found for organization")
 	}
 
 	return s.service.DeleteForm(ctx, form.ID)
 }
 
-// SubmitSignupForm processes a signup form submission
+// SubmitSignupForm processes a signup form submission.
 func (s *SignupFormService) SubmitSignupForm(ctx context.Context, req *SubmitSignupFormRequest) (*FormSubmission, error) {
 	// Get the form to validate against
 	form, err := s.GetSignupForm(ctx, req.OrganizationID)
@@ -99,18 +101,18 @@ func (s *SignupFormService) SubmitSignupForm(ctx context.Context, req *SubmitSig
 	})
 }
 
-// getDefaultForm returns the default signup form
+// getDefaultForm returns the default signup form.
 func (s *SignupFormService) getDefaultForm(ctx context.Context, orgID xid.ID) (*Form, error) {
 	// Create default signup form schema
-	defaultSchema := map[string]interface{}{
-		"fields": []map[string]interface{}{
+	defaultSchema := map[string]any{
+		"fields": []map[string]any{
 			{
 				"name":        "email",
 				"type":        "email",
 				"label":       "Email Address",
 				"required":    true,
 				"placeholder": "Enter your email",
-				"validation": map[string]interface{}{
+				"validation": map[string]any{
 					"email": true,
 				},
 			},
@@ -120,7 +122,7 @@ func (s *SignupFormService) getDefaultForm(ctx context.Context, orgID xid.ID) (*
 				"label":       "Password",
 				"required":    true,
 				"placeholder": "Enter your password",
-				"validation": map[string]interface{}{
+				"validation": map[string]any{
 					"minLength": 8,
 				},
 			},
@@ -139,7 +141,7 @@ func (s *SignupFormService) getDefaultForm(ctx context.Context, orgID xid.ID) (*
 				"placeholder": "Enter your last name",
 			},
 		},
-		"settings": map[string]interface{}{
+		"settings": map[string]any{
 			"submitText":    "Sign Up",
 			"redirectUrl":   "/dashboard",
 			"showTerms":     true,
@@ -160,17 +162,17 @@ func (s *SignupFormService) getDefaultForm(ctx context.Context, orgID xid.ID) (*
 	}, nil
 }
 
-// validateSignupFormSchema validates a signup form schema
-func (s *SignupFormService) validateSignupFormSchema(schema map[string]interface{}) error {
+// validateSignupFormSchema validates a signup form schema.
+func (s *SignupFormService) validateSignupFormSchema(schema map[string]any) error {
 	// Check if fields exist
 	fields, ok := schema["fields"]
 	if !ok {
-		return fmt.Errorf("schema must contain 'fields' array")
+		return errs.InvalidInput("schema", "must contain 'fields' array")
 	}
 
-	fieldsArray, ok := fields.([]interface{})
+	fieldsArray, ok := fields.([]any)
 	if !ok {
-		return fmt.Errorf("'fields' must be an array")
+		return errs.InvalidInput("fields", "must be an array")
 	}
 
 	// Validate required fields exist
@@ -178,7 +180,7 @@ func (s *SignupFormService) validateSignupFormSchema(schema map[string]interface
 	hasPassword := false
 
 	for _, field := range fieldsArray {
-		fieldMap, ok := field.(map[string]interface{})
+		fieldMap, ok := field.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -197,31 +199,31 @@ func (s *SignupFormService) validateSignupFormSchema(schema map[string]interface
 	}
 
 	if !hasEmail {
-		return fmt.Errorf("signup form must contain an 'email' field")
+		return errs.RequiredField("email")
 	}
 
 	if !hasPassword {
-		return fmt.Errorf("signup form must contain a 'password' field")
+		return errs.RequiredField("password")
 	}
 
 	return nil
 }
 
-// validateSubmissionData validates form submission data against schema
-func (s *SignupFormService) validateSubmissionData(schema map[string]interface{}, data map[string]interface{}) error {
+// validateSubmissionData validates form submission data against schema.
+func (s *SignupFormService) validateSubmissionData(schema map[string]any, data map[string]any) error {
 	fields, ok := schema["fields"]
 	if !ok {
-		return fmt.Errorf("invalid schema: missing fields")
+		return errs.InvalidInput("schema", "missing fields")
 	}
 
-	fieldsArray, ok := fields.([]interface{})
+	fieldsArray, ok := fields.([]any)
 	if !ok {
-		return fmt.Errorf("invalid schema: fields must be array")
+		return errs.InvalidInput("fields", "must be an array")
 	}
 
 	// Validate each field
 	for _, field := range fieldsArray {
-		fieldMap, ok := field.(map[string]interface{})
+		fieldMap, ok := field.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -251,8 +253,8 @@ func (s *SignupFormService) validateSubmissionData(schema map[string]interface{}
 	return nil
 }
 
-// validateFieldValue validates a single field value
-func (s *SignupFormService) validateFieldValue(name, fieldType string, value interface{}) error {
+// validateFieldValue validates a single field value.
+func (s *SignupFormService) validateFieldValue(name, fieldType string, value any) error {
 	strValue, ok := value.(string)
 	if !ok {
 		return fmt.Errorf("field '%s' must be a string", name)
@@ -273,34 +275,35 @@ func (s *SignupFormService) validateFieldValue(name, fieldType string, value int
 	return nil
 }
 
-// contains checks if a string contains a substring
+// contains checks if a string contains a substring.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (len(substr) == 0 || s[len(s)-len(substr):] == substr ||
 		s[:len(substr)] == substr || containsMiddle(s, substr))
 }
 
-// containsMiddle checks if substring exists in the middle of string
+// containsMiddle checks if substring exists in the middle of string.
 func containsMiddle(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true
 		}
 	}
+
 	return false
 }
 
 // Request/Response types for signup form service
 
-// SaveFormSchemaRequest represents a request to save a form schema
+// SaveFormSchemaRequest represents a request to save a form schema.
 type SaveFormSchemaRequest struct {
-	OrganizationID xid.ID                 `json:"organization_id"`
-	Schema         map[string]interface{} `json:"schema"`
+	OrganizationID xid.ID         `json:"organization_id"`
+	Schema         map[string]any `json:"schema"`
 }
 
-// SubmitSignupFormRequest represents a signup form submission request
+// SubmitSignupFormRequest represents a signup form submission request.
 type SubmitSignupFormRequest struct {
-	OrganizationID xid.ID                 `json:"organization_id"`
-	Data           map[string]interface{} `json:"data"`
-	IPAddress      string                 `json:"ip_address,omitempty"`
-	UserAgent      string                 `json:"user_agent,omitempty"`
+	OrganizationID xid.ID         `json:"organization_id"`
+	Data           map[string]any `json:"data"`
+	IPAddress      string         `json:"ip_address,omitempty"`
+	UserAgent      string         `json:"user_agent,omitempty"`
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -17,7 +18,7 @@ const (
 	PluginVersion = "1.0.0"
 )
 
-// Plugin implements the AuthSome plugin interface for backup authentication
+// Plugin implements the AuthSome plugin interface for backup authentication.
 type Plugin struct {
 	service       *Service
 	config        *Config
@@ -29,33 +30,33 @@ type Plugin struct {
 	cleanupDone   chan bool
 }
 
-// NewPlugin creates a new backup authentication plugin instance
+// NewPlugin creates a new backup authentication plugin instance.
 func NewPlugin() *Plugin {
 	return &Plugin{}
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Enterprise backup authentication and account recovery with multiple verification methods including recovery codes, security questions, trusted contacts, email/SMS verification, video verification, and document upload"
 }
 
-// Init initializes the plugin with dependencies from AuthSome
-func (p *Plugin) Init(auth interface{}) error {
+// Init initializes the plugin with dependencies from AuthSome.
+func (p *Plugin) Init(auth any) error {
 	// Type assert to get the auth instance with required methods
 	authInstance, ok := auth.(interface {
 		GetDB() *bun.DB
@@ -63,7 +64,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		GetServiceRegistry() *registry.ServiceRegistry
 	})
 	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.InternalServerErrorWithMessage("invalid auth instance type")
 	}
 
 	p.db = authInstance.GetDB()
@@ -76,6 +77,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		// Use defaults if binding fails
 		config = *DefaultConfig()
 	}
+
 	config.Validate() // Ensure defaults are set
 	p.config = &config
 
@@ -105,7 +107,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
@@ -220,7 +222,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers plugin hooks with the hook registry
+// RegisterHooks registers plugin hooks with the hook registry.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if !p.config.Enabled || p.service == nil {
 		return nil
@@ -233,14 +235,14 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// RegisterServiceDecorators allows plugins to replace core services with decorated versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Backup auth plugin doesn't decorate core services
 	// It provides its own service that's accessed via the plugin
 	return nil
 }
 
-// Migrate performs database migrations
+// Migrate performs database migrations.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
@@ -249,7 +251,7 @@ func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
 	// Create tables
-	models := []interface{}{
+	models := []any{
 		(*SecurityQuestion)(nil),
 		(*TrustedContact)(nil),
 		(*RecoverySession)(nil),
@@ -273,7 +275,7 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// startBackgroundTasks starts background tasks for the plugin
+// startBackgroundTasks starts background tasks for the plugin.
 func (p *Plugin) startBackgroundTasks() {
 	if !p.config.Enabled {
 		return
@@ -297,7 +299,7 @@ func (p *Plugin) startBackgroundTasks() {
 	}
 }
 
-// runSessionCleanup expires old recovery sessions
+// runSessionCleanup expires old recovery sessions.
 func (p *Plugin) runSessionCleanup() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -312,7 +314,7 @@ func (p *Plugin) runSessionCleanup() {
 	}
 }
 
-// Shutdown gracefully shuts down the plugin
+// Shutdown gracefully shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	// Stop background tasks
 	if p.cleanupTicker != nil {
@@ -323,10 +325,10 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Health checks plugin health
+// Health checks plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	// Check if database is accessible (simple query)
@@ -335,22 +337,22 @@ func (p *Plugin) Health(ctx context.Context) error {
 	return nil
 }
 
-// Service returns the backup auth service for programmatic access (optional public method)
+// Service returns the backup auth service for programmatic access (optional public method).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// DTOs for backupauth routes
+// DTOs for backupauth routes.
 type BackupAuthStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type BackupAuthRecoveryResponse struct {
-	SessionID string `json:"session_id" example:"session_123"`
+	SessionID string `example:"session_123" json:"session_id"`
 }
 
 type BackupAuthCodesResponse struct {
-	Codes []string `json:"codes" example:"[\"code1\",\"code2\"]"`
+	Codes []string `example:"[\"code1\",\"code2\"]" json:"codes"`
 }
 
 type BackupAuthQuestionsResponse struct {
@@ -358,34 +360,34 @@ type BackupAuthQuestionsResponse struct {
 }
 
 type BackupAuthContactResponse struct {
-	ID string `json:"id" example:"contact_123"`
+	ID string `example:"contact_123" json:"id"`
 }
 
 type BackupAuthContactsResponse struct {
-	Contacts []interface{} `json:"contacts"`
+	Contacts []any `json:"contacts"`
 }
 
 type BackupAuthVideoResponse struct {
-	SessionID string `json:"session_id" example:"video_123"`
+	SessionID string `example:"video_123" json:"session_id"`
 }
 
 type BackupAuthDocumentResponse struct {
-	ID string `json:"id" example:"doc_123"`
+	ID string `example:"doc_123" json:"id"`
 }
 
 type BackupAuthSessionsResponse struct {
-	Sessions []interface{} `json:"sessions"`
+	Sessions []any `json:"sessions"`
 }
 
 type BackupAuthStatsResponse struct {
-	Stats interface{} `json:"stats"`
+	Stats any `json:"stats"`
 }
 
 type BackupAuthConfigResponse struct {
-	Config interface{} `json:"config"`
+	Config any `json:"config"`
 }
 
-// SetProviders allows setting custom providers
+// SetProviders allows setting custom providers.
 func (p *Plugin) SetProviders(providers ProviderRegistry) {
 	p.providers = providers
 	if p.service != nil {
@@ -393,35 +395,35 @@ func (p *Plugin) SetProviders(providers ProviderRegistry) {
 	}
 }
 
-// SetEmailProvider sets a custom email provider
+// SetEmailProvider sets a custom email provider.
 func (p *Plugin) SetEmailProvider(provider EmailProvider) {
 	if registry, ok := p.providers.(*DefaultProviderRegistry); ok {
 		registry.SetEmailProvider(provider)
 	}
 }
 
-// SetSMSProvider sets a custom SMS provider
+// SetSMSProvider sets a custom SMS provider.
 func (p *Plugin) SetSMSProvider(provider SMSProvider) {
 	if registry, ok := p.providers.(*DefaultProviderRegistry); ok {
 		registry.SetSMSProvider(provider)
 	}
 }
 
-// SetVideoProvider sets a custom video verification provider
+// SetVideoProvider sets a custom video verification provider.
 func (p *Plugin) SetVideoProvider(provider VideoProvider) {
 	if registry, ok := p.providers.(*DefaultProviderRegistry); ok {
 		registry.SetVideoProvider(provider)
 	}
 }
 
-// SetDocumentProvider sets a custom document verification provider
+// SetDocumentProvider sets a custom document verification provider.
 func (p *Plugin) SetDocumentProvider(provider DocumentProvider) {
 	if registry, ok := p.providers.(*DefaultProviderRegistry); ok {
 		registry.SetDocumentProvider(provider)
 	}
 }
 
-// SetNotificationProvider sets a custom notification provider
+// SetNotificationProvider sets a custom notification provider.
 func (p *Plugin) SetNotificationProvider(provider NotificationProvider) {
 	if registry, ok := p.providers.(*DefaultProviderRegistry); ok {
 		registry.SetNotificationProvider(provider)

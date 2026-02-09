@@ -5,17 +5,18 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// AppRepository defines minimal interface needed for bootstrap
+// AppRepository defines minimal interface needed for bootstrap.
 type AppRepository interface {
 	Count(ctx context.Context) (int, error)
 	Create(ctx context.Context, app *schema.App) error
 	FindBySlug(ctx context.Context, slug string) (*schema.App, error)
 }
 
-// BootstrapConfig holds configuration for bootstrap process
+// BootstrapConfig holds configuration for bootstrap process.
 type BootstrapConfig struct {
 	DefaultAppName       string `json:"defaultAppName"`
 	DefaultAppSlug       string `json:"defaultAppSlug"`
@@ -23,19 +24,20 @@ type BootstrapConfig struct {
 	MultitenancyEnabled  bool   `json:"multitenancyEnabled"`
 }
 
-// Bootstrap handles initial app and environment setup
+// Bootstrap handles initial app and environment setup.
 type Bootstrap struct {
 	appRepo AppRepository
 	envRepo Repository
 	config  BootstrapConfig
 }
 
-// NewBootstrap creates a new bootstrap instance
+// NewBootstrap creates a new bootstrap instance.
 func NewBootstrap(appRepo AppRepository, envRepo Repository, config BootstrapConfig) *Bootstrap {
 	// Set defaults
 	if config.DefaultAppName == "" {
 		config.DefaultAppName = "Platform App"
 	}
+
 	if config.DefaultAppSlug == "" {
 		config.DefaultAppSlug = "platform"
 	}
@@ -47,7 +49,7 @@ func NewBootstrap(appRepo AppRepository, envRepo Repository, config BootstrapCon
 	}
 }
 
-// EnsureDefaultApp ensures the default app exists (non-multitenancy mode)
+// EnsureDefaultApp ensures the default app exists (non-multitenancy mode).
 func (b *Bootstrap) EnsureDefaultApp(ctx context.Context) (*schema.App, *schema.Environment, error) {
 	// Check if auto-create is disabled
 	if !b.config.AutoCreateDefaultApp {
@@ -62,7 +64,7 @@ func (b *Bootstrap) EnsureDefaultApp(ctx context.Context) (*schema.App, *schema.
 
 	// In non-multitenancy mode, ensure only one app exists
 	if !b.config.MultitenancyEnabled && count > 1 {
-		return nil, nil, fmt.Errorf("multiple apps detected in non-multitenancy mode")
+		return nil, nil, errs.BadRequest("multiple apps detected in non-multitenancy mode")
 	}
 
 	// If app already exists, return it
@@ -88,7 +90,7 @@ func (b *Bootstrap) EnsureDefaultApp(ctx context.Context) (*schema.App, *schema.
 		Slug:       b.config.DefaultAppSlug,
 		IsPlatform: true, // This is the platform app
 		Logo:       "",
-		Metadata:   make(map[string]interface{}),
+		Metadata:   make(map[string]any),
 	}
 
 	if err := b.appRepo.Create(ctx, app); err != nil {
@@ -104,12 +106,12 @@ func (b *Bootstrap) EnsureDefaultApp(ctx context.Context) (*schema.App, *schema.
 	return app, env, nil
 }
 
-// EnsureAppEnvironment ensures an app has a default environment
+// EnsureAppEnvironment ensures an app has a default environment.
 func (b *Bootstrap) EnsureAppEnvironment(ctx context.Context, appID xid.ID) (*schema.Environment, error) {
 	return b.ensureDefaultEnvironment(ctx, appID)
 }
 
-// ensureDefaultEnvironment checks and creates default environment if needed
+// ensureDefaultEnvironment checks and creates default environment if needed.
 func (b *Bootstrap) ensureDefaultEnvironment(ctx context.Context, appID xid.ID) (*schema.Environment, error) {
 	// Check if default environment exists
 	env, err := b.envRepo.FindDefaultByApp(ctx, appID)
@@ -121,7 +123,7 @@ func (b *Bootstrap) ensureDefaultEnvironment(ctx context.Context, appID xid.ID) 
 	return b.createDefaultEnvironment(ctx, appID)
 }
 
-// createDefaultEnvironment creates the default dev environment
+// createDefaultEnvironment creates the default dev environment.
 func (b *Bootstrap) createDefaultEnvironment(ctx context.Context, appID xid.ID) (*schema.Environment, error) {
 	env := &schema.Environment{
 		ID:        xid.New(),
@@ -130,7 +132,7 @@ func (b *Bootstrap) createDefaultEnvironment(ctx context.Context, appID xid.ID) 
 		Slug:      "dev",
 		Type:      schema.EnvironmentTypeDevelopment,
 		Status:    schema.EnvironmentStatusActive,
-		Config:    make(map[string]interface{}),
+		Config:    make(map[string]any),
 		IsDefault: true,
 	}
 
@@ -141,7 +143,7 @@ func (b *Bootstrap) createDefaultEnvironment(ctx context.Context, appID xid.ID) 
 	return env, nil
 }
 
-// ValidateMultitenancyMode ensures app count respects multitenancy setting
+// ValidateMultitenancyMode ensures app count respects multitenancy setting.
 func (b *Bootstrap) ValidateMultitenancyMode(ctx context.Context) error {
 	count, err := b.appRepo.Count(ctx)
 	if err != nil {

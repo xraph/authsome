@@ -9,9 +9,10 @@ import (
 	"net/http"
 
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// MailerSendConfig holds MailerSend API configuration
+// MailerSendConfig holds MailerSend API configuration.
 type MailerSendConfig struct {
 	APIKey   string `json:"api_key"`
 	From     string `json:"from"`
@@ -19,13 +20,13 @@ type MailerSendConfig struct {
 	ReplyTo  string `json:"reply_to,omitempty"`
 }
 
-// MailerSendProvider implements notification.Provider for MailerSend email service
+// MailerSendProvider implements notification.Provider for MailerSend email service.
 type MailerSendProvider struct {
 	config     MailerSendConfig
 	httpClient *http.Client
 }
 
-// NewMailerSendProvider creates a new MailerSend email provider
+// NewMailerSendProvider creates a new MailerSend email provider.
 func NewMailerSendProvider(config MailerSendConfig) *MailerSendProvider {
 	return &MailerSendProvider{
 		config:     config,
@@ -33,17 +34,17 @@ func NewMailerSendProvider(config MailerSendConfig) *MailerSendProvider {
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *MailerSendProvider) ID() string {
 	return "mailersend"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *MailerSendProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeEmail
 }
 
-// Send sends an email notification via MailerSend API
+// Send sends an email notification via MailerSend API.
 func (p *MailerSendProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Build request payload according to MailerSend API v1
 	from := map[string]string{
@@ -59,7 +60,7 @@ func (p *MailerSendProvider) Send(ctx context.Context, notif *notification.Notif
 		},
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"from":    from,
 		"to":      to,
 		"subject": notif.Subject,
@@ -80,7 +81,7 @@ func (p *MailerSendProvider) Send(ctx context.Context, notif *notification.Notif
 		}
 
 		// Add template variables if available
-		if variables, ok := notif.Metadata["variables"].([]map[string]interface{}); ok && len(variables) > 0 {
+		if variables, ok := notif.Metadata["variables"].([]map[string]any); ok && len(variables) > 0 {
 			payload["variables"] = variables
 		}
 	}
@@ -92,13 +93,13 @@ func (p *MailerSendProvider) Send(ctx context.Context, notif *notification.Notif
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.mailersend.com/v1/email", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.mailersend.com/v1/email", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.config.APIKey))
+	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
@@ -128,7 +129,7 @@ func (p *MailerSendProvider) Send(ctx context.Context, notif *notification.Notif
 	return nil
 }
 
-// GetStatus gets the delivery status of a notification
+// GetStatus gets the delivery status of a notification.
 func (p *MailerSendProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// MailerSend doesn't provide a direct status endpoint
 	// Status updates typically come via webhooks
@@ -136,36 +137,39 @@ func (p *MailerSendProvider) GetStatus(ctx context.Context, providerID string) (
 	return notification.NotificationStatusPending, nil
 }
 
-// ValidateConfig validates the provider configuration
+// ValidateConfig validates the provider configuration.
 func (p *MailerSendProvider) ValidateConfig() error {
 	if p.config.APIKey == "" {
-		return fmt.Errorf("mailersend API key is required")
+		return errs.RequiredField("api_key")
 	}
+
 	if p.config.From == "" {
-		return fmt.Errorf("from email address is required")
+		return errs.RequiredField("from")
 	}
+
 	return nil
 }
 
-// MailerSendWebhookEvent represents a MailerSend webhook event
+// MailerSendWebhookEvent represents a MailerSend webhook event.
 type MailerSendWebhookEvent struct {
-	Type      string                 `json:"type"`
-	Email     string                 `json:"email"`
-	MessageID string                 `json:"message_id"`
-	Timestamp int64                  `json:"timestamp"`
-	Data      map[string]interface{} `json:"data"`
+	Type      string         `json:"type"`
+	Email     string         `json:"email"`
+	MessageID string         `json:"message_id"`
+	Timestamp int64          `json:"timestamp"`
+	Data      map[string]any `json:"data"`
 }
 
-// ParseWebhookEvent parses a MailerSend webhook event
+// ParseWebhookEvent parses a MailerSend webhook event.
 func (p *MailerSendProvider) ParseWebhookEvent(body []byte) (*MailerSendWebhookEvent, error) {
 	var event MailerSendWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		return nil, fmt.Errorf("failed to parse webhook event: %w", err)
 	}
+
 	return &event, nil
 }
 
-// MapWebhookEventToStatus maps a MailerSend webhook event type to notification status
+// MapWebhookEventToStatus maps a MailerSend webhook event type to notification status.
 func (p *MailerSendProvider) MapWebhookEventToStatus(eventType string) notification.NotificationStatus {
 	switch eventType {
 	case "activity.sent":

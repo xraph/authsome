@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/providers"
@@ -13,7 +15,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// InvoiceService handles invoice business logic
+// InvoiceService handles invoice business logic.
 type InvoiceService struct {
 	repo      repository.InvoiceRepository
 	subRepo   repository.SubscriptionRepository
@@ -21,7 +23,7 @@ type InvoiceService struct {
 	eventRepo repository.EventRepository
 }
 
-// NewInvoiceService creates a new invoice service
+// NewInvoiceService creates a new invoice service.
 func NewInvoiceService(
 	repo repository.InvoiceRepository,
 	subRepo repository.SubscriptionRepository,
@@ -36,25 +38,27 @@ func NewInvoiceService(
 	}
 }
 
-// GetByID retrieves an invoice by ID
+// GetByID retrieves an invoice by ID.
 func (s *InvoiceService) GetByID(ctx context.Context, id xid.ID) (*core.Invoice, error) {
 	invoice, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, suberrors.ErrInvoiceNotFound
 	}
+
 	return s.schemaToCoreInvoice(invoice), nil
 }
 
-// GetByNumber retrieves an invoice by number
+// GetByNumber retrieves an invoice by number.
 func (s *InvoiceService) GetByNumber(ctx context.Context, number string) (*core.Invoice, error) {
 	invoice, err := s.repo.FindByNumber(ctx, number)
 	if err != nil {
 		return nil, suberrors.ErrInvoiceNotFound
 	}
+
 	return s.schemaToCoreInvoice(invoice), nil
 }
 
-// List retrieves invoices with filtering
+// List retrieves invoices with filtering.
 func (s *InvoiceService) List(ctx context.Context, orgID, subID *xid.ID, status string, page, pageSize int) ([]*core.Invoice, int, error) {
 	filter := &repository.InvoiceFilter{
 		OrganizationID: orgID,
@@ -77,7 +81,7 @@ func (s *InvoiceService) List(ctx context.Context, orgID, subID *xid.ID, status 
 	return result, count, nil
 }
 
-// GetPDFURL returns the PDF URL for an invoice
+// GetPDFURL returns the PDF URL for an invoice.
 func (s *InvoiceService) GetPDFURL(ctx context.Context, id xid.ID) (string, error) {
 	invoice, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -95,14 +99,15 @@ func (s *InvoiceService) GetPDFURL(ctx context.Context, id xid.ID) (string, erro
 			// Update cached URL
 			invoice.ProviderPDFURL = url
 			s.repo.Update(ctx, invoice)
+
 			return url, nil
 		}
 	}
 
-	return "", fmt.Errorf("PDF not available")
+	return "", errs.New(errs.CodeNotFound, "PDF not available", http.StatusNotFound)
 }
 
-// Void voids an invoice
+// Void voids an invoice.
 func (s *InvoiceService) Void(ctx context.Context, id xid.ID) error {
 	invoice, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -127,7 +132,7 @@ func (s *InvoiceService) Void(ctx context.Context, id xid.ID) error {
 	}
 
 	// Record event
-	s.recordEvent(ctx, invoice.SubscriptionID, invoice.OrganizationID, "invoice.voided", map[string]interface{}{
+	s.recordEvent(ctx, invoice.SubscriptionID, invoice.OrganizationID, "invoice.voided", map[string]any{
 		"invoiceId":     invoice.ID.String(),
 		"invoiceNumber": invoice.Number,
 	})
@@ -135,7 +140,7 @@ func (s *InvoiceService) Void(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// Create creates a new invoice
+// Create creates a new invoice.
 func (s *InvoiceService) Create(ctx context.Context, subID, orgID xid.ID, periodStart, periodEnd time.Time) (*core.Invoice, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByID(ctx, subID)
@@ -160,7 +165,7 @@ func (s *InvoiceService) Create(ctx context.Context, subID, orgID xid.ID, period
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
 		DueDate:        periodStart.AddDate(0, 0, 14), // Net 14
-		Metadata:       make(map[string]interface{}),
+		Metadata:       make(map[string]any),
 	}
 	invoice.CreatedAt = now
 	invoice.UpdatedAt = now
@@ -170,7 +175,7 @@ func (s *InvoiceService) Create(ctx context.Context, subID, orgID xid.ID, period
 	}
 
 	// Record event
-	s.recordEvent(ctx, subID, orgID, string(core.EventInvoiceCreated), map[string]interface{}{
+	s.recordEvent(ctx, subID, orgID, string(core.EventInvoiceCreated), map[string]any{
 		"invoiceId":     invoice.ID.String(),
 		"invoiceNumber": invoice.Number,
 	})
@@ -178,7 +183,7 @@ func (s *InvoiceService) Create(ctx context.Context, subID, orgID xid.ID, period
 	return s.schemaToCoreInvoice(invoice), nil
 }
 
-// AddItem adds a line item to an invoice
+// AddItem adds a line item to an invoice.
 func (s *InvoiceService) AddItem(ctx context.Context, invoiceID xid.ID, description string, quantity, unitAmount int64) error {
 	invoice, err := s.repo.FindByID(ctx, invoiceID)
 	if err != nil {
@@ -198,7 +203,7 @@ func (s *InvoiceService) AddItem(ctx context.Context, invoiceID xid.ID, descript
 		Amount:      quantity * unitAmount,
 		PeriodStart: invoice.PeriodStart,
 		PeriodEnd:   invoice.PeriodEnd,
-		Metadata:    make(map[string]interface{}),
+		Metadata:    make(map[string]any),
 		CreatedAt:   time.Now(),
 	}
 
@@ -210,7 +215,7 @@ func (s *InvoiceService) AddItem(ctx context.Context, invoiceID xid.ID, descript
 	return s.recalculateTotals(ctx, invoiceID)
 }
 
-// Finalize finalizes an invoice
+// Finalize finalizes an invoice.
 func (s *InvoiceService) Finalize(ctx context.Context, id xid.ID) error {
 	invoice, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -227,7 +232,7 @@ func (s *InvoiceService) Finalize(ctx context.Context, id xid.ID) error {
 	return s.repo.Update(ctx, invoice)
 }
 
-// MarkPaid marks an invoice as paid
+// MarkPaid marks an invoice as paid.
 func (s *InvoiceService) MarkPaid(ctx context.Context, id xid.ID) error {
 	invoice, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -250,7 +255,7 @@ func (s *InvoiceService) MarkPaid(ctx context.Context, id xid.ID) error {
 	}
 
 	// Record event
-	s.recordEvent(ctx, invoice.SubscriptionID, invoice.OrganizationID, string(core.EventInvoicePaid), map[string]interface{}{
+	s.recordEvent(ctx, invoice.SubscriptionID, invoice.OrganizationID, string(core.EventInvoicePaid), map[string]any{
 		"invoiceId":     invoice.ID.String(),
 		"invoiceNumber": invoice.Number,
 		"amount":        invoice.Total,
@@ -259,7 +264,7 @@ func (s *InvoiceService) MarkPaid(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// SyncFromProvider syncs an invoice from the provider
+// SyncFromProvider syncs an invoice from the provider.
 func (s *InvoiceService) SyncFromProvider(ctx context.Context, providerInvoiceID string) (*core.Invoice, error) {
 	invoice, err := s.repo.FindByProviderID(ctx, providerInvoiceID)
 	if err != nil {
@@ -297,7 +302,7 @@ func (s *InvoiceService) recalculateTotals(ctx context.Context, invoiceID xid.ID
 	return s.repo.Update(ctx, invoice)
 }
 
-func (s *InvoiceService) recordEvent(ctx context.Context, subID, orgID xid.ID, eventType string, data map[string]interface{}) {
+func (s *InvoiceService) recordEvent(ctx context.Context, subID, orgID xid.ID, eventType string, data map[string]any) {
 	event := &schema.SubscriptionEvent{
 		ID:             xid.New(),
 		SubscriptionID: &subID,

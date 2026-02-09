@@ -1,15 +1,15 @@
 package session
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
 // SetCookie sets a session cookie based on the provided configuration
-// It handles auto-detection of the Secure flag, SameSite parsing, and MaxAge calculation
+// It handles auto-detection of the Secure flag, SameSite parsing, and MaxAge calculation.
 func SetCookie(
 	c forge.Context,
 	token string,
@@ -17,7 +17,7 @@ func SetCookie(
 	config *CookieConfig,
 ) error {
 	if config == nil {
-		return fmt.Errorf("cookie config is nil")
+		return errs.RequiredField("config")
 	}
 
 	if !config.Enabled {
@@ -26,7 +26,7 @@ func SetCookie(
 	}
 
 	if token == "" {
-		return fmt.Errorf("session token is empty")
+		return errs.RequiredField("token")
 	}
 
 	// Determine cookie name (use default if not specified)
@@ -88,10 +88,10 @@ func SetCookie(
 	return nil
 }
 
-// ClearCookie clears a session cookie by setting it to expire immediately
+// ClearCookie clears a session cookie by setting it to expire immediately.
 func ClearCookie(c forge.Context, config *CookieConfig) error {
 	if config == nil {
-		return fmt.Errorf("cookie config is nil")
+		return errs.RequiredField("config")
 	}
 
 	// Determine cookie name (use default if not specified)

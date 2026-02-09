@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // AttributeProvider fetches attributes from various sources (users, resources, etc.)
@@ -13,61 +15,65 @@ type AttributeProvider interface {
 
 	// GetAttributes fetches attributes for a given entity
 	// The key format depends on the provider (e.g., "user:123", "resource:doc_456")
-	GetAttributes(ctx context.Context, key string) (map[string]interface{}, error)
+	GetAttributes(ctx context.Context, key string) (map[string]any, error)
 
 	// GetBatchAttributes fetches attributes for multiple entities
 	// Returns a map of key -> attributes
-	GetBatchAttributes(ctx context.Context, keys []string) (map[string]map[string]interface{}, error)
+	GetBatchAttributes(ctx context.Context, keys []string) (map[string]map[string]any, error)
 }
 
-// AttributeResolver coordinates multiple providers and handles caching
+// AttributeResolver coordinates multiple providers and handles caching.
 type AttributeResolver struct {
 	providers map[string]AttributeProvider
 	cache     AttributeCache
 }
 
 // AttributeCache defines the caching interface for attributes
-// This is intentionally simple and can wrap any caching backend
+// This is intentionally simple and can wrap any caching backend.
 type AttributeCache interface {
-	Get(ctx context.Context, key string) (map[string]interface{}, bool)
-	Set(ctx context.Context, key string, value map[string]interface{}, ttl time.Duration) error
+	Get(ctx context.Context, key string) (map[string]any, bool)
+	Set(ctx context.Context, key string, value map[string]any, ttl time.Duration) error
 	Delete(ctx context.Context, key string) error
 	Clear(ctx context.Context) error
 }
 
-// simpleAttributeCache is a simple in-memory implementation for testing
+// simpleAttributeCache is a simple in-memory implementation for testing.
 type simpleAttributeCache struct {
-	data map[string]map[string]interface{}
+	data map[string]map[string]any
 }
 
-// NewSimpleAttributeCache creates a simple in-memory attribute cache
+// NewSimpleAttributeCache creates a simple in-memory attribute cache.
 func NewSimpleAttributeCache() AttributeCache {
 	return &simpleAttributeCache{
-		data: make(map[string]map[string]interface{}),
+		data: make(map[string]map[string]any),
 	}
 }
 
-func (c *simpleAttributeCache) Get(ctx context.Context, key string) (map[string]interface{}, bool) {
+func (c *simpleAttributeCache) Get(ctx context.Context, key string) (map[string]any, bool) {
 	val, ok := c.data[key]
+
 	return val, ok
 }
 
-func (c *simpleAttributeCache) Set(ctx context.Context, key string, value map[string]interface{}, ttl time.Duration) error {
+func (c *simpleAttributeCache) Set(ctx context.Context, key string, value map[string]any, ttl time.Duration) error {
 	c.data[key] = value
+
 	return nil
 }
 
 func (c *simpleAttributeCache) Delete(ctx context.Context, key string) error {
 	delete(c.data, key)
+
 	return nil
 }
 
 func (c *simpleAttributeCache) Clear(ctx context.Context) error {
-	c.data = make(map[string]map[string]interface{})
+	c.data = make(map[string]map[string]any)
+
 	return nil
 }
 
-// NewAttributeResolver creates a new attribute resolver
+// NewAttributeResolver creates a new attribute resolver.
 func NewAttributeResolver(cache AttributeCache) *AttributeResolver {
 	return &AttributeResolver{
 		providers: make(map[string]AttributeProvider),
@@ -75,15 +81,15 @@ func NewAttributeResolver(cache AttributeCache) *AttributeResolver {
 	}
 }
 
-// RegisterProvider registers an attribute provider
+// RegisterProvider registers an attribute provider.
 func (r *AttributeResolver) RegisterProvider(provider AttributeProvider) error {
 	if provider == nil {
-		return fmt.Errorf("provider cannot be nil")
+		return errs.BadRequest("provider cannot be nil")
 	}
 
 	name := provider.Name()
 	if name == "" {
-		return fmt.Errorf("provider name cannot be empty")
+		return errs.RequiredField("provider name")
 	}
 
 	if _, exists := r.providers[name]; exists {
@@ -91,21 +97,23 @@ func (r *AttributeResolver) RegisterProvider(provider AttributeProvider) error {
 	}
 
 	r.providers[name] = provider
+
 	return nil
 }
 
-// GetProvider returns a registered provider by name
+// GetProvider returns a registered provider by name.
 func (r *AttributeResolver) GetProvider(name string) (AttributeProvider, error) {
 	provider, exists := r.providers[name]
 	if !exists {
 		return nil, fmt.Errorf("provider '%s' not found", name)
 	}
+
 	return provider, nil
 }
 
 // Resolve fetches attributes for a given provider and key
-// It checks the cache first, then falls back to the provider
-func (r *AttributeResolver) Resolve(ctx context.Context, providerName, key string) (map[string]interface{}, error) {
+// It checks the cache first, then falls back to the provider.
+func (r *AttributeResolver) Resolve(ctx context.Context, providerName, key string) (map[string]any, error) {
 	// Check cache first
 	cacheKey := fmt.Sprintf("%s:%s", providerName, key)
 	if r.cache != nil {
@@ -140,10 +148,10 @@ func (r *AttributeResolver) Resolve(ctx context.Context, providerName, key strin
 	return attrs, nil
 }
 
-// ResolveBatch fetches attributes for multiple entities from a provider
-func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName string, keys []string) (map[string]map[string]interface{}, error) {
+// ResolveBatch fetches attributes for multiple entities from a provider.
+func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName string, keys []string) (map[string]map[string]any, error) {
 	if len(keys) == 0 {
-		return make(map[string]map[string]interface{}), nil
+		return make(map[string]map[string]any), nil
 	}
 
 	// Get provider
@@ -153,7 +161,7 @@ func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName strin
 	}
 
 	// Check which keys are in cache
-	result := make(map[string]map[string]interface{})
+	result := make(map[string]map[string]any)
 	uncachedKeys := make([]string, 0, len(keys))
 
 	if r.cache != nil {
@@ -182,6 +190,7 @@ func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName strin
 
 			if r.cache != nil {
 				cacheKey := fmt.Sprintf("%s:%s", providerName, key)
+
 				ttl := 5 * time.Minute
 				if err := r.cache.Set(ctx, cacheKey, attrs, ttl); err != nil {
 					_ = err // Log but don't fail
@@ -194,7 +203,7 @@ func (r *AttributeResolver) ResolveBatch(ctx context.Context, providerName strin
 }
 
 // EnrichEvaluationContext enriches an evaluation context with additional attributes
-// This is called before policy evaluation to ensure all needed attributes are present
+// This is called before policy evaluation to ensure all needed attributes are present.
 func (r *AttributeResolver) EnrichEvaluationContext(ctx context.Context, evalCtx *EvaluationContext) error {
 	// For now, this is a no-op
 	// In a full implementation, this would:
@@ -206,18 +215,17 @@ func (r *AttributeResolver) EnrichEvaluationContext(ctx context.Context, evalCtx
 	// - If principal.id is set but principal.roles is missing, fetch from user provider
 	// - If resource.type and resource.id are set but resource.owner is missing, fetch from resource provider
 	// - Add request context attributes (IP, time, location) if not present
-
 	return nil
 }
 
-// AttributeRequest represents a request for attributes
+// AttributeRequest represents a request for attributes.
 type AttributeRequest struct {
 	Provider string
 	Key      string
 }
 
-// ResolveMultiple fetches attributes for multiple requests in parallel
-func (r *AttributeResolver) ResolveMultiple(ctx context.Context, requests []AttributeRequest) (map[string]map[string]interface{}, error) {
+// ResolveMultiple fetches attributes for multiple requests in parallel.
+func (r *AttributeResolver) ResolveMultiple(ctx context.Context, requests []AttributeRequest) (map[string]map[string]any, error) {
 	// Group requests by provider for batch fetching
 	providerRequests := make(map[string][]string)
 	for _, req := range requests {
@@ -225,7 +233,8 @@ func (r *AttributeResolver) ResolveMultiple(ctx context.Context, requests []Attr
 	}
 
 	// Fetch from each provider
-	result := make(map[string]map[string]interface{})
+	result := make(map[string]map[string]any)
+
 	for providerName, keys := range providerRequests {
 		batchResult, err := r.ResolveBatch(ctx, providerName, keys)
 		if err != nil {
@@ -242,19 +251,22 @@ func (r *AttributeResolver) ResolveMultiple(ctx context.Context, requests []Attr
 	return result, nil
 }
 
-// ClearCache clears all cached attributes
+// ClearCache clears all cached attributes.
 func (r *AttributeResolver) ClearCache(ctx context.Context) error {
 	if r.cache == nil {
 		return nil
 	}
+
 	return r.cache.Clear(ctx)
 }
 
-// ClearCacheKey clears a specific cached attribute
+// ClearCacheKey clears a specific cached attribute.
 func (r *AttributeResolver) ClearCacheKey(ctx context.Context, providerName, key string) error {
 	if r.cache == nil {
 		return nil
 	}
+
 	cacheKey := fmt.Sprintf("%s:%s", providerName, key)
+
 	return r.cache.Delete(ctx, cacheKey)
 }

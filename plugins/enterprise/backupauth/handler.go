@@ -1,26 +1,26 @@
 package backupauth
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/forge"
 )
 
-// Handler provides HTTP handlers for backup authentication
+// Handler provides HTTP handlers for backup authentication.
 type Handler struct {
 	service *Service
 }
 
-// NewHandler creates a new handler
+// NewHandler creates a new handler.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
 // ===== Recovery Session Handlers =====
 
-// StartRecovery handles POST /recovery/start
+// StartRecovery handles POST /recovery/start.
 func (h *Handler) StartRecovery(c forge.Context) error {
 	var req StartRecoveryRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -35,7 +35,7 @@ func (h *Handler) StartRecovery(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// ContinueRecovery handles POST /recovery/continue
+// ContinueRecovery handles POST /recovery/continue.
 func (h *Handler) ContinueRecovery(c forge.Context) error {
 	var req ContinueRecoveryRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -50,7 +50,7 @@ func (h *Handler) ContinueRecovery(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// CompleteRecovery handles POST /recovery/complete
+// CompleteRecovery handles POST /recovery/complete.
 func (h *Handler) CompleteRecovery(c forge.Context) error {
 	var req CompleteRecoveryRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -65,7 +65,7 @@ func (h *Handler) CompleteRecovery(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// CancelRecovery handles POST /recovery/cancel
+// CancelRecovery handles POST /recovery/cancel.
 func (h *Handler) CancelRecovery(c forge.Context) error {
 	var req CancelRecoveryRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -81,7 +81,7 @@ func (h *Handler) CancelRecovery(c forge.Context) error {
 
 // ===== Recovery Codes Handlers =====
 
-// GenerateRecoveryCodes handles POST /recovery-codes/generate
+// GenerateRecoveryCodes handles POST /recovery-codes/generate.
 func (h *Handler) GenerateRecoveryCodes(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
 	appID, userOrgID := h.getAppAndOrgFromContext(c)
@@ -109,7 +109,7 @@ func (h *Handler) GenerateRecoveryCodes(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// VerifyRecoveryCode handles POST /recovery-codes/verify
+// VerifyRecoveryCode handles POST /recovery-codes/verify.
 func (h *Handler) VerifyRecoveryCode(c forge.Context) error {
 	var req VerifyRecoveryCodeRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -126,7 +126,7 @@ func (h *Handler) VerifyRecoveryCode(c forge.Context) error {
 
 // ===== Security Questions Handlers =====
 
-// SetupSecurityQuestions handles POST /security-questions/setup
+// SetupSecurityQuestions handles POST /security-questions/setup.
 func (h *Handler) SetupSecurityQuestions(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
 	appID, userOrgID := h.getAppAndOrgFromContext(c)
@@ -153,7 +153,7 @@ func (h *Handler) SetupSecurityQuestions(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// GetSecurityQuestions handles POST /security-questions/get
+// GetSecurityQuestions handles POST /security-questions/get.
 func (h *Handler) GetSecurityQuestions(c forge.Context) error {
 	var req GetSecurityQuestionsRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -168,7 +168,7 @@ func (h *Handler) GetSecurityQuestions(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// VerifySecurityAnswers handles POST /security-questions/verify
+// VerifySecurityAnswers handles POST /security-questions/verify.
 func (h *Handler) VerifySecurityAnswers(c forge.Context) error {
 	var req VerifySecurityAnswersRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -185,7 +185,7 @@ func (h *Handler) VerifySecurityAnswers(c forge.Context) error {
 
 // ===== Trusted Contacts Handlers =====
 
-// AddTrustedContact handles POST /trusted-contacts/add
+// AddTrustedContact handles POST /trusted-contacts/add.
 func (h *Handler) AddTrustedContact(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
 	appID, userOrgID := h.getAppAndOrgFromContext(c)
@@ -212,7 +212,7 @@ func (h *Handler) AddTrustedContact(c forge.Context) error {
 	return c.JSON(201, resp)
 }
 
-// ListTrustedContacts handles GET /trusted-contacts
+// ListTrustedContacts handles GET /trusted-contacts.
 func (h *Handler) ListTrustedContacts(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
 	appID, userOrgID := h.getAppAndOrgFromContext(c)
@@ -234,7 +234,7 @@ func (h *Handler) ListTrustedContacts(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// VerifyTrustedContact handles POST /trusted-contacts/verify
+// VerifyTrustedContact handles POST /trusted-contacts/verify.
 func (h *Handler) VerifyTrustedContact(c forge.Context) error {
 	var req VerifyTrustedContactRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -249,7 +249,7 @@ func (h *Handler) VerifyTrustedContact(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// RequestTrustedContactVerification handles POST /trusted-contacts/request-verification
+// RequestTrustedContactVerification handles POST /trusted-contacts/request-verification.
 func (h *Handler) RequestTrustedContactVerification(c forge.Context) error {
 	var req RequestTrustedContactVerificationRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -264,7 +264,7 @@ func (h *Handler) RequestTrustedContactVerification(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// RemoveTrustedContact handles DELETE /trusted-contacts/:id
+// RemoveTrustedContact handles DELETE /trusted-contacts/:id.
 func (h *Handler) RemoveTrustedContact(c forge.Context) error {
 	userID := h.getUserIDFromContext(c)
 	appID, userOrgID := h.getAppAndOrgFromContext(c)
@@ -279,6 +279,7 @@ func (h *Handler) RemoveTrustedContact(c forge.Context) error {
 	}
 
 	contactIDStr := c.Param("id")
+
 	contactID, err := xid.FromString(contactIDStr)
 	if err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_contact_id", Message: err.Error()})
@@ -294,7 +295,7 @@ func (h *Handler) RemoveTrustedContact(c forge.Context) error {
 
 // ===== Email/SMS Verification Handlers =====
 
-// SendVerificationCode handles POST /verification/send
+// SendVerificationCode handles POST /verification/send.
 func (h *Handler) SendVerificationCode(c forge.Context) error {
 	var req SendVerificationCodeRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -311,7 +312,7 @@ func (h *Handler) SendVerificationCode(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// VerifyCode handles POST /verification/verify
+// VerifyCode handles POST /verification/verify.
 func (h *Handler) VerifyCode(c forge.Context) error {
 	var req VerifyCodeRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -329,7 +330,7 @@ func (h *Handler) VerifyCode(c forge.Context) error {
 
 // ===== Video Verification Handlers =====
 
-// ScheduleVideoSession handles POST /video/schedule
+// ScheduleVideoSession handles POST /video/schedule.
 func (h *Handler) ScheduleVideoSession(c forge.Context) error {
 	var req ScheduleVideoSessionRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -346,7 +347,7 @@ func (h *Handler) ScheduleVideoSession(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// StartVideoSession handles POST /video/start
+// StartVideoSession handles POST /video/start.
 func (h *Handler) StartVideoSession(c forge.Context) error {
 	var req StartVideoSessionRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -363,7 +364,7 @@ func (h *Handler) StartVideoSession(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// CompleteVideoSession handles POST /video/complete (admin)
+// CompleteVideoSession handles POST /video/complete (admin).
 func (h *Handler) CompleteVideoSession(c forge.Context) error {
 	var req CompleteVideoSessionRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -382,7 +383,7 @@ func (h *Handler) CompleteVideoSession(c forge.Context) error {
 
 // ===== Document Verification Handlers =====
 
-// UploadDocument handles POST /documents/upload
+// UploadDocument handles POST /documents/upload.
 func (h *Handler) UploadDocument(c forge.Context) error {
 	var req UploadDocumentRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -399,9 +400,10 @@ func (h *Handler) UploadDocument(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// GetDocumentVerification handles GET /documents/:id
+// GetDocumentVerification handles GET /documents/:id.
 func (h *Handler) GetDocumentVerification(c forge.Context) error {
 	documentIDStr := c.Param("id")
+
 	documentID, err := xid.FromString(documentIDStr)
 	if err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_document_id", Message: err.Error()})
@@ -419,9 +421,10 @@ func (h *Handler) GetDocumentVerification(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// ReviewDocument handles POST /documents/:id/review (admin)
+// ReviewDocument handles POST /documents/:id/review (admin).
 func (h *Handler) ReviewDocument(c forge.Context) error {
 	documentIDStr := c.Param("id")
+
 	documentID, err := xid.FromString(documentIDStr)
 	if err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_document_id", Message: err.Error()})
@@ -431,6 +434,7 @@ func (h *Handler) ReviewDocument(c forge.Context) error {
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 	}
+
 	req.DocumentID = documentID
 
 	// TODO: Implement document review
@@ -440,7 +444,7 @@ func (h *Handler) ReviewDocument(c forge.Context) error {
 
 // ===== Admin Handlers =====
 
-// ListRecoverySessions handles GET /admin/sessions (admin)
+// ListRecoverySessions handles GET /admin/sessions (admin).
 func (h *Handler) ListRecoverySessions(c forge.Context) error {
 	var req ListRecoverySessionsRequest
 	// Parse query parameters
@@ -459,9 +463,10 @@ func (h *Handler) ListRecoverySessions(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// ApproveRecovery handles POST /admin/sessions/:id/approve (admin)
+// ApproveRecovery handles POST /admin/sessions/:id/approve (admin).
 func (h *Handler) ApproveRecovery(c forge.Context) error {
 	sessionIDStr := c.Param("id")
+
 	sessionID, err := xid.FromString(sessionIDStr)
 	if err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_session_id", Message: err.Error()})
@@ -472,6 +477,7 @@ func (h *Handler) ApproveRecovery(c forge.Context) error {
 		// Use defaults if no body
 		req = ApproveRecoveryRequest{}
 	}
+
 	req.SessionID = sessionID
 
 	// TODO: Implement session approval
@@ -485,9 +491,10 @@ func (h *Handler) ApproveRecovery(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// RejectRecovery handles POST /admin/sessions/:id/reject (admin)
+// RejectRecovery handles POST /admin/sessions/:id/reject (admin).
 func (h *Handler) RejectRecovery(c forge.Context) error {
 	sessionIDStr := c.Param("id")
+
 	sessionID, err := xid.FromString(sessionIDStr)
 	if err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_session_id", Message: err.Error()})
@@ -497,6 +504,7 @@ func (h *Handler) RejectRecovery(c forge.Context) error {
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(400, ErrorResponse{Error: "invalid_request", Message: err.Error()})
 	}
+
 	req.SessionID = sessionID
 
 	// TODO: Implement session rejection
@@ -511,10 +519,9 @@ func (h *Handler) RejectRecovery(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// GetRecoveryStats handles GET /admin/stats (admin)
+// GetRecoveryStats handles GET /admin/stats (admin).
 func (h *Handler) GetRecoveryStats(c forge.Context) error {
 	// TODO: Parse time range from query params
-
 	resp := &GetRecoveryStatsResponse{
 		TotalAttempts:        0,
 		SuccessfulRecoveries: 0,
@@ -529,10 +536,9 @@ func (h *Handler) GetRecoveryStats(c forge.Context) error {
 
 // ===== Configuration Handlers =====
 
-// GetRecoveryConfig handles GET /admin/config (admin)
+// GetRecoveryConfig handles GET /admin/config (admin).
 func (h *Handler) GetRecoveryConfig(c forge.Context) error {
 	// TODO: Implement config retrieval
-
 	resp := &GetRecoveryConfigResponse{
 		EnabledMethods:       []RecoveryMethod{},
 		RequireMultipleSteps: true,
@@ -542,7 +548,7 @@ func (h *Handler) GetRecoveryConfig(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// UpdateRecoveryConfig handles PUT /admin/config (admin)
+// UpdateRecoveryConfig handles PUT /admin/config (admin).
 func (h *Handler) UpdateRecoveryConfig(c forge.Context) error {
 	var req UpdateRecoveryConfigRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -556,7 +562,7 @@ func (h *Handler) UpdateRecoveryConfig(c forge.Context) error {
 
 // ===== Health Check =====
 
-// HealthCheck handles GET /health
+// HealthCheck handles GET /health.
 func (h *Handler) HealthCheck(c forge.Context) error {
 	resp := &HealthCheckResponse{
 		Healthy:        true,
@@ -576,6 +582,7 @@ func (h *Handler) getUserIDFromContext(c forge.Context) string {
 			return uid
 		}
 	}
+
 	return ""
 }
 
@@ -586,6 +593,7 @@ func (h *Handler) getAppAndOrgFromContext(c forge.Context) (xid.ID, *xid.ID) {
 	if orgID == xid.NilID() {
 		return appID, nil
 	}
+
 	return appID, &orgID
 }
 
@@ -594,29 +602,29 @@ func (h *Handler) handleError(c forge.Context, err error) error {
 	statusCode := 500
 	errorCode := "internal_error"
 
-	switch err {
-	case ErrRecoverySessionNotFound:
+	switch {
+	case errors.Is(err, ErrRecoverySessionNotFound):
 		statusCode = 404
 		errorCode = "session_not_found"
-	case ErrRecoverySessionExpired:
+	case errors.Is(err, ErrRecoverySessionExpired):
 		statusCode = 410
 		errorCode = "session_expired"
-	case ErrRecoverySessionInProgress:
+	case errors.Is(err, ErrRecoverySessionInProgress):
 		statusCode = 409
 		errorCode = "session_in_progress"
-	case ErrRecoveryMethodNotEnabled:
+	case errors.Is(err, ErrRecoveryMethodNotEnabled):
 		statusCode = 400
 		errorCode = "method_not_enabled"
-	case ErrRateLimitExceeded:
+	case errors.Is(err, ErrRateLimitExceeded):
 		statusCode = 429
 		errorCode = "rate_limit_exceeded"
-	case ErrUnauthorized:
+	case errors.Is(err, ErrUnauthorized):
 		statusCode = 401
 		errorCode = "unauthorized"
-	case ErrPermissionDenied:
+	case errors.Is(err, ErrPermissionDenied):
 		statusCode = 403
 		errorCode = "permission_denied"
-	case ErrInvalidInput:
+	case errors.Is(err, ErrInvalidInput):
 		statusCode = 400
 		errorCode = "invalid_input"
 	}
@@ -624,6 +632,6 @@ func (h *Handler) handleError(c forge.Context, err error) error {
 	return c.JSON(statusCode, ErrorResponse{
 		Error:   errorCode,
 		Message: err.Error(),
-		Code:    fmt.Sprintf("BACKUP_AUTH_%s", errorCode),
+		Code:    "BACKUP_AUTH_" + errorCode,
 	})
 }

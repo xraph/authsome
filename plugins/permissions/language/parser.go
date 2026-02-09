@@ -4,14 +4,15 @@ import (
 	"fmt"
 
 	"github.com/google/cel-go/cel"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Parser handles CEL expression parsing with AuthSome-specific context
+// Parser handles CEL expression parsing with AuthSome-specific context.
 type Parser struct {
 	env *cel.Env
 }
 
-// NewParser creates a new CEL parser with AuthSome context variables and functions
+// NewParser creates a new CEL parser with AuthSome context variables and functions.
 func NewParser() (*Parser, error) {
 	// Create CEL environment with AuthSome-specific context and custom library
 	env, err := cel.NewEnv(
@@ -24,7 +25,6 @@ func NewParser() (*Parser, error) {
 		// Use AuthSome custom library for functions
 		cel.Lib(authsomeLib{}),
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
@@ -32,10 +32,10 @@ func NewParser() (*Parser, error) {
 	return &Parser{env: env}, nil
 }
 
-// Parse compiles a CEL expression and returns the AST
+// Parse compiles a CEL expression and returns the AST.
 func (p *Parser) Parse(expression string) (*cel.Ast, error) {
 	if expression == "" {
-		return nil, fmt.Errorf("expression cannot be empty")
+		return nil, errs.RequiredField("expression")
 	}
 
 	ast, issues := p.env.Compile(expression)
@@ -51,22 +51,24 @@ func (p *Parser) Parse(expression string) (*cel.Ast, error) {
 	return ast, nil
 }
 
-// Program creates an executable program from an AST
+// Program creates an executable program from an AST.
 func (p *Parser) Program(ast *cel.Ast, opts ...cel.ProgramOption) (cel.Program, error) {
 	prg, err := p.env.Program(ast, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create program: %w", err)
 	}
+
 	return prg, nil
 }
 
-// ValidateExpression checks if an expression is valid without creating a full program
+// ValidateExpression checks if an expression is valid without creating a full program.
 func (p *Parser) ValidateExpression(expression string) error {
 	_, err := p.Parse(expression)
+
 	return err
 }
 
-// GetFunctionHelp returns documentation for available functions
+// GetFunctionHelp returns documentation for available functions.
 func (p *Parser) GetFunctionHelp() map[string]string {
 	return map[string]string{
 		"has_role(role)":            "Check if principal has a specific role",
@@ -83,16 +85,17 @@ func (p *Parser) GetFunctionHelp() map[string]string {
 	}
 }
 
-// ExpressionComplexity estimates the complexity of an expression (operation count)
+// ExpressionComplexity estimates the complexity of an expression (operation count).
 func (p *Parser) ExpressionComplexity(ast *cel.Ast) int {
 	// Simple heuristic: count nodes in the expression
 	// Real implementation would walk the full AST
 	expr := ast.Expr()
+
 	return estimateComplexityNode(expr, 0)
 }
 
-// estimateComplexityNode recursively counts operations in an expression
-func estimateComplexityNode(expr interface{}, depth int) int {
+// estimateComplexityNode recursively counts operations in an expression.
+func estimateComplexityNode(expr any, depth int) int {
 	if expr == nil || depth > 50 {
 		return 1
 	}
@@ -101,7 +104,7 @@ func estimateComplexityNode(expr interface{}, depth int) int {
 	return 10
 }
 
-// Example expressions for testing
+// Example expressions for testing.
 var ExampleExpressions = map[string]string{
 	"owner_only":      `resource.owner == principal.id`,
 	"admin_or_owner":  `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,

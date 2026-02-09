@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
@@ -15,7 +16,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// FeatureService handles feature business logic
+// FeatureService handles feature business logic.
 type FeatureService struct {
 	featureRepo repository.FeatureRepository
 	planRepo    repository.PlanRepository
@@ -23,7 +24,7 @@ type FeatureService struct {
 	provider    types.PaymentProvider
 }
 
-// NewFeatureService creates a new feature service
+// NewFeatureService creates a new feature service.
 func NewFeatureService(
 	featureRepo repository.FeatureRepository,
 	planRepo repository.PlanRepository,
@@ -38,7 +39,7 @@ func NewFeatureService(
 	}
 }
 
-// Create creates a new feature
+// Create creates a new feature.
 func (s *FeatureService) Create(ctx context.Context, appID xid.ID, req *core.CreateFeatureRequest) (*core.Feature, error) {
 	// Validate feature type
 	if !req.Type.IsValid() {
@@ -87,7 +88,7 @@ func (s *FeatureService) Create(ctx context.Context, appID xid.ID, req *core.Cre
 	if req.Metadata != nil {
 		feature.Metadata = req.Metadata
 	} else {
-		feature.Metadata = make(map[string]interface{})
+		feature.Metadata = make(map[string]any)
 	}
 
 	// Create feature
@@ -114,6 +115,7 @@ func (s *FeatureService) Create(ctx context.Context, appID xid.ID, req *core.Cre
 	// Auto-sync to provider (if configured)
 	if s.provider != nil {
 		coreFeature := s.schemaToCore(feature, req.Tiers)
+
 		providerFeatureID, err := s.provider.SyncFeature(ctx, coreFeature)
 		if err != nil {
 			// Log error but don't fail creation
@@ -130,7 +132,7 @@ func (s *FeatureService) Create(ctx context.Context, appID xid.ID, req *core.Cre
 	return s.schemaToCore(feature, req.Tiers), nil
 }
 
-// Update updates an existing feature
+// Update updates an existing feature.
 func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.UpdateFeatureRequest) (*core.Feature, error) {
 	feature, err := s.featureRepo.FindByID(ctx, id)
 	if err != nil {
@@ -141,27 +143,35 @@ func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.Update
 	if req.Name != nil {
 		feature.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		feature.Description = *req.Description
 	}
+
 	if req.Unit != nil {
 		feature.Unit = *req.Unit
 	}
+
 	if req.ResetPeriod != nil {
 		if !req.ResetPeriod.IsValid() {
 			return nil, suberrors.ErrInvalidResetPeriod
 		}
+
 		feature.ResetPeriod = string(*req.ResetPeriod)
 	}
+
 	if req.IsPublic != nil {
 		feature.IsPublic = *req.IsPublic
 	}
+
 	if req.DisplayOrder != nil {
 		feature.DisplayOrder = *req.DisplayOrder
 	}
+
 	if req.Icon != nil {
 		feature.Icon = *req.Icon
 	}
+
 	if req.Metadata != nil {
 		feature.Metadata = req.Metadata
 	}
@@ -205,6 +215,7 @@ func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.Update
 	// Auto-sync to provider (if configured)
 	if s.provider != nil {
 		coreFeature := s.schemaToCore(feature, nil)
+
 		providerFeatureID, err := s.provider.SyncFeature(ctx, coreFeature)
 		if err != nil {
 			// Log error but don't fail update
@@ -213,6 +224,7 @@ func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.Update
 			if providerFeatureID != "" {
 				feature.ProviderFeatureID = providerFeatureID
 			}
+
 			syncTime := time.Now()
 			feature.LastSyncedAt = &syncTime
 			s.featureRepo.Update(ctx, feature)
@@ -222,7 +234,7 @@ func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.Update
 	return s.schemaToCore(feature, nil), nil
 }
 
-// Delete deletes a feature
+// Delete deletes a feature.
 func (s *FeatureService) Delete(ctx context.Context, id xid.ID) error {
 	// Check if feature is linked to any plans
 	links, err := s.featureRepo.GetFeaturePlans(ctx, id)
@@ -242,25 +254,27 @@ func (s *FeatureService) Delete(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// GetByID retrieves a feature by ID
+// GetByID retrieves a feature by ID.
 func (s *FeatureService) GetByID(ctx context.Context, id xid.ID) (*core.Feature, error) {
 	feature, err := s.featureRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, suberrors.ErrFeatureNotFound
 	}
+
 	return s.schemaToCore(feature, nil), nil
 }
 
-// GetByKey retrieves a feature by key
+// GetByKey retrieves a feature by key.
 func (s *FeatureService) GetByKey(ctx context.Context, appID xid.ID, key string) (*core.Feature, error) {
 	feature, err := s.featureRepo.FindByKey(ctx, appID, key)
 	if err != nil {
 		return nil, suberrors.ErrFeatureNotFound
 	}
+
 	return s.schemaToCore(feature, nil), nil
 }
 
-// List retrieves features with filtering
+// List retrieves features with filtering.
 func (s *FeatureService) List(ctx context.Context, appID xid.ID, featureType string, publicOnly bool, page, pageSize int) ([]*core.Feature, int, error) {
 	filter := &repository.FeatureFilter{
 		AppID:    &appID,
@@ -287,7 +301,7 @@ func (s *FeatureService) List(ctx context.Context, appID xid.ID, featureType str
 	return result, count, nil
 }
 
-// LinkToPlan links a feature to a plan
+// LinkToPlan links a feature to a plan.
 func (s *FeatureService) LinkToPlan(ctx context.Context, planID xid.ID, req *core.LinkFeatureRequest) (*core.PlanFeatureLink, error) {
 	// Verify plan exists
 	_, err := s.planRepo.FindByID(ctx, planID)
@@ -319,7 +333,7 @@ func (s *FeatureService) LinkToPlan(ctx context.Context, planID xid.ID, req *cor
 	}
 
 	if link.OverrideSettings == nil {
-		link.OverrideSettings = make(map[string]interface{})
+		link.OverrideSettings = make(map[string]any)
 	}
 
 	if err := s.featureRepo.LinkToPlan(ctx, link); err != nil {
@@ -338,7 +352,7 @@ func (s *FeatureService) LinkToPlan(ctx context.Context, planID xid.ID, req *cor
 	}, nil
 }
 
-// UpdatePlanLink updates a feature-plan link
+// UpdatePlanLink updates a feature-plan link.
 func (s *FeatureService) UpdatePlanLink(ctx context.Context, planID, featureID xid.ID, req *core.UpdateLinkRequest) (*core.PlanFeatureLink, error) {
 	link, err := s.featureRepo.GetPlanLink(ctx, planID, featureID)
 	if err != nil {
@@ -348,12 +362,15 @@ func (s *FeatureService) UpdatePlanLink(ctx context.Context, planID, featureID x
 	if req.Value != nil {
 		link.Value = *req.Value
 	}
+
 	if req.IsBlocked != nil {
 		link.IsBlocked = *req.IsBlocked
 	}
+
 	if req.IsHighlighted != nil {
 		link.IsHighlighted = *req.IsHighlighted
 	}
+
 	if req.OverrideSettings != nil {
 		link.OverrideSettings = req.OverrideSettings
 	}
@@ -377,12 +394,12 @@ func (s *FeatureService) UpdatePlanLink(ctx context.Context, planID, featureID x
 	}, nil
 }
 
-// UnlinkFromPlan removes a feature from a plan
+// UnlinkFromPlan removes a feature from a plan.
 func (s *FeatureService) UnlinkFromPlan(ctx context.Context, planID, featureID xid.ID) error {
 	return s.featureRepo.UnlinkFromPlan(ctx, planID, featureID)
 }
 
-// GetPlanFeatures retrieves all features linked to a plan
+// GetPlanFeatures retrieves all features linked to a plan.
 func (s *FeatureService) GetPlanFeatures(ctx context.Context, planID xid.ID) ([]*core.PlanFeatureLink, error) {
 	links, err := s.featureRepo.GetPlanLinks(ctx, planID)
 	if err != nil {
@@ -406,7 +423,7 @@ func (s *FeatureService) GetPlanFeatures(ctx context.Context, planID xid.ID) ([]
 	return result, nil
 }
 
-// GetPublicFeatures retrieves public features for pricing pages
+// GetPublicFeatures retrieves public features for pricing pages.
 func (s *FeatureService) GetPublicFeatures(ctx context.Context, appID xid.ID) ([]*core.PublicFeature, error) {
 	public := true
 	filter := &repository.FeatureFilter{
@@ -435,7 +452,7 @@ func (s *FeatureService) GetPublicFeatures(ctx context.Context, appID xid.ID) ([
 	return result, nil
 }
 
-// GetPublicPlanFeatures retrieves features for a plan formatted for public API
+// GetPublicPlanFeatures retrieves features for a plan formatted for public API.
 func (s *FeatureService) GetPublicPlanFeatures(ctx context.Context, planID xid.ID) ([]*core.PublicPlanFeature, error) {
 	links, err := s.featureRepo.GetPlanLinks(ctx, planID)
 	if err != nil {
@@ -450,9 +467,11 @@ func (s *FeatureService) GetPublicPlanFeatures(ctx context.Context, planID xid.I
 
 		// Parse value based on feature type
 		var value any
+
 		switch l.Feature.Type {
 		case "boolean":
 			json.Unmarshal([]byte(l.Value), &value)
+
 			if value == nil {
 				value = !l.IsBlocked
 			}
@@ -525,10 +544,10 @@ func (s *FeatureService) schemaToCore(f *schema.Feature, inputTiers []core.Featu
 	}
 }
 
-// SyncToProvider manually syncs a feature to the payment provider
+// SyncToProvider manually syncs a feature to the payment provider.
 func (s *FeatureService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	if s.provider == nil {
-		return fmt.Errorf("payment provider not configured")
+		return errs.BadRequest("payment provider not configured")
 	}
 
 	feature, err := s.featureRepo.FindByID(ctx, id)
@@ -537,6 +556,7 @@ func (s *FeatureService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	}
 
 	coreFeature := s.schemaToCore(feature, nil)
+
 	providerFeatureID, err := s.provider.SyncFeature(ctx, coreFeature)
 	if err != nil {
 		return fmt.Errorf("failed to sync feature to provider: %w", err)
@@ -545,6 +565,7 @@ func (s *FeatureService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	// Update provider feature ID and last synced time
 	feature.ProviderFeatureID = providerFeatureID
 	syncTime := time.Now()
+
 	feature.LastSyncedAt = &syncTime
 	if err := s.featureRepo.Update(ctx, feature); err != nil {
 		return fmt.Errorf("failed to update feature sync info: %w", err)
@@ -553,10 +574,10 @@ func (s *FeatureService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// SyncFromProvider syncs a feature from the payment provider
+// SyncFromProvider syncs a feature from the payment provider.
 func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID string) (*core.Feature, error) {
 	if s.provider == nil {
-		return nil, fmt.Errorf("payment provider not configured")
+		return nil, errs.BadRequest("payment provider not configured")
 	}
 
 	providerFeature, err := s.provider.GetProviderFeature(ctx, providerFeatureID)
@@ -566,6 +587,7 @@ func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID
 
 	// Find local feature by lookup key
 	var feature *schema.Feature
+
 	features, _, err := s.featureRepo.List(ctx, &repository.FeatureFilter{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list features: %w", err)
@@ -574,6 +596,7 @@ func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID
 	for _, f := range features {
 		if f.Key == providerFeature.LookupKey || f.ProviderFeatureID == providerFeatureID {
 			feature = f
+
 			break
 		}
 	}
@@ -591,9 +614,11 @@ func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID
 	if desc, ok := providerFeature.Metadata["description"].(string); ok {
 		feature.Description = desc
 	}
+
 	if featureType, ok := providerFeature.Metadata["feature_type"].(string); ok {
 		feature.Type = featureType
 	}
+
 	if unit, ok := providerFeature.Metadata["unit"].(string); ok {
 		feature.Unit = unit
 	}
@@ -609,12 +634,12 @@ func (s *FeatureService) SyncFromProvider(ctx context.Context, providerFeatureID
 	return s.schemaToCore(feature, nil), nil
 }
 
-// createFeatureFromProvider creates a new local feature from provider data
+// createFeatureFromProvider creates a new local feature from provider data.
 func (s *FeatureService) createFeatureFromProvider(ctx context.Context, providerFeature *types.ProviderFeature) (*core.Feature, error) {
 	// Extract app ID from metadata
 	appIDStr, ok := providerFeature.Metadata["authsome_app_id"].(string)
 	if !ok || appIDStr == "" {
-		return nil, fmt.Errorf("provider feature missing authsome_app_id metadata - cannot determine which app this feature belongs to")
+		return nil, errs.InvalidInput("authsome_app_id", "provider feature missing authsome_app_id metadata - cannot determine which app this feature belongs to")
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -645,9 +670,11 @@ func (s *FeatureService) createFeatureFromProvider(ctx context.Context, provider
 		if desc, ok := providerFeature.Metadata["description"].(string); ok {
 			existingFeature.Description = desc
 		}
+
 		if featureType, ok := providerFeature.Metadata["feature_type"].(string); ok {
 			existingFeature.Type = featureType
 		}
+
 		if unit, ok := providerFeature.Metadata["unit"].(string); ok {
 			existingFeature.Unit = unit
 		}
@@ -707,10 +734,10 @@ func (s *FeatureService) createFeatureFromProvider(ctx context.Context, provider
 	return s.schemaToCore(newFeature, nil), nil
 }
 
-// SyncAllFromProvider syncs all features from the provider for a product
+// SyncAllFromProvider syncs all features from the provider for a product.
 func (s *FeatureService) SyncAllFromProvider(ctx context.Context, productID string) ([]*core.Feature, error) {
 	if s.provider == nil {
-		return nil, fmt.Errorf("payment provider not configured")
+		return nil, errs.BadRequest("payment provider not configured")
 	}
 
 	providerFeatures, err := s.provider.ListProviderFeatures(ctx, productID)
@@ -719,12 +746,14 @@ func (s *FeatureService) SyncAllFromProvider(ctx context.Context, productID stri
 	}
 
 	var result []*core.Feature
+
 	for _, pf := range providerFeatures {
 		feature, err := s.SyncFromProvider(ctx, pf.ID)
 		if err != nil {
 			// Log error but continue
 			continue
 		}
+
 		result = append(result, feature)
 	}
 

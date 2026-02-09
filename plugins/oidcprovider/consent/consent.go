@@ -2,6 +2,7 @@ package consent
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/icons"
@@ -9,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ConsentPageData contains all data needed for the consent page
+// ConsentPageData contains all data needed for the consent page.
 type ConsentPageData struct {
 	ClientName          string
 	ClientID            string
@@ -24,13 +25,13 @@ type ConsentPageData struct {
 	Branding            BrandingConfig
 }
 
-// ScopeInfo represents a scope with its description
+// ScopeInfo represents a scope with its description.
 type ScopeInfo struct {
 	Scope       string
 	Description string
 }
 
-// OAuthConsentPage renders the OAuth consent page using ForgeUI
+// OAuthConsentPage renders the OAuth consent page using ForgeUI.
 func OAuthConsentPage(data ConsentPageData) g.Node {
 	// Generate custom CSS for brand colors
 	customCSS := g.Raw(fmt.Sprintf(`
@@ -183,17 +184,23 @@ func scopeItems(scopes []ScopeInfo) []g.Node {
 			Span(Class("text-sm text-gray-700 dark:text-gray-200"), g.Text(scope.Description)),
 		)
 	}
+
 	return items
 }
 
 func scopesToString(scopes []ScopeInfo) string {
 	var result string
+	var resultSb191 strings.Builder
+
 	for i, s := range scopes {
 		if i > 0 {
-			result += " "
+			resultSb191.WriteString(" ")
 		}
-		result += s.Scope
+
+		resultSb191.WriteString(s.Scope)
 	}
+	result += resultSb191.String()
+
 	return result
 }
 

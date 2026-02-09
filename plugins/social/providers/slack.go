@@ -3,17 +3,19 @@ package providers
 import (
 	"context"
 	"fmt"
+	"net/http"
 
+	"github.com/xraph/authsome/internal/errs"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/slack"
 )
 
-// SlackProvider implements OAuth for Slack
+// SlackProvider implements OAuth for Slack.
 type SlackProvider struct {
 	*BaseProvider
 }
 
-// NewSlackProvider creates a new Slack OAuth provider
+// NewSlackProvider creates a new Slack OAuth provider.
 func NewSlackProvider(config ProviderConfig) *SlackProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -35,13 +37,13 @@ func NewSlackProvider(config ProviderConfig) *SlackProvider {
 	return &SlackProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from Slack API
+// GetUserInfo fetches user information from Slack API.
 func (s *SlackProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := s.oauth2Config.Client(ctx, token)
 
 	var response struct {
-		OK   bool                   `json:"ok"`
-		User map[string]interface{} `json:"user"`
+		OK   bool           `json:"ok"`
+		User map[string]any `json:"user"`
 	}
 
 	if err := FetchJSON(ctx, client, s.userInfoURL, &response); err != nil {
@@ -49,7 +51,7 @@ func (s *SlackProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*
 	}
 
 	if !response.OK {
-		return nil, fmt.Errorf("Slack API returned ok=false")
+		return nil, errs.New(errs.CodeInvalidInput, "Slack API returned ok=false", http.StatusBadRequest)
 	}
 
 	raw := response.User
@@ -61,9 +63,11 @@ func (s *SlackProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if email, ok := raw["email"].(string); ok {
 		userInfo.Email = email
 	}
+
 	if name, ok := raw["name"].(string); ok {
 		userInfo.Name = name
 	}

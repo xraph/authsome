@@ -3,6 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -18,13 +19,13 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardExtension implements ui.DashboardExtension for the subscription plugin
+// DashboardExtension implements ui.DashboardExtension for the subscription plugin.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension
+// NewDashboardExtension creates a new dashboard extension.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -32,12 +33,12 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "subscription"
 }
 
-// NavigationItems returns the navigation items for the dashboard
+// NavigationItems returns the navigation items for the dashboard.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -50,6 +51,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp == nil {
 					return basePath + "/billing"
 				}
+
 				return basePath + "/app/" + currentApp.ID.String() + "/billing"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -63,7 +65,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns the dashboard routes
+// Routes returns the dashboard routes.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Subscription Overview
@@ -603,12 +605,12 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated, using SettingsPages instead)
+// SettingsSections returns settings sections (deprecated, using SettingsPages instead).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return nil
 }
 
-// SettingsPages returns settings pages for the plugin
+// SettingsPages returns settings pages for the plugin.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -625,7 +627,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// DashboardWidgets returns dashboard widgets
+// DashboardWidgets returns dashboard widgets.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -651,7 +653,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the subscription plugin
+// BridgeFunctions returns bridge functions for the subscription plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	// No bridge functions for this plugin yet
 	return nil
@@ -659,20 +661,21 @@ func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 
 // Helper methods
 
-// getUserFromContext extracts the current user from the request context
+// getUserFromContext extracts the current user from the request context.
 func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
 	reqCtx := ctx.Request.Context()
 	if u, ok := reqCtx.Value("user").(*user.User); ok {
 		return u
 	}
+
 	return nil
 }
 
-// extractAppFromURL extracts the app from the URL parameter
+// extractAppFromURL extracts the app from the URL parameter.
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.New(errs.CodeInvalidInput, "app ID is required", http.StatusBadRequest)
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -684,33 +687,36 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	return &app.App{ID: appID}, nil
 }
 
-// getBasePath returns the dashboard base path
+// getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
 	return e.baseUIPath
 }
 
-// queryIntDefault gets an integer query parameter with a default value
+// queryIntDefault gets an integer query parameter with a default value.
 func queryIntDefault(ctx *router.PageContext, name string, defaultValue int) int {
 	str := ctx.QueryDefault(name, "")
 	if str == "" {
 		return defaultValue
 	}
+
 	val, err := strconv.Atoi(str)
 	if err != nil {
 		return defaultValue
 	}
+
 	return val
 }
 
-// formatMoney formats a price in cents to a human readable string
+// formatMoney formats a price in cents to a human readable string.
 func formatMoney(cents int64, currency string) string {
 	if currency == "" {
 		currency = "USD"
 	}
+
 	return fmt.Sprintf("$%.2f", float64(cents)/100)
 }
 
-// formatPercent formats a decimal as percentage
+// formatPercent formats a decimal as percentage.
 func formatPercent(value float64) string {
 	return fmt.Sprintf("%.2f%%", value*100)
 }
@@ -722,6 +728,7 @@ func (e *DashboardExtension) renderMRRWidget(currentApp *app.App) g.Node {
 	subs, _, _ := e.plugin.subscriptionSvc.List(ctx, nil, nil, nil, "active", 1, 1000)
 
 	var mrr int64
+
 	for _, sub := range subs {
 		if sub.Plan != nil {
 			switch sub.Plan.BillingInterval {
@@ -754,7 +761,7 @@ func (e *DashboardExtension) renderActiveSubscriptionsWidget(currentApp *app.App
 		Class("text-center"),
 		Div(
 			Class("text-2xl font-bold text-slate-900 dark:text-white"),
-			g.Text(fmt.Sprintf("%d", total)),
+			g.Text(strconv.Itoa(total)),
 		),
 		Div(
 			Class("text-sm text-slate-500 dark:text-gray-400"),
@@ -784,6 +791,7 @@ func (e *DashboardExtension) statsCard(title, value string, icon g.Node) g.Node 
 
 func (e *DashboardExtension) statusBadge(status string) g.Node {
 	var classes string
+
 	switch strings.ToLower(status) {
 	case "active", "paid", "success":
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
@@ -796,6 +804,7 @@ func (e *DashboardExtension) statusBadge(status string) g.Node {
 	default:
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 	}
+
 	return Span(Class(classes), g.Text(status))
 }
 
@@ -820,13 +829,13 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, baseU
 		if i == currentPage {
 			items = append(items, Span(
 				Class("px-3 py-2 text-sm font-medium text-white bg-violet-600 border border-violet-600 rounded-md"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			items = append(items, A(
 				Href(fmt.Sprintf("%s?page=%d", baseURL, i)),
 				Class("px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			items = append(items, Span(
@@ -851,7 +860,7 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, baseU
 	)
 }
 
-// Billing sub-navigation
+// Billing sub-navigation.
 func (e *DashboardExtension) renderBillingNav(currentApp *app.App, basePath, activePage string) g.Node {
 	type navItem struct {
 		label string
@@ -875,6 +884,7 @@ func (e *DashboardExtension) renderBillingNav(currentApp *app.App, basePath, act
 	navItems := make([]g.Node, 0, len(items))
 	for _, item := range items {
 		isActive := activePage == item.page
+
 		classes := "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors "
 		if isActive {
 			classes += "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
@@ -902,10 +912,11 @@ func (e *DashboardExtension) planStatusBadge(plan *core.Plan) g.Node {
 	if plan.IsActive {
 		return nil
 	}
+
 	return nil
 }
 
-// planSyncStatusBadge returns a badge indicating whether the plan is synced to the payment provider
+// planSyncStatusBadge returns a badge indicating whether the plan is synced to the payment provider.
 func (e *DashboardExtension) planSyncStatusBadge(plan *core.Plan) g.Node {
 	if plan.ProviderPlanID != "" && plan.ProviderPriceID != "" {
 		return Span(
@@ -914,6 +925,7 @@ func (e *DashboardExtension) planSyncStatusBadge(plan *core.Plan) g.Node {
 			g.Text("Synced"),
 		)
 	}
+
 	return Span(
 		Class("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-gray-700 dark:text-gray-400"),
 		lucide.CloudOff(Class("size-3")),
@@ -929,7 +941,7 @@ func (e *DashboardExtension) invoiceStatusBadge(inv *core.Invoice) g.Node {
 	return e.statusBadge(string(inv.Status))
 }
 
-// ServeSettingsPage renders the subscription settings page
+// ServeSettingsPage renders the subscription settings page.
 func (e *DashboardExtension) ServeSettingsPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -998,7 +1010,7 @@ func (e *DashboardExtension) ServeSettingsPage(ctx *router.PageContext) (g.Node,
 							Type("number"),
 							Name("trial_days"),
 							ID("trial_days"),
-							Value(fmt.Sprintf("%d", e.plugin.config.DefaultTrialDays)),
+							Value(strconv.Itoa(e.plugin.config.DefaultTrialDays)),
 							Min("0"),
 							Max("90"),
 							Class("flex h-10 w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"),
@@ -1023,7 +1035,7 @@ func (e *DashboardExtension) ServeSettingsPage(ctx *router.PageContext) (g.Node,
 							Type("number"),
 							Name("grace_days"),
 							ID("grace_days"),
-							Value(fmt.Sprintf("%d", e.plugin.config.GracePeriodDays)),
+							Value(strconv.Itoa(e.plugin.config.GracePeriodDays)),
 							Min("0"),
 							Max("30"),
 							Class("flex h-10 w-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"),
@@ -1052,6 +1064,7 @@ func (e *DashboardExtension) ServeSettingsPage(ctx *router.PageContext) (g.Node,
 								),
 							)
 						}
+
 						return Div(
 							Class("rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-4"),
 							Div(

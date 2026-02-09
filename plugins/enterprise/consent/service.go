@@ -13,16 +13,17 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Service provides consent management operations
+// Service provides consent management operations.
 type Service struct {
 	repo        Repository
 	config      *Config
 	userService *user.Service
 }
 
-// NewService creates a new consent service
+// NewService creates a new consent service.
 func NewService(
 	repo Repository,
 	config *Config,
@@ -37,7 +38,7 @@ func NewService(
 
 // ====== Consent Records ======
 
-// CreateConsent records a new consent
+// CreateConsent records a new consent.
 func (s *Service) CreateConsent(ctx context.Context, orgID, userID string, req *CreateConsentRequest) (*ConsentRecord, error) {
 	// Check if consent already exists
 	existing, err := s.repo.GetConsentByUserAndType(ctx, userID, orgID, req.ConsentType, req.Purpose)
@@ -93,17 +94,17 @@ func (s *Service) CreateConsent(ctx context.Context, orgID, userID string, req *
 	return consent, nil
 }
 
-// GetConsent retrieves a consent record
+// GetConsent retrieves a consent record.
 func (s *Service) GetConsent(ctx context.Context, id string) (*ConsentRecord, error) {
 	return s.repo.GetConsent(ctx, id)
 }
 
-// ListConsentsByUser lists all consents for a user
+// ListConsentsByUser lists all consents for a user.
 func (s *Service) ListConsentsByUser(ctx context.Context, userID, orgID string) ([]*ConsentRecord, error) {
 	return s.repo.ListConsentsByUser(ctx, userID, orgID)
 }
 
-// UpdateConsent updates a consent record
+// UpdateConsent updates a consent record.
 func (s *Service) UpdateConsent(ctx context.Context, id, userID, orgID string, req *UpdateConsentRequest) (*ConsentRecord, error) {
 	consent, err := s.repo.GetConsent(ctx, id)
 	if err != nil {
@@ -115,7 +116,7 @@ func (s *Service) UpdateConsent(ctx context.Context, id, userID, orgID string, r
 		return nil, ErrUnauthorized
 	}
 
-	previousValue := map[string]interface{}{
+	previousValue := map[string]any{
 		"granted":  consent.Granted,
 		"metadata": consent.Metadata,
 	}
@@ -127,6 +128,7 @@ func (s *Service) UpdateConsent(ctx context.Context, id, userID, orgID string, r
 			now := time.Now()
 			consent.RevokedAt = &now
 		}
+
 		consent.Granted = *req.Granted
 	}
 
@@ -143,6 +145,7 @@ func (s *Service) UpdateConsent(ctx context.Context, id, userID, orgID string, r
 	if req.Granted != nil && !*req.Granted {
 		action = ActionRevoked
 	}
+
 	s.createAuditLog(ctx, userID, orgID, id, action, consent.ConsentType, consent.Purpose, previousValue, consent)
 
 	// TODO: Audit log and notifications
@@ -150,7 +153,7 @@ func (s *Service) UpdateConsent(ctx context.Context, id, userID, orgID string, r
 	return consent, nil
 }
 
-// RevokeConsent revokes a consent record
+// RevokeConsent revokes a consent record.
 func (s *Service) RevokeConsent(ctx context.Context, userID, orgID, consentType, purpose string) error {
 	consent, err := s.repo.GetConsentByUserAndType(ctx, userID, orgID, consentType, purpose)
 	if err != nil {
@@ -175,7 +178,7 @@ func (s *Service) RevokeConsent(ctx context.Context, userID, orgID, consentType,
 	return nil
 }
 
-// GetConsentSummary provides a summary of user's consent status
+// GetConsentSummary provides a summary of user's consent status.
 func (s *Service) GetConsentSummary(ctx context.Context, userID, orgID string) (*ConsentSummary, error) {
 	consents, err := s.repo.ListConsentsByUser(ctx, userID, orgID)
 	if err != nil {
@@ -190,6 +193,7 @@ func (s *Service) GetConsentSummary(ctx context.Context, userID, orgID string) (
 	}
 
 	now := time.Now()
+
 	for _, consent := range consents {
 		if consent.Granted {
 			summary.GrantedConsents++
@@ -203,6 +207,7 @@ func (s *Service) GetConsentSummary(ctx context.Context, userID, orgID string) (
 
 		// Check if renewal is needed (within renewal reminder period)
 		needsRenewal := false
+
 		if consent.ExpiresAt != nil && s.config.Expiry.Enabled {
 			daysUntilExpiry := int(time.Until(*consent.ExpiresAt).Hours() / 24)
 			if daysUntilExpiry <= s.config.Expiry.RenewalReminderDays && daysUntilExpiry > 0 {
@@ -233,6 +238,7 @@ func (s *Service) GetConsentSummary(ctx context.Context, userID, orgID string) (
 
 	// Check for pending export
 	pendingStatus := string(StatusPending)
+
 	exports, err := s.repo.ListExportRequests(ctx, userID, orgID, &pendingStatus)
 	if err == nil && len(exports) > 0 {
 		summary.HasPendingExport = true
@@ -241,7 +247,7 @@ func (s *Service) GetConsentSummary(ctx context.Context, userID, orgID string) (
 	return summary, nil
 }
 
-// ExpireConsents automatically expires consents that have passed their expiry date
+// ExpireConsents automatically expires consents that have passed their expiry date.
 func (s *Service) ExpireConsents(ctx context.Context) (int, error) {
 	if !s.config.Expiry.Enabled || !s.config.Expiry.AutoExpireCheck {
 		return 0, nil
@@ -257,7 +263,7 @@ func (s *Service) ExpireConsents(ctx context.Context) (int, error) {
 
 // ====== Consent Policies ======
 
-// CreatePolicy creates a new consent policy
+// CreatePolicy creates a new consent policy.
 func (s *Service) CreatePolicy(ctx context.Context, orgID, createdBy string, req *CreatePolicyRequest) (*ConsentPolicy, error) {
 	policy := &ConsentPolicy{
 		OrganizationID: orgID,
@@ -283,27 +289,29 @@ func (s *Service) CreatePolicy(ctx context.Context, orgID, createdBy string, req
 	return policy, nil
 }
 
-// GetPolicy retrieves a consent policy
+// GetPolicy retrieves a consent policy.
 func (s *Service) GetPolicy(ctx context.Context, id string) (*ConsentPolicy, error) {
 	return s.repo.GetPolicy(ctx, id)
 }
 
-// GetLatestPolicy retrieves the latest active policy for a consent type
+// GetLatestPolicy retrieves the latest active policy for a consent type.
 func (s *Service) GetLatestPolicy(ctx context.Context, orgID, consentType string) (*ConsentPolicy, error) {
 	return s.repo.GetLatestPolicy(ctx, orgID, consentType)
 }
 
-// ListPolicies lists policies for an organization
+// ListPolicies lists policies for an organization.
 func (s *Service) ListPolicies(ctx context.Context, orgID string, activeOnly bool) ([]*ConsentPolicy, error) {
 	var active *bool
+
 	if activeOnly {
 		t := true
 		active = &t
 	}
+
 	return s.repo.ListPolicies(ctx, orgID, active)
 }
 
-// UpdatePolicy updates a consent policy
+// UpdatePolicy updates a consent policy.
 func (s *Service) UpdatePolicy(ctx context.Context, id, orgID, updatedBy string, req *UpdatePolicyRequest) (*ConsentPolicy, error) {
 	policy, err := s.repo.GetPolicy(ctx, id)
 	if err != nil {
@@ -318,21 +326,27 @@ func (s *Service) UpdatePolicy(ctx context.Context, id, orgID, updatedBy string,
 	if req.Name != "" {
 		policy.Name = req.Name
 	}
+
 	if req.Description != "" {
 		policy.Description = req.Description
 	}
+
 	if req.Content != "" {
 		policy.Content = req.Content
 	}
+
 	if req.Required != nil {
 		policy.Required = *req.Required
 	}
+
 	if req.Renewable != nil {
 		policy.Renewable = *req.Renewable
 	}
+
 	if req.ValidityPeriod != nil {
 		policy.ValidityPeriod = req.ValidityPeriod
 	}
+
 	if req.Active != nil {
 		policy.Active = *req.Active
 		if *req.Active {
@@ -340,6 +354,7 @@ func (s *Service) UpdatePolicy(ctx context.Context, id, orgID, updatedBy string,
 			policy.PublishedAt = &now
 		}
 	}
+
 	if req.Metadata != nil {
 		policy.Metadata = req.Metadata
 	}
@@ -353,7 +368,7 @@ func (s *Service) UpdatePolicy(ctx context.Context, id, orgID, updatedBy string,
 	return policy, nil
 }
 
-// PublishPolicy activates a policy
+// PublishPolicy activates a policy.
 func (s *Service) PublishPolicy(ctx context.Context, id, orgID string) error {
 	policy, err := s.repo.GetPolicy(ctx, id)
 	if err != nil {
@@ -373,10 +388,10 @@ func (s *Service) PublishPolicy(ctx context.Context, id, orgID string) error {
 
 // ====== Cookie Consent ======
 
-// RecordCookieConsent records cookie consent preferences
+// RecordCookieConsent records cookie consent preferences.
 func (s *Service) RecordCookieConsent(ctx context.Context, orgID, userID string, req *CookieConsentRequest) (*CookieConsent, error) {
 	if !s.config.CookieConsent.Enabled {
-		return nil, fmt.Errorf("cookie consent is not enabled")
+		return nil, errs.BadRequest("cookie consent is not enabled")
 	}
 
 	consent := &CookieConsent{
@@ -406,12 +421,12 @@ func (s *Service) RecordCookieConsent(ctx context.Context, orgID, userID string,
 	return consent, nil
 }
 
-// GetCookieConsent retrieves cookie consent preferences
+// GetCookieConsent retrieves cookie consent preferences.
 func (s *Service) GetCookieConsent(ctx context.Context, userID, orgID string) (*CookieConsent, error) {
 	return s.repo.GetCookieConsent(ctx, userID, orgID)
 }
 
-// UpdateCookieConsent updates cookie consent preferences
+// UpdateCookieConsent updates cookie consent preferences.
 func (s *Service) UpdateCookieConsent(ctx context.Context, id, userID, orgID string, req *CookieConsentRequest) (*CookieConsent, error) {
 	consent, err := s.repo.GetCookieConsent(ctx, userID, orgID)
 	if err != nil {
@@ -434,14 +449,15 @@ func (s *Service) UpdateCookieConsent(ctx context.Context, id, userID, orgID str
 
 // ====== Data Export (GDPR Article 20 - Data Portability) ======
 
-// RequestDataExport creates a data export request
+// RequestDataExport creates a data export request.
 func (s *Service) RequestDataExport(ctx context.Context, userID, orgID string, req *DataExportRequestInput) (*DataExportRequest, error) {
 	if !s.config.DataExport.Enabled {
-		return nil, fmt.Errorf("data export is not enabled")
+		return nil, errs.BadRequest("data export is not enabled")
 	}
 
 	// Check for pending export
 	pendingStatus := string(StatusPending)
+
 	existing, err := s.repo.ListExportRequests(ctx, userID, orgID, &pendingStatus)
 	if err == nil && len(existing) > 0 {
 		return nil, ErrExportAlreadyPending
@@ -449,14 +465,17 @@ func (s *Service) RequestDataExport(ctx context.Context, userID, orgID string, r
 
 	// Check rate limit
 	period := time.Now().Add(-s.config.DataExport.RequestPeriod)
+
 	recentExports, err := s.repo.ListExportRequests(ctx, userID, orgID, nil)
 	if err == nil {
 		count := 0
+
 		for _, export := range recentExports {
 			if export.CreatedAt.After(period) {
 				count++
 			}
 		}
+
 		if count >= s.config.DataExport.MaxRequests {
 			return nil, fmt.Errorf("export request limit exceeded: max %d per %v",
 				s.config.DataExport.MaxRequests, s.config.DataExport.RequestPeriod)
@@ -500,7 +519,7 @@ func (s *Service) RequestDataExport(ctx context.Context, userID, orgID string, r
 	return exportReq, nil
 }
 
-// processDataExportAsync processes a data export request asynchronously (GDPR Article 20)
+// processDataExportAsync processes a data export request asynchronously (GDPR Article 20).
 func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userID, orgID string, includeSections []string, format string) {
 	// Fetch the request from database to avoid race conditions
 	req, err := s.repo.GetExportRequest(ctx, exportReqID)
@@ -513,13 +532,14 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 	s.repo.UpdateExportRequest(ctx, req)
 
 	// Collect data from various sources
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 
 	for _, section := range req.IncludeSections {
 		switch section {
 		case "profile":
 			if s.userService != nil {
 				userXID, _ := xid.FromString(req.UserID)
+
 				user, err := s.userService.FindByID(ctx, userXID)
 				if err == nil {
 					data["profile"] = user
@@ -532,7 +552,7 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 			}
 		case "sessions":
 			// Would fetch sessions from session service
-			data["sessions"] = []interface{}{} // Placeholder
+			data["sessions"] = []any{} // Placeholder
 		case "audit":
 			logs, err := s.repo.ListAuditLogs(ctx, req.UserID, req.OrganizationID, 1000)
 			if err == nil {
@@ -547,6 +567,7 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 		req.Status = string(StatusFailed)
 		req.ErrorMessage = err.Error()
 		s.repo.UpdateExportRequest(ctx, req)
+
 		return
 	}
 
@@ -567,8 +588,8 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 	// TODO: Send notification and audit log
 }
 
-// createExportFile creates an export file in the specified format
-func (s *Service) createExportFile(req *DataExportRequest, data map[string]interface{}) (string, int64, error) {
+// createExportFile creates an export file in the specified format.
+func (s *Service) createExportFile(req *DataExportRequest, data map[string]any) (string, int64, error) {
 	// Ensure export directory exists
 	exportDir := filepath.Join(s.config.DataExport.StoragePath, req.OrganizationID)
 	if err := os.MkdirAll(exportDir, 0755); err != nil {
@@ -578,8 +599,10 @@ func (s *Service) createExportFile(req *DataExportRequest, data map[string]inter
 	filename := fmt.Sprintf("data_export_%s_%s.%s", req.UserID, req.ID.String(), req.Format)
 	filepath := filepath.Join(exportDir, filename)
 
-	var content []byte
-	var err error
+	var (
+		content []byte
+		err     error
+	)
 
 	switch req.Format {
 	case "json":
@@ -609,22 +632,22 @@ func (s *Service) createExportFile(req *DataExportRequest, data map[string]inter
 	return filepath, int64(len(content)), nil
 }
 
-// GetExportRequest retrieves an export request
+// GetExportRequest retrieves an export request.
 func (s *Service) GetExportRequest(ctx context.Context, id string) (*DataExportRequest, error) {
 	return s.repo.GetExportRequest(ctx, id)
 }
 
-// ListExportRequests lists export requests for a user
+// ListExportRequests lists export requests for a user.
 func (s *Service) ListExportRequests(ctx context.Context, userID, orgID string) ([]*DataExportRequest, error) {
 	return s.repo.ListExportRequests(ctx, userID, orgID, nil)
 }
 
 // ====== Data Deletion (GDPR Article 17 - Right to be Forgotten) ======
 
-// RequestDataDeletion creates a data deletion request
+// RequestDataDeletion creates a data deletion request.
 func (s *Service) RequestDataDeletion(ctx context.Context, userID, orgID string, req *DataDeletionRequestInput) (*DataDeletionRequest, error) {
 	if !s.config.DataDeletion.Enabled {
-		return nil, fmt.Errorf("data deletion is not enabled")
+		return nil, errs.BadRequest("data deletion is not enabled")
 	}
 
 	// Check for existing pending deletion
@@ -668,7 +691,7 @@ func (s *Service) RequestDataDeletion(ctx context.Context, userID, orgID string,
 	return deletionReq, nil
 }
 
-// ApproveDeletionRequest approves a deletion request
+// ApproveDeletionRequest approves a deletion request.
 func (s *Service) ApproveDeletionRequest(ctx context.Context, requestID, approverID, orgID string) error {
 	req, err := s.repo.GetDeletionRequest(ctx, requestID)
 	if err != nil {
@@ -680,7 +703,7 @@ func (s *Service) ApproveDeletionRequest(ctx context.Context, requestID, approve
 	}
 
 	if req.Status != string(StatusPending) {
-		return fmt.Errorf("deletion request is not pending")
+		return errs.BadRequest("deletion request is not pending")
 	}
 
 	now := time.Now()
@@ -697,7 +720,7 @@ func (s *Service) ApproveDeletionRequest(ctx context.Context, requestID, approve
 	return nil
 }
 
-// ProcessDeletionRequest processes an approved deletion request (GDPR Article 17)
+// ProcessDeletionRequest processes an approved deletion request (GDPR Article 17).
 func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) error {
 	req, err := s.repo.GetDeletionRequest(ctx, requestID)
 	if err != nil {
@@ -712,7 +735,7 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 	if s.config.DataDeletion.GracePeriodDays > 0 && req.ApprovedAt != nil {
 		gracePeriodEnd := req.ApprovedAt.AddDate(0, 0, s.config.DataDeletion.GracePeriodDays)
 		if time.Now().Before(gracePeriodEnd) {
-			return fmt.Errorf("grace period has not passed yet")
+			return errs.BadRequest("grace period has not passed yet")
 		}
 	}
 
@@ -732,8 +755,10 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 			req.Status = string(StatusFailed)
 			req.ErrorMessage = fmt.Sprintf("archive failed: %v", err)
 			s.repo.UpdateDeletionRequest(ctx, req)
+
 			return fmt.Errorf("failed to archive user data: %w", err)
 		}
+
 		req.ArchivePath = archivePath
 	}
 
@@ -746,6 +771,7 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 				req.Status = string(StatusFailed)
 				req.ErrorMessage = err.Error()
 				s.repo.UpdateDeletionRequest(ctx, req)
+
 				return err
 			}
 		case "consents":
@@ -771,14 +797,15 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 	return nil
 }
 
-// archiveUserData creates an archive of user data before deletion
+// archiveUserData creates an archive of user data before deletion.
 func (s *Service) archiveUserData(ctx context.Context, userID, orgID string) (string, error) {
 	// Collect all user data
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 
 	// User profile
 	if s.userService != nil {
 		userXID, _ := xid.FromString(userID)
+
 		user, err := s.userService.FindByID(ctx, userXID)
 		if err == nil {
 			data["profile"] = user
@@ -815,7 +842,7 @@ func (s *Service) archiveUserData(ctx context.Context, userID, orgID string) (st
 	return archivePath, nil
 }
 
-// deleteAllUserData deletes all user data (GDPR Article 17 implementation)
+// deleteAllUserData deletes all user data (GDPR Article 17 implementation).
 func (s *Service) deleteAllUserData(ctx context.Context, userID, orgID string) error {
 	// Delete consent records
 	consents, err := s.repo.ListConsentsByUser(ctx, userID, orgID)
@@ -844,29 +871,30 @@ func (s *Service) deleteAllUserData(ctx context.Context, userID, orgID string) e
 	return nil
 }
 
-// GetDeletionRequest retrieves a deletion request
+// GetDeletionRequest retrieves a deletion request.
 func (s *Service) GetDeletionRequest(ctx context.Context, id string) (*DataDeletionRequest, error) {
 	return s.repo.GetDeletionRequest(ctx, id)
 }
 
-// ListDeletionRequests lists deletion requests
+// ListDeletionRequests lists deletion requests.
 func (s *Service) ListDeletionRequests(ctx context.Context, userID, orgID string) ([]*DataDeletionRequest, error) {
 	return s.repo.ListDeletionRequests(ctx, userID, orgID, nil)
 }
 
 // ====== Privacy Settings ======
 
-// GetPrivacySettings retrieves privacy settings for an organization
+// GetPrivacySettings retrieves privacy settings for an organization.
 func (s *Service) GetPrivacySettings(ctx context.Context, orgID string) (*PrivacySettings, error) {
 	settings, err := s.repo.GetPrivacySettings(ctx, orgID)
 	if err != nil {
 		// Return default settings if not found
 		return s.createDefaultPrivacySettings(ctx, orgID)
 	}
+
 	return settings, nil
 }
 
-// UpdatePrivacySettings updates privacy settings for an organization
+// UpdatePrivacySettings updates privacy settings for an organization.
 func (s *Service) UpdatePrivacySettings(ctx context.Context, orgID, updatedBy string, req *PrivacySettingsRequest) (*PrivacySettings, error) {
 	settings, err := s.repo.GetPrivacySettings(ctx, orgID)
 	if err != nil {
@@ -881,51 +909,67 @@ func (s *Service) UpdatePrivacySettings(ctx context.Context, orgID, updatedBy st
 	if req.ConsentRequired != nil {
 		settings.ConsentRequired = *req.ConsentRequired
 	}
+
 	if req.CookieConsentEnabled != nil {
 		settings.CookieConsentEnabled = *req.CookieConsentEnabled
 	}
+
 	if req.CookieConsentStyle != "" {
 		settings.CookieConsentStyle = req.CookieConsentStyle
 	}
+
 	if req.DataRetentionDays != nil {
 		settings.DataRetentionDays = *req.DataRetentionDays
 	}
+
 	if req.AnonymousConsentEnabled != nil {
 		settings.AnonymousConsentEnabled = *req.AnonymousConsentEnabled
 	}
+
 	if req.GDPRMode != nil {
 		settings.GDPRMode = *req.GDPRMode
 	}
+
 	if req.CCPAMode != nil {
 		settings.CCPAMode = *req.CCPAMode
 	}
+
 	if req.AutoDeleteAfterDays != nil {
 		settings.AutoDeleteAfterDays = *req.AutoDeleteAfterDays
 	}
+
 	if req.RequireExplicitConsent != nil {
 		settings.RequireExplicitConsent = *req.RequireExplicitConsent
 	}
+
 	if req.AllowDataPortability != nil {
 		settings.AllowDataPortability = *req.AllowDataPortability
 	}
+
 	if req.ExportFormat != nil {
 		settings.ExportFormat = req.ExportFormat
 	}
+
 	if req.DataExportExpiryHours != nil {
 		settings.DataExportExpiryHours = *req.DataExportExpiryHours
 	}
+
 	if req.RequireAdminApprovalForDeletion != nil {
 		settings.RequireAdminApprovalForDeletion = *req.RequireAdminApprovalForDeletion
 	}
+
 	if req.DeletionGracePeriodDays != nil {
 		settings.DeletionGracePeriodDays = *req.DeletionGracePeriodDays
 	}
+
 	if req.ContactEmail != "" {
 		settings.ContactEmail = req.ContactEmail
 	}
+
 	if req.ContactPhone != "" {
 		settings.ContactPhone = req.ContactPhone
 	}
+
 	if req.DPOEmail != "" {
 		settings.DPOEmail = req.DPOEmail
 	}
@@ -939,7 +983,7 @@ func (s *Service) UpdatePrivacySettings(ctx context.Context, orgID, updatedBy st
 	return settings, nil
 }
 
-// createDefaultPrivacySettings creates default privacy settings for an organization
+// createDefaultPrivacySettings creates default privacy settings for an organization.
 func (s *Service) createDefaultPrivacySettings(ctx context.Context, orgID string) (*PrivacySettings, error) {
 	settings := &PrivacySettings{
 		OrganizationID:                  orgID,
@@ -968,8 +1012,8 @@ func (s *Service) createDefaultPrivacySettings(ctx context.Context, orgID string
 
 // ====== Audit & Helpers ======
 
-// createAuditLog creates an immutable audit log entry
-func (s *Service) createAuditLog(ctx context.Context, userID, orgID, consentID string, action ConsentAction, consentType, purpose string, previousValue interface{}, newValue interface{}) {
+// createAuditLog creates an immutable audit log entry.
+func (s *Service) createAuditLog(ctx context.Context, userID, orgID, consentID string, action ConsentAction, consentType, purpose string, previousValue any, newValue any) {
 	if !s.config.Audit.Enabled {
 		return
 	}
@@ -1002,7 +1046,7 @@ func (s *Service) createAuditLog(ctx context.Context, userID, orgID, consentID s
 // TODO: Notification helper - integrate with notification service
 // func (s *Service) sendNotification(...)
 
-// GenerateConsentReport generates analytics report
+// GenerateConsentReport generates analytics report.
 func (s *Service) GenerateConsentReport(ctx context.Context, orgID string, startDate, endDate time.Time) (*ConsentReport, error) {
 	stats, err := s.repo.GetConsentStats(ctx, orgID, startDate, endDate)
 	if err != nil {
@@ -1019,16 +1063,20 @@ func (s *Service) GenerateConsentReport(ctx context.Context, orgID string, start
 	if total, ok := stats["totalConsents"].(int); ok {
 		report.TotalUsers = total
 	}
+
 	if granted, ok := stats["grantedConsents"].(int); ok {
 		report.UsersWithConsent = granted
 	}
+
 	if revoked, ok := stats["revokedConsents"].(int); ok {
 		// report.RevokedConsents = revoked
 		_ = revoked
 	}
+
 	if pending, ok := stats["pendingDeletions"].(int); ok {
 		report.PendingDeletions = pending
 	}
+
 	if exports, ok := stats["dataExports"].(int); ok {
 		report.DataExportsThisPeriod = exports
 	}
@@ -1042,7 +1090,7 @@ func (s *Service) GenerateConsentReport(ctx context.Context, orgID string, start
 
 // ====== Data Processing Agreements ======
 
-// CreateDPA creates a new data processing agreement
+// CreateDPA creates a new data processing agreement.
 func (s *Service) CreateDPA(ctx context.Context, orgID, signedBy string, req *CreateDPARequest) (*DataProcessingAgreement, error) {
 	// Generate digital signature
 	signature := s.generateDigitalSignature(req.Content, req.SignedByEmail)
@@ -1075,10 +1123,11 @@ func (s *Service) CreateDPA(ctx context.Context, orgID, signedBy string, req *Cr
 	return dpa, nil
 }
 
-// generateDigitalSignature generates a cryptographic signature for DPA
+// generateDigitalSignature generates a cryptographic signature for DPA.
 func (s *Service) generateDigitalSignature(content, email string) string {
 	data := fmt.Sprintf("%s:%s:%d", content, email, time.Now().Unix())
 	hash := sha256.Sum256([]byte(data))
+
 	return hex.EncodeToString(hash[:])
 }
 
@@ -1088,6 +1137,7 @@ func (s *Service) getIPFromContext(ctx context.Context) string {
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
 		return authCtx.IPAddress
 	}
+
 	return ""
 }
 
@@ -1095,5 +1145,6 @@ func (s *Service) getUserAgentFromContext(ctx context.Context) string {
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
 		return authCtx.UserAgent
 	}
+
 	return ""
 }

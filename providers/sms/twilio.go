@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	"github.com/xraph/authsome/core/notification"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// TwilioConfig holds Twilio configuration
+// TwilioConfig holds Twilio configuration.
 type TwilioConfig struct {
 	AccountSID string `json:"account_sid"`
 	AuthToken  string `json:"auth_token"`
@@ -19,13 +20,13 @@ type TwilioConfig struct {
 	BaseURL    string `json:"base_url"`
 }
 
-// TwilioProvider implements notification.Provider for Twilio SMS
+// TwilioProvider implements notification.Provider for Twilio SMS.
 type TwilioProvider struct {
 	config     TwilioConfig
 	httpClient *http.Client
 }
 
-// NewTwilioProvider creates a new Twilio SMS provider
+// NewTwilioProvider creates a new Twilio SMS provider.
 func NewTwilioProvider(config TwilioConfig) *TwilioProvider {
 	if config.BaseURL == "" {
 		config.BaseURL = "https://api.twilio.com"
@@ -37,17 +38,17 @@ func NewTwilioProvider(config TwilioConfig) *TwilioProvider {
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *TwilioProvider) ID() string {
 	return "twilio"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *TwilioProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeSMS
 }
 
-// Send sends an SMS notification
+// Send sends an SMS notification.
 func (p *TwilioProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	// Validate phone number format
 	if !p.isValidPhoneNumber(notif.Recipient) {
@@ -64,7 +65,7 @@ func (p *TwilioProvider) Send(ctx context.Context, notif *notification.Notificat
 	apiURL := fmt.Sprintf("%s/2010-04-01/Accounts/%s/Messages.json",
 		p.config.BaseURL, p.config.AccountSID)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL,
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL,
 		strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -98,21 +99,22 @@ func (p *TwilioProvider) Send(ctx context.Context, notif *notification.Notificat
 
 	// Store the Twilio message SID in notification metadata
 	if notif.Metadata == nil {
-		notif.Metadata = make(map[string]interface{})
+		notif.Metadata = make(map[string]any)
 	}
+
 	notif.Metadata["twilio_sid"] = twilioResp.Sid
 	notif.ProviderID = twilioResp.Sid
 
 	return nil
 }
 
-// GetStatus gets the delivery status of a notification from Twilio
+// GetStatus gets the delivery status of a notification from Twilio.
 func (p *TwilioProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	// Query Twilio API for message status
 	apiURL := fmt.Sprintf("%s/2010-04-01/Accounts/%s/Messages/%s.json",
 		p.config.BaseURL, p.config.AccountSID, providerID)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return notification.NotificationStatusFailed, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -143,12 +145,12 @@ func (p *TwilioProvider) GetStatus(ctx context.Context, providerID string) (noti
 	}
 }
 
-// ValidateConfig validates the provider configuration
+// ValidateConfig validates the provider configuration.
 func (p *TwilioProvider) ValidateConfig() error {
 	return p.Validate()
 }
 
-// TwilioMessageResponse represents a Twilio message response
+// TwilioMessageResponse represents a Twilio message response.
 type TwilioMessageResponse struct {
 	Sid          string `json:"sid"`
 	Status       string `json:"status"`
@@ -156,7 +158,7 @@ type TwilioMessageResponse struct {
 	ErrorMessage string `json:"error_message"`
 }
 
-// TwilioErrorResponse represents a Twilio error response
+// TwilioErrorResponse represents a Twilio error response.
 type TwilioErrorResponse struct {
 	Code     int    `json:"code"`
 	Message  string `json:"message"`
@@ -164,7 +166,7 @@ type TwilioErrorResponse struct {
 	Status   int    `json:"status"`
 }
 
-// isValidPhoneNumber performs basic phone number validation
+// isValidPhoneNumber performs basic phone number validation.
 func (p *TwilioProvider) isValidPhoneNumber(phone string) bool {
 	// Remove common formatting characters
 	cleaned := strings.ReplaceAll(phone, " ", "")
@@ -192,83 +194,88 @@ func (p *TwilioProvider) isValidPhoneNumber(phone string) bool {
 	return true
 }
 
-// Validate validates the provider configuration
+// Validate validates the provider configuration.
 func (p *TwilioProvider) Validate() error {
 	if p.config.AccountSID == "" {
-		return fmt.Errorf("Twilio Account SID is required")
+		return errs.RequiredField("account_sid")
 	}
+
 	if p.config.AuthToken == "" {
-		return fmt.Errorf("Twilio Auth Token is required")
+		return errs.RequiredField("auth_token")
 	}
+
 	if p.config.FromNumber == "" {
-		return fmt.Errorf("Twilio from number is required")
+		return errs.RequiredField("from_number")
 	}
+
 	if !p.isValidPhoneNumber(p.config.FromNumber) {
-		return fmt.Errorf("invalid Twilio from number format")
+		return errs.InvalidInput("from_number", "invalid Twilio from number format")
 	}
+
 	return nil
 }
 
-// MockSMSProvider is a mock SMS provider for testing
+// MockSMSProvider is a mock SMS provider for testing.
 type MockSMSProvider struct {
 	SentMessages []MockSMSMessage
 }
 
-// MockSMSMessage represents a sent SMS message for testing
+// MockSMSMessage represents a sent SMS message for testing.
 type MockSMSMessage struct {
 	Recipient string
 	Subject   string
 	Body      string
 }
 
-// NewMockSMSProvider creates a new mock SMS provider
+// NewMockSMSProvider creates a new mock SMS provider.
 func NewMockSMSProvider() *MockSMSProvider {
 	return &MockSMSProvider{
 		SentMessages: make([]MockSMSMessage, 0),
 	}
 }
 
-// ID returns the provider ID
+// ID returns the provider ID.
 func (p *MockSMSProvider) ID() string {
 	return "mock-sms"
 }
 
-// Type returns the notification type this provider handles
+// Type returns the notification type this provider handles.
 func (p *MockSMSProvider) Type() notification.NotificationType {
 	return notification.NotificationTypeSMS
 }
 
-// Send sends a mock SMS notification
+// Send sends a mock SMS notification.
 func (p *MockSMSProvider) Send(ctx context.Context, notif *notification.Notification) error {
 	p.SentMessages = append(p.SentMessages, MockSMSMessage{
 		Recipient: notif.Recipient,
 		Subject:   notif.Subject,
 		Body:      notif.Body,
 	})
+
 	return nil
 }
 
-// GetStatus returns the status (always delivered for mock)
+// GetStatus returns the status (always delivered for mock).
 func (p *MockSMSProvider) GetStatus(ctx context.Context, providerID string) (notification.NotificationStatus, error) {
 	return notification.NotificationStatusDelivered, nil
 }
 
-// ValidateConfig validates the mock provider (always valid)
+// ValidateConfig validates the mock provider (always valid).
 func (p *MockSMSProvider) ValidateConfig() error {
 	return nil
 }
 
-// Validate validates the mock provider (always valid)
+// Validate validates the mock provider (always valid).
 func (p *MockSMSProvider) Validate() error {
 	return nil
 }
 
-// GetSentMessages returns all sent messages
+// GetSentMessages returns all sent messages.
 func (p *MockSMSProvider) GetSentMessages() []MockSMSMessage {
 	return p.SentMessages
 }
 
-// ClearSentMessages clears all sent messages
+// ClearSentMessages clears all sent messages.
 func (p *MockSMSProvider) ClearSentMessages() {
 	p.SentMessages = make([]MockSMSMessage, 0)
 }

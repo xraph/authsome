@@ -7,10 +7,11 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the AuthSome plugin interface for mTLS
+// Plugin implements the AuthSome plugin interface for mTLS.
 type Plugin struct {
 	service    *Service
 	config     *Config
@@ -22,35 +23,35 @@ type Plugin struct {
 	repo       Repository
 }
 
-// NewPlugin creates a new mTLS plugin
+// NewPlugin creates a new mTLS plugin.
 func NewPlugin() *Plugin {
 	return &Plugin{
 		config: DefaultConfig(),
 	}
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "mtls"
 }
 
-// Name returns the plugin name
+// Name returns the plugin name.
 func (p *Plugin) Name() string {
 	return "Certificate-Based Authentication (mTLS)"
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Enterprise mTLS authentication with X.509 certificates, PIV/CAC smart cards, and HSM integration"
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return "1.0.0"
 }
 
-// Init initializes the plugin with AuthSome dependencies
-func (p *Plugin) Init(auth interface{}) error {
+// Init initializes the plugin with AuthSome dependencies.
+func (p *Plugin) Init(auth any) error {
 	// Type assert to get the auth instance with required methods
 	authInstance, ok := auth.(interface {
 		GetDB() *bun.DB
@@ -58,7 +59,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		GetServiceRegistry() *registry.ServiceRegistry
 	})
 	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.InternalServerErrorWithMessage("invalid auth instance type")
 	}
 
 	db := authInstance.GetDB()
@@ -72,9 +73,11 @@ func (p *Plugin) Init(auth interface{}) error {
 		// Use defaults if binding fails
 		config = *DefaultConfig()
 	}
+
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid mTLS configuration: %w", err)
 	}
+
 	p.config = &config
 
 	if !p.config.Enabled {
@@ -121,7 +124,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
@@ -262,104 +265,104 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// registerHooks registers lifecycle hooks
+// registerHooks registers lifecycle hooks.
 func (p *Plugin) registerHooks(hookRegistry *hooks.HookRegistry) error {
 	// Register authentication hooks if needed
 	// hookRegistry.RegisterBeforeSignIn(p.onBeforeSignIn)
 	// hookRegistry.RegisterAfterSignIn(p.onAfterSignIn)
-
 	return nil
 }
 
-// RegisterHooks registers plugin hooks with the hook registry (implements Plugin interface)
+// RegisterHooks registers plugin hooks with the hook registry (implements Plugin interface).
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return p.registerHooks(hookRegistry)
 }
 
-// RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// RegisterServiceDecorators allows plugins to replace core services with decorated versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// mTLS plugin doesn't decorate core services
 	// It provides its own service that's accessed via the plugin
 	return nil
 }
 
-// Migrate performs database migrations
+// Migrate performs database migrations.
 func (p *Plugin) Migrate() error {
 	// Database migrations will be handled by migration system
 	// The schema is defined in schema.go and will be registered in migrations/
 	return nil
 }
 
-// Service returns the mTLS service for direct access (optional public method)
+// Service returns the mTLS service for direct access (optional public method).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// Validator returns the certificate validator for direct access (optional public method)
+// Validator returns the certificate validator for direct access (optional public method).
 func (p *Plugin) Validator() *CertificateValidator {
 	return p.validator
 }
 
-// SmartCardProvider returns the smart card provider for direct access (optional public method)
+// SmartCardProvider returns the smart card provider for direct access (optional public method).
 func (p *Plugin) SmartCardProvider() *SmartCardProvider {
 	return p.smartCard
 }
 
-// HSMManager returns the HSM manager for direct access (optional public method)
+// HSMManager returns the HSM manager for direct access (optional public method).
 func (p *Plugin) HSMManager() *HSMManager {
 	return p.hsmManager
 }
 
-// Shutdown cleanly shuts down the plugin
+// Shutdown cleanly shuts down the plugin.
 func (p *Plugin) Shutdown() error {
 	if p.hsmManager != nil {
 		return p.hsmManager.Shutdown()
 	}
+
 	return nil
 }
 
-// Response types for mTLS routes
+// Response types for mTLS routes.
 type mTLSErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type mTLSStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type MTLSCertificateResponse struct {
-	Certificate interface{} `json:"certificate"`
+	Certificate any `json:"certificate"`
 }
 
 type MTLSCertificateListResponse struct {
-	Certificates []interface{} `json:"certificates"`
+	Certificates []any `json:"certificates"`
 }
 
 type mTLSAuthResponse struct {
-	Success       bool     `json:"success" example:"true"`
-	UserID        string   `json:"userId,omitempty" example:"01HZ..."`
-	CertificateID string   `json:"certificateId,omitempty" example:"cert_123"`
+	Success       bool     `example:"true"          json:"success"`
+	UserID        string   `example:"01HZ..."       json:"userId,omitempty"`
+	CertificateID string   `example:"cert_123"      json:"certificateId,omitempty"`
 	Errors        []string `json:"errors,omitempty"`
 }
 
 type mTLSTrustAnchorResponse struct {
-	TrustAnchor interface{} `json:"trust_anchor"`
+	TrustAnchor any `json:"trust_anchor"`
 }
 
 type mTLSTrustAnchorListResponse struct {
-	TrustAnchors []interface{} `json:"trust_anchors"`
+	TrustAnchors []any `json:"trust_anchors"`
 }
 
 type mTLSPolicyResponse struct {
-	Policy interface{} `json:"policy"`
+	Policy any `json:"policy"`
 }
 
 type mTLSValidationResponse struct {
-	Valid    bool     `json:"valid" example:"true"`
+	Valid    bool     `example:"true"            json:"valid"`
 	Errors   []string `json:"errors,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
 }
 
 type mTLSStatsResponse struct {
-	Stats interface{} `json:"stats"`
+	Stats any `json:"stats"`
 }

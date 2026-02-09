@@ -28,6 +28,7 @@ func (m *MockUserService) FindByEmail(ctx context.Context, email string) (*user.
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
@@ -36,6 +37,7 @@ func (m *MockUserService) FindByAppAndEmail(ctx context.Context, appID xid.ID, e
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
@@ -44,6 +46,7 @@ func (m *MockUserService) FindByID(ctx context.Context, id xid.ID) (*user.User, 
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
@@ -52,6 +55,7 @@ func (m *MockUserService) FindByUsername(ctx context.Context, username string) (
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
@@ -60,6 +64,7 @@ func (m *MockUserService) Create(ctx context.Context, req *user.CreateUserReques
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
@@ -68,11 +73,13 @@ func (m *MockUserService) Update(ctx context.Context, u *user.User, req *user.Up
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*user.User), args.Error(1)
 }
 
 func (m *MockUserService) Delete(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
@@ -81,28 +88,31 @@ func (m *MockUserService) ListUsers(ctx context.Context, filter *user.ListUsersF
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*pagination.PageResponse[*user.User]), args.Error(1)
 }
 
 func (m *MockUserService) CountUsers(ctx context.Context, filter *user.CountUsersFilter) (int, error) {
 	args := m.Called(ctx, filter)
+
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockUserService) SetHookRegistry(registry interface{}) {}
+func (m *MockUserService) SetHookRegistry(registry any) {}
 
-func (m *MockUserService) GetHookRegistry() interface{} {
+func (m *MockUserService) GetHookRegistry() any {
 	return nil
 }
 
-func (m *MockUserService) SetVerificationRepo(repo interface{}) {}
+func (m *MockUserService) SetVerificationRepo(repo any) {}
 
-func (m *MockUserService) GetVerificationRepo() interface{} {
+func (m *MockUserService) GetVerificationRepo() any {
 	return nil
 }
 
 func (m *MockUserService) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
 	args := m.Called(ctx, userID, hashedPassword)
+
 	return args.Error(0)
 }
 
@@ -115,6 +125,7 @@ func (m *MockSessionService) Create(ctx context.Context, req *session.CreateSess
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*session.Session), args.Error(1)
 }
 
@@ -123,6 +134,7 @@ func (m *MockSessionService) FindByToken(ctx context.Context, token string) (*se
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*session.Session), args.Error(1)
 }
 
@@ -131,16 +143,19 @@ func (m *MockSessionService) FindByID(ctx context.Context, id xid.ID) (*session.
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*session.Session), args.Error(1)
 }
 
 func (m *MockSessionService) Delete(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *MockSessionService) DeleteByToken(ctx context.Context, token string) error {
 	args := m.Called(ctx, token)
+
 	return args.Error(0)
 }
 
@@ -149,21 +164,25 @@ func (m *MockSessionService) ListSessions(ctx context.Context, filter *session.L
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*session.ListSessionsResponse), args.Error(1)
 }
 
 func (m *MockSessionService) DeleteAllForUser(ctx context.Context, userID xid.ID) error {
 	args := m.Called(ctx, userID)
+
 	return args.Error(0)
 }
 
 func (m *MockSessionService) Revoke(ctx context.Context, token string) error {
 	args := m.Called(ctx, token)
+
 	return args.Error(0)
 }
 
 func (m *MockSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
@@ -172,6 +191,7 @@ func (m *MockSessionService) RefreshSession(ctx context.Context, refreshToken st
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*session.RefreshResponse), args.Error(1)
 }
 
@@ -180,6 +200,7 @@ func (m *MockSessionService) TouchSession(ctx context.Context, sess *session.Ses
 	if args.Get(0) == nil {
 		return nil, args.Bool(1), args.Error(2)
 	}
+
 	return args.Get(0).(*session.Session), args.Bool(1), args.Error(2)
 }
 
@@ -444,6 +465,7 @@ func TestApplyAttributeMapping(t *testing.T) {
 
 func TestInitiateOIDCLogin(t *testing.T) {
 	t.Skip("Skipping: requires HTTP client mocking for OIDC discovery")
+
 	svc := NewService(nil, Config{}, nil, nil)
 
 	provider := &schema.SSOProvider{

@@ -3,13 +3,15 @@ package twofa
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// MarkTrustedDevice marks a device as trusted for a specified number of days
+// MarkTrustedDevice marks a device as trusted for a specified number of days.
 func (s *Service) MarkTrustedDevice(ctx context.Context, userID, deviceID string, days int) error {
 	if days <= 0 || days > 90 {
 		days = 30 // Default to 30 days, max 90 days
@@ -21,11 +23,12 @@ func (s *Service) MarkTrustedDevice(ctx context.Context, userID, deviceID string
 	}
 
 	if deviceID == "" {
-		return fmt.Errorf("device ID is required")
+		return errs.New(errs.CodeInvalidInput, "device ID is required", http.StatusBadRequest)
 	}
 
 	// Check if device is already trusted
 	var existing schema.TrustedDevice
+
 	err = s.repo.DB().NewSelect().
 		Model(&existing).
 		Where("user_id = ? AND device_id = ?", uid, deviceID).
@@ -41,8 +44,8 @@ func (s *Service) MarkTrustedDevice(ctx context.Context, userID, deviceID string
 			DeviceID:  deviceID,
 			ExpiresAt: expiresAt,
 		}
-		trustedDevice.AuditableModel.CreatedBy = uid
-		trustedDevice.AuditableModel.UpdatedBy = uid
+		trustedDevice.CreatedBy = uid
+		trustedDevice.UpdatedBy = uid
 
 		_, err = s.repo.DB().NewInsert().Model(trustedDevice).Exec(ctx)
 		if err != nil {
@@ -51,8 +54,8 @@ func (s *Service) MarkTrustedDevice(ctx context.Context, userID, deviceID string
 	} else {
 		// Update existing trust record
 		existing.ExpiresAt = expiresAt
-		existing.AuditableModel.UpdatedBy = uid
-		existing.AuditableModel.UpdatedAt = time.Now().UTC()
+		existing.UpdatedBy = uid
+		existing.UpdatedAt = time.Now().UTC()
 
 		_, err = s.repo.DB().NewUpdate().
 			Model(&existing).
@@ -67,7 +70,7 @@ func (s *Service) MarkTrustedDevice(ctx context.Context, userID, deviceID string
 	return nil
 }
 
-// IsTrustedDevice checks if a device is currently trusted (not expired)
+// IsTrustedDevice checks if a device is currently trusted (not expired).
 func (s *Service) IsTrustedDevice(ctx context.Context, userID, deviceID string) bool {
 	uid, err := xid.FromString(userID)
 	if err != nil {
@@ -79,6 +82,7 @@ func (s *Service) IsTrustedDevice(ctx context.Context, userID, deviceID string) 
 	}
 
 	var trustedDevice schema.TrustedDevice
+
 	err = s.repo.DB().NewSelect().
 		Model(&trustedDevice).
 		Where("user_id = ? AND device_id = ? AND expires_at > ?", uid, deviceID, time.Now()).
@@ -87,7 +91,7 @@ func (s *Service) IsTrustedDevice(ctx context.Context, userID, deviceID string) 
 	return err == nil // Trusted if found and not expired
 }
 
-// RemoveTrustedDevice removes trust for a specific device
+// RemoveTrustedDevice removes trust for a specific device.
 func (s *Service) RemoveTrustedDevice(ctx context.Context, userID, deviceID string) error {
 	uid, err := xid.FromString(userID)
 	if err != nil {
@@ -98,7 +102,6 @@ func (s *Service) RemoveTrustedDevice(ctx context.Context, userID, deviceID stri
 		Model((*schema.TrustedDevice)(nil)).
 		Where("user_id = ? AND device_id = ?", uid, deviceID).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to remove trusted device: %w", err)
 	}
@@ -106,7 +109,7 @@ func (s *Service) RemoveTrustedDevice(ctx context.Context, userID, deviceID stri
 	return nil
 }
 
-// ListTrustedDevices returns all trusted devices for a user
+// ListTrustedDevices returns all trusted devices for a user.
 func (s *Service) ListTrustedDevices(ctx context.Context, userID string) ([]schema.TrustedDevice, error) {
 	uid, err := xid.FromString(userID)
 	if err != nil {
@@ -114,12 +117,12 @@ func (s *Service) ListTrustedDevices(ctx context.Context, userID string) ([]sche
 	}
 
 	var devices []schema.TrustedDevice
+
 	err = s.repo.DB().NewSelect().
 		Model(&devices).
 		Where("user_id = ? AND expires_at > ?", uid, time.Now()).
 		Order("created_at DESC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to list trusted devices: %w", err)
 	}
@@ -127,13 +130,12 @@ func (s *Service) ListTrustedDevices(ctx context.Context, userID string) ([]sche
 	return devices, nil
 }
 
-// CleanupExpiredDevices removes expired trusted device records
+// CleanupExpiredDevices removes expired trusted device records.
 func (s *Service) CleanupExpiredDevices(ctx context.Context) error {
 	_, err := s.repo.DB().NewDelete().
 		Model((*schema.TrustedDevice)(nil)).
 		Where("expires_at <= ?", time.Now()).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to cleanup expired devices: %w", err)
 	}

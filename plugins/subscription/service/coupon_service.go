@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/repository"
 )
 
-// CouponService handles coupon and discount operations
+// CouponService handles coupon and discount operations.
 type CouponService struct {
 	repo    repository.CouponRepository
 	subRepo repository.SubscriptionRepository
 }
 
-// NewCouponService creates a new coupon service
+// NewCouponService creates a new coupon service.
 func NewCouponService(repo repository.CouponRepository, subRepo repository.SubscriptionRepository) *CouponService {
 	return &CouponService{
 		repo:    repo,
@@ -25,7 +26,7 @@ func NewCouponService(repo repository.CouponRepository, subRepo repository.Subsc
 	}
 }
 
-// CreateCoupon creates a new coupon
+// CreateCoupon creates a new coupon.
 func (s *CouponService) CreateCoupon(ctx context.Context, appID xid.ID, req *core.CreateCouponRequest) (*core.Coupon, error) {
 	// Validate coupon type and values
 	if err := s.validateCouponRequest(req); err != nil {
@@ -78,27 +79,28 @@ func (s *CouponService) CreateCoupon(ctx context.Context, appID xid.ID, req *cor
 	return coupon, nil
 }
 
-// GetCoupon returns a coupon by ID
+// GetCoupon returns a coupon by ID.
 func (s *CouponService) GetCoupon(ctx context.Context, id xid.ID) (*core.Coupon, error) {
 	return s.repo.GetCoupon(ctx, id)
 }
 
-// GetCouponByCode returns a coupon by code
+// GetCouponByCode returns a coupon by code.
 func (s *CouponService) GetCouponByCode(ctx context.Context, appID xid.ID, code string) (*core.Coupon, error) {
 	return s.repo.GetCouponByCode(ctx, appID, strings.ToUpper(code))
 }
 
-// ListCoupons returns all coupons for an app
+// ListCoupons returns all coupons for an app.
 func (s *CouponService) ListCoupons(ctx context.Context, appID xid.ID, status *core.CouponStatus, page, pageSize int) ([]*core.Coupon, int, error) {
 	return s.repo.ListCoupons(ctx, appID, status, page, pageSize)
 }
 
-// UpdateCoupon updates a coupon
+// UpdateCoupon updates a coupon.
 func (s *CouponService) UpdateCoupon(ctx context.Context, id xid.ID, req *core.UpdateCouponRequest) (*core.Coupon, error) {
 	coupon, err := s.repo.GetCoupon(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	if coupon == nil {
 		return nil, core.ErrCouponNotFound
 	}
@@ -106,27 +108,35 @@ func (s *CouponService) UpdateCoupon(ctx context.Context, id xid.ID, req *core.U
 	if req.Name != nil {
 		coupon.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		coupon.Description = *req.Description
 	}
+
 	if req.MaxRedemptions != nil {
 		coupon.MaxRedemptions = *req.MaxRedemptions
 	}
+
 	if req.MaxRedemptionsPerOrg != nil {
 		coupon.MaxRedemptionsPerOrg = *req.MaxRedemptionsPerOrg
 	}
+
 	if len(req.ApplicablePlans) > 0 {
 		coupon.ApplicablePlans = req.ApplicablePlans
 	}
+
 	if len(req.ApplicableAddOns) > 0 {
 		coupon.ApplicableAddOns = req.ApplicableAddOns
 	}
+
 	if req.ValidUntil != nil {
 		coupon.ValidUntil = req.ValidUntil
 	}
+
 	if req.Status != nil {
 		coupon.Status = *req.Status
 	}
+
 	if req.Metadata != nil {
 		coupon.Metadata = req.Metadata
 	}
@@ -140,12 +150,13 @@ func (s *CouponService) UpdateCoupon(ctx context.Context, id xid.ID, req *core.U
 	return coupon, nil
 }
 
-// ArchiveCoupon archives a coupon
+// ArchiveCoupon archives a coupon.
 func (s *CouponService) ArchiveCoupon(ctx context.Context, id xid.ID) error {
 	coupon, err := s.repo.GetCoupon(ctx, id)
 	if err != nil {
 		return err
 	}
+
 	if coupon == nil {
 		return core.ErrCouponNotFound
 	}
@@ -156,12 +167,13 @@ func (s *CouponService) ArchiveCoupon(ctx context.Context, id xid.ID) error {
 	return s.repo.UpdateCoupon(ctx, coupon)
 }
 
-// ValidateCoupon validates a coupon code
+// ValidateCoupon validates a coupon code.
 func (s *CouponService) ValidateCoupon(ctx context.Context, appID xid.ID, req *core.ValidateCouponRequest) (*core.ValidateCouponResponse, error) {
 	coupon, err := s.repo.GetCouponByCode(ctx, appID, strings.ToUpper(req.Code))
 	if err != nil {
 		return nil, err
 	}
+
 	if coupon == nil {
 		return &core.ValidateCouponResponse{
 			Valid:   false,
@@ -191,12 +203,13 @@ func (s *CouponService) ValidateCoupon(ctx context.Context, appID xid.ID, req *c
 	}, nil
 }
 
-// RedeemCoupon redeems a coupon for a subscription
+// RedeemCoupon redeems a coupon for a subscription.
 func (s *CouponService) RedeemCoupon(ctx context.Context, appID xid.ID, req *core.RedeemCouponRequest) (*core.CouponRedemption, error) {
 	coupon, err := s.repo.GetCouponByCode(ctx, appID, strings.ToUpper(req.Code))
 	if err != nil {
 		return nil, err
 	}
+
 	if coupon == nil {
 		return nil, core.ErrCouponNotFound
 	}
@@ -206,15 +219,16 @@ func (s *CouponService) RedeemCoupon(ctx context.Context, appID xid.ID, req *cor
 		Code:           req.Code,
 		OrganizationID: req.OrganizationID,
 	}
-	errs := s.validateCouponUsage(ctx, coupon, validateReq)
-	if len(errs) > 0 {
-		return nil, fmt.Errorf("%s", errs[0])
+
+	validationErrors := s.validateCouponUsage(ctx, coupon, validateReq)
+	if len(validationErrors) > 0 {
+		return nil, fmt.Errorf("%s", validationErrors[0])
 	}
 
 	// Get subscription to calculate discount
 	sub, err := s.subRepo.FindByID(ctx, req.SubscriptionID)
 	if err != nil {
-		return nil, fmt.Errorf("subscription not found")
+		return nil, errs.NotFound("subscription not found")
 	}
 
 	discountAmount := coupon.CalculateDiscount(sub.Plan.BasePrice)
@@ -250,23 +264,24 @@ func (s *CouponService) RedeemCoupon(ctx context.Context, appID xid.ID, req *cor
 	return redemption, nil
 }
 
-// ListRedemptions lists redemptions for a coupon
+// ListRedemptions lists redemptions for a coupon.
 func (s *CouponService) ListRedemptions(ctx context.Context, couponID xid.ID, page, pageSize int) ([]*core.CouponRedemption, int, error) {
 	return s.repo.ListRedemptions(ctx, couponID, page, pageSize)
 }
 
-// ListOrgRedemptions lists all redemptions for an organization
+// ListOrgRedemptions lists all redemptions for an organization.
 func (s *CouponService) ListOrgRedemptions(ctx context.Context, orgID xid.ID) ([]*core.CouponRedemption, error) {
 	return s.repo.ListRedemptionsByOrg(ctx, orgID)
 }
 
-// CreatePromotionCode creates a promotion code for a coupon
+// CreatePromotionCode creates a promotion code for a coupon.
 func (s *CouponService) CreatePromotionCode(ctx context.Context, appID xid.ID, req *core.CreatePromotionCodeRequest) (*core.PromotionCode, error) {
 	// Verify coupon exists
 	coupon, err := s.repo.GetCoupon(ctx, req.CouponID)
 	if err != nil {
 		return nil, err
 	}
+
 	if coupon == nil {
 		return nil, core.ErrCouponNotFound
 	}
@@ -298,7 +313,7 @@ func (s *CouponService) CreatePromotionCode(ctx context.Context, appID xid.ID, r
 	return code, nil
 }
 
-// ListPromotionCodes lists promotion codes for a coupon
+// ListPromotionCodes lists promotion codes for a coupon.
 func (s *CouponService) ListPromotionCodes(ctx context.Context, couponID xid.ID, page, pageSize int) ([]*core.PromotionCode, int, error) {
 	return s.repo.ListPromotionCodes(ctx, couponID, page, pageSize)
 }
@@ -309,78 +324,84 @@ func (s *CouponService) validateCouponRequest(req *core.CreateCouponRequest) err
 	switch req.Type {
 	case core.CouponTypePercentage:
 		if req.PercentOff <= 0 || req.PercentOff > 100 {
-			return fmt.Errorf("percent off must be between 0 and 100")
+			return errs.InvalidInput("percentOff", "must be between 0 and 100")
 		}
 	case core.CouponTypeFixedAmount:
 		if req.AmountOff <= 0 {
-			return fmt.Errorf("amount off must be positive")
+			return errs.InvalidInput("amountOff", "must be positive")
 		}
+
 		if req.Currency == "" {
-			return fmt.Errorf("currency is required for fixed amount coupons")
+			return errs.RequiredField("currency")
 		}
 	case core.CouponTypeTrialExtension:
 		if req.TrialDays <= 0 {
-			return fmt.Errorf("trial days must be positive")
+			return errs.InvalidInput("trialDays", "must be positive")
 		}
 	case core.CouponTypeFreeMonths:
 		if req.FreeMonths <= 0 {
-			return fmt.Errorf("free months must be positive")
+			return errs.InvalidInput("freeMonths", "must be positive")
 		}
 	}
 
 	if req.Duration == core.CouponDurationRepeating && req.DurationMonths <= 0 {
-		return fmt.Errorf("duration months required for repeating coupons")
+		return errs.RequiredField("durationMonths")
 	}
 
 	return nil
 }
 
 func (s *CouponService) validateCouponUsage(ctx context.Context, coupon *core.Coupon, req *core.ValidateCouponRequest) []string {
-	var errs []string
+	var validationErrors []string
 
 	// Check if coupon is valid
 	if !coupon.IsValid() {
 		if coupon.Status != core.CouponStatusActive {
-			errs = append(errs, core.ErrCouponExpired.Message)
+			validationErrors = append(validationErrors, core.ErrCouponExpired.Message)
 		}
+
 		now := time.Now()
 		if now.Before(coupon.ValidFrom) {
-			errs = append(errs, core.ErrCouponNotYetValid.Message)
+			validationErrors = append(validationErrors, core.ErrCouponNotYetValid.Message)
 		}
+
 		if coupon.ValidUntil != nil && now.After(*coupon.ValidUntil) {
-			errs = append(errs, core.ErrCouponExpired.Message)
+			validationErrors = append(validationErrors, core.ErrCouponExpired.Message)
 		}
 	}
 
 	// Check max redemptions
 	if coupon.MaxRedemptions > 0 && coupon.TimesRedeemed >= coupon.MaxRedemptions {
-		errs = append(errs, core.ErrCouponMaxRedemptions.Message)
+		validationErrors = append(validationErrors, core.ErrCouponMaxRedemptions.Message)
 	}
 
 	// Check org-specific limits
 	if coupon.MaxRedemptionsPerOrg > 0 {
 		count, _ := s.repo.CountRedemptionsByOrg(ctx, coupon.ID, req.OrganizationID)
 		if count >= coupon.MaxRedemptionsPerOrg {
-			errs = append(errs, core.ErrCouponAlreadyUsed.Message)
+			validationErrors = append(validationErrors, core.ErrCouponAlreadyUsed.Message)
 		}
 	}
 
 	// Check minimum purchase
 	if coupon.MinPurchaseAmount > 0 && req.PurchaseAmount < coupon.MinPurchaseAmount {
-		errs = append(errs, core.ErrCouponMinPurchase.Message)
+		validationErrors = append(validationErrors, core.ErrCouponMinPurchase.Message)
 	}
 
 	// Check plan applicability
 	if len(coupon.ApplicablePlans) > 0 && req.PlanSlug != "" {
 		found := false
+
 		for _, plan := range coupon.ApplicablePlans {
 			if plan == req.PlanSlug {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
-			errs = append(errs, core.ErrCouponNotApplicable.Message)
+			validationErrors = append(validationErrors, core.ErrCouponNotApplicable.Message)
 		}
 	}
 
@@ -388,9 +409,9 @@ func (s *CouponService) validateCouponUsage(ctx context.Context, coupon *core.Co
 	if coupon.FirstPurchaseOnly {
 		existingRedemptions, _ := s.repo.ListRedemptionsByOrg(ctx, req.OrganizationID)
 		if len(existingRedemptions) > 0 {
-			errs = append(errs, core.ErrCouponFirstPurchase.Message)
+			validationErrors = append(validationErrors, core.ErrCouponFirstPurchase.Message)
 		}
 	}
 
-	return errs
+	return validationErrors
 }

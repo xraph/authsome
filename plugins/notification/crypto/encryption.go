@@ -7,15 +7,17 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // EncryptionKey is the encryption key for provider credentials
-// In production, this should be loaded from environment variables or a key management service
+// In production, this should be loaded from environment variables or a key management service.
 var EncryptionKey = []byte("authsome-notification-key-32b") // Must be 32 bytes for AES-256
 
-// EncryptConfig encrypts a provider configuration map
-func EncryptConfig(config map[string]interface{}) (map[string]interface{}, error) {
-	encrypted := make(map[string]interface{})
+// EncryptConfig encrypts a provider configuration map.
+func EncryptConfig(config map[string]any) (map[string]any, error) {
+	encrypted := make(map[string]any)
 
 	for key, value := range config {
 		// Only encrypt sensitive fields
@@ -25,6 +27,7 @@ func EncryptConfig(config map[string]interface{}) (map[string]interface{}, error
 				if err != nil {
 					return nil, fmt.Errorf("failed to encrypt field %s: %w", key, err)
 				}
+
 				encrypted[key] = encryptedValue
 			} else {
 				encrypted[key] = value
@@ -37,9 +40,9 @@ func EncryptConfig(config map[string]interface{}) (map[string]interface{}, error
 	return encrypted, nil
 }
 
-// DecryptConfig decrypts a provider configuration map
-func DecryptConfig(config map[string]interface{}) (map[string]interface{}, error) {
-	decrypted := make(map[string]interface{})
+// DecryptConfig decrypts a provider configuration map.
+func DecryptConfig(config map[string]any) (map[string]any, error) {
+	decrypted := make(map[string]any)
 
 	for key, value := range config {
 		// Only decrypt sensitive fields
@@ -49,6 +52,7 @@ func DecryptConfig(config map[string]interface{}) (map[string]interface{}, error
 				if err != nil {
 					return nil, fmt.Errorf("failed to decrypt field %s: %w", key, err)
 				}
+
 				decrypted[key] = decryptedValue
 			} else {
 				decrypted[key] = value
@@ -61,7 +65,7 @@ func DecryptConfig(config map[string]interface{}) (map[string]interface{}, error
 	return decrypted, nil
 }
 
-// isSensitiveField checks if a field should be encrypted
+// isSensitiveField checks if a field should be encrypted.
 func isSensitiveField(fieldName string) bool {
 	sensitiveFields := map[string]bool{
 		"password":      true,
@@ -86,7 +90,7 @@ func isSensitiveField(fieldName string) bool {
 	return sensitiveFields[fieldName]
 }
 
-// encryptString encrypts a string using AES-256-GCM
+// encryptString encrypts a string using AES-256-GCM.
 func encryptString(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
@@ -117,7 +121,7 @@ func encryptString(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// decryptString decrypts a string using AES-256-GCM
+// decryptString decrypts a string using AES-256-GCM.
 func decryptString(ciphertext string) (string, error) {
 	if ciphertext == "" {
 		return "", nil
@@ -144,7 +148,7 @@ func decryptString(ciphertext string) (string, error) {
 	// Extract nonce
 	nonceSize := gcm.NonceSize()
 	if len(data) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
+		return "", errs.BadRequest("ciphertext too short")
 	}
 
 	nonce, ciphertextBytes := data[:nonceSize], data[nonceSize:]
@@ -159,20 +163,23 @@ func decryptString(ciphertext string) (string, error) {
 }
 
 // SetEncryptionKey sets a custom encryption key
-// This should be called at application startup with a key from environment
+// This should be called at application startup with a key from environment.
 func SetEncryptionKey(key []byte) error {
 	if len(key) != 32 {
-		return fmt.Errorf("encryption key must be exactly 32 bytes for AES-256")
+		return errs.InvalidInput("key", "encryption key must be exactly 32 bytes for AES-256")
 	}
+
 	EncryptionKey = key
+
 	return nil
 }
 
-// GenerateEncryptionKey generates a new random encryption key
+// GenerateEncryptionKey generates a new random encryption key.
 func GenerateEncryptionKey() ([]byte, error) {
 	key := make([]byte, 32) // 32 bytes = 256 bits for AES-256
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, fmt.Errorf("failed to generate encryption key: %w", err)
 	}
+
 	return key, nil
 }

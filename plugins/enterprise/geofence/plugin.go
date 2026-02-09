@@ -10,10 +10,11 @@ import (
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the AuthSome plugin interface for geofencing
+// Plugin implements the AuthSome plugin interface for geofencing.
 type Plugin struct {
 	service           *Service
 	config            *Config
@@ -24,35 +25,35 @@ type Plugin struct {
 	detectionProvider DetectionProvider
 }
 
-// NewPlugin creates a new geofencing plugin
+// NewPlugin creates a new geofencing plugin.
 func NewPlugin() *Plugin {
 	return &Plugin{
 		config: DefaultConfig(),
 	}
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "geofence"
 }
 
-// Name returns the plugin name
+// Name returns the plugin name.
 func (p *Plugin) Name() string {
 	return "Geographic Fencing & Location Security"
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Enterprise geofencing with location-based access control, VPN/proxy detection, travel notifications, and GPS authentication"
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return "1.0.0"
 }
 
-// Init initializes the plugin with AuthSome dependencies
-func (p *Plugin) Init(auth interface{}) error {
+// Init initializes the plugin with AuthSome dependencies.
+func (p *Plugin) Init(auth any) error {
 	// Type assert to get the auth instance with required methods
 	authInstance, ok := auth.(interface {
 		GetDB() *bun.DB
@@ -60,7 +61,7 @@ func (p *Plugin) Init(auth interface{}) error {
 		GetServiceRegistry() *registry.ServiceRegistry
 	})
 	if !ok {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.InternalServerErrorWithMessage("invalid auth instance type")
 	}
 
 	db := authInstance.GetDB()
@@ -74,13 +75,14 @@ func (p *Plugin) Init(auth interface{}) error {
 		// Use defaults if binding fails
 		config = *DefaultConfig()
 	}
+
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid geofencing configuration: %w", err)
 	}
+
 	p.config = &config
 
 	if !p.config.Enabled {
-
 		return nil
 	}
 
@@ -124,7 +126,7 @@ func (p *Plugin) Init(auth interface{}) error {
 	return nil
 }
 
-// createGeoProvider creates a geolocation provider based on configuration
+// createGeoProvider creates a geolocation provider based on configuration.
 func (p *Plugin) createGeoProvider(name string) GeoProvider {
 	switch strings.ToLower(name) {
 	case "maxmind":
@@ -144,13 +146,14 @@ func (p *Plugin) createGeoProvider(name string) GeoProvider {
 	}
 }
 
-// createDetectionProvider creates a detection provider based on configuration
+// createDetectionProvider creates a detection provider based on configuration.
 func (p *Plugin) createDetectionProvider(name string) DetectionProvider {
 	switch strings.ToLower(name) {
 	case "ipqs":
 		if p.config.Detection.IPQSKey == "" {
 			return nil
 		}
+
 		return NewIPQSProvider(
 			p.config.Detection.IPQSKey,
 			p.config.Detection.IPQSStrictness,
@@ -160,11 +163,13 @@ func (p *Plugin) createDetectionProvider(name string) DetectionProvider {
 		if p.config.Detection.ProxyCheckKey == "" {
 			return nil
 		}
+
 		return NewProxyCheckProvider(p.config.Detection.ProxyCheckKey)
 	case "vpnapi":
 		if p.config.Detection.VPNAPIKey == "" {
 			return nil
 		}
+
 		return NewVPNAPIProvider(p.config.Detection.VPNAPIKey)
 	case "static":
 		return NewStaticDetectionProvider()
@@ -173,7 +178,7 @@ func (p *Plugin) createDetectionProvider(name string) DetectionProvider {
 	}
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
@@ -403,17 +408,18 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// Middleware returns the geofence middleware for automatic checks
+// Middleware returns the geofence middleware for automatic checks.
 func (p *Plugin) Middleware() func(next func(forge.Context) error) func(forge.Context) error {
 	if p.middleware == nil {
 		return func(next func(forge.Context) error) func(forge.Context) error {
 			return next
 		}
 	}
+
 	return p.middleware.CheckGeofence
 }
 
-// RegisterHooks registers plugin hooks with the hook registry
+// RegisterHooks registers plugin hooks with the hook registry.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if !p.config.Enabled {
 		return nil
@@ -429,7 +435,6 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get AuthContext with complete authentication state
 			authCtx, ok := contexts.GetAuthContext(ctx)
 			if !ok || authCtx == nil {
-
 				return nil
 			}
 
@@ -455,57 +460,57 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			return nil
 		})
-
 	}
 
 	return nil
 }
 
-// RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// RegisterServiceDecorators allows plugins to replace core services with decorated versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Geofence plugin doesn't decorate core services
 	// It provides its own service that's accessed via the plugin
 	return nil
 }
 
-// Migrate performs database migrations
+// Migrate performs database migrations.
 func (p *Plugin) Migrate() error {
 	// Database migrations will be handled by migration system
 	// The schema is defined in schema.go and will be registered in migrations/
 	return nil
 }
 
-// Service returns the geofencing service for direct access
+// Service returns the geofencing service for direct access.
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// Config returns the plugin configuration
+// Config returns the plugin configuration.
 func (p *Plugin) Config() *Config {
 	return p.config
 }
 
-// Shutdown cleanly shuts down the plugin
+// Shutdown cleanly shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	if p.service != nil {
 		// Cleanup expired cache entries
 		_, _ = p.repo.DeleteExpiredCache(ctx)
 	}
+
 	return nil
 }
 
-// Health checks plugin health
+// Health checks plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if !p.config.Enabled {
 		return nil
 	}
 
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	if p.geoProvider == nil {
-		return fmt.Errorf("geolocation provider not initialized")
+		return errs.InternalServerErrorWithMessage("geolocation provider not initialized")
 	}
 
 	// Test geolocation provider with a known IP
@@ -517,75 +522,75 @@ func (p *Plugin) Health(ctx context.Context) error {
 	return nil
 }
 
-// DTOs for geofence routes
+// DTOs for geofence routes.
 type GeofenceErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type GeofenceStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type GeofenceRuleResponse struct {
-	ID string `json:"id" example:"rule_123"`
+	ID string `example:"rule_123" json:"id"`
 }
 
 type GeofenceRulesResponse struct {
-	Rules []interface{} `json:"rules"`
+	Rules []any `json:"rules"`
 }
 
 type GeofenceCheckResponse struct {
-	Allowed bool   `json:"allowed" example:"true"`
-	Country string `json:"country,omitempty" example:"US"`
+	Allowed bool   `example:"true" json:"allowed"`
+	Country string `example:"US"   json:"country,omitempty"`
 }
 
 type GeofenceLookupResponse struct {
-	Country   string  `json:"country" example:"US"`
-	City      string  `json:"city,omitempty" example:"San Francisco"`
-	Latitude  float64 `json:"latitude,omitempty" example:"37.7749"`
-	Longitude float64 `json:"longitude,omitempty" example:"-122.4194"`
+	Country   string  `example:"US"            json:"country"`
+	City      string  `example:"San Francisco" json:"city,omitempty"`
+	Latitude  float64 `example:"37.7749"       json:"latitude,omitempty"`
+	Longitude float64 `example:"-122.4194"     json:"longitude,omitempty"`
 }
 
 type GeofenceEventsResponse struct {
-	Events []interface{} `json:"events"`
+	Events []any `json:"events"`
 }
 
 type GeofenceEventResponse struct {
-	ID string `json:"id" example:"event_123"`
+	ID string `example:"event_123" json:"id"`
 }
 
 type GeofenceTravelAlertsResponse struct {
-	TravelAlerts []interface{} `json:"travel_alerts"`
+	TravelAlerts []any `json:"travel_alerts"`
 }
 
 type GeofenceTravelAlertResponse struct {
-	ID string `json:"id" example:"alert_123"`
+	ID string `example:"alert_123" json:"id"`
 }
 
 type GeofenceTrustedLocationResponse struct {
-	ID string `json:"id" example:"trusted_123"`
+	ID string `example:"trusted_123" json:"id"`
 }
 
 type GeofenceTrustedLocationsResponse struct {
-	TrustedLocations []interface{} `json:"trusted_locations"`
+	TrustedLocations []any `json:"trusted_locations"`
 }
 
 type GeofenceViolationsResponse struct {
-	Violations []interface{} `json:"violations"`
+	Violations []any `json:"violations"`
 }
 
 type GeofenceViolationResponse struct {
-	ID string `json:"id" example:"violation_123"`
+	ID string `example:"violation_123" json:"id"`
 }
 
 type GeofenceMetricsResponse struct {
-	Metrics interface{} `json:"metrics"`
+	Metrics any `json:"metrics"`
 }
 
 type GeofenceLocationAnalyticsResponse struct {
-	Analytics interface{} `json:"analytics"`
+	Analytics any `json:"analytics"`
 }
 
 type GeofenceViolationAnalyticsResponse struct {
-	Analytics interface{} `json:"analytics"`
+	Analytics any `json:"analytics"`
 }

@@ -6,22 +6,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xraph/authsome/internal/errs"
 	"gopkg.in/yaml.v3"
 )
 
-// Parser handles loading and parsing manifest files
+// Parser handles loading and parsing manifest files.
 type Parser struct {
 	manifests map[string]*Manifest
 }
 
-// NewParser creates a new manifest parser
+// NewParser creates a new manifest parser.
 func NewParser() *Parser {
 	return &Parser{
 		manifests: make(map[string]*Manifest),
 	}
 }
 
-// LoadFile loads a single manifest file
+// LoadFile loads a single manifest file.
 func (p *Parser) LoadFile(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -41,10 +42,11 @@ func (p *Parser) LoadFile(path string) error {
 	}
 
 	p.manifests[manifest.PluginID] = &manifest
+
 	return nil
 }
 
-// LoadDirectory loads all manifest files from a directory
+// LoadDirectory loads all manifest files from a directory.
 func (p *Parser) LoadDirectory(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -71,22 +73,24 @@ func (p *Parser) LoadDirectory(dir string) error {
 	return nil
 }
 
-// Get returns a manifest by plugin ID
+// Get returns a manifest by plugin ID.
 func (p *Parser) Get(pluginID string) (*Manifest, bool) {
 	m, ok := p.manifests[pluginID]
+
 	return m, ok
 }
 
-// List returns all loaded manifests
+// List returns all loaded manifests.
 func (p *Parser) List() []*Manifest {
 	manifests := make([]*Manifest, 0, len(p.manifests))
 	for _, m := range p.manifests {
 		manifests = append(manifests, m)
 	}
+
 	return manifests
 }
 
-// Filter returns manifests matching the given plugin IDs
+// Filter returns manifests matching the given plugin IDs.
 func (p *Parser) Filter(pluginIDs []string) []*Manifest {
 	if len(pluginIDs) == 0 {
 		return p.List()
@@ -98,19 +102,21 @@ func (p *Parser) Filter(pluginIDs []string) []*Manifest {
 			manifests = append(manifests, m)
 		}
 	}
+
 	return manifests
 }
 
-// GetCore returns the core manifest (plugin_id: "core")
+// GetCore returns the core manifest (plugin_id: "core").
 func (p *Parser) GetCore() (*Manifest, error) {
 	m, ok := p.Get("core")
 	if !ok {
-		return nil, fmt.Errorf("core manifest not found")
+		return nil, errs.NotFound("core manifest not found")
 	}
+
 	return m, nil
 }
 
-// GetPluginManifests returns all non-core manifests
+// GetPluginManifests returns all non-core manifests.
 func (p *Parser) GetPluginManifests() []*Manifest {
 	var manifests []*Manifest
 	for _, m := range p.manifests {
@@ -118,11 +124,12 @@ func (p *Parser) GetPluginManifests() []*Manifest {
 			manifests = append(manifests, m)
 		}
 	}
+
 	return manifests
 }
 
 // enrichManifestWithPathParams extracts path parameters from route paths
-// and populates the Params field if it's empty
+// and populates the Params field if it's empty.
 func enrichManifestWithPathParams(manifest *Manifest) {
 	for i := range manifest.Routes {
 		route := &manifest.Routes[i]
@@ -136,19 +143,19 @@ func enrichManifestWithPathParams(manifest *Manifest) {
 
 // extractPathParams extracts path parameters from a route path string
 // Supports both :param (Forge/Express style) and {param} (OpenAPI style)
-// Returns a map of parameter names to their inferred types
+// Returns a map of parameter names to their inferred types.
 func extractPathParams(path string) map[string]string {
 	params := make(map[string]string)
 
 	// Split path by '/'
-	segments := strings.Split(path, "/")
+	segments := strings.SplitSeq(path, "/")
 
-	for _, segment := range segments {
+	for segment := range segments {
 		var paramName string
 
 		// Check for :param style
-		if strings.HasPrefix(segment, ":") {
-			paramName = strings.TrimPrefix(segment, ":")
+		if after, ok := strings.CutPrefix(segment, ":"); ok {
+			paramName = after
 		} else if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
 			// Check for {param} style
 			paramName = strings.TrimPrefix(strings.TrimSuffix(segment, "}"), "{")
@@ -164,7 +171,7 @@ func extractPathParams(path string) map[string]string {
 	return params
 }
 
-// inferParamType infers the type of a path parameter based on its name
+// inferParamType infers the type of a path parameter based on its name.
 func inferParamType(paramName string) string {
 	// Lowercase for case-insensitive matching
 	lowerName := strings.ToLower(paramName)
@@ -175,6 +182,7 @@ func inferParamType(paramName string) string {
 		if lowerName == "clientid" || lowerName == "providerid" {
 			return "string!"
 		}
+
 		return "xid.ID!"
 	}
 

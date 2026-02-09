@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/billingportal/session"
@@ -20,20 +21,21 @@ import (
 	"github.com/stripe/stripe-go/v76/subscriptionitem"
 	"github.com/stripe/stripe-go/v76/usagerecord"
 	"github.com/stripe/stripe-go/v76/webhook"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
 )
 
-// Provider implements the PaymentProvider interface for Stripe
+// Provider implements the PaymentProvider interface for Stripe.
 type Provider struct {
 	secretKey     string
 	webhookSecret string
 }
 
-// NewStripeProvider creates a new Stripe provider
+// NewStripeProvider creates a new Stripe provider.
 func NewStripeProvider(secretKey, webhookSecret string) (*Provider, error) {
 	if secretKey == "" {
-		return nil, fmt.Errorf("stripe secret key is required")
+		return nil, errs.RequiredField("secretKey")
 	}
 
 	stripe.Key = secretKey
@@ -44,13 +46,13 @@ func NewStripeProvider(secretKey, webhookSecret string) (*Provider, error) {
 	}, nil
 }
 
-// Name returns the provider name
+// Name returns the provider name.
 func (p *Provider) Name() string {
 	return "stripe"
 }
 
-// CreateCustomer creates a Stripe customer
-func (p *Provider) CreateCustomer(ctx context.Context, email, name string, metadata map[string]interface{}) (string, error) {
+// CreateCustomer creates a Stripe customer.
+func (p *Provider) CreateCustomer(ctx context.Context, email, name string, metadata map[string]any) (string, error) {
 	params := &stripe.CustomerParams{
 		Email: stripe.String(email),
 		Name:  stripe.String(name),
@@ -71,8 +73,8 @@ func (p *Provider) CreateCustomer(ctx context.Context, email, name string, metad
 	return c.ID, nil
 }
 
-// UpdateCustomer updates a Stripe customer
-func (p *Provider) UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]interface{}) error {
+// UpdateCustomer updates a Stripe customer.
+func (p *Provider) UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]any) error {
 	params := &stripe.CustomerParams{
 		Email: stripe.String(email),
 		Name:  stripe.String(name),
@@ -86,16 +88,18 @@ func (p *Provider) UpdateCustomer(ctx context.Context, customerID, email, name s
 	}
 
 	_, err := customer.Update(customerID, params)
+
 	return err
 }
 
-// DeleteCustomer deletes a Stripe customer
+// DeleteCustomer deletes a Stripe customer.
 func (p *Provider) DeleteCustomer(ctx context.Context, customerID string) error {
 	_, err := customer.Del(customerID, nil)
+
 	return err
 }
 
-// SyncPlan syncs a plan to Stripe (creates Product and Price)
+// SyncPlan syncs a plan to Stripe (creates Product and Price).
 func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 	// Build metadata for AuthSome plan identification and recovery
 	metadata := map[string]string{
@@ -109,6 +113,7 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 
 	// Create or update product
 	var productID string
+
 	if plan.ProviderPlanID != "" {
 		// Update existing product
 		params := &stripe.ProductParams{
@@ -120,10 +125,12 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 		if plan.Description != "" {
 			params.Description = stripe.String(plan.Description)
 		}
+
 		_, err := product.Update(plan.ProviderPlanID, params)
 		if err != nil {
 			return fmt.Errorf("failed to update Stripe product: %w", err)
 		}
+
 		productID = plan.ProviderPlanID
 	} else {
 		// Create new product
@@ -136,10 +143,12 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 		if plan.Description != "" {
 			params.Description = stripe.String(plan.Description)
 		}
+
 		prod, err := product.New(params)
 		if err != nil {
 			return fmt.Errorf("failed to create Stripe product: %w", err)
 		}
+
 		productID = prod.ID
 		plan.ProviderPlanID = productID
 	}
@@ -159,6 +168,7 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 			if plan.BillingInterval == core.BillingIntervalYearly {
 				interval = stripe.PriceRecurringIntervalYear
 			}
+
 			priceParams.Recurring = &stripe.PriceRecurringParams{
 				Interval: stripe.String(string(interval)),
 			}
@@ -168,13 +178,14 @@ func (p *Provider) SyncPlan(ctx context.Context, plan *core.Plan) error {
 		if err != nil {
 			return fmt.Errorf("failed to create Stripe price: %w", err)
 		}
+
 		plan.ProviderPriceID = pr.ID
 	}
 
 	return nil
 }
 
-// SyncAddOn syncs an add-on to Stripe
+// SyncAddOn syncs an add-on to Stripe.
 func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
 	// Build metadata for recovery and identification
 	metadata := map[string]string{
@@ -188,6 +199,7 @@ func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
 
 	// Create or update product
 	var productID string
+
 	if addon.ProviderPriceID != "" {
 		// Extract product ID from existing price
 		// For Stripe, we need to get the price to find the product
@@ -208,6 +220,7 @@ func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
 	if err != nil {
 		return fmt.Errorf("failed to create Stripe product for add-on: %w", err)
 	}
+
 	productID = prod.ID
 
 	// Create price
@@ -224,6 +237,7 @@ func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
 		if addon.BillingInterval == core.BillingIntervalYearly {
 			interval = stripe.PriceRecurringIntervalYear
 		}
+
 		priceParams.Recurring = &stripe.PriceRecurringParams{
 			Interval: stripe.String(string(interval)),
 		}
@@ -240,8 +254,8 @@ func (p *Provider) SyncAddOn(ctx context.Context, addon *core.AddOn) error {
 	return nil
 }
 
-// CreateSubscription creates a Stripe subscription
-func (p *Provider) CreateSubscription(ctx context.Context, customerID string, priceID string, quantity int, trialDays int, metadata map[string]interface{}) (string, error) {
+// CreateSubscription creates a Stripe subscription.
+func (p *Provider) CreateSubscription(ctx context.Context, customerID string, priceID string, quantity int, trialDays int, metadata map[string]any) (string, error) {
 	params := &stripe.SubscriptionParams{
 		Customer: stripe.String(customerID),
 		Items: []*stripe.SubscriptionItemsParams{
@@ -271,7 +285,7 @@ func (p *Provider) CreateSubscription(ctx context.Context, customerID string, pr
 	return sub.ID, nil
 }
 
-// UpdateSubscription updates a Stripe subscription
+// UpdateSubscription updates a Stripe subscription.
 func (p *Provider) UpdateSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) error {
 	// Get existing subscription to find item ID
 	sub, err := subscription.Get(subscriptionID, nil)
@@ -280,7 +294,7 @@ func (p *Provider) UpdateSubscription(ctx context.Context, subscriptionID string
 	}
 
 	if len(sub.Items.Data) == 0 {
-		return fmt.Errorf("subscription has no items")
+		return errs.BadRequest("subscription has no items")
 	}
 
 	params := &stripe.SubscriptionParams{
@@ -294,13 +308,15 @@ func (p *Provider) UpdateSubscription(ctx context.Context, subscriptionID string
 	}
 
 	_, err = subscription.Update(subscriptionID, params)
+
 	return err
 }
 
-// CancelSubscription cancels a Stripe subscription
+// CancelSubscription cancels a Stripe subscription.
 func (p *Provider) CancelSubscription(ctx context.Context, subscriptionID string, immediate bool) error {
 	if immediate {
 		_, err := subscription.Cancel(subscriptionID, nil)
+
 		return err
 	}
 
@@ -308,10 +324,11 @@ func (p *Provider) CancelSubscription(ctx context.Context, subscriptionID string
 		CancelAtPeriodEnd: stripe.Bool(true),
 	}
 	_, err := subscription.Update(subscriptionID, params)
+
 	return err
 }
 
-// PauseSubscription pauses a Stripe subscription
+// PauseSubscription pauses a Stripe subscription.
 func (p *Provider) PauseSubscription(ctx context.Context, subscriptionID string) error {
 	params := &stripe.SubscriptionParams{
 		PauseCollection: &stripe.SubscriptionPauseCollectionParams{
@@ -319,18 +336,20 @@ func (p *Provider) PauseSubscription(ctx context.Context, subscriptionID string)
 		},
 	}
 	_, err := subscription.Update(subscriptionID, params)
+
 	return err
 }
 
-// ResumeSubscription resumes a Stripe subscription
+// ResumeSubscription resumes a Stripe subscription.
 func (p *Provider) ResumeSubscription(ctx context.Context, subscriptionID string) error {
 	params := &stripe.SubscriptionParams{}
 	params.AddExtra("pause_collection", "")
 	_, err := subscription.Update(subscriptionID, params)
+
 	return err
 }
 
-// AddSubscriptionItem adds an item (add-on) to an existing subscription
+// AddSubscriptionItem adds an item (add-on) to an existing subscription.
 func (p *Provider) AddSubscriptionItem(ctx context.Context, subscriptionID string, priceID string, quantity int) (string, error) {
 	params := &stripe.SubscriptionItemParams{
 		Subscription: stripe.String(subscriptionID),
@@ -346,26 +365,28 @@ func (p *Provider) AddSubscriptionItem(ctx context.Context, subscriptionID strin
 	return item.ID, nil
 }
 
-// RemoveSubscriptionItem removes an item from a subscription
+// RemoveSubscriptionItem removes an item from a subscription.
 func (p *Provider) RemoveSubscriptionItem(ctx context.Context, subscriptionID string, itemID string) error {
 	_, err := subscriptionitem.Del(itemID, nil)
+
 	return err
 }
 
-// UpdateSubscriptionItem updates the quantity of a subscription item
+// UpdateSubscriptionItem updates the quantity of a subscription item.
 func (p *Provider) UpdateSubscriptionItem(ctx context.Context, subscriptionID string, itemID string, quantity int) error {
 	params := &stripe.SubscriptionItemParams{
 		Quantity: stripe.Int64(int64(quantity)),
 	}
 
 	_, err := subscriptionitem.Update(itemID, params)
+
 	return err
 }
 
-// Ensure Provider implements types.PaymentProvider
+// Ensure Provider implements types.PaymentProvider.
 var _ types.PaymentProvider = (*Provider)(nil)
 
-// GetSubscription retrieves a Stripe subscription
+// GetSubscription retrieves a Stripe subscription.
 func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (*types.ProviderSubscription, error) {
 	sub, err := subscription.Get(subscriptionID, nil)
 	if err != nil {
@@ -378,21 +399,25 @@ func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (
 		Status:             string(sub.Status),
 		CurrentPeriodStart: sub.CurrentPeriodStart,
 		CurrentPeriodEnd:   sub.CurrentPeriodEnd,
-		Metadata:           make(map[string]interface{}),
+		Metadata:           make(map[string]any),
 	}
 
 	if sub.TrialStart > 0 {
 		result.TrialStart = &sub.TrialStart
 	}
+
 	if sub.TrialEnd > 0 {
 		result.TrialEnd = &sub.TrialEnd
 	}
+
 	if sub.CancelAt > 0 {
 		result.CancelAt = &sub.CancelAt
 	}
+
 	if sub.CanceledAt > 0 {
 		result.CanceledAt = &sub.CanceledAt
 	}
+
 	if sub.EndedAt > 0 {
 		result.EndedAt = &sub.EndedAt
 	}
@@ -409,12 +434,13 @@ func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (
 	return result, nil
 }
 
-// CreateCheckoutSession creates a Stripe checkout session
+// CreateCheckoutSession creates a Stripe checkout session.
 func (p *Provider) CreateCheckoutSession(ctx context.Context, req *types.CheckoutRequest) (*types.CheckoutSession, error) {
 	mode := stripe.CheckoutSessionModeSubscription
-	if req.Mode == types.CheckoutModePayment {
+	switch req.Mode {
+	case types.CheckoutModePayment:
 		mode = stripe.CheckoutSessionModePayment
-	} else if req.Mode == types.CheckoutModeSetup {
+	case types.CheckoutModeSetup:
 		mode = stripe.CheckoutSessionModeSetup
 	}
 
@@ -454,7 +480,7 @@ func (p *Provider) CreateCheckoutSession(ctx context.Context, req *types.Checkou
 	}, nil
 }
 
-// CreatePortalSession creates a Stripe billing portal session
+// CreatePortalSession creates a Stripe billing portal session.
 func (p *Provider) CreatePortalSession(ctx context.Context, customerID, returnURL string) (string, error) {
 	params := &stripe.BillingPortalSessionParams{
 		Customer:  stripe.String(customerID),
@@ -469,7 +495,7 @@ func (p *Provider) CreatePortalSession(ctx context.Context, customerID, returnUR
 	return sess.URL, nil
 }
 
-// CreateSetupIntent creates a Stripe setup intent
+// CreateSetupIntent creates a Stripe setup intent.
 func (p *Provider) CreateSetupIntent(ctx context.Context, customerID string) (*core.SetupIntentResult, error) {
 	params := &stripe.SetupIntentParams{
 		Customer: stripe.String(customerID),
@@ -489,7 +515,7 @@ func (p *Provider) CreateSetupIntent(ctx context.Context, customerID string) (*c
 	}, nil
 }
 
-// GetPaymentMethod retrieves a Stripe payment method
+// GetPaymentMethod retrieves a Stripe payment method.
 func (p *Provider) GetPaymentMethod(ctx context.Context, paymentMethodID string) (*core.PaymentMethod, error) {
 	pm, err := paymentmethod.Get(paymentMethodID, nil)
 	if err != nil {
@@ -512,22 +538,24 @@ func (p *Provider) GetPaymentMethod(ctx context.Context, paymentMethodID string)
 	return result, nil
 }
 
-// AttachPaymentMethod attaches a payment method to a customer
+// AttachPaymentMethod attaches a payment method to a customer.
 func (p *Provider) AttachPaymentMethod(ctx context.Context, customerID, paymentMethodID string) error {
 	params := &stripe.PaymentMethodAttachParams{
 		Customer: stripe.String(customerID),
 	}
 	_, err := paymentmethod.Attach(paymentMethodID, params)
+
 	return err
 }
 
-// DetachPaymentMethod detaches a payment method
+// DetachPaymentMethod detaches a payment method.
 func (p *Provider) DetachPaymentMethod(ctx context.Context, paymentMethodID string) error {
 	_, err := paymentmethod.Detach(paymentMethodID, nil)
+
 	return err
 }
 
-// SetDefaultPaymentMethod sets the default payment method for a customer
+// SetDefaultPaymentMethod sets the default payment method for a customer.
 func (p *Provider) SetDefaultPaymentMethod(ctx context.Context, customerID, paymentMethodID string) error {
 	params := &stripe.CustomerParams{
 		InvoiceSettings: &stripe.CustomerInvoiceSettingsParams{
@@ -535,12 +563,14 @@ func (p *Provider) SetDefaultPaymentMethod(ctx context.Context, customerID, paym
 		},
 	}
 	_, err := customer.Update(customerID, params)
+
 	return err
 }
 
-// ReportUsage reports usage to Stripe
+// ReportUsage reports usage to Stripe.
 func (p *Provider) ReportUsage(ctx context.Context, subscriptionItemID string, records []*core.UsageRecord) (string, error) {
 	var lastID string
+
 	for _, record := range records {
 		params := &stripe.UsageRecordParams{
 			SubscriptionItem: stripe.String(subscriptionItemID),
@@ -558,12 +588,14 @@ func (p *Provider) ReportUsage(ctx context.Context, subscriptionItemID string, r
 		if err != nil {
 			return "", err
 		}
+
 		lastID = ur.ID
 	}
+
 	return lastID, nil
 }
 
-// GetInvoice retrieves a Stripe invoice
+// GetInvoice retrieves a Stripe invoice.
 func (p *Provider) GetInvoice(ctx context.Context, invoiceID string) (*types.ProviderInvoice, error) {
 	inv, err := invoice.Get(invoiceID, nil)
 	if err != nil {
@@ -586,22 +618,24 @@ func (p *Provider) GetInvoice(ctx context.Context, invoiceID string) (*types.Pro
 	}, nil
 }
 
-// GetInvoicePDF returns the PDF URL for an invoice
+// GetInvoicePDF returns the PDF URL for an invoice.
 func (p *Provider) GetInvoicePDF(ctx context.Context, invoiceID string) (string, error) {
 	inv, err := invoice.Get(invoiceID, nil)
 	if err != nil {
 		return "", err
 	}
+
 	return inv.InvoicePDF, nil
 }
 
-// VoidInvoice voids a Stripe invoice
+// VoidInvoice voids a Stripe invoice.
 func (p *Provider) VoidInvoice(ctx context.Context, invoiceID string) error {
 	_, err := invoice.VoidInvoice(invoiceID, nil)
+
 	return err
 }
 
-// ListInvoices lists invoices for a customer from Stripe
+// ListInvoices lists invoices for a customer from Stripe.
 func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit int) ([]*types.ProviderInvoice, error) {
 	params := &stripe.InvoiceListParams{
 		Customer: stripe.String(customerID),
@@ -609,6 +643,7 @@ func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit in
 	params.Limit = stripe.Int64(int64(limit))
 
 	var invoices []*types.ProviderInvoice
+
 	iter := invoice.List(params)
 	for iter.Next() {
 		inv := iter.Invoice()
@@ -637,7 +672,7 @@ func (p *Provider) ListInvoices(ctx context.Context, customerID string, limit in
 	return invoices, nil
 }
 
-// ListSubscriptionInvoices lists invoices for a subscription from Stripe
+// ListSubscriptionInvoices lists invoices for a subscription from Stripe.
 func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID string, limit int) ([]*types.ProviderInvoice, error) {
 	params := &stripe.InvoiceListParams{
 		Subscription: stripe.String(subscriptionID),
@@ -645,6 +680,7 @@ func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID 
 	params.Limit = stripe.Int64(int64(limit))
 
 	var invoices []*types.ProviderInvoice
+
 	iter := invoice.List(params)
 	for iter.Next() {
 		inv := iter.Invoice()
@@ -673,7 +709,7 @@ func (p *Provider) ListSubscriptionInvoices(ctx context.Context, subscriptionID 
 	return invoices, nil
 }
 
-// SyncFeature syncs a feature to Stripe as an Entitlement Feature
+// SyncFeature syncs a feature to Stripe as an Entitlement Feature.
 func (p *Provider) SyncFeature(ctx context.Context, coreFeature *core.Feature) (string, error) {
 	// Check if feature already exists in Stripe (has ProviderFeatureID)
 	if coreFeature.ProviderFeatureID != "" {
@@ -724,7 +760,7 @@ func (p *Provider) SyncFeature(ctx context.Context, coreFeature *core.Feature) (
 	return stripeFeature.ID, nil
 }
 
-// ListProviderFeatures lists features from Stripe for a product
+// ListProviderFeatures lists features from Stripe for a product.
 func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) ([]*types.ProviderFeature, error) {
 	var features []*types.ProviderFeature
 
@@ -745,7 +781,7 @@ func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) (
 			}
 		}
 
-		metadata := make(map[string]interface{})
+		metadata := make(map[string]any)
 		for k, v := range feat.Metadata {
 			metadata[k] = v
 		}
@@ -767,14 +803,14 @@ func (p *Provider) ListProviderFeatures(ctx context.Context, productID string) (
 	return features, nil
 }
 
-// GetProviderFeature gets a specific feature from Stripe
+// GetProviderFeature gets a specific feature from Stripe.
 func (p *Provider) GetProviderFeature(ctx context.Context, featureID string) (*types.ProviderFeature, error) {
 	feat, err := feature.Get(featureID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Stripe feature: %w", err)
 	}
 
-	metadata := make(map[string]interface{})
+	metadata := make(map[string]any)
 	for k, v := range feat.Metadata {
 		metadata[k] = v
 	}
@@ -789,7 +825,7 @@ func (p *Provider) GetProviderFeature(ctx context.Context, featureID string) (*t
 	return providerFeature, nil
 }
 
-// DeleteProviderFeature deletes a feature from Stripe
+// DeleteProviderFeature deletes a feature from Stripe.
 func (p *Provider) DeleteProviderFeature(ctx context.Context, featureID string) error {
 	// Note: Stripe Entitlements Features cannot be deleted once created
 	// They can only be archived/deactivated
@@ -798,7 +834,7 @@ func (p *Provider) DeleteProviderFeature(ctx context.Context, featureID string) 
 	return nil
 }
 
-// ListProducts lists all products from Stripe, filtering for AuthSome-created products
+// ListProducts lists all products from Stripe, filtering for AuthSome-created products.
 func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, error) {
 	var products []*types.ProviderProduct
 
@@ -811,9 +847,7 @@ func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, 
 
 		// Convert metadata
 		metadata := make(map[string]string)
-		for k, v := range prod.Metadata {
-			metadata[k] = v
-		}
+		maps.Copy(metadata, prod.Metadata)
 
 		products = append(products, &types.ProviderProduct{
 			ID:          prod.ID,
@@ -831,7 +865,7 @@ func (p *Provider) ListProducts(ctx context.Context) ([]*types.ProviderProduct, 
 	return products, nil
 }
 
-// GetProduct retrieves a single product from Stripe
+// GetProduct retrieves a single product from Stripe.
 func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.ProviderProduct, error) {
 	prod, err := product.Get(productID, nil)
 	if err != nil {
@@ -840,9 +874,7 @@ func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.Pro
 
 	// Convert metadata
 	metadata := make(map[string]string)
-	for k, v := range prod.Metadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, prod.Metadata)
 
 	return &types.ProviderProduct{
 		ID:          prod.ID,
@@ -853,7 +885,7 @@ func (p *Provider) GetProduct(ctx context.Context, productID string) (*types.Pro
 	}, nil
 }
 
-// ListPrices lists all prices for a product from Stripe
+// ListPrices lists all prices for a product from Stripe.
 func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.ProviderPrice, error) {
 	var prices []*types.ProviderPrice
 
@@ -867,9 +899,7 @@ func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.P
 
 		// Convert metadata
 		metadata := make(map[string]string)
-		for k, v := range pr.Metadata {
-			metadata[k] = v
-		}
+		maps.Copy(metadata, pr.Metadata)
 
 		providerPrice := &types.ProviderPrice{
 			ID:         pr.ID,
@@ -898,7 +928,7 @@ func (p *Provider) ListPrices(ctx context.Context, productID string) ([]*types.P
 	return prices, nil
 }
 
-// HandleWebhook handles a Stripe webhook
+// HandleWebhook handles a Stripe webhook.
 func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature string) (*types.WebhookEvent, error) {
 	event, err := webhook.ConstructEvent(payload, signature, p.webhookSecret)
 	if err != nil {
@@ -906,9 +936,9 @@ func (p *Provider) HandleWebhook(ctx context.Context, payload []byte, signature 
 	}
 
 	// Parse the raw JSON into a map
-	var data map[string]interface{}
+	var data map[string]any
 	if err := json.Unmarshal(event.Data.Raw, &data); err != nil {
-		data = make(map[string]interface{})
+		data = make(map[string]any)
 	}
 
 	return &types.WebhookEvent{

@@ -7,23 +7,26 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// GenerateToken generates a cryptographically secure random token
+// GenerateToken generates a cryptographically secure random token.
 func GenerateToken(length int) (string, error) {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
+
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
-// GenerateID generates a unique ID
+// GenerateID generates a unique ID.
 func GenerateID() (string, error) {
 	return GenerateToken(16)
 }
 
-// Encrypt encrypts data using AES-GCM with the provided key
+// Encrypt encrypts data using AES-GCM with the provided key.
 func Encrypt(data, key string) (string, error) {
 	// Create a hash of the key to ensure it's 32 bytes
 	hash := sha256.Sum256([]byte(key))
@@ -53,7 +56,7 @@ func Encrypt(data, key string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// Decrypt decrypts data using AES-GCM with the provided key
+// Decrypt decrypts data using AES-GCM with the provided key.
 func Decrypt(encryptedData, key string) (string, error) {
 	// Create a hash of the key to ensure it's 32 bytes
 	hash := sha256.Sum256([]byte(key))
@@ -79,7 +82,7 @@ func Decrypt(encryptedData, key string) (string, error) {
 	// Extract nonce
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
+		return "", errs.BadRequest("ciphertext too short")
 	}
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]

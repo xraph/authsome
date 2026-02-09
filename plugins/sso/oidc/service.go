@@ -17,9 +17,10 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Service handles OIDC operations
+// Service handles OIDC operations.
 type Service struct {
 	httpClient     *http.Client
 	jwksCache      map[string]*CachedJWKS
@@ -27,7 +28,7 @@ type Service struct {
 	cacheMutex     sync.RWMutex
 }
 
-// NewService creates a new OIDC service
+// NewService creates a new OIDC service.
 func NewService() *Service {
 	return &Service{
 		httpClient: &http.Client{
@@ -38,12 +39,12 @@ func NewService() *Service {
 	}
 }
 
-// JWKS represents a JSON Web Key Set
+// JWKS represents a JSON Web Key Set.
 type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
-// JWK represents a JSON Web Key
+// JWK represents a JSON Web Key.
 type JWK struct {
 	Kty string `json:"kty"`           // Key Type
 	Use string `json:"use,omitempty"` // Public Key Use
@@ -56,7 +57,7 @@ type JWK struct {
 	Crv string `json:"crv,omitempty"` // EC curve / OKP subtype
 }
 
-// CachedJWKS represents cached JWKS with expiration
+// CachedJWKS represents cached JWKS with expiration.
 type CachedJWKS struct {
 	JWKS      *JWKS
 	ExpiresAt time.Time
@@ -84,13 +85,13 @@ type OIDCDiscovery struct {
 	EndSessionEndpoint                string   `json:"end_session_endpoint,omitempty"`
 }
 
-// CachedDiscovery represents cached OIDC discovery document with expiration
+// CachedDiscovery represents cached OIDC discovery document with expiration.
 type CachedDiscovery struct {
 	Discovery *OIDCDiscovery
 	ExpiresAt time.Time
 }
 
-// OIDCTokenResponse represents the response from token endpoint
+// OIDCTokenResponse represents the response from token endpoint.
 type OIDCTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
@@ -100,7 +101,7 @@ type OIDCTokenResponse struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
-// OIDCUserInfo represents user information from userinfo endpoint
+// OIDCUserInfo represents user information from userinfo endpoint.
 type OIDCUserInfo struct {
 	Sub               string `json:"sub"`
 	Name              string `json:"name,omitempty"`
@@ -112,20 +113,21 @@ type OIDCUserInfo struct {
 	PreferredUsername string `json:"preferred_username,omitempty"`
 }
 
-// PKCEChallenge represents PKCE challenge data
+// PKCEChallenge represents PKCE challenge data.
 type PKCEChallenge struct {
 	CodeVerifier  string
 	CodeChallenge string
 	Method        string
 }
 
-// GeneratePKCEChallenge generates a PKCE challenge for OAuth2 flow
+// GeneratePKCEChallenge generates a PKCE challenge for OAuth2 flow.
 func (s *Service) GeneratePKCEChallenge() (*PKCEChallenge, error) {
 	// Generate code verifier (43-128 characters)
 	verifierBytes := make([]byte, 32)
 	if _, err := rand.Read(verifierBytes); err != nil {
 		return nil, fmt.Errorf("failed to generate code verifier: %w", err)
 	}
+
 	codeVerifier := base64.RawURLEncoding.EncodeToString(verifierBytes)
 
 	// Generate code challenge using SHA256
@@ -139,21 +141,23 @@ func (s *Service) GeneratePKCEChallenge() (*PKCEChallenge, error) {
 	}, nil
 }
 
-// ExchangeCodeForTokens exchanges authorization code for tokens
+// ExchangeCodeForTokens exchanges authorization code for tokens.
 func (s *Service) ExchangeCodeForTokens(ctx context.Context, tokenEndpoint, clientID, clientSecret, code, redirectURI, codeVerifier string) (*OIDCTokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("redirect_uri", redirectURI)
 	data.Set("client_id", clientID)
+
 	if clientSecret != "" {
 		data.Set("client_secret", clientSecret)
 	}
+
 	if codeVerifier != "" {
 		data.Set("code_verifier", codeVerifier)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tokenEndpoint, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token request: %w", err)
 	}
@@ -169,6 +173,7 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, tokenEndpoint, clie
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("token exchange failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -185,16 +190,19 @@ func (s *Service) ExchangeCodeForTokens(ctx context.Context, tokenEndpoint, clie
 func (s *Service) FetchDiscovery(ctx context.Context, issuerURL string) (*OIDCDiscovery, error) {
 	// Check cache first
 	s.cacheMutex.RLock()
+
 	if cached, exists := s.discoveryCache[issuerURL]; exists && time.Now().Before(cached.ExpiresAt) {
 		s.cacheMutex.RUnlock()
+
 		return cached.Discovery, nil
 	}
+
 	s.cacheMutex.RUnlock()
 
 	// Construct discovery URL
 	discoveryURL := strings.TrimSuffix(issuerURL, "/") + "/.well-known/openid-configuration"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", discoveryURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create discovery request: %w", err)
 	}
@@ -207,6 +215,7 @@ func (s *Service) FetchDiscovery(ctx context.Context, issuerURL string) (*OIDCDi
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("discovery fetch failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -217,16 +226,19 @@ func (s *Service) FetchDiscovery(ctx context.Context, issuerURL string) (*OIDCDi
 
 	// Validate required fields
 	if discovery.Issuer == "" {
-		return nil, fmt.Errorf("discovery document missing issuer")
+		return nil, errs.InvalidInput("issuer", "discovery document missing issuer")
 	}
+
 	if discovery.AuthorizationEndpoint == "" {
-		return nil, fmt.Errorf("discovery document missing authorization_endpoint")
+		return nil, errs.InvalidInput("authorization_endpoint", "discovery document missing authorization_endpoint")
 	}
+
 	if discovery.TokenEndpoint == "" {
-		return nil, fmt.Errorf("discovery document missing token_endpoint")
+		return nil, errs.InvalidInput("token_endpoint", "discovery document missing token_endpoint")
 	}
+
 	if discovery.JwksURI == "" {
-		return nil, fmt.Errorf("discovery document missing jwks_uri")
+		return nil, errs.InvalidInput("jwks_uri", "discovery document missing jwks_uri")
 	}
 
 	// Cache for 24 hours (discovery documents rarely change)
@@ -240,16 +252,19 @@ func (s *Service) FetchDiscovery(ctx context.Context, issuerURL string) (*OIDCDi
 	return &discovery, nil
 }
 
-// FetchJWKS fetches JWKS from the given URL with caching
+// FetchJWKS fetches JWKS from the given URL with caching.
 func (s *Service) FetchJWKS(ctx context.Context, jwksURL string) (*JWKS, error) {
 	s.cacheMutex.RLock()
+
 	if cached, exists := s.jwksCache[jwksURL]; exists && time.Now().Before(cached.ExpiresAt) {
 		s.cacheMutex.RUnlock()
+
 		return cached.JWKS, nil
 	}
+
 	s.cacheMutex.RUnlock()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", jwksURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JWKS request: %w", err)
 	}
@@ -280,8 +295,8 @@ func (s *Service) FetchJWKS(ctx context.Context, jwksURL string) (*JWKS, error) 
 	return &jwks, nil
 }
 
-// GetPublicKeyFromJWK converts a JWK to a public key for JWT verification
-func (s *Service) GetPublicKeyFromJWK(jwk *JWK) (interface{}, error) {
+// GetPublicKeyFromJWK converts a JWK to a public key for JWT verification.
+func (s *Service) GetPublicKeyFromJWK(jwk *JWK) (any, error) {
 	switch jwk.Kty {
 	case "RSA":
 		// Decode RSA modulus and exponent
@@ -309,14 +324,14 @@ func (s *Service) GetPublicKeyFromJWK(jwk *JWK) (interface{}, error) {
 	}
 }
 
-// ValidateIDTokenWithJWKS validates an ID token using remote JWKS
+// ValidateIDTokenWithJWKS validates an ID token using remote JWKS.
 func (s *Service) ValidateIDTokenWithJWKS(ctx context.Context, idToken, jwksURL, expectedIssuer, expectedAudience, expectedNonce string) (*jwt.MapClaims, error) {
 	// Parse token to get header
-	token, err := jwt.Parse(idToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(idToken, func(token *jwt.Token) (any, error) {
 		// Get key ID from token header
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
-			return nil, fmt.Errorf("missing kid in token header")
+			return nil, errs.InvalidToken().WithContext("reason", "missing kid in token header")
 		}
 
 		// Fetch JWKS
@@ -334,18 +349,17 @@ func (s *Service) ValidateIDTokenWithJWKS(ctx context.Context, idToken, jwksURL,
 
 		return nil, fmt.Errorf("key with kid %s not found in JWKS", kid)
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate token signature: %w", err)
 	}
 
 	if !token.Valid {
-		return nil, fmt.Errorf("invalid token")
+		return nil, errs.InvalidToken()
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, fmt.Errorf("invalid token claims")
+		return nil, errs.InvalidToken().WithContext("reason", "invalid token claims")
 	}
 
 	// Validate issuer
@@ -356,14 +370,17 @@ func (s *Service) ValidateIDTokenWithJWKS(ctx context.Context, idToken, jwksURL,
 	// Validate audience
 	if aud, ok := claims["aud"].(string); !ok || aud != expectedAudience {
 		// Check if audience is an array
-		if audArray, ok := claims["aud"].([]interface{}); ok {
+		if audArray, ok := claims["aud"].([]any); ok {
 			found := false
+
 			for _, a := range audArray {
 				if audStr, ok := a.(string); ok && audStr == expectedAudience {
 					found = true
+
 					break
 				}
 			}
+
 			if !found {
 				return nil, fmt.Errorf("invalid audience: expected %s not found in %v", expectedAudience, claims["aud"])
 			}
@@ -382,27 +399,27 @@ func (s *Service) ValidateIDTokenWithJWKS(ctx context.Context, idToken, jwksURL,
 	// Validate expiration
 	if exp, ok := claims["exp"].(float64); ok {
 		if time.Now().Unix() > int64(exp) {
-			return nil, fmt.Errorf("token expired")
+			return nil, errs.TokenExpired()
 		}
 	} else {
-		return nil, fmt.Errorf("missing or invalid exp claim")
+		return nil, errs.InvalidToken().WithContext("reason", "missing or invalid exp claim")
 	}
 
 	// Validate issued at time
 	if iat, ok := claims["iat"].(float64); ok {
 		if time.Now().Unix() < int64(iat) {
-			return nil, fmt.Errorf("token used before issued")
+			return nil, errs.InvalidToken().WithContext("reason", "token used before issued")
 		}
 	} else {
-		return nil, fmt.Errorf("missing or invalid iat claim")
+		return nil, errs.InvalidToken().WithContext("reason", "missing or invalid iat claim")
 	}
 
 	return &claims, nil
 }
 
-// GetUserInfo fetches user information from the userinfo endpoint
+// GetUserInfo fetches user information from the userinfo endpoint.
 func (s *Service) GetUserInfo(ctx context.Context, userinfoEndpoint, accessToken string) (*OIDCUserInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", userinfoEndpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoEndpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create userinfo request: %w", err)
 	}
@@ -418,6 +435,7 @@ func (s *Service) GetUserInfo(ctx context.Context, userinfoEndpoint, accessToken
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("userinfo request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -429,19 +447,19 @@ func (s *Service) GetUserInfo(ctx context.Context, userinfoEndpoint, accessToken
 	return &userInfo, nil
 }
 
-// ValidateIDToken validates an OIDC ID token using JWKS for signature verification
+// ValidateIDToken validates an OIDC ID token using JWKS for signature verification.
 func (s *Service) ValidateIDToken(ctx context.Context, tokenString, jwksURL, issuer, clientID, nonce string) (*jwt.MapClaims, error) {
 	return s.ValidateIDTokenWithJWKS(ctx, tokenString, jwksURL, issuer, clientID, nonce)
 }
 
-// RefreshTokens refreshes access tokens using a refresh token
+// RefreshTokens refreshes access tokens using a refresh token.
 func (s *Service) RefreshTokens(ctx context.Context, tokenEndpoint, clientID, clientSecret, refreshToken string) (*OIDCTokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", refreshToken)
 	data.Set("client_id", clientID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tokenEndpoint, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create refresh request: %w", err)
 	}
@@ -461,6 +479,7 @@ func (s *Service) RefreshTokens(ctx context.Context, tokenEndpoint, clientID, cl
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("refresh failed with status %d: %s", resp.StatusCode, string(body))
 	}
 

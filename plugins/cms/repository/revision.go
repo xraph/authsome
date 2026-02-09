@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/rs/xid"
@@ -12,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// RevisionRepository defines the interface for content revision storage operations
+// RevisionRepository defines the interface for content revision storage operations.
 type RevisionRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, revision *schema.ContentRevision) error
@@ -28,12 +29,12 @@ type RevisionRepository interface {
 	GetLatestVersion(ctx context.Context, entryID xid.ID) (int, error)
 }
 
-// revisionRepository implements RevisionRepository using Bun ORM
+// revisionRepository implements RevisionRepository using Bun ORM.
 type revisionRepository struct {
 	db *bun.DB
 }
 
-// NewRevisionRepository creates a new revision repository instance
+// NewRevisionRepository creates a new revision repository instance.
 func NewRevisionRepository(db *bun.DB) RevisionRepository {
 	return &revisionRepository{db: db}
 }
@@ -42,14 +43,16 @@ func NewRevisionRepository(db *bun.DB) RevisionRepository {
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content revision
+// Create creates a new content revision.
 func (r *revisionRepository) Create(ctx context.Context, revision *schema.ContentRevision) error {
 	if revision.ID.IsNil() {
 		revision.ID = xid.New()
 	}
+
 	if revision.CreatedAt.IsZero() {
 		revision.CreatedAt = time.Now()
 	}
+
 	if revision.Data == nil {
 		revision.Data = make(schema.EntryData)
 	}
@@ -57,47 +60,55 @@ func (r *revisionRepository) Create(ctx context.Context, revision *schema.Conten
 	_, err := r.db.NewInsert().
 		Model(revision).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a revision by ID
+// FindByID finds a revision by ID.
 func (r *revisionRepository) FindByID(ctx context.Context, id xid.ID) (*schema.ContentRevision, error) {
 	revision := new(schema.ContentRevision)
+
 	err := r.db.NewSelect().
 		Model(revision).
 		Where("cr.id = ?", id).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrRevisionNotFound("", 0)
 		}
+
 		return nil, err
 	}
+
 	return revision, nil
 }
 
-// FindByVersion finds a specific version of an entry
+// FindByVersion finds a specific version of an entry.
 func (r *revisionRepository) FindByVersion(ctx context.Context, entryID xid.ID, version int) (*schema.ContentRevision, error) {
 	revision := new(schema.ContentRevision)
+
 	err := r.db.NewSelect().
 		Model(revision).
 		Where("cr.entry_id = ?", entryID).
 		Where("cr.version = ?", version).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrRevisionNotFound(entryID.String(), version)
 		}
+
 		return nil, err
 	}
+
 	return revision, nil
 }
 
-// List lists revisions for an entry with pagination
+// List lists revisions for an entry with pagination.
 func (r *revisionRepository) List(ctx context.Context, entryID xid.ID, page, pageSize int) ([]*schema.ContentRevision, int, error) {
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+
 	if page <= 0 {
 		page = 1
 	}
@@ -113,7 +124,9 @@ func (r *revisionRepository) List(ctx context.Context, entryID xid.ID, page, pag
 
 	// Get revisions
 	offset := (page - 1) * pageSize
+
 	var revisions []*schema.ContentRevision
+
 	err = r.db.NewSelect().
 		Model(&revisions).
 		Where("entry_id = ?", entryID).
@@ -128,25 +141,27 @@ func (r *revisionRepository) List(ctx context.Context, entryID xid.ID, page, pag
 	return revisions, total, nil
 }
 
-// Delete deletes a revision
+// Delete deletes a revision.
 func (r *revisionRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentRevision)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteAllForEntry deletes all revisions for an entry
+// DeleteAllForEntry deletes all revisions for an entry.
 func (r *revisionRepository) DeleteAllForEntry(ctx context.Context, entryID xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ContentRevision)(nil)).
 		Where("entry_id = ?", entryID).
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteOldRevisions deletes old revisions, keeping only the most recent N versions
+// DeleteOldRevisions deletes old revisions, keeping only the most recent N versions.
 func (r *revisionRepository) DeleteOldRevisions(ctx context.Context, entryID xid.ID, keepCount int) error {
 	if keepCount <= 0 {
 		return nil
@@ -154,6 +169,7 @@ func (r *revisionRepository) DeleteOldRevisions(ctx context.Context, entryID xid
 
 	// Get versions to keep
 	var keepVersions []int
+
 	err := r.db.NewSelect().
 		Model((*schema.ContentRevision)(nil)).
 		Column("version").
@@ -175,6 +191,7 @@ func (r *revisionRepository) DeleteOldRevisions(ctx context.Context, entryID xid
 		Where("entry_id = ?", entryID).
 		Where("version NOT IN (?)", bun.In(keepVersions)).
 		Exec(ctx)
+
 	return err
 }
 
@@ -182,7 +199,7 @@ func (r *revisionRepository) DeleteOldRevisions(ctx context.Context, entryID xid
 // Stats Operations
 // =============================================================================
 
-// Count counts total revisions for an entry
+// Count counts total revisions for an entry.
 func (r *revisionRepository) Count(ctx context.Context, entryID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentRevision)(nil)).
@@ -190,9 +207,10 @@ func (r *revisionRepository) Count(ctx context.Context, entryID xid.ID) (int, er
 		Count(ctx)
 }
 
-// GetLatestVersion returns the latest version number for an entry
+// GetLatestVersion returns the latest version number for an entry.
 func (r *revisionRepository) GetLatestVersion(ctx context.Context, entryID xid.ID) (int, error) {
 	var version int
+
 	err := r.db.NewSelect().
 		Model((*schema.ContentRevision)(nil)).
 		ColumnExpr("COALESCE(MAX(version), 0)").
@@ -201,5 +219,6 @@ func (r *revisionRepository) GetLatestVersion(ctx context.Context, entryID xid.I
 	if err != nil {
 		return 0, err
 	}
+
 	return version, nil
 }

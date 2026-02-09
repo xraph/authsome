@@ -10,10 +10,11 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/internal/crypto"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// PasswordResetRepository defines verification token operations
+// PasswordResetRepository defines verification token operations.
 type PasswordResetRepository interface {
 	CreateVerification(ctx context.Context, verification *schema.Verification) error
 	FindVerificationByToken(ctx context.Context, token string) (*schema.Verification, error)
@@ -22,38 +23,40 @@ type PasswordResetRepository interface {
 	DeleteExpiredVerifications(ctx context.Context) error
 }
 
-// RequestPasswordResetRequest represents a password reset request
+// RequestPasswordResetRequest represents a password reset request.
 type RequestPasswordResetRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
-// ResetPasswordRequest represents a password reset confirmation
+// ResetPasswordRequest represents a password reset confirmation.
 type ResetPasswordRequest struct {
 	Token       string `json:"token,omitempty"` // URL token for link-based reset
 	Code        string `json:"code,omitempty"`  // 6-digit code for manual entry
-	NewPassword string `json:"newPassword" validate:"required,min=8"`
+	NewPassword string `json:"newPassword"     validate:"required,min=8"`
 }
 
-// PasswordResetResult contains both token and code for password reset
+// PasswordResetResult contains both token and code for password reset.
 type PasswordResetResult struct {
 	Token string // URL-safe token for email links
 	Code  string // 6-digit numeric code for mobile entry
 }
 
-// generateNumericCode generates a cryptographically secure n-digit numeric code
+// generateNumericCode generates a cryptographically secure n-digit numeric code.
 func generateNumericCode(digits int) (string, error) {
 	max := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(digits)), nil)
+
 	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
 		return "", err
 	}
 	// Pad with leading zeros if needed
 	format := fmt.Sprintf("%%0%dd", digits)
+
 	return fmt.Sprintf(format, n), nil
 }
 
 // RequestPasswordReset initiates a password reset flow
-// Returns token (for URL links) and code (for mobile entry)
+// Returns token (for URL links) and code (for mobile entry).
 func (s *Service) RequestPasswordReset(ctx context.Context, email string) (string, string, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -107,7 +110,7 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) (strin
 	return token, code, nil
 }
 
-// ResetPassword completes the password reset flow using token
+// ResetPassword completes the password reset flow using token.
 func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -118,7 +121,7 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 	// Find verification token
 	repo, ok := s.getPasswordResetRepo()
 	if !ok {
-		return fmt.Errorf("password reset repository not available")
+		return errs.InternalServerErrorWithMessage("password reset repository not available")
 	}
 
 	verification, err := repo.FindVerificationByToken(ctx, token)
@@ -129,7 +132,7 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 	return s.completePasswordReset(ctx, appID, verification, newPassword, repo)
 }
 
-// ResetPasswordWithCode completes the password reset flow using 6-digit code
+// ResetPasswordWithCode completes the password reset flow using 6-digit code.
 func (s *Service) ResetPasswordWithCode(ctx context.Context, code, newPassword string) error {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -140,7 +143,7 @@ func (s *Service) ResetPasswordWithCode(ctx context.Context, code, newPassword s
 	// Find verification by code
 	repo, ok := s.getPasswordResetRepo()
 	if !ok {
-		return fmt.Errorf("password reset repository not available")
+		return errs.InternalServerErrorWithMessage("password reset repository not available")
 	}
 
 	verification, err := repo.FindVerificationByCode(ctx, code, "password_reset")
@@ -151,7 +154,7 @@ func (s *Service) ResetPasswordWithCode(ctx context.Context, code, newPassword s
 	return s.completePasswordReset(ctx, appID, verification, newPassword, repo)
 }
 
-// completePasswordReset is the shared logic for completing password reset
+// completePasswordReset is the shared logic for completing password reset.
 func (s *Service) completePasswordReset(ctx context.Context, appID xid.ID, verification *schema.Verification, newPassword string, repo PasswordResetRepository) error {
 	// Validate token
 	if verification.Used {
@@ -199,11 +202,11 @@ func (s *Service) completePasswordReset(ctx context.Context, appID xid.ID, verif
 	return nil
 }
 
-// ValidateResetToken checks if a reset token is valid
+// ValidateResetToken checks if a reset token is valid.
 func (s *Service) ValidateResetToken(ctx context.Context, token string) (bool, error) {
 	repo, ok := s.getPasswordResetRepo()
 	if !ok {
-		return false, fmt.Errorf("password reset repository not available")
+		return false, errs.InternalServerErrorWithMessage("password reset repository not available")
 	}
 
 	verification, err := repo.FindVerificationByToken(ctx, token)
@@ -219,7 +222,7 @@ func (s *Service) ValidateResetToken(ctx context.Context, token string) (bool, e
 	return true, nil
 }
 
-// getPasswordResetRepo attempts to get the password reset repository
+// getPasswordResetRepo attempts to get the password reset repository.
 func (s *Service) getPasswordResetRepo() (PasswordResetRepository, bool) {
 	if s.users == nil {
 		return nil, false
@@ -239,9 +242,9 @@ func (s *Service) getPasswordResetRepo() (PasswordResetRepository, bool) {
 	return nil, false
 }
 
-// Password reset specific errors
+// Password reset specific errors.
 var (
-	ErrInvalidResetToken     = fmt.Errorf("invalid reset token")
-	ErrResetTokenExpired     = fmt.Errorf("reset token has expired")
-	ErrResetTokenAlreadyUsed = fmt.Errorf("reset token has already been used")
+	ErrInvalidResetToken     = errs.InvalidToken()
+	ErrResetTokenExpired     = errs.TokenExpired()
+	ErrResetTokenAlreadyUsed = errs.BadRequest("reset token has already been used")
 )

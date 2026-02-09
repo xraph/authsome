@@ -16,30 +16,30 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles HTTP requests for social OAuth
+// Handler handles HTTP requests for social OAuth.
 type Handler struct {
 	service        *Service
 	rateLimiter    *RateLimiter
 	authCompletion *authflow.CompletionService // Centralized authentication completion
 }
 
-// Request types
+// Request types.
 type SignInRequest struct {
-	Provider    string   `json:"provider" validate:"required" example:"google"`
-	Scopes      []string `json:"scopes,omitempty" example:"[\"email\",\"profile\"]"`
-	RedirectURL string   `json:"redirectUrl,omitempty" example:"https://example.com/auth/callback"`
+	Provider    string   `example:"google"                            json:"provider"              validate:"required"`
+	Scopes      []string `example:"[\"email\",\"profile\"]"           json:"scopes,omitempty"`
+	RedirectURL string   `example:"https://example.com/auth/callback" json:"redirectUrl,omitempty"`
 }
 
 type LinkAccountRequest struct {
-	Provider string   `json:"provider" validate:"required" example:"github"`
-	Scopes   []string `json:"scopes,omitempty" example:"[\"user:email\"]"`
+	Provider string   `example:"github"           json:"provider"         validate:"required"`
+	Scopes   []string `example:"[\"user:email\"]" json:"scopes,omitempty"`
 }
 
 type AdminAddProviderRequest struct {
-	AppID        xid.ID   `json:"appId" validate:"required"`
-	Provider     string   `json:"provider" validate:"required" example:"google"`
-	ClientID     string   `json:"clientId" validate:"required"`
-	ClientSecret string   `json:"clientSecret" validate:"required"`
+	AppID        xid.ID   `json:"appId"            validate:"required"`
+	Provider     string   `example:"google"        json:"provider"     validate:"required"`
+	ClientID     string   `json:"clientId"         validate:"required"`
+	ClientSecret string   `json:"clientSecret"     validate:"required"`
 	Scopes       []string `json:"scopes,omitempty"`
 	Enabled      bool     `json:"enabled"`
 }
@@ -51,21 +51,21 @@ type AdminUpdateProviderRequest struct {
 	Enabled      *bool    `json:"enabled,omitempty"`
 }
 
-// Response types - properly typed
+// Response types - properly typed.
 type AuthURLResponse struct {
-	URL string `json:"url" example:"https://accounts.google.com/o/oauth2/v2/auth?..."`
+	URL string `example:"https://accounts.google.com/o/oauth2/v2/auth?..." json:"url"`
 }
 
 type CallbackResponse struct {
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session"`
-	Token   string           `json:"token" example:"session_token_abc123"`
+	Token   string           `example:"session_token_abc123" json:"token"`
 }
 
 type CallbackDataResponse struct {
 	User      *user.User `json:"user"`
-	IsNewUser bool       `json:"isNewUser" example:"false"`
-	Action    string     `json:"action" example:"signin"` // "signin", "signup", "linked"
+	IsNewUser bool       `example:"false"  json:"isNewUser"`
+	Action    string     `example:"signin" json:"action"` // "signin", "signup", "linked"
 }
 
 type ConnectionResponse struct {
@@ -77,7 +77,7 @@ type ConnectionsResponse struct {
 }
 
 type ProvidersResponse struct {
-	Providers []string `json:"providers" example:"[\"google\",\"github\",\"facebook\"]"`
+	Providers []string `example:"[\"google\",\"github\",\"facebook\"]" json:"providers"`
 }
 
 type ProvidersAppResponse struct {
@@ -86,15 +86,15 @@ type ProvidersAppResponse struct {
 }
 
 type ProviderConfigResponse struct {
-	Message  string `json:"message" example:"Provider configured successfully"`
-	Provider string `json:"provider" example:"google"`
-	AppID    string `json:"appId" example:"c9h7b3j2k1m4n5p6"`
+	Message  string `example:"Provider configured successfully" json:"message"`
+	Provider string `example:"google"                           json:"provider"`
+	AppID    string `example:"c9h7b3j2k1m4n5p6"                 json:"appId"`
 }
 
-// Use shared response type
+// Use shared response type.
 type MessageResponse = responses.MessageResponse
 
-// NewHandler creates a new social OAuth handler
+// NewHandler creates a new social OAuth handler.
 func NewHandler(
 	service *Service,
 	rateLimiter *RateLimiter,
@@ -107,16 +107,18 @@ func NewHandler(
 	}
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errs.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
 // SignIn initiates OAuth flow for sign-in
-// POST /api/auth/signin/social
+// POST /api/auth/signin/social.
 func (h *Handler) SignIn(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -140,6 +142,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 	// Get app and org from context
 	appID, _ := contexts.GetAppID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -147,24 +150,23 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	authURL, err := h.service.GetAuthorizationURL(ctx, req.Provider, appID, userOrgID, req.Scopes)
 	if err != nil {
-
 		return handleError(c, err, "AUTH_URL_FAILED", "Failed to generate authorization URL", http.StatusBadRequest)
 	}
 
 	return c.JSON(http.StatusOK, &AuthURLResponse{URL: authURL})
 }
 
-// CallbackRequest represents OAuth callback parameters
+// CallbackRequest represents OAuth callback parameters.
 type CallbackRequest struct {
-	Provider         string `path:"provider" validate:"required" json:"-"`
-	State            string `query:"state" validate:"required" json:"state"`
-	Code             string `query:"code" json:"code"`
-	Error            string `query:"error" json:"error,omitempty"`
-	ErrorDescription string `query:"error_description" json:"errorDescription,omitempty"`
+	Provider         string `json:"-"                          path:"provider"           validate:"required"`
+	State            string `json:"state"                      query:"state"             validate:"required"`
+	Code             string `json:"code"                       query:"code"`
+	Error            string `json:"error,omitempty"            query:"error"`
+	ErrorDescription string `json:"errorDescription,omitempty" query:"error_description"`
 }
 
 // Callback handles OAuth provider callback
-// GET /api/auth/callback/:provider
+// GET /api/auth/callback/:provider.
 func (h *Handler) Callback(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -184,10 +186,11 @@ func (h *Handler) Callback(c forge.Context) error {
 	// Check for OAuth error
 	if req.Error != "" {
 		authErr := errs.New("OAUTH_ERROR", "OAuth provider error", http.StatusBadRequest).WithError(nil)
-		authErr.Details = map[string]interface{}{
+		authErr.Details = map[string]any{
 			"error":             req.Error,
 			"error_description": req.ErrorDescription,
 		}
+
 		return c.JSON(http.StatusBadRequest, authErr)
 	}
 
@@ -198,13 +201,16 @@ func (h *Handler) Callback(c forge.Context) error {
 	result, err := h.service.HandleCallback(ctx, req.Provider, req.State, req.Code)
 	if err != nil {
 		fmt.Println("Error -------------------------- : ", err, req.Provider, req.State, req.Code)
+
 		return handleError(c, err, "CALLBACK_FAILED", "Failed to handle OAuth callback", http.StatusUnauthorized)
 	}
 
 	// Use centralized authentication completion service for signup/signin
 	if h.authCompletion != nil {
-		var authResp *responses.AuthResponse
-		var signupErr error
+		var (
+			authResp  *responses.AuthResponse
+			signupErr error
+		)
 
 		if result.IsNewUser && result.User == nil {
 			// New user signup - CompleteSignUpOrSignIn will create user and add membership
@@ -279,7 +285,7 @@ func (h *Handler) Callback(c forge.Context) error {
 }
 
 // LinkAccount links a social provider to the current user
-// POST /api/auth/account/link
+// POST /api/auth/account/link.
 func (h *Handler) LinkAccount(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -293,7 +299,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 
 	// Get current user from session - in production, extract from JWT/session
 	// For now, require user_id to be passed (or get from session cookie)
-	userIDStr := c.Request().Header.Get("X-User-ID")
+	userIDStr := c.Request().Header.Get("X-User-Id")
 	if userIDStr == "" {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "User not authenticated", http.StatusUnauthorized))
 	}
@@ -306,6 +312,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 	// Get app and org from context
 	appID, _ := contexts.GetAppID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -329,7 +336,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 }
 
 // UnlinkAccount unlinks a social provider from the current user
-// DELETE /api/auth/account/unlink/:provider
+// DELETE /api/auth/account/unlink/:provider.
 func (h *Handler) UnlinkAccount(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -341,7 +348,7 @@ func (h *Handler) UnlinkAccount(c forge.Context) error {
 		}
 	}
 
-	userIDStr := c.Request().Header.Get("X-User-ID")
+	userIDStr := c.Request().Header.Get("X-User-Id")
 	if userIDStr == "" {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "User not authenticated", http.StatusUnauthorized))
 	}
@@ -364,7 +371,7 @@ func (h *Handler) UnlinkAccount(c forge.Context) error {
 }
 
 // ListProviders returns available OAuth providers
-// GET /api/auth/providers
+// GET /api/auth/providers.
 func (h *Handler) ListProviders(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -373,6 +380,7 @@ func (h *Handler) ListProviders(c forge.Context) error {
 	envID, _ := contexts.GetEnvironmentID(ctx)
 
 	providers := h.service.ListProviders(ctx, appID, envID)
+
 	return c.JSON(http.StatusOK, &ProvidersResponse{Providers: providers})
 }
 
@@ -381,7 +389,7 @@ func (h *Handler) ListProviders(c forge.Context) error {
 // =============================================================================
 
 // AdminListProviders handles GET /social/admin/providers
-// Lists configured OAuth providers for an app
+// Lists configured OAuth providers for an app.
 func (h *Handler) AdminListProviders(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -410,7 +418,7 @@ func (h *Handler) AdminListProviders(c forge.Context) error {
 }
 
 // AdminAddProvider handles POST /social/admin/providers
-// Adds/configures an OAuth provider for an app
+// Adds/configures an OAuth provider for an app.
 func (h *Handler) AdminAddProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -455,7 +463,7 @@ func (h *Handler) AdminAddProvider(c forge.Context) error {
 }
 
 // AdminUpdateProvider handles PUT /social/admin/providers/:provider
-// Updates OAuth provider configuration for an app
+// Updates OAuth provider configuration for an app.
 func (h *Handler) AdminUpdateProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -497,7 +505,7 @@ func (h *Handler) AdminUpdateProvider(c forge.Context) error {
 }
 
 // AdminDeleteProvider handles DELETE /social/admin/providers/:provider
-// Removes OAuth provider configuration for an app
+// Removes OAuth provider configuration for an app.
 func (h *Handler) AdminDeleteProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 

@@ -6,23 +6,25 @@ import (
 	"fmt"
 	"log/syslog"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // SYSLOG EXPORTER - Exports audit events via Syslog (RFC 5424)
 // =============================================================================
 
-// SyslogExporter exports audit events via Syslog
+// SyslogExporter exports audit events via Syslog.
 type SyslogExporter struct {
 	config *SyslogConfig
 	writer *syslog.Writer
 	conn   net.Conn
 }
 
-// SyslogConfig contains Syslog configuration
+// SyslogConfig contains Syslog configuration.
 type SyslogConfig struct {
 	Network   string        `json:"network"`  // tcp, udp, tcp+tls
 	Address   string        `json:"address"`  // host:port
@@ -35,7 +37,7 @@ type SyslogConfig struct {
 	Format    string        `json:"format"` // rfc5424 or rfc3164
 }
 
-// DefaultSyslogConfig returns default Syslog configuration
+// DefaultSyslogConfig returns default Syslog configuration.
 func DefaultSyslogConfig() *SyslogConfig {
 	return &SyslogConfig{
 		Network:  "tcp",
@@ -48,10 +50,10 @@ func DefaultSyslogConfig() *SyslogConfig {
 	}
 }
 
-// NewSyslogExporter creates a new Syslog exporter
+// NewSyslogExporter creates a new Syslog exporter.
 func NewSyslogExporter(config *SyslogConfig) (*SyslogExporter, error) {
 	if config.Address == "" {
-		return nil, fmt.Errorf("syslog address is required")
+		return nil, errs.New(errs.CodeInvalidInput, "syslog address is required", http.StatusBadRequest)
 	}
 
 	// Parse facility
@@ -68,6 +70,7 @@ func NewSyslogExporter(config *SyslogConfig) (*SyslogExporter, error) {
 
 	// Create syslog writer
 	priority := facility | severity
+
 	writer, err := syslog.Dial(
 		config.Network,
 		config.Address,
@@ -84,12 +87,12 @@ func NewSyslogExporter(config *SyslogConfig) (*SyslogExporter, error) {
 	}, nil
 }
 
-// Name returns the exporter name
+// Name returns the exporter name.
 func (e *SyslogExporter) Name() string {
 	return "syslog"
 }
 
-// Export exports a batch of events to Syslog
+// Export exports a batch of events to Syslog.
 func (e *SyslogExporter) Export(ctx context.Context, events []*audit.Event) error {
 	if len(events) == 0 {
 		return nil
@@ -107,15 +110,16 @@ func (e *SyslogExporter) Export(ctx context.Context, events []*audit.Event) erro
 	return nil
 }
 
-// formatEvent formats an audit event as Syslog message
+// formatEvent formats an audit event as Syslog message.
 func (e *SyslogExporter) formatEvent(event *audit.Event) string {
 	if e.config.Format == "rfc5424" {
 		return e.formatRFC5424(event)
 	}
+
 	return e.formatRFC3164(event)
 }
 
-// formatRFC5424 formats event in RFC 5424 format
+// formatRFC5424 formats event in RFC 5424 format.
 func (e *SyslogExporter) formatRFC5424(event *audit.Event) string {
 	// RFC 5424: <priority>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 	return fmt.Sprintf(
@@ -132,7 +136,7 @@ func (e *SyslogExporter) formatRFC5424(event *audit.Event) string {
 	)
 }
 
-// formatRFC3164 formats event in RFC 3164 format (legacy BSD syslog)
+// formatRFC3164 formats event in RFC 3164 format (legacy BSD syslog).
 func (e *SyslogExporter) formatRFC3164(event *audit.Event) string {
 	// RFC 3164: <priority>TIMESTAMP HOSTNAME TAG: MSG
 	return fmt.Sprintf(
@@ -149,20 +153,22 @@ func (e *SyslogExporter) getUserID(event *audit.Event) string {
 	if event.UserID != nil {
 		return event.UserID.String()
 	}
+
 	return "system"
 }
 
-// HealthCheck checks if Syslog server is reachable
+// HealthCheck checks if Syslog server is reachable.
 func (e *SyslogExporter) HealthCheck(ctx context.Context) error {
 	// Try to send a test message
 	err := e.writer.Info("health_check")
 	if err != nil {
 		return fmt.Errorf("syslog health check failed: %w", err)
 	}
+
 	return nil
 }
 
-// Close closes the Syslog connection
+// Close closes the Syslog connection.
 func (e *SyslogExporter) Close() error {
 	return e.writer.Close()
 }
@@ -171,7 +177,7 @@ func (e *SyslogExporter) Close() error {
 // HELPER FUNCTIONS
 // =============================================================================
 
-// parseFacility parses syslog facility from string
+// parseFacility parses syslog facility from string.
 func parseFacility(facility string) (syslog.Priority, error) {
 	facilities := map[string]syslog.Priority{
 		"kern":     syslog.LOG_KERN,
@@ -204,7 +210,7 @@ func parseFacility(facility string) (syslog.Priority, error) {
 	return f, nil
 }
 
-// parseSeverity parses syslog severity from string
+// parseSeverity parses syslog severity from string.
 func parseSeverity(severity string) (syslog.Priority, error) {
 	severities := map[string]syslog.Priority{
 		"emerg":   syslog.LOG_EMERG,

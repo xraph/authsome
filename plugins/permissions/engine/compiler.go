@@ -4,29 +4,30 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/permissions/core"
 	"github.com/xraph/authsome/plugins/permissions/language"
 )
 
-// Compiler compiles policies from CEL expressions to executable programs
+// Compiler compiles policies from CEL expressions to executable programs.
 type Compiler struct {
 	parser        *language.Parser
 	maxComplexity int
 }
 
-// CompilerConfig configures the compiler
+// CompilerConfig configures the compiler.
 type CompilerConfig struct {
 	MaxComplexity int // Maximum allowed expression complexity
 }
 
-// DefaultCompilerConfig returns default compiler configuration
+// DefaultCompilerConfig returns default compiler configuration.
 func DefaultCompilerConfig() CompilerConfig {
 	return CompilerConfig{
 		MaxComplexity: 100,
 	}
 }
 
-// NewCompiler creates a new policy compiler
+// NewCompiler creates a new policy compiler.
 func NewCompiler(config CompilerConfig) (*Compiler, error) {
 	parser, err := language.NewParser()
 	if err != nil {
@@ -39,14 +40,14 @@ func NewCompiler(config CompilerConfig) (*Compiler, error) {
 	}, nil
 }
 
-// Compile converts a policy to a compiled, executable form
+// Compile converts a policy to a compiled, executable form.
 func (c *Compiler) Compile(policy *core.Policy) (*CompiledPolicy, error) {
 	if policy == nil {
-		return nil, fmt.Errorf("policy cannot be nil")
+		return nil, errs.BadRequest("policy cannot be nil")
 	}
 
 	if policy.Expression == "" {
-		return nil, fmt.Errorf("policy expression cannot be empty")
+		return nil, errs.RequiredField("policy expression")
 	}
 
 	// Parse the CEL expression
@@ -87,7 +88,7 @@ func (c *Compiler) Compile(policy *core.Policy) (*CompiledPolicy, error) {
 	return compiled, nil
 }
 
-// CompileBatch compiles multiple policies in parallel
+// CompileBatch compiles multiple policies in parallel.
 func (c *Compiler) CompileBatch(policies []*core.Policy) (map[string]*CompiledPolicy, error) {
 	if len(policies) == 0 {
 		return make(map[string]*CompiledPolicy), nil
@@ -115,9 +116,10 @@ func (c *Compiler) CompileBatch(policies []*core.Policy) (map[string]*CompiledPo
 
 	// Collect results
 	compiled := make(map[string]*CompiledPolicy)
+
 	var errors []error
 
-	for i := 0; i < len(policies); i++ {
+	for range policies {
 		res := <-results
 		if res.err != nil {
 			errors = append(errors, fmt.Errorf("policy %s: %w", res.id, res.err))
@@ -134,21 +136,22 @@ func (c *Compiler) CompileBatch(policies []*core.Policy) (map[string]*CompiledPo
 	return compiled, nil
 }
 
-// Validate checks if a policy expression is valid without fully compiling
+// Validate checks if a policy expression is valid without fully compiling.
 func (c *Compiler) Validate(expression string) error {
 	return c.parser.ValidateExpression(expression)
 }
 
-// EstimateComplexity returns the estimated complexity of an expression
+// EstimateComplexity returns the estimated complexity of an expression.
 func (c *Compiler) EstimateComplexity(expression string) (int, error) {
 	ast, err := c.parser.Parse(expression)
 	if err != nil {
 		return 0, err
 	}
+
 	return c.parser.ExpressionComplexity(ast), nil
 }
 
-// GetMaxComplexity returns the maximum allowed complexity
+// GetMaxComplexity returns the maximum allowed complexity.
 func (c *Compiler) GetMaxComplexity() int {
 	return c.maxComplexity
 }

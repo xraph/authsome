@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/providers"
@@ -14,7 +16,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// UsageService handles usage tracking and metering
+// UsageService handles usage tracking and metering.
 type UsageService struct {
 	repo      repository.UsageRepository
 	subRepo   repository.SubscriptionRepository
@@ -23,7 +25,7 @@ type UsageService struct {
 	eventRepo repository.EventRepository
 }
 
-// NewUsageService creates a new usage service
+// NewUsageService creates a new usage service.
 func NewUsageService(
 	repo repository.UsageRepository,
 	subRepo repository.SubscriptionRepository,
@@ -38,7 +40,7 @@ func NewUsageService(
 	}
 }
 
-// RecordUsage records a usage event
+// RecordUsage records a usage event.
 func (s *UsageService) RecordUsage(ctx context.Context, req *core.RecordUsageRequest) (*core.UsageRecord, error) {
 	// Validate metric key
 	if req.MetricKey == "" {
@@ -66,6 +68,7 @@ func (s *UsageService) RecordUsage(ctx context.Context, req *core.RecordUsageReq
 
 	// Create record
 	now := time.Now()
+
 	timestamp := now
 	if req.Timestamp != nil {
 		timestamp = *req.Timestamp
@@ -87,7 +90,7 @@ func (s *UsageService) RecordUsage(ctx context.Context, req *core.RecordUsageReq
 	if req.Metadata != nil {
 		record.Metadata = req.Metadata
 	} else {
-		record.Metadata = make(map[string]interface{})
+		record.Metadata = make(map[string]any)
 	}
 
 	if err := s.repo.Create(ctx, record); err != nil {
@@ -95,7 +98,7 @@ func (s *UsageService) RecordUsage(ctx context.Context, req *core.RecordUsageReq
 	}
 
 	// Record event
-	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventUsageRecorded), map[string]interface{}{
+	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventUsageRecorded), map[string]any{
 		"metricKey": req.MetricKey,
 		"quantity":  req.Quantity,
 		"action":    string(req.Action),
@@ -104,7 +107,7 @@ func (s *UsageService) RecordUsage(ctx context.Context, req *core.RecordUsageReq
 	return s.schemaToCoreRecord(record), nil
 }
 
-// GetSummary retrieves usage summary for a subscription and metric
+// GetSummary retrieves usage summary for a subscription and metric.
 func (s *UsageService) GetSummary(ctx context.Context, req *core.GetUsageSummaryRequest) (*core.UsageSummary, error) {
 	summary, err := s.repo.GetSummary(ctx, req.SubscriptionID, req.MetricKey, req.PeriodStart, req.PeriodEnd)
 	if err != nil {
@@ -120,7 +123,7 @@ func (s *UsageService) GetSummary(ctx context.Context, req *core.GetUsageSummary
 	}, nil
 }
 
-// GetUsageLimit retrieves current usage against limit for a metric
+// GetUsageLimit retrieves current usage against limit for a metric.
 func (s *UsageService) GetUsageLimit(ctx context.Context, orgID xid.ID, metricKey string) (*core.UsageLimit, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -129,22 +132,25 @@ func (s *UsageService) GetUsageLimit(ctx context.Context, orgID xid.ID, metricKe
 	}
 
 	if sub.Plan == nil {
-		return nil, fmt.Errorf("plan not loaded")
+		return nil, errs.New(errs.CodeNotFound, "plan not loaded", http.StatusNotFound)
 	}
 
 	// Get feature limit from plan
 	var limit int64 = 0
+
 	for _, f := range sub.Plan.Features {
 		if f.Key == metricKey {
-			if f.Type == "unlimited" {
+			switch f.Type {
+			case "unlimited":
 				limit = -1
-			} else if f.Type == "limit" {
+			case "limit":
 				// Parse value as int (stored as string)
 				var val float64
 				if err := json.Unmarshal([]byte(f.Value), &val); err == nil {
 					limit = int64(val)
 				}
 			}
+
 			break
 		}
 	}
@@ -158,7 +164,7 @@ func (s *UsageService) GetUsageLimit(ctx context.Context, orgID xid.ID, metricKe
 	return core.NewUsageLimit(metricKey, summary.TotalQuantity, limit), nil
 }
 
-// List retrieves usage records with filtering
+// List retrieves usage records with filtering.
 func (s *UsageService) List(ctx context.Context, subID, orgID *xid.ID, metricKey string, reported *bool, page, pageSize int) ([]*core.UsageRecord, int, error) {
 	filter := &repository.UsageFilter{
 		SubscriptionID: subID,
@@ -182,7 +188,7 @@ func (s *UsageService) List(ctx context.Context, subID, orgID *xid.ID, metricKey
 	return result, count, nil
 }
 
-// ReportToProvider reports unreported usage to the payment provider
+// ReportToProvider reports unreported usage to the payment provider.
 func (s *UsageService) ReportToProvider(ctx context.Context, batchSize int) error {
 	if batchSize <= 0 {
 		batchSize = 100
@@ -221,7 +227,7 @@ func (s *UsageService) ReportToProvider(ctx context.Context, batchSize int) erro
 	return nil
 }
 
-// GetCurrentPeriodUsage gets all usage for the current billing period
+// GetCurrentPeriodUsage gets all usage for the current billing period.
 func (s *UsageService) GetCurrentPeriodUsage(ctx context.Context, subID xid.ID) (map[string]int64, error) {
 	sub, err := s.subRepo.FindByID(ctx, subID)
 	if err != nil {
@@ -248,11 +254,13 @@ func (s *UsageService) GetCurrentPeriodUsage(ctx context.Context, subID xid.ID) 
 
 	// Get summary for each metric
 	result := make(map[string]int64)
+
 	for metric := range metrics {
 		summary, err := s.repo.GetSummary(ctx, subID, metric, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 		if err != nil {
 			continue
 		}
+
 		result[metric] = summary.TotalQuantity
 	}
 
@@ -261,7 +269,7 @@ func (s *UsageService) GetCurrentPeriodUsage(ctx context.Context, subID xid.ID) 
 
 // Helper methods
 
-func (s *UsageService) recordEvent(ctx context.Context, subID, orgID xid.ID, eventType string, data map[string]interface{}) {
+func (s *UsageService) recordEvent(ctx context.Context, subID, orgID xid.ID, eventType string, data map[string]any) {
 	event := &schema.SubscriptionEvent{
 		ID:             xid.New(),
 		SubscriptionID: &subID,

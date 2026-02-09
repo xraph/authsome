@@ -2,13 +2,14 @@ package builder
 
 import (
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
 )
 
-// BuilderUI renders the visual email builder interface
+// BuilderUI renders the visual email builder interface.
 type BuilderUI struct {
 	document   *Document
 	previewURL string
@@ -18,7 +19,7 @@ type BuilderUI struct {
 	autosave   bool
 }
 
-// NewBuilderUI creates a new builder UI instance
+// NewBuilderUI creates a new builder UI instance.
 func NewBuilderUI(doc *Document, previewURL, saveURL string) *BuilderUI {
 	return &BuilderUI{
 		document:   doc,
@@ -28,7 +29,7 @@ func NewBuilderUI(doc *Document, previewURL, saveURL string) *BuilderUI {
 	}
 }
 
-// NewBuilderUIWithAutosave creates a new builder UI instance with autosave enabled
+// NewBuilderUIWithAutosave creates a new builder UI instance with autosave enabled.
 func NewBuilderUIWithAutosave(doc *Document, previewURL, saveURL, backURL, templateID string) *BuilderUI {
 	return &BuilderUI{
 		document:   doc,
@@ -40,7 +41,7 @@ func NewBuilderUIWithAutosave(doc *Document, previewURL, saveURL, backURL, templ
 	}
 }
 
-// Render renders the complete builder interface
+// Render renders the complete builder interface.
 func (b *BuilderUI) Render() g.Node {
 	docJSON, _ := b.document.ToJSON()
 
@@ -91,7 +92,7 @@ func (b *BuilderUI) Render() g.Node {
 	)
 }
 
-// renderToolbar renders the top toolbar
+// renderToolbar renders the top toolbar.
 func (b *BuilderUI) renderToolbar() g.Node {
 	return Div(
 		Class("builder-toolbar"),
@@ -215,7 +216,7 @@ func (b *BuilderUI) renderToolbar() g.Node {
 	)
 }
 
-// renderLeftSidebar renders the template navigation sidebar
+// renderLeftSidebar renders the template navigation sidebar.
 func (b *BuilderUI) renderLeftSidebar() g.Node {
 	return Div(
 		Class("builder-sidebar builder-sidebar-left"),
@@ -249,7 +250,7 @@ func (b *BuilderUI) renderTemplateNavItem(id, label, icon string) g.Node {
 	)
 }
 
-// renderCanvas renders the main editing area
+// renderCanvas renders the main editing area.
 func (b *BuilderUI) renderCanvas() g.Node {
 	return Div(
 		Class("builder-canvas"),
@@ -328,7 +329,7 @@ func (b *BuilderUI) renderCanvas() g.Node {
 	)
 }
 
-// renderBlockItem renders a single block in the canvas
+// renderBlockItem renders a single block in the canvas.
 func (b *BuilderUI) renderBlockItem() g.Node {
 	return Div(
 		Class("canvas-block"),
@@ -374,7 +375,7 @@ func (b *BuilderUI) renderBlockItem() g.Node {
 	)
 }
 
-// renderRightSidebar renders the Styles/Inspect panel
+// renderRightSidebar renders the Styles/Inspect panel.
 func (b *BuilderUI) renderRightSidebar() g.Node {
 	return Div(
 		Class("builder-sidebar builder-sidebar-right"),
@@ -430,7 +431,7 @@ func (b *BuilderUI) renderRightSidebar() g.Node {
 	)
 }
 
-// renderGlobalSettings renders global canvas settings
+// renderGlobalSettings renders global canvas settings.
 func (b *BuilderUI) renderGlobalSettings() g.Node {
 	return Div(
 		Class("properties-form"),
@@ -473,7 +474,7 @@ func (b *BuilderUI) renderGlobalSettings() g.Node {
 	)
 }
 
-// renderBlockInspector renders the inspector for the selected block
+// renderBlockInspector renders the inspector for the selected block.
 func (b *BuilderUI) renderBlockInspector() g.Node {
 	return Div(
 		Class("properties-form"),
@@ -794,7 +795,7 @@ func (b *BuilderUI) renderSliderInput(label, model string, min, max int, unit st
 		Input(
 			Type("range"),
 			Class("slider-range"),
-			Min(fmt.Sprintf("%d", min)), Max(fmt.Sprintf("%d", max)),
+			Min(strconv.Itoa(min)), Max(strconv.Itoa(max)),
 			g.Attr("x-model", model),
 		),
 		Span(Class("slider-value"), g.Attr("x-text", fmt.Sprintf("(%s || 0) + '%s'", model, unit))),
@@ -819,7 +820,7 @@ func (b *BuilderUI) renderIconToggleOption(icon g.Node, model, value string) g.N
 	)
 }
 
-// blockItemData holds data for rendering block items
+// blockItemData holds data for rendering block items.
 type blockItemData struct {
 	Type BlockType
 	Icon g.Node
@@ -827,7 +828,7 @@ type blockItemData struct {
 	Desc string
 }
 
-// renderFloatingBlockPicker renders the floating menu for adding blocks
+// renderFloatingBlockPicker renders the floating menu for adding blocks.
 func (b *BuilderUI) renderFloatingBlockPicker() g.Node {
 	blocks := []blockItemData{
 		{BlockTypeHeading, lucide.Heading(Class("size-5")), "Heading", ""},

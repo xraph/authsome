@@ -3,9 +3,11 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// BlockType represents the type of email block
+// BlockType represents the type of email block.
 type BlockType string
 
 const (
@@ -23,19 +25,19 @@ const (
 	BlockTypeAvatar      BlockType = "Avatar"
 )
 
-// Document represents the email builder document structure
+// Document represents the email builder document structure.
 type Document struct {
 	Root   string           `json:"root"`
 	Blocks map[string]Block `json:"blocks"`
 }
 
-// Block represents a single block in the email
+// Block represents a single block in the email.
 type Block struct {
-	Type BlockType              `json:"type"`
-	Data map[string]interface{} `json:"data"`
+	Type BlockType      `json:"type"`
+	Data map[string]any `json:"data"`
 }
 
-// EmailLayoutData represents the root email layout configuration
+// EmailLayoutData represents the root email layout configuration.
 type EmailLayoutData struct {
 	BackdropColor string   `json:"backdropColor"`
 	CanvasColor   string   `json:"canvasColor"`
@@ -45,7 +47,7 @@ type EmailLayoutData struct {
 	ChildrenIDs   []string `json:"childrenIds"`
 }
 
-// Padding represents padding configuration
+// Padding represents padding configuration.
 type Padding struct {
 	Top    int `json:"top"`
 	Right  int `json:"right"`
@@ -53,7 +55,7 @@ type Padding struct {
 	Left   int `json:"left"`
 }
 
-// BlockStyle represents common style properties for blocks
+// BlockStyle represents common style properties for blocks.
 type BlockStyle struct {
 	BackgroundColor string   `json:"backgroundColor,omitempty"`
 	Color           string   `json:"color,omitempty"`
@@ -64,7 +66,7 @@ type BlockStyle struct {
 	Padding         *Padding `json:"padding,omitempty"`
 }
 
-// TextBlockData represents text block configuration
+// TextBlockData represents text block configuration.
 type TextBlockData struct {
 	Style BlockStyle     `json:"style"`
 	Props TextBlockProps `json:"props"`
@@ -74,7 +76,7 @@ type TextBlockProps struct {
 	Text string `json:"text"`
 }
 
-// HeadingBlockData represents heading block configuration
+// HeadingBlockData represents heading block configuration.
 type HeadingBlockData struct {
 	Style BlockStyle        `json:"style"`
 	Props HeadingBlockProps `json:"props"`
@@ -85,7 +87,7 @@ type HeadingBlockProps struct {
 	Level string `json:"level"` // h1, h2, h3, h4, h5, h6
 }
 
-// ButtonBlockData represents button block configuration
+// ButtonBlockData represents button block configuration.
 type ButtonBlockData struct {
 	Style BlockStyle       `json:"style"`
 	Props ButtonBlockProps `json:"props"`
@@ -100,7 +102,7 @@ type ButtonBlockProps struct {
 	FullWidth    bool   `json:"fullWidth"`
 }
 
-// ImageBlockData represents image block configuration
+// ImageBlockData represents image block configuration.
 type ImageBlockData struct {
 	Style BlockStyle      `json:"style"`
 	Props ImageBlockProps `json:"props"`
@@ -115,7 +117,7 @@ type ImageBlockProps struct {
 	ContentAlignment string `json:"contentAlignment"` // left, center, right
 }
 
-// DividerBlockData represents divider block configuration
+// DividerBlockData represents divider block configuration.
 type DividerBlockData struct {
 	Style BlockStyle        `json:"style"`
 	Props DividerBlockProps `json:"props"`
@@ -126,7 +128,7 @@ type DividerBlockProps struct {
 	LineHeight int    `json:"lineHeight"`
 }
 
-// SpacerBlockData represents spacer block configuration
+// SpacerBlockData represents spacer block configuration.
 type SpacerBlockData struct {
 	Style BlockStyle       `json:"style"`
 	Props SpacerBlockProps `json:"props"`
@@ -136,7 +138,7 @@ type SpacerBlockProps struct {
 	Height int `json:"height"`
 }
 
-// ContainerBlockData represents container block configuration
+// ContainerBlockData represents container block configuration.
 type ContainerBlockData struct {
 	Style       BlockStyle          `json:"style"`
 	Props       ContainerBlockProps `json:"props"`
@@ -147,7 +149,7 @@ type ContainerBlockProps struct {
 	BackgroundColor string `json:"backgroundColor,omitempty"`
 }
 
-// ColumnsBlockData represents columns block configuration
+// ColumnsBlockData represents columns block configuration.
 type ColumnsBlockData struct {
 	Style       BlockStyle        `json:"style"`
 	Props       ColumnsBlockProps `json:"props"`
@@ -159,7 +161,7 @@ type ColumnsBlockProps struct {
 	ColumnsGap   int `json:"columnsGap"`
 }
 
-// ColumnBlockData represents a single column in columns block
+// ColumnBlockData represents a single column in columns block.
 type ColumnBlockData struct {
 	Style       BlockStyle       `json:"style"`
 	Props       ColumnBlockProps `json:"props"`
@@ -170,7 +172,7 @@ type ColumnBlockProps struct {
 	Width string `json:"width,omitempty"` // Can be percentage or auto
 }
 
-// HTMLBlockData represents raw HTML block configuration
+// HTMLBlockData represents raw HTML block configuration.
 type HTMLBlockData struct {
 	Style BlockStyle     `json:"style"`
 	Props HTMLBlockProps `json:"props"`
@@ -180,7 +182,7 @@ type HTMLBlockProps struct {
 	HTML string `json:"html"`
 }
 
-// AvatarBlockData represents avatar block configuration
+// AvatarBlockData represents avatar block configuration.
 type AvatarBlockData struct {
 	Style BlockStyle       `json:"style"`
 	Props AvatarBlockProps `json:"props"`
@@ -195,15 +197,16 @@ type AvatarBlockProps struct {
 
 // Helper functions to create blocks
 
-// NewDocument creates a new empty email document
+// NewDocument creates a new empty email document.
 func NewDocument() *Document {
 	rootID := "root"
+
 	return &Document{
 		Root: rootID,
 		Blocks: map[string]Block{
 			rootID: {
 				Type: BlockTypeEmailLayout,
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"backdropColor": "#F8F8F8",
 					"canvasColor":   "#FFFFFF",
 					"textColor":     "#242424",
@@ -216,8 +219,8 @@ func NewDocument() *Document {
 	}
 }
 
-// AddBlock adds a block to the document and returns its ID
-func (d *Document) AddBlock(blockType BlockType, data map[string]interface{}, parentID string) (string, error) {
+// AddBlock adds a block to the document and returns its ID.
+func (d *Document) AddBlock(blockType BlockType, data map[string]any, parentID string) (string, error) {
 	// Generate unique block ID
 	blockID := fmt.Sprintf("block-%d", len(d.Blocks))
 
@@ -239,6 +242,7 @@ func (d *Document) AddBlock(blockType BlockType, data map[string]interface{}, pa
 		if !ok {
 			childrenIDs = []string{}
 		}
+
 		childrenIDs = append(childrenIDs, blockID)
 		parent.Data["childrenIds"] = childrenIDs
 		d.Blocks[parentID] = parent
@@ -247,10 +251,10 @@ func (d *Document) AddBlock(blockType BlockType, data map[string]interface{}, pa
 	return blockID, nil
 }
 
-// RemoveBlock removes a block from the document
+// RemoveBlock removes a block from the document.
 func (d *Document) RemoveBlock(blockID string) error {
 	if blockID == d.Root {
-		return fmt.Errorf("cannot remove root block")
+		return errs.BadRequest("cannot remove root block")
 	}
 
 	// Remove from parent's children
@@ -261,6 +265,7 @@ func (d *Document) RemoveBlock(blockID string) error {
 					childrenIDs = append(childrenIDs[:i], childrenIDs[i+1:]...)
 					block.Data["childrenIds"] = childrenIDs
 					d.Blocks[id] = block
+
 					break
 				}
 			}
@@ -273,29 +278,31 @@ func (d *Document) RemoveBlock(blockID string) error {
 	return nil
 }
 
-// ToJSON converts the document to JSON string
+// ToJSON converts the document to JSON string.
 func (d *Document) ToJSON() (string, error) {
 	bytes, err := json.MarshalIndent(d, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal document: %w", err)
 	}
+
 	return string(bytes), nil
 }
 
-// FromJSON creates a document from JSON string
+// FromJSON creates a document from JSON string.
 func FromJSON(jsonStr string) (*Document, error) {
 	var doc Document
 	if err := json.Unmarshal([]byte(jsonStr), &doc); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
 	}
+
 	return &doc, nil
 }
 
-// Validate validates the document structure
+// Validate validates the document structure.
 func (d *Document) Validate() error {
 	// Check if root exists
 	if _, exists := d.Blocks[d.Root]; !exists {
-		return fmt.Errorf("root block not found")
+		return errs.NotFound("root block not found")
 	}
 
 	// Validate all blocks

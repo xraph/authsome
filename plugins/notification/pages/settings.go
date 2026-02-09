@@ -1,8 +1,6 @@
 package pages
 
 import (
-	"fmt"
-
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
 	"github.com/xraph/forgeui/components/button"
@@ -13,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SettingsPage renders the notification settings page
+// SettingsPage renders the notification settings page.
 func SettingsPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 
@@ -351,9 +349,9 @@ func SettingsPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// settingsData returns the Alpine.js data object for settings
+// settingsData returns the Alpine.js data object for settings.
 func settingsData(appID string) string {
-	return fmt.Sprintf(`{
+	return `{
 		settings: {
 			appName: '',
 			auth: {
@@ -439,10 +437,10 @@ func settingsData(appID string) string {
 				this.saving = false;
 			}
 		}
-	}`)
+	}`
 }
 
-// toggleField renders a toggle setting row
+// toggleField renders a toggle setting row.
 func toggleField(name, label, description string, icon g.Node) g.Node {
 	return Div(
 		Class("flex items-center justify-between rounded-lg border bg-muted/50 p-4"),

@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -14,7 +15,7 @@ import (
 // CMS Overview Page
 // =============================================================================
 
-// CMSOverviewDynamic renders a dynamic CMS overview using bridge functions for client-side data fetching
+// CMSOverviewDynamic renders a dynamic CMS overview using bridge functions for client-side data fetching.
 func CMSOverviewDynamic(currentApp *app.App, basePath string) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 
@@ -257,7 +258,7 @@ func CMSOverviewDynamic(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// CMSOverviewPage renders the CMS overview page with content types list (SSR version)
+// CMSOverviewPage renders the CMS overview page with content types list (SSR version).
 func CMSOverviewPage(
 	currentApp *app.App,
 	basePath string,
@@ -290,18 +291,18 @@ func CMSOverviewPage(
 	)
 }
 
-// cmsStatsCards renders CMS statistics cards
+// cmsStatsCards renders CMS statistics cards.
 func cmsStatsCards(stats *core.CMSStatsDTO) g.Node {
 	return Div(
 		Class("grid grid-cols-2 md:grid-cols-4 gap-4"),
-		StatCard("Content Types", fmt.Sprintf("%d", stats.TotalContentTypes), lucide.Database(Class("size-5")), "text-violet-600"),
-		StatCard("Total Entries", fmt.Sprintf("%d", stats.TotalEntries), lucide.FileText(Class("size-5")), "text-blue-600"),
-		StatCard("Published", fmt.Sprintf("%d", stats.EntriesByStatus["published"]), lucide.CircleCheck(Class("size-5")), "text-green-600"),
-		StatCard("Drafts", fmt.Sprintf("%d", stats.EntriesByStatus["draft"]), lucide.Pencil(Class("size-5")), "text-yellow-600"),
+		StatCard("Content Types", strconv.Itoa(stats.TotalContentTypes), lucide.Database(Class("size-5")), "text-violet-600"),
+		StatCard("Total Entries", strconv.Itoa(stats.TotalEntries), lucide.FileText(Class("size-5")), "text-blue-600"),
+		StatCard("Published", strconv.Itoa(stats.EntriesByStatus["published"]), lucide.CircleCheck(Class("size-5")), "text-green-600"),
+		StatCard("Drafts", strconv.Itoa(stats.EntriesByStatus["draft"]), lucide.Pencil(Class("size-5")), "text-yellow-600"),
 	)
 }
 
-// contentTypesGrid renders the content types as a grid of cards
+// contentTypesGrid renders the content types as a grid of cards.
 func contentTypesGrid(currentApp *app.App, basePath string, contentTypes []*core.ContentTypeSummaryDTO) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 
@@ -328,7 +329,7 @@ func contentTypesGrid(currentApp *app.App, basePath string, contentTypes []*core
 	)
 }
 
-// contentTypeCard renders a single content type card
+// contentTypeCard renders a single content type card.
 func contentTypeCard(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 	return A(
 		Href(appBase+"/cms/types/"+ct.Name),
@@ -392,7 +393,7 @@ func contentTypeCard(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 // Content Types List Page (Alternate Table View)
 // =============================================================================
 
-// ContentTypesListPage renders the content types as a table
+// ContentTypesListPage renders the content types as a table.
 func ContentTypesListPage(
 	currentApp *app.App,
 	basePath string,
@@ -424,7 +425,7 @@ func ContentTypesListPage(
 	)
 }
 
-// contentTypesTable renders content types as a table
+// contentTypesTable renders content types as a table.
 func contentTypesTable(currentApp *app.App, basePath string, contentTypes []*core.ContentTypeSummaryDTO, page, totalPages int) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 
@@ -454,7 +455,7 @@ func contentTypesTable(currentApp *app.App, basePath string, contentTypes []*cor
 	)
 }
 
-// contentTypeRow renders a single content type table row
+// contentTypeRow renders a single content type table row.
 func contentTypeRow(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 	return TableRow(
 		// Name
@@ -487,10 +488,10 @@ func contentTypeRow(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 		)),
 
 		// Fields
-		TableCellSecondary(g.Text(fmt.Sprintf("%d", ct.FieldCount))),
+		TableCellSecondary(g.Text(strconv.Itoa(ct.FieldCount))),
 
 		// Entries
-		TableCellSecondary(g.Text(fmt.Sprintf("%d", ct.EntryCount))),
+		TableCellSecondary(g.Text(strconv.Itoa(ct.EntryCount))),
 
 		// Updated
 		TableCellSecondary(g.Text(FormatTimeAgo(ct.UpdatedAt))),
@@ -507,7 +508,7 @@ func contentTypeRow(appBase string, ct *core.ContentTypeSummaryDTO) g.Node {
 // Create Content Type Page
 // =============================================================================
 
-// CreateContentTypePage renders the create content type form
+// CreateContentTypePage renders the create content type form.
 func CreateContentTypePage(
 	currentApp *app.App,
 	basePath string,
@@ -684,7 +685,7 @@ func CreateContentTypePage(
 	)
 }
 
-// formField creates a form field
+// formField creates a form field.
 func formField(name, label, inputType, value, placeholder string, required bool, help string) g.Node {
 	return Div(
 		Label(
@@ -713,7 +714,7 @@ func formField(name, label, inputType, value, placeholder string, required bool,
 	)
 }
 
-// formFieldWithAlpine creates a form field with Alpine.js x-model and event binding
+// formFieldWithAlpine creates a form field with Alpine.js x-model and event binding.
 func formFieldWithAlpine(name, label, inputType, value, placeholder string, required bool, help string, xModel string, eventName string, eventHandler string) g.Node {
 	return Div(
 		Label(

@@ -4,18 +4,20 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // ADVANCED ANALYTICS - Anomaly detection, risk scoring, behavioral baselines
 // =============================================================================
 
-// AnalyticsService provides advanced security analytics
+// AnalyticsService provides advanced security analytics.
 type AnalyticsService struct {
 	repo            Repository
 	baselineCache   *BaselineCache
@@ -24,7 +26,7 @@ type AnalyticsService struct {
 	mu              sync.RWMutex
 }
 
-// NewAnalyticsService creates a new analytics service
+// NewAnalyticsService creates a new analytics service.
 func NewAnalyticsService(repo Repository) *AnalyticsService {
 	return &AnalyticsService{
 		repo:            repo,
@@ -38,7 +40,7 @@ func NewAnalyticsService(repo Repository) *AnalyticsService {
 // BASELINE CALCULATION - Statistical baselines for normal behavior
 // =============================================================================
 
-// Baseline represents statistical baseline for user behavior
+// Baseline represents statistical baseline for user behavior.
 type Baseline struct {
 	UserID           xid.ID                 `json:"userId"`
 	OrganizationID   *xid.ID                `json:"organizationId,omitempty"` // Optional org scope
@@ -55,22 +57,22 @@ type Baseline struct {
 	Metadata         map[string]interface{} `json:"metadata"`
 }
 
-// BaselineCalculator calculates behavioral baselines
+// BaselineCalculator calculates behavioral baselines.
 type BaselineCalculator struct {
 	repo Repository
 }
 
-// NewBaselineCalculator creates a new baseline calculator
+// NewBaselineCalculator creates a new baseline calculator.
 func NewBaselineCalculator(repo Repository) *BaselineCalculator {
 	return &BaselineCalculator{repo: repo}
 }
 
-// Calculate calculates baseline for a user over a period
+// Calculate calculates baseline for a user over a period.
 func (bc *BaselineCalculator) Calculate(ctx context.Context, userID xid.ID, period time.Duration) (*Baseline, error) {
 	return bc.CalculateWithOptions(ctx, userID, period, nil)
 }
 
-// CalculateWithOptions calculates baseline for a user over a period with optional organization scope
+// CalculateWithOptions calculates baseline for a user over a period with optional organization scope.
 func (bc *BaselineCalculator) CalculateWithOptions(ctx context.Context, userID xid.ID, period time.Duration, organizationID *xid.ID) (*Baseline, error) {
 	// Calculate time range
 	until := time.Now()
@@ -91,7 +93,7 @@ func (bc *BaselineCalculator) CalculateWithOptions(ctx context.Context, userID x
 
 	events := FromSchemaEvents(resp.Data)
 	if len(events) == 0 {
-		return nil, fmt.Errorf("insufficient data for baseline calculation")
+		return nil, errs.New(errs.CodeInvalidInput, "insufficient data for baseline calculation", http.StatusBadRequest)
 	}
 
 	baseline := &Baseline{
@@ -119,6 +121,7 @@ func (b *Baseline) calculateEventRate(events []*Event, period time.Duration) {
 	if hours == 0 {
 		hours = 1
 	}
+
 	b.EventsPerHour = float64(len(events)) / hours
 }
 
@@ -127,6 +130,7 @@ func (b *Baseline) calculateTopActions(events []*Event) {
 	for _, event := range events {
 		actionCounts[event.Action]++
 	}
+
 	b.TopActions = actionCounts
 }
 
@@ -135,6 +139,7 @@ func (b *Baseline) calculateTopResources(events []*Event) {
 	for _, event := range events {
 		resourceCounts[event.Resource]++
 	}
+
 	b.TopResources = resourceCounts
 }
 
@@ -154,6 +159,7 @@ func (b *Baseline) calculateTemporalPatterns(events []*Event) {
 			b.TypicalHours = append(b.TypicalHours, hour)
 		}
 	}
+
 	sort.Ints(b.TypicalHours)
 
 	// Get top days
@@ -184,14 +190,14 @@ func (b *Baseline) calculateIPPatterns(events []*Event) {
 // BASELINE CACHE - In-memory cache for baselines
 // =============================================================================
 
-// BaselineCache caches user baselines in memory
+// BaselineCache caches user baselines in memory.
 type BaselineCache struct {
 	baselines map[xid.ID]*Baseline
 	mu        sync.RWMutex
 	ttl       time.Duration
 }
 
-// NewBaselineCache creates a new baseline cache
+// NewBaselineCache creates a new baseline cache.
 func NewBaselineCache() *BaselineCache {
 	return &BaselineCache{
 		baselines: make(map[xid.ID]*Baseline),
@@ -199,7 +205,7 @@ func NewBaselineCache() *BaselineCache {
 	}
 }
 
-// Get retrieves a baseline from cache
+// Get retrieves a baseline from cache.
 func (bc *BaselineCache) Get(userID xid.ID) (*Baseline, bool) {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
@@ -217,7 +223,7 @@ func (bc *BaselineCache) Get(userID xid.ID) (*Baseline, bool) {
 	return baseline, true
 }
 
-// Set stores a baseline in cache
+// Set stores a baseline in cache.
 func (bc *BaselineCache) Set(userID xid.ID, baseline *Baseline) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
@@ -229,7 +235,7 @@ func (bc *BaselineCache) Set(userID xid.ID, baseline *Baseline) {
 // ANOMALY DETECTION - Detects abnormal behavior
 // =============================================================================
 
-// Anomaly represents a detected anomaly
+// Anomaly represents a detected anomaly.
 type Anomaly struct {
 	Type        string                 `json:"type"`     // geo_velocity, unusual_action, frequency_spike, etc.
 	Severity    string                 `json:"severity"` // low, medium, high, critical
@@ -241,22 +247,22 @@ type Anomaly struct {
 	DetectedAt  time.Time              `json:"detectedAt"`
 }
 
-// AnomalyDetector detects anomalies in audit events
+// AnomalyDetector detects anomalies in audit events.
 type AnomalyDetector struct {
 	baselineCalc *BaselineCalculator
 }
 
-// NewAnomalyDetector creates a new anomaly detector
+// NewAnomalyDetector creates a new anomaly detector.
 func NewAnomalyDetector() *AnomalyDetector {
 	return &AnomalyDetector{}
 }
 
-// SetBaselineCalculator sets the baseline calculator
+// SetBaselineCalculator sets the baseline calculator.
 func (ad *AnomalyDetector) SetBaselineCalculator(calc *BaselineCalculator) {
 	ad.baselineCalc = calc
 }
 
-// DetectAnomalies detects anomalies in an event against baseline
+// DetectAnomalies detects anomalies in an event against baseline.
 func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, event *Event, baseline *Baseline) ([]*Anomaly, error) {
 	anomalies := make([]*Anomaly, 0)
 
@@ -278,7 +284,7 @@ func (ad *AnomalyDetector) DetectAnomalies(ctx context.Context, event *Event, ba
 	return anomalies, nil
 }
 
-// detectUnusualAction checks if action is outside normal behavior
+// detectUnusualAction checks if action is outside normal behavior.
 func (ad *AnomalyDetector) detectUnusualAction(event *Event, baseline *Baseline) *Anomaly {
 	if baseline == nil || baseline.TopActions == nil {
 		return nil
@@ -311,7 +317,7 @@ func (ad *AnomalyDetector) detectUnusualAction(event *Event, baseline *Baseline)
 	return nil
 }
 
-// detectTemporalAnomaly checks if event time is outside normal hours
+// detectTemporalAnomaly checks if event time is outside normal hours.
 func (ad *AnomalyDetector) detectTemporalAnomaly(event *Event, baseline *Baseline) *Anomaly {
 	if baseline == nil || len(baseline.TypicalHours) == 0 {
 		return nil
@@ -322,18 +328,22 @@ func (ad *AnomalyDetector) detectTemporalAnomaly(event *Event, baseline *Baselin
 
 	// Check if hour is typical
 	hourTypical := false
+
 	for _, typicalHour := range baseline.TypicalHours {
 		if hour == typicalHour {
 			hourTypical = true
+
 			break
 		}
 	}
 
 	// Check if day is typical
 	dayTypical := false
+
 	for _, typicalDay := range baseline.TypicalDays {
 		if day == typicalDay {
 			dayTypical = true
+
 			break
 		}
 	}
@@ -350,7 +360,7 @@ func (ad *AnomalyDetector) detectTemporalAnomaly(event *Event, baseline *Baselin
 			Score:       score,
 			Event:       event,
 			Baseline:    baseline,
-			Description: fmt.Sprintf("Activity at unusual time: %s", event.CreatedAt.Format(time.RFC3339)),
+			Description: "Activity at unusual time: " + event.CreatedAt.Format(time.RFC3339),
 			Evidence: map[string]interface{}{
 				"hour":         hour,
 				"day":          day.String(),
@@ -364,14 +374,14 @@ func (ad *AnomalyDetector) detectTemporalAnomaly(event *Event, baseline *Baselin
 	return nil
 }
 
-// detectFrequencySpike checks for sudden increase in activity
+// detectFrequencySpike checks for sudden increase in activity.
 func (ad *AnomalyDetector) detectFrequencySpike(event *Event, baseline *Baseline) *Anomaly {
 	// This would require recent event count - simplified version
 	// In production, would compare last hour's event count to baseline.EventsPerHour
 	return nil
 }
 
-// calculateSeverity calculates severity from score
+// calculateSeverity calculates severity from score.
 func (ad *AnomalyDetector) calculateSeverity(score float64) string {
 	switch {
 	case score >= 80:
@@ -389,12 +399,12 @@ func (ad *AnomalyDetector) calculateSeverity(score float64) string {
 // GEO-VELOCITY DETECTION - Detects impossible travel
 // =============================================================================
 
-// GeoVelocityDetector detects impossible travel based on IP geolocation
+// GeoVelocityDetector detects impossible travel based on IP geolocation.
 type GeoVelocityDetector struct {
 	// Would integrate with IP geolocation service (MaxMind, IP2Location, etc.)
 }
 
-// DetectImpossibleTravel checks if travel between two locations is physically impossible
+// DetectImpossibleTravel checks if travel between two locations is physically impossible.
 func (gvd *GeoVelocityDetector) DetectImpossibleTravel(event1, event2 *Event) (*Anomaly, error) {
 	// Calculate distance between IPs (requires geolocation service)
 	// Calculate time difference
@@ -430,12 +440,12 @@ func (gvd *GeoVelocityDetector) DetectImpossibleTravel(event1, event2 *Event) (*
 // RISK ENGINE - Multi-factor risk scoring
 // =============================================================================
 
-// RiskEngine calculates risk scores for events
+// RiskEngine calculates risk scores for events.
 type RiskEngine struct {
 	weights map[string]float64
 }
 
-// NewRiskEngine creates a new risk engine
+// NewRiskEngine creates a new risk engine.
 func NewRiskEngine() *RiskEngine {
 	return &RiskEngine{
 		weights: map[string]float64{
@@ -447,7 +457,7 @@ func NewRiskEngine() *RiskEngine {
 	}
 }
 
-// RiskScore represents a calculated risk score
+// RiskScore represents a calculated risk score.
 type RiskScore struct {
 	Score        float64            `json:"score"` // 0-100
 	Level        string             `json:"level"` // low, medium, high, critical
@@ -457,18 +467,21 @@ type RiskScore struct {
 	CalculatedAt time.Time          `json:"calculatedAt"`
 }
 
-// Calculate calculates risk score for an event
+// Calculate calculates risk score for an event.
 func (re *RiskEngine) Calculate(ctx context.Context, event *Event, anomalies []*Anomaly, baseline *Baseline) (*RiskScore, error) {
 	factors := make(map[string]float64)
 
 	// Factor 1: Anomaly score (average of all detected anomalies)
 	anomalyScore := 0.0
+
 	if len(anomalies) > 0 {
 		for _, anomaly := range anomalies {
 			anomalyScore += anomaly.Score
 		}
+
 		anomalyScore /= float64(len(anomalies))
 	}
+
 	factors["anomaly_score"] = anomalyScore
 
 	// Factor 2: User risk (based on historical violations, privileges)
@@ -485,6 +498,7 @@ func (re *RiskEngine) Calculate(ctx context.Context, event *Event, anomalies []*
 
 	// Calculate weighted total
 	totalScore := 0.0
+
 	for factor, score := range factors {
 		weight := re.weights[factor]
 		totalScore += score * weight
@@ -533,12 +547,15 @@ func (re *RiskEngine) calculateContextRisk(event *Event, baseline *Baseline) flo
 	if baseline != nil && len(baseline.TypicalHours) > 0 {
 		hour := event.CreatedAt.Hour()
 		isTypical := false
+
 		for _, typicalHour := range baseline.TypicalHours {
 			if hour == typicalHour {
 				isTypical = true
+
 				break
 			}
 		}
+
 		if !isTypical {
 			risk += 30.0
 		}

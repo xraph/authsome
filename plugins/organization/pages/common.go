@@ -3,6 +3,7 @@ package pages
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -24,7 +25,7 @@ import (
 // Common Components
 // =============================================================================
 
-// PageHeader renders a standard page header with title, description, and optional actions
+// PageHeader renders a standard page header with title, description, and optional actions.
 func PageHeader(title, description string, actions ...g.Node) g.Node {
 	titleSection := primitives.VStack("gap-1",
 		H1(Class("text-2xl font-bold"), g.Text(title)),
@@ -40,15 +41,17 @@ func PageHeader(title, description string, actions ...g.Node) g.Node {
 			primitives.HStack("gap-2", actions...),
 		)
 	}
+
 	return Div(Class("mb-6"), titleSection)
 }
 
-// PrimaryButton creates a primary action button using ForgeUI
+// PrimaryButton creates a primary action button using ForgeUI.
 func PrimaryButton(href, text string, icon g.Node) g.Node {
 	content := Div(g.Text(text))
 	if icon != nil {
 		content = Div(icon, g.Text(text))
 	}
+
 	return button.Button(
 		content,
 		button.WithVariant("default"),
@@ -58,12 +61,13 @@ func PrimaryButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// SecondaryButton creates a secondary action button using ForgeUI
+// SecondaryButton creates a secondary action button using ForgeUI.
 func SecondaryButton(href, text string, icon g.Node) g.Node {
 	content := Div(g.Text(text))
 	if icon != nil {
 		content = Div(icon, g.Text(text))
 	}
+
 	return button.Button(
 		content,
 		button.WithVariant("secondary"),
@@ -73,12 +77,13 @@ func SecondaryButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// DangerButton creates a danger/destructive action button using ForgeUI
+// DangerButton creates a danger/destructive action button using ForgeUI.
 func DangerButton(onclick, text string, icon g.Node) g.Node {
 	content := Div(g.Text(text))
 	if icon != nil {
 		content = Div(icon, g.Text(text))
 	}
+
 	return button.Button(
 		content,
 		button.WithVariant("destructive"),
@@ -89,12 +94,12 @@ func DangerButton(onclick, text string, icon g.Node) g.Node {
 	)
 }
 
-// Card creates a basic card container
+// Card creates a basic card container.
 func Card(children ...g.Node) g.Node {
 	return card.Card(children...)
 }
 
-// CardWithHeader creates a card with a header section
+// CardWithHeader creates a card with a header section.
 func CardWithHeader(headerTitle string, headerActions []g.Node, body ...g.Node) g.Node {
 	headerContent := []g.Node{card.Title(headerTitle)}
 	if len(headerActions) > 0 {
@@ -105,13 +110,14 @@ func CardWithHeader(headerTitle string, headerActions []g.Node, body ...g.Node) 
 			),
 		)
 	}
+
 	return card.Card(
 		card.Header(headerContent...),
 		card.Content(g.Group(body)),
 	)
 }
 
-// StatsCard renders a statistics card with icon and value
+// StatsCard renders a statistics card with icon and value.
 func StatsCard(label, xDataValue, iconColor string) g.Node {
 	return card.Card(
 		Class("hover:shadow-md transition-shadow"),
@@ -129,9 +135,10 @@ func StatsCard(label, xDataValue, iconColor string) g.Node {
 	)
 }
 
-// RoleBadge renders a badge for organization roles
+// RoleBadge renders a badge for organization roles.
 func RoleBadge(role string) g.Node {
 	var badgeClass string
+
 	switch role {
 	case "owner":
 		badgeClass = "bg-primary text-primary-foreground capitalize"
@@ -148,8 +155,11 @@ func RoleBadge(role string) g.Node {
 
 // StatusBadge renders a badge for status (active, pending, etc.)
 func StatusBadge(status string) g.Node {
-	var badgeClass string
-	var displayText string
+	var (
+		badgeClass  string
+		displayText string
+	)
+
 	switch status {
 	case "active":
 		badgeClass = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-transparent"
@@ -177,7 +187,7 @@ func StatusBadge(status string) g.Node {
 	return badge.Badge(displayText, badge.WithClass(badgeClass))
 }
 
-// SearchInput renders a search input field using ForgeUI
+// SearchInput renders a search input field using ForgeUI.
 func SearchInput(placeholder, currentValue, formAction string) g.Node {
 	return Form(
 		Method("GET"),
@@ -199,7 +209,7 @@ func SearchInput(placeholder, currentValue, formAction string) g.Node {
 	)
 }
 
-// LoadingSpinner renders a loading spinner
+// LoadingSpinner renders a loading spinner.
 func LoadingSpinner() g.Node {
 	return Div(
 		Class("flex items-center justify-center py-12"),
@@ -209,7 +219,7 @@ func LoadingSpinner() g.Node {
 	)
 }
 
-// ErrorMessage renders an error message
+// ErrorMessage renders an error message.
 func ErrorMessage(xShowCondition string) g.Node {
 	return Div(
 		g.Attr("x-show", xShowCondition),
@@ -223,7 +233,7 @@ func ErrorMessage(xShowCondition string) g.Node {
 	)
 }
 
-// EmptyState renders an empty state message using ForgeUI
+// EmptyState renders an empty state message using ForgeUI.
 func EmptyState(icon g.Node, title, description string) g.Node {
 	return emptystate.EmptyState(
 		emptystate.WithIcon(icon),
@@ -232,7 +242,7 @@ func EmptyState(icon g.Node, title, description string) g.Node {
 	)
 }
 
-// QuickLinkCard renders a quick access card
+// QuickLinkCard renders a quick access card.
 func QuickLinkCard(title, description, href string, icon g.Node) g.Node {
 	return A(
 		Href(href),
@@ -267,7 +277,7 @@ func QuickLinkCard(title, description, href string, icon g.Node) g.Node {
 	)
 }
 
-// BackLink renders a back navigation link
+// BackLink renders a back navigation link.
 func BackLink(href, text string) g.Node {
 	return A(
 		Href(href),
@@ -277,7 +287,7 @@ func BackLink(href, text string) g.Node {
 	)
 }
 
-// FormField renders a form field with label and input using ForgeUI
+// FormField renders a form field with label and input using ForgeUI.
 func FormField(id, label, fieldType, name, placeholder string, required bool, helpText string) g.Node {
 	return Div(
 		Class("space-y-2"),
@@ -302,7 +312,7 @@ func FormField(id, label, fieldType, name, placeholder string, required bool, he
 	)
 }
 
-// TextareaField renders a textarea form field
+// TextareaField renders a textarea form field.
 func TextareaField(id, label, name, placeholder string, rows int, required bool, helpText string) g.Node {
 	return Div(
 		Class("space-y-2"),
@@ -316,7 +326,7 @@ func TextareaField(id, label, name, placeholder string, rows int, required bool,
 			ID(id),
 			Name(name),
 			Placeholder(placeholder),
-			Rows(fmt.Sprintf("%d", rows)),
+			Rows(strconv.Itoa(rows)),
 			Class("flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"),
 			g.If(required, g.Attr("required", "")),
 		),
@@ -326,7 +336,7 @@ func TextareaField(id, label, name, placeholder string, rows int, required bool,
 	)
 }
 
-// SelectField renders a select dropdown field
+// SelectField renders a select dropdown field.
 func SelectField(id, label, name string, required bool, options []SelectOption, helpText string) g.Node {
 	optionNodes := make([]g.Node, len(options))
 	for i, opt := range options {
@@ -358,14 +368,14 @@ func SelectField(id, label, name string, required bool, options []SelectOption, 
 	)
 }
 
-// SelectOption represents an option for a select field
+// SelectOption represents an option for a select field.
 type SelectOption struct {
 	Value    string
 	Label    string
 	Selected bool
 }
 
-// ConfirmDialog renders a confirmation dialog using Alpine.js
+// ConfirmDialog renders a confirmation dialog using Alpine.js.
 func ConfirmDialog(message, confirmButtonText, xShowVar, onConfirm string) g.Node {
 	return Div(
 		g.Attr("x-show", xShowVar),
@@ -403,17 +413,17 @@ func ConfirmDialog(message, confirmButtonText, xShowVar, onConfirm string) g.Nod
 	)
 }
 
-// FormatDate formats a time.Time to a readable string
+// FormatDate formats a time.Time to a readable string.
 func FormatDate(t time.Time) string {
 	return t.Format("Jan 2, 2006")
 }
 
-// FormatDateTime formats a time.Time to a readable string with time
+// FormatDateTime formats a time.Time to a readable string with time.
 func FormatDateTime(t time.Time) string {
 	return t.Format("Jan 2, 2006 3:04 PM")
 }
 
-// FormatTimeAgo returns a human-readable "time ago" string
+// FormatTimeAgo returns a human-readable "time ago" string.
 func FormatTimeAgo(t time.Time) string {
 	duration := time.Since(t)
 	switch {
@@ -424,32 +434,37 @@ func FormatTimeAgo(t time.Time) string {
 		if mins == 1 {
 			return "1 minute ago"
 		}
+
 		return fmt.Sprintf("%d minutes ago", mins)
 	case duration < 24*time.Hour:
 		hours := int(duration.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
+
 		return fmt.Sprintf("%d hours ago", hours)
 	case duration < 7*24*time.Hour:
 		days := int(duration.Hours() / 24)
 		if days == 1 {
 			return "1 day ago"
 		}
+
 		return fmt.Sprintf("%d days ago", days)
 	default:
 		return FormatDate(t)
 	}
 }
 
-// Pagination renders pagination controls
+// Pagination renders pagination controls.
 func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	if totalPages <= 1 {
 		return nil
 	}
 
-	const btnClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
-	const activeClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 bg-primary text-primary-foreground"
+	const (
+		btnClass    = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors h-9 px-3 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+		activeClass = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium h-9 px-3 bg-primary text-primary-foreground"
+	)
 
 	pages := make([]g.Node, 0)
 
@@ -467,13 +482,13 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 		if i == currentPage {
 			pages = append(pages, Span(
 				Class(activeClass),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			pages = append(pages, A(
 				Href(fmt.Sprintf("%s?page=%d", baseURL, i)),
 				Class(btnClass),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			pages = append(pages, Span(
@@ -495,7 +510,7 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	return primitives.HStack("gap-2 justify-center mt-6", pages...)
 }
 
-// DataTable renders a data table using ForgeUI
+// DataTable renders a data table using ForgeUI.
 func DataTable(headers []string, rows []g.Node) g.Node {
 	headerCells := make([]g.Node, len(headers))
 	for i, h := range headers {
@@ -513,29 +528,29 @@ func DataTable(headers []string, rows []g.Node) g.Node {
 	)
 }
 
-// TableRow creates a table row using ForgeUI
+// TableRow creates a table row using ForgeUI.
 func TableRow(cells ...g.Node) g.Node {
 	return table.TableRow()(cells...)
 }
 
-// TableCell creates a table cell using ForgeUI
+// TableCell creates a table cell using ForgeUI.
 func TableCell(content g.Node) g.Node {
 	return table.TableCell()(content)
 }
 
-// TableCellSecondary creates a secondary table cell with muted text
+// TableCellSecondary creates a secondary table cell with muted text.
 func TableCellSecondary(content g.Node) g.Node {
 	return table.TableCell(table.WithCellClass("text-muted-foreground"))(content)
 }
 
-// TableCellActions creates a table cell with action buttons
+// TableCellActions creates a table cell with action buttons.
 func TableCellActions(actions ...g.Node) g.Node {
 	return table.TableCell(table.WithAlign(table.AlignRight))(
 		primitives.HStack("gap-2 justify-end", actions...),
 	)
 }
 
-// IconButton creates a small icon button
+// IconButton creates a small icon button.
 func IconButton(href string, icon g.Node, title, colorClass string) g.Node {
 	return A(
 		Href(href),
@@ -545,7 +560,7 @@ func IconButton(href string, icon g.Node, title, colorClass string) g.Node {
 	)
 }
 
-// ConfirmButton creates a button that requires confirmation
+// ConfirmButton creates a button that requires confirmation.
 func ConfirmButton(formAction, method, text, confirmMessage, colorClass string, icon g.Node) g.Node {
 	btnContent := g.Text(text)
 	if icon != nil {
@@ -570,12 +585,12 @@ func ConfirmButton(formAction, method, text, confirmMessage, colorClass string, 
 // Helper Functions
 // =============================================================================
 
-// XIDToString converts xid.ID to string safely
+// XIDToString converts xid.ID to string safely.
 func XIDToString(id xid.ID) string {
 	return id.String()
 }
 
-// StringPtr returns a pointer to a string
+// StringPtr returns a pointer to a string.
 func StringPtr(s string) *string {
 	return &s
 }

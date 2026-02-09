@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/organization"
+	"github.com/xraph/authsome/internal/errs"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 
 	"github.com/xraph/authsome/plugins/subscription/core"
@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// EnforcementService handles subscription limit enforcement
+// EnforcementService handles subscription limit enforcement.
 type EnforcementService struct {
 	subRepo          repository.SubscriptionRepository
 	planRepo         repository.PlanRepository
@@ -25,7 +25,7 @@ type EnforcementService struct {
 	config           core.Config
 }
 
-// NewEnforcementService creates a new enforcement service
+// NewEnforcementService creates a new enforcement service.
 func NewEnforcementService(
 	subRepo repository.SubscriptionRepository,
 	planRepo repository.PlanRepository,
@@ -42,13 +42,13 @@ func NewEnforcementService(
 	}
 }
 
-// SetFeatureRepositories sets the feature repositories for enhanced feature checking
+// SetFeatureRepositories sets the feature repositories for enhanced feature checking.
 func (s *EnforcementService) SetFeatureRepositories(featureRepo repository.FeatureRepository, featureUsageRepo repository.FeatureUsageRepository) {
 	s.featureRepo = featureRepo
 	s.featureUsageRepo = featureUsageRepo
 }
 
-// CheckFeatureAccess checks if an organization has access to a feature
+// CheckFeatureAccess checks if an organization has access to a feature.
 func (s *EnforcementService) CheckFeatureAccess(ctx context.Context, orgID xid.ID, feature string) (bool, error) {
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
@@ -73,12 +73,14 @@ func (s *EnforcementService) CheckFeatureAccess(ctx context.Context, orgID xid.I
 		case "boolean":
 			var val bool
 			json.Unmarshal([]byte(f.Value), &val)
+
 			return val, nil
 		case "unlimited":
 			return true, nil
 		case "limit":
 			var val float64
 			json.Unmarshal([]byte(f.Value), &val)
+
 			return val > 0, nil
 		}
 	}
@@ -86,7 +88,7 @@ func (s *EnforcementService) CheckFeatureAccess(ctx context.Context, orgID xid.I
 	return false, nil
 }
 
-// GetRemainingSeats returns the number of available seats
+// GetRemainingSeats returns the number of available seats.
 func (s *EnforcementService) GetRemainingSeats(ctx context.Context, orgID xid.ID) (int, error) {
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
@@ -100,26 +102,25 @@ func (s *EnforcementService) GetRemainingSeats(ctx context.Context, orgID xid.ID
 
 	// Get current member count
 	currentMembers := 0
+
 	if s.orgService != nil {
 		filter := &organization.ListMembersFilter{
 			OrganizationID: orgID,
 		}
 		filter.Limit = 1 // We only care about the total count
+
 		response, err := s.orgService.ListMembers(ctx, filter)
 		if err == nil && response != nil && response.Pagination != nil {
 			currentMembers = int(response.Pagination.Total)
 		}
 	}
 
-	remaining := int(maxSeats) - currentMembers
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(int(maxSeats)-currentMembers, 0)
 
 	return remaining, nil
 }
 
-// GetFeatureLimit returns the limit for a feature
+// GetFeatureLimit returns the limit for a feature.
 func (s *EnforcementService) GetFeatureLimit(ctx context.Context, orgID xid.ID, feature string) (int64, error) {
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
@@ -129,7 +130,7 @@ func (s *EnforcementService) GetFeatureLimit(ctx context.Context, orgID xid.ID, 
 	return s.getFeatureLimitInt(sub.Plan, feature), nil
 }
 
-// GetAllLimits returns all limits and current usage for an organization
+// GetAllLimits returns all limits and current usage for an organization.
 func (s *EnforcementService) GetAllLimits(ctx context.Context, orgID xid.ID) (map[string]*core.UsageLimit, error) {
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
@@ -137,7 +138,7 @@ func (s *EnforcementService) GetAllLimits(ctx context.Context, orgID xid.ID) (ma
 	}
 
 	if sub.Plan == nil {
-		return nil, fmt.Errorf("plan not loaded")
+		return nil, errs.BadRequest("plan not loaded")
 	}
 
 	result := make(map[string]*core.UsageLimit)
@@ -151,6 +152,7 @@ func (s *EnforcementService) GetAllLimits(ctx context.Context, orgID xid.ID) (ma
 
 		// Get current usage for metered features
 		var currentUsage int64 = 0
+
 		summary, err := s.usageRepo.GetSummary(ctx, sub.ID, f.Key, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 		if err == nil && summary != nil {
 			currentUsage = summary.TotalQuantity
@@ -162,23 +164,26 @@ func (s *EnforcementService) GetAllLimits(ctx context.Context, orgID xid.ID) (ma
 	// Add seat limit
 	maxSeats := s.getFeatureLimitInt(sub.Plan, core.FeatureKeyMaxMembers)
 	currentMembers := int64(0)
+
 	if s.orgService != nil {
 		filter := &organization.ListMembersFilter{
 			OrganizationID: orgID,
 		}
 		filter.Limit = 1
+
 		response, err := s.orgService.ListMembers(ctx, filter)
 		if err == nil && response != nil && response.Pagination != nil {
 			currentMembers = int64(response.Pagination.Total)
 		}
 	}
+
 	result[core.FeatureKeyMaxMembers] = core.NewUsageLimit(core.FeatureKeyMaxMembers, currentMembers, maxSeats)
 
 	return result, nil
 }
 
-// EnforceSubscriptionRequired is a hook to enforce subscription requirement
-func (s *EnforcementService) EnforceSubscriptionRequired(ctx context.Context, req interface{}) error {
+// EnforceSubscriptionRequired is a hook to enforce subscription requirement.
+func (s *EnforcementService) EnforceSubscriptionRequired(ctx context.Context, req any) error {
 	if !s.config.RequireSubscription {
 		return nil
 	}
@@ -191,7 +196,7 @@ func (s *EnforcementService) EnforceSubscriptionRequired(ctx context.Context, re
 	return nil
 }
 
-// EnforceSeatLimit is a hook to enforce seat limits when adding members
+// EnforceSeatLimit is a hook to enforce seat limits when adding members.
 func (s *EnforcementService) EnforceSeatLimit(ctx context.Context, orgIDStr string, userID xid.ID) error {
 	orgID, err := xid.FromString(orgIDStr)
 	if err != nil {
@@ -204,6 +209,7 @@ func (s *EnforcementService) EnforceSeatLimit(ctx context.Context, orgIDStr stri
 		if s.config.RequireSubscription {
 			return suberrors.ErrSubscriptionRequired
 		}
+
 		return nil
 	}
 
@@ -218,13 +224,14 @@ func (s *EnforcementService) EnforceSeatLimit(ctx context.Context, orgIDStr stri
 	return nil
 }
 
-// EnforceTeamLimit enforces team creation limits
+// EnforceTeamLimit enforces team creation limits.
 func (s *EnforcementService) EnforceTeamLimit(ctx context.Context, orgID xid.ID) error {
 	limit, err := s.GetFeatureLimit(ctx, orgID, core.FeatureKeyMaxTeams)
 	if err != nil {
 		if s.config.RequireSubscription {
 			return suberrors.ErrSubscriptionRequired
 		}
+
 		return nil
 	}
 
@@ -238,6 +245,7 @@ func (s *EnforcementService) EnforceTeamLimit(ctx context.Context, orgID xid.ID)
 			OrganizationID: orgID,
 		}
 		filter.Limit = 1 // We only need the total count
+
 		response, err := s.orgService.ListTeams(ctx, filter)
 		if err == nil && response != nil && response.Pagination != nil && int64(response.Pagination.Total) >= limit {
 			return suberrors.ErrFeatureLimitExceeded
@@ -248,7 +256,7 @@ func (s *EnforcementService) EnforceTeamLimit(ctx context.Context, orgID xid.ID)
 }
 
 // CheckFeatureAccessEnhanced checks feature access using the new feature system
-// Falls back to legacy system if new system is not configured
+// Falls back to legacy system if new system is not configured.
 func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, orgID xid.ID, featureKey string) (*core.FeatureAccess, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -277,8 +285,10 @@ func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, org
 				}
 
 				// Determine access based on feature type
-				var hasAccess bool
-				var limit int64 = 0
+				var (
+					hasAccess bool
+					limit     int64 = 0
+				)
 
 				switch feature.Type {
 				case "boolean":
@@ -299,6 +309,7 @@ func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, org
 
 				// Get current usage
 				var currentUsage int64 = 0
+
 				if s.featureUsageRepo != nil {
 					usage, err := s.featureUsageRepo.FindUsage(ctx, orgID, feature.ID)
 					if err == nil && usage != nil {
@@ -319,10 +330,7 @@ func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, org
 
 				var remaining int64 = -1
 				if effectiveLimit > 0 {
-					remaining = effectiveLimit - currentUsage
-					if remaining < 0 {
-						remaining = 0
-					}
+					remaining = max(effectiveLimit-currentUsage, 0)
 				}
 
 				return &core.FeatureAccess{
@@ -353,7 +361,7 @@ func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, org
 	}, nil
 }
 
-// GetEffectiveLimitEnhanced returns the effective limit for a feature including grants
+// GetEffectiveLimitEnhanced returns the effective limit for a feature including grants.
 func (s *EnforcementService) GetEffectiveLimitEnhanced(ctx context.Context, orgID xid.ID, featureKey string) (int64, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -372,6 +380,7 @@ func (s *EnforcementService) GetEffectiveLimitEnhanced(ctx context.Context, orgI
 				}
 
 				var baseLimit int64 = 0
+
 				switch feature.Type {
 				case "unlimited":
 					return -1, nil
@@ -382,9 +391,11 @@ func (s *EnforcementService) GetEffectiveLimitEnhanced(ctx context.Context, orgI
 				case "boolean":
 					var val bool
 					json.Unmarshal([]byte(link.Value), &val)
+
 					if val {
 						return -1, nil
 					}
+
 					return 0, nil
 				case "tiered":
 					return -1, nil
@@ -393,6 +404,7 @@ func (s *EnforcementService) GetEffectiveLimitEnhanced(ctx context.Context, orgI
 				// Add grants
 				if s.featureUsageRepo != nil {
 					grantedExtra, _ := s.featureUsageRepo.GetTotalGrantedValue(ctx, orgID, feature.ID)
+
 					return baseLimit + grantedExtra, nil
 				}
 
@@ -419,6 +431,7 @@ func (s *EnforcementService) getFeatureLimitInt(plan *schema.SubscriptionPlan, k
 				if link.IsBlocked {
 					return 0
 				}
+
 				switch link.Feature.Type {
 				case "unlimited":
 					return -1

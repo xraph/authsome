@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/xraph/forgeui/components/button"
@@ -12,7 +13,7 @@ import (
 	"maragu.dev/gomponents/html"
 )
 
-// Renderer renders schema elements to ForgeUI components
+// Renderer renders schema elements to ForgeUI components.
 type Renderer struct {
 	// Theme is the current theme (light/dark)
 	theme string
@@ -24,7 +25,7 @@ type Renderer struct {
 	onSave string
 }
 
-// NewRenderer creates a new renderer with default settings
+// NewRenderer creates a new renderer with default settings.
 func NewRenderer() *Renderer {
 	return &Renderer{
 		theme:       "light",
@@ -34,31 +35,35 @@ func NewRenderer() *Renderer {
 	}
 }
 
-// WithTheme sets the theme
+// WithTheme sets the theme.
 func (r *Renderer) WithTheme(theme string) *Renderer {
 	r.theme = theme
+
 	return r
 }
 
-// WithDataPrefix sets the Alpine.js data prefix
+// WithDataPrefix sets the Alpine.js data prefix.
 func (r *Renderer) WithDataPrefix(prefix string) *Renderer {
 	r.dataPrefix = prefix
+
 	return r
 }
 
-// WithErrorPrefix sets the Alpine.js error prefix
+// WithErrorPrefix sets the Alpine.js error prefix.
 func (r *Renderer) WithErrorPrefix(prefix string) *Renderer {
 	r.errorPrefix = prefix
+
 	return r
 }
 
-// WithOnSave sets the save function name
+// WithOnSave sets the save function name.
 func (r *Renderer) WithOnSave(fn string) *Renderer {
 	r.onSave = fn
+
 	return r
 }
 
-// RenderSchema renders a complete schema as a form
+// RenderSchema renders a complete schema as a form.
 func (r *Renderer) RenderSchema(schema *Schema, options ...RenderOption) g.Node {
 	opts := r.applyOptions(options...)
 
@@ -73,13 +78,14 @@ func (r *Renderer) RenderSchema(schema *Schema, options ...RenderOption) g.Node 
 	)
 }
 
-// RenderSection renders a section with all its fields
+// RenderSection renders a section with all its fields.
 func (r *Renderer) RenderSection(section *Section, options ...RenderOption) g.Node {
 	opts := r.applyOptions(options...)
+
 	return r.renderSectionWithOpts(section, opts)
 }
 
-// renderSectionWithOpts renders a section with pre-processed options
+// renderSectionWithOpts renders a section with pre-processed options.
 func (r *Renderer) renderSectionWithOpts(section *Section, opts renderOptions) g.Node {
 	fields := make([]g.Node, 0, len(section.GetSortedFields()))
 	for _, field := range section.GetSortedFields() {
@@ -91,6 +97,7 @@ func (r *Renderer) renderSectionWithOpts(section *Section, opts renderOptions) g
 	if section.Icon != "" {
 		headerContent = append(headerContent, r.renderIcon(section.Icon))
 	}
+
 	headerContent = append(headerContent, g.Text(section.Title))
 
 	header := card.Header(
@@ -124,12 +131,14 @@ func (r *Renderer) renderSectionWithOpts(section *Section, opts renderOptions) g
 	if footer != nil {
 		return card.Card(header, content, footer)
 	}
+
 	return card.Card(header, content)
 }
 
-// renderCollapsibleCard renders a collapsible card section
+// renderCollapsibleCard renders a collapsible card section.
 func (r *Renderer) renderCollapsibleCard(section *Section, header, content, footer g.Node, opts renderOptions) g.Node {
-	collapseVar := fmt.Sprintf("collapsed_%s", section.ID)
+	collapseVar := "collapsed_" + section.ID
+
 	defaultState := "false"
 	if section.DefaultCollapsed {
 		defaultState = "true"
@@ -144,7 +153,7 @@ func (r *Renderer) renderCollapsibleCard(section *Section, header, content, foot
 				header,
 			),
 			html.Div(
-				g.Attr("x-show", fmt.Sprintf("!%s", collapseVar)),
+				g.Attr("x-show", "!"+collapseVar),
 				g.Attr("x-collapse", ""),
 				content,
 				g.If(footer != nil, footer),
@@ -153,15 +162,15 @@ func (r *Renderer) renderCollapsibleCard(section *Section, header, content, foot
 	)
 }
 
-// RenderField renders a single field based on its type
+// RenderField renders a single field based on its type.
 func (r *Renderer) RenderField(field *Field, options ...RenderOption) g.Node {
 	opts := r.applyOptions(options...)
+
 	return r.renderFieldWithOpts(field, opts)
 }
 
-// renderFieldWithOpts renders a field with pre-processed options
+// renderFieldWithOpts renders a field with pre-processed options.
 func (r *Renderer) renderFieldWithOpts(field *Field, opts renderOptions) g.Node {
-
 	if field.Hidden {
 		return g.Group(nil)
 	}
@@ -172,6 +181,7 @@ func (r *Renderer) renderFieldWithOpts(field *Field, opts renderOptions) g.Node 
 
 	// Determine width class
 	widthClass := "w-full"
+
 	switch field.Width {
 	case "half":
 		widthClass = "w-full md:w-1/2"
@@ -183,10 +193,12 @@ func (r *Renderer) renderFieldWithOpts(field *Field, opts renderOptions) g.Node 
 
 	// Build visibility conditions
 	var visibilityAttrs []g.Node
+
 	for _, cond := range field.Conditions {
-		if cond.Action == ActionShow {
+		switch cond.Action {
+		case ActionShow:
 			visibilityAttrs = append(visibilityAttrs, g.Attr("x-show", r.buildConditionExpression(cond)))
-		} else if cond.Action == ActionHide {
+		case ActionHide:
 			visibilityAttrs = append(visibilityAttrs, g.Attr("x-show", "!("+r.buildConditionExpression(cond)+")"))
 		}
 	}
@@ -224,7 +236,7 @@ func (r *Renderer) renderFieldWithOpts(field *Field, opts renderOptions) g.Node 
 	)
 }
 
-// renderInput renders the appropriate input component for a field type
+// renderInput renders the appropriate input component for a field type.
 func (r *Renderer) renderInput(field *Field, modelPath string, opts renderOptions) g.Node {
 	switch field.Type {
 	case FieldTypeText:
@@ -260,7 +272,7 @@ func (r *Renderer) renderInput(field *Field, modelPath string, opts renderOption
 	}
 }
 
-// renderTextInput renders a text input
+// renderTextInput renders a text input.
 func (r *Renderer) renderTextInput(field *Field, modelPath string) g.Node {
 	attrs := []input.Option{
 		input.WithID(field.ID),
@@ -280,7 +292,7 @@ func (r *Renderer) renderTextInput(field *Field, modelPath string) g.Node {
 	return input.Input(attrs...)
 }
 
-// renderInputWithAddons renders an input with prefix/suffix
+// renderInputWithAddons renders an input with prefix/suffix.
 func (r *Renderer) renderInputWithAddons(field *Field, modelPath string, inputType string) g.Node {
 	return html.Div(
 		html.Class("flex items-center"),
@@ -302,7 +314,7 @@ func (r *Renderer) renderInputWithAddons(field *Field, modelPath string, inputTy
 	)
 }
 
-// renderNumberInput renders a number input
+// renderNumberInput renders a number input.
 func (r *Renderer) renderNumberInput(field *Field, modelPath string) g.Node {
 	attrs := []g.Node{
 		html.ID(field.ID),
@@ -315,15 +327,19 @@ func (r *Renderer) renderNumberInput(field *Field, modelPath string) g.Node {
 	if field.Min != nil {
 		attrs = append(attrs, g.Attr("min", fmt.Sprintf("%v", *field.Min)))
 	}
+
 	if field.Max != nil {
 		attrs = append(attrs, g.Attr("max", fmt.Sprintf("%v", *field.Max)))
 	}
+
 	if field.Step != nil {
 		attrs = append(attrs, g.Attr("step", fmt.Sprintf("%v", *field.Step)))
 	}
+
 	if field.Placeholder != "" {
 		attrs = append(attrs, html.Placeholder(field.Placeholder))
 	}
+
 	if field.Disabled || field.ReadOnly {
 		attrs = append(attrs, g.Attr("disabled", ""))
 	}
@@ -331,7 +347,7 @@ func (r *Renderer) renderNumberInput(field *Field, modelPath string) g.Node {
 	return html.Input(attrs...)
 }
 
-// renderBooleanInput renders a toggle/checkbox
+// renderBooleanInput renders a toggle/checkbox.
 func (r *Renderer) renderBooleanInput(field *Field, modelPath string) g.Node {
 	return html.Label(
 		html.Class("relative inline-flex items-center cursor-pointer"),
@@ -351,7 +367,7 @@ func (r *Renderer) renderBooleanInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderSelectInput renders a select dropdown
+// renderSelectInput renders a select dropdown.
 func (r *Renderer) renderSelectInput(field *Field, modelPath string) g.Node {
 	options := make([]g.Node, 0, len(field.Options)+1)
 
@@ -367,11 +383,13 @@ func (r *Renderer) renderSelectInput(field *Field, modelPath string) g.Node {
 	// Group options if any have groups
 	hasGroups := false
 	groups := make(map[string][]SelectOption)
+
 	var ungrouped []SelectOption
 
 	for _, opt := range field.Options {
 		if opt.Group != "" {
 			hasGroups = true
+
 			groups[opt.Group] = append(groups[opt.Group], opt)
 		} else {
 			ungrouped = append(ungrouped, opt)
@@ -389,6 +407,7 @@ func (r *Renderer) renderSelectInput(field *Field, modelPath string) g.Node {
 			for i, opt := range opts {
 				groupOptions[i] = r.renderOption(opt)
 			}
+
 			options = append(options, html.OptGroup(
 				g.Attr("label", group),
 				g.Group(groupOptions),
@@ -410,7 +429,7 @@ func (r *Renderer) renderSelectInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderOption renders a select option
+// renderOption renders a select option.
 func (r *Renderer) renderOption(opt SelectOption) g.Node {
 	return html.Option(
 		html.Value(fmt.Sprintf("%v", opt.Value)),
@@ -419,7 +438,7 @@ func (r *Renderer) renderOption(opt SelectOption) g.Node {
 	)
 }
 
-// renderMultiSelectInput renders a multi-select component
+// renderMultiSelectInput renders a multi-select component.
 func (r *Renderer) renderMultiSelectInput(field *Field, modelPath string) g.Node {
 	// Simple multi-select with checkboxes
 	checkboxes := make([]g.Node, len(field.Options))
@@ -443,9 +462,9 @@ func (r *Renderer) renderMultiSelectInput(field *Field, modelPath string) g.Node
 	)
 }
 
-// renderPasswordInput renders a password input with toggle visibility
+// renderPasswordInput renders a password input with toggle visibility.
 func (r *Renderer) renderPasswordInput(field *Field, modelPath string) g.Node {
-	showVar := fmt.Sprintf("show_%s", field.ID)
+	showVar := "show_" + field.ID
 
 	return html.Div(
 		g.Attr("x-data", fmt.Sprintf("{%s: false}", showVar)),
@@ -453,7 +472,7 @@ func (r *Renderer) renderPasswordInput(field *Field, modelPath string) g.Node {
 		html.Input(
 			html.ID(field.ID),
 			html.Name(field.ID),
-			g.Attr(":type", fmt.Sprintf("%s ? 'text' : 'password'", showVar)),
+			g.Attr(":type", showVar+" ? 'text' : 'password'"),
 			html.Class("flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"),
 			g.Attr("x-model", modelPath),
 			g.If(field.Placeholder != "", html.Placeholder(field.Placeholder)),
@@ -464,7 +483,7 @@ func (r *Renderer) renderPasswordInput(field *Field, modelPath string) g.Node {
 			html.Class("absolute inset-y-0 right-0 flex items-center pr-3"),
 			g.Attr("@click", fmt.Sprintf("%s = !%s", showVar, showVar)),
 			html.Span(
-				g.Attr("x-show", fmt.Sprintf("!%s", showVar)),
+				g.Attr("x-show", "!"+showVar),
 				icons.Eye(icons.WithSize(16)),
 			),
 			html.Span(
@@ -475,7 +494,7 @@ func (r *Renderer) renderPasswordInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderEmailInput renders an email input
+// renderEmailInput renders an email input.
 func (r *Renderer) renderEmailInput(field *Field, modelPath string) g.Node {
 	return input.Input(
 		input.WithID(field.ID),
@@ -486,7 +505,7 @@ func (r *Renderer) renderEmailInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderURLInput renders a URL input
+// renderURLInput renders a URL input.
 func (r *Renderer) renderURLInput(field *Field, modelPath string) g.Node {
 	return input.Input(
 		input.WithID(field.ID),
@@ -497,9 +516,10 @@ func (r *Renderer) renderURLInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderTextAreaInput renders a textarea
+// renderTextAreaInput renders a textarea.
 func (r *Renderer) renderTextAreaInput(field *Field, modelPath string) g.Node {
 	rows := 4
+
 	if field.Metadata != nil {
 		if r, ok := field.Metadata["rows"].(int); ok {
 			rows = r
@@ -511,14 +531,14 @@ func (r *Renderer) renderTextAreaInput(field *Field, modelPath string) g.Node {
 		html.Name(field.ID),
 		html.Class("flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"),
 		g.Attr("x-model", modelPath),
-		g.Attr("rows", fmt.Sprintf("%d", rows)),
+		g.Attr("rows", strconv.Itoa(rows)),
 		g.If(field.Placeholder != "", html.Placeholder(field.Placeholder)),
 		g.If(field.Disabled, g.Attr("disabled", "")),
-		g.If(field.MaxLength != nil, g.Attr("maxlength", fmt.Sprintf("%d", *field.MaxLength))),
+		g.If(field.MaxLength != nil, g.Attr("maxlength", strconv.Itoa(*field.MaxLength))),
 	)
 }
 
-// renderJSONInput renders a JSON editor textarea
+// renderJSONInput renders a JSON editor textarea.
 func (r *Renderer) renderJSONInput(field *Field, modelPath string) g.Node {
 	return html.Div(
 		html.Class("relative"),
@@ -548,7 +568,7 @@ func (r *Renderer) renderJSONInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderSliderInput renders a range slider
+// renderSliderInput renders a range slider.
 func (r *Renderer) renderSliderInput(field *Field, modelPath string) g.Node {
 	min := 0.0
 	max := 100.0
@@ -557,9 +577,11 @@ func (r *Renderer) renderSliderInput(field *Field, modelPath string) g.Node {
 	if field.Min != nil {
 		min = *field.Min
 	}
+
 	if field.Max != nil {
 		max = *field.Max
 	}
+
 	if field.Step != nil {
 		step = *field.Step
 	}
@@ -584,9 +606,9 @@ func (r *Renderer) renderSliderInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderTagsInput renders a tags input
+// renderTagsInput renders a tags input.
 func (r *Renderer) renderTagsInput(field *Field, modelPath string) g.Node {
-	inputVar := fmt.Sprintf("tagInput_%s", field.ID)
+	inputVar := "tagInput_" + field.ID
 
 	return html.Div(
 		g.Attr("x-data", fmt.Sprintf("{%s: ''}", inputVar)),
@@ -594,14 +616,14 @@ func (r *Renderer) renderTagsInput(field *Field, modelPath string) g.Node {
 		// Tags display
 		html.Div(
 			html.Class("flex flex-wrap gap-2"),
-			g.El("template", g.Attr("x-for", fmt.Sprintf("(tag, index) in %s", modelPath)),
+			g.El("template", g.Attr("x-for", "(tag, index) in "+modelPath),
 				html.Span(
 					html.Class("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"),
 					html.Span(g.Attr("x-text", "tag")),
 					html.Button(
 						html.Type("button"),
 						html.Class("ml-1 inline-flex items-center"),
-						g.Attr("@click", fmt.Sprintf("%s.splice(index, 1)", modelPath)),
+						g.Attr("@click", modelPath+".splice(index, 1)"),
 						icons.X(icons.WithSize(12)),
 					),
 				),
@@ -618,7 +640,7 @@ func (r *Renderer) renderTagsInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderColorInput renders a color picker
+// renderColorInput renders a color picker.
 func (r *Renderer) renderColorInput(field *Field, modelPath string) g.Node {
 	return html.Div(
 		html.Class("flex items-center space-x-2"),
@@ -638,7 +660,7 @@ func (r *Renderer) renderColorInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderDateInput renders a date or datetime input
+// renderDateInput renders a date or datetime input.
 func (r *Renderer) renderDateInput(field *Field, modelPath string) g.Node {
 	inputType := "date"
 	if field.Type == FieldTypeDateTime {
@@ -655,7 +677,7 @@ func (r *Renderer) renderDateInput(field *Field, modelPath string) g.Node {
 	)
 }
 
-// renderIcon renders an icon by name
+// renderIcon renders an icon by name.
 func (r *Renderer) renderIcon(iconName string) g.Node {
 	// Map common icon names to lucide icons
 	switch strings.ToLower(iconName) {
@@ -684,7 +706,7 @@ func (r *Renderer) renderIcon(iconName string) g.Node {
 	}
 }
 
-// buildConditionExpression builds an Alpine.js expression for a condition
+// buildConditionExpression builds an Alpine.js expression for a condition.
 func (r *Renderer) buildConditionExpression(cond Condition) string {
 	fieldPath := fmt.Sprintf("%s.%s", r.dataPrefix, cond.Field)
 
@@ -708,8 +730,8 @@ func (r *Renderer) buildConditionExpression(cond Condition) string {
 	}
 }
 
-// formatValue formats a value for use in Alpine.js expressions
-func (r *Renderer) formatValue(value interface{}) string {
+// formatValue formats a value for use in Alpine.js expressions.
+func (r *Renderer) formatValue(value any) string {
 	switch v := value.(type) {
 	case string:
 		return fmt.Sprintf("'%s'", v)
@@ -717,13 +739,14 @@ func (r *Renderer) formatValue(value interface{}) string {
 		if v {
 			return "true"
 		}
+
 		return "false"
 	default:
 		return fmt.Sprintf("%v", v)
 	}
 }
 
-// getInputClass returns the appropriate class for an input with addons
+// getInputClass returns the appropriate class for an input with addons.
 func (r *Renderer) getInputClass(field *Field) string {
 	classes := "flex h-10 w-full px-3 py-2 text-sm border border-input bg-background ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
@@ -740,7 +763,7 @@ func (r *Renderer) getInputClass(field *Field) string {
 	return classes
 }
 
-// RenderOption is a functional option for rendering
+// RenderOption is a functional option for rendering.
 type RenderOption func(*renderOptions)
 
 type renderOptions struct {
@@ -753,17 +776,18 @@ func (r *Renderer) applyOptions(opts ...RenderOption) renderOptions {
 	for _, opt := range opts {
 		opt(&options)
 	}
+
 	return options
 }
 
-// WithSaveButton includes a save button in the rendered form
+// WithSaveButton includes a save button in the rendered form.
 func WithSaveButton() RenderOption {
 	return func(o *renderOptions) {
 		o.showSaveButton = true
 	}
 }
 
-// WithReadOnly makes all fields read-only
+// WithReadOnly makes all fields read-only.
 func WithReadOnly() RenderOption {
 	return func(o *renderOptions) {
 		o.readOnly = true

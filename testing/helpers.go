@@ -2,15 +2,16 @@ package testing
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// sessionContextKey is used to store the session object in context
+// sessionContextKey is used to store the session object in context.
 type contextKey string
 
 const sessionContextKey contextKey = "test_session"
@@ -18,67 +19,72 @@ const sessionContextKey contextKey = "test_session"
 // Context helpers using core/contexts typed keys
 // These match the actual AuthSome context system
 
-// GetUserID retrieves the user ID from context using core/contexts
+// GetUserID retrieves the user ID from context using core/contexts.
 func GetUserID(ctx context.Context) (xid.ID, bool) {
 	return contexts.GetUserID(ctx)
 }
 
-// GetAppID retrieves the app ID from context using core/contexts
+// GetAppID retrieves the app ID from context using core/contexts.
 func GetAppID(ctx context.Context) (xid.ID, bool) {
 	return contexts.GetAppID(ctx)
 }
 
-// GetEnvironmentID retrieves the environment ID from context using core/contexts
+// GetEnvironmentID retrieves the environment ID from context using core/contexts.
 func GetEnvironmentID(ctx context.Context) (xid.ID, bool) {
 	return contexts.GetEnvironmentID(ctx)
 }
 
-// GetOrganizationID retrieves the organization ID from context using core/contexts
+// GetOrganizationID retrieves the organization ID from context using core/contexts.
 func GetOrganizationID(ctx context.Context) (xid.ID, bool) {
 	return contexts.GetOrganizationID(ctx)
 }
 
-// GetSession retrieves the session object from context
+// GetSession retrieves the session object from context.
 func GetSession(ctx context.Context) (*schema.Session, bool) {
 	session, ok := ctx.Value(sessionContextKey).(*schema.Session)
+
 	return session, ok
 }
 
 // Convenience helpers that fetch full entities from Mock
 
-// GetUserFromContext retrieves the full user object from context using the Mock
+// GetUserFromContext retrieves the full user object from context using the Mock.
 func (m *Mock) GetUserFromContext(ctx context.Context) (*schema.User, error) {
 	userID, ok := GetUserID(ctx)
 	if !ok || userID.IsNil() {
-		return nil, fmt.Errorf("user ID not found in context")
+		return nil, errs.New(errs.CodeUserNotFound, "user ID not found in context", http.StatusNotFound)
 	}
+
 	return m.GetUser(userID)
 }
 
-// GetAppFromContext retrieves the full app object from context using the Mock
+// GetAppFromContext retrieves the full app object from context using the Mock.
 func (m *Mock) GetAppFromContext(ctx context.Context) (*schema.App, error) {
 	appID, ok := GetAppID(ctx)
 	if !ok || appID.IsNil() {
-		return nil, fmt.Errorf("app ID not found in context")
+		return nil, errs.New(errs.CodeNotFound, "app ID not found in context", http.StatusNotFound)
 	}
+
 	return m.GetApp(appID)
 }
 
-// GetEnvironmentFromContext retrieves the full environment object from context using the Mock
+// GetEnvironmentFromContext retrieves the full environment object from context using the Mock.
 func (m *Mock) GetEnvironmentFromContext(ctx context.Context) (*schema.Environment, error) {
 	envID, ok := GetEnvironmentID(ctx)
 	if !ok || envID.IsNil() {
-		return nil, fmt.Errorf("environment ID not found in context")
+		return nil, errs.New(errs.CodeNotFound, "environment ID not found in context", http.StatusNotFound)
 	}
+
 	return m.GetEnvironment(envID)
 }
 
-// GetOrganizationFromContext retrieves the full organization object from context using the Mock
+// GetOrganizationFromContext retrieves the full organization object from context using the Mock.
 func (m *Mock) GetOrganizationFromContext(ctx context.Context) (*schema.Organization, error) {
 	orgID, ok := GetOrganizationID(ctx)
 	if !ok || orgID.IsNil() {
-		return nil, fmt.Errorf("organization ID not found in context")
+		return nil, errs.New(errs.CodeOrganizationNotFound, "organization ID not found in context", http.StatusNotFound)
 	}
+
 	return m.GetOrganization(orgID)
 }
 
@@ -157,7 +163,7 @@ func (m *Mock) RequireOrgRole(ctx context.Context, orgID xid.ID, requiredRole st
 	return member, nil
 }
 
-// Common test errors
+// Common test errors.
 var (
 	ErrNotAuthenticated        = &TestError{Code: "not_authenticated", Message: "user is not authenticated"}
 	ErrInvalidSession          = &TestError{Code: "invalid_session", Message: "session is invalid or expired"}

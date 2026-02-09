@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/rs/xid"
@@ -10,19 +11,20 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// QueryBuilder builds Bun queries from parsed Query objects
+// QueryBuilder builds Bun queries from parsed Query objects.
 type QueryBuilder struct {
 	db            *bun.DB
 	contentTypeID xid.ID
 	fields        map[string]*schema.ContentField
 }
 
-// NewQueryBuilder creates a new query builder
+// NewQueryBuilder creates a new query builder.
 func NewQueryBuilder(db *bun.DB, contentTypeID xid.ID, fields []*schema.ContentField) *QueryBuilder {
 	fieldMap := make(map[string]*schema.ContentField)
 	for _, f := range fields {
 		fieldMap[f.Name] = f
 	}
+
 	return &QueryBuilder{
 		db:            db,
 		contentTypeID: contentTypeID,
@@ -30,7 +32,7 @@ func NewQueryBuilder(db *bun.DB, contentTypeID xid.ID, fields []*schema.ContentF
 	}
 }
 
-// Build builds a Bun select query from a parsed Query
+// Build builds a Bun select query from a parsed Query.
 func (b *QueryBuilder) Build(q *Query) *bun.SelectQuery {
 	selectQuery := b.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
@@ -71,7 +73,7 @@ func (b *QueryBuilder) Build(q *Query) *bun.SelectQuery {
 	return selectQuery
 }
 
-// BuildCount builds a count query from a parsed Query
+// BuildCount builds a count query from a parsed Query.
 func (b *QueryBuilder) BuildCount(q *Query) *bun.SelectQuery {
 	selectQuery := b.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
@@ -96,7 +98,7 @@ func (b *QueryBuilder) BuildCount(q *Query) *bun.SelectQuery {
 	return selectQuery
 }
 
-// applyFilterGroup applies a filter group to the query
+// applyFilterGroup applies a filter group to the query.
 func (b *QueryBuilder) applyFilterGroup(q *bun.SelectQuery, group *FilterGroup) *bun.SelectQuery {
 	if group == nil || (len(group.Conditions) == 0 && len(group.Groups) == 0) {
 		return q
@@ -116,18 +118,20 @@ func (b *QueryBuilder) applyFilterGroup(q *bun.SelectQuery, group *FilterGroup) 
 	}
 }
 
-// applyAndGroup applies conditions with AND logic
+// applyAndGroup applies conditions with AND logic.
 func (b *QueryBuilder) applyAndGroup(q *bun.SelectQuery, group *FilterGroup) *bun.SelectQuery {
 	for _, cond := range group.Conditions {
 		q = b.applyCondition(q, cond, " AND ")
 	}
+
 	for _, subGroup := range group.Groups {
 		q = b.applyFilterGroup(q, subGroup)
 	}
+
 	return q
 }
 
-// applyOrGroup applies conditions with OR logic
+// applyOrGroup applies conditions with OR logic.
 func (b *QueryBuilder) applyOrGroup(q *bun.SelectQuery, group *FilterGroup) *bun.SelectQuery {
 	first := true
 	for _, cond := range group.Conditions {
@@ -138,6 +142,7 @@ func (b *QueryBuilder) applyOrGroup(q *bun.SelectQuery, group *FilterGroup) *bun
 			q = b.applyConditionOr(q, cond)
 		}
 	}
+
 	for _, subGroup := range group.Groups {
 		if first {
 			q = b.applyFilterGroup(q, subGroup)
@@ -148,10 +153,11 @@ func (b *QueryBuilder) applyOrGroup(q *bun.SelectQuery, group *FilterGroup) *bun
 			})
 		}
 	}
+
 	return q
 }
 
-// applyCondition applies a single filter condition
+// applyCondition applies a single filter condition.
 func (b *QueryBuilder) applyCondition(q *bun.SelectQuery, cond FilterCondition, separator string) *bun.SelectQuery {
 	// Check if it's a system field
 	if isSystemField(cond.Field) {
@@ -165,7 +171,7 @@ func (b *QueryBuilder) applyCondition(q *bun.SelectQuery, cond FilterCondition, 
 	return b.applyJSONBCondition(q, cond, field)
 }
 
-// applyConditionOr applies a single filter condition with OR
+// applyConditionOr applies a single filter condition with OR.
 func (b *QueryBuilder) applyConditionOr(q *bun.SelectQuery, cond FilterCondition) *bun.SelectQuery {
 	// Check if it's a system field
 	if isSystemField(cond.Field) {
@@ -179,7 +185,7 @@ func (b *QueryBuilder) applyConditionOr(q *bun.SelectQuery, cond FilterCondition
 	return b.applyJSONBConditionOr(q, cond, field)
 }
 
-// applySystemFieldCondition applies a condition on a system field
+// applySystemFieldCondition applies a condition on a system field.
 func (b *QueryBuilder) applySystemFieldCondition(q *bun.SelectQuery, cond FilterCondition) *bun.SelectQuery {
 	// Extract the actual field name (strips _meta. prefix if present)
 	fieldName := getSystemFieldName(cond.Field)
@@ -206,13 +212,14 @@ func (b *QueryBuilder) applySystemFieldCondition(q *bun.SelectQuery, cond Filter
 		if toBool(cond.Value) {
 			return q.Where(column + " IS NULL")
 		}
+
 		return q.Where(column + " IS NOT NULL")
 	default:
 		return q.Where(column+" = ?", cond.Value)
 	}
 }
 
-// applySystemFieldConditionOr applies a condition on a system field with OR
+// applySystemFieldConditionOr applies a condition on a system field with OR.
 func (b *QueryBuilder) applySystemFieldConditionOr(q *bun.SelectQuery, cond FilterCondition) *bun.SelectQuery {
 	// Extract the actual field name (strips _meta. prefix if present)
 	fieldName := getSystemFieldName(cond.Field)
@@ -229,13 +236,14 @@ func (b *QueryBuilder) applySystemFieldConditionOr(q *bun.SelectQuery, cond Filt
 		if toBool(cond.Value) {
 			return q.WhereOr(column + " IS NULL")
 		}
+
 		return q.WhereOr(column + " IS NOT NULL")
 	default:
 		return q.WhereOr(column+" = ?", cond.Value)
 	}
 }
 
-// applyJSONBCondition applies a condition on a JSONB field
+// applyJSONBCondition applies a condition on a JSONB field.
 func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondition, field *schema.ContentField) *bun.SelectQuery {
 	// Determine if we need type casting
 	castType := b.getTypeCast(field)
@@ -245,12 +253,14 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 		if castType != "" {
 			return q.Where(fmt.Sprintf("(ce.data->>?)%s = ?", castType), cond.Field, cond.Value)
 		}
+
 		return q.Where("ce.data->>? = ?", cond.Field, toString(cond.Value))
 
 	case OpNotEqual:
 		if castType != "" {
 			return q.Where(fmt.Sprintf("(ce.data->>?)%s != ?", castType), cond.Field, cond.Value)
 		}
+
 		return q.Where("ce.data->>? != ?", cond.Field, toString(cond.Value))
 
 	case OpGreaterThan:
@@ -282,10 +292,12 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 
 	case OpIn:
 		values := toStringSlice(cond.Value)
+
 		return q.Where("ce.data->>? IN (?)", cond.Field, bun.In(values))
 
 	case OpNotIn:
 		values := toStringSlice(cond.Value)
+
 		return q.Where("ce.data->>? NOT IN (?)", cond.Field, bun.In(values))
 
 	case OpNull:
@@ -293,6 +305,7 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 			return q.Where("(ce.data->>? IS NULL OR ce.data->>? = 'null' OR ce.data->>? = '')",
 				cond.Field, cond.Field, cond.Field)
 		}
+
 		return q.Where("ce.data->>? IS NOT NULL AND ce.data->>? != 'null' AND ce.data->>? != ''",
 			cond.Field, cond.Field, cond.Field)
 
@@ -300,6 +313,7 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 		if toBool(cond.Value) {
 			return q.Where("ce.data ? ?", cond.Field)
 		}
+
 		return q.Where("NOT (ce.data ? ?)", cond.Field)
 
 	case OpJsonContains:
@@ -314,6 +328,7 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 			return q.Where(fmt.Sprintf("(ce.data->>?)%s BETWEEN ? AND ?", castType),
 				cond.Field, values[0], values[1])
 		}
+
 		return q
 
 	case OpAll:
@@ -322,11 +337,13 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 		for _, v := range values {
 			q = q.Where("ce.data->? @> ?", cond.Field, fmt.Sprintf(`["%s"]`, v))
 		}
+
 		return q
 
 	case OpAny:
 		// Array field contains any value
 		values := toStringSlice(cond.Value)
+
 		return q.WhereGroup(" AND ", func(sq *bun.SelectQuery) *bun.SelectQuery {
 			for i, v := range values {
 				if i == 0 {
@@ -335,6 +352,7 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 					sq = sq.WhereOr("ce.data->? @> ?", cond.Field, fmt.Sprintf(`["%s"]`, v))
 				}
 			}
+
 			return sq
 		})
 
@@ -343,7 +361,7 @@ func (b *QueryBuilder) applyJSONBCondition(q *bun.SelectQuery, cond FilterCondit
 	}
 }
 
-// applyJSONBConditionOr applies a JSONB condition with OR
+// applyJSONBConditionOr applies a JSONB condition with OR.
 func (b *QueryBuilder) applyJSONBConditionOr(q *bun.SelectQuery, cond FilterCondition, field *schema.ContentField) *bun.SelectQuery {
 	switch cond.Operator {
 	case OpEqual:
@@ -355,7 +373,7 @@ func (b *QueryBuilder) applyJSONBConditionOr(q *bun.SelectQuery, cond FilterCond
 	}
 }
 
-// getTypeCast returns the PostgreSQL type cast for a field
+// getTypeCast returns the PostgreSQL type cast for a field.
 func (b *QueryBuilder) getTypeCast(field *schema.ContentField) string {
 	if field == nil {
 		return ""
@@ -377,10 +395,11 @@ func (b *QueryBuilder) getTypeCast(field *schema.ContentField) string {
 	}
 }
 
-// applySearch applies full-text search
+// applySearch applies full-text search.
 func (b *QueryBuilder) applySearch(q *bun.SelectQuery, search string) *bun.SelectQuery {
 	// Get searchable fields
 	var searchableFields []string
+
 	for slug, field := range b.fields {
 		if field.IsSearchable() {
 			searchableFields = append(searchableFields, slug)
@@ -401,11 +420,12 @@ func (b *QueryBuilder) applySearch(q *bun.SelectQuery, search string) *bun.Selec
 				sq = sq.WhereOr("LOWER(ce.data->>?) LIKE ?", field, searchPattern)
 			}
 		}
+
 		return sq
 	})
 }
 
-// applySort applies sorting to the query
+// applySort applies sorting to the query.
 func (b *QueryBuilder) applySort(q *bun.SelectQuery, sorts []SortField) *bun.SelectQuery {
 	for _, sort := range sorts {
 		direction := "ASC"
@@ -421,6 +441,7 @@ func (b *QueryBuilder) applySort(q *bun.SelectQuery, sorts []SortField) *bun.Sel
 		} else {
 			// Sort by JSONB field
 			field := b.fields[sort.Field]
+
 			cast := b.getTypeCast(field)
 			if cast != "" {
 				q = q.OrderExpr(fmt.Sprintf("(ce.data->>?)%s %s NULLS LAST", cast, direction), sort.Field)
@@ -429,10 +450,11 @@ func (b *QueryBuilder) applySort(q *bun.SelectQuery, sorts []SortField) *bun.Sel
 			}
 		}
 	}
+
 	return q
 }
 
-// applySelect applies field selection (projection)
+// applySelect applies field selection (projection).
 func (b *QueryBuilder) applySelect(q *bun.SelectQuery, fields []string) *bun.SelectQuery {
 	// Always include system fields
 	q = q.Column("ce.id", "ce.content_type_id", "ce.app_id", "ce.environment_id",
@@ -447,16 +469,18 @@ func (b *QueryBuilder) applySelect(q *bun.SelectQuery, fields []string) *bun.Sel
 	return q
 }
 
-// applyPagination applies pagination to the query
+// applyPagination applies pagination to the query.
 func (b *QueryBuilder) applyPagination(q *bun.SelectQuery, query *Query) *bun.SelectQuery {
 	// Prefer offset/limit if both are set
 	if query.Offset > 0 || query.Limit > 0 {
 		if query.Offset > 0 {
 			q = q.Offset(query.Offset)
 		}
+
 		if query.Limit > 0 {
 			q = q.Limit(query.Limit)
 		}
+
 		return q
 	}
 
@@ -465,15 +489,18 @@ func (b *QueryBuilder) applyPagination(q *bun.SelectQuery, query *Query) *bun.Se
 	if page <= 0 {
 		page = 1
 	}
+
 	pageSize := query.PageSize
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+
 	if pageSize > 100 {
 		pageSize = 100
 	}
 
 	offset := (page - 1) * pageSize
+
 	return q.Offset(offset).Limit(pageSize)
 }
 
@@ -481,42 +508,45 @@ func (b *QueryBuilder) applyPagination(q *bun.SelectQuery, query *Query) *bun.Se
 // Helper functions
 // =============================================================================
 
-// toSnakeCase converts camelCase to snake_case
+// toSnakeCase converts camelCase to snake_case.
 func toSnakeCase(s string) string {
 	var result strings.Builder
+
 	for i, r := range s {
 		if i > 0 && r >= 'A' && r <= 'Z' {
 			result.WriteByte('_')
 		}
+
 		if r >= 'A' && r <= 'Z' {
 			result.WriteByte(byte(r + 32))
 		} else {
 			result.WriteRune(r)
 		}
 	}
+
 	return result.String()
 }
 
-// toString converts a value to string
-func toString(v interface{}) string {
+// toString converts a value to string.
+func toString(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val
 	case int:
-		return fmt.Sprintf("%d", val)
+		return strconv.Itoa(val)
 	case int64:
-		return fmt.Sprintf("%d", val)
+		return strconv.FormatInt(val, 10)
 	case float64:
 		return fmt.Sprintf("%v", val)
 	case bool:
-		return fmt.Sprintf("%v", val)
+		return strconv.FormatBool(val)
 	default:
 		return fmt.Sprintf("%v", val)
 	}
 }
 
-// toBool converts a value to boolean
-func toBool(v interface{}) bool {
+// toBool converts a value to boolean.
+func toBool(v any) bool {
 	switch val := v.(type) {
 	case bool:
 		return val
@@ -531,32 +561,34 @@ func toBool(v interface{}) bool {
 	}
 }
 
-// toSlice converts a value to a slice
-func toSlice(v interface{}) []interface{} {
+// toSlice converts a value to a slice.
+func toSlice(v any) []any {
 	switch val := v.(type) {
-	case []interface{}:
+	case []any:
 		return val
 	case []string:
-		result := make([]interface{}, len(val))
+		result := make([]any, len(val))
 		for i, s := range val {
 			result[i] = s
 		}
+
 		return result
 	default:
-		return []interface{}{v}
+		return []any{v}
 	}
 }
 
-// toStringSlice converts a value to a string slice
-func toStringSlice(v interface{}) []string {
+// toStringSlice converts a value to a string slice.
+func toStringSlice(v any) []string {
 	switch val := v.(type) {
 	case []string:
 		return val
-	case []interface{}:
+	case []any:
 		result := make([]string, len(val))
 		for i, item := range val {
 			result[i] = toString(item)
 		}
+
 		return result
 	case string:
 		return []string{val}

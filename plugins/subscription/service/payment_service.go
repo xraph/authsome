@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 	"github.com/xraph/authsome/plugins/subscription/providers"
@@ -13,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// PaymentService handles payment method management
+// PaymentService handles payment method management.
 type PaymentService struct {
 	repo         repository.PaymentMethodRepository
 	customerRepo repository.CustomerRepository
@@ -21,7 +22,7 @@ type PaymentService struct {
 	eventRepo    repository.EventRepository
 }
 
-// NewPaymentService creates a new payment service
+// NewPaymentService creates a new payment service.
 func NewPaymentService(
 	repo repository.PaymentMethodRepository,
 	customerRepo repository.CustomerRepository,
@@ -36,12 +37,12 @@ func NewPaymentService(
 	}
 }
 
-// CreateSetupIntent creates a setup intent for adding a payment method
+// CreateSetupIntent creates a setup intent for adding a payment method.
 func (s *PaymentService) CreateSetupIntent(ctx context.Context, orgID xid.ID) (*core.SetupIntentResult, error) {
 	// Get or create customer
 	customer, err := s.customerRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("customer not found - create customer first")
+		return nil, errs.NotFound("customer not found - create customer first")
 	}
 
 	result, err := s.provider.CreateSetupIntent(ctx, customer.ProviderCustomerID)
@@ -52,11 +53,11 @@ func (s *PaymentService) CreateSetupIntent(ctx context.Context, orgID xid.ID) (*
 	return result, nil
 }
 
-// AddPaymentMethod adds a payment method from provider
+// AddPaymentMethod adds a payment method from provider.
 func (s *PaymentService) AddPaymentMethod(ctx context.Context, orgID xid.ID, providerMethodID string, setDefault bool) (*core.PaymentMethod, error) {
 	customer, err := s.customerRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("customer not found")
+		return nil, errs.NotFound("customer not found")
 	}
 
 	// Get payment method details from provider
@@ -79,7 +80,7 @@ func (s *PaymentService) AddPaymentMethod(ctx context.Context, orgID xid.ID, pro
 		CardExpMonth:       pm.CardExpMonth,
 		CardExpYear:        pm.CardExpYear,
 		CardFunding:        pm.CardFunding,
-		Metadata:           make(map[string]interface{}),
+		Metadata:           make(map[string]any),
 	}
 	method.CreatedAt = now
 	method.UpdatedAt = now
@@ -96,7 +97,7 @@ func (s *PaymentService) AddPaymentMethod(ctx context.Context, orgID xid.ID, pro
 	return s.schemaToCorePayment(method), nil
 }
 
-// RemovePaymentMethod removes a payment method
+// RemovePaymentMethod removes a payment method.
 func (s *PaymentService) RemovePaymentMethod(ctx context.Context, id xid.ID) error {
 	pm, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -115,12 +116,12 @@ func (s *PaymentService) RemovePaymentMethod(ctx context.Context, id xid.ID) err
 	return s.repo.Delete(ctx, id)
 }
 
-// SetDefaultPaymentMethod sets a payment method as default
+// SetDefaultPaymentMethod sets a payment method as default.
 func (s *PaymentService) SetDefaultPaymentMethod(ctx context.Context, orgID, paymentMethodID xid.ID) error {
 	return s.repo.SetDefault(ctx, orgID, paymentMethodID)
 }
 
-// ListPaymentMethods lists all payment methods for an organization
+// ListPaymentMethods lists all payment methods for an organization.
 func (s *PaymentService) ListPaymentMethods(ctx context.Context, orgID xid.ID) ([]*core.PaymentMethod, error) {
 	methods, err := s.repo.ListByOrganization(ctx, orgID)
 	if err != nil {
@@ -135,12 +136,13 @@ func (s *PaymentService) ListPaymentMethods(ctx context.Context, orgID xid.ID) (
 	return result, nil
 }
 
-// GetDefaultPaymentMethod gets the default payment method
+// GetDefaultPaymentMethod gets the default payment method.
 func (s *PaymentService) GetDefaultPaymentMethod(ctx context.Context, orgID xid.ID) (*core.PaymentMethod, error) {
 	pm, err := s.repo.GetDefault(ctx, orgID)
 	if err != nil {
 		return nil, suberrors.ErrPaymentMethodNotFound
 	}
+
 	return s.schemaToCorePayment(pm), nil
 }
 

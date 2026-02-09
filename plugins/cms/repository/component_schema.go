@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ComponentSchemaRepository defines the interface for component schema storage operations
+// ComponentSchemaRepository defines the interface for component schema storage operations.
 type ComponentSchemaRepository interface {
 	// CRUD operations
 	Create(ctx context.Context, component *schema.ComponentSchema) error
@@ -34,12 +35,12 @@ type ComponentSchemaRepository interface {
 	CountUsages(ctx context.Context, appID, envID xid.ID, componentSlug string) (int, error)
 }
 
-// componentSchemaRepository implements ComponentSchemaRepository using Bun ORM
+// componentSchemaRepository implements ComponentSchemaRepository using Bun ORM.
 type componentSchemaRepository struct {
 	db *bun.DB
 }
 
-// NewComponentSchemaRepository creates a new component schema repository instance
+// NewComponentSchemaRepository creates a new component schema repository instance.
 func NewComponentSchemaRepository(db *bun.DB) ComponentSchemaRepository {
 	return &componentSchemaRepository{db: db}
 }
@@ -48,11 +49,12 @@ func NewComponentSchemaRepository(db *bun.DB) ComponentSchemaRepository {
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new component schema
+// Create creates a new component schema.
 func (r *componentSchemaRepository) Create(ctx context.Context, component *schema.ComponentSchema) error {
 	if component.ID.IsNil() {
 		component.ID = xid.New()
 	}
+
 	now := time.Now()
 	component.CreatedAt = now
 	component.UpdatedAt = now
@@ -64,29 +66,34 @@ func (r *componentSchemaRepository) Create(ctx context.Context, component *schem
 	_, err := r.db.NewInsert().
 		Model(component).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a component schema by ID
+// FindByID finds a component schema by ID.
 func (r *componentSchemaRepository) FindByID(ctx context.Context, id xid.ID) (*schema.ComponentSchema, error) {
 	component := new(schema.ComponentSchema)
+
 	err := r.db.NewSelect().
 		Model(component).
 		Where("cs.id = ?", id).
 		Where("cs.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrComponentSchemaNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return component, nil
 }
 
-// FindBySlug finds a component schema by slug within an app/environment
+// FindBySlug finds a component schema by slug within an app/environment.
 func (r *componentSchemaRepository) FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ComponentSchema, error) {
 	component := new(schema.ComponentSchema)
+
 	err := r.db.NewSelect().
 		Model(component).
 		Where("cs.app_id = ?", appID).
@@ -95,15 +102,17 @@ func (r *componentSchemaRepository) FindByName(ctx context.Context, appID, envID
 		Where("cs.deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrComponentSchemaNotFound(name)
 		}
+
 		return nil, err
 	}
+
 	return component, nil
 }
 
-// List lists component schemas with filtering and pagination
+// List lists component schemas with filtering and pagination.
 func (r *componentSchemaRepository) List(ctx context.Context, appID, envID xid.ID, query *core.ListComponentSchemasQuery) ([]*schema.ComponentSchema, int, error) {
 	if query == nil {
 		query = &core.ListComponentSchemasQuery{}
@@ -113,9 +122,11 @@ func (r *componentSchemaRepository) List(ctx context.Context, appID, envID xid.I
 	if query.PageSize <= 0 {
 		query.PageSize = 20
 	}
+
 	if query.Page <= 0 {
 		query.Page = 1
 	}
+
 	if query.PageSize > 100 {
 		query.PageSize = 100
 	}
@@ -180,6 +191,7 @@ func (r *componentSchemaRepository) List(ctx context.Context, appID, envID xid.I
 
 	// Execute query
 	var components []*schema.ComponentSchema
+
 	err = q.Scan(ctx, &components)
 	if err != nil {
 		return nil, 0, err
@@ -188,7 +200,7 @@ func (r *componentSchemaRepository) List(ctx context.Context, appID, envID xid.I
 	return components, total, nil
 }
 
-// Update updates a component schema
+// Update updates a component schema.
 func (r *componentSchemaRepository) Update(ctx context.Context, component *schema.ComponentSchema) error {
 	component.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
@@ -196,10 +208,11 @@ func (r *componentSchemaRepository) Update(ctx context.Context, component *schem
 		WherePK().
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// Delete soft-deletes a component schema
+// Delete soft-deletes a component schema.
 func (r *componentSchemaRepository) Delete(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -209,15 +222,17 @@ func (r *componentSchemaRepository) Delete(ctx context.Context, id xid.ID) error
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// HardDelete permanently deletes a component schema
+// HardDelete permanently deletes a component schema.
 func (r *componentSchemaRepository) HardDelete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.ComponentSchema)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -225,7 +240,7 @@ func (r *componentSchemaRepository) HardDelete(ctx context.Context, id xid.ID) e
 // Stats Operations
 // =============================================================================
 
-// Count counts total component schemas for an app/environment
+// Count counts total component schemas for an app/environment.
 func (r *componentSchemaRepository) Count(ctx context.Context, appID, envID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ComponentSchema)(nil)).
@@ -235,7 +250,7 @@ func (r *componentSchemaRepository) Count(ctx context.Context, appID, envID xid.
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a component schema with the given name exists
+// ExistsWithSlug checks if a component schema with the given name exists.
 func (r *componentSchemaRepository) ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ComponentSchema)(nil)).
@@ -247,6 +262,7 @@ func (r *componentSchemaRepository) ExistsWithName(ctx context.Context, appID, e
 	if err != nil {
 		return false, err
 	}
+
 	return count > 0, nil
 }
 
@@ -254,9 +270,10 @@ func (r *componentSchemaRepository) ExistsWithName(ctx context.Context, appID, e
 // Usage Queries
 // =============================================================================
 
-// FindUsages finds all content fields that reference this component schema
+// FindUsages finds all content fields that reference this component schema.
 func (r *componentSchemaRepository) FindUsages(ctx context.Context, appID, envID xid.ID, componentSlug string) ([]*schema.ContentField, error) {
 	var fields []*schema.ContentField
+
 	err := r.db.NewSelect().
 		Model(&fields).
 		Join("JOIN cms_content_types ct ON ct.id = cf.content_type_id").
@@ -268,10 +285,11 @@ func (r *componentSchemaRepository) FindUsages(ctx context.Context, appID, envID
 	if err != nil {
 		return nil, err
 	}
+
 	return fields, nil
 }
 
-// CountUsages counts how many content fields reference this component schema
+// CountUsages counts how many content fields reference this component schema.
 func (r *componentSchemaRepository) CountUsages(ctx context.Context, appID, envID xid.ID, componentSlug string) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.ContentField)(nil)).
