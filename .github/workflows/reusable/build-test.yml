@@ -3,11 +3,6 @@ name: Reusable Build & Test
 on:
   workflow_call:
     inputs:
-      go-version:
-        description: 'Go version to use'
-        required: false
-        type: string
-        default: '1.25'
       run-coverage:
         description: 'Whether to upload coverage'
         required: false
@@ -29,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ inputs.go-version }}
+          go-version-file: go.mod
           cache: true
 
       - name: Download dependencies
@@ -64,11 +59,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ inputs.go-version }}
+          go-version-file: go.mod
           cache: true
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.6.1
+          version: latest
           args: --timeout=5m
