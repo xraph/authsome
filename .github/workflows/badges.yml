@@ -1,13 +1,18 @@
-name: Badges
+name: Update Badges
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   schedule:
-    - cron: '0 0 * * 0'  # Weekly
+    - cron: '0 0 * * 0' # Weekly on Sunday
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update-badges:
+    name: Generate Badges
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,15 +22,92 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.25'
+          cache: true
 
-      - name: Generate coverage badge
+      - name: Generate coverage data
+        id: coverage
         run: |
-          go test -coverprofile=coverage.out ./...
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')
-          echo "Coverage: $COVERAGE"
+          go test -coverprofile=coverage.out ./... 2>/dev/null || true
+          if [ -f coverage.out ]; then
+            COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            echo "Coverage: ${COVERAGE}%"
+          else
+            echo "coverage=0" >> $GITHUB_OUTPUT
+          fi
 
       - name: Get test count
+        id: tests
         run: |
-          TESTS=$(go test -json ./... | jq -s '[.[] | select(.Action == "pass" and .Test)] | length')
+          TESTS=$(go test -json ./... 2>/dev/null | jq -s '[.[] | select(.Action == "pass" and .Test != null)] | length' 2>/dev/null || echo "0")
+          echo "count=$TESTS" >> $GITHUB_OUTPUT
           echo "Tests: $TESTS"
 
+      - name: Get Go version from go.mod
+        id: goversion
+        run: |
+          GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
+          echo "version=$GO_VERSION" >> $GITHUB_OUTPUT
+          echo "Go version: $GO_VERSION"
+
+      - name: Determine coverage color
+        id: color
+        run: |
+          COVERAGE=${{ steps.coverage.outputs.coverage }}
+          if (( $(echo "$COVERAGE >= 80" | bc -l 2>/dev/null || echo 0) )); then
+            echo "coverage_color=brightgreen" >> $GITHUB_OUTPUT
+          elif (( $(echo "$COVERAGE >= 60" | bc -l 2>/dev/null || echo 0) )); then
+            echo "coverage_color=yellow" >> $GITHUB_OUTPUT
+          elif (( $(echo "$COVERAGE >= 40" | bc -l 2>/dev/null || echo 0) )); then
+            echo "coverage_color=orange" >> $GITHUB_OUTPUT
+          else
+            echo "coverage_color=red" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create badges directory
+        run: mkdir -p .github/badges
+
+      - name: Generate coverage badge JSON
+        run: |
+          cat > .github/badges/coverage.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "${{ steps.coverage.outputs.coverage }}%",
+            "color": "${{ steps.color.outputs.coverage_color }}"
+          }
+          EOF
+
+      - name: Generate test count badge JSON
+        run: |
+          cat > .github/badges/tests.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "tests",
+            "message": "${{ steps.tests.outputs.count }} passing",
+            "color": "brightgreen"
+          }
+          EOF
+
+      - name: Generate Go version badge JSON
+        run: |
+          cat > .github/badges/go-version.json <<EOF
+          {
+            "schemaVersion": 1,
+            "label": "go",
+            "message": "${{ steps.goversion.outputs.version }}",
+            "color": "00ADD8"
+          }
+          EOF
+
+      - name: Commit badge data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/badges/*.json
+          if git diff --cached --quiet; then
+            echo "No badge changes to commit"
+          else
+            git commit -m "chore: update badge data [skip ci]"
+            git push
+          fi

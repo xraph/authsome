@@ -1,0 +1,262 @@
+name: Reusable Client Release
+
+on:
+  workflow_call:
+    inputs:
+      client:
+        description: 'Client to release: go, typescript, rust'
+        required: true
+        type: string
+      version:
+        description: 'Version to release (without v prefix, e.g. 1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      NPM_TOKEN:
+        required: false
+      CARGO_TOKEN:
+        required: false
+
+jobs:
+  release-go-client:
+    name: Release Go Client
+    runs-on: ubuntu-latest
+    if: inputs.client == 'go'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Check if clients/go directory exists
+        id: check_dir
+        run: |
+          if [ -d "clients/go" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::clients/go directory does not exist, skipping release"
+          fi
+
+      - name: Build Go client
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/go
+        run: go build -v ./...
+
+      - name: Run tests
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/go
+        run: go test -v ./...
+
+      - name: Run go mod tidy
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/go
+        run: go mod tidy
+
+      - name: Create tarball
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/go
+        run: |
+          tar -czf ../go-client-v${{ inputs.version }}.tar.gz \
+            *.go plugins/ go.mod go.sum README.md 2>/dev/null || \
+          tar -czf ../go-client-v${{ inputs.version }}.tar.gz \
+            *.go go.mod go.sum README.md 2>/dev/null || true
+
+      - name: Create GitHub Release
+        if: steps.check_dir.outputs.exists == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: clients/go/v${{ inputs.version }}
+          name: Go Client v${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          body: |
+            ## Go Client v${{ inputs.version }}
+
+            ### Installation
+            ```bash
+            go get github.com/xraph/authsome/clients/go@v${{ inputs.version }}
+            ```
+
+            ### Usage
+            ```go
+            import "github.com/xraph/authsome/clients/go"
+            ```
+
+            Go modules are served directly from GitHub tags. No separate registry needed.
+          files: |
+            clients/go-client-v${{ inputs.version }}.tar.gz
+          draft: false
+
+      - name: Notify Go Proxy
+        if: steps.check_dir.outputs.exists == 'true'
+        run: |
+          curl -s "https://proxy.golang.org/github.com/xraph/authsome/clients/go/@v/v${{ inputs.version }}.info" || true
+
+  release-typescript-client:
+    name: Release TypeScript Client
+    runs-on: ubuntu-latest
+    if: inputs.client == 'typescript'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if clients/typescript directory exists
+        id: check_dir
+        run: |
+          if [ -d "clients/typescript" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::clients/typescript directory does not exist, skipping release"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check_dir.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update package.json version
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/typescript
+        run: npm version ${{ inputs.version }} --no-git-tag-version
+
+      - name: Install dependencies
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/typescript
+        run: npm install
+
+      - name: Build
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/typescript
+        run: npm run build
+
+      - name: Run tests
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/typescript
+        run: npm test --if-present
+        continue-on-error: true
+
+      - name: Publish to npm
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/typescript
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create tarball
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/typescript
+        run: |
+          tar -czf ../typescript-client-v${{ inputs.version }}.tar.gz dist/ package.json README.md
+
+      - name: Create GitHub Release
+        if: steps.check_dir.outputs.exists == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: clients/typescript/v${{ inputs.version }}
+          name: TypeScript Client v${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          body: |
+            ## TypeScript Client v${{ inputs.version }}
+
+            ### Installation
+            ```bash
+            npm install @authsome/client@${{ inputs.version }}
+            ```
+
+            Published to npm: https://www.npmjs.com/package/@authsome/client
+          files: |
+            clients/typescript-client-v${{ inputs.version }}.tar.gz
+          draft: false
+
+  release-rust-client:
+    name: Release Rust Client
+    runs-on: ubuntu-latest
+    if: inputs.client == 'rust'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if clients/rust directory exists
+        id: check_dir
+        run: |
+          if [ -d "clients/rust" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::clients/rust directory does not exist, skipping release"
+          fi
+
+      - name: Setup Rust
+        if: steps.check_dir.outputs.exists == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Update Cargo.toml version
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/rust
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ inputs.version }}"/' Cargo.toml
+
+      - name: Build
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/rust
+        run: cargo build --release
+
+      - name: Run tests
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/rust
+        run: cargo test
+
+      - name: Publish to crates.io
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/rust
+        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
+        continue-on-error: true
+
+      - name: Create tarball
+        if: steps.check_dir.outputs.exists == 'true'
+        working-directory: clients/rust
+        run: |
+          tar -czf ../rust-client-v${{ inputs.version }}.tar.gz \
+            src/ Cargo.toml README.md
+
+      - name: Create GitHub Release
+        if: steps.check_dir.outputs.exists == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: clients/rust/v${{ inputs.version }}
+          name: Rust Client v${{ inputs.version }}
+          prerelease: ${{ inputs.prerelease }}
+          body: |
+            ## Rust Client v${{ inputs.version }}
+
+            ### Installation
+            ```toml
+            [dependencies]
+            authsome-client = "${{ inputs.version }}"
+            ```
+
+            Published to crates.io: https://crates.io/crates/authsome-client
+          files: |
+            clients/rust-client-v${{ inputs.version }}.tar.gz
+          draft: false

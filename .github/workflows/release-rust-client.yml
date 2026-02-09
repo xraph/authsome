@@ -4,124 +4,51 @@ on:
   push:
     tags:
       - 'clients/rust/v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 1.2.3, without v prefix)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build and Publish Rust Client
+  extract-version:
+    name: Extract Version
     runs-on: ubuntu-latest
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check if Rust client changed
-        id: check_changes
+      - name: Determine version
+        id: version
         run: |
-          # Get the previous tag for this client
-          PREV_TAG=$(git tag -l 'clients/rust/v*' --sort=-version:refname | sed -n '2p')
-          
-          if [ -z "$PREV_TAG" ]; then
-            echo "First release, proceeding"
-            echo "changed=true" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "prerelease=${{ inputs.prerelease }}" >> $GITHUB_OUTPUT
           else
-            # Check if there are changes in clients/rust since last tag
-            CHANGES=$(git diff --name-only $PREV_TAG ${{ github.ref }} -- clients/rust/)
-            
-            if [ -z "$CHANGES" ]; then
-              echo "No changes in clients/rust, skipping release"
-              echo "changed=false" >> $GITHUB_OUTPUT
+            VERSION="${GITHUB_REF#refs/tags/clients/rust/v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            if [[ "$VERSION" == *"-"* ]]; then
+              echo "prerelease=true" >> $GITHUB_OUTPUT
             else
-              echo "Changes detected in clients/rust"
-              echo "changed=true" >> $GITHUB_OUTPUT
+              echo "prerelease=false" >> $GITHUB_OUTPUT
             fi
           fi
 
-      - name: Extract version from tag
-        if: steps.check_changes.outputs.changed == 'true'
-        id: extract_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/clients/rust/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Extracted version: $VERSION"
-
-      - name: Setup Rust
-        if: steps.check_changes.outputs.changed == 'true'
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Update Cargo.toml version
-        if: steps.check_changes.outputs.changed == 'true'
-        working-directory: clients/rust
-        run: |
-          sed -i 's/^version = ".*"/version = "${{ steps.extract_version.outputs.version }}"/' Cargo.toml
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Build Rust client
-        if: steps.check_changes.outputs.changed == 'true'
-        working-directory: clients/rust
-        run: cargo build --release
-
-      - name: Run tests
-        if: steps.check_changes.outputs.changed == 'true'
-        working-directory: clients/rust
-        run: cargo test
-
-      - name: Publish to crates.io
-        if: steps.check_changes.outputs.changed == 'true'
-        working-directory: clients/rust
-        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
-        continue-on-error: false
-
-      - name: Create tarball for GitHub release
-        if: steps.check_changes.outputs.changed == 'true'
-        working-directory: clients/rust
-        run: |
-          tar -czf ../rust-client-v${{ steps.extract_version.outputs.version }}.tar.gz \
-            src/ Cargo.toml Cargo.lock README.md target/release/
-
-      - name: Commit version bump
-        if: steps.check_changes.outputs.changed == 'true'
-        run: |
-          git add clients/rust/Cargo.toml clients/rust/Cargo.lock
-          git commit -m "chore(clients/rust): bump version to ${{ steps.extract_version.outputs.version }}" || echo "No changes to commit"
-          git push origin HEAD:main || echo "Failed to push, may need manual intervention"
-
-      - name: Create GitHub Release
-        if: steps.check_changes.outputs.changed == 'true'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Rust Client v${{ steps.extract_version.outputs.version }}
-          body: |
-            ## Rust Client v${{ steps.extract_version.outputs.version }}
-            
-            ### Installation
-            ```toml
-            [dependencies]
-            authsome-client = "${{ steps.extract_version.outputs.version }}"
-            ```
-            
-            Or via cargo:
-            ```bash
-            cargo add authsome-client@${{ steps.extract_version.outputs.version }}
-            ```
-            
-            ### What's Changed
-            Published to crates.io: https://crates.io/crates/authsome-client
-            
-            ### Assets
-            - Rust client source and release binaries (tarball)
-          files: |
-            clients/rust-client-v${{ steps.extract_version.outputs.version }}.tar.gz
-          draft: false
-          prerelease: false
-
+  release:
+    name: Release
+    needs: extract-version
+    uses: ./.github/workflows/reusable/release-client.yml
+    with:
+      client: rust
+      version: ${{ needs.extract-version.outputs.version }}
+      prerelease: ${{ needs.extract-version.outputs.prerelease == 'true' }}
+    secrets: inherit

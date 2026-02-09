@@ -93,8 +93,8 @@ autolabeler:
     files:
       - 'go.mod'
       - 'go.sum'
-      - 'farp-rust/Cargo.toml'
-      - 'farp-rust/Cargo.lock'
+      - 'clients/rust/Cargo.toml'
+      - 'clients/rust/Cargo.lock'
   - label: 'ci'
     files:
       - '.github/**/*'

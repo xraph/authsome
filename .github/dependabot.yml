@@ -27,9 +27,9 @@ updates:
     versioning-strategy: increase
 
   
-  # Rust dependencies (when Cargo.toml exists)
+  # Rust dependencies (clients/rust if it exists)
   - package-ecosystem: "cargo"
-    directory: "/farp-rust"
+    directory: "/clients/rust"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -41,7 +41,6 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
-    # Only run if Cargo.toml exists
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
