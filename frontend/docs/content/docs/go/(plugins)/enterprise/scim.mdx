@@ -1,0 +1,149 @@
+---
+title: SCIM 2.0 Provisioning
+description: Automated user and group provisioning from enterprise identity providers via SCIM 2.0
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# SCIM Plugin
+
+The SCIM plugin implements the SCIM 2.0 standard (RFC 7643/7644) for automated user and group provisioning from enterprise identity providers like Okta, Azure AD, and OneLogin. It supports full user lifecycle management, group synchronization to teams/roles, bulk operations, and JIT provisioning.
+
+## Features
+
+- **SCIM 2.0 Compliance** - Full RFC 7643/7644 implementation
+- **User Provisioning** - Create, read, update, delete, and search users
+- **Group Sync** - Synchronize groups to teams and roles
+- **Bulk Operations** - Efficient batch provisioning operations
+- **JIT Provisioning** - Just-In-Time user creation on first login
+- **Bearer/OAuth2 Auth** - Dual authentication mode for SCIM endpoints
+- **Rate Limiting** - Configurable per-minute rate limits
+- **Custom Attribute Mapping** - Map IdP attributes to AuthSome fields
+- **Dashboard Extension** - UI for provisioning token management
+- **Multi-Tenant** - Organization-scoped provisioning
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/scim"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        scim.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    scim:
+      enabled: true
+      authMethod: "bearer"
+      tokenExpiry: "2160h"  # 90 days
+
+      rateLimit:
+        enabled: true
+        requestsPerMin: 600
+        burstSize: 100
+
+      userProvisioning:
+        enabled: true
+        autoActivate: true
+        sendWelcomeEmail: true
+        defaultRole: "member"
+        preventDuplicates: true
+        softDeleteOnDeprovision: true
+
+      groupSync:
+        enabled: true
+        syncToTeams: true
+        syncToRoles: false
+        createMissingGroups: true
+
+      bulkOperations:
+        enabled: true
+        maxOperations: 100
+        maxPayloadBytes: 1048576
+
+      security:
+        requireHttps: true
+        auditAllOperations: true
+        maskSensitiveData: true
+        requireOrgValidation: true
+```
+
+## API Reference
+
+### Discovery
+
+```http
+GET  /scim/v2/ServiceProviderConfig   # Service provider configuration
+GET  /scim/v2/ResourceTypes            # List resource types
+GET  /scim/v2/ResourceTypes/:id        # Get resource type
+GET  /scim/v2/Schemas                  # List schemas
+GET  /scim/v2/Schemas/:id              # Get schema
+```
+
+### Users
+
+```http
+POST   /scim/v2/Users                 # Create user
+GET    /scim/v2/Users                  # List/filter users
+GET    /scim/v2/Users/:id              # Get user
+PUT    /scim/v2/Users/:id              # Replace user
+PATCH  /scim/v2/Users/:id             # Update user
+DELETE /scim/v2/Users/:id              # Delete user
+```
+
+### Groups
+
+```http
+POST   /scim/v2/Groups                # Create group
+GET    /scim/v2/Groups                 # List/filter groups
+GET    /scim/v2/Groups/:id             # Get group
+PUT    /scim/v2/Groups/:id             # Replace group
+PATCH  /scim/v2/Groups/:id            # Update group
+DELETE /scim/v2/Groups/:id             # Delete group
+```
+
+### Bulk & Search
+
+```http
+POST   /scim/v2/Bulk                   # Bulk operations
+POST   /scim/v2/.search                # Search resources
+```
+
+### Admin
+
+```http
+POST   /admin/scim/tokens              # Create provisioning token
+GET    /admin/scim/tokens              # List tokens
+DELETE /admin/scim/tokens/:id          # Revoke token
+GET    /admin/scim/stats               # Provisioning statistics
+```
+
+## Middleware
+
+The plugin provides several middleware handlers:
+
+- `AuthMiddleware()` - Validates SCIM bearer tokens
+- `OrgResolutionMiddleware()` - Resolves organization context
+- `RateLimitMiddleware()` - Per-minute rate limiting
+- `RequireAdminMiddleware()` - Admin-only access
+- `SecurityHeadersMiddleware()` - Security headers for SCIM responses
+
+## Resources
+
+- [SCIM Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/scim)
+- [RFC 7643 - SCIM Core Schema](https://tools.ietf.org/html/rfc7643)
+- [RFC 7644 - SCIM Protocol](https://tools.ietf.org/html/rfc7644)

@@ -1,0 +1,199 @@
+---
+title: Step-Up Authentication
+description: Context-aware step-up authentication for high-value operations with risk-based adaptive requirements
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Step-Up Authentication Plugin
+
+The Step-Up Authentication plugin provides context-aware re-authentication for high-value operations. It supports route-based, amount-based, resource-based, time-based, and context-based rules with four security levels (low, medium, high, critical). Includes device remembering, grace periods, risk-based adaptive requirements, and organization-scoped policy overrides.
+
+## Features
+
+- **Security Levels** - Low, Medium, High, Critical with configurable verification methods
+- **Route-Based Rules** - Require step-up for specific URL patterns
+- **Amount-Based Rules** - Require step-up for monetary transactions above thresholds
+- **Resource-Based Rules** - Require step-up for specific resource types and actions
+- **Time-Based Rules** - Maximum authentication age requirements
+- **Risk-Based Adaptive** - Adjust requirements based on risk scores
+- **Device Remembering** - Remember verified devices for configurable duration
+- **Grace Periods** - Short grace period after successful step-up
+- **Policy Management** - CRUD for step-up policies
+- **Organization Overrides** - Per-org policy customization
+- **Rich Middleware** - Route-level enforcement with multiple strategies
+- **Audit Logging** - Comprehensive step-up audit trail
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/stepup"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        stepup.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    stepup:
+      enabled: true
+
+      # Authentication windows per level
+      mediumAuthWindow: "15m"
+      highAuthWindow: "5m"
+      criticalAuthWindow: "0s"  # immediate
+
+      # Verification methods per level
+      lowMethods:
+        - "password"
+      mediumMethods:
+        - "password"
+      highMethods:
+        - "password"
+        - "totp"
+      criticalMethods:
+        - "password"
+        - "webauthn"
+
+      # Route-based rules
+      routeRules:
+        - pattern: "/api/admin/*"
+          level: "high"
+        - pattern: "/api/billing/*"
+          level: "critical"
+
+      # Amount-based rules
+      amountRules:
+        - minAmount: 1000
+          currency: "USD"
+          level: "medium"
+        - minAmount: 10000
+          currency: "USD"
+          level: "high"
+
+      # Device remembering
+      rememberStepUp: true
+      rememberDuration: "24h"
+      gracePeriod: "30s"
+
+      # Risk-based
+      riskBasedEnabled: true
+      riskThresholdLow: 0.3
+      riskThresholdMedium: 0.6
+      riskThresholdHigh: 0.8
+
+      # Organization overrides
+      enableOrgOverrides: true
+
+      # Audit
+      auditEnabled: true
+```
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `mediumAuthWindow` | duration | `15m` | Time window for medium level |
+| `highAuthWindow` | duration | `5m` | Time window for high level |
+| `criticalAuthWindow` | duration | `0s` | Time window for critical (immediate) |
+| `rememberStepUp` | bool | `true` | Remember step-up on device |
+| `rememberDuration` | duration | `24h` | Device remember duration |
+| `gracePeriod` | duration | `30s` | Grace period after step-up |
+| `riskBasedEnabled` | bool | `true` | Enable risk-based adaptive rules |
+| `enableOrgOverrides` | bool | `true` | Allow per-org policy overrides |
+
+## API Reference
+
+### Evaluation & Verification
+
+```http
+POST   /stepup/evaluate               # Evaluate step-up requirement
+POST   /stepup/verify                  # Verify step-up authentication
+GET    /stepup/status                  # Get current step-up status
+```
+
+### Requirements
+
+```http
+GET    /stepup/requirements/:id        # Get step-up requirement
+GET    /stepup/requirements/pending    # List pending requirements
+```
+
+### Verifications
+
+```http
+GET    /stepup/verifications           # List verification history
+```
+
+### Remembered Devices
+
+```http
+GET    /stepup/devices                 # List remembered devices
+DELETE /stepup/devices/:id             # Forget device
+```
+
+### Policies
+
+```http
+POST   /stepup/policies               # Create policy
+GET    /stepup/policies                # List policies
+GET    /stepup/policies/:id            # Get policy
+PUT    /stepup/policies/:id            # Update policy
+DELETE /stepup/policies/:id            # Delete policy
+```
+
+### Audit
+
+```http
+GET    /stepup/audit                   # Get audit logs
+```
+
+## Middleware
+
+The plugin provides rich middleware for route-level enforcement:
+
+```go
+// Require specific security level
+app.Use(stepupPlugin.RequireLevel(stepup.LevelHigh))
+
+// Auto-evaluate based on configured route rules
+app.Use(stepupPlugin.RequireForRoute())
+
+// Require for monetary amounts
+app.Use(stepupPlugin.RequireForAmount(5000, "USD"))
+
+// Require for specific resource actions
+app.Use(stepupPlugin.RequireForResource("user", "delete"))
+
+// Evaluate without blocking (stores result in context)
+app.Use(stepupPlugin.EvaluateMiddleware())
+```
+
+## Verification Methods
+
+| Method | Description |
+|---|---|
+| `password` | Re-enter password |
+| `totp` | Time-based one-time password |
+| `sms` | SMS verification code |
+| `email` | Email verification code |
+| `biometric` | Biometric verification |
+| `webauthn` | WebAuthn/passkey verification |
+| `backup_code` | Backup recovery code |
+
+## Resources
+
+- [Step-Up Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/stepup)

@@ -7,6 +7,8 @@
     "two-factor",
     "username",
     "anonymous",
+    "email-verification",
+    "bearer",
     "dashboard"
   ]
 }

@@ -1,0 +1,295 @@
+---
+title: Components Reference
+description: Complete props reference for all AuthSome UI components
+icon: Component
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Components Reference
+
+This page documents all components from `@authsome/ui-react`, `@authsome/ui-react-headless`, and `@authsome/ui-next`.
+
+## @authsome/ui-react
+
+### AuthProvider
+
+The root context provider. Wrap your app with this component.
+
+```typescript
+interface AuthProviderProps {
+  /** AuthClient instance (required) */
+  client: AuthClient;
+  children: React.ReactNode;
+  /** Flow engine configuration */
+  flows?: FlowConfig;
+  initialFlowState?: Partial<FlowState>;
+  /** Override default UI components used by flow renderers */
+  uiComponents?: Partial<UIComponents>;
+  /** Renderer configuration for built-in flows */
+  rendererConfig?: RendererConfig;
+  /** Flow state change callback */
+  onFlowStateChange?: (state: FlowState) => void;
+  /** Locale overrides for i18n */
+  locale?: DeepPartial<AuthLocale>;
+  /** Organization change callback */
+  onOrganizationChange?: (org: Organization | null) => void;
+}
+```
+
+### RequireAuth
+
+Renders children only when authenticated. Shows fallback or redirects otherwise.
+
+```typescript
+interface RequireAuthProps {
+  children: React.ReactNode;
+  /** Shown while loading or when unauthenticated */
+  fallback?: React.ReactNode;
+  /** URL to redirect to when unauthenticated */
+  redirectTo?: string;
+  /** Callback when user is not authenticated */
+  onUnauthenticated?: () => void;
+}
+```
+
+### withAuth
+
+HOC that wraps a component with auth protection.
+
+```typescript
+interface WithAuthOptions {
+  fallback?: React.ComponentType;
+  redirectTo?: string;
+  onUnauthenticated?: () => void;
+}
+
+function withAuth<P extends object>(
+  Component: React.ComponentType<P>,
+  options?: WithAuthOptions
+): React.ComponentType<P>
+```
+
+---
+
+## @authsome/ui-react-headless
+
+All headless components use the render-prop pattern.
+
+### SignInForm
+
+```typescript
+interface SignInFormProps {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  children: (props: SignInFormRenderProps) => React.ReactNode;
+}
+
+interface SignInFormRenderProps {
+  email: string;
+  password: string;
+  isLoading: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setEmail: (email: string) => void;
+  setPassword: (password: string) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### SignUpForm
+
+```typescript
+interface SignUpFormProps {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  children: (props: SignUpFormRenderProps) => React.ReactNode;
+}
+
+interface SignUpFormRenderProps {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  name: string;
+  isLoading: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setEmail: (email: string) => void;
+  setPassword: (password: string) => void;
+  setConfirmPassword: (password: string) => void;
+  setName: (name: string) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### OAuthButtons
+
+```typescript
+interface OAuthButtonsProps {
+  redirectUri?: string;
+  onError?: (error: Error) => void;
+  children: (props: OAuthButtonsRenderProps) => React.ReactNode;
+}
+
+interface OAuthButtonsRenderProps {
+  providers: OAuthProvider[];
+  isLoading: boolean;
+  error: Error | null;
+  signIn: (provider: OAuthProvider) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### MagicLinkForm
+
+```typescript
+interface MagicLinkFormProps {
+  redirectUri?: string;
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  children: (props: MagicLinkFormRenderProps) => React.ReactNode;
+}
+
+interface MagicLinkFormRenderProps {
+  email: string;
+  isLoading: boolean;
+  isSent: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setEmail: (email: string) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### TwoFactorForm
+
+```typescript
+interface TwoFactorFormProps {
+  method?: TwoFactorMethod;
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  children: (props: TwoFactorFormRenderProps) => React.ReactNode;
+}
+
+interface TwoFactorFormRenderProps {
+  code: string;
+  remember: boolean;
+  isLoading: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setCode: (code: string) => void;
+  setRemember: (remember: boolean) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### AuthTabs
+
+```typescript
+type AuthTab = 'signin' | 'signup';
+
+interface AuthTabsProps {
+  defaultTab?: AuthTab;
+  onTabChange?: (tab: AuthTab) => void;
+  children: (props: AuthTabsRenderProps) => React.ReactNode;
+}
+
+interface AuthTabsRenderProps {
+  activeTab: AuthTab;
+  setActiveTab: (tab: AuthTab) => void;
+  isSignIn: boolean;
+  isSignUp: boolean;
+}
+```
+
+### AuthModal
+
+```typescript
+interface AuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: (props: AuthModalRenderProps) => React.ReactNode;
+}
+
+interface AuthModalRenderProps {
+  isOpen: boolean;
+  close: () => void;
+}
+```
+
+### ProfileMenu
+
+```typescript
+interface ProfileMenuProps {
+  onSignOut?: () => void;
+  children: (props: ProfileMenuRenderProps) => React.ReactNode;
+}
+
+interface ProfileMenuRenderProps {
+  user: User | null;
+  isOpen: boolean;
+  isSigningOut: boolean;
+  toggle: () => void;
+  open: () => void;
+  close: () => void;
+  signOut: () => Promise<void>;
+}
+```
+
+### SessionList
+
+```typescript
+interface SessionListProps {
+  onRevoke?: (sessionId: string) => void;
+  children: (props: SessionListRenderProps) => React.ReactNode;
+}
+
+interface SessionListRenderProps {
+  currentSession: Session | null;
+  sessions: Session[];
+  revokeSession: (sessionId: string) => Promise<void>;
+}
+```
+
+---
+
+## @authsome/ui-next
+
+### NextAuthProvider
+
+Next.js-specific auth provider with automatic flow detection.
+
+```typescript
+interface NextAuthProviderProps {
+  config: NextAuthConfig;
+  children: React.ReactNode;
+}
+```
+
+### ProtectedRoute
+
+Client-side route protection for Next.js pages.
+
+```typescript
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+  redirectTo?: string;
+}
+```
+
+### OAuthCallbackClient
+
+Handles OAuth callback processing.
+
+```typescript
+interface OAuthCallbackClientProps {
+  provider: string;
+  successRedirect?: string;
+  errorRedirect?: string;
+}
+```

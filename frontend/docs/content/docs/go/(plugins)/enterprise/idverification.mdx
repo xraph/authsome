@@ -1,0 +1,161 @@
+---
+title: Identity Verification (KYC)
+description: Identity verification with document checks, liveness detection, and AML screening via Onfido, Jumio, and Stripe Identity
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Identity Verification Plugin
+
+The Identity Verification plugin provides Know Your Customer (KYC) capabilities with multi-provider support. It includes document verification, liveness detection, age verification, AML/sanctions screening, risk scoring, and manual review workflows. Supports Onfido, Jumio, and Stripe Identity as verification providers.
+
+## Features
+
+- **Document Verification** - Passport, driver's license, national ID verification
+- **Liveness Detection** - Facial recognition and liveness checks
+- **Age Verification** - Configurable minimum age requirements
+- **AML Screening** - Sanctions lists and PEP database checks
+- **Risk Scoring** - Configurable risk thresholds with auto-reject
+- **Multi-Provider** - Onfido, Jumio, Stripe Identity
+- **Manual Review** - Admin review workflow for edge cases
+- **Reverification** - Support for periodic re-verification
+- **Webhook Integration** - Real-time status updates from providers
+- **GDPR Compliance** - Document retention with auto-deletion
+- **Rate Limiting** - Per-hour and per-day verification limits
+- **Rich Middleware** - Route-level verification enforcement
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/idverification"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        idverification.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    idverification:
+      enabled: true
+      defaultProvider: "onfido"
+      sessionExpiryDuration: "24h"
+      verificationExpiry: "8760h"  # 1 year
+
+      requireDocumentVerification: true
+      requireLivenessDetection: true
+      requireAgeVerification: false
+      requireAMLScreening: false
+      minimumAge: 18
+
+      maxAllowedRiskScore: 70
+      autoRejectHighRisk: true
+      minConfidenceScore: 80
+      maxVerificationAttempts: 3
+
+      retainDocuments: true
+      documentRetentionPeriod: "2160h"  # 90 days
+      autoDeleteAfterExpiry: true
+
+      gdprCompliant: true
+
+      onfido:
+        apiToken: "${ONFIDO_API_TOKEN}"
+        region: "eu"
+        webhookToken: "${ONFIDO_WEBHOOK_TOKEN}"
+
+      jumio:
+        apiToken: "${JUMIO_API_TOKEN}"
+        apiSecret: "${JUMIO_API_SECRET}"
+        dataCenter: "eu"
+
+      stripeIdentity:
+        apiKey: "${STRIPE_API_KEY}"
+        webhookSecret: "${STRIPE_WEBHOOK_SECRET}"
+
+      rateLimitEnabled: true
+      maxVerificationsPerHour: 10
+      maxVerificationsPerDay: 50
+```
+
+## API Reference
+
+### Verification Sessions
+
+```http
+POST   /verification/sessions          # Create verification session
+GET    /verification/sessions/:id      # Get session status
+```
+
+### User Verification
+
+```http
+GET    /verification/me                # Get my verifications
+GET    /verification/me/status         # Get my verification status
+POST   /verification/me/reverify       # Request re-verification
+GET    /verification/:id               # Get specific verification
+```
+
+### Admin
+
+```http
+POST   /verification/admin/users/:userId/block       # Block user
+POST   /verification/admin/users/:userId/unblock      # Unblock user
+GET    /verification/admin/users/:userId/status       # Admin user status
+GET    /verification/admin/users/:userId/verifications # Admin user verifications
+```
+
+### Provider Webhooks
+
+```http
+POST   /verification/webhook/:provider  # Handle provider webhook
+```
+
+## Middleware
+
+```go
+// Load verification status (non-blocking)
+app.Use(idPlugin.LoadVerificationStatus())
+
+// Require verified identity
+app.Use(idPlugin.RequireVerified())
+
+// Require document verification
+app.Use(idPlugin.RequireDocumentVerified())
+
+// Require liveness verification
+app.Use(idPlugin.RequireLivenessVerified())
+
+// Require AML clearance
+app.Use(idPlugin.RequireAMLClear())
+
+// Require minimum age
+app.Use(idPlugin.RequireAge(21))
+
+// Require user not blocked
+app.Use(idPlugin.RequireNotBlocked())
+```
+
+## Supported Providers
+
+| Provider | Features |
+|---|---|
+| Onfido | Document check, facial similarity, liveness, AML |
+| Jumio | Document verification, identity proofing, AML |
+| Stripe Identity | Document verification, selfie verification |
+
+## Resources
+
+- [ID Verification Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/idverification)

@@ -1,0 +1,170 @@
+---
+title: JWT
+description: JWT token generation, verification, key management, and JWKS endpoint
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# JWT Plugin
+
+The JWT plugin provides JSON Web Token (JWT) generation, verification, and key management. It includes a JWKS (JSON Web Key Set) endpoint for public key distribution, making it suitable for distributed authentication architectures.
+
+## Features
+
+- **Token Generation** - Generate signed JWT access and refresh tokens
+- **Token Verification** - Verify and decode JWT tokens
+- **Key Management** - Create and manage JWT signing keys
+- **JWKS Endpoint** - RFC 7517 compliant JSON Web Key Set endpoint
+- **Configurable Algorithm** - Support for HS256, RS256, and other signing algorithms
+- **App ID Claims** - Optional app_id claim for multi-tenant support
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/jwt"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        jwt.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['YAML', 'Programmatic']}>
+  <Tab value="YAML">
+    ```yaml
+    auth:
+      plugins:
+        jwt:
+          issuer: "authsome"
+          accessExpirySeconds: 3600
+          refreshExpirySeconds: 2592000
+          signingAlgorithm: "HS256"
+          includeAppIDClaim: true
+    ```
+  </Tab>
+  <Tab value="Programmatic">
+    ```go
+    jwt.NewPlugin(
+        jwt.WithIssuer("authsome"),
+        jwt.WithAccessExpirySeconds(3600),
+        jwt.WithRefreshExpirySeconds(2592000),
+        jwt.WithSigningAlgorithm("RS256"),
+        jwt.WithIncludeAppIDClaim(true),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `issuer` | string | `"authsome"` | JWT issuer claim (`iss`) |
+| `accessExpirySeconds` | int | `3600` | Access token expiry in seconds (1 hour) |
+| `refreshExpirySeconds` | int | `2592000` | Refresh token expiry in seconds (30 days) |
+| `signingAlgorithm` | string | `"HS256"` | Signing algorithm (HS256, RS256, etc.) |
+| `includeAppIDClaim` | bool | `true` | Include `app_id` in JWT claims |
+
+## API Reference
+
+### Create JWT Key
+
+Create a new JWT signing key pair.
+
+```bash
+curl -X POST https://auth.yourdomain.com/jwt/keys \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+### List JWT Keys
+
+List all JWT signing keys.
+
+```bash
+curl https://auth.yourdomain.com/jwt/keys \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Generate JWT Token
+
+Generate a signed JWT token.
+
+```bash
+curl -X POST https://auth.yourdomain.com/jwt/generate \
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+### Verify JWT Token
+
+Verify and decode a JWT token.
+
+```bash
+curl -X POST https://auth.yourdomain.com/jwt/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  }'
+```
+
+### JWKS Endpoint
+
+Get the JSON Web Key Set for token verification by external services.
+
+```bash
+curl https://auth.yourdomain.com/jwt/jwks
+```
+
+**Response (200):**
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "key-id-1",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "...",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+## Route Summary
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/jwt/keys` | Create JWT signing key |
+| `GET` | `/jwt/keys` | List JWT keys |
+| `POST` | `/jwt/generate` | Generate JWT token |
+| `POST` | `/jwt/verify` | Verify JWT token |
+| `GET` | `/jwt/jwks` | JWKS endpoint (RFC 7517) |
+
+## Security Considerations
+
+<Callout type="warn">
+Use RS256 for distributed systems where multiple services need to verify tokens. HS256 is simpler but requires sharing the secret key.
+</Callout>
+
+- **Key Rotation**: Rotate signing keys periodically using the key management endpoints
+- **Algorithm Choice**: Use RS256 for public/private key pairs, HS256 for shared secrets
+- **Token Expiry**: Keep access tokens short-lived (1 hour default), use refresh tokens for re-authentication
+- **JWKS Caching**: External services should cache JWKS responses with appropriate TTL
+
+## Resources
+
+- [JWT Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/jwt)
+- [RFC 7519 - JSON Web Token](https://tools.ietf.org/html/rfc7519)
+- [RFC 7517 - JSON Web Key](https://tools.ietf.org/html/rfc7517)

@@ -1,0 +1,165 @@
+---
+title: Backup Authentication
+description: Enterprise account recovery with multiple verification methods and risk-based step requirements
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Backup Authentication Plugin
+
+The Backup Authentication plugin provides comprehensive account recovery capabilities with multiple verification methods. It supports multi-step recovery flows with risk-based step requirements, ensuring both security and usability during account recovery scenarios.
+
+## Features
+
+- **Recovery Codes** - Generate and verify one-time recovery codes
+- **Security Questions** - Setup and verify security question answers
+- **Trusted Contacts** - Designate and verify trusted contacts for recovery
+- **Email/SMS Verification** - Send and verify codes via email or SMS
+- **Video Verification** - Schedule and conduct video identity verification
+- **Document Upload** - Upload and review identity documents
+- **Multi-Step Recovery** - Risk-based multi-step recovery flows
+- **Risk Assessment** - Device, location, IP, velocity, and history analysis
+- **Admin Workflows** - Admin approval for high-risk recoveries
+- **Audit Trail** - Immutable 7-year audit log retention
+- **Rate Limiting** - Per-hour and per-day attempt limits
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/backupauth"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        backupauth.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    backupauth:
+      enabled: true
+
+      recoveryCodes:
+        enabled: true
+        codeCount: 10
+        codeLength: 12
+        format: "alphanumeric"
+        autoRegenerate: true
+
+      securityQuestions:
+        minimumQuestions: 3
+        requiredToRecover: 2
+        allowCustomQuestions: true
+        maxAttempts: 3
+
+      trustedContacts:
+        minimumContacts: 1
+        maximumContacts: 5
+        requiredToRecover: 1
+
+      emailVerification:
+        codeLength: 6
+        expiryMinutes: 15
+
+      smsVerification:
+        codeLength: 6
+        expiryMinutes: 10
+        provider: "twilio"
+
+      multiStepRecovery:
+        enabled: true
+        minimumSteps: 2
+        lowRiskSteps: 1
+        mediumRiskSteps: 2
+        highRiskSteps: 3
+
+      rateLimiting:
+        maxAttemptsPerHour: 5
+        maxAttemptsPerDay: 10
+        lockoutDuration: "1h"
+
+      audit:
+        retentionDays: 2555  # 7 years
+        immutable: true
+```
+
+## API Reference
+
+### Recovery Flow
+
+```http
+POST   /recovery/start                # Start account recovery
+POST   /recovery/continue             # Continue with next step
+POST   /recovery/complete             # Complete recovery
+POST   /recovery/cancel               # Cancel recovery
+```
+
+### Recovery Codes
+
+```http
+POST   /recovery-codes/generate       # Generate recovery codes
+POST   /recovery-codes/verify         # Verify a recovery code
+```
+
+### Security Questions
+
+```http
+POST   /security-questions/setup      # Setup security questions
+POST   /security-questions/get        # Get questions (for verification)
+POST   /security-questions/verify     # Verify answers
+```
+
+### Trusted Contacts
+
+```http
+POST   /trusted-contacts/add                    # Add trusted contact
+GET    /trusted-contacts                         # List trusted contacts
+POST   /trusted-contacts/verify                  # Verify contact
+POST   /trusted-contacts/request-verification    # Request contact verification
+DELETE /trusted-contacts/:id                     # Remove contact
+```
+
+### Email/SMS Verification
+
+```http
+POST   /verification/send             # Send verification code
+POST   /verification/verify           # Verify code
+```
+
+### Video & Document Verification
+
+```http
+POST   /video/schedule                # Schedule video session
+POST   /video/start                   # Start video session
+POST   /video/complete                # Complete session (admin)
+POST   /documents/upload              # Upload document
+GET    /documents/:id                 # Get document status
+POST   /documents/:id/review          # Review document (admin)
+```
+
+### Admin
+
+```http
+GET    /admin/sessions                # List recovery sessions
+POST   /admin/sessions/:id/approve    # Approve recovery
+POST   /admin/sessions/:id/reject     # Reject recovery
+GET    /admin/stats                   # Recovery statistics
+GET    /admin/config                  # Get config
+PUT    /admin/config                  # Update config
+GET    /health                        # Health check
+```
+
+## Resources
+
+- [Backup Auth Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/backupauth)

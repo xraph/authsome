@@ -1,0 +1,393 @@
+---
+title: "@authsome/ui-next"
+description: Next.js App Router integration with server actions, middleware, and OAuth handling
+icon: Globe
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# @authsome/ui-next
+
+First-class Next.js integration with App Router support, server components, server actions, Edge-compatible middleware, and OAuth callback handling.
+
+## Installation
+
+```bash
+npm install @authsome/ui-core @authsome/ui-react @authsome/ui-next
+```
+
+**Peer dependencies**: `@authsome/ui-core`, `@authsome/ui-react`, `next` (^14.0.0 || ^15.0.0 || ^16.0.0), `react` (^18 || ^19)
+
+## Exports
+
+The package provides three entry points:
+
+| Import | Description |
+|--------|-------------|
+| `@authsome/ui-next` | Client components, hooks, and types |
+| `@authsome/ui-next/server` | Server utilities (RSC, actions, session) |
+| `@authsome/ui-next/middleware` | Edge middleware for route protection |
+
+<Callout type="warn">
+The `/server` entry point can only be imported in server components and server actions. Importing it in a client component will throw an error.
+</Callout>
+
+## Configuration
+
+### NextAuthConfig
+
+```typescript
+interface NextAuthConfig {
+  /** Authentication adapter (required) */
+  adapter: AuthProvider;
+  /** Base path for auth routes (default: '/auth') */
+  basePath?: string;
+  /** Page paths configuration */
+  pages?: PageConfig;
+  /** Auth callbacks */
+  callbacks?: AuthCallbacks;
+  /** Session configuration */
+  session?: SessionConfig;
+  /** UI components override */
+  uiComponents?: UIComponents;
+  /** Flow configuration */
+  flows?: FlowConfig;
+  /** Locale overrides */
+  locale?: DeepPartial<AuthLocale>;
+  /** Flow state change callback */
+  onFlowStateChange?: (state: FlowState) => void;
+  /** Organization change callback */
+  onOrganizationChange?: (org: Organization | null) => void;
+}
+```
+
+### SessionConfig
+
+```typescript
+interface SessionConfig {
+  /** Session strategy (default: 'adapter') */
+  strategy?: 'adapter' | 'cookie';
+  /** Cookie name (default: 'authsome.session') */
+  cookieName?: string;
+  /** Max age in seconds (default: 2592000 / 30 days) */
+  maxAge?: number;
+  /** Secure cookies (default: true in production) */
+  secure?: boolean;
+  /** Cookie path (default: '/') */
+  path?: string;
+  /** SameSite policy (default: 'lax') */
+  sameSite?: 'strict' | 'lax' | 'none';
+  /** Encryption password (falls back to SESSION_SECRET env var) */
+  password?: string;
+}
+```
+
+## Client Components
+
+### NextAuthProvider
+
+The main provider for Next.js applications. Wraps `AuthProvider` from `@authsome/ui-react` with Next.js-specific features like automatic flow detection from URL paths.
+
+```tsx
+// app/providers.tsx
+'use client';
+
+import { NextAuthProvider } from '@authsome/ui-next';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+adapter.initialize({
+  apiUrl: process.env.NEXT_PUBLIC_AUTH_URL!,
+  authMode: 'cookies',
+});
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <NextAuthProvider config={{ adapter, basePath: '/auth' }}>
+      {children}
+    </NextAuthProvider>
+  );
+}
+```
+
+### ProtectedRoute
+
+Client-side route protection component.
+
+```typescript
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+  redirectTo?: string;
+}
+```
+
+```tsx
+import { ProtectedRoute } from '@authsome/ui-next';
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute redirectTo="/auth/signin" fallback={<p>Loading...</p>}>
+      <Dashboard />
+    </ProtectedRoute>
+  );
+}
+```
+
+### OAuthCallbackClient
+
+Handles OAuth callback processing automatically.
+
+```typescript
+interface OAuthCallbackClientProps {
+  provider: string;
+  successRedirect?: string;
+  errorRedirect?: string;
+}
+```
+
+```tsx
+// app/auth/callback/[provider]/page.tsx
+import { OAuthCallbackClient } from '@authsome/ui-next';
+
+export default function OAuthCallback({ params }: { params: { provider: string } }) {
+  return (
+    <OAuthCallbackClient
+      provider={params.provider}
+      successRedirect="/dashboard"
+      errorRedirect="/auth/signin"
+    />
+  );
+}
+```
+
+## Client Hooks
+
+### useProtectedRoute
+
+```typescript
+interface UseProtectedRouteOptions {
+  redirectTo?: string;        // Default: '/auth/signin'
+  showLoading?: boolean;      // Default: true
+  onUnauthenticated?: () => void;
+  onAuthenticated?: () => void;
+}
+
+function useProtectedRoute(options?: UseProtectedRouteOptions): {
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  user: User | null;
+}
+```
+
+### useRequirePermissions
+
+```typescript
+function useRequirePermissions(
+  requiredPermissions: string[],
+  options?: UseProtectedRouteOptions
+): {
+  hasPermission: boolean;
+  isLoading: boolean;
+  user: User | null;
+}
+```
+
+## Server Utilities
+
+Import from `@authsome/ui-next/server`:
+
+### createServerAuthClient
+
+Creates a server-side auth client for use in server components, API routes, and server actions.
+
+```typescript
+function createServerAuthClient(config: NextAuthConfig): ServerAuthClient
+```
+
+The `ServerAuthClient` provides all authentication methods:
+
+```typescript
+const serverAuth = createServerAuthClient({ adapter });
+
+// Authentication
+await serverAuth.signIn({ email, password });
+await serverAuth.signUp({ email, password, name });
+await serverAuth.signOut();
+
+// Session
+await serverAuth.getSession();
+await serverAuth.getUser();
+await serverAuth.isAuthenticated();
+await serverAuth.requireAuth(); // throws if not authenticated
+
+// OAuth
+await serverAuth.getOAuthProviders();
+
+// Password
+await serverAuth.requestPasswordReset({ email });
+await serverAuth.confirmPasswordReset({ token, password });
+await serverAuth.changePassword({ currentPassword, newPassword });
+
+// Email verification
+await serverAuth.sendVerificationEmail({ email });
+await serverAuth.verifyEmail({ token });
+
+// MFA
+await serverAuth.enrollMFAFactor({ type, name });
+await serverAuth.listMFAFactors();
+await serverAuth.verifyMFAFactor({ factorId, code });
+
+// Device management
+await serverAuth.listDevices();
+await serverAuth.revokeDevice(deviceId);
+
+// Session management
+await serverAuth.listSessions();
+await serverAuth.revokeSession(sessionId);
+await serverAuth.revokeAllSessions();
+```
+
+### Session Helpers
+
+```typescript
+// Get server-side session
+const session = await getServerSession(adapter, sessionConfig);
+
+// Get current user
+const user = await getServerUser(adapter, sessionConfig);
+
+// Check authentication
+const authed = await isAuthenticated(adapter, sessionConfig);
+
+// Require auth (throws redirect if not authenticated)
+const { user, session } = await requireAuth(adapter, sessionConfig);
+```
+
+### Server Actions
+
+Pre-built server actions for common auth operations:
+
+```typescript
+import { initializeServerActions, signInAction, signUpAction, signOutAction } from '@authsome/ui-next/server';
+
+// Initialize once in your server configuration
+initializeServerActions(config);
+
+// Use in server actions or API routes
+const result = await signInAction({ email, password });
+const result = await signUpAction({ email, password, name });
+const result = await signOutAction();
+const result = await getSessionAction();
+const result = await sendMagicLinkAction({ email });
+const result = await verifyTwoFactorAction({ code });
+const result = await requestPasswordResetAction({ email });
+const result = await getOAuthProvidersAction();
+```
+
+Each action returns:
+
+```typescript
+interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  redirect?: string;
+}
+```
+
+## Middleware
+
+Import from `@authsome/ui-next/middleware`:
+
+### createAuthMiddleware
+
+Edge-compatible middleware for route protection.
+
+```typescript
+interface MiddlewareConfig {
+  adapter: AuthProvider;
+  basePath?: string;              // Default: '/auth'
+  publicRoutes?: string[];        // Supports wildcards: '/api/*', '/docs/**'
+  authRoutes?: string[];          // Default: ['/auth/signin', '/auth/signup']
+  afterAuthRedirect?: string;     // Default: '/'
+  afterSignOutRedirect?: string;  // Default: '/auth/signin'
+  session?: SessionConfig;
+  pages?: PageConfig;
+}
+```
+
+```typescript
+// middleware.ts
+import { createAuthMiddleware } from '@authsome/ui-next/middleware';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+adapter.initialize({
+  apiUrl: process.env.AUTH_URL!,
+  authMode: 'cookies',
+});
+
+export default createAuthMiddleware({
+  adapter,
+  publicRoutes: ['/', '/about', '/pricing', '/api/public/*'],
+  authRoutes: ['/auth/signin', '/auth/signup', '/auth/forgot-password'],
+  afterAuthRedirect: '/dashboard',
+});
+
+export const config = {
+  matcher: ['/((?!_next|favicon.ico|.*\\.).*)'],
+};
+```
+
+### createAuthMiddlewareWithHandler
+
+For custom middleware logic:
+
+```typescript
+export default createAuthMiddlewareWithHandler(
+  { adapter, publicRoutes: ['/'] },
+  async (request, session) => {
+    // Custom logic with session data
+    if (session && request.nextUrl.pathname.startsWith('/admin')) {
+      // Check admin role
+      if (session.user?.metadata?.role !== 'admin') {
+        return NextResponse.redirect(new URL('/unauthorized', request.url));
+      }
+    }
+    return NextResponse.next();
+  }
+);
+```
+
+### Route Matching
+
+The middleware supports pattern matching for routes:
+
+| Pattern | Matches |
+|---------|---------|
+| `/api/users` | Exact match only |
+| `/api/*` | `/api/users`, `/api/posts` (one level) |
+| `/api/**` | `/api/users/123/posts` (any depth) |
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Next.js App Router Guide"
+    description="Complete guide for building Next.js apps with AuthSome UI"
+    href="/docs/ui/guides/nextjs-app-router"
+  />
+  <Card
+    title="Middleware Guide"
+    description="Advanced middleware configuration and patterns"
+    href="/docs/ui/guides/middleware"
+  />
+  <Card
+    title="Server-Side Auth Guide"
+    description="Working with server components and server actions"
+    href="/docs/ui/guides/server-side-auth"
+  />
+</Cards>

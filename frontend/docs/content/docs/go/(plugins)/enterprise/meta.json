@@ -3,9 +3,22 @@
   "icon": "Building2",
   "pages": [
     "index",
-    "multitenancy",
+    "admin",
     "sso",
     "oidc-provider",
-    "admin"
+    "multitenancy",
+    "multiapp",
+    "organization",
+    "subscription",
+    "secrets",
+    "cms",
+    "scim",
+    "backupauth",
+    "compliance",
+    "consent",
+    "geofence",
+    "idverification",
+    "mtls",
+    "stepup"
   ]
 }

@@ -1,0 +1,147 @@
+---
+title: Consent Management
+description: GDPR/CCPA consent tracking, cookie consent, data portability, and right to be forgotten
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Consent Plugin
+
+The Consent plugin provides comprehensive consent and privacy management for GDPR and CCPA compliance. It includes granular consent tracking, cookie consent management, data portability (GDPR Article 20), right to be forgotten (GDPR Article 17) with admin approval workflows, consent versioning, and immutable audit trails.
+
+## Features
+
+- **Consent Records** - Granular consent tracking per user and organization
+- **Cookie Consent** - Category-based cookie consent (essential, functional, analytics, marketing)
+- **Data Portability** - GDPR Article 20 data export in JSON, CSV, XML, PDF
+- **Right to Be Forgotten** - GDPR Article 17 deletion with admin approval
+- **Consent Policies** - Versioned consent policy management
+- **Privacy Settings** - User and admin privacy configuration
+- **Consent Expiry** - Automatic consent expiry with renewal reminders
+- **Immutable Audit Trail** - 7-year retention with signed logs
+- **Multi-Tenant** - Organization-scoped consent management
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/consent"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        consent.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    consent:
+      enabled: true
+      gdprEnabled: true
+      ccpaEnabled: false
+
+      cookieConsent:
+        enabled: true
+        defaultStyle: "banner"
+        requireExplicit: true
+        validityPeriod: "8760h"  # 1 year
+
+      dataExport:
+        enabled: true
+        allowedFormats:
+          - "json"
+          - "csv"
+        maxRequests: 5
+        requestPeriod: "720h"  # 30 days
+        expiryHours: 72
+
+      dataDeletion:
+        enabled: true
+        requireAdminApproval: true
+        gracePeriodDays: 30
+        archiveBeforeDeletion: true
+
+      expiry:
+        enabled: true
+        defaultValidityDays: 365
+        renewalReminderDays: 30
+
+      audit:
+        retentionDays: 2555  # 7 years
+        immutable: true
+        signLogs: true
+```
+
+## API Reference
+
+### Consent Records
+
+```http
+POST   /consent/records                # Create consent record
+GET    /consent/records/:id            # Get consent record
+PUT    /consent/records/:id            # Update consent record
+POST   /consent/revoke/:id            # Revoke consent
+```
+
+### Consent Policies
+
+```http
+POST   /consent/policies               # Create policy (admin)
+GET    /consent/policies/:id           # Get policy
+```
+
+### Cookie Consent
+
+```http
+POST   /consent/cookies               # Record cookie consent
+GET    /consent/cookies                # Get current cookie consent
+```
+
+### Data Export (GDPR Article 20)
+
+```http
+POST   /consent/export                 # Request data export
+GET    /consent/export/:id             # Get export status
+GET    /consent/export/:id/download    # Download export
+```
+
+### Data Deletion (GDPR Article 17)
+
+```http
+POST   /consent/deletion               # Request data deletion
+GET    /consent/deletion/:id           # Get deletion status
+POST   /consent/deletion/:id/approve   # Approve deletion (admin)
+```
+
+### Privacy Settings
+
+```http
+GET    /consent/settings               # Get privacy settings
+PUT    /consent/settings               # Update settings (admin)
+```
+
+### Audit & Reports
+
+```http
+GET    /consent/audit                  # List consent audit logs
+POST   /consent/reports                # Generate consent report (admin)
+```
+
+## Hooks
+
+- **AfterUserCreate** - Initialize default privacy settings for new users
+- **AfterOrganizationCreate** - Initialize default privacy settings for new organizations
+
+## Resources
+
+- [Consent Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/consent)

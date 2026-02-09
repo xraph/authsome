@@ -1,0 +1,205 @@
+---
+title: API Key
+description: API key authentication with rate limiting, key rotation, IP restrictions, and webhook notifications
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# API Key Plugin
+
+The API Key plugin provides full API key lifecycle management with authentication middleware. It supports key rotation, rate limiting per key, IP whitelisting, webhook notifications, and automatic cleanup of expired keys.
+
+## Features
+
+- **Full CRUD** - Create, list, get, update, and delete API keys
+- **Key Rotation** - Rotate keys without downtime
+- **Rate Limiting** - Per-key rate limiting with configurable windows
+- **IP Whitelisting** - Optional IP-based access restrictions
+- **Webhook Notifications** - Notify on create, rotate, delete, rate limit, and expiry
+- **Auto Cleanup** - Automatic cleanup of expired keys on a configurable schedule
+- **Authentication Middleware** - Drop-in middleware for API key authentication
+- **Scope-Based Access** - Require specific scopes or permissions per route
+- **Dashboard Extension** - UI integration for key management
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/apikey"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        apikey.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['YAML', 'Programmatic']}>
+  <Tab value="YAML">
+    ```yaml
+    auth:
+      plugins:
+        apikey:
+          defaultRateLimit: 1000
+          maxRateLimit: 10000
+          defaultExpiry: "8760h"  # 1 year
+          maxKeysPerUser: 10
+          maxKeysPerOrg: 100
+          keyLength: 32
+          allowQueryParam: false
+
+          rateLimiting:
+            enabled: true
+            window: "1h"
+
+          ipWhitelisting:
+            enabled: false
+            strictMode: false
+
+          webhooks:
+            enabled: false
+            notifyOnCreated: true
+            notifyOnRotated: true
+            notifyOnDeleted: true
+            notifyOnRateLimit: true
+            notifyOnExpiring: true
+            expiryWarningDays: 7
+
+          autoCleanup:
+            enabled: true
+            interval: "24h"
+    ```
+  </Tab>
+  <Tab value="Programmatic">
+    ```go
+    apikey.NewPlugin(
+        apikey.WithDefaultRateLimit(1000),
+        apikey.WithMaxKeysPerUser(10),
+        apikey.WithKeyLength(32),
+        apikey.WithAutoCleanup(true),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `defaultRateLimit` | int | `1000` | Default rate limit per key |
+| `maxRateLimit` | int | `10000` | Maximum allowed rate limit |
+| `defaultExpiry` | duration | `365d` | Default key expiry |
+| `maxKeysPerUser` | int | `10` | Max keys per user |
+| `maxKeysPerOrg` | int | `100` | Max keys per organization |
+| `keyLength` | int | `32` | Length of generated keys |
+| `allowQueryParam` | bool | `false` | Allow API key in query parameter |
+| `rateLimiting.enabled` | bool | `true` | Enable per-key rate limiting |
+| `rateLimiting.window` | duration | `1h` | Rate limit window |
+| `ipWhitelisting.enabled` | bool | `false` | Enable IP whitelisting |
+| `autoCleanup.enabled` | bool | `true` | Auto-cleanup expired keys |
+| `autoCleanup.interval` | duration | `24h` | Cleanup check interval |
+
+## API Reference
+
+### Create API Key
+
+```bash
+curl -X POST https://auth.yourdomain.com/api-keys \
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production API Key",
+    "scopes": ["users:read", "users:write"],
+    "expiresAt": "2026-12-31T23:59:59Z",
+    "rateLimit": 5000
+  }'
+```
+
+### List API Keys
+
+```bash
+curl https://auth.yourdomain.com/api-keys \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Get API Key
+
+```bash
+curl https://auth.yourdomain.com/api-keys/{key_id} \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Update API Key
+
+```bash
+curl -X PUT https://auth.yourdomain.com/api-keys/{key_id} \
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Key Name",
+    "scopes": ["users:read"]
+  }'
+```
+
+### Rotate API Key
+
+```bash
+curl -X POST https://auth.yourdomain.com/api-keys/{key_id}/rotate \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Delete API Key
+
+```bash
+curl -X DELETE https://auth.yourdomain.com/api-keys/{key_id} \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Verify API Key
+
+```bash
+curl -X POST https://auth.yourdomain.com/api-keys/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "key": "sk_live_abc123..."
+  }'
+```
+
+## Middleware
+
+The API Key plugin provides authentication middleware:
+
+```go
+// Require any valid API key
+app.Use(apikeyPlugin.RequireAPIKey())
+
+// Require API key with specific scopes
+app.Use(apikeyPlugin.RequireAPIKey("users:read", "users:write"))
+
+// Require specific permissions
+app.Use(apikeyPlugin.RequirePermission("admin:users:read"))
+```
+
+## Route Summary
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api-keys` | Create API key |
+| `GET` | `/api-keys` | List API keys |
+| `GET` | `/api-keys/:id` | Get API key |
+| `PUT` | `/api-keys/:id` | Update API key |
+| `DELETE` | `/api-keys/:id` | Delete API key |
+| `POST` | `/api-keys/:id/rotate` | Rotate API key |
+| `POST` | `/api-keys/verify` | Verify API key |
+
+## Resources
+
+- [API Key Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/apikey)

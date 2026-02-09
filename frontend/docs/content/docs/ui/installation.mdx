@@ -1,0 +1,214 @@
+---
+title: Installation
+description: Install AuthSome UI packages for your React or Next.js project
+icon: Download
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Installation
+
+AuthSome UI is composed of modular packages. Install only the ones you need for your project.
+
+## Prerequisites
+
+- **Node.js**: Version 18 or later
+- **React**: Version 18 or 19
+- **TypeScript**: Recommended (all packages include type definitions)
+
+## Choose Your Setup
+
+<Tabs items={['Next.js (Recommended)', 'React SPA', 'Minimal']}>
+  <Tab value="Next.js (Recommended)">
+    For Next.js App Router applications with server-side auth:
+
+    ```bash
+    # Core + React + Next.js + AuthSome adapter
+    npm install @authsome/ui-core @authsome/ui-react @authsome/ui-next @authsome/adapter-authsome
+    ```
+
+    This gives you:
+    - Server components and server actions
+    - Edge-compatible middleware for route protection
+    - OAuth callback handling
+    - Client-side hooks and components
+  </Tab>
+  <Tab value="React SPA">
+    For client-side React applications (Vite, CRA, etc.):
+
+    ```bash
+    # Core + React + AuthSome adapter
+    npm install @authsome/ui-core @authsome/ui-react @authsome/adapter-authsome
+    ```
+
+    This gives you:
+    - React context provider with auth state
+    - All authentication hooks
+    - Route protection components
+  </Tab>
+  <Tab value="Minimal">
+    For framework-agnostic or custom setups:
+
+    ```bash
+    # Core only
+    npm install @authsome/ui-core @authsome/adapter-authsome
+    ```
+
+    This gives you:
+    - `AuthClient` with observable state
+    - Flow engine for auth flows
+    - Type definitions
+    - No React dependency
+  </Tab>
+</Tabs>
+
+## Package Managers
+
+<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
+  <Tab value="npm">
+    ```bash
+    npm install @authsome/ui-core @authsome/ui-react @authsome/adapter-authsome
+    ```
+  </Tab>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @authsome/ui-core @authsome/ui-react @authsome/adapter-authsome
+    ```
+  </Tab>
+  <Tab value="yarn">
+    ```bash
+    yarn add @authsome/ui-core @authsome/ui-react @authsome/adapter-authsome
+    ```
+  </Tab>
+  <Tab value="bun">
+    ```bash
+    bun add @authsome/ui-core @authsome/ui-react @authsome/adapter-authsome
+    ```
+  </Tab>
+</Tabs>
+
+## All Packages
+
+### Core Packages
+
+| Package | Version | Description |
+|---------|---------|-------------|
+| `@authsome/ui-core` | 0.1.9 | Framework-agnostic auth client, flow engine, types |
+| `@authsome/ui-react` | 0.1.15 | React provider, hooks, and route protection |
+| `@authsome/ui-react-headless` | 0.1.16 | Unstyled render-prop components |
+| `@authsome/ui-react-shadcn` | 0.1.4 | CLI for styled component scaffolding |
+| `@authsome/ui-next` | 0.1.16 | Next.js App Router integration |
+
+### Adapters
+
+| Package | Version | Backend |
+|---------|---------|---------|
+| `@authsome/adapter-authsome` | 0.1.13 | AuthSome Go backend |
+| `@authsome/adapter-clerk` | 0.1.12 | Clerk |
+| `@authsome/adapter-supabase` | 0.1.12 | Supabase Auth |
+| `@authsome/adapter-generic` | 0.1.12 | Any REST API |
+
+### Optional Packages
+
+<Tabs items={['Headless Components', 'shadcn CLI', 'Next.js']}>
+  <Tab value="Headless Components">
+    Add unstyled, accessible components with render props:
+
+    ```bash
+    npm install @authsome/ui-react-headless
+    ```
+
+    Requires `@authsome/ui-core` and `@authsome/ui-react` as peer dependencies.
+  </Tab>
+  <Tab value="shadcn CLI">
+    Scaffold styled auth components into your project:
+
+    ```bash
+    npm install -D @authsome/ui-react-shadcn
+    ```
+
+    Then use the CLI:
+
+    ```bash
+    npx authsome-ui init
+    npx authsome-ui add sign-in-form sign-up-form oauth-buttons
+    ```
+
+    Requires `@authsome/ui-core`, `@authsome/ui-react`, and `@authsome/ui-react-headless` as peer dependencies.
+  </Tab>
+  <Tab value="Next.js">
+    Add server-side auth, middleware, and server actions:
+
+    ```bash
+    npm install @authsome/ui-next
+    ```
+
+    Requires `@authsome/ui-core`, `@authsome/ui-react`, and `next` (v14+) as peer dependencies.
+  </Tab>
+</Tabs>
+
+## Choosing an Adapter
+
+You need exactly one adapter. Choose based on your backend:
+
+<Cards>
+  <Card
+    title="AuthSome Adapter"
+    description="For projects using the AuthSome Go backend. Full plugin support including OAuth, passkeys, 2FA, MFA, and device flow."
+    href="/docs/ui/adapters/authsome"
+  />
+  <Card
+    title="Clerk Adapter"
+    description="For projects using Clerk as their auth provider. Supports OAuth, magic links, 2FA, passkeys, and organizations."
+    href="/docs/ui/adapters/clerk"
+  />
+  <Card
+    title="Supabase Adapter"
+    description="For projects using Supabase Auth. Supports OAuth, magic links, 2FA/MFA, and phone auth."
+    href="/docs/ui/adapters/supabase"
+  />
+  <Card
+    title="Generic Adapter"
+    description="For custom backends. Configure endpoints, response transformers, and token handling to match your API."
+    href="/docs/ui/adapters/generic"
+  />
+</Cards>
+
+## Verify Installation
+
+Create a simple test to verify everything is working:
+
+```tsx
+import { AuthClient } from '@authsome/ui-core';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+await adapter.initialize({
+  apiUrl: 'https://auth.yourapp.com',
+});
+
+const client = new AuthClient({ provider: adapter });
+
+console.log('AuthSome UI initialized successfully!');
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Quick Start"
+    description="Build your first authenticated app in 5 minutes"
+    href="/docs/ui/quick-start"
+  />
+  <Card
+    title="Adapter Configuration"
+    description="Configure your chosen adapter with all available options"
+    href="/docs/ui/adapters"
+  />
+</Cards>
+
+<Callout type="warn">
+**Peer Dependencies**: Make sure peer dependencies are satisfied. If you see warnings about missing peers during install, add the listed packages to your project.
+</Callout>

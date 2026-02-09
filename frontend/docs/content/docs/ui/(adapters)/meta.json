@@ -1,0 +1,11 @@
+{
+  "title": "Adapters",
+  "description": "Backend adapter documentation",
+  "pages": [
+    "index",
+    "authsome",
+    "clerk",
+    "supabase",
+    "generic"
+  ]
+}

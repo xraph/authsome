@@ -1,0 +1,164 @@
+---
+title: Geographic Fencing
+description: Location-based access control with IP geolocation, VPN/proxy detection, and travel alerts
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Geofence Plugin
+
+The Geofence plugin provides location-based access control with IP geolocation, VPN/proxy/Tor detection, GPS-based authentication, corporate network detection, and travel alert management. It supports multiple geolocation providers with automatic fallback and provides comprehensive middleware for route-level enforcement.
+
+## Features
+
+- **Geographic Restrictions** - Country, region, and city-level access controls
+- **IP Geolocation** - MaxMind, IPAPI, IPInfo, IPGeolocation providers with fallback
+- **VPN/Proxy Detection** - Detect and block VPN, proxy, Tor, and datacenter IPs
+- **GPS Authentication** - Validate device GPS coordinates against geofences
+- **Travel Alerts** - Impossible travel detection with approval workflows
+- **Corporate Networks** - Whitelist corporate network ranges
+- **Location Events** - Track and audit location-based access events
+- **Trusted Locations** - User-defined trusted locations
+- **Rich Middleware** - Route-level enforcement with country, VPN, and proxy guards
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/geofence"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        geofence.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    geofence:
+      enabled: true
+
+      restrictions:
+        defaultAction: "allow"
+        strictMode: false
+        allowedCountries: []
+        blockedCountries: []
+        maxDistanceKm: 0
+
+      geolocation:
+        provider: "maxmind"
+        maxmindLicenseKey: "${MAXMIND_LICENSE_KEY}"
+        maxmindDatabasePath: "/data/GeoLite2-City.mmdb"
+        fallbackProvider: "ipapi"
+        cacheDuration: "1h"
+
+      detection:
+        detectVpn: true
+        blockVpn: false
+        detectProxy: true
+        blockProxy: false
+        detectTor: true
+        blockTor: false
+
+      gps:
+        enabled: false
+        requireGps: false
+        maxAccuracyMeters: 100
+        maxSpeedKmh: 900
+
+      travel:
+        enabled: true
+        minDistanceKm: 500
+        maxSpeedKmh: 900
+        notifyUser: true
+        notifyAdmin: true
+        requireApproval: false
+
+      notifications:
+        enabled: true
+        newLocationEnabled: true
+        suspiciousLoginEnabled: true
+        impossibleTravelEnabled: true
+```
+
+## API Reference
+
+### Geofence Rules
+
+```http
+POST   /geofence/rules                # Create rule
+GET    /geofence/rules                # List rules
+GET    /geofence/rules/:id            # Get rule
+PUT    /geofence/rules/:id            # Update rule
+DELETE /geofence/rules/:id            # Delete rule
+```
+
+### Location Validation
+
+```http
+POST   /geofence/check                # Check location against rules
+GET    /geofence/lookup/:ip            # Lookup IP geolocation
+```
+
+### Location Events
+
+```http
+GET    /geofence/events                # List location events
+GET    /geofence/events/:id            # Get event details
+```
+
+### Travel Alerts
+
+```http
+GET    /geofence/travel-alerts                # List travel alerts
+GET    /geofence/travel-alerts/:id            # Get alert details
+POST   /geofence/travel-alerts/:id/approve    # Approve alert
+POST   /geofence/travel-alerts/:id/deny       # Deny alert
+```
+
+## Middleware
+
+The plugin provides route-level middleware:
+
+```go
+// Check all geofence rules
+app.Use(geofencePlugin.CheckGeofence())
+
+// Require geofence check to pass
+app.Use(geofencePlugin.RequireLocation())
+
+// Require specific countries
+app.Use(geofencePlugin.RequireCountry("US", "CA", "GB"))
+
+// Block VPN connections
+app.Use(geofencePlugin.BlockVPN())
+
+// Block proxy connections
+app.Use(geofencePlugin.BlockProxy())
+
+// Block Tor exit nodes
+app.Use(geofencePlugin.BlockTor())
+```
+
+## Geolocation Providers
+
+| Provider | Config Key | Features |
+|---|---|---|
+| MaxMind GeoIP2 | `maxmind` | Local database, fast lookups |
+| ipapi.com | `ipapi` | Free tier available |
+| IPInfo.io | `ipinfo` | Accurate business data |
+| ipgeolocation.io | `ipgeolocation` | Comprehensive data |
+
+## Resources
+
+- [Geofence Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/geofence)

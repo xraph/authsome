@@ -1,0 +1,619 @@
+---
+title: Types Reference
+description: Core TypeScript type definitions for AuthSome UI
+icon: FileType
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Types Reference
+
+All types are exported from `@authsome/ui-core` and re-exported from the React packages.
+
+## Core Types
+
+### User
+
+```typescript
+interface User {
+  id: string;
+  email?: string;
+  username?: string;
+  phone?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: Date;
+  updatedAt?: Date;
+  organizationId?: string;
+  organizationRole?: string;
+  organizationMemberships?: OrganizationMembership[];
+}
+```
+
+### Session
+
+```typescript
+interface Session {
+  id: string;
+  userId: string;
+  token: string;
+  expiresAt?: Date;
+  createdAt?: Date;
+  metadata?: Record<string, unknown>;
+}
+```
+
+### SessionData
+
+```typescript
+interface SessionData {
+  user: User;
+  session: Session;
+  expiresAt: number;
+}
+```
+
+### AuthContext
+
+```typescript
+interface AuthContext {
+  state: AuthState;
+  user: User | null;
+  session: Session | null;
+  error: AuthError | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+```
+
+### AuthState
+
+```typescript
+enum AuthState {
+  AUTHENTICATED = 'authenticated',
+  UNAUTHENTICATED = 'unauthenticated',
+  LOADING = 'loading',
+  ERROR = 'error',
+}
+```
+
+### AuthError
+
+```typescript
+class AuthError extends Error {
+  readonly type: AuthErrorType;
+  readonly details?: Record<string, unknown>;
+  readonly code?: string | number;
+  readonly originalError?: unknown;
+
+  constructor(
+    message: string,
+    type?: AuthErrorType,
+    options?: {
+      details?: Record<string, unknown>;
+      code?: string | number;
+      originalError?: unknown;
+    }
+  );
+}
+```
+
+### AuthErrorType
+
+```typescript
+enum AuthErrorType {
+  INVALID_CREDENTIALS = 'invalid_credentials',
+  USER_NOT_FOUND = 'user_not_found',
+  USER_ALREADY_EXISTS = 'user_already_exists',
+  INVALID_TOKEN = 'invalid_token',
+  TOKEN_EXPIRED = 'token_expired',
+  NETWORK_ERROR = 'network_error',
+  VALIDATION_ERROR = 'validation_error',
+  MFA_REQUIRED = 'mfa_required',
+  EMAIL_NOT_VERIFIED = 'email_not_verified',
+  PHONE_NOT_VERIFIED = 'phone_not_verified',
+  RATE_LIMIT_EXCEEDED = 'rate_limit_exceeded',
+  UNKNOWN_ERROR = 'unknown_error',
+}
+```
+
+### AuthResponse
+
+```typescript
+interface AuthResponse {
+  user: User;
+  session: Session;
+  requiresTwoFactor?: boolean;
+  twoFactorMethods?: TwoFactorMethod[];
+}
+```
+
+---
+
+## Organization Types
+
+### Organization
+
+```typescript
+interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+  createdAt?: Date;
+  metadata?: Record<string, unknown>;
+}
+```
+
+### OrganizationMembership
+
+```typescript
+interface OrganizationMembership {
+  organization: Organization;
+  role: 'owner' | 'admin' | 'member';
+  permissions?: string[];
+}
+```
+
+---
+
+## OAuth Types
+
+### OAuthProvider
+
+```typescript
+enum OAuthProvider {
+  GOOGLE = 'google',
+  GITHUB = 'github',
+  FACEBOOK = 'facebook',
+  TWITTER = 'twitter',
+  MICROSOFT = 'microsoft',
+  APPLE = 'apple',
+  LINKEDIN = 'linkedin',
+  DISCORD = 'discord',
+}
+```
+
+### OAuthConfig
+
+```typescript
+interface OAuthConfig {
+  provider: OAuthProvider;
+  clientId: string;
+  redirectUri: string;
+  scope?: string[];
+  state?: string;
+}
+```
+
+---
+
+## Two-Factor Types
+
+### TwoFactorMethod
+
+```typescript
+enum TwoFactorMethod {
+  TOTP = 'totp',
+  SMS = 'sms',
+  EMAIL = 'email',
+  BACKUP_CODE = 'backup_code',
+}
+```
+
+### TwoFactorSetupResponse
+
+```typescript
+interface TwoFactorSetupResponse {
+  method: TwoFactorMethod;
+  secret?: string;
+  qrCode?: string;
+  backupCodes?: string[];
+}
+```
+
+---
+
+## Passkey Types
+
+### PasskeyCredential
+
+```typescript
+interface PasskeyCredential {
+  id: string;
+  name?: string;
+  createdAt?: Date;
+  lastUsedAt?: Date;
+}
+```
+
+---
+
+## Request Types
+
+### SignInRequest
+
+```typescript
+interface SignInRequest {
+  email?: string;
+  username?: string;
+  phone?: string;
+  password?: string;
+  remember?: boolean;
+}
+```
+
+### SignUpRequest
+
+```typescript
+interface SignUpRequest {
+  email?: string;
+  username?: string;
+  phone?: string;
+  password: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+```
+
+### OAuthSignInRequest
+
+```typescript
+interface OAuthSignInRequest {
+  provider: OAuthProvider;
+  redirectUri?: string;
+  state?: string;
+  scope?: string[];
+}
+```
+
+### OAuthCallbackRequest
+
+```typescript
+interface OAuthCallbackRequest {
+  provider: OAuthProvider;
+  code: string;
+  state?: string;
+}
+```
+
+### MagicLinkRequest / MagicLinkVerifyRequest
+
+```typescript
+interface MagicLinkRequest {
+  email: string;
+  redirectUri?: string;
+}
+
+interface MagicLinkVerifyRequest {
+  token: string;
+}
+```
+
+### PhoneAuthRequest / PhoneVerifyRequest
+
+```typescript
+interface PhoneAuthRequest {
+  phone: string;
+}
+
+interface PhoneVerifyRequest {
+  phone: string;
+  code: string;
+}
+```
+
+### TwoFactorSetupRequest / TwoFactorVerifyRequest
+
+```typescript
+interface TwoFactorSetupRequest {
+  method: TwoFactorMethod;
+  phone?: string;
+  email?: string;
+}
+
+interface TwoFactorVerifyRequest {
+  code: string;
+  method?: TwoFactorMethod;
+  remember?: boolean;
+}
+```
+
+### PasskeyRegisterRequest / PasskeyAuthRequest
+
+```typescript
+interface PasskeyRegisterRequest {
+  name?: string;
+}
+
+interface PasskeyAuthRequest {
+  credentialId?: string;
+}
+```
+
+### Password Requests
+
+```typescript
+interface PasswordResetRequest {
+  email: string;
+}
+
+interface PasswordResetConfirmRequest {
+  token: string;
+  password: string;
+}
+
+interface PasswordChangeRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+```
+
+### UpdateUserRequest
+
+```typescript
+interface UpdateUserRequest {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
+---
+
+## Device & Session Management
+
+### Device
+
+```typescript
+interface Device {
+  id: string;
+  userId: string;
+  name?: string;
+  type?: string;
+  lastUsedAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
+}
+```
+
+### SessionInfo
+
+```typescript
+interface SessionInfo extends Session {
+  device?: Device;
+  location?: string;
+}
+```
+
+### ListSessionsOptions
+
+```typescript
+interface ListSessionsOptions {
+  active?: boolean;
+  ipAddress?: string;
+  userAgent?: string;
+  createdFrom?: string | Date;
+  createdTo?: string | Date;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+```
+
+### ListSessionsResponse
+
+```typescript
+interface ListSessionsResponse {
+  sessions: SessionInfo[];
+  total: number;
+  page: number;
+  totalPages: number;
+  limit: number;
+}
+```
+
+---
+
+## MFA Types
+
+### MFAFactor
+
+```typescript
+interface MFAFactor {
+  id: string;
+  type: string;
+  name: string;
+  status: string;
+  createdAt: Date;
+  metadata?: Record<string, unknown>;
+}
+```
+
+### MFAChallengeResponse
+
+```typescript
+interface MFAChallengeResponse {
+  challengeId: string;
+  availableFactors: MFAFactor[];
+  expiresAt: Date;
+}
+```
+
+---
+
+## Device Flow Types (RFC 8628)
+
+```typescript
+interface DeviceFlowInitiateRequest {
+  clientId: string;
+  scope?: string;
+}
+
+interface DeviceFlowInitiateResponse {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete?: string;
+  expiresIn: number;
+  interval: number;
+}
+
+type DeviceTokenPollStatus =
+  | 'authorization_pending'
+  | 'slow_down'
+  | 'expired_token'
+  | 'access_denied';
+```
+
+---
+
+## Provider Interface
+
+### AuthProvider
+
+The interface that all adapters implement:
+
+```typescript
+interface AuthProvider {
+  readonly name: string;
+
+  // Lifecycle
+  initialize(config: ProviderConfig): Promise<void>;
+
+  // Core auth (required)
+  signIn(request: SignInRequest): Promise<AuthResponse>;
+  signUp(request: SignUpRequest): Promise<AuthResponse>;
+  signOut(): Promise<void>;
+  getCurrentUser(): Promise<User | null>;
+  getCurrentSession(): Promise<Session | null>;
+  getCurrentSessionData(): Promise<SessionData | null>;
+  refreshSession(): Promise<Session>;
+  updateUser(request: UpdateUserRequest): Promise<User>;
+  changePassword(request: PasswordChangeRequest): Promise<void>;
+  requestPasswordReset(request: PasswordResetRequest): Promise<void>;
+  confirmPasswordReset(request: PasswordResetConfirmRequest): Promise<void>;
+
+  // OAuth (optional)
+  oauthSignIn?(request: OAuthSignInRequest): Promise<string>;
+  oauthCallback?(request: OAuthCallbackRequest): Promise<AuthResponse>;
+  getOAuthProviders?(): Promise<OAuthProvider[]>;
+
+  // Magic link (optional)
+  sendMagicLink?(request: MagicLinkRequest): Promise<void>;
+  verifyMagicLink?(request: MagicLinkVerifyRequest): Promise<AuthResponse>;
+
+  // Phone auth (optional)
+  sendPhoneCode?(request: PhoneAuthRequest): Promise<void>;
+  verifyPhoneCode?(request: PhoneVerifyRequest): Promise<AuthResponse>;
+
+  // 2FA (optional)
+  setupTwoFactor?(request: TwoFactorSetupRequest): Promise<TwoFactorSetupResponse>;
+  verifyTwoFactor?(request: TwoFactorVerifyRequest): Promise<AuthResponse>;
+  disableTwoFactor?(): Promise<void>;
+  getTwoFactorStatus?(): Promise<TwoFactorMethod[]>;
+
+  // Passkeys (optional)
+  registerPasskey?(request: PasskeyRegisterRequest): Promise<PasskeyCredential>;
+  authenticatePasskey?(request: PasskeyAuthRequest): Promise<AuthResponse>;
+  listPasskeys?(): Promise<PasskeyCredential[]>;
+  deletePasskey?(credentialId: string): Promise<void>;
+
+  // Organizations (optional)
+  getOrganizations?(): Promise<Organization[]>;
+  getActiveOrganization?(): Promise<Organization | null>;
+  setActiveOrganization?(orgId: string): Promise<void>;
+  getOrganizationMemberships?(): Promise<OrganizationMembership[]>;
+
+  // Edge runtime (optional)
+  setContext?(context: RequestContext): void;
+  getCookies?(): CookieData[];
+  clearContext?(): void;
+
+  // Error normalization
+  normalizeError(error: unknown): AuthError;
+}
+```
+
+---
+
+## Dynamic Form Fields
+
+### FieldDefinition
+
+Used for dynamic signup forms where the backend controls field configuration:
+
+```typescript
+type FieldType =
+  | 'text' | 'email' | 'tel' | 'number'
+  | 'select' | 'checkbox' | 'textarea'
+  | 'date' | 'url' | 'password' | 'group';
+
+interface FieldDefinition {
+  name: string;
+  label: string;
+  type: FieldType;
+  placeholder?: string;
+  helperText?: string;
+  defaultValue?: string | number | boolean;
+  options?: Array<{ value: string; label: string }>;
+  validation?: FieldValidation;
+  fields?: FieldDefinition[]; // For 'group' type
+  order?: number;
+}
+
+interface FieldValidation {
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  pattern?: string;
+  errorMessage?: string;
+}
+```
+
+---
+
+## Edge Runtime Types
+
+### RequestContext
+
+```typescript
+interface RequestContext {
+  headers?: Record<string, string>;
+  cookies?: Record<string, string>;
+  url?: string;
+  method?: string;
+  [key: string]: unknown;
+}
+```
+
+### CookieData
+
+```typescript
+interface CookieData {
+  name: string;
+  value: string;
+  options?: {
+    path?: string;
+    domain?: string;
+    secure?: boolean;
+    httpOnly?: boolean;
+    sameSite?: 'strict' | 'lax' | 'none';
+    maxAge?: number;
+    expires?: Date;
+  };
+}
+```

@@ -1,0 +1,11 @@
+{
+  "title": "Packages",
+  "description": "AuthSome UI package documentation",
+  "pages": [
+    "core",
+    "react",
+    "react-headless",
+    "react-shadcn",
+    "next"
+  ]
+}

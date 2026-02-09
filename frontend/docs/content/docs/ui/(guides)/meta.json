@@ -1,0 +1,12 @@
+{
+  "title": "Guides",
+  "description": "Step-by-step guides for AuthSome UI",
+  "pages": [
+    "nextjs-app-router",
+    "authentication-flows",
+    "headless-components",
+    "server-side-auth",
+    "middleware",
+    "theming"
+  ]
+}

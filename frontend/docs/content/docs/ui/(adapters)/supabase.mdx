@@ -1,0 +1,125 @@
+---
+title: Supabase Adapter
+description: Adapter for Supabase Auth
+icon: Database
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Supabase Adapter
+
+Adapter for [Supabase Auth](https://supabase.com/docs/guides/auth). Wraps the `@supabase/supabase-js` client.
+
+## Installation
+
+```bash
+npm install @authsome/adapter-supabase
+```
+
+**Dependencies**: `@supabase/supabase-js` (^2.39.8)
+**Peer dependencies**: `@authsome/ui-core`
+
+## Configuration
+
+```typescript
+import { SupabaseAdapter } from '@authsome/adapter-supabase';
+
+const adapter = new SupabaseAdapter();
+
+adapter.initialize({
+  // Your Supabase project URL
+  apiUrl: 'https://your-project.supabase.co',
+  // Your Supabase anon key
+  apiKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6...',
+});
+```
+
+## Supported Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| Email/Password Sign In | Yes | |
+| Email/Password Sign Up | Yes | |
+| OAuth Providers | Yes | Configured in Supabase dashboard |
+| Magic Links | Yes | Uses Supabase OTP flow |
+| Phone Authentication | Yes | |
+| Two-Factor Authentication | Yes | |
+| MFA | Yes | Supabase MFA API |
+| Passkeys/WebAuthn | No | Not supported by Supabase |
+| Organizations | No | Not a Supabase feature |
+| Session Management | Yes | |
+
+<Callout type="warn">
+Supabase does not support passkeys/WebAuthn or multi-tenant organizations. If you need these features, consider the AuthSome or Clerk adapter.
+</Callout>
+
+## Usage
+
+```tsx
+import { AuthClient } from '@authsome/ui-core';
+import { AuthProvider } from '@authsome/ui-react';
+import { SupabaseAdapter } from '@authsome/adapter-supabase';
+
+const adapter = new SupabaseAdapter();
+adapter.initialize({
+  apiUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  apiKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+});
+
+const client = new AuthClient({ provider: adapter });
+
+function App() {
+  return (
+    <AuthProvider client={client}>
+      <MyApp />
+    </AuthProvider>
+  );
+}
+```
+
+## OAuth Setup
+
+OAuth providers are configured in your Supabase dashboard. The adapter automatically maps Supabase's OAuth flow to the AuthSome UI interface:
+
+```tsx
+import { useOAuth } from '@authsome/ui-react';
+
+function SocialLogin() {
+  const { providers, signIn } = useOAuth();
+
+  return (
+    <div>
+      {providers.map((provider) => (
+        <button key={provider} onClick={() => signIn(provider)}>
+          Sign in with {provider}
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+## Magic Links
+
+Supabase magic links use the OTP (one-time password) flow internally. The adapter translates this to the standard AuthSome magic link interface:
+
+```tsx
+import { useMagicLink } from '@authsome/ui-react';
+
+function MagicLinkLogin() {
+  const { sendMagicLink, isSent, isLoading } = useMagicLink();
+
+  if (isSent) return <p>Check your email for a login link!</p>;
+
+  return (
+    <button onClick={() => sendMagicLink('user@example.com')} disabled={isLoading}>
+      Send Magic Link
+    </button>
+  );
+}
+```
+
+## Migration from Supabase Auth Helpers
+
+If migrating from `@supabase/auth-helpers-react`, you can use the same Supabase project URL and anon key. The adapter uses `@supabase/supabase-js` directly.

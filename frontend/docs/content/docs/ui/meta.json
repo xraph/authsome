@@ -1,11 +1,21 @@
 {
   "title": "Authsome UI",
-  "description": "Authsome UI documentation",
+  "description": "Universal authentication UI components for React and Next.js",
   "icon": "Palette",
   "root": true,
+  "defaultOpen": true,
   "pages": [
+    "---Introduction---",
     "index",
-    "theming",
-    "test"
+    "installation",
+    "quick-start",
+    "---Packages---",
+    "...(packages)",
+    "---Adapters---",
+    "...(adapters)",
+    "---Guides---",
+    "...(guides)",
+    "---API Reference---",
+    "...(api)"
   ]
 }

@@ -1,0 +1,245 @@
+---
+title: AuthSome Adapter
+description: Official adapter for the AuthSome Go backend with full plugin support
+icon: Shield
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# AuthSome Adapter
+
+The official adapter for the [AuthSome Go backend](/docs/go). Uses the `@authsome/client` SDK under the hood and supports all AuthSome plugins.
+
+## Installation
+
+```bash
+npm install @authsome/adapter-authsome
+```
+
+**Dependencies**: `@authsome/client` (included automatically)
+**Peer dependencies**: `@authsome/ui-core`
+
+## Configuration
+
+```typescript
+interface AuthSomeAdapterConfig {
+  /** Base URL of your AuthSome API (required) */
+  apiUrl: string;
+
+  /** Base path prefix for all API routes (default: '') */
+  basePath?: string;
+
+  /** Publishable API key for client-side use (pk_*) */
+  publishableKey?: string;
+
+  /** Secret API key for server-side use (sk_*) -- never expose client-side */
+  secretKey?: string;
+
+  /**
+   * Authentication mode:
+   * - 'bearer': Bearer token auth (default)
+   * - 'cookies': Cookie-based auth
+   * - 'apiKey': API key auth
+   */
+  authMode?: 'bearer' | 'cookies' | 'apiKey';
+
+  /**
+   * Plugins to enable.
+   * Features requiring a plugin will throw if the plugin is not listed.
+   */
+  plugins?: string[];
+
+  /** Request timeout in ms (default: 30000) */
+  timeout?: number;
+}
+```
+
+## Basic Setup
+
+```typescript
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+import { AuthClient } from '@authsome/ui-core';
+
+const adapter = new AuthSomeAdapter();
+
+adapter.initialize({
+  apiUrl: 'https://auth.yourapp.com',
+  basePath: '/api/auth',
+  publishableKey: 'pk_live_...',
+  authMode: 'cookies',
+  plugins: ['social', 'twofa', 'passkey', 'magiclink', 'phone'],
+});
+
+const client = new AuthClient({ provider: adapter });
+```
+
+## Authentication Modes
+
+<Tabs items={['Cookie Mode', 'Bearer Mode', 'API Key Mode']}>
+  <Tab value="Cookie Mode">
+    Best for web applications with server-side rendering. The backend manages session cookies.
+
+    ```typescript
+    adapter.initialize({
+      apiUrl: 'https://auth.yourapp.com',
+      authMode: 'cookies',
+    });
+    ```
+  </Tab>
+  <Tab value="Bearer Mode">
+    Best for SPAs and mobile apps. Tokens are stored client-side and sent via `Authorization` header.
+
+    ```typescript
+    adapter.initialize({
+      apiUrl: 'https://auth.yourapp.com',
+      authMode: 'bearer',
+    });
+    ```
+  </Tab>
+  <Tab value="API Key Mode">
+    For server-to-server or machine-to-machine authentication.
+
+    ```typescript
+    adapter.initialize({
+      apiUrl: 'https://auth.yourapp.com',
+      authMode: 'apiKey',
+      secretKey: 'sk_live_...',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Plugin Support
+
+The adapter validates plugin requirements at runtime. Calling a method that requires a plugin not listed in your `plugins` array will throw a clear error.
+
+| Plugin ID | Features Enabled |
+|-----------|-----------------|
+| `social` | OAuth sign-in, OAuth callback, list OAuth providers |
+| `twofa` | 2FA setup, verify, disable, status, backup codes |
+| `passkey` | Passkey registration, authentication, listing, deletion |
+| `magiclink` | Send magic link, verify magic link |
+| `phone` | Send phone code, verify phone code, phone sign-in |
+| `mfa` | Advanced MFA factor enrollment, challenge, verification |
+| `emailverification` | Send verification email, verify email, resend |
+| `oidcprovider` | Device flow (initiate, verify, authorize, poll) |
+
+## Supported Features
+
+### Core Authentication
+
+```typescript
+// Sign in
+await adapter.signIn({ email: 'user@example.com', password: 'secret' });
+
+// Sign up
+await adapter.signUp({ email: 'user@example.com', password: 'secret', name: 'John' });
+
+// Sign out
+await adapter.signOut();
+
+// Get current user and session
+const user = await adapter.getCurrentUser();
+const session = await adapter.getCurrentSession();
+const sessionData = await adapter.getCurrentSessionData();
+```
+
+### OAuth (requires `social` plugin)
+
+```typescript
+// Get available providers
+const providers = await adapter.getOAuthProviders();
+
+// Start OAuth flow (returns redirect URL)
+const url = await adapter.oauthSignIn({
+  provider: 'google',
+  redirectUri: 'https://yourapp.com/auth/callback/google',
+});
+
+// Handle callback
+const authResponse = await adapter.oauthCallback({
+  provider: 'google',
+  code: 'auth_code_from_provider',
+  state: 'csrf_state',
+});
+```
+
+### Two-Factor Authentication (requires `twofa` plugin)
+
+```typescript
+// Setup
+const setup = await adapter.setupTwoFactor({ method: 'totp' });
+// setup.qrCode, setup.secret, setup.backupCodes
+
+// Verify
+await adapter.verifyTwoFactor({ code: '123456' });
+
+// Disable
+await adapter.disableTwoFactor();
+
+// Check status
+const methods = await adapter.getTwoFactorStatus();
+```
+
+### Dynamic Signup Fields
+
+The AuthSome backend can return dynamic form fields for sign-up:
+
+```typescript
+const fields = await adapter.getSignupFields();
+// Returns FieldDefinition[] with name, label, type, validation rules, etc.
+```
+
+This allows the backend to control what fields appear on the registration form without frontend changes.
+
+### Edge Runtime Context
+
+For server-side operations in Next.js middleware or server components:
+
+```typescript
+// Set context for a request
+adapter.setContext({
+  headers: { cookie: request.headers.get('cookie') || '' },
+  cookies: parsedCookies,
+  url: request.url,
+});
+
+// Perform auth operations
+const user = await adapter.getCurrentUser();
+
+// Get cookies the adapter wants to set
+const cookies = adapter.getCookies();
+const rawHeaders = adapter.getRawSetCookieHeaders();
+
+// Clean up
+adapter.clearContext();
+```
+
+### Direct Client Access
+
+Access the underlying `@authsome/client` SDK for advanced operations:
+
+```typescript
+const authsomeClient = adapter.getClient();
+const config = adapter.getConfig();
+
+// Access specific plugin instance
+const socialPlugin = adapter.getPlugin('social');
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="AuthSome Go Docs"
+    description="Set up the AuthSome Go backend"
+    href="/docs/go"
+  />
+  <Card
+    title="Next.js Integration"
+    description="Use the adapter with Next.js middleware and server components"
+    href="/docs/ui/guides/nextjs-app-router"
+  />
+</Cards>

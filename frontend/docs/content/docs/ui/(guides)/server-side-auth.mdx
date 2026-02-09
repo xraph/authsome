@@ -1,0 +1,261 @@
+---
+title: Server-Side Auth
+description: Working with server components, server actions, and API routes
+icon: Server
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Server-Side Authentication
+
+AuthSome UI provides first-class server-side support for Next.js. Access auth state in server components, run auth operations in server actions, and protect API routes.
+
+<Callout type="info">
+Server-side utilities are imported from `@authsome/ui-next/server`. This entry point throws an error if imported in a client component.
+</Callout>
+
+## Server Auth Client
+
+The `createServerAuthClient` is the main entry point for server-side auth:
+
+```typescript
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+
+const serverAuth = createServerAuthClient({ adapter });
+```
+
+## Server Components
+
+Read auth state in React Server Components without any client-side JavaScript:
+
+```tsx
+// app/profile/page.tsx (Server Component)
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+
+export default async function ProfilePage() {
+  const serverAuth = createServerAuthClient({ adapter });
+
+  // This runs on the server -- no client JS needed
+  const isAuthed = await serverAuth.isAuthenticated();
+  if (!isAuthed) redirect('/auth/signin');
+
+  const user = await serverAuth.getUser();
+
+  return (
+    <div>
+      <h1>Profile</h1>
+      <p>Name: {user?.name}</p>
+      <p>Email: {user?.email}</p>
+      <p>Verified: {user?.emailVerified ? 'Yes' : 'No'}</p>
+    </div>
+  );
+}
+```
+
+### requireAuth Helper
+
+Throws a redirect if not authenticated -- useful for pages that should never render for unauthenticated users:
+
+```tsx
+export default async function DashboardPage() {
+  const serverAuth = createServerAuthClient({ adapter });
+  const { user, session } = await serverAuth.requireAuth();
+
+  return <Dashboard user={user} session={session} />;
+}
+```
+
+## Server Actions
+
+Run auth operations from form submissions and client interactions:
+
+```typescript
+// app/actions.ts
+'use server';
+
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
+
+export async function signInAction(formData: FormData) {
+  const serverAuth = createServerAuthClient({ adapter });
+
+  const result = await serverAuth.signIn({
+    email: formData.get('email') as string,
+    password: formData.get('password') as string,
+  });
+
+  if (!result.success) {
+    return { error: result.error };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function signOutAction() {
+  const serverAuth = createServerAuthClient({ adapter });
+  await serverAuth.signOut();
+  revalidatePath('/');
+}
+
+export async function updateProfileAction(formData: FormData) {
+  const serverAuth = createServerAuthClient({ adapter });
+  const { user } = await serverAuth.requireAuth();
+
+  await serverAuth.adapter.updateUser({
+    name: formData.get('name') as string,
+  });
+
+  revalidatePath('/profile');
+}
+```
+
+### Using Server Actions in Components
+
+```tsx
+// app/profile/edit-form.tsx
+'use client';
+
+import { updateProfileAction } from '@/app/actions';
+import { useUser } from '@authsome/ui-react';
+
+export function EditProfileForm() {
+  const user = useUser();
+
+  return (
+    <form action={updateProfileAction}>
+      <input name="name" defaultValue={user?.name || ''} />
+      <button type="submit">Update Profile</button>
+    </form>
+  );
+}
+```
+
+## API Routes
+
+Protect Next.js API routes:
+
+```typescript
+// app/api/user/route.ts
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  const serverAuth = createServerAuthClient({ adapter });
+
+  try {
+    const { user } = await serverAuth.requireAuth();
+    return NextResponse.json(user);
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const serverAuth = createServerAuthClient({ adapter });
+
+  try {
+    const { user } = await serverAuth.requireAuth();
+    const body = await request.json();
+
+    const updatedUser = await serverAuth.adapter.updateUser(body);
+    return NextResponse.json(updatedUser);
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+}
+```
+
+## Session Strategies
+
+The server auth client supports two session strategies:
+
+<Tabs items={['Adapter Strategy', 'Cookie Strategy']}>
+  <Tab value="Adapter Strategy">
+    The adapter manages session cookies directly. This is the default and recommended approach.
+
+    ```typescript
+    const serverAuth = createServerAuthClient({
+      adapter,
+      session: {
+        strategy: 'adapter',
+      },
+    });
+    ```
+
+    The adapter reads session data from cookies it controls and validates with the backend.
+  </Tab>
+  <Tab value="Cookie Strategy">
+    Uses `iron-session` to store encrypted session data in a local cookie. Useful when your adapter does not manage cookies.
+
+    ```typescript
+    const serverAuth = createServerAuthClient({
+      adapter,
+      session: {
+        strategy: 'cookie',
+        cookieName: 'authsome.session',
+        password: process.env.SESSION_SECRET!, // Min 32 chars
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Cookie Utilities
+
+Low-level cookie helpers for advanced use cases:
+
+```typescript
+import {
+  getSessionCookie,
+  setSessionCookie,
+  deleteSessionCookie,
+  isSessionExpired,
+} from '@authsome/ui-next/server';
+```
+
+## Pre-Built Server Actions
+
+The package includes ready-to-use server actions. Initialize them once:
+
+```typescript
+// lib/server-auth.ts
+import { initializeServerActions } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+
+initializeServerActions({ adapter });
+```
+
+Then import and use individual actions:
+
+```typescript
+import {
+  signInAction,
+  signUpAction,
+  signOutAction,
+  sendMagicLinkAction,
+  verifyTwoFactorAction,
+  requestPasswordResetAction,
+  confirmPasswordResetAction,
+  sendVerificationEmailAction,
+  getOAuthProvidersAction,
+} from '@authsome/ui-next/server';
+```
+
+Each returns an `ActionResult`:
+
+```typescript
+interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  redirect?: string;
+}
+```

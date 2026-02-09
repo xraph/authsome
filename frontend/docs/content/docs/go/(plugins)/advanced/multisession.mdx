@@ -1,0 +1,184 @@
+---
+title: Multi-Session
+description: Multiple concurrent session management with device tracking and statistics
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Multi-Session Plugin
+
+The Multi-Session plugin enables users to manage multiple concurrent sessions across devices. It provides session listing, active session switching, selective revocation, and session statistics with device tracking.
+
+## Features
+
+- **Session Listing** - List all active sessions for a user
+- **Active Session Switching** - Set a specific session as the active one
+- **Selective Revocation** - Revoke individual, all, or all-other sessions
+- **Session Refresh** - Refresh the current session token
+- **Session Statistics** - View session counts and device breakdown
+- **Device Tracking** - Track devices and platforms per session
+- **Cross-Platform Support** - Support sessions across different platforms
+- **Dashboard Extension** - UI integration for session management
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/multisession"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        multisession.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['YAML', 'Programmatic']}>
+  <Tab value="YAML">
+    ```yaml
+    auth:
+      plugins:
+        multisession:
+          maxSessionsPerUser: 10
+          enableDeviceTracking: true
+          sessionExpiryHours: 720
+          allowCrossPlatform: true
+    ```
+  </Tab>
+  <Tab value="Programmatic">
+    ```go
+    multisession.NewPlugin(
+        multisession.WithMaxSessionsPerUser(10),
+        multisession.WithEnableDeviceTracking(true),
+        multisession.WithSessionExpiryHours(720),
+        multisession.WithAllowCrossPlatform(true),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `maxSessionsPerUser` | int | `10` | Maximum concurrent sessions per user |
+| `enableDeviceTracking` | bool | `true` | Track device info per session |
+| `sessionExpiryHours` | int | `720` | Session expiry in hours (30 days) |
+| `allowCrossPlatform` | bool | `true` | Allow sessions across platforms |
+
+## API Reference
+
+### List Sessions
+
+List all active sessions for the authenticated user.
+
+```bash
+curl https://auth.yourdomain.com/multi-session/list \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+**Response (200):**
+```json
+{
+  "sessions": [
+    {
+      "id": "sess_abc123",
+      "device": "Chrome on macOS",
+      "ipAddress": "192.168.1.1",
+      "lastActive": "2025-01-15T10:30:00Z",
+      "createdAt": "2025-01-10T08:00:00Z",
+      "isCurrent": true
+    }
+  ]
+}
+```
+
+### Set Active Session
+
+Switch the active session to a different one.
+
+```bash
+curl -X POST https://auth.yourdomain.com/multi-session/set-active \
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "sess_abc123"}'
+```
+
+### Get Current Session
+
+```bash
+curl https://auth.yourdomain.com/multi-session/current \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Get Session by ID
+
+```bash
+curl https://auth.yourdomain.com/multi-session/{session_id} \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Delete Session
+
+```bash
+curl -X POST https://auth.yourdomain.com/multi-session/delete \
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "sess_abc123"}'
+```
+
+### Revoke All Sessions
+
+```bash
+curl -X POST https://auth.yourdomain.com/multi-session/revoke-all \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Revoke Other Sessions
+
+Keep the current session and revoke all others.
+
+```bash
+curl -X POST https://auth.yourdomain.com/multi-session/revoke-others \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Refresh Session
+
+```bash
+curl -X POST https://auth.yourdomain.com/multi-session/refresh \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Session Statistics
+
+```bash
+curl https://auth.yourdomain.com/multi-session/stats \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+## Route Summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/multi-session/list` | List all sessions |
+| `POST` | `/multi-session/set-active` | Set active session |
+| `POST` | `/multi-session/delete` | Delete a session |
+| `GET` | `/multi-session/current` | Get current session |
+| `GET` | `/multi-session/:id` | Get session by ID |
+| `POST` | `/multi-session/revoke-all` | Revoke all sessions |
+| `POST` | `/multi-session/revoke-others` | Revoke other sessions |
+| `POST` | `/multi-session/refresh` | Refresh session |
+| `GET` | `/multi-session/stats` | Session statistics |
+
+## Resources
+
+- [Multi-Session Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/multisession)

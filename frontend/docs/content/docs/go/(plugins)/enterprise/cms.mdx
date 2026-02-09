@@ -1,0 +1,164 @@
+---
+title: CMS
+description: Headless CMS with custom content types, dynamic fields, revision tracking, and draft/publish workflow
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# CMS Plugin
+
+The CMS plugin provides a headless content management system with custom content types, dynamic field definitions, draft/publish workflow, revision tracking, scheduled publishing, full-text search, content relations, and a powerful query language.
+
+<Callout type="info">
+The CMS plugin requires the Multi-App plugin for app-scoped content management.
+</Callout>
+
+## Features
+
+- **Custom Content Types** - Define content types with dynamic field schemas
+- **Dynamic Fields** - Rich field types with drag-and-drop reordering
+- **Draft/Publish Workflow** - Draft, published, and archived content states
+- **Revision History** - Track changes with version comparison and restore
+- **Scheduled Publishing** - Publish content at a future date/time
+- **Full-Text Search** - PostgreSQL-powered search with highlighting
+- **Content Relations** - Many-to-many content relationships
+- **Bulk Operations** - Bulk publish, unpublish, and delete
+- **Query Language** - Advanced filtering and querying of entries
+- **Component Schemas** - Reusable component definitions
+- **Dashboard Extension** - UI for content management
+- **RBAC Roles** - cms_admin, cms_editor, cms_author, cms_viewer
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/cms"
+    "github.com/xraph/authsome/plugins/multiapp"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        multiapp.NewPlugin(),
+        cms.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    cms:
+      features:
+        enableRevisions: true
+        enableDrafts: true
+        enableScheduling: true
+        enableSearch: false
+        enableRelations: true
+        enableLocalization: false
+        enableSoftDelete: true
+
+      limits:
+        maxContentTypes: 100
+        maxFieldsPerType: 50
+        maxEntriesPerType: 0  # unlimited
+        maxEntryDataSize: 1048576  # 1MB
+        maxRelationsPerEntry: 100
+
+      revisions:
+        maxRevisionsPerEntry: 50
+        retentionDays: 90
+        autoCleanup: true
+
+      search:
+        language: "english"
+        minSearchLength: 2
+        maxSearchResults: 100
+        enableHighlighting: true
+
+      api:
+        enablePublicAPI: false
+        defaultPageSize: 20
+        maxPageSize: 100
+```
+
+## API Reference
+
+### Content Types
+
+```http
+GET    /cms/types                     # List content types
+POST   /cms/types                     # Create content type
+GET    /cms/types/:slug               # Get content type
+PUT    /cms/types/:slug               # Update content type
+DELETE /cms/types/:slug               # Delete content type
+```
+
+### Fields
+
+```http
+GET    /cms/types/:slug/fields                   # List fields
+POST   /cms/types/:slug/fields                   # Create field
+GET    /cms/types/:slug/fields/:fieldSlug        # Get field
+PUT    /cms/types/:slug/fields/:fieldSlug        # Update field
+DELETE /cms/types/:slug/fields/:fieldSlug        # Delete field
+POST   /cms/types/:slug/fields/reorder           # Reorder fields
+```
+
+### Content Entries
+
+```http
+GET    /cms/:typeSlug                            # List entries
+POST   /cms/:typeSlug                            # Create entry
+POST   /cms/:typeSlug/query                      # Query entries
+GET    /cms/:typeSlug/stats                      # Entry statistics
+GET    /cms/:typeSlug/:entryId                   # Get entry
+PUT    /cms/:typeSlug/:entryId                   # Update entry
+DELETE /cms/:typeSlug/:entryId                   # Delete entry
+POST   /cms/:typeSlug/:entryId/publish           # Publish entry
+POST   /cms/:typeSlug/:entryId/unpublish         # Unpublish entry
+POST   /cms/:typeSlug/:entryId/archive           # Archive entry
+```
+
+### Bulk Operations
+
+```http
+POST   /cms/:typeSlug/bulk/publish               # Bulk publish
+POST   /cms/:typeSlug/bulk/unpublish             # Bulk unpublish
+POST   /cms/:typeSlug/bulk/delete                # Bulk delete
+```
+
+### Revisions
+
+```http
+GET    /cms/:typeSlug/:entryId/revisions                     # List revisions
+GET    /cms/:typeSlug/:entryId/revisions/compare             # Compare revisions
+GET    /cms/:typeSlug/:entryId/revisions/:version            # Get revision
+POST   /cms/:typeSlug/:entryId/revisions/:version/restore    # Restore revision
+```
+
+### Utilities
+
+```http
+GET    /cms/ping                      # Health check
+GET    /cms/field-types               # List available field types
+```
+
+## RBAC Roles
+
+| Role | Description |
+|---|---|
+| `cms_admin` | Full CMS access including type management |
+| `cms_editor` | Edit and publish all content |
+| `cms_author` | Create and edit own content |
+| `cms_viewer` | Read-only access to content |
+
+## Resources
+
+- [CMS Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/cms)

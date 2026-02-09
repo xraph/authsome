@@ -1,0 +1,228 @@
+---
+title: Notification
+description: Email and SMS notification template management and delivery with multiple providers
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Notification Plugin
+
+The Notification plugin provides comprehensive email and SMS notification management. It includes template CRUD with preview/rendering, multi-provider support (SMTP, SendGrid, Resend, MailerSend, Postmark, Twilio), async delivery with retry, auto-send hooks for lifecycle events, and webhook integration for delivery status.
+
+## Features
+
+- **Template Management** - Create, update, delete, preview, and render notification templates
+- **Multi-Provider Support** - SMTP, SendGrid, Resend, MailerSend, Postmark (email); Twilio (SMS)
+- **Async Delivery** - Worker pool with configurable queue size and retry logic
+- **Auto-Send Hooks** - Automatic notifications for auth, organization, session, and account events
+- **Template Defaults** - Auto-populate default templates for new apps
+- **Template Reset** - Reset individual or all templates to defaults
+- **Webhook Integration** - Provider webhooks for delivery status tracking
+- **Rate Limiting** - Per-notification-type rate limits
+- **App Overrides** - Per-app template customization
+- **Dashboard Extension** - UI integration for template management
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/notification"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        notification.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    notification:
+      addDefaultTemplates: true
+      defaultLanguage: "en"
+      allowAppOverrides: true
+      appName: "MyApp"
+      retryAttempts: 3
+      retryDelay: "5s"
+
+      providers:
+        email:
+          provider: "smtp"
+          from: "noreply@example.com"
+          fromName: "MyApp"
+          replyTo: "support@example.com"
+          config:
+            host: "smtp.example.com"
+            port: 587
+            username: "${SMTP_USER}"
+            password: "${SMTP_PASS}"
+        sms:
+          provider: "twilio"
+          from: "+15551234567"
+          config:
+            accountSid: "${TWILIO_SID}"
+            authToken: "${TWILIO_TOKEN}"
+
+      autoSend:
+        auth:
+          welcome: true
+          verificationEmail: true
+          magicLink: true
+          emailOtp: true
+          mfaCode: true
+          passwordReset: true
+        organization:
+          invite: true
+          memberAdded: true
+          memberRemoved: true
+          roleChanged: true
+        session:
+          newDevice: true
+          newLocation: true
+          suspiciousLogin: true
+        account:
+          emailChanged: true
+          passwordChanged: true
+
+      async:
+        enabled: true
+        workerPoolSize: 5
+        queueSize: 1000
+        retryEnabled: true
+        maxRetries: 3
+```
+
+## API Reference
+
+### Template Management
+
+#### Create Template
+
+```bash
+curl -X POST https://auth.yourdomain.com/templates \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "custom-welcome",
+    "type": "email",
+    "subject": "Welcome to {{appName}}!",
+    "body": "<h1>Welcome, {{userName}}!</h1>",
+    "language": "en"
+  }'
+```
+
+#### List Templates
+
+```bash
+curl https://auth.yourdomain.com/templates \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+#### Preview Template
+
+```bash
+curl -X POST https://auth.yourdomain.com/templates/{id}/preview \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "variables": {
+      "userName": "John Doe",
+      "appName": "MyApp"
+    }
+  }'
+```
+
+#### Reset Template to Default
+
+```bash
+curl -X POST https://auth.yourdomain.com/templates/{id}/reset \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Sending Notifications
+
+#### Send Notification
+
+```bash
+curl -X POST https://auth.yourdomain.com/notifications/send \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "template_123",
+    "to": "user@example.com",
+    "variables": {
+      "userName": "John Doe"
+    }
+  }'
+```
+
+#### List Sent Notifications
+
+```bash
+curl https://auth.yourdomain.com/notifications \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+#### Resend Notification
+
+```bash
+curl -X POST https://auth.yourdomain.com/notifications/{id}/resend \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Provider Webhooks
+
+Handle delivery status webhooks from email/SMS providers.
+
+```http
+POST /notifications/webhook/:provider
+```
+
+## Route Summary
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/templates` | Create template |
+| `GET` | `/templates` | List templates |
+| `GET` | `/templates/:id` | Get template |
+| `PUT` | `/templates/:id` | Update template |
+| `DELETE` | `/templates/:id` | Delete template |
+| `POST` | `/templates/:id/reset` | Reset to default |
+| `POST` | `/templates/reset-all` | Reset all templates |
+| `GET` | `/templates/defaults` | Get default metadata |
+| `POST` | `/templates/:id/preview` | Preview template |
+| `POST` | `/templates/render` | Render template |
+| `POST` | `/notifications/send` | Send notification |
+| `GET` | `/notifications` | List notifications |
+| `GET` | `/notifications/:id` | Get notification |
+| `POST` | `/notifications/:id/resend` | Resend notification |
+| `POST` | `/notifications/webhook/:provider` | Provider webhook |
+
+## Supported Providers
+
+### Email Providers
+| Provider | Config Key |
+|---|---|
+| SMTP | `smtp` |
+| SendGrid | `sendgrid` |
+| Resend | `resend` |
+| MailerSend | `mailersend` |
+| Postmark | `postmark` |
+
+### SMS Providers
+| Provider | Config Key |
+|---|---|
+| Twilio | `twilio` |
+
+## Resources
+
+- [Notification Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/notification)

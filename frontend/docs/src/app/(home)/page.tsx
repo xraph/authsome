@@ -1,12 +1,21 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Shield,
   Zap,
-  Users,
-  Code,
-  Globe,
+  Shield,
+  Key,
+  Fingerprint,
+  Smartphone,
+  Mail,
   Lock,
+  Building2,
+  Globe,
+  Scan,
+  KeyRound,
+  BadgeCheck,
+  ShieldCheck,
+  GitBranch,
+  Server,
 } from "lucide-react";
 import {
   Card,
@@ -17,48 +26,40 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { ReactNode } from "react";
 import { LineShadowText } from "@/components/ui/line-shadow-text";
 import FeatureHighlightSection from "@/components/feature-highlight-section";
-import HeroSection2 from "@/components/hero-section";
-import ConceptsHighlightSection from "@/components/concepts-highlight-section";
 import SpecialHighlightSection from "@/components/special-highlight-section";
 import FooterSection from "@/components/footer-section";
-import { SvgMountainBackground, SvgLiquidBackground, SvgWaveBackground, SvgGridDotsBackground } from "@/components/misc-components";
-// import { useTheme } from "next-themes";
 
 /**
  * Hero Section Component
- * Modern hero with gradient background and call-to-action
+ * Modern hero with gradient background, tagline, and code preview
  */
 function HeroSection() {
-  // const theme = useTheme()
-  // const shadowColor = theme.resolvedTheme === "dark" ? "white" : "black"
   return (
-    <section className="relative container overflow-hidden  py-24 sm:py-32">
-      <SvgWaveBackground />
-      <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:60px_60px]" />
-      <div className="relative mx-auto max-w-7xl px-6 lg:px-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="mx-auto max-w-2xl text-left">
+    <section className="relative container overflow-hidden py-24 sm:py-32">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_-20%,rgba(120,119,198,0.15),transparent)]" />
+      <div className="relative mx-auto max-w-7xl px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div className="max-w-2xl text-left">
           <Badge variant="outline" className="mb-4">
             <Zap className="mr-1 h-3 w-3" />
-            Enterprise-Grade Authentication
+            Enterprise-Grade Authentication for Go
           </Badge>
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
             Auth
-            <LineShadowText className="italic" shadowColor='black'>
+            <LineShadowText className="italic" shadowColor="var(--color-foreground)">
               some
             </LineShadowText>
           </h1>
           <p className="mt-6 text-lg leading-8 text-muted-foreground">
-            A comprehensive, pluggable authentication framework for Go
-            applications. Built for enterprise with multi-tenancy, RBAC, and 12+
-            authentication methods.
+            A comprehensive, pluggable authentication framework for Go. 
+            Multi-tenancy, RBAC, 30+ plugins, and enterprise security -- built 
+            on the Forge framework so you can ship auth in minutes, not months.
           </p>
           <div className="mt-10 flex items-center justify-start gap-x-6">
             <Link
-              href="/portal"
+              href="/docs/go/getting-started"
               className="rounded-md bg-brand px-3.5 py-2.5 text-sm font-semibold text-brand-foreground shadow-sm hover:bg-brand/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Get Started
@@ -68,138 +69,36 @@ function HeroSection() {
               href="/docs/go/examples"
               className="text-sm font-semibold leading-6 text-foreground hover:text-brand"
             >
-              View Examples <span aria-hidden="true">→</span>
+              View Examples <span aria-hidden="true">&rarr;</span>
             </Link>
           </div>
         </div>
 
-        <div className="mx-auto max-w-2xl text-center relative">
-          <SvgGridDotsBackground dotColor="#8B5CF6" spacing={30} />
-          <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:60px_60px]" />
-          
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/**
- * Feature Cards Section with Aceternity UI Bento Grid
- * Showcases key capabilities of AuthSome with glassmorphism effects and hover animations
- */
-function FeaturesSection() {
-  const features = [
-    {
-      icon: Shield,
-      title: "Enterprise Security",
-      description:
-        "Built-in security features including rate limiting, device tracking, and audit logging with comprehensive threat detection.",
-      className: "md:col-span-2",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 dark:from-blue-500/20 dark:via-purple-500/20 dark:to-pink-500/20" />
-      ),
-    },
-    {
-      icon: Users,
-      title: "Multi-Tenancy",
-      description:
-        "Organization-scoped configurations and user management with seamless tenant isolation.",
-      className: "md:col-span-1",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-green-500/10 via-emerald-500/10 to-teal-500/10 dark:from-green-500/20 dark:via-emerald-500/20 dark:to-teal-500/20" />
-      ),
-    },
-    {
-      icon: Code,
-      title: "Plugin Architecture",
-      description:
-        "12+ authentication methods via extensible plugin system. Add custom auth flows easily.",
-      className: "md:col-span-1",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-orange-500/10 via-red-500/10 to-pink-500/10 dark:from-orange-500/20 dark:via-red-500/20 dark:to-pink-500/20" />
-      ),
-    },
-    {
-      icon: Globe,
-      title: "Framework Agnostic",
-      description:
-        "Mounts on Forge framework but designed to work with any Go web framework.",
-      className: "md:col-span-2",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-cyan-500/10 via-blue-500/10 to-indigo-500/10 dark:from-cyan-500/20 dark:via-blue-500/20 dark:to-indigo-500/20" />
-      ),
-    },
-    {
-      icon: Lock,
-      title: "RBAC & Policies",
-      description:
-        "Role-based access control with policy language for fine-grained permissions.",
-      className: "md:col-span-1",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/20 dark:to-fuchsia-500/20" />
-      ),
-    },
-    {
-      icon: Zap,
-      title: "High Performance",
-      description:
-        "Session caching with Redis, connection pooling, and optimized database queries for lightning-fast responses.",
-      className: "md:col-span-2",
-      header: (
-        <div className="flex h-full min-h-[6rem] w-full flex-1 rounded-xl bg-gradient-to-br from-yellow-500/10 via-orange-500/10 to-red-500/10 dark:from-yellow-500/20 dark:via-orange-500/20 dark:to-red-500/20" />
-      ),
-    },
-  ];
-
-  return (
-    <section className="py-24 sm:py-32 relative">
-      {/* Background with subtle pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background via-background/95 to-muted/20" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
-
-      <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-            Everything you need for authentication
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
-            From simple username/password to enterprise SSO, AuthSome provides
-            all the tools you need.
-          </p>
-        </div>
-
-        {/* Aceternity UI Bento Grid */}
-        <div className="mx-auto mt-16 grid max-w-7xl grid-cols-1 gap-4 sm:mt-20 md:auto-rows-[18rem] md:grid-cols-3">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className={cn(
-                "group/bento row-span-1 flex flex-col justify-between space-y-4 rounded-xl border border-transparent bg-white p-4 shadow-input transition duration-200 hover:shadow-xl dark:border-white/[0.2] dark:bg-black dark:shadow-none",
-                feature.className
-              )}
-            >
-              {/* Header with gradient background */}
-              {feature.header}
-
-              {/* Content with hover animation */}
-              <div className="transition duration-200 group-hover/bento:translate-x-2">
-                {/* Icon */}
-                <div className="mb-2">
-                  <feature.icon className="h-4 w-4 text-neutral-500 dark:text-neutral-400" />
-                </div>
-
-                {/* Title */}
-                <div className="mb-2 mt-2 font-sans font-bold text-neutral-600 dark:text-neutral-200">
-                  {feature.title}
-                </div>
-
-                {/* Description */}
-                <div className="font-sans text-xs font-normal text-neutral-600 dark:text-neutral-300">
-                  {feature.description}
-                </div>
-              </div>
+        {/* Code preview */}
+        <div className="hidden lg:block">
+          <div className="rounded-xl border border-border bg-muted/50 backdrop-blur-sm shadow-lg overflow-hidden">
+            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-border bg-muted/80">
+              <div className="h-2.5 w-2.5 rounded-full bg-red-400/60" />
+              <div className="h-2.5 w-2.5 rounded-full bg-yellow-400/60" />
+              <div className="h-2.5 w-2.5 rounded-full bg-green-400/60" />
+              <span className="ml-2 text-xs text-muted-foreground font-mono">main.go</span>
             </div>
-          ))}
+            <pre className="p-5 text-sm leading-relaxed font-mono overflow-x-auto">
+              <code>
+                <span className="text-muted-foreground">{"// Initialize AuthSome with plugins"}</span>{"\n"}
+                <span className="text-blue-500 dark:text-blue-400">auth</span>{" := authsome."}<span className="text-purple-600 dark:text-purple-400">New</span>{"(\n"}
+                {"  authsome."}<span className="text-purple-600 dark:text-purple-400">WithPlugins</span>{"(\n"}
+                {"    social."}<span className="text-purple-600 dark:text-purple-400">New</span>{"(),\n"}
+                {"    passkey."}<span className="text-purple-600 dark:text-purple-400">New</span>{"(),\n"}
+                {"    mfa."}<span className="text-purple-600 dark:text-purple-400">New</span>{"(),\n"}
+                {"    organization."}<span className="text-purple-600 dark:text-purple-400">New</span>{"(),\n"}
+                {"  ),\n"}
+                {")\n\n"}
+                <span className="text-muted-foreground">{"// Mount on your Forge app"}</span>{"\n"}
+                {"app."}<span className="text-purple-600 dark:text-purple-400">Mount</span>{"("}<span className="text-green-600 dark:text-green-400">{'"'}/auth{'"'}</span>{", auth)"}
+              </code>
+            </pre>
+          </div>
         </div>
       </div>
     </section>
@@ -212,9 +111,9 @@ function FeaturesSection() {
  */
 function QuickStartSection() {
   return (
-    <section className="relative container overflow-hidden  py-24 sm:py-32">
-      <SvgLiquidBackground />
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+    <section className="relative container overflow-hidden py-24 sm:py-32">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_100%,rgba(120,119,198,0.08),transparent)]" />
+      <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Get started in minutes
@@ -237,7 +136,7 @@ function QuickStartSection() {
               </CardHeader>
               <CardContent>
                 <div className="rounded-lg bg-muted p-4">
-                  <code className="text-sm">
+                  <code className="text-sm font-mono">
                     go get github.com/xraph/authsome
                   </code>
                 </div>
@@ -249,15 +148,13 @@ function QuickStartSection() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground">
                     2
                   </span>
-                  Mount to Forge
+                  Configure and Mount
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="rounded-lg bg-muted p-4">
-                  <code className="text-sm">
-                    auth := authsome.New(config)
-                    <br />
-                    app.Mount("/auth", auth)
+                  <code className="text-sm font-mono whitespace-pre">
+                    {"auth := authsome.New(\n  authsome.WithPlugins(...),\n)\napp.Mount(\"/auth\", auth)"}
                   </code>
                 </div>
               </CardContent>
@@ -279,50 +176,68 @@ function QuickStartSection() {
 }
 
 /**
- * Navigation Cards Section
- * Main documentation sections with visual cards
+ * Auth Methods Showcase Section
+ * Displays the breadth of supported authentication methods
  */
-function NavigationSection() {
-  const sections = [
+function AuthMethodsSection() {
+  const categories = [
     {
-      title: "Getting Started",
-      description:
-        "Installation, configuration, and your first authentication flow.",
-      href: "/docs/go/getting-started",
-      icon: "🚀",
+      title: "Password-Based",
+      methods: [
+        { label: "Email / Password", icon: Mail },
+        { label: "Username / Password", icon: Key },
+      ],
     },
     {
-      title: "Core Concepts",
-      description:
-        "Understanding users, sessions, organizations, and multi-tenancy.",
-      href: "/docs/go/concepts",
-      icon: "🧠",
+      title: "Passwordless",
+      methods: [
+        { label: "Magic Link", icon: Mail },
+        { label: "Passkey / WebAuthn", icon: Fingerprint },
+        { label: "Email OTP", icon: KeyRound },
+        { label: "Phone / SMS", icon: Smartphone },
+      ],
     },
     {
-      title: "Plugins",
-      description:
-        "Explore 12+ authentication methods and how to create custom plugins.",
-      href: "/docs/go/plugins",
-      icon: "🔌",
+      title: "Social OAuth",
+      methods: [
+        { label: "Google", icon: Globe },
+        { label: "GitHub", icon: GitBranch },
+        { label: "Apple", icon: Globe },
+        { label: "Microsoft", icon: Building2 },
+        { label: "Discord", icon: Globe },
+        { label: "10+ more", icon: Globe },
+      ],
     },
     {
-      title: "API Reference",
-      description: "Complete API documentation for all services and handlers.",
-      href: "/docs/go/api",
-      icon: "📚",
+      title: "Multi-Factor",
+      methods: [
+        { label: "TOTP", icon: Smartphone },
+        { label: "SMS Codes", icon: Smartphone },
+        { label: "Email Codes", icon: Mail },
+        { label: "Backup Codes", icon: Key },
+        { label: "WebAuthn MFA", icon: Fingerprint },
+      ],
     },
     {
-      title: "Guides",
-      description:
-        "Step-by-step tutorials for common authentication scenarios.",
-      href: "/docs/go/guides",
-      icon: "📖",
+      title: "Enterprise",
+      methods: [
+        { label: "SAML SSO", icon: Building2 },
+        { label: "OIDC Provider", icon: Server },
+        { label: "Mutual TLS", icon: Lock },
+        { label: "API Keys", icon: Key },
+        { label: "JWT / Bearer", icon: BadgeCheck },
+        { label: "SCIM 2.0", icon: Scan },
+      ],
     },
     {
-      title: "Examples",
-      description: "Real-world examples and sample applications.",
-      href: "/docs/go/examples",
-      icon: "💡",
+      title: "Advanced Security",
+      methods: [
+        { label: "Step-Up Auth", icon: ShieldCheck },
+        { label: "Geofencing", icon: Globe },
+        { label: "ID Verification", icon: Scan },
+        { label: "Device Tracking", icon: Smartphone },
+        { label: "Risk-Based MFA", icon: Shield },
+      ],
     },
   ];
 
@@ -331,32 +246,34 @@ function NavigationSection() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Explore the documentation
+            Every authentication method you need
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Everything you need to build secure, scalable authentication
-            systems.
+            From simple passwords to enterprise SSO, AuthSome covers the full
+            spectrum of authentication -- all via a unified plugin system.
           </p>
         </div>
-        <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-          {sections.map((section, index) => (
-            <Link key={index} href={section.href} className="group">
-              <Card className="h-full transition-all duration-200 hover:shadow-lg hover:border-brand/50 group-hover:scale-[1.02]">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{section.icon}</span>
-                    <CardTitle className="text-xl group-hover:text-brand transition-colors">
-                      {section.title}
-                    </CardTitle>
+        <div className="mx-auto mt-16 grid max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {categories.map((category) => (
+            <div
+              key={category.title}
+              className="rounded-xl border border-border bg-card/50 p-6 transition-colors hover:border-brand/30"
+            >
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-brand mb-4">
+                {category.title}
+              </h3>
+              <div className="space-y-3">
+                {category.methods.map((method) => (
+                  <div
+                    key={method.label}
+                    className="flex items-center gap-3 text-sm text-muted-foreground"
+                  >
+                    <method.icon className="h-4 w-4 shrink-0 text-foreground/60" />
+                    <span>{method.label}</span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-base">
-                    {section.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -374,17 +291,18 @@ function CommunitySection() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Join the community
+            Open source, community driven
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            AuthSome is open source and built by developers, for developers.
+            AuthSome is built in the open. Contribute, report issues, or join
+            the conversation.
           </p>
         </div>
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-8 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-xl">🐙</span>
+                <GitBranch className="h-5 w-5 text-brand" />
                 GitHub Repository
               </CardTitle>
             </CardHeader>
@@ -404,19 +322,20 @@ function CommunitySection() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-xl">💬</span>
-                Community Support
+                <Shield className="h-5 w-5 text-brand" />
+                Documentation
               </CardTitle>
             </CardHeader>
             <CardContent>
               <CardDescription className="text-base mb-4">
-                Get help, share ideas, and connect with other developers.
+                Explore guides, API references, and examples to get the most out
+                of AuthSome.
               </CardDescription>
               <Link
-                href="/docs/go/guides"
+                href="/docs"
                 className="inline-flex items-center text-sm font-semibold text-brand hover:text-brand/80"
               >
-                Join Discussions
+                Browse Documentation
                 <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </CardContent>
@@ -428,8 +347,7 @@ function CommunitySection() {
 }
 
 /**
- * Community Section
- * Links to community resources and contribution
+ * Container wrapper for consistent page-level styling
  */
 function ContainerSection({ children }: { children: ReactNode }) {
   return (
@@ -462,6 +380,8 @@ export default function HomePage() {
           <SpecialHighlightSection />
           <Separator />
           <QuickStartSection />
+          <Separator />
+          <AuthMethodsSection />
           <Separator />
           <CommunitySection />
           <FooterSection />

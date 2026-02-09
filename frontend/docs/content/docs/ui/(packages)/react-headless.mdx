@@ -1,0 +1,338 @@
+---
+title: "@authsome/ui-react-headless"
+description: Unstyled, accessible render-prop components for full UI control
+icon: Layers
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# @authsome/ui-react-headless
+
+Unstyled, accessible authentication components that use the render-prop pattern. You control the markup and styling; AuthSome handles the authentication logic, state management, and validation.
+
+## Installation
+
+```bash
+npm install @authsome/ui-core @authsome/ui-react @authsome/ui-react-headless
+```
+
+**Peer dependencies**: `@authsome/ui-core`, `@authsome/ui-react`, `react` (^18 || ^19), `react-dom` (^18 || ^19)
+
+## Philosophy
+
+Headless components separate **behavior** from **presentation**. Each component provides a render function with all the state and handlers you need -- you write the JSX.
+
+```tsx
+<SignInForm onSuccess={() => router.push('/dashboard')}>
+  {({ email, password, setEmail, setPassword, handleSubmit, isLoading, error }) => (
+    // Your completely custom UI
+    <form onSubmit={handleSubmit}>
+      {/* ... */}
+    </form>
+  )}
+</SignInForm>
+```
+
+## Components
+
+### SignInForm
+
+Email/password sign-in with validation and error handling.
+
+```typescript
+interface SignInFormRenderProps {
+  email: string;
+  password: string;
+  isLoading: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setEmail: (email: string) => void;
+  setPassword: (password: string) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+
+interface SignInFormProps {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  children: (props: SignInFormRenderProps) => React.ReactNode;
+}
+```
+
+```tsx
+import { SignInForm } from '@authsome/ui-react-headless';
+
+function CustomSignIn() {
+  return (
+    <SignInForm onSuccess={() => console.log('Signed in!')}>
+      {({ email, password, setEmail, setPassword, handleSubmit, isLoading, error, validationErrors }) => (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <div className="text-red-500">{error.message}</div>}
+
+          <div>
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            {validationErrors.email && <span>{validationErrors.email}</span>}
+          </div>
+
+          <div>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {validationErrors.password && <span>{validationErrors.password}</span>}
+          </div>
+
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+      )}
+    </SignInForm>
+  );
+}
+```
+
+### SignUpForm
+
+Registration form with email, password, confirmation, and name fields.
+
+```typescript
+interface SignUpFormRenderProps {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  name: string;
+  isLoading: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setEmail: (email: string) => void;
+  setPassword: (password: string) => void;
+  setConfirmPassword: (password: string) => void;
+  setName: (name: string) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### OAuthButtons
+
+Social login buttons with automatic provider detection.
+
+```typescript
+interface OAuthButtonsRenderProps {
+  providers: OAuthProvider[];
+  isLoading: boolean;
+  error: Error | null;
+  signIn: (provider: OAuthProvider) => Promise<void>;
+  clearError: () => void;
+}
+
+interface OAuthButtonsProps {
+  redirectUri?: string;
+  onError?: (error: Error) => void;
+  children: (props: OAuthButtonsRenderProps) => React.ReactNode;
+}
+```
+
+```tsx
+import { OAuthButtons } from '@authsome/ui-react-headless';
+
+function SocialButtons() {
+  return (
+    <OAuthButtons>
+      {({ providers, signIn, isLoading }) => (
+        <div className="flex gap-2">
+          {providers.map((provider) => (
+            <button
+              key={provider}
+              onClick={() => signIn(provider)}
+              disabled={isLoading}
+              className="px-4 py-2 border rounded"
+            >
+              Continue with {provider}
+            </button>
+          ))}
+        </div>
+      )}
+    </OAuthButtons>
+  );
+}
+```
+
+### MagicLinkForm
+
+Passwordless authentication via email magic link.
+
+```typescript
+interface MagicLinkFormRenderProps {
+  email: string;
+  isLoading: boolean;
+  isSent: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setEmail: (email: string) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+```
+
+### TwoFactorForm
+
+2FA verification code entry.
+
+```typescript
+interface TwoFactorFormRenderProps {
+  code: string;
+  remember: boolean;
+  isLoading: boolean;
+  error: Error | null;
+  validationErrors: Record<string, string>;
+  setCode: (code: string) => void;
+  setRemember: (remember: boolean) => void;
+  handleSubmit: (e: React.FormEvent) => Promise<void>;
+  clearError: () => void;
+}
+
+interface TwoFactorFormProps {
+  method?: TwoFactorMethod;
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  children: (props: TwoFactorFormRenderProps) => React.ReactNode;
+}
+```
+
+### AuthTabs
+
+Tabbed sign-in / sign-up interface.
+
+```typescript
+type AuthTab = 'signin' | 'signup';
+
+interface AuthTabsRenderProps {
+  activeTab: AuthTab;
+  setActiveTab: (tab: AuthTab) => void;
+  isSignIn: boolean;
+  isSignUp: boolean;
+}
+
+interface AuthTabsProps {
+  defaultTab?: AuthTab;
+  onTabChange?: (tab: AuthTab) => void;
+  children: (props: AuthTabsRenderProps) => React.ReactNode;
+}
+```
+
+```tsx
+import { AuthTabs, SignInForm, SignUpForm } from '@authsome/ui-react-headless';
+
+function AuthPage() {
+  return (
+    <AuthTabs defaultTab="signin">
+      {({ activeTab, setActiveTab }) => (
+        <div>
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => setActiveTab('signin')}>Sign In</button>
+            <button onClick={() => setActiveTab('signup')}>Sign Up</button>
+          </div>
+
+          {activeTab === 'signin' && (
+            <SignInForm>{/* ... */}</SignInForm>
+          )}
+          {activeTab === 'signup' && (
+            <SignUpForm>{/* ... */}</SignUpForm>
+          )}
+        </div>
+      )}
+    </AuthTabs>
+  );
+}
+```
+
+### AuthModal
+
+Modal wrapper for auth flows.
+
+```typescript
+interface AuthModalRenderProps {
+  isOpen: boolean;
+  close: () => void;
+}
+
+interface AuthModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: (props: AuthModalRenderProps) => React.ReactNode;
+}
+```
+
+### ProfileMenu
+
+User profile dropdown with sign-out.
+
+```typescript
+interface ProfileMenuRenderProps {
+  user: User | null;
+  isOpen: boolean;
+  isSigningOut: boolean;
+  toggle: () => void;
+  open: () => void;
+  close: () => void;
+  signOut: () => Promise<void>;
+}
+```
+
+### SessionList
+
+Active session management.
+
+```typescript
+interface SessionListRenderProps {
+  currentSession: Session | null;
+  sessions: Session[];
+  revokeSession: (sessionId: string) => Promise<void>;
+}
+```
+
+## Re-exports
+
+For convenience, the headless package re-exports all hooks and the `AuthProvider` from `@authsome/ui-react`:
+
+```typescript
+// You can import everything from one package
+import {
+  AuthProvider,
+  useAuth, useUser, useSignIn, useOAuth,
+  SignInForm, OAuthButtons,
+} from '@authsome/ui-react-headless';
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Headless Components Guide"
+    description="Detailed examples for building custom auth UIs"
+    href="/docs/ui/guides/headless-components"
+  />
+  <Card
+    title="shadcn CLI"
+    description="Pre-styled components you can scaffold with a CLI"
+    href="/docs/ui/packages/react-shadcn"
+  />
+  <Card
+    title="Component API Reference"
+    description="All component props and render prop signatures"
+    href="/docs/ui/api/components"
+  />
+</Cards>

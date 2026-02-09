@@ -1,54 +1,65 @@
 import { BentoGrid, type BentoItem } from "@/components/ui/bento-grid"
 import {
-    CheckCircle,
-    Clock,
-    Star,
-    TrendingUp,
-    Video,
-    Globe,
+    Users,
+    Fingerprint,
+    ShieldCheck,
+    Code,
 } from "lucide-react";
 
-
-const itemsSample: BentoItem[] = [
+const items: BentoItem[] = [
     {
-        title: "Analytics Dashboard",
-        meta: "v2.4.1",
+        title: "Multi-Tenancy",
+        meta: "Standalone & SaaS",
         description:
-            "Real-time metrics with AI-powered insights and predictive analytics",
-        icon: <TrendingUp className="w-4 h-4 text-blue-500" />,
-        status: "Live",
-        tags: ["Statistics", "Reports", "AI"],
+            "Standalone mode for single-tenant apps, SaaS mode for full multi-tenancy with Clerk.js-style organizations and org-scoped configuration overrides.",
+        icon: <Users className="w-4 h-4 text-blue-500" />,
+        status: "Production",
+        tags: ["Organizations", "Tenant Isolation", "Config Overrides"],
         colSpan: 2,
         hasPersistentHover: true,
     },
     {
-        title: "Task Manager",
-        meta: "84 completed",
-        description: "Automated workflow management with priority scheduling",
-        icon: <CheckCircle className="w-4 h-4 text-emerald-500" />,
-        status: "Updated",
-        tags: ["Productivity", "Automation"],
+        title: "Authentication Methods",
+        meta: "30+ plugins",
+        description: "Passwordless login, MFA, Social OAuth with 17+ providers, Enterprise SSO, API keys, and more -- all via a unified plugin system.",
+        icon: <Fingerprint className="w-4 h-4 text-emerald-500" />,
+        status: "Extensible",
+        tags: ["Passkey", "Magic Link", "SAML", "OAuth"],
     },
     {
-        title: "Media Library",
-        meta: "12GB used",
-        description: "Cloud storage with intelligent content processing",
-        icon: <Video className="w-4 h-4 text-purple-500" />,
-        tags: ["Storage", "CDN"],
+        title: "Security & Compliance",
+        meta: "Enterprise-grade",
+        description: "Adaptive MFA, device tracking, risk-based authentication, audit logging with Datadog/Splunk exporters, GDPR/HIPAA compliance, and geofencing.",
+        icon: <ShieldCheck className="w-4 h-4 text-purple-500" />,
+        tags: ["Audit", "Compliance", "Device Tracking"],
         colSpan: 2,
     },
     {
-        title: "Global Network",
-        meta: "6 regions",
-        description: "Multi-region deployment with edge computing",
-        icon: <Globe className="w-4 h-4 text-sky-500" />,
-        status: "Beta",
-        tags: ["Infrastructure", "Edge"],
+        title: "Developer Experience",
+        meta: "Clean Architecture",
+        description: "Service-oriented design with repository pattern, extensible plugin system, Smartform integration for dynamic forms, and comprehensive API.",
+        icon: <Code className="w-4 h-4 text-sky-500" />,
+        status: "Documented",
+        tags: ["Plugins", "Forge", "Type-safe"],
     },
 ];
 
 function ConceptsHighlightSection() {
-    return <BentoGrid items={itemsSample} />
+    return (
+        <section className="py-16 md:py-24">
+            <div className="mx-auto max-w-7xl px-4">
+                <div className="mx-auto max-w-2xl text-center mb-12">
+                    <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                        Core Concepts
+                    </h2>
+                    <p className="mt-4 text-lg text-muted-foreground">
+                        The building blocks behind AuthSome&apos;s architecture.
+                    </p>
+                </div>
+                <BentoGrid items={items} />
+            </div>
+        </section>
+    );
 }
 
 export default ConceptsHighlightSection;

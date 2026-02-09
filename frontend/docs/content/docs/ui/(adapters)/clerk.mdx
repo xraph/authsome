@@ -1,0 +1,105 @@
+---
+title: Clerk Adapter
+description: Adapter for Clerk authentication service
+icon: Key
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Clerk Adapter
+
+Adapter for [Clerk](https://clerk.com) authentication. Wraps the `@clerk/clerk-js` SDK to provide the AuthSome UI interface.
+
+## Installation
+
+```bash
+npm install @authsome/adapter-clerk
+```
+
+**Dependencies**: `@clerk/clerk-js` (^5.33.0)
+**Peer dependencies**: `@authsome/ui-core`
+
+## Configuration
+
+```typescript
+import { ClerkAdapter } from '@authsome/adapter-clerk';
+
+const adapter = new ClerkAdapter();
+
+adapter.initialize({
+  // Your Clerk publishable key
+  publishableKey: 'pk_test_...',
+});
+```
+
+## Supported Features
+
+| Feature | Supported |
+|---------|-----------|
+| Email/Password Sign In | Yes |
+| Email/Password Sign Up | Yes |
+| OAuth Providers | Yes |
+| Magic Links | Yes |
+| Phone Authentication | Yes |
+| Two-Factor Authentication | Yes |
+| Passkeys/WebAuthn | Yes |
+| Organizations | Yes |
+| MFA | Yes |
+| Session Management | Yes |
+
+## Usage
+
+```tsx
+import { AuthClient } from '@authsome/ui-core';
+import { AuthProvider } from '@authsome/ui-react';
+import { ClerkAdapter } from '@authsome/adapter-clerk';
+
+const adapter = new ClerkAdapter();
+adapter.initialize({
+  publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!,
+});
+
+const client = new AuthClient({ provider: adapter });
+
+function App() {
+  return (
+    <AuthProvider client={client}>
+      <MyApp />
+    </AuthProvider>
+  );
+}
+```
+
+<Callout type="info">
+The Clerk adapter maps Clerk's API to the AuthSome UI interface. All hooks like `useSignIn`, `useOAuth`, and `useOrganization` work identically regardless of which adapter you use.
+</Callout>
+
+## Organization Support
+
+Clerk has built-in organization support. The `useOrganization` hook works automatically:
+
+```tsx
+import { useOrganization } from '@authsome/ui-react';
+
+function OrgSwitcher() {
+  const { organizations, activeOrganization, setActiveOrganization, isSupported } = useOrganization();
+
+  if (!isSupported) return null;
+
+  return (
+    <select
+      value={activeOrganization?.id}
+      onChange={(e) => setActiveOrganization?.(e.target.value)}
+    >
+      {organizations.map((org) => (
+        <option key={org.id} value={org.id}>{org.name}</option>
+      ))}
+    </select>
+  );
+}
+```
+
+## Migration from Clerk Components
+
+If you are migrating from Clerk's own React components to AuthSome UI, you can use the same Clerk publishable key. The adapter uses the same underlying SDK, so your existing Clerk configuration and dashboard settings will continue to work.

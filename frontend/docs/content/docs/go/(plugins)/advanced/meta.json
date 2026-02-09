@@ -9,6 +9,11 @@
     "email-otp",
     "social",
     "mfa",
-    "mcp"
+    "mcp",
+    "jwt",
+    "apikey",
+    "multisession",
+    "impersonation",
+    "notification"
   ]
 }

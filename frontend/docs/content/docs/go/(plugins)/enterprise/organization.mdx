@@ -1,0 +1,120 @@
+---
+title: Organizations
+description: User-created organizations with RBAC, teams, invitations, and member management
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Organization Plugin
+
+The Organization plugin enables users to create and manage their own organizations (workspaces). It provides member management, team management, invitation system, RBAC integration, and notification hooks for lifecycle events.
+
+## Features
+
+- **Organization CRUD** - Create, update, delete organizations with unique slugs
+- **Member Management** - Invite, add, remove, and update member roles
+- **Team Management** - Create teams within organizations
+- **Invitation System** - Token-based invitations with configurable expiry
+- **RBAC Integration** - Organization-scoped roles and permissions
+- **Slug-Based Lookup** - Access organizations by slug
+- **Notification Integration** - Auto-notify on member add/remove/role changes
+- **Dashboard Extension** - UI integration for organization management
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/organization"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        organization.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    organization:
+      maxOrganizationsPerUser: 5
+      maxMembersPerOrganization: 50
+      maxTeamsPerOrganization: 20
+      enableUserCreation: true
+      requireInvitation: false
+      invitationExpiryHours: 72
+      enforceUniqueSlug: true
+      allowAppLevelRoles: true
+```
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `maxOrganizationsPerUser` | int | `5` | Max organizations per user |
+| `maxMembersPerOrganization` | int | `50` | Max members per organization |
+| `maxTeamsPerOrganization` | int | `20` | Max teams per organization |
+| `enableUserCreation` | bool | `true` | Allow organization creation by users |
+| `requireInvitation` | bool | `false` | Require invitation to join |
+| `invitationExpiryHours` | int | `72` | Invitation token expiry (hours) |
+| `enforceUniqueSlug` | bool | `true` | Enforce unique organization slugs |
+| `allowAppLevelRoles` | bool | `true` | Allow app-level role assignment |
+
+## API Reference
+
+### Organizations
+
+```http
+POST   /organizations                    # Create organization
+GET    /organizations                    # List organizations
+GET    /organizations/:id                # Get organization
+PATCH  /organizations/:id                # Update organization
+DELETE /organizations/:id                # Delete organization
+GET    /organizations/slug/:slug         # Get by slug
+```
+
+### Members
+
+```http
+GET    /organizations/:id/members             # List members
+POST   /organizations/:id/members/invite      # Invite member
+PATCH  /organizations/:id/members/:memberId   # Update member role
+DELETE /organizations/:id/members/:memberId   # Remove member
+```
+
+### Teams
+
+```http
+GET    /organizations/:id/teams               # List teams
+POST   /organizations/:id/teams               # Create team
+PATCH  /organizations/:id/teams/:teamId       # Update team
+DELETE /organizations/:id/teams/:teamId       # Delete team
+```
+
+### Invitations
+
+```http
+POST   /organization-invitations/:token/accept   # Accept invitation
+POST   /organization-invitations/:token/decline   # Decline invitation
+```
+
+## Hooks
+
+The plugin registers notification hooks for organization lifecycle events:
+
+- **AfterMemberAdd** - Notification when a member is added
+- **AfterMemberRemove** - Notification when a member is removed
+- **AfterMemberRoleChange** - Notification when a member's role changes
+- **AfterOrganizationDelete** - Notification when an organization is deleted
+
+## Resources
+
+- [Organization Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/organization)

@@ -1,0 +1,261 @@
+---
+title: Headless Components
+description: Build fully custom authentication UIs with headless render-prop components
+icon: Layers
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Building Custom Auth UIs with Headless Components
+
+The `@authsome/ui-react-headless` package gives you authentication logic without any styling decisions. Use the render-prop pattern to build auth UIs that match your design system exactly.
+
+## When to Use Headless Components
+
+- You have a custom design system or component library
+- You want pixel-perfect control over every element
+- You need non-standard layouts or interactions
+- You are building a design system that wraps auth functionality
+
+## Pattern: Render Props
+
+Every headless component uses the render-prop pattern:
+
+```tsx
+<ComponentName onSuccess={handleSuccess}>
+  {(renderProps) => (
+    // Your JSX -- you own every element
+  )}
+</ComponentName>
+```
+
+The render props provide:
+- **State values** (email, password, isLoading, error, etc.)
+- **State setters** (setEmail, setPassword, etc.)
+- **Handlers** (handleSubmit, clearError, etc.)
+- **Validation errors** (per-field validation messages)
+
+## Complete Example: Tailwind Sign In
+
+```tsx
+import { SignInForm, OAuthButtons } from '@authsome/ui-react-headless';
+import { useRouter } from 'next/navigation';
+
+function CustomSignIn() {
+  const router = useRouter();
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8">
+        <h1 className="text-2xl font-bold text-center mb-2">Welcome back</h1>
+        <p className="text-gray-500 text-center mb-8">
+          Sign in to your account
+        </p>
+
+        {/* OAuth buttons */}
+        <OAuthButtons>
+          {({ providers, signIn, isLoading }) => (
+            <div className="space-y-3 mb-6">
+              {providers.map((provider) => (
+                <button
+                  key={provider}
+                  onClick={() => signIn(provider)}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5
+                    border border-gray-300 rounded-lg hover:bg-gray-50
+                    text-sm font-medium text-gray-700 transition-colors"
+                >
+                  Continue with {provider}
+                </button>
+              ))}
+            </div>
+          )}
+        </OAuthButtons>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-200" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-4 bg-white text-gray-500">or</span>
+          </div>
+        </div>
+
+        {/* Email/password form */}
+        <SignInForm onSuccess={() => router.push('/dashboard')}>
+          {({ email, password, setEmail, setPassword, handleSubmit,
+              isLoading, error, validationErrors, clearError }) => (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-600
+                  text-sm p-3 rounded-lg flex justify-between items-center">
+                  <span>{error.message}</span>
+                  <button onClick={clearError} className="text-red-400 hover:text-red-600">
+                    &times;
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2
+                    ${validationErrors.email
+                      ? 'border-red-300 focus:ring-red-500'
+                      : 'border-gray-300 focus:ring-blue-500'}`}
+                />
+                {validationErrors.email && (
+                  <p className="mt-1 text-sm text-red-500">{validationErrors.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2
+                    ${validationErrors.password
+                      ? 'border-red-300 focus:ring-red-500'
+                      : 'border-gray-300 focus:ring-blue-500'}`}
+                />
+                {validationErrors.password && (
+                  <p className="mt-1 text-sm text-red-500">{validationErrors.password}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg
+                  font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {isLoading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+          )}
+        </SignInForm>
+      </div>
+    </div>
+  );
+}
+```
+
+## Composing Components
+
+Combine multiple headless components for complex UIs:
+
+```tsx
+import { AuthTabs, SignInForm, SignUpForm, OAuthButtons } from '@authsome/ui-react-headless';
+
+function AuthPage() {
+  return (
+    <AuthTabs defaultTab="signin">
+      {({ activeTab, setActiveTab, isSignIn, isSignUp }) => (
+        <div className="max-w-md mx-auto">
+          {/* Tab buttons */}
+          <div className="flex border-b mb-6">
+            <button
+              onClick={() => setActiveTab('signin')}
+              className={`flex-1 py-2 text-center font-medium border-b-2 transition
+                ${isSignIn ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setActiveTab('signup')}
+              className={`flex-1 py-2 text-center font-medium border-b-2 transition
+                ${isSignUp ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          {/* Shared OAuth buttons */}
+          <OAuthButtons>
+            {({ providers, signIn }) => (
+              <div className="space-y-2 mb-6">
+                {providers.map((p) => (
+                  <button key={p} onClick={() => signIn(p)} className="w-full border p-2 rounded">
+                    Continue with {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </OAuthButtons>
+
+          {/* Conditional form */}
+          {isSignIn && (
+            <SignInForm>{/* ... render props ... */}</SignInForm>
+          )}
+          {isSignUp && (
+            <SignUpForm>{/* ... render props ... */}</SignUpForm>
+          )}
+        </div>
+      )}
+    </AuthTabs>
+  );
+}
+```
+
+## Profile Menu Example
+
+```tsx
+import { ProfileMenu } from '@authsome/ui-react-headless';
+
+function UserNav() {
+  return (
+    <ProfileMenu onSignOut={() => window.location.href = '/'}>
+      {({ user, isOpen, toggle, close, signOut, isSigningOut }) => (
+        <div className="relative">
+          <button onClick={toggle} className="flex items-center gap-2">
+            <img
+              src={user?.avatar || '/default-avatar.png'}
+              alt={user?.name || ''}
+              className="w-8 h-8 rounded-full"
+            />
+            <span className="text-sm font-medium">{user?.name}</span>
+          </button>
+
+          {isOpen && (
+            <>
+              <div className="fixed inset-0" onClick={close} />
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border py-1 z-50">
+                <div className="px-4 py-2 border-b">
+                  <p className="text-sm font-medium">{user?.name}</p>
+                  <p className="text-xs text-gray-500">{user?.email}</p>
+                </div>
+                <a href="/settings" className="block px-4 py-2 text-sm hover:bg-gray-50">
+                  Settings
+                </a>
+                <button
+                  onClick={signOut}
+                  disabled={isSigningOut}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                >
+                  {isSigningOut ? 'Signing out...' : 'Sign Out'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </ProfileMenu>
+  );
+}
+```
+
+<Callout type="info">
+All headless components re-export hooks from `@authsome/ui-react`, so you can import everything from a single package: `import { SignInForm, useUser } from '@authsome/ui-react-headless'`.
+</Callout>

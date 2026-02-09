@@ -1,0 +1,370 @@
+---
+title: Quick Start
+description: Build your first authenticated app with AuthSome UI in minutes
+icon: Zap
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Quick Start
+
+This guide walks you through adding authentication to a React or Next.js app using AuthSome UI. By the end, you will have working sign-in, sign-up, and route protection.
+
+<Callout type="info">
+This guide assumes you have already [installed the required packages](/docs/ui/installation). We use the AuthSome adapter here, but you can substitute any adapter.
+</Callout>
+
+## Next.js App Router
+
+### 1. Create the Auth Client
+
+Create a shared auth configuration file:
+
+```tsx
+// lib/auth.ts
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+export const adapter = new AuthSomeAdapter();
+
+// Initialize is called once; the adapter stores config internally
+adapter.initialize({
+  apiUrl: process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:8080',
+  authMode: 'cookies',
+  plugins: ['social', 'twofa'],
+});
+```
+
+### 2. Set Up the Provider
+
+Wrap your application with the `NextAuthProvider`:
+
+```tsx
+// app/providers.tsx
+'use client';
+
+import { NextAuthProvider } from '@authsome/ui-next';
+import { adapter } from '@/lib/auth';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <NextAuthProvider
+      config={{
+        adapter,
+        basePath: '/auth',
+        pages: {
+          signIn: '/auth/signin',
+          signUp: '/auth/signup',
+          signOut: '/auth/signout',
+        },
+      }}
+    >
+      {children}
+    </NextAuthProvider>
+  );
+}
+```
+
+```tsx
+// app/layout.tsx
+import { Providers } from './providers';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+```
+
+### 3. Add Middleware
+
+Protect routes at the edge with middleware:
+
+```typescript
+// middleware.ts
+import { createAuthMiddleware } from '@authsome/ui-next/middleware';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+adapter.initialize({
+  apiUrl: process.env.AUTH_URL || 'http://localhost:8080',
+  authMode: 'cookies',
+});
+
+export default createAuthMiddleware({
+  adapter,
+  publicRoutes: ['/', '/about', '/pricing', '/api/public/*'],
+  authRoutes: ['/auth/signin', '/auth/signup'],
+  afterAuthRedirect: '/dashboard',
+  afterSignOutRedirect: '/auth/signin',
+});
+
+export const config = {
+  matcher: ['/((?!_next|favicon.ico|.*\\.).*)'],
+};
+```
+
+### 4. Create Auth Pages
+
+```tsx
+// app/auth/signin/page.tsx
+'use client';
+
+import { useSignIn, useOAuth } from '@authsome/ui-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+export default function SignInPage() {
+  const { signIn, isLoading, error, clearError } = useSignIn();
+  const { providers, signIn: oauthSignIn } = useOAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearError();
+    await signIn({ email, password });
+    router.push('/dashboard');
+  };
+
+  return (
+    <div>
+      <h1>Sign In</h1>
+
+      {error && <p style={{ color: 'red' }}>{error.message}</p>}
+
+      <form onSubmit={handleSubmit}>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+          required
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          required
+        />
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Signing in...' : 'Sign In'}
+        </button>
+      </form>
+
+      {providers.length > 0 && (
+        <div>
+          <p>Or sign in with:</p>
+          {providers.map((provider) => (
+            <button key={provider} onClick={() => oauthSignIn(provider)}>
+              {provider}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 5. Use Auth in Components
+
+```tsx
+// app/dashboard/page.tsx
+'use client';
+
+import { useUser, useSignOut } from '@authsome/ui-react';
+import { ProtectedRoute } from '@authsome/ui-next';
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute redirectTo="/auth/signin">
+      <Dashboard />
+    </ProtectedRoute>
+  );
+}
+
+function Dashboard() {
+  const user = useUser();
+  const { signOut } = useSignOut();
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      <p>Welcome, {user?.name || user?.email}!</p>
+      <button onClick={signOut}>Sign Out</button>
+    </div>
+  );
+}
+```
+
+### 6. Server-Side Auth
+
+Access auth state in server components and server actions:
+
+```tsx
+// app/api/profile/route.ts
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  const serverAuth = createServerAuthClient({ adapter });
+  const user = await serverAuth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  return NextResponse.json({ user });
+}
+```
+
+---
+
+## React SPA
+
+### 1. Create the Auth Client
+
+```tsx
+// src/lib/auth.ts
+import { AuthClient } from '@authsome/ui-core';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+adapter.initialize({
+  apiUrl: import.meta.env.VITE_AUTH_URL || 'http://localhost:8080',
+  authMode: 'bearer',
+  plugins: ['social', 'twofa'],
+});
+
+export const authClient = new AuthClient({
+  provider: adapter,
+  autoRefresh: true,
+  refreshInterval: 5 * 60 * 1000, // 5 minutes
+});
+```
+
+### 2. Set Up the Provider
+
+```tsx
+// src/App.tsx
+import { AuthProvider } from '@authsome/ui-react';
+import { authClient } from './lib/auth';
+import { Router } from './Router';
+
+function App() {
+  return (
+    <AuthProvider client={authClient}>
+      <Router />
+    </AuthProvider>
+  );
+}
+
+export default App;
+```
+
+### 3. Build Auth Components
+
+```tsx
+// src/pages/Login.tsx
+import { useSignIn } from '@authsome/ui-react';
+import { useState } from 'react';
+
+export function LoginPage() {
+  const { signIn, isLoading, error, clearError } = useSignIn();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearError();
+    await signIn({ email, password });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <p>{error.message}</p>}
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+      />
+      <button disabled={isLoading}>
+        {isLoading ? 'Signing in...' : 'Sign In'}
+      </button>
+    </form>
+  );
+}
+```
+
+### 4. Protect Routes
+
+```tsx
+// src/pages/Dashboard.tsx
+import { RequireAuth, useUser, useSignOut } from '@authsome/ui-react';
+
+export function DashboardPage() {
+  return (
+    <RequireAuth
+      fallback={<p>Loading...</p>}
+      redirectTo="/login"
+    >
+      <Dashboard />
+    </RequireAuth>
+  );
+}
+
+function Dashboard() {
+  const user = useUser();
+  const { signOut } = useSignOut();
+
+  return (
+    <div>
+      <h1>Welcome, {user?.name}!</h1>
+      <button onClick={signOut}>Sign Out</button>
+    </div>
+  );
+}
+```
+
+---
+
+## What's Next?
+
+<Cards>
+  <Card
+    title="Packages"
+    description="Explore each package in detail"
+    href="/docs/ui/packages/core"
+  />
+  <Card
+    title="Adapters"
+    description="Configure your backend adapter"
+    href="/docs/ui/adapters"
+  />
+  <Card
+    title="Next.js Guide"
+    description="In-depth Next.js App Router integration guide"
+    href="/docs/ui/guides/nextjs-app-router"
+  />
+  <Card
+    title="Hooks Reference"
+    description="Complete reference for all 13+ React hooks"
+    href="/docs/ui/api/hooks"
+  />
+</Cards>

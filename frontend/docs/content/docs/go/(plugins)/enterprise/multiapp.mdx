@@ -1,0 +1,134 @@
+---
+title: Multi-App Platform
+description: Platform-level app management with member, team, invitation, and environment systems
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Multi-App Plugin
+
+The Multi-App plugin provides platform-level multi-tenancy through app management. It enables creating isolated apps (tenants) with their own members, teams, invitations, and environments. It decorates core User, Session, and Auth services to scope all operations to the active app context.
+
+<Callout type="info">
+This is the foundational multi-tenancy plugin. It automatically creates a platform app on startup and scopes all authentication operations to app contexts.
+</Callout>
+
+## Features
+
+- **App CRUD** - Create, update, and delete platform apps
+- **Member Management** - App-scoped member management with roles
+- **Team Management** - Create teams within apps with member assignment
+- **Invitation System** - Token-based invitations with expiry
+- **Platform App** - Auto-created platform app for system-wide operations
+- **Service Decorators** - Decorates User, Session, and Auth services for multi-tenancy
+- **Environment Management** - Per-app environments (development, staging, production)
+- **Lifecycle Hooks** - Hooks for user creation/deletion and session creation
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/multiapp"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        multiapp.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    multiapp:
+      defaultAppName: "Platform App"
+      enableAppCreation: false
+      maxMembersPerApp: 1000
+      maxTeamsPerApp: 100
+      requireInvitation: false
+      invitationExpiryHours: 72
+      autoCreateDefaultApp: true
+      defaultEnvironmentName: "Development"
+```
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `defaultAppName` | string | `"Platform App"` | Name of the auto-created platform app |
+| `enableAppCreation` | bool | `false` | Allow users to create new apps |
+| `maxMembersPerApp` | int | `1000` | Maximum members per app |
+| `maxTeamsPerApp` | int | `100` | Maximum teams per app |
+| `requireInvitation` | bool | `false` | Require invitation to join apps |
+| `invitationExpiryHours` | int | `72` | Invitation expiry in hours |
+| `autoCreateDefaultApp` | bool | `true` | Auto-create platform app on startup |
+| `defaultEnvironmentName` | string | `"Development"` | Default environment for new apps |
+
+## API Reference
+
+### Apps
+
+```http
+POST   /apps                          # Create app
+GET    /apps                          # List apps
+GET    /apps/:appId                   # Get app
+PUT    /apps/:appId                   # Update app
+DELETE /apps/:appId                   # Delete app
+```
+
+### Members
+
+```http
+GET    /apps/:appId/members                    # List members
+POST   /apps/:appId/members/invite             # Invite member
+PUT    /apps/:appId/members/:memberId          # Update member
+DELETE /apps/:appId/members/:memberId          # Remove member
+```
+
+### Teams
+
+```http
+GET    /apps/:appId/teams                              # List teams
+POST   /apps/:appId/teams                              # Create team
+GET    /apps/:appId/teams/:teamId                      # Get team
+PUT    /apps/:appId/teams/:teamId                      # Update team
+DELETE /apps/:appId/teams/:teamId                      # Delete team
+POST   /apps/:appId/teams/:teamId/members              # Add team member
+DELETE /apps/:appId/teams/:teamId/members/:memberId    # Remove team member
+```
+
+### Invitations
+
+```http
+GET    /invitations/:token             # Get invitation details
+POST   /invitations/:token/accept      # Accept invitation
+POST   /invitations/:token/decline     # Decline invitation
+```
+
+## Service Decorators
+
+The Multi-App plugin decorates core services to add multi-tenancy:
+
+- **User Service** - Scopes user operations to the active app
+- **Session Service** - Scopes sessions to the active app
+- **Auth Service** - Scopes authentication flows to the active app
+
+This means all core operations automatically work within the context of the current app without requiring plugin-specific API calls.
+
+## Hooks
+
+- **AfterUserCreate** - Associates new users with the active app
+- **AfterUserDelete** - Cleans up app memberships when a user is deleted
+- **AfterSessionCreate** - Associates sessions with the active app
+
+## Resources
+
+- [Multi-App Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/multiapp)

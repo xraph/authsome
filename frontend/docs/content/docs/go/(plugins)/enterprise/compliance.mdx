@@ -1,0 +1,159 @@
+---
+title: Compliance
+description: Enterprise compliance management for SOC 2, HIPAA, PCI-DSS, GDPR, and ISO 27001
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Compliance Plugin
+
+The Compliance plugin provides enterprise compliance management supporting SOC 2 Type II, HIPAA, PCI-DSS, GDPR, ISO 27001, and CCPA standards. It includes automated compliance checks, violation tracking, evidence management, report generation, and training tracking.
+
+## Features
+
+- **Multi-Standard Support** - SOC 2, HIPAA, PCI-DSS, GDPR, ISO 27001, CCPA
+- **Compliance Profiles** - Per-app compliance configuration with templates
+- **Automated Checks** - MFA coverage, password policy, session policy, access review, inactive users, data retention
+- **Violation Management** - Track, resolve, and report violations
+- **Evidence Management** - Document and track compliance evidence
+- **Report Generation** - PDF, JSON, CSV reports with scheduled generation
+- **Training Tracking** - Track and require compliance training
+- **Immutable Audit Logs** - Signed, immutable audit trail
+- **Dashboard Integration** - Compliance dashboard with status overview
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/compliance"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        compliance.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    compliance:
+      enabled: true
+      defaultStandard: "soc2"
+
+      automatedChecks:
+        enabled: true
+        checkInterval: "24h"
+        mfaCoverage: true
+        passwordPolicy: true
+        sessionPolicy: true
+        accessReview: true
+        inactiveUsers: true
+        dataRetention: true
+
+      audit:
+        minRetentionDays: 90
+        maxRetentionDays: 2555  # 7 years
+        detailedTrail: true
+        immutable: true
+        signLogs: true
+
+      reports:
+        enabled: true
+        schedule: "monthly"
+        formats:
+          - "pdf"
+          - "json"
+
+      retention:
+        enabled: true
+        purgeSchedule: "weekly"
+        gracePeriodDays: 30
+
+      notifications:
+        enabled: true
+        violations: true
+        failedChecks: true
+        auditReminders: true
+```
+
+## API Reference
+
+### Compliance Profiles
+
+```http
+POST   /compliance/profiles                    # Create profile
+POST   /compliance/profiles/from-template      # Create from template
+GET    /compliance/profiles/:id                # Get profile
+GET    /compliance/apps/:appId/profile         # Get app profile
+PUT    /compliance/profiles/:id                # Update profile
+DELETE /compliance/profiles/:id                # Delete profile
+```
+
+### Status & Dashboard
+
+```http
+GET    /compliance/apps/:appId/status          # Compliance status
+GET    /compliance/apps/:appId/dashboard       # Dashboard data
+```
+
+### Compliance Checks
+
+```http
+POST   /compliance/profiles/:profileId/checks  # Run check
+GET    /compliance/profiles/:profileId/checks  # List checks
+GET    /compliance/checks/:id                  # Get check result
+```
+
+### Violations
+
+```http
+GET    /compliance/apps/:appId/violations      # List violations
+GET    /compliance/violations/:id              # Get violation
+PUT    /compliance/violations/:id/resolve      # Resolve violation
+```
+
+### Reports
+
+```http
+POST   /compliance/apps/:appId/reports         # Generate report
+GET    /compliance/apps/:appId/reports         # List reports
+GET    /compliance/reports/:id                 # Get report
+GET    /compliance/reports/:id/download        # Download report
+```
+
+### Evidence
+
+```http
+POST   /compliance/apps/:appId/evidence        # Create evidence
+GET    /compliance/apps/:appId/evidence        # List evidence
+```
+
+### Templates
+
+```http
+GET    /compliance/templates                   # List available templates
+```
+
+## Supported Standards
+
+| Standard | Description |
+|---|---|
+| SOC 2 Type II | Service Organization Control security audit |
+| HIPAA | Healthcare data protection |
+| PCI-DSS | Payment card industry security |
+| GDPR | EU data protection regulation |
+| ISO 27001 | Information security management |
+| CCPA | California Consumer Privacy Act |
+
+## Resources
+
+- [Compliance Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/compliance)

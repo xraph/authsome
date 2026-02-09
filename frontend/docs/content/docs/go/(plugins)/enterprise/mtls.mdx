@@ -1,0 +1,151 @@
+---
+title: mTLS Authentication
+description: Mutual TLS with X.509 certificates, PIV/CAC smart cards, and HSM integration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# mTLS Plugin
+
+The mTLS plugin provides mutual TLS authentication with X.509 certificate validation, full certificate chain verification, CRL/OCSP revocation checking, PIV/CAC smart card support, HSM integration, and certificate lifecycle management.
+
+## Features
+
+- **X.509 Certificate Auth** - Full certificate chain validation and authentication
+- **Revocation Checking** - CRL and OCSP with caching and stapling
+- **PIV/CAC Smart Cards** - Personal Identity Verification and Common Access Card support
+- **HSM Integration** - PKCS#11, AWS CloudHSM, Azure Key Vault, GCP Cloud HSM
+- **Certificate Management** - Register, list, revoke, and monitor certificates
+- **Trust Anchors** - Manage trusted CA certificates
+- **Certificate Policies** - Organization-specific validation policies
+- **Certificate Pinning** - Pin certificates to prevent substitution
+- **Expiration Monitoring** - Track and alert on expiring certificates
+- **Session Binding** - Bind sessions to certificate fingerprints
+- **Audit Logging** - All authentication attempts logged
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/enterprise/mtls"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        mtls.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    mtls:
+      enabled: true
+
+      validation:
+        checkExpiration: true
+        checkSignature: true
+        validateChain: true
+        minKeySize: 2048
+        maxChainLength: 5
+        allowedKeyAlgorithms:
+          - "RSA"
+          - "ECDSA"
+          - "Ed25519"
+
+      revocation:
+        enableCrl: true
+        crlCacheDuration: "1h"
+        enableOcsp: true
+        ocspCacheDuration: "1h"
+        ocspStapling: true
+        failOpen: false
+
+      smartCard:
+        enabled: true
+        enablePiv: true
+        enableCac: true
+        requirePin: true
+        maxPinAttempts: 3
+
+      hsm:
+        enabled: false
+        provider: "pkcs11"
+        pkcs11Library: "/usr/lib/softhsm/libsofthsm2.so"
+
+      pinning:
+        enabled: true
+
+      trustAnchors:
+        useSystemStore: true
+
+      session:
+        createSession: true
+        sessionDuration: "24h"
+
+      security:
+        rateLimitEnabled: true
+        auditAllAttempts: true
+        storeCertificates: true
+        notifyOnExpiration: true
+```
+
+## API Reference
+
+### Certificate Management
+
+```http
+POST   /mtls/certificates                 # Register certificate
+GET    /mtls/certificates                  # List certificates
+GET    /mtls/certificates/:id              # Get certificate
+POST   /mtls/certificates/:id/revoke      # Revoke certificate
+GET    /mtls/certificates/expiring         # Get expiring certificates
+```
+
+### Authentication
+
+```http
+POST   /mtls/authenticate                  # Authenticate with certificate
+```
+
+### Trust Anchors
+
+```http
+POST   /mtls/trust-anchors                # Add trust anchor
+GET    /mtls/trust-anchors                 # List trust anchors
+```
+
+### Policies
+
+```http
+POST   /mtls/policies                      # Create certificate policy
+GET    /mtls/policies/:id                  # Get policy
+```
+
+### Validation & Stats
+
+```http
+POST   /mtls/validate                      # Validate certificate
+GET    /mtls/stats/auth                    # Authentication statistics
+```
+
+## HSM Providers
+
+| Provider | Config Key | Description |
+|---|---|---|
+| PKCS#11 | `pkcs11` | Software and hardware HSM via PKCS#11 |
+| AWS CloudHSM | `cloudhsm` | AWS managed HSM |
+| Azure Key Vault | `azure` | Azure managed HSM |
+| GCP Cloud HSM | `gcp` | Google Cloud managed HSM |
+
+## Resources
+
+- [mTLS Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/enterprise/mtls)

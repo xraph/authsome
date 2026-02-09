@@ -1,0 +1,335 @@
+---
+title: Hooks Reference
+description: Complete API reference for all AuthSome UI React hooks
+icon: Anchor
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Hooks Reference
+
+All hooks are exported from `@authsome/ui-react` and must be used inside an `AuthProvider`. Each hook that performs async operations returns `isLoading`, `error`, and `clearError()`.
+
+## useAuth
+
+Returns the full auth context with all methods and state.
+
+```typescript
+function useAuth(): AuthContextValue
+```
+
+The returned object includes all auth state (`user`, `session`, `isAuthenticated`, `isLoading`, `error`) plus every method from the other hooks below. Use this when you need access to multiple auth features in one component.
+
+---
+
+## useUser
+
+Returns the current authenticated user or `null`.
+
+```typescript
+function useUser(): User | null
+```
+
+**Example:**
+```tsx
+const user = useUser();
+// user?.id, user?.email, user?.name, user?.avatar, etc.
+```
+
+---
+
+## useSession
+
+Returns the current session or `null`.
+
+```typescript
+function useSession(): Session | null
+```
+
+**Example:**
+```tsx
+const session = useSession();
+// session?.id, session?.token, session?.expiresAt, etc.
+```
+
+---
+
+## useSignIn
+
+Sign in with email/password or username/password.
+
+```typescript
+interface UseSignInResult {
+  signIn: (request: SignInRequest) => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useSignIn(): UseSignInResult
+```
+
+**SignInRequest:**
+```typescript
+interface SignInRequest {
+  email?: string;
+  username?: string;
+  phone?: string;
+  password?: string;
+  remember?: boolean;
+}
+```
+
+---
+
+## useSignUp
+
+Register a new user.
+
+```typescript
+interface UseSignUpResult {
+  signUp: (request: SignUpRequest) => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useSignUp(): UseSignUpResult
+```
+
+**SignUpRequest:**
+```typescript
+interface SignUpRequest {
+  email?: string;
+  username?: string;
+  phone?: string;
+  password: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown; // Supports dynamic fields from backend
+}
+```
+
+---
+
+## useSignOut
+
+Sign out the current user.
+
+```typescript
+interface UseSignOutResult {
+  signOut: () => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+}
+
+function useSignOut(): UseSignOutResult
+```
+
+---
+
+## useOAuth
+
+OAuth / social authentication.
+
+```typescript
+interface UseOAuthResult {
+  /** Available OAuth providers (auto-loaded) */
+  providers: OAuthProvider[];
+  /** Initiate OAuth flow (redirects to provider) */
+  signIn: (provider: OAuthProvider, redirectUri?: string) => Promise<void>;
+  /** Handle OAuth callback (code exchange) */
+  handleCallback: (code: string, state?: string, provider?: OAuthProvider) => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useOAuth(): UseOAuthResult
+```
+
+**OAuthProvider enum:**
+```typescript
+enum OAuthProvider {
+  GOOGLE = 'google',
+  GITHUB = 'github',
+  FACEBOOK = 'facebook',
+  TWITTER = 'twitter',
+  MICROSOFT = 'microsoft',
+  APPLE = 'apple',
+  LINKEDIN = 'linkedin',
+  DISCORD = 'discord',
+}
+```
+
+---
+
+## useMagicLink
+
+Passwordless authentication via email magic link.
+
+```typescript
+interface UseMagicLinkResult {
+  sendMagicLink: (email: string, redirectUri?: string) => Promise<void>;
+  verifyMagicLink: (token: string) => Promise<void>;
+  isLoading: boolean;
+  /** Whether the magic link email was sent */
+  isSent: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useMagicLink(): UseMagicLinkResult
+```
+
+---
+
+## use2FA
+
+Two-factor authentication management.
+
+```typescript
+interface Use2FAResult {
+  /** Currently enabled 2FA methods (auto-loaded) */
+  enabledMethods: TwoFactorMethod[];
+  /** Set up a 2FA method. Returns QR code / secret / backup codes. */
+  setup: (method: TwoFactorMethod, contact?: string) => Promise<TwoFactorSetupResponse>;
+  /** Verify a 2FA code */
+  verify: (code: string, method?: TwoFactorMethod, remember?: boolean) => Promise<void>;
+  /** Disable all 2FA */
+  disable: () => Promise<void>;
+  /** Refresh enabled methods list */
+  refresh: () => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function use2FA(): Use2FAResult
+```
+
+**TwoFactorMethod enum:**
+```typescript
+enum TwoFactorMethod {
+  TOTP = 'totp',
+  SMS = 'sms',
+  EMAIL = 'email',
+  BACKUP_CODE = 'backup_code',
+}
+```
+
+**TwoFactorSetupResponse:**
+```typescript
+interface TwoFactorSetupResponse {
+  method: TwoFactorMethod;
+  secret?: string;      // For TOTP
+  qrCode?: string;      // QR code data URL
+  backupCodes?: string[];
+}
+```
+
+---
+
+## usePasskey
+
+Passkey / WebAuthn authentication.
+
+```typescript
+interface UsePasskeyResult {
+  /** List of registered passkeys (auto-loaded) */
+  passkeys: PasskeyCredential[];
+  /** Register a new passkey */
+  register: (name?: string) => Promise<PasskeyCredential>;
+  /** Authenticate with a passkey */
+  authenticate: (credentialId?: string) => Promise<void>;
+  /** Remove a passkey */
+  remove: (credentialId: string) => Promise<void>;
+  /** Refresh passkey list */
+  refresh: () => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function usePasskey(): UsePasskeyResult
+```
+
+**PasskeyCredential:**
+```typescript
+interface PasskeyCredential {
+  id: string;
+  name?: string;
+  createdAt?: Date;
+  lastUsedAt?: Date;
+}
+```
+
+---
+
+## usePhoneAuth
+
+Phone number authentication (send code + verify).
+
+---
+
+## useUsernameAuth
+
+Username/password authentication.
+
+---
+
+## useOrganization
+
+Multi-tenant organization management.
+
+```typescript
+interface UseOrganizationReturn {
+  /** User's organizations */
+  organizations: Organization[];
+  /** Currently active organization */
+  activeOrganization: Organization | null;
+  /** Switch active organization */
+  setActiveOrganization?: (orgId: string) => Promise<void>;
+  /** Refresh organizations list */
+  getOrganizations?: () => Promise<Organization[]>;
+  /** Whether the adapter supports organizations */
+  isSupported: boolean;
+  isLoading: boolean;
+}
+
+function useOrganization(): UseOrganizationReturn
+```
+
+---
+
+## useRequireAuth
+
+Programmatic auth guard. Redirects if not authenticated.
+
+```typescript
+function useRequireAuth(options?: { redirectTo?: string }): {
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  user: User | null;
+}
+```
+
+---
+
+## useAdapter
+
+Direct access to the underlying auth adapter.
+
+```typescript
+function useAdapter(): AuthProvider
+```
+
+Use this for advanced operations not covered by other hooks:
+
+```tsx
+const adapter = useAdapter();
+// Access adapter-specific methods
+const fields = await adapter.getSignupFields?.();
+```

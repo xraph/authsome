@@ -1,0 +1,392 @@
+---
+title: Next.js App Router
+description: Complete guide for integrating AuthSome UI with Next.js App Router
+icon: Globe
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# Next.js App Router Integration
+
+This guide covers the complete setup for using AuthSome UI with Next.js App Router, including server components, server actions, middleware, and OAuth.
+
+## Project Structure
+
+A typical AuthSome UI + Next.js project:
+
+```
+app/
+  layout.tsx              # Root layout with providers
+  providers.tsx           # Client-side auth provider
+  page.tsx                # Public home page
+  dashboard/
+    page.tsx              # Protected dashboard
+    settings/
+      page.tsx            # Protected settings
+  auth/
+    signin/page.tsx       # Sign in page
+    signup/page.tsx       # Sign up page
+    callback/
+      [provider]/page.tsx # OAuth callback
+    forgot-password/page.tsx
+    reset-password/page.tsx
+    verify-email/page.tsx
+  api/
+    profile/route.ts      # Protected API route
+lib/
+  auth.ts                 # Shared adapter configuration
+middleware.ts             # Route protection middleware
+```
+
+## Step 1: Shared Configuration
+
+Create a shared auth configuration:
+
+```typescript
+// lib/auth.ts
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+export const adapter = new AuthSomeAdapter();
+
+adapter.initialize({
+  apiUrl: process.env.NEXT_PUBLIC_AUTH_URL || 'http://localhost:8080',
+  authMode: 'cookies',
+  plugins: ['social', 'twofa', 'magiclink'],
+});
+
+export const authConfig = {
+  adapter,
+  basePath: '/auth',
+  pages: {
+    signIn: '/auth/signin',
+    signUp: '/auth/signup',
+    signOut: '/auth/signout',
+    forgotPassword: '/auth/forgot-password',
+    resetPassword: '/auth/reset-password',
+    verifyEmail: '/auth/verify-email',
+  },
+  session: {
+    strategy: 'adapter' as const,
+    cookieName: 'authsome.session',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+};
+```
+
+## Step 2: Provider Setup
+
+```tsx
+// app/providers.tsx
+'use client';
+
+import { NextAuthProvider } from '@authsome/ui-next';
+import { adapter, authConfig } from '@/lib/auth';
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <NextAuthProvider config={authConfig}>
+      {children}
+    </NextAuthProvider>
+  );
+}
+```
+
+```tsx
+// app/layout.tsx
+import { Providers } from './providers';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+```
+
+## Step 3: Middleware
+
+```typescript
+// middleware.ts
+import { createAuthMiddleware } from '@authsome/ui-next/middleware';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+adapter.initialize({
+  apiUrl: process.env.AUTH_URL || 'http://localhost:8080',
+  authMode: 'cookies',
+});
+
+export default createAuthMiddleware({
+  adapter,
+  publicRoutes: [
+    '/',
+    '/about',
+    '/pricing',
+    '/blog/**',
+    '/api/public/*',
+  ],
+  authRoutes: [
+    '/auth/signin',
+    '/auth/signup',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+    '/auth/verify-email',
+  ],
+  afterAuthRedirect: '/dashboard',
+  afterSignOutRedirect: '/auth/signin',
+});
+
+export const config = {
+  matcher: ['/((?!_next|favicon.ico|.*\\.).*)'],
+};
+```
+
+## Step 4: Auth Pages
+
+### Sign In
+
+```tsx
+// app/auth/signin/page.tsx
+'use client';
+
+import { useSignIn, useOAuth } from '@authsome/ui-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import Link from 'next/link';
+
+export default function SignInPage() {
+  const { signIn, isLoading, error, clearError } = useSignIn();
+  const { providers, signIn: oauthSignIn } = useOAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearError();
+    try {
+      await signIn({ email, password });
+      router.push(callbackUrl);
+    } catch {
+      // Error is available via the error state
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto mt-20 p-6">
+      <h1 className="text-2xl font-bold mb-6">Sign In</h1>
+
+      {error && (
+        <div className="bg-red-50 text-red-600 p-3 rounded mb-4">
+          {error.message}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <input
+          type="email" value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email" required
+          className="w-full p-2 border rounded"
+        />
+        <input
+          type="password" value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password" required
+          className="w-full p-2 border rounded"
+        />
+        <button type="submit" disabled={isLoading}
+          className="w-full p-2 bg-blue-600 text-white rounded">
+          {isLoading ? 'Signing in...' : 'Sign In'}
+        </button>
+      </form>
+
+      {providers.length > 0 && (
+        <>
+          <div className="my-4 text-center text-gray-500">or</div>
+          <div className="space-y-2">
+            {providers.map((p) => (
+              <button key={p} onClick={() => oauthSignIn(p)}
+                className="w-full p-2 border rounded">
+                Continue with {p}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="mt-4 text-sm text-center space-y-1">
+        <p><Link href="/auth/forgot-password">Forgot password?</Link></p>
+        <p>No account? <Link href="/auth/signup">Sign up</Link></p>
+      </div>
+    </div>
+  );
+}
+```
+
+### OAuth Callback
+
+```tsx
+// app/auth/callback/[provider]/page.tsx
+import { OAuthCallbackClient } from '@authsome/ui-next';
+
+export default function OAuthCallback({ params }: { params: { provider: string } }) {
+  return (
+    <OAuthCallbackClient
+      provider={params.provider}
+      successRedirect="/dashboard"
+      errorRedirect="/auth/signin"
+    />
+  );
+}
+```
+
+## Step 5: Protected Pages
+
+```tsx
+// app/dashboard/page.tsx
+'use client';
+
+import { ProtectedRoute } from '@authsome/ui-next';
+import { useUser, useSignOut } from '@authsome/ui-react';
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute redirectTo="/auth/signin">
+      <Dashboard />
+    </ProtectedRoute>
+  );
+}
+
+function Dashboard() {
+  const user = useUser();
+  const { signOut } = useSignOut();
+
+  return (
+    <div className="max-w-4xl mx-auto mt-10 p-6">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <button onClick={signOut} className="text-sm text-gray-600 hover:text-gray-900">
+          Sign Out
+        </button>
+      </div>
+      <div className="bg-white rounded-lg border p-6">
+        <h2 className="font-semibold mb-2">Profile</h2>
+        <p>Name: {user?.name}</p>
+        <p>Email: {user?.email}</p>
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 6: Server-Side Auth
+
+### Server Components
+
+```tsx
+// app/profile/page.tsx (Server Component)
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+
+export default async function ProfilePage() {
+  const serverAuth = createServerAuthClient({ adapter });
+
+  const isAuthed = await serverAuth.isAuthenticated();
+  if (!isAuthed) redirect('/auth/signin');
+
+  const user = await serverAuth.getUser();
+
+  return (
+    <div>
+      <h1>Server-Side Profile</h1>
+      <p>Name: {user?.name}</p>
+      <p>Email: {user?.email}</p>
+    </div>
+  );
+}
+```
+
+### API Routes
+
+```typescript
+// app/api/profile/route.ts
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  const serverAuth = createServerAuthClient({ adapter });
+
+  try {
+    const { user, session } = await serverAuth.requireAuth();
+    return NextResponse.json({ user, session });
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+}
+```
+
+### Server Actions
+
+```typescript
+// app/actions.ts
+'use server';
+
+import { createServerAuthClient } from '@authsome/ui-next/server';
+import { adapter } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
+
+export async function updateProfileAction(formData: FormData) {
+  const serverAuth = createServerAuthClient({ adapter });
+  const { user } = await serverAuth.requireAuth();
+
+  // Update user profile via your API
+  await serverAuth.adapter.updateUser({
+    name: formData.get('name') as string,
+  });
+
+  revalidatePath('/profile');
+}
+```
+
+## Environment Variables
+
+```bash
+# .env.local
+NEXT_PUBLIC_AUTH_URL=http://localhost:8080
+AUTH_URL=http://localhost:8080
+SESSION_SECRET=your-32-character-random-secret-key
+```
+
+<Callout type="warn">
+`NEXT_PUBLIC_AUTH_URL` is exposed to the browser. `AUTH_URL` and `SESSION_SECRET` are server-only.
+</Callout>
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Middleware Guide"
+    description="Advanced middleware patterns and custom handlers"
+    href="/docs/ui/guides/middleware"
+  />
+  <Card
+    title="Server-Side Auth"
+    description="Deep dive into server components and actions"
+    href="/docs/ui/guides/server-side-auth"
+  />
+  <Card
+    title="Authentication Flows"
+    description="Multi-step auth flows with the flow engine"
+    href="/docs/ui/guides/authentication-flows"
+  />
+</Cards>

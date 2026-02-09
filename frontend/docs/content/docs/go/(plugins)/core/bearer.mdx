@@ -1,0 +1,192 @@
+---
+title: Bearer Token
+description: Bearer token authentication middleware for session-based authorization
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Bearer Token Plugin
+
+The Bearer Token plugin provides middleware for authenticating requests using Bearer tokens in the `Authorization` header. It validates tokens against the session service, loads the associated user, and sets the authentication context for downstream handlers.
+
+<Callout type="info">
+This is a middleware-only plugin. It does not register any HTTP routes -- it provides authentication handlers that can be used in your route configuration.
+</Callout>
+
+## Features
+
+- **Authorization Header Extraction** - Extracts bearer tokens from the `Authorization` header
+- **Session-Based Validation** - Validates tokens against the session service
+- **Configurable Token Prefix** - Customize the token prefix (default: "Bearer")
+- **Optional Authentication** - `AuthenticateHandler` passes through unauthenticated requests
+- **Required Authentication** - `RequireAuthHandler` returns 401 for unauthenticated requests
+- **Session Expiration Check** - Automatically checks session expiration
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/bearer"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        bearer.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['YAML', 'Programmatic']}>
+  <Tab value="YAML">
+    ```yaml
+    auth:
+      plugins:
+        bearer:
+          tokenPrefix: "Bearer"
+          validateIssuer: false
+          requireScopes: []
+          caseSensitive: false
+    ```
+  </Tab>
+  <Tab value="Programmatic">
+    ```go
+    bearer.NewPlugin(
+        bearer.WithTokenPrefix("Bearer"),
+        bearer.WithCaseSensitive(false),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tokenPrefix` | string | `"Bearer"` | Token prefix in Authorization header |
+| `validateIssuer` | bool | `false` | Validate the token issuer |
+| `requireScopes` | []string | `[]` | Required scopes for the token |
+| `caseSensitive` | bool | `false` | Case-sensitive prefix matching |
+
+## Middleware Usage
+
+The Bearer plugin provides two middleware handlers:
+
+### AuthenticateHandler (Optional Auth)
+
+Attempts to authenticate the request but passes through if no token is present or validation fails. Use this for routes that work for both authenticated and unauthenticated users.
+
+```go
+app := forge.New()
+
+// Apply bearer authentication middleware
+app.Use(bearerPlugin.AuthenticateHandler())
+
+// This route works for both authenticated and unauthenticated users
+app.GET("/public", func(c *forge.Context) error {
+    user := contexts.GetUser(c)
+    if user != nil {
+        return c.JSON(200, map[string]interface{}{
+            "message": "Hello, " + user.Name,
+        })
+    }
+    return c.JSON(200, map[string]interface{}{
+        "message": "Hello, guest",
+    })
+})
+```
+
+### RequireAuthHandler (Required Auth)
+
+Requires a valid bearer token. Returns 401 Unauthorized if no valid token is present. Use this for protected routes.
+
+```go
+// Protected routes
+protected := app.Group("/api")
+protected.Use(bearerPlugin.RequireAuthHandler())
+
+protected.GET("/profile", func(c *forge.Context) error {
+    user := contexts.RequireUser(c)
+    return c.JSON(200, user)
+})
+```
+
+## Authentication Flow
+
+1. Client sends request with `Authorization: Bearer <token>` header
+2. Plugin extracts the token from the header
+3. Token is validated against the session service
+4. Session expiration is checked
+5. User is loaded and set in the request context
+6. Downstream handlers can access the user via `contexts.GetUser(c)`
+
+```
+Client Request
+    │
+    ▼
+┌─────────────────────┐
+│ Extract Bearer Token │
+│ from Auth Header     │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Validate Session     │
+│ via Session Service  │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Check Expiration     │
+│ Load User            │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Set Auth Context     │
+│ Continue to Handler  │
+└─────────────────────┘
+```
+
+## Frontend Integration
+
+### JavaScript
+
+```typescript
+// Include bearer token in requests
+const token = getSessionToken();
+
+const response = await fetch('/api/profile', {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+  },
+});
+```
+
+### Axios Interceptor
+
+```typescript
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'https://api.example.com',
+});
+
+api.interceptors.request.use((config) => {
+  const token = getSessionToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+```
+
+## Resources
+
+- [Bearer Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/bearer)

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { Calendar, LucideIcon, MapIcon } from 'lucide-react'
+import { ShieldCheck, LayoutDashboard, LucideIcon } from 'lucide-react'
 import { ReactNode } from 'react'
 
 export function Features() {
@@ -11,22 +11,47 @@ export function Features() {
                     <FeatureCard>
                         <CardHeader className="pb-3">
                             <CardHeading
-                                icon={MapIcon}
-                                title="Concent and Compliance"
-                                description="Compliance with GDPR, CCPA, and other privacy laws."
+                                icon={ShieldCheck}
+                                title="Consent and Compliance"
+                                description="Built-in GDPR, HIPAA, and CCPA compliance with user consent management workflows."
                             />
                         </CardHeader>
 
                         <div className="relative mb-6 border-t border-dashed sm:mb-0">
                             <div className="absolute inset-0 [background:radial-gradient(125%_125%_at_50%_0%,transparent_40%,hsl(var(--muted)),white_125%)]"></div>
-                            <div className="aspect-[76/59] p-1 px-6">
-                                <DualModeImage
-                                    darkSrc="https://tailark.com/_next/image?url=%2Fpayments.png&w=3840&q=75"
-                                    lightSrc="https://tailark.com/_next/image?url=%2Fpayments-light.png&w=3840&q=75"
-                                    alt="payments illustration"
-                                    width={1207}
-                                    height={929}
-                                />
+                            <div className="aspect-[76/59] p-1 px-6 flex items-center justify-center">
+                                <div className="w-full max-w-sm space-y-3 py-6">
+                                    <div className="rounded-lg border border-border bg-card p-4">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="h-8 w-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                                                <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-medium">Data Processing Consent</div>
+                                                <div className="text-xs text-muted-foreground">Required for GDPR</div>
+                                            </div>
+                                        </div>
+                                        <div className="h-2 w-full rounded-full bg-muted">
+                                            <div className="h-2 w-4/5 rounded-full bg-green-500" />
+                                        </div>
+                                        <div className="mt-1 text-xs text-muted-foreground text-right">80% opted in</div>
+                                    </div>
+                                    <div className="rounded-lg border border-border bg-card p-4">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="h-8 w-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                                                <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-medium">Identity Verification</div>
+                                                <div className="text-xs text-muted-foreground">KYC via Stripe Identity</div>
+                                            </div>
+                                        </div>
+                                        <div className="h-2 w-full rounded-full bg-muted">
+                                            <div className="h-2 w-3/5 rounded-full bg-blue-500" />
+                                        </div>
+                                        <div className="mt-1 text-xs text-muted-foreground text-right">Verified</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </FeatureCard>
@@ -34,51 +59,83 @@ export function Features() {
                     <FeatureCard>
                         <CardHeader className="pb-3">
                             <CardHeading
-                                icon={Calendar}
-                                title="Dashboard Plugin"
-                                description="Manage your users, organizations, and applications with ease."
+                                icon={LayoutDashboard}
+                                title="Admin Dashboard"
+                                description="Server-rendered admin UI with user, organization, and application management."
                             />
                         </CardHeader>
 
                         <CardContent>
                             <div className="relative mb-6 sm:mb-0">
                                 <div className="absolute -inset-6 [background:radial-gradient(50%_50%_at_75%_50%,transparent,hsl(var(--background))_100%)]"></div>
-                                <div className="aspect-[76/59] border">
-                                    <DualModeImage
-                                        darkSrc="https://tailark.com/_next/image?url=%2Forigin-cal-dark.png&w=3840&q=75"
-                                        lightSrc="https://tailark.com/_next/image?url=%2Forigin-cal.png&w=3840&q=75"
-                                        alt="calendar illustration"
-                                        width={1207}
-                                        height={929}
-                                    />
+                                <div className="aspect-[76/59] border rounded-lg bg-card p-4 flex flex-col">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="text-sm font-medium">Users Overview</div>
+                                        <div className="flex gap-1">
+                                            <div className="h-2 w-2 rounded-full bg-green-500" />
+                                            <div className="text-xs text-muted-foreground">Live</div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3 mb-4">
+                                        <div className="rounded-md bg-muted/50 p-3 text-center">
+                                            <div className="text-lg font-bold">2.4k</div>
+                                            <div className="text-xs text-muted-foreground">Users</div>
+                                        </div>
+                                        <div className="rounded-md bg-muted/50 p-3 text-center">
+                                            <div className="text-lg font-bold">48</div>
+                                            <div className="text-xs text-muted-foreground">Orgs</div>
+                                        </div>
+                                        <div className="rounded-md bg-muted/50 p-3 text-center">
+                                            <div className="text-lg font-bold">12</div>
+                                            <div className="text-xs text-muted-foreground">Apps</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 space-y-2">
+                                        {[
+                                            { name: 'Active Sessions', value: '1,284', pct: 85 },
+                                            { name: 'MFA Enabled', value: '67%', pct: 67 },
+                                            { name: 'Auth Success', value: '99.2%', pct: 99 },
+                                        ].map((stat) => (
+                                            <div key={stat.name} className="flex items-center gap-3">
+                                                <div className="w-28 text-xs text-muted-foreground">{stat.name}</div>
+                                                <div className="flex-1 h-1.5 rounded-full bg-muted">
+                                                    <div
+                                                        className="h-1.5 rounded-full bg-brand"
+                                                        style={{ width: `${stat.pct}%` }}
+                                                    />
+                                                </div>
+                                                <div className="w-12 text-xs text-right font-mono">{stat.value}</div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
                     </FeatureCard>
 
                     <FeatureCard className="p-6 md:col-span-2">
-                        <p className="mx-auto my-6 max-w-md text-balance text-center text-2xl font-semibold">
-                            Auth should be secure, compliant, easy to use and should match today's security threats
+                        <p className="mx-auto my-6 max-w-lg text-balance text-center text-2xl font-semibold">
+                            Authentication should be secure, compliant, and simple to integrate -- without compromising on flexibility
                         </p>
 
                         <div className="flex justify-center gap-6 overflow-hidden">
                             <CircularUI
-                                label="Inclusion"
+                                label="Authenticate"
                                 circles={[{ pattern: 'border' }, { pattern: 'border' }]}
                             />
 
                             <CircularUI
-                                label="Inclusion"
+                                label="Authorize"
                                 circles={[{ pattern: 'none' }, { pattern: 'primary' }]}
                             />
 
                             <CircularUI
-                                label="Join"
+                                label="Protect"
                                 circles={[{ pattern: 'blue' }, { pattern: 'none' }]}
                             />
 
                             <CircularUI
-                                label="Exclusion"
+                                label="Audit"
                                 circles={[{ pattern: 'primary' }, { pattern: 'none' }]}
                                 className="hidden sm:block"
                             />
@@ -125,34 +182,6 @@ const CardHeading = ({ icon: Icon, title, description }: CardHeadingProps) => (
         </span>
         <p className="mt-8 text-2xl font-semibold">{description}</p>
     </div>
-)
-
-interface DualModeImageProps {
-    darkSrc: string
-    lightSrc: string
-    alt: string
-    width: number
-    height: number
-    className?: string
-}
-
-const DualModeImage = ({ darkSrc, lightSrc, alt, width, height, className }: DualModeImageProps) => (
-    <>
-        <img
-            src={darkSrc}
-            className={cn('hidden dark:block', className)}
-            alt={`${alt} dark`}
-            width={width}
-            height={height}
-        />
-        <img
-            src={lightSrc}
-            className={cn('shadow dark:hidden', className)}
-            alt={`${alt} light`}
-            width={width}
-            height={height}
-        />
-    </>
 )
 
 interface CircleConfig {

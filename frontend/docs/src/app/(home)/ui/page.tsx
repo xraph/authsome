@@ -44,29 +44,35 @@ function HeroSection() {
             </LineShadowText>
           </h1>
           <p className="mt-6 text-lg leading-8 text-muted-foreground">
-            A comprehensive, pluggable authentication framework for Go
-            applications. Built for enterprise with multi-tenancy, RBAC, and 12+
-            authentication methods.
+            Universal authentication UI components for React and Next.js.
+            Adapter-based architecture, 13+ hooks, headless components, and
+            full server-side support.
           </p>
           <div className="mt-10 flex items-center justify-start gap-x-6">
             <Link
-              href="/portal"
+              href="/docs/ui"
               className="rounded-md bg-brand px-3.5 py-2.5 text-sm font-semibold text-brand-foreground shadow-sm hover:bg-brand/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Get Started
               <ArrowRight className="ml-2 h-4 w-4 inline" />
             </Link>
             <Link
-              href="/docs/go/examples"
+              href="/docs/ui/quick-start"
               className="text-sm font-semibold leading-6 text-foreground hover:text-brand"
             >
-              View Examples <span aria-hidden="true">→</span>
+              Quick Start <span aria-hidden="true">→</span>
             </Link>
           </div>
         </div>
 
-        <div className="mx-auto max-w-2xl text-center">
-          Things to add
+        <div className="mx-auto max-w-2xl text-left">
+          <div className="rounded-lg bg-muted p-4">
+            <code className="text-sm whitespace-pre text-foreground">
+              {`npm install @authsome/ui-core \\
+  @authsome/ui-react \\
+  @authsome/adapter-authsome`}
+            </code>
+          </div>
         </div>
       </div>
     </section>
@@ -88,7 +94,7 @@ function QuickStartSection() {
             Get started in minutes
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Add enterprise-grade authentication to your Go application with just
+            Add authentication to your React or Next.js application with just
             a few lines of code.
           </p>
         </div>
@@ -100,13 +106,13 @@ function QuickStartSection() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground">
                     1
                   </span>
-                  Install AuthSome
+                  Install Packages
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="rounded-lg bg-muted p-4">
                   <code className="text-sm">
-                    go get github.com/xraph/authsome
+                    npm install @authsome/ui-core @authsome/ui-react
                   </code>
                 </div>
               </CardContent>
@@ -117,15 +123,17 @@ function QuickStartSection() {
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand text-xs font-bold text-brand-foreground">
                     2
                   </span>
-                  Mount to Forge
+                  Wrap with Provider
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="rounded-lg bg-muted p-4">
-                  <code className="text-sm">
-                    auth := authsome.New(config)
+                  <code className="text-sm whitespace-pre">
+                    {`<AuthProvider client={client}>`}
                     <br />
-                    app.Mount("/auth", auth)
+                    {"  "}{`<App />`}
+                    <br />
+                    {`</AuthProvider>`}
                   </code>
                 </div>
               </CardContent>
@@ -133,7 +141,7 @@ function QuickStartSection() {
           </div>
           <div className="mt-8 text-center">
             <Link
-              href="/docs/go/getting-started"
+              href="/docs/ui/quick-start"
               className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground shadow-sm hover:bg-brand/90"
             >
               View Full Tutorial
@@ -153,44 +161,44 @@ function QuickStartSection() {
 function NavigationSection() {
   const sections = [
     {
-      title: "Getting Started",
+      title: "Quick Start",
       description:
-        "Installation, configuration, and your first authentication flow.",
-      href: "/docs/go/getting-started",
+        "Install packages, set up the provider, and build your first auth flow.",
+      href: "/docs/ui/quick-start",
       icon: "🚀",
     },
     {
-      title: "Core Concepts",
+      title: "Packages",
       description:
-        "Understanding users, sessions, organizations, and multi-tenancy.",
-      href: "/docs/go/concepts",
-      icon: "🧠",
+        "Core, React, Headless, shadcn CLI, and Next.js packages explained.",
+      href: "/docs/ui/packages/core",
+      icon: "📦",
     },
     {
-      title: "Plugins",
+      title: "Adapters",
       description:
-        "Explore 12+ authentication methods and how to create custom plugins.",
-      href: "/docs/go/plugins",
+        "Connect to AuthSome, Clerk, Supabase, or any custom backend.",
+      href: "/docs/ui/adapters",
       icon: "🔌",
     },
     {
-      title: "API Reference",
-      description: "Complete API documentation for all services and handlers.",
-      href: "/docs/go/api",
-      icon: "📚",
+      title: "Hooks Reference",
+      description: "13+ React hooks for auth, OAuth, MFA, passkeys, and more.",
+      href: "/docs/ui/api/hooks",
+      icon: "🪝",
     },
     {
       title: "Guides",
       description:
-        "Step-by-step tutorials for common authentication scenarios.",
-      href: "/docs/go/guides",
+        "Next.js integration, auth flows, headless components, and theming.",
+      href: "/docs/ui/guides/nextjs-app-router",
       icon: "📖",
     },
     {
-      title: "Examples",
-      description: "Real-world examples and sample applications.",
-      href: "/docs/go/examples",
-      icon: "💡",
+      title: "API Reference",
+      description: "Complete reference for hooks, components, types, and server utilities.",
+      href: "/docs/ui/api/types",
+      icon: "📚",
     },
   ];
 
@@ -202,8 +210,8 @@ function NavigationSection() {
             Explore the documentation
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Everything you need to build secure, scalable authentication
-            systems.
+            Everything you need to build authentication UIs for React and
+            Next.js.
           </p>
         </div>
         <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
@@ -261,7 +269,7 @@ function CommunitySection() {
                 Star the project, report issues, and contribute to the codebase.
               </CardDescription>
               <Link
-                href="https://github.com/xraph/authsome"
+                href="https://github.com/xraph/authsome-ui"
                 className="inline-flex items-center text-sm font-semibold text-brand hover:text-brand/80"
               >
                 View on GitHub
@@ -281,7 +289,7 @@ function CommunitySection() {
                 Get help, share ideas, and connect with other developers.
               </CardDescription>
               <Link
-                href="/docs/go/guides"
+                href="/docs/ui/guides/nextjs-app-router"
                 className="inline-flex items-center text-sm font-semibold text-brand hover:text-brand/80"
               >
                 Join Discussions

@@ -1,0 +1,221 @@
+---
+title: Generic Adapter
+description: Configurable adapter for any REST API backend
+icon: Settings
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Generic Adapter
+
+A configurable adapter for connecting to any REST API backend. Define your endpoints, response transformers, and token handling to match your existing API.
+
+## Installation
+
+```bash
+npm install @authsome/adapter-generic
+```
+
+**Dependencies**: None
+**Peer dependencies**: `@authsome/ui-core`
+
+## Configuration
+
+```typescript
+interface GenericAdapterConfig {
+  /** Base URL of your API (required) */
+  apiUrl: string;
+
+  /** Custom headers for all requests */
+  headers?: Record<string, string>;
+
+  /** Endpoint paths (relative to apiUrl) */
+  endpoints?: {
+    signIn?: string;             // Default: '/auth/signin'
+    signUp?: string;             // Default: '/auth/signup'
+    signOut?: string;            // Default: '/auth/signout'
+    refreshSession?: string;     // Default: '/auth/refresh'
+    getUser?: string;            // Default: '/auth/user'
+    updateUser?: string;         // Default: '/auth/user'
+    changePassword?: string;     // Default: '/auth/password/change'
+    resetPassword?: string;      // Default: '/auth/password/reset'
+    resetPasswordConfirm?: string; // Default: '/auth/password/reset/confirm'
+    oauthSignIn?: string;        // Default: '/auth/oauth'
+    oauthCallback?: string;      // Default: '/auth/oauth/callback'
+    oauthProviders?: string;     // Default: '/auth/oauth/providers'
+    magicLink?: string;          // Default: '/auth/magic-link'
+    magicLinkVerify?: string;    // Default: '/auth/magic-link/verify'
+    phoneAuth?: string;          // Default: '/auth/phone'
+    phoneVerify?: string;        // Default: '/auth/phone/verify'
+    twoFactorSetup?: string;     // Default: '/auth/2fa/setup'
+    twoFactorVerify?: string;    // Default: '/auth/2fa/verify'
+    twoFactorDisable?: string;   // Default: '/auth/2fa/disable'
+    twoFactorStatus?: string;    // Default: '/auth/2fa/status'
+    passkeyRegister?: string;    // Default: '/auth/passkey/register'
+    passkeyAuth?: string;        // Default: '/auth/passkey/auth'
+    passkeyList?: string;        // Default: '/auth/passkey/list'
+    passkeyDelete?: string;      // Default: '/auth/passkey/delete'
+  };
+
+  /** Transform API responses to AuthSome types */
+  transformers?: {
+    user?: (data: unknown) => User;
+    session?: (data: unknown) => Session;
+    authResponse?: (data: unknown) => AuthResponse;
+  };
+
+  /** Token extraction configuration */
+  tokenConfig?: {
+    accessTokenKey?: string;   // Default: 'accessToken'
+    refreshTokenKey?: string;  // Default: 'refreshToken'
+    expiresAtKey?: string;     // Default: 'expiresAt'
+  };
+}
+```
+
+## Basic Setup
+
+```typescript
+import { GenericAdapter } from '@authsome/adapter-generic';
+import { AuthClient } from '@authsome/ui-core';
+
+const adapter = new GenericAdapter();
+
+adapter.initialize({
+  apiUrl: 'https://api.yourapp.com',
+  headers: {
+    'X-API-Key': 'your-api-key',
+  },
+});
+
+const client = new AuthClient({ provider: adapter });
+```
+
+## Custom Endpoints
+
+Map your API's endpoint paths:
+
+```typescript
+adapter.initialize({
+  apiUrl: 'https://api.yourapp.com',
+  endpoints: {
+    signIn: '/v1/login',
+    signUp: '/v1/register',
+    signOut: '/v1/logout',
+    getUser: '/v1/me',
+    refreshSession: '/v1/token/refresh',
+    oauthSignIn: '/v1/oauth/authorize',
+    oauthCallback: '/v1/oauth/callback',
+    oauthProviders: '/v1/oauth/providers',
+  },
+});
+```
+
+## Response Transformers
+
+If your API returns data in a different shape than AuthSome expects, use transformers:
+
+```typescript
+adapter.initialize({
+  apiUrl: 'https://api.yourapp.com',
+  transformers: {
+    user: (data: any) => ({
+      id: data.user_id,
+      email: data.email_address,
+      name: `${data.first_name} ${data.last_name}`,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      avatar: data.profile_image,
+      emailVerified: data.is_verified,
+      createdAt: new Date(data.created),
+    }),
+    session: (data: any) => ({
+      id: data.session_id,
+      userId: data.user_id,
+      token: data.access_token,
+      expiresAt: new Date(data.expires_at),
+    }),
+    authResponse: (data: any) => ({
+      user: data.user,
+      session: data.session,
+      requiresTwoFactor: data.requires_2fa,
+      twoFactorMethods: data.available_2fa_methods,
+    }),
+  },
+});
+```
+
+## Token Configuration
+
+Customize how tokens are extracted from API responses:
+
+```typescript
+adapter.initialize({
+  apiUrl: 'https://api.yourapp.com',
+  tokenConfig: {
+    accessTokenKey: 'token',       // Response field for access token
+    refreshTokenKey: 'refresh',    // Response field for refresh token
+    expiresAtKey: 'expires',       // Response field for expiration
+  },
+});
+```
+
+## Edge Runtime Support
+
+The generic adapter supports Edge Runtime context for server-side operations:
+
+```typescript
+// Set context for a request
+adapter.setContext({
+  headers: { authorization: 'Bearer ...' },
+  cookies: { session: '...' },
+  url: 'https://yourapp.com/dashboard',
+});
+
+// Get cookies set by the adapter
+const cookies = adapter.getCookies();
+
+// Clean up
+adapter.clearContext();
+```
+
+## Example: Custom Django Backend
+
+```typescript
+const adapter = new GenericAdapter();
+
+adapter.initialize({
+  apiUrl: 'https://api.example.com',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  endpoints: {
+    signIn: '/api/auth/login/',
+    signUp: '/api/auth/register/',
+    signOut: '/api/auth/logout/',
+    getUser: '/api/auth/user/',
+    refreshSession: '/api/auth/token/refresh/',
+    changePassword: '/api/auth/password/change/',
+    resetPassword: '/api/auth/password/reset/',
+    resetPasswordConfirm: '/api/auth/password/reset/confirm/',
+  },
+  transformers: {
+    user: (data: any) => ({
+      id: String(data.pk),
+      email: data.email,
+      name: `${data.first_name} ${data.last_name}`.trim(),
+      firstName: data.first_name,
+      lastName: data.last_name,
+    }),
+  },
+  tokenConfig: {
+    accessTokenKey: 'access',
+    refreshTokenKey: 'refresh',
+  },
+});
+```
+
+<Callout type="info">
+The generic adapter calls each endpoint only when the corresponding method is invoked. If your API does not support a feature (e.g., passkeys), those methods will return appropriate errors.
+</Callout>

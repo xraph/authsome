@@ -1,0 +1,10 @@
+{
+  "title": "API Reference",
+  "description": "Complete API documentation",
+  "pages": [
+    "hooks",
+    "components",
+    "types",
+    "server"
+  ]
+}

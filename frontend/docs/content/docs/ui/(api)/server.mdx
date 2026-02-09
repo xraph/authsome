@@ -1,0 +1,279 @@
+---
+title: Server Utilities Reference
+description: API reference for Next.js server-side authentication utilities
+icon: Server
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+# Server Utilities Reference
+
+All server utilities are imported from `@authsome/ui-next/server`. This entry point is server-only and will throw if imported in a client component.
+
+## createServerAuthClient
+
+Creates a server-side auth client for use in server components, API routes, and server actions.
+
+```typescript
+function createServerAuthClient(config: NextAuthConfig): ServerAuthClient
+```
+
+### ServerAuthClient Methods
+
+#### Authentication
+
+```typescript
+async signIn(data: SignInRequest, cookieStore?: CookieStore): Promise<ActionResult>
+async signUp(data: SignUpRequest, cookieStore?: CookieStore): Promise<ActionResult>
+async signOut(cookieStore?: CookieStore): Promise<ActionResult>
+```
+
+#### Session
+
+```typescript
+async getSession(cookieStore?: CookieStore): Promise<Session | null>
+async getUser(cookieStore?: CookieStore): Promise<User | null>
+async isAuthenticated(cookieStore?: CookieStore): Promise<boolean>
+async requireAuth(cookieStore?: CookieStore): Promise<{ user: User; session: Session }>
+async refreshSession(cookieStore?: CookieStore): Promise<ActionResult>
+```
+
+<Callout type="info">
+`requireAuth()` throws a redirect to the sign-in page if the user is not authenticated. Use it in server components that should never render for unauthenticated users.
+</Callout>
+
+#### OAuth
+
+```typescript
+async getOAuthProviders(): Promise<ActionResult>
+```
+
+#### Magic Link
+
+```typescript
+async sendMagicLink(data: MagicLinkRequest): Promise<ActionResult>
+```
+
+#### Phone Auth
+
+```typescript
+async sendPhoneCode(data: PhoneAuthRequest): Promise<ActionResult>
+async verifyPhoneCode(data: PhoneVerifyRequest, cookieStore?: CookieStore): Promise<ActionResult>
+```
+
+#### Two-Factor Auth
+
+```typescript
+async verifyTwoFactor(data: TwoFactorVerifyRequest, cookieStore?: CookieStore): Promise<ActionResult>
+```
+
+#### Password Management
+
+```typescript
+async requestPasswordReset(data: PasswordResetRequest): Promise<ActionResult>
+async confirmPasswordReset(data: PasswordResetConfirmRequest): Promise<ActionResult>
+async changePassword(data: PasswordChangeRequest): Promise<ActionResult>
+```
+
+#### Passkey
+
+```typescript
+async authenticatePasskey(data: PasskeyAuthRequest, cookieStore?: CookieStore): Promise<ActionResult>
+```
+
+#### Email Verification
+
+```typescript
+async sendVerificationEmail(data: SendVerificationEmailRequest): Promise<ActionResult>
+async verifyEmail(data: VerifyEmailRequest): Promise<ActionResult>
+async resendVerificationEmail(data: ResendVerificationRequest): Promise<ActionResult>
+```
+
+#### MFA (Advanced)
+
+```typescript
+async enrollMFAFactor(data: EnrollMFAFactorRequest): Promise<ActionResult<{ factor: MFAFactor }>>
+async listMFAFactors(): Promise<ActionResult<{ factors: MFAFactor[] }>>
+async getMFAFactor(factorId: string): Promise<ActionResult<{ factor: MFAFactor }>>
+async deleteMFAFactor(factorId: string): Promise<ActionResult>
+async verifyMFAFactor(data: VerifyMFAFactorRequest): Promise<ActionResult>
+async initiateMFAChallenge(data: MFAChallengeRequest): Promise<ActionResult<{ challenge: MFAChallengeResponse }>>
+async getMFAStatus(): Promise<ActionResult>
+```
+
+#### Device Management
+
+```typescript
+async listDevices(): Promise<ActionResult<{ devices: Device[] }>>
+async revokeDevice(deviceId: string): Promise<ActionResult>
+async trustDevice(deviceId: string, name?: string): Promise<ActionResult>
+async listTrustedDevices(): Promise<ActionResult<{ devices: Device[] }>>
+async revokeTrustedDevice(deviceId: string): Promise<ActionResult>
+```
+
+#### Session Management
+
+```typescript
+async listSessions(options?: ListSessionsOptions): Promise<ActionResult<ListSessionsResponse>>
+async revokeSession(sessionId: string, cookieStore?: CookieStore): Promise<ActionResult>
+async revokeAllSessions(cookieStore?: CookieStore): Promise<ActionResult>
+```
+
+#### Accessors
+
+```typescript
+get adapter(): AuthProvider
+get config(): NextAuthConfig
+```
+
+---
+
+## Session Helpers
+
+Standalone functions for working with sessions:
+
+```typescript
+async function getServerSession(
+  adapter: AuthProvider,
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<Session | null>
+
+async function setServerSession(
+  user: User,
+  session: Session,
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<void>
+
+async function clearServerSession(
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<void>
+
+async function getServerUser(
+  adapter: AuthProvider,
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<User | null>
+
+async function refreshServerSession(
+  adapter: AuthProvider,
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<Session | null>
+
+async function isAuthenticated(
+  adapter: AuthProvider,
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<boolean>
+
+async function requireAuth(
+  adapter: AuthProvider,
+  config?: SessionConfig,
+  cookieStore?: CookieStore
+): Promise<{ user: User; session: Session }>
+```
+
+---
+
+## Pre-Built Server Actions
+
+Initialize once, then import individual actions:
+
+```typescript
+function initializeServerActions(config: NextAuthConfig): void
+```
+
+### Available Actions
+
+```typescript
+async function signInAction(data: SignInRequest): Promise<ActionResult>
+async function signUpAction(data: SignUpRequest): Promise<ActionResult>
+async function signOutAction(): Promise<ActionResult>
+async function getSessionAction(): Promise<ActionResult>
+async function refreshSessionAction(): Promise<ActionResult>
+async function sendMagicLinkAction(data: MagicLinkRequest): Promise<ActionResult>
+async function sendPhoneCodeAction(data: PhoneAuthRequest): Promise<ActionResult>
+async function verifyPhoneCodeAction(data: PhoneVerifyRequest): Promise<ActionResult>
+async function verifyTwoFactorAction(data: TwoFactorVerifyRequest): Promise<ActionResult>
+async function requestPasswordResetAction(data: PasswordResetRequest): Promise<ActionResult>
+async function confirmPasswordResetAction(data: PasswordResetConfirmRequest): Promise<ActionResult>
+async function sendVerificationEmailAction(data: SendVerificationEmailRequest): Promise<ActionResult>
+async function verifyEmailAction(data: VerifyEmailRequest): Promise<ActionResult>
+async function resendVerificationEmailAction(data: ResendVerificationRequest): Promise<ActionResult>
+async function changePasswordAction(data: PasswordChangeRequest): Promise<ActionResult>
+async function authenticatePasskeyAction(data: PasskeyAuthRequest): Promise<ActionResult>
+async function getOAuthProvidersAction(): Promise<ActionResult>
+
+// Device Flow (RFC 8628)
+async function initiateDeviceFlowAction(data: DeviceFlowInitiateRequest): Promise<ActionResult>
+async function verifyDeviceCodeAction(data: DeviceCodeVerifyRequest): Promise<ActionResult>
+async function authorizeDeviceAction(data: DeviceAuthorizeRequest): Promise<ActionResult>
+async function pollDeviceTokenAction(data: DeviceTokenPollRequest): Promise<ActionResult>
+```
+
+### ActionResult
+
+All actions return this type:
+
+```typescript
+interface ActionResult<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  redirect?: string;
+}
+```
+
+---
+
+## Cookie Utilities
+
+```typescript
+function getSessionCookie(config?: SessionConfig, cookieStore?: CookieStore): string | null
+function setSessionCookie(data: SessionData, config?: SessionConfig, cookieStore?: CookieStore): void
+function deleteSessionCookie(config?: SessionConfig, cookieStore?: CookieStore): void
+function getSessionData(config?: SessionConfig, cookieStore?: CookieStore): SessionData | null
+function refreshSessionCookie(adapter: AuthProvider, config?: SessionConfig, cookieStore?: CookieStore): Promise<void>
+function isSessionExpired(config?: SessionConfig, cookieStore?: CookieStore): boolean
+```
+
+---
+
+## OAuth Server Helpers
+
+```typescript
+async function handleOAuthCallback(adapter: AuthProvider, request: OAuthCallbackRequest): Promise<AuthResponse>
+function buildOAuthState(params: Record<string, string>): string
+async function initiateOAuth(adapter: AuthProvider, request: OAuthSignInRequest): Promise<string>
+```
+
+---
+
+## Middleware Utilities
+
+Import from `@authsome/ui-next/middleware`:
+
+```typescript
+function createAuthMiddleware(config: MiddlewareConfig): NextMiddleware
+function createAuthMiddlewareWithHandler(
+  config: MiddlewareConfig,
+  handler: (request: NextRequest, session: SessionData | null) => Promise<NextResponse> | NextResponse
+): NextMiddleware
+
+// Route matching
+function isPublicRoute(pathname: string, publicRoutes?: string[]): boolean
+function isAuthRoute(pathname: string, basePath?: string): boolean
+function matchesPattern(pathname: string, pattern: string): boolean
+function matchesAnyPattern(pathname: string, patterns: string[]): boolean
+function normalizePath(pathname: string): string
+function shouldProcessRequest(pathname: string): boolean
+
+// Edge session
+async function getSessionFromRequest(adapter: AuthProvider, request: NextRequest): Promise<SessionData | null>
+async function getSessionFromAdapter(adapter: AuthProvider, request: NextRequest): Promise<SessionData | null>
+function createSessionCookie(data: SessionData, config?: SessionConfig): string
+async function isAuthenticated(adapter: AuthProvider, request: NextRequest): Promise<boolean>
+```

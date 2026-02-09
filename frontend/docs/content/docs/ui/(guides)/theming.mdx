@@ -1,0 +1,264 @@
+---
+title: Theming
+description: Customize the look and feel of AuthSome UI components
+icon: Paintbrush
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Theming & Customization
+
+AuthSome UI is designed to integrate with your existing design system. The approach to theming depends on which package you use.
+
+## Theming by Package
+
+| Package | Approach |
+|---------|----------|
+| `@authsome/ui-react` | Hooks only -- you build the UI |
+| `@authsome/ui-react-headless` | Render props -- you control all markup and styling |
+| `@authsome/ui-react-shadcn` | Copy-paste components -- modify source directly |
+| `@authsome/ui-next` | Components accept `uiComponents` prop for overrides |
+
+## Approach 1: Hooks (Full Control)
+
+When using hooks directly from `@authsome/ui-react`, you have complete control over every element. No theming system is needed -- just build your UI.
+
+```tsx
+import { useSignIn } from '@authsome/ui-react';
+
+function MyBrandedLogin() {
+  const { signIn, isLoading, error } = useSignIn();
+
+  return (
+    <div className="my-custom-card">
+      {/* 100% your design, your components, your styles */}
+    </div>
+  );
+}
+```
+
+## Approach 2: Headless + Design System
+
+Headless components pair well with any component library:
+
+<Tabs items={['shadcn/ui', 'Chakra UI', 'MUI']}>
+  <Tab value="shadcn/ui">
+    ```tsx
+    import { SignInForm } from '@authsome/ui-react-headless';
+    import { Button } from '@/components/ui/button';
+    import { Input } from '@/components/ui/input';
+    import { Label } from '@/components/ui/label';
+    import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+
+    function SignIn() {
+      return (
+        <SignInForm onSuccess={() => router.push('/dashboard')}>
+          {({ email, password, setEmail, setPassword, handleSubmit, isLoading, error }) => (
+            <Card className="w-full max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle>Sign In</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" value={email}
+                      onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input id="password" type="password" value={password}
+                      onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+        </SignInForm>
+      );
+    }
+    ```
+  </Tab>
+  <Tab value="Chakra UI">
+    ```tsx
+    import { SignInForm } from '@authsome/ui-react-headless';
+    import { Box, Button, FormControl, FormLabel, Input, VStack, Alert } from '@chakra-ui/react';
+
+    function SignIn() {
+      return (
+        <SignInForm onSuccess={() => router.push('/dashboard')}>
+          {({ email, password, setEmail, setPassword, handleSubmit, isLoading, error }) => (
+            <Box maxW="md" mx="auto" p={8} borderWidth={1} borderRadius="lg">
+              <form onSubmit={handleSubmit}>
+                <VStack spacing={4}>
+                  {error && <Alert status="error">{error.message}</Alert>}
+                  <FormControl>
+                    <FormLabel>Email</FormLabel>
+                    <Input type="email" value={email}
+                      onChange={(e) => setEmail(e.target.value)} />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>Password</FormLabel>
+                    <Input type="password" value={password}
+                      onChange={(e) => setPassword(e.target.value)} />
+                  </FormControl>
+                  <Button type="submit" colorScheme="blue" w="full" isLoading={isLoading}>
+                    Sign In
+                  </Button>
+                </VStack>
+              </form>
+            </Box>
+          )}
+        </SignInForm>
+      );
+    }
+    ```
+  </Tab>
+  <Tab value="MUI">
+    ```tsx
+    import { SignInForm } from '@authsome/ui-react-headless';
+    import { TextField, Button, Card, CardContent, Typography, Alert, Stack } from '@mui/material';
+
+    function SignIn() {
+      return (
+        <SignInForm onSuccess={() => router.push('/dashboard')}>
+          {({ email, password, setEmail, setPassword, handleSubmit, isLoading, error }) => (
+            <Card sx={{ maxWidth: 400, mx: 'auto', mt: 8 }}>
+              <CardContent>
+                <Typography variant="h5" gutterBottom>Sign In</Typography>
+                <form onSubmit={handleSubmit}>
+                  <Stack spacing={2}>
+                    {error && <Alert severity="error">{error.message}</Alert>}
+                    <TextField label="Email" type="email" value={email}
+                      onChange={(e) => setEmail(e.target.value)} fullWidth />
+                    <TextField label="Password" type="password" value={password}
+                      onChange={(e) => setPassword(e.target.value)} fullWidth />
+                    <Button type="submit" variant="contained" disabled={isLoading} fullWidth>
+                      {isLoading ? 'Signing in...' : 'Sign In'}
+                    </Button>
+                  </Stack>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+        </SignInForm>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Approach 3: shadcn CLI Components
+
+Components scaffolded by `@authsome/ui-react-shadcn` use CSS custom properties (design tokens) via shadcn/ui:
+
+```css
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  /* ... */
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  /* ... */
+}
+```
+
+Since the components are in your codebase, you can modify Tailwind classes directly.
+
+## Approach 4: UI Components Override
+
+The `NextAuthProvider` and `AuthProvider` accept a `uiComponents` prop to override default UI elements used by the built-in flow renderers:
+
+```tsx
+<NextAuthProvider
+  config={{
+    adapter,
+    uiComponents: {
+      Button: ({ children, ...props }) => (
+        <button className="my-custom-button" {...props}>{children}</button>
+      ),
+      Input: ({ ...props }) => (
+        <input className="my-custom-input" {...props} />
+      ),
+      Card: ({ children, ...props }) => (
+        <div className="my-custom-card" {...props}>{children}</div>
+      ),
+    },
+  }}
+>
+  {children}
+</NextAuthProvider>
+```
+
+## i18n / Locale
+
+Customize all UI text strings via the locale prop:
+
+```tsx
+<AuthProvider
+  client={client}
+  locale={{
+    common: {
+      signIn: 'Log In',
+      signUp: 'Create Account',
+      signOut: 'Log Out',
+      email: 'Email Address',
+      password: 'Password',
+      submit: 'Continue',
+      cancel: 'Go Back',
+      loading: 'Please wait...',
+      or: 'or continue with',
+    },
+    signIn: {
+      title: 'Welcome Back',
+      subtitle: 'Enter your credentials to continue',
+    },
+    signUp: {
+      title: 'Get Started',
+      subtitle: 'Create your free account',
+    },
+    errors: {
+      invalidCredentials: 'Incorrect email or password',
+      networkError: 'Connection failed. Please try again.',
+    },
+  }}
+>
+  {children}
+</AuthProvider>
+```
+
+<Callout type="info">
+The locale system uses deep merging. You only need to override the strings you want to change -- everything else falls back to the English defaults.
+</Callout>
+
+## Dark Mode
+
+All AuthSome UI approaches support dark mode:
+
+- **Hooks / Headless**: Your responsibility -- use your own dark mode system
+- **shadcn CLI components**: Use the `.dark` class on `<html>` or a theme provider like `next-themes`
+- **UI components override**: Provide dark-mode-aware components
+
+```tsx
+// Using next-themes for dark mode
+import { ThemeProvider } from 'next-themes';
+
+function App({ children }) {
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system">
+      <AuthProvider client={client}>
+        {children}
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
+```

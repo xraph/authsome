@@ -1,0 +1,180 @@
+---
+title: Subscription & Billing
+description: SaaS subscription management with Stripe integration, usage tracking, and feature-based access control
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Subscription Plugin
+
+The Subscription plugin provides full SaaS billing and subscription management with Stripe integration. It includes plan management, subscription lifecycle, add-ons, invoices, usage metering, feature-based access control, payment methods, checkout sessions, and webhook handling.
+
+<Callout type="info">
+The Subscription plugin requires the Organization plugin for per-organization billing.
+</Callout>
+
+## Features
+
+- **Plan Management** - Create and manage subscription plans with features
+- **Subscription Lifecycle** - Subscribe, cancel, pause, resume, and sync
+- **Feature-Based Access** - Per-plan feature limits with usage tracking
+- **Usage Metering** - Track and report usage for metered billing
+- **Stripe Integration** - Full Stripe API integration with webhook support
+- **Payment Methods** - Manage cards, setup intents, and default methods
+- **Checkout Sessions** - Hosted checkout and customer portal
+- **Invoices** - Invoice listing and sync
+- **Add-Ons** - Add-on management for plan extensions
+- **Public Pricing** - Public-facing plan and feature comparison
+- **Seat Enforcement** - Enforce member seat limits via hooks
+- **Dashboard Extension** - UI integration for billing management
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/subscription"
+    "github.com/xraph/authsome/plugins/organization"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        organization.NewPlugin(),
+        subscription.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+```yaml
+auth:
+  plugins:
+    subscription:
+      enabled: true
+      requireSubscription: false
+      defaultTrialDays: 14
+      gracePeriodDays: 7
+      autoSyncSeats: false
+      autoSyncPlans: false
+      provider: "stripe"
+
+      stripe:
+        secretKey: "${STRIPE_SECRET_KEY}"
+        webhookSecret: "${STRIPE_WEBHOOK_SECRET}"
+        publishableKey: "${STRIPE_PUBLISHABLE_KEY}"
+        apiVersion: "2024-06-20"
+
+      webhookTolerance: 300
+      usageReportBatchSize: 100
+      usageReportInterval: 3600
+```
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Enable the subscription plugin |
+| `requireSubscription` | bool | `false` | Require subscription for org creation |
+| `defaultTrialDays` | int | `14` | Default trial period in days |
+| `gracePeriodDays` | int | `7` | Grace period after subscription ends |
+| `autoSyncSeats` | bool | `false` | Auto-sync seat count with Stripe |
+| `autoSyncPlans` | bool | `false` | Auto-sync plans from Stripe |
+| `provider` | string | `"stripe"` | Payment provider |
+| `stripe.secretKey` | string | - | Stripe secret API key |
+| `stripe.webhookSecret` | string | - | Stripe webhook signing secret |
+| `stripe.publishableKey` | string | - | Stripe publishable key |
+
+## API Reference
+
+### Plans
+
+```http
+POST   /subscription/plans              # Create plan
+GET    /subscription/plans              # List plans
+GET    /subscription/plans/:id          # Get plan
+PATCH  /subscription/plans/:id          # Update plan
+DELETE /subscription/plans/:id          # Delete plan
+POST   /subscription/plans/:id/sync     # Sync plan to Stripe
+```
+
+### Plan Features
+
+```http
+POST   /subscription/plans/:planId/features      # Add feature to plan
+GET    /subscription/plans/:planId/features      # List plan features
+PATCH  /subscription/plans/:planId/features      # Update plan feature
+DELETE /subscription/plans/:planId/features      # Remove plan feature
+```
+
+### Subscriptions
+
+```http
+POST   /subscription/subscriptions                       # Create subscription
+GET    /subscription/subscriptions                       # List subscriptions
+GET    /subscription/subscriptions/:id                   # Get subscription
+PATCH  /subscription/subscriptions/:id                   # Update subscription
+POST   /subscription/subscriptions/:id/cancel            # Cancel subscription
+POST   /subscription/subscriptions/:id/pause             # Pause subscription
+POST   /subscription/subscriptions/:id/resume            # Resume subscription
+POST   /subscription/subscriptions/:id/sync              # Sync to provider
+POST   /subscription/subscriptions/:id/sync-from-provider # Sync from provider
+GET    /subscription/subscriptions/organization/:orgId   # Get org subscription
+```
+
+### Checkout & Payment
+
+```http
+POST   /subscription/checkout                         # Create checkout session
+POST   /subscription/checkout/portal                  # Create customer portal
+POST   /subscription/payment-methods                  # Add payment method
+GET    /subscription/payment-methods                  # List payment methods
+POST   /subscription/payment-methods/:id/set-default  # Set default
+DELETE /subscription/payment-methods/:id              # Delete payment method
+POST   /subscription/payment-methods/setup-intent     # Create setup intent
+```
+
+### Features & Usage
+
+```http
+POST   /subscription/features                              # Create feature
+GET    /subscription/features                              # List features
+GET    /subscription/organizations/:orgId/features         # Org features
+GET    /subscription/organizations/:orgId/features/:key/access  # Check access
+POST   /subscription/organizations/:orgId/features/:key/consume # Record usage
+```
+
+### Public API
+
+```http
+GET    /subscription/public/plans                 # Public plan list
+GET    /subscription/public/plans/:slug           # Public plan details
+GET    /subscription/public/plans/:slug/features  # Public plan features
+GET    /subscription/public/features              # Public feature list
+GET    /subscription/public/compare               # Plan comparison
+```
+
+### Webhooks
+
+```http
+POST   /subscription/webhooks/stripe    # Stripe webhook handler
+```
+
+## Hooks
+
+- **BeforeOrganizationCreate** - Enforces subscription requirement (when `requireSubscription` is enabled)
+- **BeforeMemberAdd** - Enforces seat limits based on plan
+
+## RBAC Roles
+
+The plugin registers:
+- `subscription_admin` - Full subscription management
+- `billing_manager` - Billing and payment management
+
+## Resources
+
+- [Subscription Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/subscription)

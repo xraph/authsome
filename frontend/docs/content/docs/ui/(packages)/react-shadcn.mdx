@@ -1,0 +1,157 @@
+---
+title: "@authsome/ui-react-shadcn"
+description: CLI tool for scaffolding styled auth components into your project
+icon: Terminal
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# @authsome/ui-react-shadcn
+
+A CLI tool that scaffolds pre-styled authentication components into your project, following the same copy-paste philosophy as [shadcn/ui](https://ui.shadcn.com). Components are copied into your codebase so you own and customize them freely.
+
+<Callout type="info">
+This is **not** a component library you import from `node_modules`. The CLI copies component source files into your project so you have full control over the code.
+</Callout>
+
+## Installation
+
+```bash
+npm install -D @authsome/ui-react-shadcn
+```
+
+**Peer dependencies**: `@authsome/ui-core`, `@authsome/ui-react`, `@authsome/ui-react-headless`
+
+## Getting Started
+
+### 1. Initialize
+
+Run the init command to set up your project:
+
+```bash
+npx authsome-ui init
+```
+
+This will:
+- Detect your project setup (Next.js, Vite, etc.)
+- Check for shadcn/ui installation (installs if needed)
+- Create an auth client configuration file
+- Set up the required directory structure
+
+### 2. Add Components
+
+Add individual components or all at once:
+
+<Tabs items={['Individual', 'All', 'Multiple']}>
+  <Tab value="Individual">
+    ```bash
+    npx authsome-ui add sign-in-form
+    ```
+  </Tab>
+  <Tab value="All">
+    ```bash
+    npx authsome-ui add --all
+    ```
+  </Tab>
+  <Tab value="Multiple">
+    ```bash
+    npx authsome-ui add sign-in-form sign-up-form oauth-buttons auth-tabs
+    ```
+  </Tab>
+</Tabs>
+
+### 3. List Available Components
+
+```bash
+npx authsome-ui list
+```
+
+## CLI Commands
+
+### `authsome-ui init`
+
+Initialize AuthSome UI in your project. Interactive prompts guide you through adapter selection and configuration.
+
+### `authsome-ui add [components...]`
+
+Add components to your project.
+
+| Option | Description |
+|--------|-------------|
+| `--all` / `-a` | Add all available components |
+| `--overwrite` / `-o` | Overwrite existing files |
+| `--path <path>` / `-p` | Custom output path for components |
+
+### `authsome-ui list`
+
+List all available components with descriptions.
+
+## Available Components
+
+| Component | Description | shadcn Dependencies |
+|-----------|-------------|---------------------|
+| `sign-in-form` | Email/password and social sign-in form | button, input, label, card |
+| `sign-up-form` | Registration form with email/password | button, input, label, card |
+| `auth-tabs` | Tabbed interface for sign in/sign up | tabs, card, separator |
+| `oauth-buttons` | Social authentication buttons | button |
+| `magic-link-form` | Passwordless authentication form | button, input, label, card |
+| `two-factor-form` | 2FA code verification form | button, input, label, card |
+| `two-factor-setup` | 2FA setup with QR code | button, input, label, card |
+| `phone-auth-form` | Phone number authentication | button, input, label, card |
+| `username-auth-form` | Username-based authentication | button, input, label, card |
+| `passkey-prompt` | WebAuthn/passkey authentication | button, card |
+| `auth-modal` | Modal dialog for authentication flows | dialog, tabs, separator |
+| `profile-menu` | User profile dropdown menu | dropdown-menu, avatar, button |
+| `session-list` | Active sessions management | card, button, badge |
+| `auth-provider-wrapper` | Wrapper component with loading state | (none) |
+
+## Example: Sign In Form
+
+After running `npx authsome-ui add sign-in-form`, you will have a file like:
+
+```tsx
+// components/auth/sign-in-form.tsx
+'use client';
+
+import { useSignIn, useOAuth } from '@authsome/ui-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+export function SignInForm({ onSuccess }: { onSuccess?: () => void }) {
+  const { signIn, isLoading, error, clearError } = useSignIn();
+  const { providers, signIn: oauthSignIn } = useOAuth();
+  // ... full implementation with styled shadcn components
+}
+```
+
+You can then customize every aspect of the component -- colors, layout, animations, copy -- because you own the code.
+
+## Customization
+
+Since components are local files, you can:
+
+1. **Change styling**: Modify Tailwind classes directly
+2. **Add fields**: Add extra form fields for your use case
+3. **Change validation**: Adjust validation rules
+4. **Add animations**: Use Framer Motion or CSS transitions
+5. **Modify layout**: Rearrange components to match your design
+6. **Change copy**: Update all text and labels
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Headless Components"
+    description="Build completely custom UIs with render-prop components"
+    href="/docs/ui/packages/react-headless"
+  />
+  <Card
+    title="Theming Guide"
+    description="Customize colors and styles for your auth components"
+    href="/docs/ui/guides/theming"
+  />
+</Cards>

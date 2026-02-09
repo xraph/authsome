@@ -1,0 +1,206 @@
+---
+title: Email Verification
+description: Email address verification with auto-send on signup and configurable token management
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Email Verification Plugin
+
+The Email Verification plugin provides email address verification for users during signup and after email changes. It supports auto-sending verification emails on signup, configurable token expiry, rate limiting, and auto-login after verification.
+
+## Features
+
+- **Auto-Send on Signup** - Automatically send verification emails when users register
+- **Token-Based Verification** - Secure cryptographic tokens with configurable expiry
+- **Rate Limiting** - Configurable resend rate limit to prevent abuse
+- **Auto-Login After Verify** - Optionally create a session after email verification
+- **Developer Mode** - Expose tokens in API responses for development/testing
+- **AfterSignUp Hook** - Integrates with the signup flow via hooks
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/emailverification"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        emailverification.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['YAML', 'Programmatic']}>
+  <Tab value="YAML">
+    ```yaml
+    auth:
+      plugins:
+        emailVerification:
+          tokenLength: 32
+          expiryHours: 24
+          maxResendPerHour: 3
+          autoSendOnSignup: true
+          autoLoginAfterVerify: true
+          verificationURL: "https://myapp.com/verify-email?token={{token}}"
+          devExposeToken: false
+    ```
+  </Tab>
+  <Tab value="Programmatic">
+    ```go
+    emailverification.NewPlugin(
+        emailverification.WithTokenLength(32),
+        emailverification.WithExpiryHours(24),
+        emailverification.WithMaxResendPerHour(3),
+        emailverification.WithAutoSendOnSignup(true),
+        emailverification.WithAutoLoginAfterVerify(true),
+        emailverification.WithVerificationURL("https://myapp.com/verify-email?token={{token}}"),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tokenLength` | int | `32` | Length of verification token in bytes |
+| `expiryHours` | int | `24` | Hours until verification token expires |
+| `maxResendPerHour` | int | `3` | Maximum resend requests per hour per email |
+| `autoSendOnSignup` | bool | `true` | Automatically send verification email on signup |
+| `autoLoginAfterVerify` | bool | `true` | Create session after successful verification |
+| `verificationURL` | string | `""` | Frontend URL template with `{{token}}` placeholder |
+| `devExposeToken` | bool | `false` | Expose token in API response (development only) |
+
+<Callout type="warn">
+Never enable `devExposeToken` in production. It exposes verification tokens in API responses for testing convenience only.
+</Callout>
+
+## API Reference
+
+### Verify Email
+
+Verify an email address using the token sent via email.
+
+```http
+GET /email-verification/verify?token=abc123
+```
+
+**Query Parameters:**
+- `token` (required) - The verification token from the email
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Email verified successfully"
+}
+```
+
+### Send Verification Email
+
+Send a verification email to the specified address.
+
+```http
+POST /email-verification/send
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+```
+
+### Resend Verification Email
+
+Resend the verification email (rate limited).
+
+```http
+POST /email-verification/resend
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+```
+
+### Check Verification Status
+
+Check the verification status of the current user (requires authentication).
+
+```http
+GET /email-verification/status
+Authorization: Bearer SESSION_TOKEN
+```
+
+**Response (200):**
+```json
+{
+  "verified": true,
+  "email": "user@example.com"
+}
+```
+
+## Route Summary
+
+| Method | Path | Auth Required | Description |
+|---|---|---|---|
+| `GET` | `/email-verification/verify` | No | Verify email with token |
+| `POST` | `/email-verification/send` | No | Send verification email |
+| `POST` | `/email-verification/resend` | No | Resend verification email |
+| `GET` | `/email-verification/status` | Yes | Check verification status |
+
+## Hooks
+
+The plugin registers an `AfterSignUp` hook when `autoSendOnSignup` is enabled. After a successful signup, it automatically sends a verification email if the user's email is not already verified.
+
+```go
+// The hook runs automatically after signup
+// It only sends if:
+// 1. autoSendOnSignup is enabled in config
+// 2. The user's email is not already verified
+// 3. Errors are logged but don't fail the signup
+```
+
+## Frontend Integration
+
+### React Example
+
+```typescript
+// Send verification email
+async function sendVerification(email: string) {
+  const response = await fetch('/email-verification/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  return response.json();
+}
+
+// Verify email from URL token
+async function verifyEmail(token: string) {
+  const response = await fetch(
+    `/email-verification/verify?token=${token}`
+  );
+  return response.json();
+}
+
+// Check verification status
+async function checkStatus() {
+  const response = await fetch('/email-verification/status', {
+    credentials: 'include',
+  });
+  return response.json();
+}
+```
+
+## Resources
+
+- [Email Verification Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/emailverification)

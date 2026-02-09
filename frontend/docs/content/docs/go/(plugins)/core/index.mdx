@@ -13,24 +13,39 @@ Core plugins provide essential authentication methods that most applications nee
 
 <Cards>
   <Card
-    title="📧 Email & Password"
+    title="Email & Password"
     description="Traditional email and password authentication with security features"
     href="/docs/go/plugins/core/email-password"
   />
   <Card
-    title="🔐 Two-Factor Authentication"
-    description="TOTP, SMS, and backup codes for enhanced security"
+    title="Two-Factor Authentication"
+    description="TOTP, backup codes, and trusted devices for enhanced security"
     href="/docs/go/plugins/core/two-factor"
   />
   <Card
-    title="👤 Username Authentication"
-    description="Username-based login as an alternative to email"
+    title="Username Authentication"
+    description="Username-based login with account lockout and password history"
     href="/docs/go/plugins/core/username"
   />
   <Card
-    title="👻 Anonymous Authentication"
-    description="Guest user sessions for unauthenticated access"
+    title="Anonymous Authentication"
+    description="Guest user sessions with account linking support"
     href="/docs/go/plugins/core/anonymous"
+  />
+  <Card
+    title="Email Verification"
+    description="Email address verification with auto-send on signup"
+    href="/docs/go/plugins/core/email-verification"
+  />
+  <Card
+    title="Bearer Token"
+    description="Bearer token authentication middleware for session-based auth"
+    href="/docs/go/plugins/core/bearer"
+  />
+  <Card
+    title="Dashboard"
+    description="Server-rendered admin dashboard UI with plugin extensions"
+    href="/docs/go/plugins/core/dashboard"
   />
 </Cards>
 
@@ -38,516 +53,133 @@ Core plugins provide essential authentication methods that most applications nee
 
 Enable core plugins in your AuthSome configuration:
 
-<Tabs items={['YAML Configuration', 'Environment Variables', 'Programmatic']}>
+<Tabs items={['YAML Configuration', 'Programmatic']}>
   <Tab value="YAML Configuration">
     ```yaml
     auth:
       plugins:
-        # Email & Password authentication
-        emailPassword:
-          enabled: true
-          requireEmailVerification: true
-          passwordPolicy:
-            minLength: 8
-            requireUpper: true
-            requireLower: true
-            requireNumbers: true
-            requireSymbols: false
-          
-        # Two-factor authentication
-        twoFactor:
-          enabled: true
-          issuer: "MyApp"
-          methods: ["totp", "sms"]
-          backupCodes: true
-          
-        # Username authentication
+        # Username/password authentication
         username:
-          enabled: true
-          allowEmailFallback: true
-          usernamePolicy:
-            minLength: 3
-            maxLength: 30
-            allowedChars: "alphanumeric_underscore"
-            
+          minPasswordLength: 8
+          maxPasswordLength: 128
+          requireUppercase: true
+          requireLowercase: true
+          requireNumber: true
+          requireSpecialChar: false
+          allowUsernameLogin: true
+          lockoutEnabled: true
+          maxFailedAttempts: 5
+          lockoutDuration: "15m"
+
+        # Two-factor authentication
+        twofa:
+          totpIssuer: "MyApp"
+          totpPeriod: 30
+          totpDigits: 6
+          backupCodeCount: 10
+          backupCodeLength: 8
+          trustedDeviceDays: 30
+
         # Anonymous authentication
         anonymous:
-          enabled: true
-          sessionDuration: "24h"
-          allowConversion: true
-    ```
-  </Tab>
-  <Tab value="Environment Variables">
-    ```bash
-    # Email & Password
-    AUTH_PLUGINS_EMAIL_PASSWORD_ENABLED=true
-    AUTH_PLUGINS_EMAIL_PASSWORD_REQUIRE_EMAIL_VERIFICATION=true
-    AUTH_PLUGINS_EMAIL_PASSWORD_PASSWORD_POLICY_MIN_LENGTH=8
+          enableAnonymous: true
+          sessionExpiryHours: 72
+          autoConvert: true
 
-    # Two-Factor Authentication
-    AUTH_PLUGINS_TWO_FACTOR_ENABLED=true
-    AUTH_PLUGINS_TWO_FACTOR_ISSUER=MyApp
-    AUTH_PLUGINS_TWO_FACTOR_METHODS=totp,sms
+        # Email verification
+        emailVerification:
+          tokenLength: 32
+          expiryHours: 24
+          maxResendPerHour: 3
+          autoSendOnSignup: true
+          autoLoginAfterVerify: true
 
-    # Username Authentication
-    AUTH_PLUGINS_USERNAME_ENABLED=true
-    AUTH_PLUGINS_USERNAME_ALLOW_EMAIL_FALLBACK=true
-
-    # Anonymous Authentication
-    AUTH_PLUGINS_ANONYMOUS_ENABLED=true
-    AUTH_PLUGINS_ANONYMOUS_SESSION_DURATION=24h
+        # Bearer token middleware
+        bearer:
+          tokenPrefix: "Bearer"
+          caseSensitive: false
     ```
   </Tab>
   <Tab value="Programmatic">
     ```go
-    config := authsome.Config{
-        Plugins: authsome.PluginConfigs{
-            EmailPassword: &emailpassword.Config{
-                Enabled:                  true,
-                RequireEmailVerification: true,
-                PasswordPolicy: emailpassword.PasswordPolicy{
-                    MinLength:      8,
-                    RequireUpper:   true,
-                    RequireLower:   true,
-                    RequireNumbers: true,
-                    RequireSymbols: false,
-                },
-            },
-            TwoFactor: &twofactor.Config{
-                Enabled:     true,
-                Issuer:      "MyApp",
-                Methods:     []string{"totp", "sms"},
-                BackupCodes: true,
-            },
-            Username: &username.Config{
-                Enabled:          true,
-                AllowEmailFallback: true,
-                UsernamePolicy: username.UsernamePolicy{
-                    MinLength:    3,
-                    MaxLength:    30,
-                    AllowedChars: "alphanumeric_underscore",
-                },
-            },
-            Anonymous: &anonymous.Config{
-                Enabled:         true,
-                SessionDuration: 24 * time.Hour,
-                AllowConversion: true,
-            },
-        },
+    package main
+
+    import (
+        "log"
+
+        "github.com/xraph/authsome"
+        "github.com/xraph/authsome/plugins/username"
+        "github.com/xraph/authsome/plugins/twofa"
+        "github.com/xraph/authsome/plugins/anonymous"
+        "github.com/xraph/authsome/plugins/emailverification"
+        "github.com/xraph/authsome/plugins/bearer"
+        "github.com/xraph/authsome/plugins/dashboard"
+        "github.com/xraph/forge"
+    )
+
+    func main() {
+        auth, err := authsome.New(config)
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        // Register core plugins
+        auth.RegisterPlugin(username.NewPlugin())
+        auth.RegisterPlugin(twofa.NewPlugin())
+        auth.RegisterPlugin(anonymous.NewPlugin())
+        auth.RegisterPlugin(emailverification.NewPlugin())
+        auth.RegisterPlugin(bearer.NewPlugin())
+        auth.RegisterPlugin(dashboard.NewPlugin())
+
+        // Initialize all plugins
+        if err := auth.InitializePlugins(); err != nil {
+            log.Fatal(err)
+        }
+
+        // Create Forge app and mount AuthSome
+        app := forge.New()
+        auth.Mount(app, "/auth")
+
+        log.Println("Server starting on :8080")
+        app.Listen(":8080")
     }
     ```
   </Tab>
 </Tabs>
-
-## Plugin Registration
-
-Register core plugins with your AuthSome instance:
-
-```go
-package main
-
-import (
-    "log"
-    
-    "github.com/xraph/authsome"
-    "github.com/xraph/authsome/plugins/emailpassword"
-    "github.com/xraph/authsome/plugins/twofactor"
-    "github.com/xraph/authsome/plugins/username"
-    "github.com/xraph/authsome/plugins/anonymous"
-    "github.com/xraph/forge"
-)
-
-func main() {
-    // Create AuthSome instance
-    auth, err := authsome.New(config)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Register core plugins
-    auth.RegisterPlugin(emailpassword.NewPlugin())
-    auth.RegisterPlugin(twofactor.NewPlugin())
-    auth.RegisterPlugin(username.NewPlugin())
-    auth.RegisterPlugin(anonymous.NewPlugin())
-
-    // Initialize all plugins
-    if err := auth.InitializePlugins(); err != nil {
-        log.Fatal(err)
-    }
-
-    // Create Forge app and mount AuthSome
-    app := forge.New()
-    auth.Mount(app, "/auth")
-
-    // Start server
-    log.Println("Server starting on :8080")
-    app.Listen(":8080")
-}
-```
 
 ## Common API Endpoints
 
 Core plugins provide these standard endpoints:
 
-### Email & Password Plugin
+### Username Plugin
 ```http
-POST /auth/signup              # Register new user
-POST /auth/signin              # Sign in user
-POST /auth/signout             # Sign out user
-POST /auth/password/reset      # Request password reset
-POST /auth/password/confirm    # Confirm password reset
-POST /auth/password/change     # Change password
-POST /auth/email/verify        # Verify email address
-POST /auth/email/resend        # Resend verification email
+POST /username/signup             # Register with username/password
+POST /username/signin             # Sign in with username/password
 ```
 
 ### Two-Factor Authentication Plugin
 ```http
-POST /auth/2fa/setup           # Setup 2FA for user
-POST /auth/2fa/verify          # Verify 2FA code
-POST /auth/2fa/disable         # Disable 2FA
-GET  /auth/2fa/backup-codes    # Get backup codes
-POST /auth/2fa/backup-codes    # Generate new backup codes
-POST /auth/2fa/recovery        # Use backup code
-```
-
-### Username Plugin
-```http
-POST /auth/username/signup     # Register with username
-POST /auth/username/signin     # Sign in with username
-POST /auth/username/change     # Change username
-GET  /auth/username/check      # Check username availability
+POST /2fa/enable                  # Enable 2FA for user
+POST /2fa/verify                  # Verify 2FA code
+POST /2fa/disable                 # Disable 2FA
+POST /2fa/generate-backup-codes   # Generate new backup codes
+POST /2fa/send-otp                # Send OTP via email/SMS
+GET  /2fa/status                  # Get 2FA status
 ```
 
 ### Anonymous Plugin
 ```http
-POST /auth/anonymous/session   # Create anonymous session
-POST /auth/anonymous/convert   # Convert to registered user
+POST /anonymous/signin            # Create anonymous session
+POST /anonymous/link              # Link anonymous account to registered account
 ```
 
-## Integration Examples
-
-### Frontend Integration
-
-<Tabs items={['JavaScript/Fetch', 'React Hook', 'Vue Composable']}>
-  <Tab value="JavaScript/Fetch">
-    ```javascript
-    // Email & Password signup
-    async function signUp(email, password) {
-        const response = await fetch('/auth/signup', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-        });
-        
-        if (!response.ok) {
-            throw new Error('Signup failed');
-        }
-        
-        return response.json();
-    }
-
-    // Sign in with 2FA
-    async function signInWith2FA(email, password, twoFactorCode) {
-        const response = await fetch('/auth/signin', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                email, 
-                password, 
-                twoFactorCode 
-            }),
-        });
-        
-        return response.json();
-    }
-
-    // Username signup
-    async function signUpWithUsername(username, email, password) {
-        const response = await fetch('/auth/username/signup', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ username, email, password }),
-        });
-        
-        return response.json();
-    }
-
-    // Create anonymous session
-    async function createAnonymousSession() {
-        const response = await fetch('/auth/anonymous/session', {
-            method: 'POST',
-        });
-        
-        return response.json();
-    }
-    ```
-  </Tab>
-  <Tab value="React Hook">
-    ```jsx
-    import { useState, useCallback } from 'react';
-
-    export function useAuth() {
-        const [user, setUser] = useState(null);
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState(null);
-
-        const signUp = useCallback(async (email, password) => {
-            setLoading(true);
-            setError(null);
-            
-            try {
-                const response = await fetch('/auth/signup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password }),
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Signup failed');
-                }
-                
-                const userData = await response.json();
-                setUser(userData.user);
-                return userData;
-            } catch (err) {
-                setError(err.message);
-                throw err;
-            } finally {
-                setLoading(false);
-            }
-        }, []);
-
-        const signIn = useCallback(async (email, password, twoFactorCode) => {
-            setLoading(true);
-            setError(null);
-            
-            try {
-                const response = await fetch('/auth/signin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, twoFactorCode }),
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.message || 'Sign in failed');
-                }
-                
-                setUser(data.user);
-                return data;
-            } catch (err) {
-                setError(err.message);
-                throw err;
-            } finally {
-                setLoading(false);
-            }
-        }, []);
-
-        const signOut = useCallback(async () => {
-            setLoading(true);
-            
-            try {
-                await fetch('/auth/signout', { method: 'POST' });
-                setUser(null);
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        }, []);
-
-        const setup2FA = useCallback(async () => {
-            const response = await fetch('/auth/2fa/setup', {
-                method: 'POST',
-            });
-            
-            return response.json();
-        }, []);
-
-        return {
-            user,
-            loading,
-            error,
-            signUp,
-            signIn,
-            signOut,
-            setup2FA,
-        };
-    }
-
-    // Usage in component
-    function LoginForm() {
-        const { signIn, loading, error } = useAuth();
-        const [email, setEmail] = useState('');
-        const [password, setPassword] = useState('');
-        const [twoFactorCode, setTwoFactorCode] = useState('');
-
-        const handleSubmit = async (e) => {
-            e.preventDefault();
-            try {
-                await signIn(email, password, twoFactorCode);
-            } catch (err) {
-                console.error('Login failed:', err);
-            }
-        };
-
-        return (
-            <form onSubmit={handleSubmit}>
-                <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email"
-                    required
-                />
-                <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password"
-                    required
-                />
-                <input
-                    type="text"
-                    value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value)}
-                    placeholder="2FA Code (optional)"
-                />
-                <button type="submit" disabled={loading}>
-                    {loading ? 'Signing in...' : 'Sign In'}
-                </button>
-                {error && <div className="error">{error}</div>}
-            </form>
-        );
-    }
-    ```
-  </Tab>
-  <Tab value="Vue Composable">
-    ```vue
-    <script setup>
-    import { ref, reactive } from 'vue';
-
-    // Composable for authentication
-    export function useAuth() {
-        const user = ref(null);
-        const loading = ref(false);
-        const error = ref(null);
-
-        const signUp = async (email, password) => {
-            loading.value = true;
-            error.value = null;
-            
-            try {
-                const response = await fetch('/auth/signup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password }),
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Signup failed');
-                }
-                
-                const userData = await response.json();
-                user.value = userData.user;
-                return userData;
-            } catch (err) {
-                error.value = err.message;
-                throw err;
-            } finally {
-                loading.value = false;
-            }
-        };
-
-        const signIn = async (email, password, twoFactorCode) => {
-            loading.value = true;
-            error.value = null;
-            
-            try {
-                const response = await fetch('/auth/signin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password, twoFactorCode }),
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.message || 'Sign in failed');
-                }
-                
-                user.value = data.user;
-                return data;
-            } catch (err) {
-                error.value = err.message;
-                throw err;
-            } finally {
-                loading.value = false;
-            }
-        };
-
-        return {
-            user,
-            loading,
-            error,
-            signUp,
-            signIn,
-        };
-    }
-
-    // Component usage
-    const { user, loading, error, signIn } = useAuth();
-    const form = reactive({
-        email: '',
-        password: '',
-        twoFactorCode: '',
-    });
-
-    const handleSubmit = async () => {
-        try {
-            await signIn(form.email, form.password, form.twoFactorCode);
-        } catch (err) {
-            console.error('Login failed:', err);
-        }
-    };
-    </script>
-
-    <template>
-        <form @submit.prevent="handleSubmit">
-            <input
-                v-model="form.email"
-                type="email"
-                placeholder="Email"
-                required
-            />
-            <input
-                v-model="form.password"
-                type="password"
-                placeholder="Password"
-                required
-            />
-            <input
-                v-model="form.twoFactorCode"
-                type="text"
-                placeholder="2FA Code (optional)"
-            />
-            <button type="submit" :disabled="loading">
-                {{ loading ? 'Signing in...' : 'Sign In' }}
-            </button>
-            <div v-if="error" class="error">{{ error }}</div>
-        </form>
-    </template>
-    ```
-  </Tab>
-</Tabs>
+### Email Verification Plugin
+```http
+GET  /email-verification/verify   # Verify email with token
+POST /email-verification/resend   # Resend verification email
+POST /email-verification/send     # Send verification email
+GET  /email-verification/status   # Check verification status (authenticated)
+```
 
 ## Security Considerations
 
@@ -555,54 +187,29 @@ POST /auth/anonymous/convert   # Convert to registered user
 **Security Best Practices**: Always use HTTPS in production, implement proper rate limiting, validate all inputs, and follow the security guidelines for each plugin.
 </Callout>
 
-### Email & Password Security
-- Strong password policies
+### Username/Password Security
+- Strong password policies with configurable requirements
 - Password hashing with bcrypt/Argon2
-- Email verification requirements
-- Rate limiting on login attempts
+- Account lockout after failed attempts (default: 5 attempts, 15 minute lockout)
+- Password history to prevent reuse
+- Optional password expiry
 
 ### Two-Factor Authentication Security
 - Secure TOTP secret generation
 - Backup codes for recovery
 - Rate limiting on verification attempts
-- Proper secret storage
+- Trusted device tracking
 
-### Username Security
-- Username uniqueness validation
-- Character restrictions
-- Case-insensitive handling
-- Reserved username protection
+### Email Verification Security
+- Cryptographically secure token generation
+- Configurable token expiry (default: 24 hours)
+- Rate limiting on resend (default: 3 per hour)
+- Auto-send on signup for immediate verification
 
-### Anonymous Session Security
-- Limited session duration
-- Secure session token generation
-- Proper cleanup of expired sessions
-- Conversion tracking
-
-## Plugin Combinations
-
-Core plugins work well together and can be combined for enhanced functionality:
-
-```go
-// Example: Email + Username + 2FA
-config := authsome.Config{
-    Plugins: authsome.PluginConfigs{
-        EmailPassword: &emailpassword.Config{
-            Enabled: true,
-            RequireEmailVerification: true,
-        },
-        Username: &username.Config{
-            Enabled: true,
-            AllowEmailFallback: true, // Allow login with email or username
-        },
-        TwoFactor: &twofactor.Config{
-            Enabled: true,
-            Methods: []string{"totp"},
-            RequiredForRoles: []string{"admin"}, // Require 2FA for admins
-        },
-    },
-}
-```
+### Bearer Token Security
+- Session-based token validation
+- Configurable token prefix
+- Session expiration checking
 
 ## Next Steps
 
@@ -614,17 +221,17 @@ config := authsome.Config{
   />
   <Card
     title="Two-Factor Authentication"
-    description="Add TOTP and SMS-based 2FA"
+    description="Add TOTP and backup code-based 2FA"
     href="/docs/go/plugins/core/two-factor"
   />
   <Card
-    title="Username Authentication"
-    description="Enable username-based login"
-    href="/docs/go/plugins/core/username"
+    title="Email Verification"
+    description="Add email verification to your authentication flow"
+    href="/docs/go/plugins/core/email-verification"
   />
   <Card
-    title="Anonymous Authentication"
-    description="Support guest user sessions"
-    href="/docs/go/plugins/core/anonymous"
+    title="Advanced Plugins"
+    description="Explore advanced authentication methods"
+    href="/docs/go/plugins/advanced"
   />
 </Cards>

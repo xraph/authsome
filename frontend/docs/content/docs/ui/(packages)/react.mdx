@@ -1,0 +1,376 @@
+---
+title: "@authsome/ui-react"
+description: React context provider, hooks, and route protection components
+icon: Atom
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# @authsome/ui-react
+
+React bindings for AuthSome UI. Provides a context provider, 13+ purpose-built hooks, and route protection components.
+
+## Installation
+
+```bash
+npm install @authsome/ui-core @authsome/ui-react
+```
+
+**Peer dependencies**: `react` (^18.0.0 || ^19.0.0), `react-dom` (^18.0.0 || ^19.0.0)
+
+## AuthProvider
+
+The `AuthProvider` wraps your application and provides auth state to all child components through React context.
+
+### Props
+
+```typescript
+interface AuthProviderProps {
+  /** The AuthClient instance (required) */
+  client: AuthClient;
+  children: React.ReactNode;
+
+  /** Flow engine configuration */
+  flows?: FlowConfig;
+  initialFlowState?: Partial<FlowState>;
+  uiComponents?: Partial<UIComponents>;
+  rendererConfig?: RendererConfig;
+  onFlowStateChange?: (state: FlowState) => void;
+
+  /** Locale overrides for i18n */
+  locale?: DeepPartial<AuthLocale>;
+
+  /** Organization change callback */
+  onOrganizationChange?: (org: Organization | null) => void;
+}
+```
+
+### Basic Setup
+
+```tsx
+import { AuthClient } from '@authsome/ui-core';
+import { AuthProvider } from '@authsome/ui-react';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+adapter.initialize({ apiUrl: 'https://auth.yourapp.com' });
+const client = new AuthClient({ provider: adapter });
+
+function App() {
+  return (
+    <AuthProvider client={client}>
+      <YourApp />
+    </AuthProvider>
+  );
+}
+```
+
+## Hooks
+
+All hooks must be used inside an `AuthProvider`. Each hook follows a consistent pattern with `isLoading`, `error`, and `clearError()`.
+
+### useAuth
+
+Returns the full auth context with all methods and state.
+
+```typescript
+function useAuth(): AuthContextValue
+```
+
+```tsx
+import { useAuth } from '@authsome/ui-react';
+
+function MyComponent() {
+  const {
+    user, session, isAuthenticated, isLoading, error,
+    signIn, signUp, signOut,
+  } = useAuth();
+  // ...
+}
+```
+
+### useUser
+
+Returns the current user or `null`.
+
+```typescript
+function useUser(): User | null
+```
+
+```tsx
+import { useUser } from '@authsome/ui-react';
+
+function Profile() {
+  const user = useUser();
+  if (!user) return <p>Not signed in</p>;
+  return <p>Hello, {user.name}!</p>;
+}
+```
+
+### useSession
+
+Returns the current session or `null`.
+
+```typescript
+function useSession(): Session | null
+```
+
+### useSignIn
+
+```typescript
+interface UseSignInResult {
+  signIn: (request: SignInRequest) => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useSignIn(): UseSignInResult
+```
+
+```tsx
+import { useSignIn } from '@authsome/ui-react';
+
+function LoginForm() {
+  const { signIn, isLoading, error, clearError } = useSignIn();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearError();
+    await signIn({ email: 'user@example.com', password: 'password' });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <p>{error.message}</p>}
+      {/* form fields */}
+      <button disabled={isLoading}>Sign In</button>
+    </form>
+  );
+}
+```
+
+### useSignUp
+
+```typescript
+interface UseSignUpResult {
+  signUp: (request: SignUpRequest) => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useSignUp(): UseSignUpResult
+```
+
+### useSignOut
+
+```typescript
+interface UseSignOutResult {
+  signOut: () => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+}
+
+function useSignOut(): UseSignOutResult
+```
+
+### useOAuth
+
+```typescript
+interface UseOAuthResult {
+  providers: OAuthProvider[];
+  signIn: (provider: OAuthProvider, redirectUri?: string) => Promise<void>;
+  handleCallback: (code: string, state?: string, provider?: OAuthProvider) => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useOAuth(): UseOAuthResult
+```
+
+```tsx
+import { useOAuth } from '@authsome/ui-react';
+
+function SocialLogin() {
+  const { providers, signIn, isLoading } = useOAuth();
+
+  return (
+    <div>
+      {providers.map((provider) => (
+        <button
+          key={provider}
+          onClick={() => signIn(provider)}
+          disabled={isLoading}
+        >
+          Sign in with {provider}
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+### useMagicLink
+
+```typescript
+interface UseMagicLinkResult {
+  sendMagicLink: (email: string, redirectUri?: string) => Promise<void>;
+  verifyMagicLink: (token: string) => Promise<void>;
+  isLoading: boolean;
+  isSent: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function useMagicLink(): UseMagicLinkResult
+```
+
+### use2FA
+
+```typescript
+interface Use2FAResult {
+  enabledMethods: TwoFactorMethod[];
+  setup: (method: TwoFactorMethod, contact?: string) => Promise<TwoFactorSetupResponse>;
+  verify: (code: string, method?: TwoFactorMethod, remember?: boolean) => Promise<void>;
+  disable: () => Promise<void>;
+  refresh: () => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function use2FA(): Use2FAResult
+```
+
+### usePasskey
+
+```typescript
+interface UsePasskeyResult {
+  passkeys: PasskeyCredential[];
+  register: (name?: string) => Promise<PasskeyCredential>;
+  authenticate: (credentialId?: string) => Promise<void>;
+  remove: (credentialId: string) => Promise<void>;
+  refresh: () => Promise<void>;
+  isLoading: boolean;
+  error: AuthError | null;
+  clearError: () => void;
+}
+
+function usePasskey(): UsePasskeyResult
+```
+
+### usePhoneAuth
+
+Hook for phone number authentication (send code + verify).
+
+### useUsernameAuth
+
+Hook for username/password authentication.
+
+### useOrganization
+
+```typescript
+interface UseOrganizationReturn {
+  organizations: Organization[];
+  activeOrganization: Organization | null;
+  setActiveOrganization?: (orgId: string) => Promise<void>;
+  getOrganizations?: () => Promise<Organization[]>;
+  isSupported: boolean;
+  isLoading: boolean;
+}
+
+function useOrganization(): UseOrganizationReturn
+```
+
+### useRequireAuth
+
+Programmatic auth guard hook. Redirects if not authenticated.
+
+### useAdapter
+
+Direct access to the underlying adapter instance.
+
+```typescript
+function useAdapter(): AuthProvider
+```
+
+## Components
+
+### RequireAuth
+
+Renders children only when the user is authenticated.
+
+```typescript
+interface RequireAuthProps {
+  children: React.ReactNode;
+  /** Shown while loading or when unauthenticated */
+  fallback?: React.ReactNode;
+  /** Redirect URL when unauthenticated */
+  redirectTo?: string;
+  /** Callback when unauthenticated */
+  onUnauthenticated?: () => void;
+}
+```
+
+```tsx
+import { RequireAuth } from '@authsome/ui-react';
+
+function ProtectedPage() {
+  return (
+    <RequireAuth fallback={<p>Loading...</p>} redirectTo="/login">
+      <Dashboard />
+    </RequireAuth>
+  );
+}
+```
+
+### withAuth (HOC)
+
+Higher-order component for class components or when you prefer HOCs:
+
+```typescript
+interface WithAuthOptions {
+  fallback?: React.ComponentType;
+  redirectTo?: string;
+  onUnauthenticated?: () => void;
+}
+
+function withAuth<P extends object>(
+  Component: React.ComponentType<P>,
+  options?: WithAuthOptions
+): React.ComponentType<P>
+```
+
+```tsx
+import { withAuth } from '@authsome/ui-react';
+
+function Dashboard(props: DashboardProps) {
+  return <div>Protected content</div>;
+}
+
+export default withAuth(Dashboard, { redirectTo: '/login' });
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Headless Components"
+    description="Unstyled render-prop components for custom UIs"
+    href="/docs/ui/packages/react-headless"
+  />
+  <Card
+    title="Next.js Integration"
+    description="Server-side auth, middleware, and server actions"
+    href="/docs/ui/packages/next"
+  />
+  <Card
+    title="Hooks API Reference"
+    description="Complete reference with all hook signatures"
+    href="/docs/ui/api/hooks"
+  />
+</Cards>

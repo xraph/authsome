@@ -1,0 +1,364 @@
+---
+title: "@authsome/ui-core"
+description: Framework-agnostic authentication client with observable state, flow engine, and i18n
+icon: Box
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { Card, Cards } from 'fumadocs-ui/components/card'
+
+# @authsome/ui-core
+
+The core package provides the foundation for all AuthSome UI packages. It is framework-agnostic and can be used with React, Vue, Svelte, or vanilla JavaScript.
+
+## Installation
+
+```bash
+npm install @authsome/ui-core
+```
+
+## AuthClient
+
+The `AuthClient` is the central class that manages authentication state and communicates with your backend through an adapter.
+
+### Configuration
+
+```typescript
+interface AuthClientConfig {
+  /** The authentication provider adapter (required) */
+  provider: AuthProvider;
+  /** Automatically refresh sessions (default: true) */
+  autoRefresh?: boolean;
+  /** Session refresh interval in ms (default: 300000 / 5 minutes) */
+  refreshInterval?: number;
+}
+```
+
+### Creating a Client
+
+```typescript
+import { AuthClient } from '@authsome/ui-core';
+import { AuthSomeAdapter } from '@authsome/adapter-authsome';
+
+const adapter = new AuthSomeAdapter();
+await adapter.initialize({ apiUrl: 'https://auth.yourapp.com' });
+
+const client = new AuthClient({
+  provider: adapter,
+  autoRefresh: true,
+  refreshInterval: 5 * 60 * 1000,
+});
+
+// Initialize the client (restores existing session)
+await client.initialize();
+```
+
+### Core Methods
+
+#### Authentication
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `initialize` | `() => Promise<void>` | Initialize client and restore session |
+| `signIn` | `(request: SignInRequest) => Promise<void>` | Sign in with credentials |
+| `signUp` | `(request: SignUpRequest) => Promise<void>` | Register a new user |
+| `signOut` | `() => Promise<void>` | Sign out and clear session |
+
+#### User Management
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `updateUser` | `(request: UpdateUserRequest) => Promise<void>` | Update user profile |
+| `changePassword` | `(request: PasswordChangeRequest) => Promise<void>` | Change password |
+| `requestPasswordReset` | `(request: PasswordResetRequest) => Promise<void>` | Request reset email |
+| `confirmPasswordReset` | `(request: PasswordResetConfirmRequest) => Promise<void>` | Confirm password reset |
+
+#### OAuth
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `getOAuthUrl` | `(request: OAuthSignInRequest) => Promise<string>` | Get OAuth authorization URL |
+| `handleOAuthCallback` | `(request: OAuthCallbackRequest) => Promise<void>` | Handle OAuth callback |
+| `getOAuthProviders` | `() => Promise<OAuthProvider[]>` | List available OAuth providers |
+
+#### Magic Link
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `sendMagicLink` | `(request: MagicLinkRequest) => Promise<void>` | Send magic link email |
+| `verifyMagicLink` | `(request: MagicLinkVerifyRequest) => Promise<void>` | Verify magic link token |
+
+#### Two-Factor Authentication
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `setupTwoFactor` | `(request: TwoFactorSetupRequest) => Promise<TwoFactorSetupResponse>` | Set up 2FA |
+| `verifyTwoFactor` | `(request: TwoFactorVerifyRequest) => Promise<void>` | Verify 2FA code |
+| `disableTwoFactor` | `() => Promise<void>` | Disable 2FA |
+| `getTwoFactorStatus` | `() => Promise<TwoFactorMethod[]>` | Get enabled 2FA methods |
+
+#### Passkeys / WebAuthn
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `registerPasskey` | `(request: PasskeyRegisterRequest) => Promise<PasskeyCredential>` | Register a passkey |
+| `authenticatePasskey` | `(request: PasskeyAuthRequest) => Promise<void>` | Authenticate with passkey |
+| `listPasskeys` | `() => Promise<PasskeyCredential[]>` | List registered passkeys |
+| `deletePasskey` | `(credentialId: string) => Promise<void>` | Delete a passkey |
+
+#### Organizations
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `getOrganizations` | `() => Promise<Organization[]>` | Get user's organizations |
+| `getActiveOrganization` | `() => Promise<Organization \| null>` | Get active organization |
+| `setActiveOrganization` | `(orgId: string) => Promise<void>` | Switch active organization |
+| `supportsOrganizations` | `() => boolean` | Check adapter support |
+
+#### State Access
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `getUser` | `() => User \| null` | Get current user |
+| `getSession` | `() => Session \| null` | Get current session |
+| `isAuthenticated` | `() => boolean` | Check authentication status |
+| `getError` | `() => AuthError \| null` | Get current error |
+| `clearError` | `() => void` | Clear error state |
+| `subscribe` | `(listener: (ctx: AuthContext) => void) => Unsubscribe` | Subscribe to state changes |
+| `destroy` | `() => void` | Cleanup resources |
+
+### Observable State
+
+The client uses an observable pattern for framework-agnostic state management:
+
+```typescript
+// Subscribe to auth state changes
+const unsubscribe = client.subscribe((context) => {
+  console.log('State:', context.state);       // 'loading' | 'authenticated' | 'unauthenticated' | 'error'
+  console.log('User:', context.user);         // User | null
+  console.log('Session:', context.session);   // Session | null
+  console.log('Error:', context.error);       // AuthError | null
+  console.log('Loading:', context.isLoading); // boolean
+});
+
+// Later: unsubscribe
+unsubscribe();
+```
+
+## AuthState
+
+```typescript
+enum AuthState {
+  AUTHENTICATED = 'authenticated',
+  UNAUTHENTICATED = 'unauthenticated',
+  LOADING = 'loading',
+  ERROR = 'error',
+}
+```
+
+## Flow Engine
+
+The flow engine provides a state machine for multi-step authentication flows (sign-in, MFA, email verification, etc.).
+
+### Flow Steps
+
+```typescript
+enum FlowStep {
+  // Email/password
+  SIGN_IN = 'sign_in',
+  SIGN_UP = 'sign_up',
+  EMAIL_PASSWORD_SIGN_IN = 'email_password_sign_in',
+  EMAIL_PASSWORD_SIGN_UP = 'email_password_sign_up',
+
+  // OAuth
+  OAUTH_SELECT = 'oauth_select',
+  OAUTH_CALLBACK = 'oauth_callback',
+
+  // Magic link
+  MAGIC_LINK_REQUEST = 'magic_link_request',
+  MAGIC_LINK_VERIFY = 'magic_link_verify',
+  MAGIC_LINK_SENT = 'magic_link_sent',
+
+  // Phone
+  PHONE_REQUEST = 'phone_request',
+  PHONE_VERIFY = 'phone_verify',
+
+  // Passkeys
+  PASSKEY_REGISTER = 'passkey_register',
+  PASSKEY_AUTHENTICATE = 'passkey_authenticate',
+
+  // MFA
+  MFA_REQUIRED = 'mfa_required',
+  MFA_SETUP = 'mfa_setup',
+  MFA_VERIFY = 'mfa_verify',
+  MFA_SELECT_METHOD = 'mfa_select_method',
+
+  // Email verification
+  EMAIL_VERIFICATION_REQUIRED = 'email_verification_required',
+  EMAIL_VERIFICATION_SENT = 'email_verification_sent',
+
+  // Password reset
+  PASSWORD_RESET_REQUEST = 'password_reset_request',
+  PASSWORD_RESET_SENT = 'password_reset_sent',
+  PASSWORD_RESET_CONFIRM = 'password_reset_confirm',
+
+  // Device flow (RFC 8628)
+  DEVICE_FLOW_INITIATE = 'device_flow_initiate',
+  DEVICE_CODE_ENTRY = 'device_code_entry',
+  DEVICE_AUTHORIZE = 'device_authorize',
+  DEVICE_POLLING = 'device_polling',
+
+  // Terminal states
+  SUCCESS = 'success',
+  ERROR = 'error',
+  CANCELLED = 'cancelled',
+}
+```
+
+### Flow Configuration
+
+```typescript
+interface FlowConfig {
+  name: string;
+  description?: string;
+  initialStep: FlowStep;
+  allowedSteps: FlowStep[];
+  transitions: {
+    [key in FlowStep]?: {
+      onSuccess?: FlowStep;
+      onError?: FlowStep;
+      onCancel?: FlowStep;
+      onBack?: FlowStep;
+      conditions?: Array<{
+        when: (state: FlowState) => boolean;
+        then: FlowStep;
+      }>;
+    };
+  };
+  onStepChange?: (step: FlowStep, state: FlowState) => void;
+  onComplete?: (user: User, session: Session) => void;
+  onError?: (error: AuthError, state: FlowState) => void;
+}
+```
+
+### Using the Flow Engine
+
+```typescript
+import { FlowEngine, FlowStep } from '@authsome/ui-core';
+
+const engine = new FlowEngine({
+  name: 'sign-in',
+  initialStep: FlowStep.EMAIL_PASSWORD_SIGN_IN,
+  allowedSteps: [
+    FlowStep.EMAIL_PASSWORD_SIGN_IN,
+    FlowStep.MFA_REQUIRED,
+    FlowStep.MFA_VERIFY,
+    FlowStep.SUCCESS,
+    FlowStep.ERROR,
+  ],
+  transitions: {
+    [FlowStep.EMAIL_PASSWORD_SIGN_IN]: {
+      onSuccess: FlowStep.SUCCESS,
+      conditions: [
+        {
+          when: (state) => state.mfaRequired === true,
+          then: FlowStep.MFA_REQUIRED,
+        },
+      ],
+    },
+    [FlowStep.MFA_VERIFY]: {
+      onSuccess: FlowStep.SUCCESS,
+    },
+  },
+  onComplete: (user, session) => {
+    console.log('Auth complete:', user.email);
+  },
+});
+
+// Get current state
+const state = engine.getState();
+const currentStep = engine.getCurrentStep();
+
+// Navigate the flow
+await engine.transition({ type: 'SUCCESS', data: { user, session } });
+```
+
+<Callout type="info">
+The React package (`@authsome/ui-react`) wraps the flow engine in a context provider so you can drive flows declaratively from components. See the [Authentication Flows guide](/docs/ui/guides/authentication-flows).
+</Callout>
+
+## Locale / i18n
+
+The core package includes a locale system for internationalization:
+
+```typescript
+import { createLocale, defaultLocale } from '@authsome/ui-core';
+
+// Use the default English locale
+console.log(defaultLocale.common.signIn); // "Sign In"
+
+// Create a custom locale with overrides
+const frenchLocale = createLocale({
+  common: {
+    signIn: 'Se connecter',
+    signUp: "S'inscrire",
+    signOut: 'Se deconnecter',
+    email: 'E-mail',
+    password: 'Mot de passe',
+    submit: 'Soumettre',
+    cancel: 'Annuler',
+    loading: 'Chargement...',
+    or: 'ou',
+  },
+});
+```
+
+Pass the locale to the React provider:
+
+```tsx
+<AuthProvider client={client} locale={frenchLocale}>
+  {children}
+</AuthProvider>
+```
+
+## Storage Adapters
+
+The core package provides storage abstractions:
+
+```typescript
+import {
+  LocalStorageAdapter,
+  SessionStorageAdapter,
+  MemoryStorageAdapter,
+} from '@authsome/ui-core';
+
+// Browser localStorage (default)
+const localStorage = new LocalStorageAdapter();
+
+// Session storage (cleared when browser closes)
+const sessionStorage = new SessionStorageAdapter();
+
+// In-memory storage (for SSR / testing)
+const memoryStorage = new MemoryStorageAdapter();
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="@authsome/ui-react"
+    description="React bindings with hooks and context provider"
+    href="/docs/ui/packages/react"
+  />
+  <Card
+    title="Types Reference"
+    description="Complete type definitions for User, Session, AuthError, and more"
+    href="/docs/ui/api/types"
+  />
+  <Card
+    title="Authentication Flows"
+    description="Learn to build multi-step auth flows with the flow engine"
+    href="/docs/ui/guides/authentication-flows"
+  />
+</Cards>

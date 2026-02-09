@@ -1,0 +1,186 @@
+---
+title: Impersonation
+description: Secure admin-to-user impersonation with audit logging, RBAC, and time limits
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+
+# Impersonation Plugin
+
+The Impersonation plugin provides secure admin-to-user impersonation with comprehensive audit logging, RBAC permission checks, time limits, and automatic cleanup of expired sessions. Designed for support and debugging workflows where administrators need to view the application as a specific user.
+
+<Callout type="warn">
+Impersonation is a powerful feature that should be restricted to trusted administrators. All impersonation actions are audit logged for compliance.
+</Callout>
+
+## Features
+
+- **Time-Limited Sessions** - Configurable default, minimum, and maximum duration
+- **Audit Logging** - All impersonation actions are recorded
+- **RBAC Integration** - Permission-based access control for impersonation
+- **Reason & Ticket Requirements** - Optionally require a reason and support ticket
+- **Auto Cleanup** - Automatic cleanup of expired impersonation sessions
+- **Middleware** - Request-level impersonation context and guards
+- **Webhook Notifications** - Notify on impersonation start and end
+
+## Quick Start
+
+### Installation
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/impersonation"
+)
+
+auth := authsome.New(
+    authsome.WithDatabase(db),
+    authsome.WithPlugins(
+        impersonation.NewPlugin(),
+    ),
+)
+```
+
+### Configuration
+
+<Tabs items={['YAML', 'Programmatic']}>
+  <Tab value="YAML">
+    ```yaml
+    auth:
+      plugins:
+        impersonation:
+          defaultDurationMinutes: 60
+          maxDurationMinutes: 480
+          minDurationMinutes: 5
+          requireReason: true
+          requireTicket: false
+          minReasonLength: 10
+          requirePermission: true
+          impersonatePermission: "admin:user:impersonate"
+          auditAllActions: true
+          autoCleanupEnabled: true
+          cleanupInterval: "30m"
+          showIndicator: true
+          indicatorMessage: "You are impersonating a user"
+          webhookOnStart: false
+          webhookOnEnd: false
+    ```
+  </Tab>
+  <Tab value="Programmatic">
+    ```go
+    impersonation.NewPlugin(
+        impersonation.WithDefaultDurationMinutes(60),
+        impersonation.WithMaxDurationMinutes(480),
+        impersonation.WithRequireReason(true),
+        impersonation.WithAuditAllActions(true),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration Options
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `defaultDurationMinutes` | int | `60` | Default impersonation duration |
+| `maxDurationMinutes` | int | `480` | Maximum allowed duration |
+| `minDurationMinutes` | int | `5` | Minimum allowed duration |
+| `requireReason` | bool | `true` | Require a reason for impersonation |
+| `requireTicket` | bool | `false` | Require a support ticket reference |
+| `minReasonLength` | int | `10` | Minimum reason text length |
+| `requirePermission` | bool | `true` | Check RBAC permissions |
+| `impersonatePermission` | string | `"admin:user:impersonate"` | Required RBAC permission |
+| `auditAllActions` | bool | `true` | Audit all actions during impersonation |
+| `autoCleanupEnabled` | bool | `true` | Auto-cleanup expired sessions |
+| `cleanupInterval` | duration | `30m` | Cleanup check interval |
+| `showIndicator` | bool | `true` | Show impersonation indicator in UI |
+| `webhookOnStart` | bool | `false` | Send webhook on impersonation start |
+| `webhookOnEnd` | bool | `false` | Send webhook on impersonation end |
+
+## API Reference
+
+### Start Impersonation
+
+```bash
+curl -X POST https://auth.yourdomain.com/impersonation/start \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_456",
+    "reason": "Investigating reported UI issue #1234",
+    "durationMinutes": 30
+  }'
+```
+
+### End Impersonation
+
+```bash
+curl -X POST https://auth.yourdomain.com/impersonation/end \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Get Impersonation Details
+
+```bash
+curl https://auth.yourdomain.com/impersonation/{id} \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### List Impersonations
+
+```bash
+curl https://auth.yourdomain.com/impersonation/ \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+### Verify Impersonation
+
+Check if the current session is an impersonation session.
+
+```bash
+curl -X POST https://auth.yourdomain.com/impersonation/verify \
+  -H "Authorization: Bearer SESSION_TOKEN"
+```
+
+### Impersonation Audit Log
+
+```bash
+curl https://auth.yourdomain.com/impersonation/audit \
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+## Middleware
+
+The Impersonation plugin provides middleware for request-level guards:
+
+```go
+// Add impersonation context to all requests
+app.Use(impersonationPlugin.ImpersonationMiddleware.Handle())
+
+// Block certain routes during impersonation (e.g., billing)
+billing := app.Group("/billing")
+billing.Use(impersonationPlugin.ImpersonationMiddleware.RequireNoImpersonation())
+
+// Require active impersonation for support tools
+supportTools := app.Group("/support")
+supportTools.Use(impersonationPlugin.ImpersonationMiddleware.RequireImpersonation())
+
+// Audit actions during impersonation
+app.Use(impersonationPlugin.ImpersonationMiddleware.AuditImpersonationAction())
+```
+
+## Route Summary
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/impersonation/start` | Start impersonation |
+| `POST` | `/impersonation/end` | End impersonation |
+| `GET` | `/impersonation/:id` | Get impersonation details |
+| `GET` | `/impersonation/` | List impersonations |
+| `POST` | `/impersonation/verify` | Verify impersonation status |
+| `GET` | `/impersonation/audit` | Impersonation audit log |
+
+## Resources
+
+- [Impersonation Plugin Source](https://github.com/xraph/authsome/tree/main/plugins/impersonation)

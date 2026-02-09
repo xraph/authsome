@@ -13,17 +13,17 @@ AuthSome Go features a powerful plugin system that allows you to extend authenti
 
 <Cards>
   <Card
-    title="🔧 Core Plugins"
+    title="Core Plugins"
     description="Essential authentication methods for most applications"
     href="/docs/go/plugins/core"
   />
   <Card
-    title="⚡ Advanced Plugins"
-    description="Enhanced security and user experience features"
+    title="Advanced Plugins"
+    description="Enhanced security, token management, and user experience features"
     href="/docs/go/plugins/advanced"
   />
   <Card
-    title="🏢 Enterprise Plugins"
+    title="Enterprise Plugins"
     description="Enterprise-grade features for large organizations"
     href="/docs/go/plugins/enterprise"
   />
@@ -42,223 +42,118 @@ type Plugin interface {
     RegisterHooks(hooks *HookRegistry) error      // Register lifecycle hooks
     Migrate() error                               // Run database migrations
 }
-
-// Example plugin implementation
-type EmailPasswordPlugin struct {
-    service *emailpassword.Service
-    config  emailpassword.Config
-}
-
-func NewEmailPasswordPlugin() *EmailPasswordPlugin {
-    return &EmailPasswordPlugin{}
-}
-
-func (p *EmailPasswordPlugin) ID() string {
-    return "email-password"
-}
-
-func (p *EmailPasswordPlugin) Init(auth *authsome.Auth) error {
-    // Initialize service with dependencies from auth instance
-    var config emailpassword.Config
-    if err := auth.Config().Bind("auth.plugins.emailPassword", &config); err != nil {
-        return fmt.Errorf("failed to bind config: %w", err)
-    }
-    
-    p.config = config
-    p.service = emailpassword.NewService(
-        auth.Config(),
-        auth.UserRepository(),
-        auth.SessionService(),
-        auth.PasswordHasher(),
-    )
-    
-    return nil
-}
-
-func (p *EmailPasswordPlugin) RegisterRoutes(router forge.Router) error {
-    handler := emailpassword.NewHandler(p.service)
-    
-    router.POST("/auth/signup", handler.SignUp)
-    router.POST("/auth/signin", handler.SignIn)
-    router.POST("/auth/password/reset", handler.RequestPasswordReset)
-    router.POST("/auth/password/reset/confirm", handler.ConfirmPasswordReset)
-    
-    return nil
-}
-
-func (p *EmailPasswordPlugin) RegisterHooks(hooks *HookRegistry) error {
-    // Register before/after hooks for plugin events
-    hooks.Register("before:signup", p.beforeSignUp)
-    hooks.Register("after:signup", p.afterSignUp)
-    hooks.Register("before:signin", p.beforeSignIn)
-    hooks.Register("after:signin", p.afterSignIn)
-    
-    return nil
-}
-
-func (p *EmailPasswordPlugin) Migrate() error {
-    // Plugin-specific database migrations
-    return p.service.Migrate()
-}
 ```
 
 ## Plugin Configuration
 
-Plugins are configured through the main AuthSome configuration system with plugin-specific sections:
+Plugins are configured through the AuthSome configuration system:
 
-<Tabs items={['YAML Configuration', 'Environment Variables', 'Programmatic']}>
+<Tabs items={['YAML Configuration', 'Programmatic']}>
   <Tab value="YAML Configuration">
     ```yaml
     auth:
       plugins:
         # Core plugins
-        emailPassword:
-          enabled: true
-          requireEmailVerification: true
-          passwordPolicy:
-            minLength: 8
-            requireUpper: true
-            requireLower: true
-            requireNumbers: true
-            requireSymbols: false
-        
-        twoFactor:
-          enabled: true
-          issuer: "MyApp"
-          methods: ["totp", "sms"]
-          backupCodes: true
-        
+        username:
+          minPasswordLength: 8
+          maxPasswordLength: 128
+          requireUppercase: true
+          requireLowercase: true
+          allowUsernameLogin: true
+          lockoutEnabled: true
+          maxFailedAttempts: 5
+
+        twofa:
+          totpIssuer: "MyApp"
+          totpPeriod: 30
+          totpDigits: 6
+          backupCodeCount: 10
+
+        anonymous:
+          enableAnonymous: true
+          sessionExpiryHours: 72
+
+        emailVerification:
+          tokenLength: 32
+          expiryHours: 24
+          autoSendOnSignup: true
+
         # Advanced plugins
-        oauth:
-          enabled: true
+        social:
+          autoCreateUser: true
+          allowAccountLinking: true
+          trustEmailVerified: true
           providers:
             google:
               clientId: "${GOOGLE_CLIENT_ID}"
               clientSecret: "${GOOGLE_CLIENT_SECRET}"
-              scopes: ["email", "profile"]
             github:
               clientId: "${GITHUB_CLIENT_ID}"
               clientSecret: "${GITHUB_CLIENT_SECRET}"
-        
+
         magicLink:
-          enabled: true
-          tokenExpiry: "15m"
-          maxAttempts: 3
-        
+          expiryMinutes: 15
+          allowImplicitSignup: true
+
+        passkey:
+          rpId: "example.com"
+          rpName: "Example App"
+          timeout: 60000
+
+        jwt:
+          issuer: "authsome"
+          accessExpirySeconds: 3600
+          refreshExpirySeconds: 2592000
+          signingAlgorithm: "HS256"
+
+        apikey:
+          defaultRateLimit: 1000
+          maxKeysPerUser: 10
+          keyLength: 32
+
         # Enterprise plugins
-        saml:
-          enabled: true
-          providers:
-            okta:
-              entityId: "https://myapp.com"
-              ssoUrl: "https://mycompany.okta.com/app/myapp/sso/saml"
-              certificate: "${OKTA_CERTIFICATE}"
-        
-        rbac:
-          enabled: true
-          defaultRole: "user"
-          superAdminRole: "admin"
-    ```
-  </Tab>
-  <Tab value="Environment Variables">
-    ```bash
-    # Core plugins
-    AUTH_PLUGINS_EMAIL_PASSWORD_ENABLED=true
-    AUTH_PLUGINS_EMAIL_PASSWORD_REQUIRE_EMAIL_VERIFICATION=true
-    AUTH_PLUGINS_EMAIL_PASSWORD_PASSWORD_POLICY_MIN_LENGTH=8
+        sso:
+          allowSAML: true
+          allowOIDC: true
+          autoProvision: true
+          defaultRole: "member"
 
-    # Two-factor authentication
-    AUTH_PLUGINS_TWO_FACTOR_ENABLED=true
-    AUTH_PLUGINS_TWO_FACTOR_ISSUER=MyApp
-    AUTH_PLUGINS_TWO_FACTOR_METHODS=totp,sms
-
-    # OAuth
-    AUTH_PLUGINS_OAUTH_ENABLED=true
-    AUTH_PLUGINS_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID=your_google_client_id
-    AUTH_PLUGINS_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-    # Magic Link
-    AUTH_PLUGINS_MAGIC_LINK_ENABLED=true
-    AUTH_PLUGINS_MAGIC_LINK_TOKEN_EXPIRY=15m
-
-    # RBAC
-    AUTH_PLUGINS_RBAC_ENABLED=true
-    AUTH_PLUGINS_RBAC_DEFAULT_ROLE=user
+        admin:
+          requiredRole: "admin"
+          allowUserCreation: true
+          allowImpersonation: true
     ```
   </Tab>
   <Tab value="Programmatic">
     ```go
-    config := authsome.Config{
-        Plugins: authsome.PluginConfigs{
-            EmailPassword: &emailpassword.Config{
-                Enabled:                  true,
-                RequireEmailVerification: true,
-                PasswordPolicy: emailpassword.PasswordPolicy{
-                    MinLength:      8,
-                    RequireUpper:   true,
-                    RequireLower:   true,
-                    RequireNumbers: true,
-                    RequireSymbols: false,
-                },
-            },
-            TwoFactor: &twofactor.Config{
-                Enabled:     true,
-                Issuer:      "MyApp",
-                Methods:     []string{"totp", "sms"},
-                BackupCodes: true,
-            },
-            OAuth: &oauth.Config{
-                Enabled: true,
-                Providers: map[string]oauth.ProviderConfig{
-                    "google": {
-                        ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-                        ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-                        Scopes:       []string{"email", "profile"},
-                    },
-                },
-            },
-            RBAC: &rbac.Config{
-                Enabled:        true,
-                DefaultRole:    "user",
-                SuperAdminRole: "admin",
-            },
-        },
-    }
+    import (
+        "github.com/xraph/authsome"
+        "github.com/xraph/authsome/plugins/username"
+        "github.com/xraph/authsome/plugins/twofa"
+        "github.com/xraph/authsome/plugins/social"
+        "github.com/xraph/authsome/plugins/passkey"
+        "github.com/xraph/authsome/plugins/sso"
+        "github.com/xraph/authsome/plugins/admin"
+    )
 
-    auth, err := authsome.New(config)
-    if err != nil {
-        log.Fatal(err)
-    }
-    ```
-  </Tab>
-</Tabs>
-
-## Plugin Registration
-
-Register plugins with your AuthSome instance:
-
-```go
-func main() {
-    // Create AuthSome instance
     auth, err := authsome.New(config)
     if err != nil {
         log.Fatal(err)
     }
 
     // Register core plugins
-    auth.RegisterPlugin(emailpassword.NewPlugin())
-    auth.RegisterPlugin(twofactor.NewPlugin())
     auth.RegisterPlugin(username.NewPlugin())
+    auth.RegisterPlugin(twofa.NewPlugin())
+    auth.RegisterPlugin(anonymous.NewPlugin())
 
     // Register advanced plugins
-    auth.RegisterPlugin(oauth.NewPlugin())
-    auth.RegisterPlugin(magiclink.NewPlugin())
+    auth.RegisterPlugin(social.NewPlugin())
     auth.RegisterPlugin(passkey.NewPlugin())
+    auth.RegisterPlugin(magiclink.NewPlugin())
 
     // Register enterprise plugins
-    auth.RegisterPlugin(saml.NewPlugin())
-    auth.RegisterPlugin(oidc.NewPlugin())
-    auth.RegisterPlugin(rbac.NewPlugin())
+    auth.RegisterPlugin(sso.NewPlugin())
+    auth.RegisterPlugin(admin.NewPlugin())
 
     // Initialize all plugins
     if err := auth.InitializePlugins(); err != nil {
@@ -268,22 +163,16 @@ func main() {
     // Mount to Forge app
     app := forge.New()
     auth.Mount(app, "/auth")
-
     app.Listen(":8080")
-}
-```
+    ```
+  </Tab>
+</Tabs>
 
 ## Plugin Hooks
 
 Plugins can register hooks to extend functionality at various points in the authentication flow:
 
 ```go
-type HookRegistry struct {
-    hooks map[string][]HookFunc
-}
-
-type HookFunc func(ctx context.Context, data interface{}) error
-
 // Available hook points
 const (
     // User lifecycle
@@ -314,31 +203,6 @@ const (
     BeforePasswordReset  = "before:password:reset"
     AfterPasswordReset   = "after:password:reset"
 )
-
-// Example hook implementation
-func (p *EmailPasswordPlugin) afterSignUp(ctx context.Context, data interface{}) error {
-    signUpData := data.(*SignUpData)
-    
-    // Send welcome email
-    if err := p.emailService.SendWelcomeEmail(ctx, signUpData.User); err != nil {
-        log.Printf("Failed to send welcome email: %v", err)
-        // Don't fail the signup process for email errors
-    }
-    
-    // Log audit event
-    p.auditService.LogEvent(ctx, &AuditEvent{
-        Action:     "user_signup",
-        Resource:   "user",
-        ResourceID: signUpData.User.ID,
-        Success:    true,
-        Metadata: map[string]interface{}{
-            "method": "email_password",
-            "email":  signUpData.User.Email,
-        },
-    })
-    
-    return nil
-}
 ```
 
 ## Plugin Development
@@ -354,7 +218,7 @@ import (
 )
 
 type MyCustomPlugin struct {
-    config MyPluginConfig
+    config  MyPluginConfig
     service *MyPluginService
 }
 
@@ -373,27 +237,18 @@ func (p *MyCustomPlugin) ID() string {
 }
 
 func (p *MyCustomPlugin) Init(auth *authsome.Auth) error {
-    // Bind configuration
     if err := auth.Config().Bind("auth.plugins.myCustomPlugin", &p.config); err != nil {
         return err
     }
 
-    // Initialize service with dependencies
-    p.service = NewMyPluginService(
-        p.config,
-        auth.UserRepository(),
-        auth.SessionService(),
-    )
-
+    p.service = NewMyPluginService(p.config)
     return nil
 }
 
 func (p *MyCustomPlugin) RegisterRoutes(router forge.Router) error {
     handler := NewMyPluginHandler(p.service)
-    
-    router.POST("/auth/my-custom/action", handler.CustomAction)
-    router.GET("/auth/my-custom/status", handler.GetStatus)
-    
+    router.POST("/my-custom/action", handler.CustomAction)
+    router.GET("/my-custom/status", handler.GetStatus)
     return nil
 }
 
@@ -403,13 +258,7 @@ func (p *MyCustomPlugin) RegisterHooks(hooks *HookRegistry) error {
 }
 
 func (p *MyCustomPlugin) Migrate() error {
-    // Run any database migrations needed by this plugin
     return p.service.Migrate()
-}
-
-func (p *MyCustomPlugin) onSignIn(ctx context.Context, data interface{}) error {
-    // Custom logic after user signs in
-    return nil
 }
 ```
 
@@ -422,30 +271,50 @@ func (p *MyCustomPlugin) onSignIn(ctx context.Context, data interface{}) error {
 ### Core Plugins
 Essential authentication methods that most applications need:
 
-- **Email & Password** - Traditional email/password authentication
-- **Two-Factor Authentication** - TOTP, SMS, and backup codes
-- **Username Authentication** - Username-based login alternative
-- **Anonymous Authentication** - Guest user sessions
+- **Email & Password** - Traditional email/password authentication with sign up, sign in, password reset
+- **Two-Factor Authentication** - TOTP, backup codes, and trusted devices
+- **Username Authentication** - Username/password login with account lockout and password history
+- **Anonymous Authentication** - Guest user sessions with account linking
+- **Email Verification** - Email address verification with auto-send on signup
+- **Bearer Token** - Bearer token authentication middleware for session-based auth
+- **Dashboard** - Server-rendered admin dashboard UI with plugin extensions
 
 ### Advanced Plugins
 Enhanced features for better security and user experience:
 
-- **OAuth Providers** - Google, GitHub, Facebook, and more
+- **Social OAuth** - Google, GitHub, Facebook, Apple, Microsoft, Discord, and 10+ more providers
+- **Passkey/WebAuthn** - Modern biometric and hardware key authentication
 - **Magic Link** - Passwordless email-based authentication
-- **Phone Authentication** - SMS-based verification
-- **Passkey/WebAuthn** - Modern biometric authentication
-- **RBAC** - Role-based access control
-- **Audit Logging** - Comprehensive audit trails
+- **Email OTP** - One-time password via email
+- **Phone Authentication** - SMS-based verification and authentication
+- **Multi-Factor Authentication** - Advanced MFA with risk-based adaptive authentication
+- **MCP** - Model Context Protocol integration for AI-powered workflows
+- **JWT** - JWT token generation, verification, and JWKS endpoint
+- **API Key** - API key authentication with rate limiting, rotation, and IP restrictions
+- **Multi-Session** - Multiple concurrent session management with device tracking
+- **Impersonation** - Secure admin-to-user impersonation with audit logging
+- **Notification** - Email/SMS template management and delivery with multiple providers
 
 ### Enterprise Plugins
 Enterprise-grade features for large organizations:
 
-- **SAML SSO** - Enterprise single sign-on
-- **OIDC Provider** - OpenID Connect identity provider
-- **Multi-Session** - Multiple concurrent sessions
-- **Admin Panel** - Administrative interface
-- **Advanced Security** - Enhanced security features
-- **Compliance** - GDPR, SOC2, and other compliance tools
+- **Admin API** - User management, session management, role assignment, and system stats
+- **SSO** - Enterprise Single Sign-On with SAML 2.0 and OIDC
+- **OIDC Provider** - Full OpenID Connect Provider with OAuth 2.0 authorization
+- **Multi-Tenancy** - Enterprise multi-tenant organization management
+- **Multi-App Platform** - Platform-level app management with environments
+- **Organizations** - User-created organizations with teams and invitations
+- **Subscription & Billing** - SaaS subscription management with Stripe integration
+- **Secrets Management** - Encrypted secrets with versioning and Forge ConfigSource
+- **CMS** - Headless CMS with content types, revisions, and draft/publish workflow
+- **SCIM 2.0** - Automated user provisioning from enterprise identity providers
+- **Backup Authentication** - Account recovery with multiple verification methods
+- **Compliance** - SOC 2, HIPAA, PCI-DSS, GDPR, and ISO 27001 compliance
+- **Consent Management** - GDPR/CCPA consent, cookie consent, and data portability
+- **Geographic Fencing** - Location-based access control with VPN/proxy detection
+- **Identity Verification** - KYC with Onfido, Jumio, and Stripe Identity
+- **mTLS** - Mutual TLS with X.509 certificates and smart card support
+- **Step-Up Authentication** - Context-aware re-authentication for sensitive operations
 
 ## Next Steps
 
@@ -464,10 +333,5 @@ Enterprise-grade features for large organizations:
     title="Enterprise Plugins"
     description="Implement enterprise-grade features"
     href="/docs/go/plugins/enterprise"
-  />
-  <Card
-    title="Plugin Development"
-    description="Learn to create custom plugins"
-    href="/docs/go/guides/plugin-development"
   />
 </Cards>
