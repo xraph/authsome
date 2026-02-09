@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -20,7 +21,7 @@ import (
 	"maragu.dev/gomponents"
 )
 
-// Handler handles OIDC provider HTTP endpoints
+// Handler handles OIDC provider HTTP endpoints.
 type Handler struct {
 	svc              *Service
 	revocationSvc    *RevokeTokenService
@@ -33,12 +34,13 @@ type Handler struct {
 	apiMode          bool   // If true, return JSON instead of HTML redirects
 }
 
-// NewHandler creates a new OIDC handler
+// NewHandler creates a new OIDC handler.
 func NewHandler(svc *Service, basePath, loginURL string, apiMode bool) *Handler {
 	// Default to /auth/signin if not provided
 	if loginURL == "" {
 		loginURL = "/auth/signin"
 	}
+
 	return &Handler{
 		svc:              svc,
 		revocationSvc:    svc.revocation,
@@ -56,7 +58,7 @@ func NewHandler(svc *Service, basePath, loginURL string, apiMode bool) *Handler 
 // DISCOVERY ENDPOINT
 // =============================================================================
 
-// Discovery handles the OIDC discovery endpoint (.well-known/openid-configuration)
+// Discovery handles the OIDC discovery endpoint (.well-known/openid-configuration).
 func (h *Handler) Discovery(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -65,18 +67,21 @@ func (h *Handler) Discovery(c forge.Context) error {
 	if c.Request().TLS == nil {
 		scheme = "http"
 	}
+
 	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
 
 	doc := h.discoverySvc.GetDiscoveryDocument(ctx, baseURL, h.basePath)
+
 	return c.JSON(http.StatusOK, doc)
 }
 
-// JWKS returns the JSON Web Key Set
+// JWKS returns the JSON Web Key Set.
 func (h *Handler) JWKS(c forge.Context) error {
 	jwks, err := h.svc.GetJWKS()
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
+
 	return c.JSON(http.StatusOK, jwks)
 }
 
@@ -84,7 +89,7 @@ func (h *Handler) JWKS(c forge.Context) error {
 // AUTHORIZATION FLOW
 // =============================================================================
 
-// Authorize handles OAuth2/OIDC authorization requests
+// Authorize handles OAuth2/OIDC authorization requests.
 func (h *Handler) Authorize(c forge.Context) error {
 	ctx := c.Request().Context()
 	q := c.Request().URL.Query()
@@ -125,6 +130,7 @@ func (h *Handler) Authorize(c forge.Context) error {
 
 		// Validate user session
 		var err error
+
 		sess, err = h.svc.sessionSvc.FindByToken(ctx, sessionToken)
 		if err != nil || sess == nil {
 			return h.handleAuthRequired(c, c.Request().URL.String())
@@ -135,6 +141,7 @@ func (h *Handler) Authorize(c forge.Context) error {
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -162,10 +169,11 @@ func (h *Handler) Authorize(c forge.Context) error {
 	}
 
 	c.SetHeader("Location", redirectURL)
+
 	return c.JSON(http.StatusFound, nil)
 }
 
-// HandleConsent processes the consent form submission
+// HandleConsent processes the consent form submission.
 func (h *Handler) HandleConsent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -216,6 +224,7 @@ func (h *Handler) HandleConsent(c forge.Context) error {
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -256,12 +265,15 @@ func (h *Handler) HandleConsent(c forge.Context) error {
 
 	query := redirectURL.Query()
 	query.Set("code", authCode.Code)
+
 	if authReq.State != "" {
 		query.Set("state", authReq.State)
 	}
+
 	redirectURL.RawQuery = query.Encode()
 
 	c.SetHeader("Location", redirectURL.String())
+
 	return c.JSON(http.StatusFound, nil)
 }
 
@@ -269,7 +281,7 @@ func (h *Handler) HandleConsent(c forge.Context) error {
 // TOKEN ENDPOINT
 // =============================================================================
 
-// Token handles the token endpoint
+// Token handles the token endpoint.
 func (h *Handler) Token(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -281,6 +293,7 @@ func (h *Handler) Token(c forge.Context) error {
 		if err := c.Request().ParseForm(); err != nil {
 			return c.JSON(http.StatusBadRequest, errs.BadRequest("failed to parse form data"))
 		}
+
 		req.GrantType = c.Request().FormValue("grant_type")
 		req.Code = c.Request().FormValue("code")
 		req.RedirectURI = c.Request().FormValue("redirect_uri")
@@ -311,14 +324,16 @@ func (h *Handler) Token(c forge.Context) error {
 	}
 }
 
-// handleAuthorizationCodeGrant handles the authorization_code grant type
+// handleAuthorizationCodeGrant handles the authorization_code grant type.
 func (h *Handler) handleAuthorizationCodeGrant(ctx context.Context, c forge.Context, req *TokenRequest) error {
 	// Validate authorization code
 	authCode, err := h.svc.ValidateAuthorizationCode(ctx, req.Code, req.ClientID, req.RedirectURI, req.CodeVerifier)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
@@ -333,7 +348,7 @@ func (h *Handler) handleAuthorizationCodeGrant(ctx context.Context, c forge.Cont
 		return c.JSON(http.StatusInternalServerError, errs.DatabaseError("find user", err))
 	}
 
-	userInfo := map[string]interface{}{
+	userInfo := map[string]any{
 		"sub":   user.ID.String(),
 		"email": user.Email,
 		"name":  user.Name,
@@ -342,16 +357,18 @@ func (h *Handler) handleAuthorizationCodeGrant(ctx context.Context, c forge.Cont
 	// Exchange code for tokens
 	tokenResponse, err := h.svc.ExchangeCodeForTokens(ctx, authCode, userInfo)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse)
 }
 
-// handleRefreshTokenGrant handles the refresh_token grant type
+// handleRefreshTokenGrant handles the refresh_token grant type.
 func (h *Handler) handleRefreshTokenGrant(ctx context.Context, c forge.Context, req *TokenRequest) error {
 	// Extract refresh token
 	refreshToken := req.RefreshToken
@@ -362,9 +379,11 @@ func (h *Handler) handleRefreshTokenGrant(ctx context.Context, c forge.Context, 
 	// Authenticate client
 	clientAuth, client, err := h.clientAuth.AuthenticateClient(ctx, c.Request())
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
@@ -373,23 +392,27 @@ func (h *Handler) handleRefreshTokenGrant(ctx context.Context, c forge.Context, 
 	// Refresh the token (with optional rotation)
 	tokenResponse, err := h.svc.RefreshAccessToken(ctx, refreshToken, client.ClientID, req.Scope)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusUnauthorized, errs.UnauthorizedWithMessage("invalid or expired refresh token"))
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse)
 }
 
-// handleClientCredentialsGrant handles the client_credentials grant type (M2M)
+// handleClientCredentialsGrant handles the client_credentials grant type (M2M).
 func (h *Handler) handleClientCredentialsGrant(ctx context.Context, c forge.Context, req *TokenRequest) error {
 	// Authenticate client (confidential clients only)
 	clientAuth, client, err := h.clientAuth.AuthenticateClient(ctx, c.Request())
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
@@ -410,16 +433,18 @@ func (h *Handler) handleClientCredentialsGrant(ctx context.Context, c forge.Cont
 	// Generate tokens for client (no user context)
 	tokenResponse, err := h.svc.GenerateClientCredentialsToken(ctx, client, scope)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusOK, tokenResponse)
 }
 
-// handleDeviceCodeGrant handles the device_code grant type (RFC 8628)
+// handleDeviceCodeGrant handles the device_code grant type (RFC 8628).
 func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, req *TokenRequest) error {
 	// Check if device flow is enabled
 	if h.svc.deviceFlowService == nil {
@@ -436,6 +461,7 @@ func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, re
 			"error_description": "device_code is required",
 		})
 	}
+
 	if req.ClientID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":             "invalid_request",
@@ -447,20 +473,24 @@ func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, re
 	deviceCode, shouldSlowDown, err := h.svc.deviceFlowService.PollDeviceCode(ctx, req.DeviceCode)
 	if err != nil {
 		// Return appropriate OAuth error based on the error type
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			errorCode := "invalid_grant"
-			if authErr.HTTPStatus == http.StatusForbidden {
+			switch authErr.HTTPStatus {
+			case http.StatusForbidden:
 				errorCode = "access_denied"
-			} else if authErr.HTTPStatus == http.StatusBadRequest {
+			case http.StatusBadRequest:
 				if strings.Contains(authErr.Message, "expired") {
 					errorCode = "expired_token"
 				}
 			}
+
 			return c.JSON(http.StatusBadRequest, map[string]string{
 				"error":             errorCode,
 				"error_description": authErr.Message,
 			})
 		}
+
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error":             "invalid_grant",
 			"error_description": "invalid device code",
@@ -535,12 +565,14 @@ func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, re
 	// Generate tokens
 	tokenResponse, err := h.svc.GenerateTokensForDeviceCode(ctx, deviceCode, client)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, map[string]string{
 				"error":             "server_error",
 				"error_description": authErr.Message,
 			})
 		}
+
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":             "server_error",
 			"error_description": "failed to generate tokens",
@@ -559,7 +591,7 @@ func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, re
 // USERINFO ENDPOINT
 // =============================================================================
 
-// UserInfo returns user information based on the access token
+// UserInfo returns user information based on the access token.
 func (h *Handler) UserInfo(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -582,9 +614,11 @@ func (h *Handler) UserInfo(c forge.Context) error {
 	// Get user information from the service
 	userInfo, err := h.svc.GetUserInfoFromToken(ctx, accessToken)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusUnauthorized, errs.UnauthorizedWithMessage("invalid or expired access token"))
 	}
 
@@ -595,41 +629,49 @@ func (h *Handler) UserInfo(c forge.Context) error {
 // TOKEN INTROSPECTION (RFC 7662)
 // =============================================================================
 
-// IntrospectToken handles token introspection requests
+// IntrospectToken handles token introspection requests.
 func (h *Handler) IntrospectToken(c forge.Context) error {
 	ctx := c.Request().Context()
 
 	// Authenticate client
 	authResult, client, err := h.clientAuth.AuthenticateClient(ctx, c.Request())
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	// Validate client can introspect (confidential clients only)
 	if err := h.clientAuth.ValidateClientForEndpoint(client, "introspect"); err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("introspect", "endpoint"))
 	}
 
 	// Parse introspection request
 	var req TokenIntrospectionRequest
+
 	if err := c.Request().ParseForm(); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("failed to parse form data"))
 	}
+
 	req.Token = c.Request().FormValue("token")
 	req.TokenTypeHint = c.Request().FormValue("token_type_hint")
 
 	// Introspect token
 	response, err := h.introspectionSvc.IntrospectToken(ctx, &req, authResult.ClientID)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
@@ -640,24 +682,28 @@ func (h *Handler) IntrospectToken(c forge.Context) error {
 // TOKEN REVOCATION (RFC 7009)
 // =============================================================================
 
-// RevokeToken handles token revocation requests
+// RevokeToken handles token revocation requests.
 func (h *Handler) RevokeToken(c forge.Context) error {
 	ctx := c.Request().Context()
 
 	// Authenticate client
 	_, _, err := h.clientAuth.AuthenticateClient(ctx, c.Request())
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
 
 	// Parse revocation request
 	var req TokenRevocationRequest
+
 	if err := c.Request().ParseForm(); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("failed to parse form data"))
 	}
+
 	req.Token = c.Request().FormValue("token")
 	req.TokenTypeHint = c.Request().FormValue("token_type_hint")
 
@@ -673,15 +719,17 @@ func (h *Handler) RevokeToken(c forge.Context) error {
 // DEVICE FLOW ENDPOINTS (RFC 8628)
 // =============================================================================
 
-// DeviceAuthorize initiates the device authorization flow
+// DeviceAuthorize initiates the device authorization flow.
 func (h *Handler) DeviceAuthorize(c forge.Context) error {
 	ctx := c.Request().Context()
 
 	// Parse request
 	var req DeviceAuthorizationRequest
+
 	if err := c.Request().ParseForm(); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("failed to parse form data"))
 	}
+
 	req.ClientID = c.Request().FormValue("client_id")
 	req.Scope = c.Request().FormValue("scope")
 
@@ -695,6 +743,7 @@ func (h *Handler) DeviceAuthorize(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid client"))
 	}
+
 	if client == nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("client not found"))
 	}
@@ -713,9 +762,11 @@ func (h *Handler) DeviceAuthorize(c forge.Context) error {
 	// Initiate device authorization
 	deviceCode, err := h.svc.deviceFlowService.InitiateDeviceAuthorization(ctx, req.ClientID, req.Scope, appID, envID, orgIDPtr)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
@@ -724,6 +775,7 @@ func (h *Handler) DeviceAuthorize(c forge.Context) error {
 	if c.Request().TLS == nil {
 		scheme = "http"
 	}
+
 	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request().Host)
 	// Prepend base path to the verification URI path
 	verificationURI := baseURL + h.basePath + deviceCode.VerificationURI
@@ -747,7 +799,7 @@ func (h *Handler) DeviceAuthorize(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// DeviceCodeEntry shows the device code entry form
+// DeviceCodeEntry shows the device code entry form.
 func (h *Handler) DeviceCodeEntry(c forge.Context) error {
 	// Check if device flow is enabled
 	if h.svc.deviceFlowService == nil {
@@ -771,7 +823,7 @@ func (h *Handler) DeviceCodeEntry(c forge.Context) error {
 	return renderNode(c, http.StatusOK, page)
 }
 
-// DeviceVerify verifies the user code and shows the consent screen
+// DeviceVerify verifies the user code and shows the consent screen.
 func (h *Handler) DeviceVerify(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -781,16 +833,18 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	// Check if device flow is enabled
 	if h.svc.deviceFlowService == nil {
 		if h.apiMode {
-			return c.JSON(http.StatusNotFound, map[string]interface{}{
+			return c.JSON(http.StatusNotFound, map[string]any{
 				"error":             "not_found",
 				"error_description": "Device flow is not enabled",
 			})
 		}
+
 		return returnHTML(c, http.StatusNotFound, "<h1>404 Not Found</h1><p>Device flow is not enabled.</p>")
 	}
 
 	// Parse request body (support both JSON and form-encoded)
 	var userCode, redirectURL string
+
 	contentType := c.Request().Header.Get("Content-Type")
 
 	if strings.Contains(contentType, "application/json") {
@@ -802,6 +856,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 		if err := c.BindJSON(&body); err != nil {
 			return h.handleDeviceError(c, http.StatusBadRequest, "invalid_request", "Failed to parse JSON body", "")
 		}
+
 		userCode = body.UserCode
 		redirectURL = body.RedirectURL
 	} else {
@@ -809,6 +864,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 		if err := c.Request().ParseForm(); err != nil {
 			return h.handleDeviceError(c, http.StatusBadRequest, "invalid_request", "Failed to parse form data", "")
 		}
+
 		userCode = c.Request().FormValue("user_code")
 		redirectURL = c.Request().FormValue("redirect")
 	}
@@ -830,10 +886,12 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	if !deviceCode.IsPending() {
 		errMsg := "This code has already been used or has expired"
 		errorCode := "code_expired"
+
 		if deviceCode.Status == "denied" {
 			errMsg = "This authorization has been denied"
 			errorCode = "access_denied"
 		}
+
 		return h.handleDeviceError(c, http.StatusBadRequest, errorCode, errMsg, redirectURL)
 	}
 
@@ -850,6 +908,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	// This handles cases where API key is present but session is not in context
 	if sess == nil {
 		sessionToken := h.getSessionToken(c)
+
 		formattedCode := deviceCode.FormattedUserCode()
 		if sessionToken == "" {
 			// Build return URL (preserve redirect parameter if present)
@@ -857,17 +916,20 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 			if redirectURL != "" {
 				returnURL += "&redirect=" + url.QueryEscape(redirectURL)
 			}
+
 			return h.handleAuthRequired(c, returnURL)
 		}
 
 		// Validate user session
 		var err error
+
 		sess, err = h.svc.sessionSvc.FindByToken(ctx, sessionToken)
 		if err != nil || sess == nil {
 			returnURL := fmt.Sprintf("%s/device/verify?user_code=%s", h.basePath, formattedCode)
 			if redirectURL != "" {
 				returnURL += "&redirect=" + url.QueryEscape(redirectURL)
 			}
+
 			return h.handleAuthRequired(c, returnURL)
 		}
 	}
@@ -883,6 +945,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 
 	// Parse scopes for display
 	scopes := h.consentSvc.GetScopeDescriptions(h.consentSvc.ParseScopes(deviceCode.Scope))
+
 	componentScopes := make([]consent.ScopeInfo, len(scopes))
 	for i, s := range scopes {
 		componentScopes[i] = consent.ScopeInfo{
@@ -893,7 +956,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 
 	// In API mode, return JSON with consent data
 	if h.apiMode {
-		return c.JSON(http.StatusOK, map[string]interface{}{
+		return c.JSON(http.StatusOK, map[string]any{
 			"requireConsent": true,
 			"userCode":       deviceCode.UserCode,
 			"clientName":     client.Name,
@@ -920,7 +983,7 @@ func (h *Handler) DeviceVerify(c forge.Context) error {
 	return renderNode(c, http.StatusOK, page)
 }
 
-// DeviceAuthorizeDecision handles the user's authorization decision
+// DeviceAuthorizeDecision handles the user's authorization decision.
 func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -930,16 +993,18 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 	// Check if device flow is enabled
 	if h.svc.deviceFlowService == nil {
 		if h.apiMode {
-			return c.JSON(http.StatusNotFound, map[string]interface{}{
+			return c.JSON(http.StatusNotFound, map[string]any{
 				"error":             "not_found",
 				"error_description": "Device flow is not enabled",
 			})
 		}
+
 		return returnHTML(c, http.StatusNotFound, "<h1>404 Not Found</h1><p>Device flow is not enabled.</p>")
 	}
 
 	// Parse request body (support both JSON and form-encoded)
 	var userCode, action, redirectURL string
+
 	contentType := c.Request().Header.Get("Content-Type")
 
 	if strings.Contains(contentType, "application/json") {
@@ -951,13 +1016,15 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 		}
 		if err := c.BindJSON(&body); err != nil {
 			if h.apiMode {
-				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				return c.JSON(http.StatusBadRequest, map[string]any{
 					"error":             "invalid_request",
 					"error_description": "Failed to parse JSON body",
 				})
 			}
+
 			return returnHTML(c, http.StatusBadRequest, "<h1>400 Bad Request</h1><p>Failed to parse JSON body</p>")
 		}
+
 		userCode = body.UserCode
 		action = body.Action
 		redirectURL = body.RedirectURL
@@ -965,13 +1032,15 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 		// Parse form data
 		if err := c.Request().ParseForm(); err != nil {
 			if h.apiMode {
-				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				return c.JSON(http.StatusBadRequest, map[string]any{
 					"error":             "invalid_request",
 					"error_description": "Failed to parse form data",
 				})
 			}
+
 			return returnHTML(c, http.StatusBadRequest, "<h1>400 Bad Request</h1><p>Failed to parse form data</p>")
 		}
+
 		userCode = c.Request().FormValue("user_code")
 		action = c.Request().FormValue("action")
 		redirectURL = c.Request().FormValue("redirect")
@@ -995,23 +1064,26 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 		sessionToken := h.getSessionToken(c)
 		if sessionToken == "" {
 			if h.apiMode {
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+				return c.JSON(http.StatusUnauthorized, map[string]any{
 					"error":             "authentication_required",
 					"error_description": "No active session",
 				})
 			}
+
 			return returnHTML(c, http.StatusUnauthorized, "<h1>401 Unauthorized</h1><p>No active session</p>")
 		}
 
 		var err error
+
 		sess, err = h.svc.sessionSvc.FindByToken(ctx, sessionToken)
 		if err != nil || sess == nil {
 			if h.apiMode {
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+				return c.JSON(http.StatusUnauthorized, map[string]any{
 					"error":             "authentication_required",
 					"error_description": "Invalid session",
 				})
 			}
+
 			return returnHTML(c, http.StatusUnauthorized, "<h1>401 Unauthorized</h1><p>Invalid session</p>")
 		}
 	}
@@ -1027,26 +1099,29 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 	}
 
 	// Handle user decision
-	if action == "approve" {
+	switch action {
+	case "approve":
 		// Authorize device
 		if err := h.svc.deviceFlowService.AuthorizeDevice(ctx, userCode, sess.UserID, sess.ID); err != nil {
 			if h.apiMode {
-				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				return c.JSON(http.StatusBadRequest, map[string]any{
 					"error":             "authorization_failed",
 					"error_description": "Failed to authorize device",
 				})
 			}
+
 			page := consent.DeviceCodeEntryPage(consent.CodeEntryPageData{
 				ErrorMsg: "Failed to authorize device",
 				Branding: branding,
 				BasePath: h.basePath,
 			})
+
 			return renderNode(c, http.StatusBadRequest, page)
 		}
 
 		// In API mode, return JSON success
 		if h.apiMode {
-			response := map[string]interface{}{
+			response := map[string]any{
 				"success": true,
 				"action":  "approved",
 				"message": "Device has been authorized successfully",
@@ -1054,38 +1129,43 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 			if redirectURL != "" {
 				response["redirectUrl"] = redirectURL
 			}
+
 			return c.JSON(http.StatusOK, response)
 		}
 
 		// HTML mode: If redirect URL is provided, redirect there
 		if redirectURL != "" {
 			c.SetHeader("Location", redirectURL)
+
 			return c.JSON(http.StatusFound, nil)
 		}
 
 		// Otherwise show success page
 		page := consent.DeviceSuccessPage(true, branding)
+
 		return renderNode(c, http.StatusOK, page)
-	} else if action == "deny" {
+	case "deny":
 		// Deny device
 		if err := h.svc.deviceFlowService.DenyDevice(ctx, userCode); err != nil {
 			if h.apiMode {
-				return c.JSON(http.StatusBadRequest, map[string]interface{}{
+				return c.JSON(http.StatusBadRequest, map[string]any{
 					"error":             "denial_failed",
 					"error_description": "Failed to deny device",
 				})
 			}
+
 			page := consent.DeviceCodeEntryPage(consent.CodeEntryPageData{
 				ErrorMsg: "Failed to deny device",
 				Branding: branding,
 				BasePath: h.basePath,
 			})
+
 			return renderNode(c, http.StatusBadRequest, page)
 		}
 
 		// In API mode, return JSON success
 		if h.apiMode {
-			response := map[string]interface{}{
+			response := map[string]any{
 				"success": true,
 				"action":  "denied",
 				"message": "Device authorization has been denied",
@@ -1093,26 +1173,30 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 			if redirectURL != "" {
 				response["redirectUrl"] = redirectURL
 			}
+
 			return c.JSON(http.StatusOK, response)
 		}
 
 		// HTML mode: If redirect URL is provided, redirect there
 		if redirectURL != "" {
 			c.SetHeader("Location", redirectURL)
+
 			return c.JSON(http.StatusFound, nil)
 		}
 
 		// Otherwise show denial page
 		page := consent.DeviceSuccessPage(false, branding)
+
 		return renderNode(c, http.StatusOK, page)
 	}
 
 	if h.apiMode {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{
+		return c.JSON(http.StatusBadRequest, map[string]any{
 			"error":             "invalid_action",
 			"error_description": "Invalid action. Must be 'approve' or 'deny'",
 		})
 	}
+
 	return returnHTML(c, http.StatusBadRequest, "<h1>400 Bad Request</h1><p>Invalid action</p>")
 }
 
@@ -1120,7 +1204,7 @@ func (h *Handler) DeviceAuthorizeDecision(c forge.Context) error {
 // HELPER METHODS
 // =============================================================================
 
-// getSessionToken extracts session token from cookie or Authorization header
+// getSessionToken extracts session token from cookie or Authorization header.
 func (h *Handler) getSessionToken(c forge.Context) string {
 	// Try cookie first - check both default name and legacy name
 	cookieNames := []string{"authsome_session", "session_token"}
@@ -1141,13 +1225,13 @@ func (h *Handler) getSessionToken(c forge.Context) string {
 
 // handleAuthRequired handles the case when authentication is required
 // In API mode: returns JSON with loginUrl for client-side handling
-// In redirect mode: performs HTTP redirect to login page
+// In redirect mode: performs HTTP redirect to login page.
 func (h *Handler) handleAuthRequired(c forge.Context, returnURL string) error {
 	loginRedirectURL := fmt.Sprintf("%s?return_to=%s", h.loginURL, url.QueryEscape(returnURL))
 
 	if h.apiMode {
 		// API mode: return JSON response for client-side handling
-		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+		return c.JSON(http.StatusUnauthorized, map[string]any{
 			"error":             "authentication_required",
 			"error_description": "User authentication is required to continue",
 			"loginUrl":          loginRedirectURL,
@@ -1157,15 +1241,16 @@ func (h *Handler) handleAuthRequired(c forge.Context, returnURL string) error {
 
 	// Traditional mode: HTTP redirect
 	c.SetHeader("Location", loginRedirectURL)
+
 	return c.JSON(http.StatusFound, nil)
 }
 
 // handleDeviceError handles device flow errors
 // In API mode: returns JSON error
-// In HTML mode: returns HTML error page
+// In HTML mode: returns HTML error page.
 func (h *Handler) handleDeviceError(c forge.Context, statusCode int, errorCode, errorMsg, redirectURL string) error {
 	if h.apiMode {
-		return c.JSON(statusCode, map[string]interface{}{
+		return c.JSON(statusCode, map[string]any{
 			"error":             errorCode,
 			"error_description": errorMsg,
 		})
@@ -1179,10 +1264,11 @@ func (h *Handler) handleDeviceError(c forge.Context, statusCode int, errorCode, 
 		BasePath:    h.basePath,
 		RedirectURL: redirectURL,
 	})
+
 	return renderNode(c, statusCode, page)
 }
 
-// redirectWithError redirects to the client with an OAuth error
+// redirectWithError redirects to the client with an OAuth error.
 func (h *Handler) redirectWithError(c forge.Context, redirectURI, errorCode, errorDescription, state string) error {
 	if redirectURI == "" {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest(errorDescription))
@@ -1198,10 +1284,11 @@ func (h *Handler) redirectWithError(c forge.Context, redirectURI, errorCode, err
 	}
 
 	c.SetHeader("Location", redirectURL)
+
 	return c.JSON(http.StatusFound, nil)
 }
 
-// showConsentScreen displays the consent screen to the user
+// showConsentScreen displays the consent screen to the user.
 func (h *Handler) showConsentScreen(c forge.Context, req *AuthorizeRequest, sess *session.Session) error {
 	// Get client information for display
 	client, err := h.svc.clientRepo.FindByClientID(c.Request().Context(), req.ClientID)
@@ -1241,10 +1328,11 @@ func (h *Handler) showConsentScreen(c forge.Context, req *AuthorizeRequest, sess
 
 	// Render ForgeUI page
 	page := consent.OAuthConsentPage(data)
+
 	return renderNode(c, http.StatusOK, page)
 }
 
-// normalizeUserCode normalizes a user code by removing spaces, hyphens, and converting to uppercase
+// normalizeUserCode normalizes a user code by removing spaces, hyphens, and converting to uppercase.
 func normalizeUserCode(code string) string {
 	// Remove spaces and hyphens
 	code = strings.ReplaceAll(code, " ", "")
@@ -1253,19 +1341,22 @@ func normalizeUserCode(code string) string {
 	return strings.ToUpper(code)
 }
 
-// returnHTML is a helper to return HTML content
+// returnHTML is a helper to return HTML content.
 func returnHTML(c forge.Context, statusCode int, html string) error {
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+
 	return c.String(statusCode, html)
 }
 
-// renderNode renders a gomponents node to HTML
+// renderNode renders a gomponents node to HTML.
 func renderNode(c forge.Context, statusCode int, node gomponents.Node) error {
 	var buf bytes.Buffer
 	if err := node.Render(&buf); err != nil {
 		return c.String(http.StatusInternalServerError, "Failed to render page")
 	}
+
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
 	_, err := c.Response().Write(buf.Bytes())
+
 	return err
 }

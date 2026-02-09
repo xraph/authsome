@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
@@ -143,18 +144,18 @@ func (p *Plugin) ID() string { return "sso" }
 // Init accepts auth instance with GetDB method.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return errors.New("sso plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("sso plugin requires auth instance")
 	}
 
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return errors.New("database not available for sso plugin")
+		return errs.InternalServerErrorWithMessage("database not available for sso plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return errors.New("forge app not available for sso plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for sso plugin")
 	}
 
 	// Initialize logger
@@ -175,7 +176,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get user and session services from DI container for JIT provisioning
 	container := forgeApp.Container()
 	if container == nil {
-		return errors.New("DI container not available for sso plugin")
+		return errs.InternalServerErrorWithMessage("DI container not available for sso plugin")
 	}
 
 	// Resolve user service from container
@@ -186,7 +187,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	userSvc, ok := userSvcRaw.(user.ServiceInterface)
 	if !ok {
-		return errors.New("user service has invalid type")
+		return errs.InternalServerErrorWithMessage("user service has invalid type")
 	}
 
 	// Resolve session service from container
@@ -197,7 +198,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	sessionSvc, ok := sessionSvcRaw.(session.ServiceInterface)
 	if !ok {
-		return errors.New("session service has invalid type")
+		return errs.InternalServerErrorWithMessage("session service has invalid type")
 	}
 
 	// Initialize SSO service with all dependencies

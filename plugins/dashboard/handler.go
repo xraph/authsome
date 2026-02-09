@@ -32,7 +32,7 @@ import (
 	g "maragu.dev/gomponents"
 )
 
-// Handler handles dashboard HTTP requests
+// Handler handles dashboard HTTP requests.
 type Handler struct {
 	assets            embed.FS
 	userSvc           user.ServiceInterface
@@ -52,13 +52,13 @@ type Handler struct {
 	configManager     forge.ConfigManager // For config viewer page
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-// NewHandler creates a new dashboard handler
+// NewHandler creates a new dashboard handler.
 func NewHandler(
 	assets embed.FS,
 	appService app.Service,
@@ -97,7 +97,7 @@ func NewHandler(
 	return h
 }
 
-// enrichPageDataWithExtensions adds extension navigation items and widgets to PageData
+// enrichPageDataWithExtensions adds extension navigation items and widgets to PageData.
 func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
 	if h.extensionRegistry == nil {
 		return
@@ -122,6 +122,7 @@ func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
 			if item.ActiveChecker != nil {
 				isActive = item.ActiveChecker(pageData.ActivePage)
 			}
+
 			url := item.URLBuilder(h.basePath, pageData.CurrentApp)
 
 			pageData.ExtensionNavData = append(pageData.ExtensionNavData, components.ExtensionNavItemData{
@@ -142,19 +143,20 @@ func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
 				widgetNodes = append(widgetNodes, widget.Renderer(h.basePath, pageData.CurrentApp))
 			}
 		}
+
 		pageData.ExtensionWidgets = widgetNodes
 	}
 }
 
 // extractAndInjectAppID extracts appId from URL param and injects it into request context
-// Returns the updated context and the app, or an error if invalid/unauthorized
+// Returns the updated context and the app, or an error if invalid/unauthorized.
 func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.App, error) {
 	ctx := c.Request().Context()
 
 	// Extract appId from URL param
 	appIDStr := c.Param("appId")
 	if appIDStr == "" {
-		return ctx, nil, fmt.Errorf("app ID is required")
+		return ctx, nil, errs.RequiredField("appId")
 	}
 
 	// Parse appId
@@ -174,7 +176,7 @@ func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.
 	if user != nil {
 		isMember, err := h.appService.IsUserMember(ctx, appID, user.ID)
 		if err != nil || !isMember {
-			return ctx, nil, fmt.Errorf("access denied: you are not a member of this app")
+			return ctx, nil, errs.BadRequest("access denied: you are not a member of this app")
 		}
 	}
 
@@ -187,12 +189,13 @@ func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.
 		// If environment extraction fails, log but don't fail the request
 		// This allows the dashboard to work even if environments aren't set up yet
 	}
+
 	_ = env // Environment is stored in context, no need to return it here
 
 	return ctx, appEntity, nil
 }
 
-// extractAndInjectEnvironmentID extracts environment from cookie or gets default, then injects into context
+// extractAndInjectEnvironmentID extracts environment from cookie or gets default, then injects into context.
 func (h *Handler) extractAndInjectEnvironmentID(c forge.Context, ctx context.Context, appID xid.ID) (context.Context, *environment.Environment, error) {
 	// Try to get environment from cookie first
 	env, err := h.getEnvironmentFromCookie(c, appID)
@@ -213,7 +216,7 @@ func (h *Handler) extractAndInjectEnvironmentID(c forge.Context, ctx context.Con
 	return ctx, env, nil
 }
 
-// getUserRoleForApp gets the user's RBAC role for a specific app from the user_roles table
+// getUserRoleForApp gets the user's RBAC role for a specific app from the user_roles table.
 func (h *Handler) getUserRoleForApp(ctx context.Context, userID, appID xid.ID) string {
 	// Query user_roles table with role relation to get the role name
 	var userRoles []struct {
@@ -244,7 +247,7 @@ func (h *Handler) getUserRoleForApp(ctx context.Context, userID, appID xid.ID) s
 	return userRoles[0].RoleName
 }
 
-// getUserApps gets all apps the user belongs to (for app switcher)
+// getUserApps gets all apps the user belongs to (for app switcher).
 func (h *Handler) getUserApps(ctx context.Context, userID xid.ID) ([]*app.App, error) {
 	// Get user's memberships
 	memberships, err := h.appService.GetUserMemberships(ctx, userID)
@@ -255,10 +258,12 @@ func (h *Handler) getUserApps(ctx context.Context, userID xid.ID) ([]*app.App, e
 	// Get app details for each membership, de-duplicating by app ID
 	seenApps := make(map[xid.ID]bool)
 	apps := make([]*app.App, 0)
+
 	for _, membership := range memberships {
 		if seenApps[membership.AppID] {
 			continue // Skip duplicate
 		}
+
 		appEntity, err := h.appService.FindAppByID(ctx, membership.AppID)
 		if err == nil {
 			apps = append(apps, appEntity)
@@ -269,7 +274,7 @@ func (h *Handler) getUserApps(ctx context.Context, userID xid.ID) ([]*app.App, e
 	return apps, nil
 }
 
-// ServeStatic serves static assets (CSS, JS, images)
+// ServeStatic serves static assets (CSS, JS, images).
 func (h *Handler) ServeStatic(c forge.Context) error {
 	// Get the wildcard path from the route parameter
 	// The route is registered as "/ui/static/*" so we get everything after /static/
@@ -282,6 +287,7 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 
 	// Read file from embedded assets
 	fullPath := filepath.Join("static", path)
+
 	content, err := fs.ReadFile(h.assets, fullPath)
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("asset not found"))
@@ -289,6 +295,7 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 
 	// Get content type - use Go's mime package first, fallback to our custom function
 	ext := filepath.Ext(path)
+
 	contentType := mime.TypeByExtension(ext)
 	if contentType == "" {
 		contentType = getContentType(ext)
@@ -300,19 +307,21 @@ func (h *Handler) ServeStatic(c forge.Context) error {
 	w.Header().Set("Cache-Control", "public, max-age=31536000") // 1 year cache
 	w.WriteHeader(http.StatusOK)
 	_, writeErr := w.Write(content)
+
 	return writeErr
 }
 
 // Helper methods
 
-// render renders a gomponent node
+// render renders a gomponent node.
 func (h *Handler) render(c forge.Context, node g.Node) error {
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+
 	return node.Render(c.Response())
 }
 
 // RenderWithLayout renders content with the dashboard layout (public for extensions)
-// This method automatically populates app, environment, and extension data
+// This method automatically populates app, environment, and extension data.
 func (h *Handler) RenderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	ctx := c.Request().Context()
 
@@ -344,6 +353,7 @@ func (h *Handler) RenderWithLayout(c forge.Context, pageData components.PageData
 					h.setEnvironmentCookie(c, currentEnv.ID)
 				}
 			}
+
 			pageData.CurrentEnvironment = currentEnv
 		}
 
@@ -359,10 +369,11 @@ func (h *Handler) RenderWithLayout(c forge.Context, pageData components.PageData
 	h.enrichPageDataWithExtensions(&pageData)
 
 	page := components.BaseSidebarLayout(pageData, content)
+
 	return h.render(c, page)
 }
 
-// RenderWithBaseLayout renders content with an empty layout (public for extensions)
+// RenderWithBaseLayout renders content with an empty layout (public for extensions).
 func (h *Handler) RenderWithBaseLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	ctx := c.Request().Context()
 
@@ -394,6 +405,7 @@ func (h *Handler) RenderWithBaseLayout(c forge.Context, pageData components.Page
 					h.setEnvironmentCookie(c, currentEnv.ID)
 				}
 			}
+
 			pageData.CurrentEnvironment = currentEnv
 		}
 
@@ -409,10 +421,11 @@ func (h *Handler) RenderWithBaseLayout(c forge.Context, pageData components.Page
 	h.enrichPageDataWithExtensions(&pageData)
 
 	page := components.EmptyLayout(pageData, content)
+
 	return h.render(c, page)
 }
 
-// RenderWithHeaderLayout renders content with a header layout (public for extensions)
+// RenderWithHeaderLayout renders content with a header layout (public for extensions).
 func (h *Handler) RenderWithHeaderLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	ctx := c.Request().Context()
 
@@ -444,6 +457,7 @@ func (h *Handler) RenderWithHeaderLayout(c forge.Context, pageData components.Pa
 					h.setEnvironmentCookie(c, currentEnv.ID)
 				}
 			}
+
 			pageData.CurrentEnvironment = currentEnv
 		}
 
@@ -459,10 +473,11 @@ func (h *Handler) RenderWithHeaderLayout(c forge.Context, pageData components.Pa
 	h.enrichPageDataWithExtensions(&pageData)
 
 	page := components.BaseLayout(pageData, content)
+
 	return h.render(c, page)
 }
 
-// RenderWithSidebarLayout renders content with a sidebar layout (public for extensions)
+// RenderWithSidebarLayout renders content with a sidebar layout (public for extensions).
 func (h *Handler) RenderWithSidebarLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	ctx := c.Request().Context()
 
@@ -494,6 +509,7 @@ func (h *Handler) RenderWithSidebarLayout(c forge.Context, pageData components.P
 					h.setEnvironmentCookie(c, currentEnv.ID)
 				}
 			}
+
 			pageData.CurrentEnvironment = currentEnv
 		}
 
@@ -509,30 +525,31 @@ func (h *Handler) RenderWithSidebarLayout(c forge.Context, pageData components.P
 	h.enrichPageDataWithExtensions(&pageData)
 
 	page := components.BaseSidebarLayout(pageData, content)
+
 	return h.render(c, page)
 }
 
-// renderWithLayout is the internal version (kept for backward compatibility)
+// renderWithLayout is the internal version (kept for backward compatibility).
 func (h *Handler) renderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	return h.RenderWithLayout(c, pageData, content)
 }
 
-// renderWithBaseLayout is the internal version (kept for backward compatibility)
+// renderWithBaseLayout is the internal version (kept for backward compatibility).
 func (h *Handler) renderWithBaseLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	return h.RenderWithBaseLayout(c, pageData, content)
 }
 
-// renderWithHeaderLayout is the internal version (kept for backward compatibility)
+// renderWithHeaderLayout is the internal version (kept for backward compatibility).
 func (h *Handler) renderWithHeaderLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	return h.RenderWithHeaderLayout(c, pageData, content)
 }
 
-// renderWithSidebarLayout is the internal version (kept for backward compatibility)
+// renderWithSidebarLayout is the internal version (kept for backward compatibility).
 func (h *Handler) renderWithSidebarLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	return h.RenderWithSidebarLayout(c, pageData, content)
 }
 
-// renderError renders an error page
+// renderError renders an error page.
 func (h *Handler) renderError(c forge.Context, message string, err error) error {
 	user := h.getUserFromContext(c)
 
@@ -555,18 +572,20 @@ func (h *Handler) renderError(c forge.Context, message string, err error) error 
 
 	content := pages.ErrorPage(errorMsg, h.basePath)
 	page := components.BaseLayout(pageData, content)
+
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+
 	return h.render(c, page)
 }
 
 // Public helper methods for extensions
 
-// GetUserFromContext returns the authenticated user from request context
+// GetUserFromContext returns the authenticated user from request context.
 func (h *Handler) GetUserFromContext(c forge.Context) *user.User {
 	return h.getUserFromContext(c)
 }
 
-// GetCurrentApp extracts and returns the current app from URL parameter
+// GetCurrentApp extracts and returns the current app from URL parameter.
 func (h *Handler) GetCurrentApp(c forge.Context) (*app.App, error) {
 	ctx, currentApp, err := h.extractAndInjectAppID(c)
 	if err != nil {
@@ -574,36 +593,38 @@ func (h *Handler) GetCurrentApp(c forge.Context) (*app.App, error) {
 	}
 	// Update request context
 	*c.Request() = *c.Request().WithContext(ctx)
+
 	return currentApp, nil
 }
 
-// GetUserApps returns all apps the user has access to
+// GetUserApps returns all apps the user has access to.
 func (h *Handler) GetUserApps(c forge.Context, userID xid.ID) ([]*app.App, error) {
 	ctx := c.Request().Context()
+
 	return h.getUserApps(ctx, userID)
 }
 
-// GetCSRFToken returns the CSRF token for the request
+// GetCSRFToken returns the CSRF token for the request.
 func (h *Handler) GetCSRFToken(c forge.Context) string {
 	return h.getCSRFToken(c)
 }
 
-// GetBasePath returns the dashboard base path
+// GetBasePath returns the dashboard base path.
 func (h *Handler) GetBasePath() string {
 	return h.basePath
 }
 
-// GetEnabledPlugins returns map of enabled plugins
+// GetEnabledPlugins returns map of enabled plugins.
 func (h *Handler) GetEnabledPlugins() map[string]bool {
 	return h.enabledPlugins
 }
 
-// RenderSettingsPage renders content within the settings layout
+// RenderSettingsPage renders content within the settings layout.
 func (h *Handler) RenderSettingsPage(c forge.Context, pageID string, content g.Node) error {
 	return h.renderSettingsPage(c, pageID, content)
 }
 
-// GetCurrentEnvironment returns the current environment from cookie or default
+// GetCurrentEnvironment returns the current environment from cookie or default.
 func (h *Handler) GetCurrentEnvironment(c forge.Context, appID xid.ID) (*environment.Environment, error) {
 	ctx := c.Request().Context()
 
@@ -622,15 +643,16 @@ func (h *Handler) GetCurrentEnvironment(c forge.Context, appID xid.ID) (*environ
 	return env, nil
 }
 
-// GetUserEnvironments returns all environments for the given app
+// GetUserEnvironments returns all environments for the given app.
 func (h *Handler) GetUserEnvironments(c forge.Context, appID xid.ID) ([]*environment.Environment, error) {
 	ctx := c.Request().Context()
+
 	return h.getUserEnvironments(ctx, appID)
 }
 
 // Private helper methods
 
-// getUserFromContext retrieves the user from the request context
+// getUserFromContext retrieves the user from the request context.
 func (h *Handler) getUserFromContext(c forge.Context) *user.User {
 	userVal := c.Request().Context().Value("user")
 	if userVal == nil {
@@ -645,7 +667,7 @@ func (h *Handler) getUserFromContext(c forge.Context) *user.User {
 	return user
 }
 
-// getCSRFToken retrieves the CSRF token from the request context
+// getCSRFToken retrieves the CSRF token from the request context.
 func (h *Handler) getCSRFToken(c forge.Context) string {
 	tokenVal := c.Request().Context().Value("csrf_token")
 	if tokenVal == nil {
@@ -660,11 +682,11 @@ func (h *Handler) getCSRFToken(c forge.Context) string {
 	return token
 }
 
-// getEnvironmentFromCookie retrieves the selected environment ID from cookie
+// getEnvironmentFromCookie retrieves the selected environment ID from cookie.
 func (h *Handler) getEnvironmentFromCookie(c forge.Context, appID xid.ID) (*environment.Environment, error) {
 	cookie, err := c.Request().Cookie(environmentCookieName)
 	if err != nil || cookie == nil || cookie.Value == "" {
-		return nil, fmt.Errorf("no environment cookie found")
+		return nil, errs.NotFound("no environment cookie found")
 	}
 
 	envID, err := xid.FromString(cookie.Value)
@@ -680,13 +702,13 @@ func (h *Handler) getEnvironmentFromCookie(c forge.Context, appID xid.ID) (*envi
 
 	// Verify environment belongs to the current app
 	if env.AppID != appID {
-		return nil, fmt.Errorf("environment does not belong to current app")
+		return nil, errs.BadRequest("environment does not belong to current app")
 	}
 
 	return env, nil
 }
 
-// setEnvironmentCookie stores the selected environment ID in a cookie
+// setEnvironmentCookie stores the selected environment ID in a cookie.
 func (h *Handler) setEnvironmentCookie(c forge.Context, envID xid.ID) {
 	cookie := &http.Cookie{
 		Name:     environmentCookieName,
@@ -700,7 +722,7 @@ func (h *Handler) setEnvironmentCookie(c forge.Context, envID xid.ID) {
 	http.SetCookie(c.Response(), cookie)
 }
 
-// clearEnvironmentCookie removes the environment cookie
+// clearEnvironmentCookie removes the environment cookie.
 func (h *Handler) clearEnvironmentCookie(c forge.Context) {
 	cookie := &http.Cookie{
 		Name:     environmentCookieName,
@@ -714,7 +736,7 @@ func (h *Handler) clearEnvironmentCookie(c forge.Context) {
 	http.SetCookie(c.Response(), cookie)
 }
 
-// getUserEnvironments retrieves all environments for the given app
+// getUserEnvironments retrieves all environments for the given app.
 func (h *Handler) getUserEnvironments(ctx context.Context, appID xid.ID) ([]*environment.Environment, error) {
 	envs, err := h.envService.ListEnvironments(ctx, &environment.ListEnvironmentsFilter{
 		AppID: appID,
@@ -722,10 +744,11 @@ func (h *Handler) getUserEnvironments(ctx context.Context, appID xid.ID) ([]*env
 	if err != nil {
 		return nil, fmt.Errorf("failed to list environments: %w", err)
 	}
+
 	return envs.Data, nil
 }
 
-// getEnvironmentData retrieves current environment and environment list for PageData
+// getEnvironmentData retrieves current environment and environment list for PageData.
 func (h *Handler) getEnvironmentData(c forge.Context, ctx context.Context, appID xid.ID) (currentEnv *environment.Environment, environments []*environment.Environment) {
 	// Get all environments for current app
 	environments, err := h.getUserEnvironments(ctx, appID)
@@ -743,7 +766,7 @@ func (h *Handler) getEnvironmentData(c forge.Context, ctx context.Context, appID
 	return currentEnv, environments
 }
 
-// checkExistingSession checks if there's a valid session without middleware
+// checkExistingSession checks if there's a valid session without middleware.
 func (h *Handler) checkExistingSession(c forge.Context) *user.User {
 	// Extract session token from cookie
 	cookie, err := c.Request().Cookie(sessionCookieName)
@@ -779,7 +802,7 @@ func (h *Handler) checkExistingSession(c forge.Context) *user.User {
 	return user
 }
 
-// isFirstUser checks if there are any users in the system
+// isFirstUser checks if there are any users in the system.
 func (h *Handler) isFirstUser(ctx context.Context) (bool, error) {
 	// Check if platform app exists and has any members
 	platformApp, err := h.appService.GetPlatformApp(ctx)
@@ -798,12 +821,12 @@ func (h *Handler) isFirstUser(ctx context.Context) (bool, error) {
 	return count == 0, nil
 }
 
-// generateCSRFToken generates a simple CSRF token
+// generateCSRFToken generates a simple CSRF token.
 func (h *Handler) generateCSRFToken() string {
 	return xid.New().String()
 }
 
-// renderSettingsPage is a helper to render any settings page with the sidebar layout
+// renderSettingsPage is a helper to render any settings page with the sidebar layout.
 func (h *Handler) renderSettingsPage(c forge.Context, pageID string, content g.Node) error {
 	currentUser := h.getUserFromContext(c)
 	if currentUser == nil {
@@ -849,10 +872,11 @@ func (h *Handler) renderSettingsPage(c forge.Context, pageID string, content g.N
 	}
 
 	settingsPage := components.SettingsLayout(layoutData)
+
 	return h.renderWithLayout(c, pageData, settingsPage)
 }
 
-// buildSettingsNavigation builds the settings sidebar navigation
+// buildSettingsNavigation builds the settings sidebar navigation.
 func (h *Handler) buildSettingsNavigation(currentApp *app.App) []components.SettingsNavItem {
 	var navItems []components.SettingsNavItem
 
@@ -883,7 +907,7 @@ func (h *Handler) buildSettingsNavigation(currentApp *app.App) []components.Sett
 	return navItems
 }
 
-// getContentType returns the appropriate content type for file extensions
+// getContentType returns the appropriate content type for file extensions.
 func getContentType(ext string) string {
 	switch ext {
 	case ".html":

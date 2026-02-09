@@ -20,7 +20,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the social OAuth plugin
+// Plugin implements the social OAuth plugin.
 type Plugin struct {
 	db               *bun.DB
 	service          *Service
@@ -34,17 +34,17 @@ type Plugin struct {
 	logger           forge.Logger
 }
 
-// PluginOption is a functional option for configuring the social plugin
+// PluginOption is a functional option for configuring the social plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithProvider adds a provider configuration
+// WithProvider adds a provider configuration.
 func WithProvider(name string, clientID, clientSecret, callbackURL string, scopes []string) PluginOption {
 	return func(p *Plugin) {
 		// ProvidersConfig is a struct, not a map - no nil check needed
@@ -71,28 +71,28 @@ func WithProvider(name string, clientID, clientSecret, callbackURL string, scope
 	}
 }
 
-// WithAutoCreateUser sets whether to auto-create users
+// WithAutoCreateUser sets whether to auto-create users.
 func WithAutoCreateUser(auto bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoCreateUser = auto
 	}
 }
 
-// WithAllowLinking sets whether to allow account linking
+// WithAllowLinking sets whether to allow account linking.
 func WithAllowLinking(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowAccountLinking = allow
 	}
 }
 
-// WithTrustEmailVerified sets whether to trust provider email verification
+// WithTrustEmailVerified sets whether to trust provider email verification.
 func WithTrustEmailVerified(trust bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.TrustEmailVerified = trust
 	}
 }
 
-// NewPlugin creates a new social OAuth plugin with optional configuration
+// NewPlugin creates a new social OAuth plugin with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -110,20 +110,20 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "social"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("social plugin requires auth instance with GetDB and GetForgeApp methods")
+		return errs.BadRequest("social plugin requires auth instance with GetDB and GetForgeApp methods")
 	}
 
 	db := authInst.GetDB()
 	if db == nil {
-		return fmt.Errorf("database not available for social plugin")
+		return errs.InternalServerErrorWithMessage("database not available for social plugin")
 	}
 
 	p.db = db
@@ -156,6 +156,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Create state store
 	var stateStore StateStore
+
 	if p.config.StateStorage.UseRedis {
 		// Create Redis client
 		redisClient := redis.NewClient(&redis.Options{
@@ -186,6 +187,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Create rate limiter (only if Redis is available)
 	var rateLimiter *RateLimiter
+
 	if p.config.StateStorage.UseRedis {
 		// Create Redis client for rate limiting
 		redisClient := redis.NewClient(&redis.Options{
@@ -198,6 +200,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Create centralized authentication completion service
 	var authCompletion *authflow.CompletionService
+
 	serviceRegistry := authInst.GetServiceRegistry()
 	if serviceRegistry != nil {
 		authService := serviceRegistry.AuthService()
@@ -231,7 +234,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// SetConfig allows setting configuration after plugin creation
+// SetConfig allows setting configuration after plugin creation.
 func (p *Plugin) SetConfig(config Config) {
 	p.config = config
 	if p.service != nil && p.authInst != nil {
@@ -241,12 +244,14 @@ func (p *Plugin) SetConfig(config Config) {
 
 		// Recreate state store
 		var stateStore StateStore
+
 		if config.StateStorage.UseRedis {
 			redisClient := redis.NewClient(&redis.Options{
 				Addr:     config.StateStorage.RedisAddr,
 				Password: config.StateStorage.RedisPassword,
 				DB:       config.StateStorage.RedisDB,
 			})
+
 			ctx := context.Background()
 			if err := redisClient.Ping(ctx).Err(); err == nil {
 				stateStore = NewRedisStateStore(redisClient)
@@ -261,10 +266,10 @@ func (p *Plugin) SetConfig(config Config) {
 	}
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil || p.handler == nil {
-		return fmt.Errorf("social plugin not initialized")
+		return errs.InternalServerErrorWithMessage("social plugin not initialized")
 	}
 
 	// Use the handler created during Init()
@@ -278,6 +283,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(h)
 		}
+
 		return h
 	}
 
@@ -331,10 +337,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Providers list", ProvidersResponse{}),
 		forge.WithTags("Social", "Configuration"),
 	)
+
 	return nil
 }
 
-// RegisterHooks registers plugin hooks
+// RegisterHooks registers plugin hooks.
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error {
 	// TODO: Add hooks for OAuth flow events
 	// - OnSocialSignIn
@@ -344,13 +351,13 @@ func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators
+// RegisterServiceDecorators registers service decorators.
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error {
 	// No service decorators needed for social plugin
 	return nil
 }
 
-// Migrate creates database tables
+// Migrate creates database tables.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
@@ -429,23 +436,24 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// GetService returns the social service (for testing/internal use)
+// GetService returns the social service (for testing/internal use).
 func (p *Plugin) GetService() *Service {
 	return p.service
 }
 
-// DashboardExtension returns the dashboard extension for the social plugin
+// DashboardExtension returns the dashboard extension for the social plugin.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtOnce.Do(func() {
 		p.dashboardExt = NewDashboardExtension(p, p.configRepo)
 	})
+
 	return p.dashboardExt
 }
 
-// GetConfigRepository returns the config repository (for testing/internal use)
+// GetConfigRepository returns the config repository (for testing/internal use).
 func (p *Plugin) GetConfigRepository() repository.SocialProviderConfigRepository {
 	return p.configRepo
 }
 
-// Type alias for error responses
+// Type alias for error responses.
 type ErrorResponse = errs.AuthsomeError

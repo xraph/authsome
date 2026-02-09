@@ -6,17 +6,18 @@ import (
 	"sync"
 
 	"github.com/xraph/authsome/core/ui"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // OrganizationUIRegistry manages organization UI extensions from plugins
 // It collects widgets, tabs, actions, and quick links from registered plugins
-// and provides them in sorted, filtered order for rendering
+// and provides them in sorted, filtered order for rendering.
 type OrganizationUIRegistry struct {
 	extensions map[string]ui.OrganizationUIExtension
 	mu         sync.RWMutex
 }
 
-// NewOrganizationUIRegistry creates a new organization UI registry
+// NewOrganizationUIRegistry creates a new organization UI registry.
 func NewOrganizationUIRegistry() *OrganizationUIRegistry {
 	return &OrganizationUIRegistry{
 		extensions: make(map[string]ui.OrganizationUIExtension),
@@ -24,15 +25,15 @@ func NewOrganizationUIRegistry() *OrganizationUIRegistry {
 }
 
 // Register registers an organization UI extension
-// Returns an error if an extension with the same ID is already registered
+// Returns an error if an extension with the same ID is already registered.
 func (r *OrganizationUIRegistry) Register(ext ui.OrganizationUIExtension) error {
 	if ext == nil {
-		return fmt.Errorf("cannot register nil extension")
+		return errs.BadRequest("cannot register nil extension")
 	}
 
 	extID := ext.ExtensionID()
 	if extID == "" {
-		return fmt.Errorf("extension ID cannot be empty")
+		return errs.RequiredField("extension ID")
 	}
 
 	r.mu.Lock()
@@ -43,16 +44,18 @@ func (r *OrganizationUIRegistry) Register(ext ui.OrganizationUIExtension) error 
 	}
 
 	r.extensions[extID] = ext
+
 	return nil
 }
 
 // GetWidgets returns all registered widgets, sorted by order
-// Filters out widgets that require admin if the user is not an admin
+// Filters out widgets that require admin if the user is not an admin.
 func (r *OrganizationUIRegistry) GetWidgets(ctx ui.OrgExtensionContext) []ui.OrganizationWidget {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var widgets []ui.OrganizationWidget
+
 	seen := make(map[string]bool)
 
 	for _, ext := range r.extensions {
@@ -61,6 +64,7 @@ func (r *OrganizationUIRegistry) GetWidgets(ctx ui.OrgExtensionContext) []ui.Org
 			if seen[widget.ID] {
 				continue
 			}
+
 			seen[widget.ID] = true
 
 			// Filter by admin requirement
@@ -81,12 +85,13 @@ func (r *OrganizationUIRegistry) GetWidgets(ctx ui.OrgExtensionContext) []ui.Org
 }
 
 // GetTabs returns all registered tabs, sorted by order
-// Filters out tabs that require admin if the user is not an admin
+// Filters out tabs that require admin if the user is not an admin.
 func (r *OrganizationUIRegistry) GetTabs(ctx ui.OrgExtensionContext) []ui.OrganizationTab {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var tabs []ui.OrganizationTab
+
 	seen := make(map[string]bool)
 
 	for _, ext := range r.extensions {
@@ -95,6 +100,7 @@ func (r *OrganizationUIRegistry) GetTabs(ctx ui.OrgExtensionContext) []ui.Organi
 			if seen[tab.ID] {
 				continue
 			}
+
 			seen[tab.ID] = true
 
 			// Filter by admin requirement
@@ -114,7 +120,7 @@ func (r *OrganizationUIRegistry) GetTabs(ctx ui.OrgExtensionContext) []ui.Organi
 	return tabs
 }
 
-// GetTabByPath returns a tab by its path, or nil if not found
+// GetTabByPath returns a tab by its path, or nil if not found.
 func (r *OrganizationUIRegistry) GetTabByPath(ctx ui.OrgExtensionContext, path string) *ui.OrganizationTab {
 	tabs := r.GetTabs(ctx)
 	for _, tab := range tabs {
@@ -122,16 +128,18 @@ func (r *OrganizationUIRegistry) GetTabByPath(ctx ui.OrgExtensionContext, path s
 			return &tab
 		}
 	}
+
 	return nil
 }
 
 // GetActions returns all registered actions, sorted by order
-// Filters out actions that require admin if the user is not an admin
+// Filters out actions that require admin if the user is not an admin.
 func (r *OrganizationUIRegistry) GetActions(ctx ui.OrgExtensionContext) []ui.OrganizationAction {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var actions []ui.OrganizationAction
+
 	seen := make(map[string]bool)
 
 	for _, ext := range r.extensions {
@@ -140,6 +148,7 @@ func (r *OrganizationUIRegistry) GetActions(ctx ui.OrgExtensionContext) []ui.Org
 			if seen[action.ID] {
 				continue
 			}
+
 			seen[action.ID] = true
 
 			// Filter by admin requirement
@@ -160,12 +169,13 @@ func (r *OrganizationUIRegistry) GetActions(ctx ui.OrgExtensionContext) []ui.Org
 }
 
 // GetQuickLinks returns all registered quick links, sorted by order
-// Filters out links that require admin if the user is not an admin
+// Filters out links that require admin if the user is not an admin.
 func (r *OrganizationUIRegistry) GetQuickLinks(ctx ui.OrgExtensionContext) []ui.OrganizationQuickLink {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var links []ui.OrganizationQuickLink
+
 	seen := make(map[string]bool)
 
 	for _, ext := range r.extensions {
@@ -174,6 +184,7 @@ func (r *OrganizationUIRegistry) GetQuickLinks(ctx ui.OrgExtensionContext) []ui.
 			if seen[link.ID] {
 				continue
 			}
+
 			seen[link.ID] = true
 
 			// Filter by admin requirement
@@ -194,12 +205,13 @@ func (r *OrganizationUIRegistry) GetQuickLinks(ctx ui.OrgExtensionContext) []ui.
 }
 
 // GetSettingsSections returns all registered settings sections, sorted by order
-// Filters out sections that require admin if the user is not an admin
+// Filters out sections that require admin if the user is not an admin.
 func (r *OrganizationUIRegistry) GetSettingsSections(ctx ui.OrgExtensionContext) []ui.OrganizationSettingsSection {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var sections []ui.OrganizationSettingsSection
+
 	seen := make(map[string]bool)
 
 	for _, ext := range r.extensions {
@@ -208,6 +220,7 @@ func (r *OrganizationUIRegistry) GetSettingsSections(ctx ui.OrgExtensionContext)
 			if seen[section.ID] {
 				continue
 			}
+
 			seen[section.ID] = true
 
 			// Filter by admin requirement
@@ -227,7 +240,7 @@ func (r *OrganizationUIRegistry) GetSettingsSections(ctx ui.OrgExtensionContext)
 	return sections
 }
 
-// ListExtensions returns the IDs of all registered extensions
+// ListExtensions returns the IDs of all registered extensions.
 func (r *OrganizationUIRegistry) ListExtensions() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -236,14 +249,18 @@ func (r *OrganizationUIRegistry) ListExtensions() []string {
 	for id := range r.extensions {
 		ids = append(ids, id)
 	}
+
 	sort.Strings(ids)
+
 	return ids
 }
 
-// HasExtension checks if an extension with the given ID is registered
+// HasExtension checks if an extension with the given ID is registered.
 func (r *OrganizationUIRegistry) HasExtension(id string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	_, exists := r.extensions[id]
+
 	return exists
 }

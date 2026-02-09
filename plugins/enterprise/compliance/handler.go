@@ -1,6 +1,7 @@
 package compliance
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,19 +13,19 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles HTTP requests for compliance endpoints
+// Handler handles HTTP requests for compliance endpoints.
 type Handler struct {
 	service      *Service
 	policyEngine *PolicyEngine
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-// NewHandler creates a new compliance handler
+// NewHandler creates a new compliance handler.
 func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 	return &Handler{
 		service:      service,
@@ -35,7 +36,7 @@ func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 // ===== Profile Handlers =====
 
 // CreateProfile creates a new compliance profile
-// POST /auth/compliance/profiles
+// POST /auth/compliance/profiles.
 func (h *Handler) CreateProfile(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -66,7 +67,7 @@ func (h *Handler) CreateProfile(c forge.Context) error {
 }
 
 // CreateProfileFromTemplate creates a profile from a template
-// POST /auth/compliance/profiles/from-template
+// POST /auth/compliance/profiles/from-template.
 func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -97,7 +98,7 @@ func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
 }
 
 // GetProfile retrieves a compliance profile
-// GET /auth/compliance/profiles/:id
+// GET /auth/compliance/profiles/:id.
 func (h *Handler) GetProfile(c forge.Context) error {
 	id := c.Param("id")
 
@@ -110,7 +111,7 @@ func (h *Handler) GetProfile(c forge.Context) error {
 }
 
 // GetAppProfile retrieves the compliance profile for an app
-// GET /auth/compliance/apps/:appId/profile
+// GET /auth/compliance/apps/:appId/profile.
 func (h *Handler) GetAppProfile(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -133,7 +134,7 @@ func (h *Handler) GetAppProfile(c forge.Context) error {
 }
 
 // UpdateProfile updates a compliance profile
-// PUT /auth/compliance/profiles/:id
+// PUT /auth/compliance/profiles/:id.
 func (h *Handler) UpdateProfile(c forge.Context) error {
 	id := c.Param("id")
 
@@ -151,7 +152,7 @@ func (h *Handler) UpdateProfile(c forge.Context) error {
 }
 
 // DeleteProfile deletes a compliance profile
-// DELETE /auth/compliance/profiles/:id
+// DELETE /auth/compliance/profiles/:id.
 func (h *Handler) DeleteProfile(c forge.Context) error {
 	id := c.Param("id")
 
@@ -165,7 +166,7 @@ func (h *Handler) DeleteProfile(c forge.Context) error {
 // ===== Status & Dashboard Handlers =====
 
 // GetComplianceStatus gets overall compliance status for an app
-// GET /auth/compliance/apps/:appId/status
+// GET /auth/compliance/apps/:appId/status.
 func (h *Handler) GetComplianceStatus(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -188,7 +189,7 @@ func (h *Handler) GetComplianceStatus(c forge.Context) error {
 }
 
 // GetDashboard gets compliance dashboard data
-// GET /auth/compliance/apps/:appId/dashboard
+// GET /auth/compliance/apps/:appId/dashboard.
 func (h *Handler) GetDashboard(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -240,7 +241,7 @@ func (h *Handler) GetDashboard(c forge.Context) error {
 	reportsResp, _ := h.service.ListReports(ctx, reportsFilter)
 	reports := reportsResp.Data
 
-	dashboard := map[string]interface{}{
+	dashboard := map[string]any{
 		"profile":    profile,
 		"status":     status,
 		"checks":     checks,
@@ -254,7 +255,7 @@ func (h *Handler) GetDashboard(c forge.Context) error {
 // ===== Check Handlers =====
 
 // RunCheck executes a compliance check
-// POST /auth/compliance/profiles/:profileId/checks
+// POST /auth/compliance/profiles/:profileId/checks.
 func (h *Handler) RunCheck(c forge.Context) error {
 	profileID := c.Param("profileId")
 
@@ -275,7 +276,7 @@ func (h *Handler) RunCheck(c forge.Context) error {
 }
 
 // ListChecks lists compliance checks
-// GET /auth/compliance/profiles/:profileId/checks
+// GET /auth/compliance/profiles/:profileId/checks.
 func (h *Handler) ListChecks(c forge.Context) error {
 	ctx := c.Request().Context()
 	q := c.Request().URL.Query()
@@ -285,6 +286,7 @@ func (h *Handler) ListChecks(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -299,12 +301,15 @@ func (h *Handler) ListChecks(c forge.Context) error {
 	if profileID := c.Param("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
+
 	if appID := q.Get("appId"); appID != "" {
 		filter.AppID = &appID
 	}
+
 	if checkType := q.Get("checkType"); checkType != "" {
 		filter.CheckType = &checkType
 	}
+
 	if status := q.Get("status"); status != "" {
 		filter.Status = &status
 	}
@@ -318,7 +323,7 @@ func (h *Handler) ListChecks(c forge.Context) error {
 }
 
 // GetCheck retrieves a compliance check
-// GET /auth/compliance/checks/:id
+// GET /auth/compliance/checks/:id.
 func (h *Handler) GetCheck(c forge.Context) error {
 	id := c.Param("id")
 
@@ -333,7 +338,7 @@ func (h *Handler) GetCheck(c forge.Context) error {
 // ===== Violation Handlers =====
 
 // ListViolations lists compliance violations
-// GET /auth/compliance/apps/:appId/violations
+// GET /auth/compliance/apps/:appId/violations.
 func (h *Handler) ListViolations(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -346,6 +351,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 			http.StatusForbidden,
 		))
 	}
+
 	appIDStr := appID.String()
 
 	q := c.Request().URL.Query()
@@ -355,6 +361,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -370,15 +377,19 @@ func (h *Handler) ListViolations(c forge.Context) error {
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
+
 	if userID := q.Get("userId"); userID != "" {
 		filter.UserID = &userID
 	}
+
 	if violationType := q.Get("violationType"); violationType != "" {
 		filter.ViolationType = &violationType
 	}
+
 	if severity := q.Get("severity"); severity != "" {
 		filter.Severity = &severity
 	}
+
 	if status := q.Get("status"); status != "" {
 		filter.Status = &status
 	}
@@ -392,7 +403,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 }
 
 // GetViolation retrieves a compliance violation
-// GET /auth/compliance/violations/:id
+// GET /auth/compliance/violations/:id.
 func (h *Handler) GetViolation(c forge.Context) error {
 	id := c.Param("id")
 
@@ -405,7 +416,7 @@ func (h *Handler) GetViolation(c forge.Context) error {
 }
 
 // ResolveViolation resolves a compliance violation
-// PUT /auth/compliance/violations/:id/resolve
+// PUT /auth/compliance/violations/:id/resolve.
 func (h *Handler) ResolveViolation(c forge.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
@@ -432,7 +443,7 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 // ===== Report Handlers =====
 
 // GenerateReport generates a compliance report
-// POST /auth/compliance/apps/:appId/reports
+// POST /auth/compliance/apps/:appId/reports.
 func (h *Handler) GenerateReport(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -449,8 +460,8 @@ func (h *Handler) GenerateReport(c forge.Context) error {
 	var req struct {
 		ReportType string             `json:"reportType" validate:"required"`
 		Standard   ComplianceStandard `json:"standard"`
-		Period     string             `json:"period" validate:"required"`
-		Format     string             `json:"format" validate:"required"`
+		Period     string             `json:"period"     validate:"required"`
+		Format     string             `json:"format"     validate:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
@@ -482,7 +493,7 @@ func (h *Handler) GenerateReport(c forge.Context) error {
 }
 
 // ListReports lists compliance reports
-// GET /auth/compliance/apps/:appId/reports
+// GET /auth/compliance/apps/:appId/reports.
 func (h *Handler) ListReports(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -495,6 +506,7 @@ func (h *Handler) ListReports(c forge.Context) error {
 			http.StatusForbidden,
 		))
 	}
+
 	appIDStr := appID.String()
 
 	q := c.Request().URL.Query()
@@ -504,6 +516,7 @@ func (h *Handler) ListReports(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -519,12 +532,15 @@ func (h *Handler) ListReports(c forge.Context) error {
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
+
 	if reportType := q.Get("reportType"); reportType != "" {
 		filter.ReportType = &reportType
 	}
+
 	if status := q.Get("status"); status != "" {
 		filter.Status = &status
 	}
+
 	if format := q.Get("format"); format != "" {
 		filter.Format = &format
 	}
@@ -538,7 +554,7 @@ func (h *Handler) ListReports(c forge.Context) error {
 }
 
 // GetReport retrieves a compliance report
-// GET /auth/compliance/reports/:id
+// GET /auth/compliance/reports/:id.
 func (h *Handler) GetReport(c forge.Context) error {
 	id := c.Param("id")
 
@@ -551,7 +567,7 @@ func (h *Handler) GetReport(c forge.Context) error {
 }
 
 // DownloadReport downloads a compliance report file
-// GET /auth/compliance/reports/:id/download
+// GET /auth/compliance/reports/:id/download.
 func (h *Handler) DownloadReport(c forge.Context) error {
 	id := c.Param("id")
 
@@ -568,7 +584,7 @@ func (h *Handler) DownloadReport(c forge.Context) error {
 	return c.Redirect(http.StatusFound, report.FileURL)
 }
 
-// generateReportAsync generates report asynchronously
+// generateReportAsync generates report asynchronously.
 func (h *Handler) generateReportAsync(report *ComplianceReport) {
 	// This would be implemented with proper report generation logic
 	// For now, it's a placeholder
@@ -577,7 +593,7 @@ func (h *Handler) generateReportAsync(report *ComplianceReport) {
 // ===== Evidence Handlers =====
 
 // CreateEvidence creates compliance evidence
-// POST /auth/compliance/apps/:appId/evidence
+// POST /auth/compliance/apps/:appId/evidence.
 func (h *Handler) CreateEvidence(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -595,7 +611,7 @@ func (h *Handler) CreateEvidence(c forge.Context) error {
 		EvidenceType string             `json:"evidenceType" validate:"required"`
 		Standard     ComplianceStandard `json:"standard"`
 		ControlID    string             `json:"controlId"`
-		Title        string             `json:"title" validate:"required"`
+		Title        string             `json:"title"        validate:"required"`
 		Description  string             `json:"description"`
 		FileURL      string             `json:"fileUrl"`
 	}
@@ -633,7 +649,7 @@ func (h *Handler) CreateEvidence(c forge.Context) error {
 }
 
 // ListEvidence lists compliance evidence
-// GET /auth/compliance/apps/:appId/evidence
+// GET /auth/compliance/apps/:appId/evidence.
 func (h *Handler) ListEvidence(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -646,6 +662,7 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 			http.StatusForbidden,
 		))
 	}
+
 	appIDStr := appID.String()
 
 	q := c.Request().URL.Query()
@@ -655,6 +672,7 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -670,9 +688,11 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
+
 	if evidenceType := q.Get("evidenceType"); evidenceType != "" {
 		filter.EvidenceType = &evidenceType
 	}
+
 	if controlID := q.Get("controlId"); controlID != "" {
 		filter.ControlID = &controlID
 	}
@@ -686,7 +706,7 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 }
 
 // GetEvidence retrieves compliance evidence
-// GET /auth/compliance/evidence/:id
+// GET /auth/compliance/evidence/:id.
 func (h *Handler) GetEvidence(c forge.Context) error {
 	id := c.Param("id")
 
@@ -699,7 +719,7 @@ func (h *Handler) GetEvidence(c forge.Context) error {
 }
 
 // DeleteEvidence deletes compliance evidence
-// DELETE /auth/compliance/evidence/:id
+// DELETE /auth/compliance/evidence/:id.
 func (h *Handler) DeleteEvidence(c forge.Context) error {
 	id := c.Param("id")
 
@@ -713,7 +733,7 @@ func (h *Handler) DeleteEvidence(c forge.Context) error {
 // ===== Policy Handlers =====
 
 // CreatePolicy creates a compliance policy
-// POST /auth/compliance/apps/:appId/policies
+// POST /auth/compliance/apps/:appId/policies.
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -730,9 +750,9 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	var req struct {
 		PolicyType string             `json:"policyType" validate:"required"`
 		Standard   ComplianceStandard `json:"standard"`
-		Title      string             `json:"title" validate:"required"`
-		Version    string             `json:"version" validate:"required"`
-		Content    string             `json:"content" validate:"required"`
+		Title      string             `json:"title"      validate:"required"`
+		Version    string             `json:"version"    validate:"required"`
+		Content    string             `json:"content"    validate:"required"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
@@ -764,7 +784,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 }
 
 // ListPolicies lists compliance policies
-// GET /auth/compliance/apps/:appId/policies
+// GET /auth/compliance/apps/:appId/policies.
 func (h *Handler) ListPolicies(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -777,6 +797,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 			http.StatusForbidden,
 		))
 	}
+
 	appIDStr := appID.String()
 
 	q := c.Request().URL.Query()
@@ -786,6 +807,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -801,9 +823,11 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
+
 	if policyType := q.Get("policyType"); policyType != "" {
 		filter.PolicyType = &policyType
 	}
+
 	if status := q.Get("status"); status != "" {
 		filter.Status = &status
 	}
@@ -817,7 +841,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 }
 
 // GetPolicy retrieves a compliance policy
-// GET /auth/compliance/policies/:id
+// GET /auth/compliance/policies/:id.
 func (h *Handler) GetPolicy(c forge.Context) error {
 	id := c.Param("id")
 
@@ -830,7 +854,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 }
 
 // UpdatePolicy updates a compliance policy
-// PUT /auth/compliance/policies/:id
+// PUT /auth/compliance/policies/:id.
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	id := c.Param("id")
 
@@ -854,12 +878,15 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	if req.Title != nil {
 		policy.Title = *req.Title
 	}
+
 	if req.Version != nil {
 		policy.Version = *req.Version
 	}
+
 	if req.Content != nil {
 		policy.Content = *req.Content
 	}
+
 	if req.Status != nil {
 		policy.Status = *req.Status
 	}
@@ -872,7 +899,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 }
 
 // DeletePolicy deletes a compliance policy
-// DELETE /auth/compliance/policies/:id
+// DELETE /auth/compliance/policies/:id.
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	id := c.Param("id")
 
@@ -886,7 +913,7 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 // ===== Training Handlers =====
 
 // CreateTraining creates a training record
-// POST /auth/compliance/apps/:appId/training
+// POST /auth/compliance/apps/:appId/training.
 func (h *Handler) CreateTraining(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -901,7 +928,7 @@ func (h *Handler) CreateTraining(c forge.Context) error {
 	}
 
 	var req struct {
-		UserID       string             `json:"userId" validate:"required"`
+		UserID       string             `json:"userId"       validate:"required"`
 		TrainingType string             `json:"trainingType" validate:"required"`
 		Standard     ComplianceStandard `json:"standard"`
 	}
@@ -933,7 +960,7 @@ func (h *Handler) CreateTraining(c forge.Context) error {
 }
 
 // ListTraining lists training records
-// GET /auth/compliance/apps/:appId/training
+// GET /auth/compliance/apps/:appId/training.
 func (h *Handler) ListTraining(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -946,6 +973,7 @@ func (h *Handler) ListTraining(c forge.Context) error {
 			http.StatusForbidden,
 		))
 	}
+
 	appIDStr := appID.String()
 
 	q := c.Request().URL.Query()
@@ -955,6 +983,7 @@ func (h *Handler) ListTraining(c forge.Context) error {
 	if limit == 0 {
 		limit = 50
 	}
+
 	offset, _ := strconv.Atoi(q.Get("offset"))
 
 	// Build filter
@@ -970,12 +999,15 @@ func (h *Handler) ListTraining(c forge.Context) error {
 	if profileID := q.Get("profileId"); profileID != "" {
 		filter.ProfileID = &profileID
 	}
+
 	if userID := q.Get("userId"); userID != "" {
 		filter.UserID = &userID
 	}
+
 	if trainingType := q.Get("trainingType"); trainingType != "" {
 		filter.TrainingType = &trainingType
 	}
+
 	if status := q.Get("status"); status != "" {
 		filter.Status = &status
 	}
@@ -989,7 +1021,7 @@ func (h *Handler) ListTraining(c forge.Context) error {
 }
 
 // GetUserTraining gets training status for a user
-// GET /auth/compliance/users/:userId/training
+// GET /auth/compliance/users/:userId/training.
 func (h *Handler) GetUserTraining(c forge.Context) error {
 	userID := c.Param("userId")
 
@@ -1002,7 +1034,7 @@ func (h *Handler) GetUserTraining(c forge.Context) error {
 }
 
 // CompleteTraining marks training as completed
-// PUT /auth/compliance/training/:id/complete
+// PUT /auth/compliance/training/:id/complete.
 func (h *Handler) CompleteTraining(c forge.Context) error {
 	id := c.Param("id")
 
@@ -1038,12 +1070,12 @@ func (h *Handler) CompleteTraining(c forge.Context) error {
 // ===== Template Handlers =====
 
 // ListTemplates lists available compliance templates
-// GET /auth/compliance/templates
+// GET /auth/compliance/templates.
 func (h *Handler) ListTemplates(c forge.Context) error {
-	templates := make([]map[string]interface{}, 0)
+	templates := make([]map[string]any, 0)
 
 	for standard, template := range ComplianceTemplates {
-		templates = append(templates, map[string]interface{}{
+		templates = append(templates, map[string]any{
 			"standard":    standard,
 			"name":        template.Name,
 			"description": template.Description,
@@ -1054,7 +1086,7 @@ func (h *Handler) ListTemplates(c forge.Context) error {
 }
 
 // GetTemplate retrieves a compliance template
-// GET /auth/compliance/templates/:standard
+// GET /auth/compliance/templates/:standard.
 func (h *Handler) GetTemplate(c forge.Context) error {
 	standard := ComplianceStandard(c.Param("standard"))
 
@@ -1070,7 +1102,8 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 
 func handleError(c forge.Context, err error) error {
 	// Handle structured AuthsomeError
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 

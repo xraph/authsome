@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,12 +15,13 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/internal/errs"
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 	"golang.org/x/crypto/bcrypt"
 )
 
 // SCIMOrgService defines a unified interface for organization/app operations
-// Supports both app mode (multitenancy) and organization mode (organization plugin)
+// Supports both app mode (multitenancy) and organization mode (organization plugin).
 type SCIMOrgService interface {
 	// Member operations
 	AddMember(ctx context.Context, orgID, userID xid.ID, role string) (interface{}, error)
@@ -40,7 +42,7 @@ type SCIMOrgService interface {
 	GetMemberIDByUserID(ctx context.Context, orgID, userID xid.ID) (xid.ID, error)
 }
 
-// ServiceConfig holds service dependencies
+// ServiceConfig holds service dependencies.
 type ServiceConfig struct {
 	Config         *Config
 	Repository     *Repository
@@ -50,7 +52,7 @@ type ServiceConfig struct {
 	WebhookService *webhook.Service
 }
 
-// Service provides SCIM provisioning business logic
+// Service provides SCIM provisioning business logic.
 type Service struct {
 	config         *Config
 	repo           *Repository
@@ -63,7 +65,7 @@ type Service struct {
 	mode           string // "app" or "organization"
 }
 
-// NewService creates a new SCIM service
+// NewService creates a new SCIM service.
 func NewService(cfg ServiceConfig) *Service {
 	service := &Service{
 		config:         cfg.Config,
@@ -93,17 +95,18 @@ func NewService(cfg ServiceConfig) *Service {
 	return service
 }
 
-// getOrgService returns the unified SCIM organization service adapter
+// getOrgService returns the unified SCIM organization service adapter.
 func (s *Service) getOrgService() SCIMOrgService {
 	if s.scimOrgService == nil {
 		panic("SCIM plugin requires multitenancy or organization plugin - organization service not available")
 	}
+
 	return s.scimOrgService
 }
 
 // User Provisioning Operations
 
-// CreateUser provisions a new user via SCIM
+// CreateUser provisions a new user via SCIM.
 func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.ID) (*SCIMUser, error) {
 	// Validate required attributes
 	if err := s.validateUserAttributes(scimUser); err != nil {
@@ -123,6 +126,7 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.
 
 	// Get primary email for user creation
 	email := s.getPrimaryEmail(scimUser)
+
 	name := scimUser.DisplayName
 	if name == "" && scimUser.Name != nil {
 		name = strings.TrimSpace(scimUser.Name.GivenName + " " + scimUser.Name.FamilyName)
@@ -145,6 +149,7 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.
 		updateReq := &user.UpdateUserRequest{
 			EmailVerified: boolPtr(true),
 		}
+
 		_, err := s.userService.Update(ctx, createdUser, updateReq)
 		if err != nil {
 			// Log but don't fail
@@ -189,7 +194,7 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.
 	return resultUser, nil
 }
 
-// GetUser retrieves a user by ID
+// GetUser retrieves a user by ID.
 func (s *Service) GetUser(ctx context.Context, id, orgID xid.ID) (*SCIMUser, error) {
 	authUser, err := s.userService.FindByID(ctx, id)
 	if err != nil {
@@ -199,7 +204,7 @@ func (s *Service) GetUser(ctx context.Context, id, orgID xid.ID) (*SCIMUser, err
 	// Verify user belongs to organization/app
 	isMember, err := s.getOrgService().IsUserMember(ctx, orgID, authUser.ID)
 	if err != nil || !isMember {
-		return nil, fmt.Errorf("user not found in organization")
+		return nil, errs.NotFound("user not found in organization")
 	}
 
 	scimUser := s.mapAuthSomeToSCIMUser(authUser, "")
@@ -211,7 +216,7 @@ func (s *Service) GetUser(ctx context.Context, id, orgID xid.ID) (*SCIMUser, err
 	return scimUser, nil
 }
 
-// UpdateUser updates a user via SCIM PATCH
+// UpdateUser updates a user via SCIM PATCH.
 func (s *Service) UpdateUser(ctx context.Context, id, orgID xid.ID, patch *PatchOp) (*SCIMUser, error) {
 	authUser, err := s.userService.FindByID(ctx, id)
 	if err != nil {
@@ -231,6 +236,7 @@ func (s *Service) UpdateUser(ctx context.Context, id, orgID xid.ID, patch *Patch
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
+
 	authUser = updatedUser
 
 	// Record metrics
@@ -248,10 +254,11 @@ func (s *Service) UpdateUser(ctx context.Context, id, orgID xid.ID, patch *Patch
 	}
 
 	scimUser := s.mapAuthSomeToSCIMUser(authUser, "")
+
 	return scimUser, nil
 }
 
-// ReplaceUser replaces a user via SCIM PUT
+// ReplaceUser replaces a user via SCIM PUT.
 func (s *Service) ReplaceUser(ctx context.Context, id, orgID xid.ID, scimUser *SCIMUser) (*SCIMUser, error) {
 	authUser, err := s.userService.FindByID(ctx, id)
 	if err != nil {
@@ -260,6 +267,7 @@ func (s *Service) ReplaceUser(ctx context.Context, id, orgID xid.ID, scimUser *S
 
 	// Build full replacement update request
 	email := s.getPrimaryEmail(scimUser)
+
 	name := scimUser.DisplayName
 	if name == "" && scimUser.Name != nil {
 		name = strings.TrimSpace(scimUser.Name.GivenName + " " + scimUser.Name.FamilyName)
@@ -277,10 +285,11 @@ func (s *Service) ReplaceUser(ctx context.Context, id, orgID xid.ID, scimUser *S
 	}
 
 	resultUser := s.mapAuthSomeToSCIMUser(updatedUser, scimUser.ExternalID)
+
 	return resultUser, nil
 }
 
-// DeleteUser de-provisions a user
+// DeleteUser de-provisions a user.
 func (s *Service) DeleteUser(ctx context.Context, id, orgID xid.ID) error {
 	// Soft delete or hard delete based on config
 	if s.config.UserProvisioning.SoftDeleteOnDeProvision {
@@ -322,7 +331,7 @@ func (s *Service) DeleteUser(ctx context.Context, id, orgID xid.ID) error {
 	return nil
 }
 
-// ListUsers lists users with filtering and pagination
+// ListUsers lists users with filtering and pagination.
 func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, startIndex, count int) (*ListResponse, error) {
 	// Get paginated members
 	offset := startIndex - 1
@@ -340,6 +349,7 @@ func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, st
 	for _, memberInterface := range memberList {
 		// Extract UserID from member (works for both app.Member and schema.OrganizationMember)
 		var userID xid.ID
+
 		switch m := memberInterface.(type) {
 		case *app.Member:
 			userID = m.UserID
@@ -376,6 +386,7 @@ func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, st
 	if err != nil {
 		return nil, fmt.Errorf("failed to count users: %w", err)
 	}
+
 	total := len(totalMemberList)
 
 	return &ListResponse{
@@ -388,13 +399,12 @@ func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, st
 }
 
 // matchesSCIMFilter checks if a SCIM user matches the filter expression
-// Implements basic SCIM filtering as per RFC 7644 Section 3.4.2.2
+// Implements basic SCIM filtering as per RFC 7644 Section 3.4.2.2.
 func (s *Service) matchesSCIMFilter(user *SCIMUser, filter string) bool {
 	// Parse simple filter expressions like:
 	// - userName eq "john@example.com"
 	// - active eq true
 	// - emails[type eq "work"].value co "@example.com"
-
 	filter = strings.TrimSpace(filter)
 
 	// Extract attribute, operator, and value
@@ -409,13 +419,14 @@ func (s *Service) matchesSCIMFilter(user *SCIMUser, filter string) bool {
 
 	// Get the attribute value from the user
 	var attrValue string
+
 	switch attribute {
 	case "userName":
 		attrValue = user.UserName
 	case "displayName":
 		attrValue = user.DisplayName
 	case "active":
-		attrValue = fmt.Sprintf("%v", user.Active)
+		attrValue = strconv.FormatBool(user.Active)
 	case "externalId":
 		attrValue = user.ExternalID
 	default:
@@ -456,18 +467,19 @@ func (s *Service) matchesSCIMFilter(user *SCIMUser, filter string) bool {
 
 // Group Operations
 
-// CreateGroup creates a new group (maps to team/role)
+// CreateGroup creates a new group (maps to team/role).
 func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID xid.ID) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
-		return nil, fmt.Errorf("group synchronization is disabled")
+		return nil, errs.BadRequest("group synchronization is disabled")
 	}
 
 	// Create team if sync to teams is enabled
 	if s.config.GroupSync.SyncToTeams {
-		description := fmt.Sprintf("Synced from SCIM group: %s", scimGroup.ExternalID)
+		description := "Synced from SCIM group: " + scimGroup.ExternalID
 
 		// Create team request based on mode
 		var teamReq interface{}
+
 		if s.mode == "organization" {
 			desc := description
 			teamReq = &orgplugin.CreateTeamRequest{
@@ -490,6 +502,7 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 
 		// Extract team ID from interface
 		var teamID xid.ID
+
 		switch t := teamInterface.(type) {
 		case *app.Team:
 			teamID = t.ID
@@ -499,6 +512,7 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 			if val.Kind() == reflect.Ptr {
 				val = val.Elem()
 			}
+
 			if val.Kind() == reflect.Struct {
 				idField := val.FieldByName("ID")
 				if idField.IsValid() && idField.CanInterface() {
@@ -542,6 +556,7 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 		if err != nil {
 			return nil, fmt.Errorf("invalid group ID: %w", err)
 		}
+
 		if err := s.syncGroupMembers(ctx, scimGroupID, scimGroup.Members, orgID); err != nil {
 		}
 	}
@@ -549,10 +564,10 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 	return scimGroup, nil
 }
 
-// GetGroup retrieves a group by ID
+// GetGroup retrieves a group by ID.
 func (s *Service) GetGroup(ctx context.Context, id, orgID xid.ID) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
-		return nil, fmt.Errorf("group synchronization is disabled")
+		return nil, errs.BadRequest("group synchronization is disabled")
 	}
 
 	// Get group mapping
@@ -568,9 +583,11 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID xid.ID) (*SCIMGroup, e
 	}
 
 	// Extract team info using reflection
-	var teamID xid.ID
-	var teamName string
-	var createdAt, updatedAt time.Time
+	var (
+		teamID               xid.ID
+		teamName             string
+		createdAt, updatedAt time.Time
+	)
 
 	switch t := teamInterface.(type) {
 	case *app.Team:
@@ -584,22 +601,26 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID xid.ID) (*SCIMGroup, e
 		if val.Kind() == reflect.Ptr {
 			val = val.Elem()
 		}
+
 		if val.Kind() == reflect.Struct {
 			if idField := val.FieldByName("ID"); idField.IsValid() {
 				if id, ok := idField.Interface().(xid.ID); ok {
 					teamID = id
 				}
 			}
+
 			if nameField := val.FieldByName("Name"); nameField.IsValid() {
 				if name, ok := nameField.Interface().(string); ok {
 					teamName = name
 				}
 			}
+
 			if createdAtField := val.FieldByName("CreatedAt"); createdAtField.IsValid() {
 				if ca, ok := createdAtField.Interface().(time.Time); ok {
 					createdAt = ca
 				}
 			}
+
 			if updatedAtField := val.FieldByName("UpdatedAt"); updatedAtField.IsValid() {
 				if ua, ok := updatedAtField.Interface().(time.Time); ok {
 					updatedAt = ua
@@ -639,10 +660,10 @@ func (s *Service) GetGroup(ctx context.Context, id, orgID xid.ID) (*SCIMGroup, e
 	return scimGroup, nil
 }
 
-// UpdateGroup updates a group via PATCH
+// UpdateGroup updates a group via PATCH.
 func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *PatchOp) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
-		return nil, fmt.Errorf("group synchronization is disabled")
+		return nil, errs.BadRequest("group synchronization is disabled")
 	}
 
 	teamInterface, err := s.getOrgService().GetTeam(ctx, id)
@@ -658,9 +679,11 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 	}
 
 	// Extract team info for update request
-	var teamName string
-	var teamDesc *string
-	var teamMetadata map[string]interface{}
+	var (
+		teamName     string
+		teamDesc     *string
+		teamMetadata map[string]interface{}
+	)
 
 	switch t := teamInterface.(type) {
 	case *app.Team:
@@ -673,12 +696,14 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 		if val.Kind() == reflect.Ptr {
 			val = val.Elem()
 		}
+
 		if val.Kind() == reflect.Struct {
 			if nameField := val.FieldByName("Name"); nameField.IsValid() {
 				if name, ok := nameField.Interface().(string); ok {
 					teamName = name
 				}
 			}
+
 			if descField := val.FieldByName("Description"); descField.IsValid() {
 				if desc, ok := descField.Interface().(*string); ok {
 					teamDesc = desc
@@ -686,6 +711,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 					teamDesc = &descStr
 				}
 			}
+
 			if metaField := val.FieldByName("Metadata"); metaField.IsValid() {
 				if meta, ok := metaField.Interface().(map[string]interface{}); ok {
 					teamMetadata = meta
@@ -717,14 +743,15 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 	return s.GetGroup(ctx, id, orgID)
 }
 
-// ReplaceGroup replaces a group via PUT
+// ReplaceGroup replaces a group via PUT.
 func (s *Service) ReplaceGroup(ctx context.Context, id, orgID xid.ID, scimGroup *SCIMGroup) (*SCIMGroup, error) {
 	if !s.config.GroupSync.Enabled {
-		return nil, fmt.Errorf("group synchronization is disabled")
+		return nil, errs.BadRequest("group synchronization is disabled")
 	}
 
 	// Update team properties
 	var updateReq interface{}
+
 	if s.mode == "organization" {
 		name := scimGroup.DisplayName
 		updateReq = &orgplugin.UpdateTeamRequest{
@@ -750,10 +777,10 @@ func (s *Service) ReplaceGroup(ctx context.Context, id, orgID xid.ID, scimGroup 
 	return s.GetGroup(ctx, id, orgID)
 }
 
-// DeleteGroup deletes a group
+// DeleteGroup deletes a group.
 func (s *Service) DeleteGroup(ctx context.Context, id, orgID xid.ID) error {
 	if !s.config.GroupSync.Enabled {
-		return fmt.Errorf("group synchronization is disabled")
+		return errs.BadRequest("group synchronization is disabled")
 	}
 
 	// Delete group mapping
@@ -770,7 +797,7 @@ func (s *Service) DeleteGroup(ctx context.Context, id, orgID xid.ID) error {
 	return nil
 }
 
-// ListGroups lists groups with filtering and pagination
+// ListGroups lists groups with filtering and pagination.
 func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, startIndex, count int) (*ListResponse, error) {
 	if !s.config.GroupSync.Enabled {
 		return &ListResponse{
@@ -797,9 +824,11 @@ func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, s
 	resources := make([]interface{}, 0, len(teamList))
 	for _, teamInterface := range teamList {
 		// Extract team info using reflection
-		var teamID xid.ID
-		var teamName string
-		var createdAt, updatedAt time.Time
+		var (
+			teamID               xid.ID
+			teamName             string
+			createdAt, updatedAt time.Time
+		)
 
 		switch t := teamInterface.(type) {
 		case *app.Team:
@@ -813,22 +842,26 @@ func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, s
 			if val.Kind() == reflect.Ptr {
 				val = val.Elem()
 			}
+
 			if val.Kind() == reflect.Struct {
 				if idField := val.FieldByName("ID"); idField.IsValid() {
 					if id, ok := idField.Interface().(xid.ID); ok {
 						teamID = id
 					}
 				}
+
 				if nameField := val.FieldByName("Name"); nameField.IsValid() {
 					if name, ok := nameField.Interface().(string); ok {
 						teamName = name
 					}
 				}
+
 				if createdAtField := val.FieldByName("CreatedAt"); createdAtField.IsValid() {
 					if ca, ok := createdAtField.Interface().(time.Time); ok {
 						createdAt = ca
 					}
 				}
+
 				if updatedAtField := val.FieldByName("UpdatedAt"); updatedAtField.IsValid() {
 					if ua, ok := updatedAtField.Interface().(time.Time); ok {
 						updatedAt = ua
@@ -874,7 +907,7 @@ func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, s
 // Token Management
 
 // CreateProvisioningToken creates a new SCIM provisioning token
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 func (s *Service) CreateProvisioningToken(ctx context.Context, appID, envID, orgID xid.ID, name, description string, scopes []string, expiresAt *time.Time) (string, *ProvisioningToken, error) {
 	// Generate random token
 	tokenBytes := make([]byte, 32)
@@ -918,12 +951,13 @@ func (s *Service) CreateProvisioningToken(ctx context.Context, appID, envID, org
 	return token, provToken, nil
 }
 
-// ValidateProvisioningToken validates a bearer token
+// ValidateProvisioningToken validates a bearer token.
 func (s *Service) ValidateProvisioningToken(ctx context.Context, token string) (*ProvisioningToken, error) {
 	if len(token) < 8 {
 		s.metrics.RecordTokenValidation(false)
 		s.metrics.RecordError("token_invalid_format")
-		return nil, fmt.Errorf("invalid token format")
+
+		return nil, errs.InvalidToken()
 	}
 
 	tokenPrefix := token[:8]
@@ -933,6 +967,7 @@ func (s *Service) ValidateProvisioningToken(ctx context.Context, token string) (
 	if err != nil {
 		s.metrics.RecordTokenValidation(false)
 		s.metrics.RecordError("token_not_found")
+
 		return nil, fmt.Errorf("token not found: %w", err)
 	}
 
@@ -940,21 +975,24 @@ func (s *Service) ValidateProvisioningToken(ctx context.Context, token string) (
 	if provToken.RevokedAt != nil {
 		s.metrics.RecordTokenValidation(false)
 		s.metrics.RecordError("token_revoked")
-		return nil, fmt.Errorf("token has been revoked")
+
+		return nil, errs.BadRequest("token has been revoked")
 	}
 
 	// Check expiry
 	if provToken.ExpiresAt != nil && time.Now().After(*provToken.ExpiresAt) {
 		s.metrics.RecordTokenValidation(false)
 		s.metrics.RecordError("token_expired")
-		return nil, fmt.Errorf("token has expired")
+
+		return nil, errs.TokenExpired()
 	}
 
 	// Verify token hash
 	if err := bcrypt.CompareHashAndPassword([]byte(provToken.TokenHash), []byte(token)); err != nil {
 		s.metrics.RecordTokenValidation(false)
 		s.metrics.RecordError("token_invalid_hash")
-		return nil, fmt.Errorf("invalid token")
+
+		return nil, errs.InvalidToken()
 	}
 
 	// Update last used timestamp
@@ -975,14 +1013,15 @@ func (s *Service) validateUserAttributes(scimUser *SCIMUser) error {
 		switch attr {
 		case "userName":
 			if scimUser.UserName == "" {
-				return fmt.Errorf("userName is required")
+				return errs.RequiredField("userName")
 			}
 		case "emails":
 			if len(scimUser.Emails) == 0 {
-				return fmt.Errorf("at least one email is required")
+				return errs.RequiredField("emails")
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -992,9 +1031,11 @@ func (s *Service) getPrimaryEmail(scimUser *SCIMUser) string {
 			return email.Value
 		}
 	}
+
 	if len(scimUser.Emails) > 0 {
 		return scimUser.Emails[0].Value
 	}
+
 	return ""
 }
 
@@ -1039,7 +1080,7 @@ func (s *Service) mapAuthSomeToSCIMUser(authUser *user.User, externalID string) 
 			ResourceType: "User",
 			Created:      authUser.CreatedAt,
 			LastModified: authUser.UpdatedAt,
-			Location:     fmt.Sprintf("/scim/v2/Users/%s", authUser.ID.String()),
+			Location:     "/scim/v2/Users/" + authUser.ID.String(),
 		},
 	}
 
@@ -1064,15 +1105,16 @@ func (s *Service) applyPatchOperationToRequest(authUser *user.User, op *PatchOpe
 	// Simplified patch operation handling
 	switch op.Op {
 	case "replace":
-		if op.Path == "active" {
+		switch op.Path {
+		case "active":
 			if active, ok := op.Value.(bool); ok {
 				updateReq.EmailVerified = boolPtr(active)
 			}
-		} else if op.Path == "name.givenName" || op.Path == "name.familyName" || op.Path == "displayName" {
+		case "name.givenName", "name.familyName", "displayName":
 			if name, ok := op.Value.(string); ok {
 				updateReq.Name = stringPtr(name)
 			}
-		} else if op.Path == "emails[type eq \"work\"].value" || op.Path == "emails[primary eq true].value" {
+		case "emails[type eq \"work\"].value", "emails[primary eq true].value":
 			if email, ok := op.Value.(string); ok {
 				updateReq.Email = stringPtr(email)
 			}
@@ -1082,10 +1124,11 @@ func (s *Service) applyPatchOperationToRequest(authUser *user.User, op *PatchOpe
 	case "remove":
 		// Handle remove operations
 	}
+
 	return nil
 }
 
-// Helper functions for pointer conversion
+// Helper functions for pointer conversion.
 func stringPtr(s string) *string {
 	return &s
 }
@@ -1097,6 +1140,7 @@ func boolPtr(b bool) *bool {
 func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface interface{}, op *PatchOperation, orgID xid.ID) error {
 	// Extract team ID from interface
 	var teamID xid.ID
+
 	switch t := teamInterface.(type) {
 	case *app.Team:
 		teamID = t.ID
@@ -1106,6 +1150,7 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface in
 		if val.Kind() == reflect.Ptr {
 			val = val.Elem()
 		}
+
 		if val.Kind() == reflect.Struct {
 			if idField := val.FieldByName("ID"); idField.IsValid() {
 				if id, ok := idField.Interface().(xid.ID); ok {
@@ -1197,10 +1242,11 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface in
 			}
 		}
 	}
+
 	return nil
 }
 
-// Helper to extract member ID from member interface
+// Helper to extract member ID from member interface.
 func extractMemberIDFromInterface(member interface{}) xid.ID {
 	switch m := member.(type) {
 	case *app.Member:
@@ -1211,6 +1257,7 @@ func extractMemberIDFromInterface(member interface{}) xid.ID {
 		if val.Kind() == reflect.Ptr {
 			val = val.Elem()
 		}
+
 		if val.Kind() == reflect.Struct {
 			if idField := val.FieldByName("ID"); idField.IsValid() {
 				if id, ok := idField.Interface().(xid.ID); ok {
@@ -1219,6 +1266,7 @@ func extractMemberIDFromInterface(member interface{}) xid.ID {
 			}
 		}
 	}
+
 	return xid.ID{}
 }
 
@@ -1269,6 +1317,7 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID xid.ID, members 
 	for _, memberRef := range members {
 		// memberRef.Value is the userID
 		userIDStr := memberRef.Value
+
 		userID, err := xid.FromString(userIDStr)
 		if err != nil {
 			continue
@@ -1296,7 +1345,7 @@ func (s *Service) syncGroupMembers(ctx context.Context, groupID xid.ID, members 
 
 // updateTeamProvisioningInfo updates a team with SCIM provisioning information
 // This uses direct database access to update provisioning fields since the service layer
-// doesn't expose these fields in update requests
+// doesn't expose these fields in update requests.
 func (s *Service) updateTeamProvisioningInfo(ctx context.Context, teamID xid.ID, externalID string) error {
 	provisionedBy := "scim"
 
@@ -1305,7 +1354,7 @@ func (s *Service) updateTeamProvisioningInfo(ctx context.Context, teamID xid.ID,
 	return s.repo.UpdateTeamProvisioningInfo(ctx, teamID, &provisionedBy, &externalID)
 }
 
-// strPtr is a helper function to create a string pointer
+// strPtr is a helper function to create a string pointer.
 func strPtr(s string) *string {
 	return &s
 }
@@ -1321,7 +1370,7 @@ func (s *Service) sendProvisioningWebhook(ctx context.Context, event string, dat
 
 // Bulk Operations (RFC 7644 Section 3.7)
 
-// ProcessBulkOperation processes a bulk operation request
+// ProcessBulkOperation processes a bulk operation request.
 func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest, orgID xid.ID) (*BulkResponse, error) {
 	response := &BulkResponse{
 		Schemas:    []string{SchemaBulkResponse},
@@ -1365,7 +1414,7 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 						}
 					} else {
 						respOp.Status = 201
-						respOp.Location = fmt.Sprintf("/scim/v2/Users/%s", user.ID)
+						respOp.Location = "/scim/v2/Users/" + user.ID
 						respOp.Response = user
 					}
 				}
@@ -1390,7 +1439,7 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 						}
 					} else {
 						respOp.Status = 201
-						respOp.Location = fmt.Sprintf("/scim/v2/Groups/%s", group.ID)
+						respOp.Location = "/scim/v2/Groups/" + group.ID
 						respOp.Response = group
 					}
 				}
@@ -1408,6 +1457,7 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 				}
 			} else {
 				resID := pathParts[len(pathParts)-1]
+
 				resourceID, err := xid.FromString(resID)
 				if err != nil {
 					respOp.Status = 400
@@ -1450,6 +1500,7 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 				}
 			} else {
 				resID := pathParts[len(pathParts)-1]
+
 				resourceID, err := xid.FromString(resID)
 				if err != nil {
 					respOp.Status = 400
@@ -1492,6 +1543,7 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 				}
 			} else {
 				resID := pathParts[len(pathParts)-1]
+
 				resourceID, err := xid.FromString(resID)
 				if err != nil {
 					respOp.Status = 400
@@ -1530,11 +1582,13 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 		// Check fail on errors mode
 		if bulkReq.FailOnErrors > 0 {
 			failCount := 0
+
 			for _, ro := range response.Operations {
 				if ro.Status >= 400 {
 					failCount++
 				}
 			}
+
 			if failCount >= bulkReq.FailOnErrors {
 				break
 			}
@@ -1547,7 +1601,7 @@ func (s *Service) ProcessBulkOperation(ctx context.Context, bulkReq *BulkRequest
 // Token Management Operations
 
 // ListProvisioningTokens lists all provisioning tokens for an organization
-// Updated for 3-tier architecture
+// Updated for 3-tier architecture.
 func (s *Service) ListProvisioningTokens(ctx context.Context, appID, envID, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, int, error) {
 	tokens, err := s.repo.ListProvisioningTokens(ctx, appID, envID, orgID, limit, offset)
 	if err != nil {
@@ -1560,7 +1614,7 @@ func (s *Service) ListProvisioningTokens(ctx context.Context, appID, envID, orgI
 	return tokens, total, nil
 }
 
-// RevokeProvisioningToken revokes a provisioning token
+// RevokeProvisioningToken revokes a provisioning token.
 func (s *Service) RevokeProvisioningToken(ctx context.Context, tokenID string) error {
 	tokenXID, err := xid.FromString(tokenID)
 	if err != nil {
@@ -1573,7 +1627,7 @@ func (s *Service) RevokeProvisioningToken(ctx context.Context, tokenID string) e
 // Attribute Mapping Operations
 
 // GetAttributeMappings retrieves attribute mappings for an organization
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 func (s *Service) GetAttributeMappings(ctx context.Context, appID, envID, orgID xid.ID) (map[string]string, error) {
 	mapping, err := s.repo.FindAttributeMappingByOrganization(ctx, appID, envID, orgID)
 	if err != nil {
@@ -1585,7 +1639,7 @@ func (s *Service) GetAttributeMappings(ctx context.Context, appID, envID, orgID 
 }
 
 // UpdateAttributeMappings updates attribute mappings for an organization
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 func (s *Service) UpdateAttributeMappings(ctx context.Context, appID, envID, orgID xid.ID, mappings map[string]string) error {
 	// Find existing mapping
 	existingMapping, err := s.repo.FindAttributeMappingByOrganization(ctx, appID, envID, orgID)
@@ -1601,19 +1655,21 @@ func (s *Service) UpdateAttributeMappings(ctx context.Context, appID, envID, org
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
+
 		return s.repo.CreateAttributeMapping(ctx, mapping)
 	}
 
 	// Update existing mapping
 	existingMapping.Mappings = mappings
 	existingMapping.UpdatedAt = time.Now()
+
 	return s.repo.UpdateAttributeMapping(ctx, existingMapping)
 }
 
 // Provisioning Logs Operations
 
 // GetProvisioningLogs retrieves provisioning logs with filtering
-// Updated for 3-tier architecture
+// Updated for 3-tier architecture.
 func (s *Service) GetProvisioningLogs(ctx context.Context, appID, envID, orgID xid.ID, action string, limit, offset int) ([]*ProvisioningLog, int, error) {
 	// Build filters
 	filters := make(map[string]interface{})
@@ -1635,22 +1691,23 @@ func (s *Service) GetProvisioningLogs(ctx context.Context, appID, envID, orgID x
 	return logs, total, nil
 }
 
-// CreateProvisioningLog creates a new provisioning log entry
+// CreateProvisioningLog creates a new provisioning log entry.
 func (s *Service) CreateProvisioningLog(ctx context.Context, log *ProvisioningLog) error {
 	log.ID = xid.New()
 	log.CreatedAt = time.Now()
+
 	return s.repo.CreateProvisioningLog(ctx, log)
 }
 
 // Lifecycle methods
 
-// Migrate runs database migrations
+// Migrate runs database migrations.
 func (s *Service) Migrate(ctx context.Context) error {
 	return s.repo.Migrate(ctx)
 }
 
 // InitializeOrgSCIMConfig initializes default SCIM config for an organization
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, appID, envID, orgID xid.ID) error {
 	// Create default attribute mapping
 	mapping := &AttributeMapping{
@@ -1667,24 +1724,24 @@ func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, appID, envID, org
 	return s.repo.CreateAttributeMapping(ctx, mapping)
 }
 
-// SendProvisioningWebhook sends a provisioning webhook
+// SendProvisioningWebhook sends a provisioning webhook.
 func (s *Service) SendProvisioningWebhook(ctx context.Context, event string, data map[string]interface{}) error {
 	return s.sendProvisioningWebhook(ctx, event, data)
 }
 
-// Shutdown gracefully shuts down the service
+// Shutdown gracefully shuts down the service.
 func (s *Service) Shutdown(ctx context.Context) error {
 	// Cleanup resources
 	return nil
 }
 
-// Health checks service health
+// Health checks service health.
 func (s *Service) Health(ctx context.Context) error {
 	// Check database connectivity
 	return s.repo.Ping(ctx)
 }
 
-// Helper function to extract UserID from member interface
+// Helper function to extract UserID from member interface.
 func extractUserIDFromMember(member interface{}) xid.ID {
 	// Try app.Member
 	if m, ok := member.(*app.Member); ok {
@@ -1699,6 +1756,7 @@ func extractUserIDFromMember(member interface{}) xid.ID {
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
+
 	if val.Kind() == reflect.Struct {
 		userIDField := val.FieldByName("UserID")
 		if userIDField.IsValid() && userIDField.CanInterface() {
@@ -1707,12 +1765,13 @@ func extractUserIDFromMember(member interface{}) xid.ID {
 			}
 		}
 	}
+
 	return xid.ID{}
 }
 
 // Adapter implementations for unified interface
 
-// appServiceAdapter adapts multitenancy app service to SCIMOrgService interface
+// appServiceAdapter adapts multitenancy app service to SCIMOrgService interface.
 type appServiceAdapter struct {
 	service *app.ServiceImpl
 }
@@ -1724,6 +1783,7 @@ func (a *appServiceAdapter) AddMember(ctx context.Context, orgID, userID xid.ID,
 		Role:   app.MemberRole(role),
 		Status: app.MemberStatusActive,
 	}
+
 	return a.service.CreateMember(ctx, member)
 }
 
@@ -1737,21 +1797,24 @@ func (a *appServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit
 	}
 	filter.Limit = limit
 	filter.Offset = offset
+
 	response, err := a.service.ListMembers(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
+
 	result := make([]interface{}, len(response.Data))
 	for i, m := range response.Data {
 		result[i] = m
 	}
+
 	return result, nil
 }
 
 func (a *appServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req interface{}) (interface{}, error) {
 	// For now, return a placeholder since team creation interface needs proper implementation
 	// TODO: Implement team creation with new app service interface
-	return nil, fmt.Errorf("team creation via SCIM not yet implemented for app mode")
+	return nil, errs.NotImplemented("team creation via SCIM for app mode")
 }
 
 func (a *appServiceAdapter) GetTeam(ctx context.Context, id xid.ID) (interface{}, error) {
@@ -1764,21 +1827,24 @@ func (a *appServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, 
 	}
 	filter.Limit = limit
 	filter.Offset = offset
+
 	response, err := a.service.ListTeams(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
+
 	result := make([]interface{}, len(response.Data))
 	for i, t := range response.Data {
 		result[i] = t
 	}
+
 	return result, nil
 }
 
 func (a *appServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req interface{}) (interface{}, error) {
 	// For now, return a placeholder since team update interface needs proper implementation
 	// TODO: Implement team update with new app service interface
-	return nil, fmt.Errorf("team update via SCIM not yet implemented for app mode")
+	return nil, errs.NotImplemented("team update via SCIM for app mode")
 }
 
 func (a *appServiceAdapter) DeleteTeam(ctx context.Context, id xid.ID) error {
@@ -1792,6 +1858,7 @@ func (a *appServiceAdapter) AddTeamMember(ctx context.Context, teamID, memberID 
 		// Note: Role management should be handled through member roles, not team member roles
 	}
 	_, err := a.service.AddTeamMember(ctx, tm)
+
 	return err
 }
 
@@ -1805,14 +1872,17 @@ func (a *appServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) 
 	}
 	filter.Limit = 10000
 	filter.Offset = 0
+
 	response, err := a.service.ListTeamMembers(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
+
 	result := make([]interface{}, len(response.Data))
 	for i, m := range response.Data {
 		result[i] = m
 	}
+
 	return result, nil
 }
 
@@ -1822,19 +1892,22 @@ func (a *appServiceAdapter) GetMemberIDByUserID(ctx context.Context, orgID, user
 	}
 	filter.Limit = 10000
 	filter.Offset = 0
+
 	response, err := a.service.ListMembers(ctx, filter)
 	if err != nil {
 		return xid.ID{}, err
 	}
+
 	for _, m := range response.Data {
 		if m.UserID == userID {
 			return m.ID, nil
 		}
 	}
+
 	return xid.ID{}, fmt.Errorf("member not found for user %s in org %s", userID, orgID)
 }
 
-// orgServiceAdapter adapts organization plugin service to SCIMOrgService interface
+// orgServiceAdapter adapts organization plugin service to SCIMOrgService interface.
 type orgServiceAdapter struct {
 	service *orgplugin.Service
 }
@@ -1850,7 +1923,7 @@ func (a *orgServiceAdapter) IsUserMember(ctx context.Context, orgID, userID xid.
 func (a *orgServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return empty to prevent errors
-	return []interface{}{}, fmt.Errorf("organization service list members needs pagination filter update")
+	return []interface{}{}, errs.NotImplemented("organization service list members pagination")
 }
 
 func (a *orgServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req interface{}) (interface{}, error) {
@@ -1865,24 +1938,25 @@ func (a *orgServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req in
 				Metadata:    appReq.Metadata,
 			}
 		} else {
-			return nil, fmt.Errorf("invalid team request type")
+			return nil, errs.InvalidInput("team request", "invalid type")
 		}
 	}
 	// For SCIM operations, we use a system user ID (zero xid) or get from context
 	// In practice, SCIM tokens should have a created_by field we can use
 	systemUserID := xid.ID{} // Zero xid for system operations
+
 	return a.service.CreateTeam(ctx, orgID, teamReq, systemUserID)
 }
 
 func (a *orgServiceAdapter) GetTeam(ctx context.Context, id xid.ID) (interface{}, error) {
 	// TODO: Organization service needs GetTeam method
-	return nil, fmt.Errorf("organization service get team not yet implemented")
+	return nil, errs.NotImplemented("organization service get team")
 }
 
 func (a *orgServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return empty to prevent errors
-	return []interface{}{}, fmt.Errorf("organization service list teams needs pagination filter update")
+	return []interface{}{}, errs.NotImplemented("organization service list teams pagination")
 }
 
 func (a *orgServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req interface{}) (interface{}, error) {
@@ -1896,37 +1970,41 @@ func (a *orgServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req inter
 				Metadata:    appReq.Metadata,
 			}
 		} else {
-			return nil, fmt.Errorf("invalid team update request type")
+			return nil, errs.InvalidInput("team update request", "invalid type")
 		}
 	}
 	// For SCIM operations, we use a system user ID
 	systemUserID := xid.ID{} // Zero xid for system operations
+
 	return a.service.UpdateTeam(ctx, id, teamReq, systemUserID)
 }
 
 func (a *orgServiceAdapter) DeleteTeam(ctx context.Context, id xid.ID) error {
 	systemUserID := xid.ID{} // Zero xid for system operations
+
 	return a.service.DeleteTeam(ctx, id, systemUserID)
 }
 
 func (a *orgServiceAdapter) AddTeamMember(ctx context.Context, teamID, memberID xid.ID, role string) error {
 	systemUserID := xid.ID{} // Zero xid for system operations
+
 	return a.service.AddTeamMember(ctx, teamID, memberID, systemUserID)
 }
 
 func (a *orgServiceAdapter) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
 	systemUserID := xid.ID{} // Zero xid for system operations
+
 	return a.service.RemoveTeamMember(ctx, teamID, memberID, systemUserID)
 }
 
 func (a *orgServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) ([]interface{}, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return empty to prevent errors
-	return []interface{}{}, fmt.Errorf("organization service list team members needs pagination filter update")
+	return []interface{}{}, errs.NotImplemented("organization service list team members pagination")
 }
 
 func (a *orgServiceAdapter) GetMemberIDByUserID(ctx context.Context, orgID, userID xid.ID) (xid.ID, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return error
-	return xid.ID{}, fmt.Errorf("organization service get member needs pagination filter update")
+	return xid.ID{}, errs.NotImplemented("organization service get member pagination")
 }

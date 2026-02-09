@@ -13,7 +13,7 @@ import (
 
 // RefreshAccessToken refreshes an access token using a refresh token
 // Implements OAuth2 Refresh Token Grant (RFC 6749 Section 6)
-// Optionally rotates the refresh token for improved security
+// Optionally rotates the refresh token for improved security.
 func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID, requestedScope string) (*TokenResponse, error) {
 	// Find the token by refresh token
 	token, err := s.tokenRepo.FindByRefreshToken(ctx, refreshToken)
@@ -45,6 +45,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID
 		if !isScopeSubset(requestedScopes, originalScopes) {
 			return nil, errs.BadRequest("requested scope exceeds original grant")
 		}
+
 		effectiveScope = requestedScope
 	}
 
@@ -54,7 +55,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID
 		return nil, errs.DatabaseError("find user", err)
 	}
 
-	userInfo := map[string]interface{}{
+	userInfo := map[string]any{
 		"sub":   user.ID.String(),
 		"email": user.Email,
 		"name":  user.Name,
@@ -140,10 +141,10 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshToken, clientID
 }
 
 // GenerateClientCredentialsToken generates a token for client credentials grant (M2M)
-// Implements OAuth2 Client Credentials Grant (RFC 6749 Section 4.4)
+// Implements OAuth2 Client Credentials Grant (RFC 6749 Section 4.4).
 func (s *Service) GenerateClientCredentialsToken(ctx context.Context, client *schema.OAuthClient, scope string) (*TokenResponse, error) {
 	if s.jwtService == nil {
-		return nil, errs.InternalError(fmt.Errorf("JWT service not initialized"))
+		return nil, errs.InternalServerErrorWithMessage("JWT service not initialized")
 	}
 
 	// Validate scope against client's allowed scopes
@@ -196,7 +197,7 @@ func (s *Service) GenerateClientCredentialsToken(ctx context.Context, client *sc
 	}, nil
 }
 
-// isScopeSubset checks if requested scopes are a subset of original scopes
+// isScopeSubset checks if requested scopes are a subset of original scopes.
 func isScopeSubset(requested, original []string) bool {
 	originalSet := make(map[string]bool)
 	for _, scope := range original {

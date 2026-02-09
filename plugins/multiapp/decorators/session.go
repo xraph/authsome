@@ -11,19 +11,20 @@ import (
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Ensure MultiTenantSessionService implements session.ServiceInterface
+// Ensure MultiTenantSessionService implements session.ServiceInterface.
 var _ session.ServiceInterface = (*MultiTenantSessionService)(nil)
 
-// sessionCacheEntry holds cached session validation results
+// sessionCacheEntry holds cached session validation results.
 type sessionCacheEntry struct {
 	session   *session.Session
 	valid     bool
 	timestamp time.Time
 }
 
-// MultiTenantSessionService decorates the core session service with multi-tenancy capabilities
+// MultiTenantSessionService decorates the core session service with multi-tenancy capabilities.
 type MultiTenantSessionService struct {
 	sessionService session.ServiceInterface
 	appService     *coreapp.ServiceImpl
@@ -34,7 +35,7 @@ type MultiTenantSessionService struct {
 	cacheTTL time.Duration
 }
 
-// NewMultiTenantSessionService creates a new multi-tenant session service
+// NewMultiTenantSessionService creates a new multi-tenant session service.
 func NewMultiTenantSessionService(sessionService session.ServiceInterface, appService *coreapp.ServiceImpl) *MultiTenantSessionService {
 	svc := &MultiTenantSessionService{
 		sessionService: sessionService,
@@ -48,24 +49,26 @@ func NewMultiTenantSessionService(sessionService session.ServiceInterface, appSe
 	return svc
 }
 
-// cleanupCache periodically removes stale entries from the cache
+// cleanupCache periodically removes stale entries from the cache.
 func (s *MultiTenantSessionService) cleanupCache() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		now := time.Now()
-		s.cache.Range(func(key, value interface{}) bool {
+
+		s.cache.Range(func(key, value any) bool {
 			entry := value.(sessionCacheEntry)
 			if now.Sub(entry.timestamp) > s.cacheTTL {
 				s.cache.Delete(key)
 			}
+
 			return true
 		})
 	}
 }
 
-// Create creates a new session with app context
+// Create creates a new session with app context.
 func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.CreateSessionRequest) (*session.Session, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -90,7 +93,7 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 		// Try to find which organization this user belongs to
 		memberships, err := s.appService.GetUserMemberships(ctx, req.UserID)
 		if err != nil || len(memberships) == 0 {
-			return nil, fmt.Errorf("app context not found and user has no organizations")
+			return nil, errs.BadRequest("app context not found and user has no organizations")
 		}
 
 		// Use the first organization the user belongs to
@@ -108,15 +111,16 @@ func (s *MultiTenantSessionService) Create(ctx context.Context, req *session.Cre
 	if err != nil {
 		return nil, fmt.Errorf("user is not a member of this app: %w", err)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	// Create session using core service
 	return s.sessionService.Create(ctx, req)
 }
 
-// FindByToken retrieves a session by token with app context
+// FindByToken retrieves a session by token with app context.
 func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token string) (*session.Session, error) {
 	// Check cache first to avoid redundant queries within the same request
 	if cached, ok := s.cache.Load(token); ok {
@@ -124,8 +128,9 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 		// Check if cache entry is still valid
 		if time.Since(entry.timestamp) < s.cacheTTL {
 			if !entry.valid {
-				return nil, fmt.Errorf("cached invalid session")
+				return nil, errs.BadRequest("cached invalid session")
 			}
+
 			return entry.session, nil
 		}
 		// Cache expired, remove it
@@ -141,6 +146,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 			valid:     false,
 			timestamp: time.Now(),
 		})
+
 		return nil, err
 	}
 
@@ -151,6 +157,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 			valid:     false,
 			timestamp: time.Now(),
 		})
+
 		return nil, nil
 	}
 
@@ -163,6 +170,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 		if !sess.AppID.IsNil() {
 			// Session already has organization context - trust it
 			s.cacheSession(token, sess, true)
+
 			return sess, nil
 		}
 
@@ -176,6 +184,7 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 		if err != nil || len(response.Data) == 0 {
 			// No organizations exist yet - allow (first user scenario)
 			s.cacheSession(token, sess, true)
+
 			return sess, nil
 		}
 
@@ -187,16 +196,19 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 			// Allow sessions created in the last 10 seconds to give hooks time to complete
 			if time.Since(sess.CreatedAt) < 10*time.Second {
 				s.cacheSession(token, sess, true)
+
 				return sess, nil
 			}
 			// User has no organizations and session is not newly created
 			s.cacheSession(token, nil, false)
-			return nil, fmt.Errorf("session user has no organization memberships")
+
+			return nil, errs.BadRequest("session user has no organization memberships")
 		}
 
 		// User has organizations - allow the session
 		// (In a more sophisticated system, you might want to set org context here)
 		s.cacheSession(token, sess, true)
+
 		return sess, nil
 	}
 
@@ -204,18 +216,22 @@ func (s *MultiTenantSessionService) FindByToken(ctx context.Context, token strin
 	member, err := s.appService.Member.FindMember(ctx, appID, sess.UserID)
 	if err != nil {
 		s.cacheSession(token, nil, false)
+
 		return nil, fmt.Errorf("user is not a member of this app: %w", err)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		s.cacheSession(token, nil, false)
-		return nil, fmt.Errorf("user membership is not active")
+
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	s.cacheSession(token, sess, true)
+
 	return sess, nil
 }
 
-// cacheSession stores a session validation result in the cache
+// cacheSession stores a session validation result in the cache.
 func (s *MultiTenantSessionService) cacheSession(token string, sess *session.Session, valid bool) {
 	s.cache.Store(token, sessionCacheEntry{
 		session:   sess,
@@ -224,7 +240,7 @@ func (s *MultiTenantSessionService) cacheSession(token string, sess *session.Ses
 	})
 }
 
-// Revoke revokes a session with app context
+// Revoke revokes a session with app context.
 func (s *MultiTenantSessionService) Revoke(ctx context.Context, token string) error {
 	// First validate the session belongs to the organization
 	sess, err := s.FindByToken(ctx, token)
@@ -233,14 +249,14 @@ func (s *MultiTenantSessionService) Revoke(ctx context.Context, token string) er
 	}
 
 	if sess == nil {
-		return fmt.Errorf("session not found")
+		return errs.NotFound("session not found")
 	}
 
 	// Revoke session using core service
 	return s.sessionService.Revoke(ctx, token)
 }
 
-// FindByID retrieves a session by ID with app context
+// FindByID retrieves a session by ID with app context.
 func (s *MultiTenantSessionService) FindByID(ctx context.Context, id xid.ID) (*session.Session, error) {
 	// Get session using core service first
 	sess, err := s.sessionService.FindByID(ctx, id)
@@ -258,8 +274,9 @@ func (s *MultiTenantSessionService) FindByID(ctx context.Context, id xid.ID) (*s
 		// No app context - allow if user has any organization memberships
 		memberships, err := s.appService.GetUserMemberships(ctx, sess.UserID)
 		if err != nil || len(memberships) == 0 {
-			return nil, fmt.Errorf("session user has no organization memberships")
+			return nil, errs.BadRequest("session user has no organization memberships")
 		}
+
 		return sess, nil
 	}
 
@@ -268,26 +285,27 @@ func (s *MultiTenantSessionService) FindByID(ctx context.Context, id xid.ID) (*s
 	if err != nil {
 		return nil, fmt.Errorf("user is not a member of this app: %w", err)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	return sess, nil
 }
 
-// ListSessions lists sessions with filtering within app context
+// ListSessions lists sessions with filtering within app context.
 func (s *MultiTenantSessionService) ListSessions(ctx context.Context, filter *session.ListSessionsFilter) (*session.ListSessionsResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
-		return nil, fmt.Errorf("app context not found")
+		return nil, errs.BadRequest("app context not found")
 	}
 
 	// Verify the filter's app ID matches the context (or set it if not provided)
 	if filter.AppID.IsNil() {
 		filter.AppID = appID
 	} else if filter.AppID != appID {
-		return nil, fmt.Errorf("filter app ID does not match context")
+		return nil, errs.BadRequest("filter app ID does not match context")
 	}
 
 	// If filtering by user, verify user belongs to the organization
@@ -296,8 +314,9 @@ func (s *MultiTenantSessionService) ListSessions(ctx context.Context, filter *se
 		if err != nil {
 			return nil, fmt.Errorf("user is not a member of this app: %w", err)
 		}
+
 		if member.Status != coreapp.MemberStatusActive {
-			return nil, fmt.Errorf("user membership is not active")
+			return nil, errs.BadRequest("user membership is not active")
 		}
 	}
 
@@ -305,12 +324,12 @@ func (s *MultiTenantSessionService) ListSessions(ctx context.Context, filter *se
 	return s.sessionService.ListSessions(ctx, filter)
 }
 
-// RevokeByID revokes a session by ID with app context
+// RevokeByID revokes a session by ID with app context.
 func (s *MultiTenantSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
 	// Get organization from context
 	_, ok := ctx.Value(contexts.AppContextKey).(xid.ID)
 	if !ok {
-		return fmt.Errorf("app context not found")
+		return errs.BadRequest("app context not found")
 	}
 
 	// Get session to verify organization membership
@@ -322,7 +341,7 @@ func (s *MultiTenantSessionService) RevokeByID(ctx context.Context, id xid.ID) e
 	return s.sessionService.RevokeByID(ctx, id)
 }
 
-// TouchSession extends the session expiry time if sliding window is enabled
+// TouchSession extends the session expiry time if sliding window is enabled.
 func (s *MultiTenantSessionService) TouchSession(ctx context.Context, sess *session.Session) (*session.Session, bool, error) {
 	// Get organization from context if present
 	appID, ok := contexts.GetAppID(ctx)
@@ -332,8 +351,9 @@ func (s *MultiTenantSessionService) TouchSession(ctx context.Context, sess *sess
 		if err != nil {
 			return nil, false, fmt.Errorf("user is not a member of this app: %w", err)
 		}
+
 		if member.Status != coreapp.MemberStatusActive {
-			return nil, false, fmt.Errorf("user membership is not active")
+			return nil, false, errs.BadRequest("user membership is not active")
 		}
 	}
 
@@ -341,12 +361,12 @@ func (s *MultiTenantSessionService) TouchSession(ctx context.Context, sess *sess
 	return s.sessionService.TouchSession(ctx, sess)
 }
 
-// RefreshSession refreshes an access token using a refresh token within app context
+// RefreshSession refreshes an access token using a refresh token within app context.
 func (s *MultiTenantSessionService) RefreshSession(ctx context.Context, refreshToken string) (*session.RefreshResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
-		return nil, fmt.Errorf("app context not found")
+		return nil, errs.BadRequest("app context not found")
 	}
 
 	// Refresh session using core service
@@ -360,8 +380,9 @@ func (s *MultiTenantSessionService) RefreshSession(ctx context.Context, refreshT
 	if err != nil {
 		return nil, fmt.Errorf("user is not a member of this app: %w", err)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	return response, nil

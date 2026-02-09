@@ -6,18 +6,20 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/passkey"
 )
 
 // WebAuthnFactorAdapter integrates passkey plugin as an MFA factor
 // This adapter enables passkeys to be used as a second authentication factor
-// while maintaining support for standalone passwordless authentication
+// while maintaining support for standalone passwordless authentication.
 type WebAuthnFactorAdapter struct {
 	BaseFactorAdapter
+
 	passkeyService *passkey.Service
 }
 
-// NewWebAuthnFactorAdapter creates a new WebAuthn factor adapter
+// NewWebAuthnFactorAdapter creates a new WebAuthn factor adapter.
 func NewWebAuthnFactorAdapter(passkeyService *passkey.Service, enabled bool) *WebAuthnFactorAdapter {
 	return &WebAuthnFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
@@ -28,10 +30,10 @@ func NewWebAuthnFactorAdapter(passkeyService *passkey.Service, enabled bool) *We
 	}
 }
 
-// Enroll initiates WebAuthn credential registration for MFA
+// Enroll initiates WebAuthn credential registration for MFA.
 func (a *WebAuthnFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("WebAuthn factor not available")
+		return nil, errs.BadRequest("WebAuthn factor not available")
 	}
 
 	// Extract optional metadata for registration
@@ -43,9 +45,11 @@ func (a *WebAuthnFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metad
 	if name, ok := metadata["name"].(string); ok {
 		req.Name = name
 	}
+
 	if authType, ok := metadata["authenticatorType"].(string); ok {
 		req.AuthenticatorType = authType
 	}
+
 	if reqResidentKey, ok := metadata["requireResidentKey"].(bool); ok {
 		req.RequireResidentKey = reqResidentKey
 	}
@@ -57,6 +61,7 @@ func (a *WebAuthnFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metad
 	}
 
 	factorID := xid.New()
+
 	return &FactorEnrollmentResponse{
 		FactorID: factorID,
 		Type:     FactorTypeWebAuthn,
@@ -70,10 +75,10 @@ func (a *WebAuthnFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metad
 	}, nil
 }
 
-// VerifyEnrollment completes WebAuthn credential registration
+// VerifyEnrollment completes WebAuthn credential registration.
 func (a *WebAuthnFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	if !a.IsAvailable() {
-		return fmt.Errorf("WebAuthn factor not available")
+		return errs.BadRequest("WebAuthn factor not available")
 	}
 
 	// In MFA context, the proof would be the credential response
@@ -82,10 +87,10 @@ func (a *WebAuthnFactorAdapter) VerifyEnrollment(ctx context.Context, enrollment
 	return nil
 }
 
-// Challenge initiates a WebAuthn authentication challenge for MFA verification
+// Challenge initiates a WebAuthn authentication challenge for MFA verification.
 func (a *WebAuthnFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("WebAuthn factor not available")
+		return nil, errs.BadRequest("WebAuthn factor not available")
 	}
 
 	// Prepare login request
@@ -127,10 +132,10 @@ func (a *WebAuthnFactorAdapter) Challenge(ctx context.Context, factor *Factor, m
 	return challenge, nil
 }
 
-// Verify verifies the WebAuthn challenge response
+// Verify verifies the WebAuthn challenge response.
 func (a *WebAuthnFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
-		return false, fmt.Errorf("WebAuthn factor not available")
+		return false, errs.BadRequest("WebAuthn factor not available")
 	}
 
 	// Extract credential response from data
@@ -138,15 +143,16 @@ func (a *WebAuthnFactorAdapter) Verify(ctx context.Context, challenge *Challenge
 	credentialResponseBytes, ok := data["credentialResponse"].([]byte)
 	if !ok {
 		// Try to get it as a map and marshal to bytes
-		credentialResponseMap, ok := data["credentialResponse"].(map[string]interface{})
+		credentialResponseMap, ok := data["credentialResponse"].(map[string]any)
 		if !ok {
-			return false, fmt.Errorf("missing or invalid credential response")
+			return false, errs.InvalidInput("credentialResponse", "missing or invalid credential response")
 		}
 
 		// In production, this would be properly marshaled from the client
 		// For now, we expect the client to send the raw bytes
 		_ = credentialResponseMap
-		return false, fmt.Errorf("credential response must be raw bytes from WebAuthn API")
+
+		return false, errs.InvalidInput("credentialResponse", "credential response must be raw bytes from WebAuthn API")
 	}
 
 	// Use passkey service to verify the assertion
@@ -161,7 +167,7 @@ func (a *WebAuthnFactorAdapter) Verify(ctx context.Context, challenge *Challenge
 	return loginResp != nil, nil
 }
 
-// IsAvailable checks if WebAuthn factor is available
+// IsAvailable checks if WebAuthn factor is available.
 func (a *WebAuthnFactorAdapter) IsAvailable() bool {
 	return a.available && a.passkeyService != nil
 }

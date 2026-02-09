@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/enterprise/scim/schema"
 )
 
 // Dashboard Service Methods
 // Additional service methods specifically for dashboard UI
 
-// DashboardStats holds statistics for dashboard widgets
+// DashboardStats holds statistics for dashboard widgets.
 type DashboardStats struct {
 	TotalSyncs     int
 	SuccessRate    float64
@@ -21,7 +22,7 @@ type DashboardStats struct {
 	LastSyncStatus string
 }
 
-// SyncStatus holds current sync status information
+// SyncStatus holds current sync status information.
 type SyncStatus struct {
 	IsHealthy       bool
 	ActiveProviders int
@@ -30,14 +31,14 @@ type SyncStatus struct {
 	Message         string
 }
 
-// ConnectionTestResult holds connection test results
+// ConnectionTestResult holds connection test results.
 type ConnectionTestResult struct {
 	Success bool
 	Message string
-	Details map[string]interface{}
+	Details map[string]any
 }
 
-// ProviderHealth holds provider health status
+// ProviderHealth holds provider health status.
 type ProviderHealth struct {
 	Healthy      bool
 	Status       string
@@ -46,7 +47,7 @@ type ProviderHealth struct {
 	ErrorMessage string
 }
 
-// DetailedStats holds detailed statistics for analytics
+// DetailedStats holds detailed statistics for analytics.
 type DetailedStats struct {
 	TotalOperations    int
 	SuccessRate        float64
@@ -56,7 +57,7 @@ type DetailedStats struct {
 	OperationsByStatus map[string]int
 }
 
-// GetDashboardStats returns statistics for dashboard widgets
+// GetDashboardStats returns statistics for dashboard widgets.
 func (s *Service) GetDashboardStats(ctx context.Context, appID xid.ID, orgID *xid.ID) (*DashboardStats, error) {
 	// Count total syncs
 	query := s.repo.db.NewSelect().
@@ -102,6 +103,7 @@ func (s *Service) GetDashboardStats(ctx context.Context, appID xid.ID, orgID *xi
 
 	// Get last sync event
 	var lastEvent schema.SCIMSyncEvent
+
 	lastQuery := s.repo.db.NewSelect().
 		Model(&lastEvent).
 		Order("created_at DESC").
@@ -119,6 +121,7 @@ func (s *Service) GetDashboardStats(ctx context.Context, appID xid.ID, orgID *xi
 
 	lastSyncTime := "Never"
 	lastSyncStatus := "unknown"
+
 	if err == nil {
 		// Format last sync time
 		duration := time.Since(lastEvent.CreatedAt)
@@ -131,6 +134,7 @@ func (s *Service) GetDashboardStats(ctx context.Context, appID xid.ID, orgID *xi
 		} else {
 			lastSyncTime = fmt.Sprintf("%d days ago", int(duration.Hours()/24))
 		}
+
 		lastSyncStatus = lastEvent.Status
 	}
 
@@ -145,7 +149,7 @@ func (s *Service) GetDashboardStats(ctx context.Context, appID xid.ID, orgID *xi
 	return stats, nil
 }
 
-// GetSyncStatus returns current sync status
+// GetSyncStatus returns current sync status.
 func (s *Service) GetSyncStatus(ctx context.Context, appID xid.ID, orgID *xid.ID) (*SyncStatus, error) {
 	// Count active providers
 	providerQuery := s.repo.db.NewSelect().
@@ -184,6 +188,7 @@ func (s *Service) GetSyncStatus(ctx context.Context, appID xid.ID, orgID *xid.ID
 
 	// Get last sync time
 	var lastEvent schema.SCIMSyncEvent
+
 	lastQuery := s.repo.db.NewSelect().
 		Model(&lastEvent).
 		Order("created_at DESC").
@@ -229,7 +234,7 @@ func (s *Service) GetSyncStatus(ctx context.Context, appID xid.ID, orgID *xid.ID
 	}, nil
 }
 
-// GetRecentActivity returns recent provisioning events
+// GetRecentActivity returns recent provisioning events.
 func (s *Service) GetRecentActivity(ctx context.Context, appID xid.ID, orgID *xid.ID, limit int) ([]*SCIMSyncEvent, error) {
 	var events []*schema.SCIMSyncEvent
 
@@ -268,7 +273,7 @@ func (s *Service) GetRecentActivity(ctx context.Context, appID xid.ID, orgID *xi
 	return result, nil
 }
 
-// GetFailedEvents returns recent failed events
+// GetFailedEvents returns recent failed events.
 func (s *Service) GetFailedEvents(ctx context.Context, appID xid.ID, orgID *xid.ID, limit int) ([]*SCIMSyncEvent, error) {
 	var events []*schema.SCIMSyncEvent
 
@@ -308,14 +313,13 @@ func (s *Service) GetFailedEvents(ctx context.Context, appID xid.ID, orgID *xid.
 	return result, nil
 }
 
-// GetFailedOperationsCount returns count of failed operations
+// GetFailedOperationsCount returns count of failed operations.
 func (s *Service) GetFailedOperationsCount(ctx context.Context, appID xid.ID, orgID *xid.ID) (int, error) {
 	// TODO: Implement actual count from repository
-
 	return 0, nil
 }
 
-// GetSyncLogs returns sync logs with pagination and filtering
+// GetSyncLogs returns sync logs with pagination and filtering.
 func (s *Service) GetSyncLogs(ctx context.Context, appID xid.ID, orgID *xid.ID, page, perPage int, statusFilter, eventTypeFilter string) ([]*SCIMSyncEvent, int, error) {
 	offset := (page - 1) * perPage
 
@@ -354,7 +358,6 @@ func (s *Service) GetSyncLogs(ctx context.Context, appID xid.ID, orgID *xid.ID, 
 		Limit(perPage).
 		Offset(offset).
 		Scan(ctx)
-
 	if err != nil {
 		return make([]*SCIMSyncEvent, 0), 0, err
 	}
@@ -376,7 +379,7 @@ func (s *Service) GetSyncLogs(ctx context.Context, appID xid.ID, orgID *xid.ID, 
 	return result, total, nil
 }
 
-// GetDetailedStats returns detailed statistics for analytics
+// GetDetailedStats returns detailed statistics for analytics.
 func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid.ID) (*DetailedStats, error) {
 	// Base query
 	baseQuery := s.repo.db.NewSelect().
@@ -407,6 +410,7 @@ func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid
 
 	// Average duration
 	var avgDuration float64
+
 	err := s.repo.db.NewSelect().
 		Model((*schema.SCIMSyncEvent)(nil)).
 		ColumnExpr("AVG(duration_ms)").
@@ -422,6 +426,7 @@ func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid
 	}
 
 	var typeCounts []TypeCount
+
 	err = s.repo.db.NewSelect().
 		Model((*schema.SCIMSyncEvent)(nil)).
 		Column("event_type").
@@ -430,6 +435,7 @@ func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid
 		Scan(ctx, &typeCounts)
 
 	operationsByType := make(map[string]int)
+
 	if err == nil {
 		for _, tc := range typeCounts {
 			operationsByType[tc.EventType] = tc.Count
@@ -443,6 +449,7 @@ func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid
 	}
 
 	var statusCounts []StatusCount
+
 	err = s.repo.db.NewSelect().
 		Model((*schema.SCIMSyncEvent)(nil)).
 		Column("status").
@@ -451,6 +458,7 @@ func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid
 		Scan(ctx, &statusCounts)
 
 	operationsByStatus := make(map[string]int)
+
 	if err == nil {
 		for _, sc := range statusCounts {
 			operationsByStatus[sc.Status] = sc.Count
@@ -469,18 +477,17 @@ func (s *Service) GetDetailedStats(ctx context.Context, appID xid.ID, orgID *xid
 	return stats, nil
 }
 
-// TestConnection tests SCIM endpoint connectivity for a token
+// TestConnection tests SCIM endpoint connectivity for a token.
 func (s *Service) TestConnection(ctx context.Context, tokenID xid.ID) (*ConnectionTestResult, error) {
 	// TODO: Implement actual connection testing
 	// This should:
 	// 1. Fetch the token
 	// 2. Make a test SCIM request (e.g., GET /ServiceProviderConfig)
 	// 3. Return results
-
 	result := &ConnectionTestResult{
 		Success: true,
 		Message: "Connection successful",
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"latency_ms": 45,
 			"version":    "2.0",
 		},
@@ -489,7 +496,7 @@ func (s *Service) TestConnection(ctx context.Context, tokenID xid.ID) (*Connecti
 	return result, nil
 }
 
-// TriggerManualSync initiates a manual sync operation
+// TriggerManualSync initiates a manual sync operation.
 func (s *Service) TriggerManualSync(ctx context.Context, providerID xid.ID, syncType string) error {
 	// TODO: Implement manual sync trigger
 	// This should:
@@ -497,18 +504,16 @@ func (s *Service) TriggerManualSync(ctx context.Context, providerID xid.ID, sync
 	// 2. Validate provider is active
 	// 3. Queue sync job
 	// 4. Return immediately (async operation)
-
 	return nil
 }
 
-// GetProviderHealth checks provider health status
+// GetProviderHealth checks provider health status.
 func (s *Service) GetProviderHealth(ctx context.Context, providerID xid.ID) (*ProviderHealth, error) {
 	// TODO: Implement provider health check
 	// This should:
 	// 1. Fetch the provider
 	// 2. Test connectivity
 	// 3. Return health status
-
 	health := &ProviderHealth{
 		Healthy:      true,
 		Status:       "healthy",
@@ -522,48 +527,43 @@ func (s *Service) GetProviderHealth(ctx context.Context, providerID xid.ID) (*Pr
 
 // Token Management
 
-// CreateToken creates a new SCIM token
+// CreateToken creates a new SCIM token.
 func (s *Service) CreateToken(ctx context.Context, req *CreateSCIMTokenRequest) (*SCIMToken, error) {
 	// TODO: Implement token creation
 	// This should:
 	// 1. Generate secure token
 	// 2. Store in database
 	// 3. Return token with full value (only shown once)
-
-	return nil, fmt.Errorf("not implemented")
+	return nil, errs.InternalServerErrorWithMessage("not implemented")
 }
 
-// ListTokens lists SCIM tokens
+// ListTokens lists SCIM tokens.
 func (s *Service) ListTokens(ctx context.Context, appID, envID *xid.ID, orgID *xid.ID) ([]*SCIMToken, error) {
 	// TODO: Implement token listing
-
 	return make([]*SCIMToken, 0), nil
 }
 
-// RotateToken rotates an existing token
+// RotateToken rotates an existing token.
 func (s *Service) RotateToken(ctx context.Context, tokenID xid.ID) (*SCIMToken, error) {
 	// TODO: Implement token rotation
-
-	return nil, fmt.Errorf("not implemented")
+	return nil, errs.InternalServerErrorWithMessage("not implemented")
 }
 
-// RevokeToken revokes a token
+// RevokeToken revokes a token.
 func (s *Service) RevokeToken(ctx context.Context, tokenID xid.ID) error {
 	// TODO: Implement token revocation
-
-	return fmt.Errorf("not implemented")
+	return errs.InternalServerErrorWithMessage("not implemented")
 }
 
 // Provider Management
 
-// CreateProvider creates a new SCIM provider
+// CreateProvider creates a new SCIM provider.
 func (s *Service) CreateProvider(ctx context.Context, req *CreateSCIMProviderRequest) (*SCIMProvider, error) {
 	// TODO: Implement provider creation
-
-	return nil, fmt.Errorf("not implemented")
+	return nil, errs.InternalServerErrorWithMessage("not implemented")
 }
 
-// ListProviders lists SCIM providers
+// ListProviders lists SCIM providers.
 func (s *Service) ListProviders(ctx context.Context, appID xid.ID, orgID *xid.ID) ([]*SCIMProvider, error) {
 	var providers []*schema.SCIMProvider
 
@@ -602,30 +602,27 @@ func (s *Service) ListProviders(ctx context.Context, appID xid.ID, orgID *xid.ID
 	return result, nil
 }
 
-// GetProvider gets a provider by ID
+// GetProvider gets a provider by ID.
 func (s *Service) GetProvider(ctx context.Context, providerID xid.ID) (*SCIMProvider, error) {
 	// TODO: Implement provider fetching
-
-	return nil, fmt.Errorf("not implemented")
+	return nil, errs.InternalServerErrorWithMessage("not implemented")
 }
 
-// RemoveProvider removes a provider
+// RemoveProvider removes a provider.
 func (s *Service) RemoveProvider(ctx context.Context, providerID xid.ID) error {
 	// TODO: Implement provider removal
-
-	return fmt.Errorf("not implemented")
+	return errs.InternalServerErrorWithMessage("not implemented")
 }
 
-// GetProviderSyncHistory gets sync history for a provider
+// GetProviderSyncHistory gets sync history for a provider.
 func (s *Service) GetProviderSyncHistory(ctx context.Context, providerID xid.ID, limit int) ([]*SCIMSyncEvent, error) {
 	// TODO: Implement sync history fetching
-
 	return make([]*SCIMSyncEvent, 0), nil
 }
 
 // Request types
 
-// CreateSCIMTokenRequest holds data for creating a SCIM token
+// CreateSCIMTokenRequest holds data for creating a SCIM token.
 type CreateSCIMTokenRequest struct {
 	AppID          xid.ID
 	EnvironmentID  xid.ID
@@ -636,7 +633,7 @@ type CreateSCIMTokenRequest struct {
 	ExpiresAt      *time.Time
 }
 
-// CreateSCIMProviderRequest holds data for creating a SCIM provider
+// CreateSCIMProviderRequest holds data for creating a SCIM provider.
 type CreateSCIMProviderRequest struct {
 	AppID          *xid.ID
 	OrganizationID *xid.ID
@@ -651,20 +648,20 @@ type CreateSCIMProviderRequest struct {
 
 // Organization-scoped dashboard methods
 
-// ProviderStats holds provider statistics
+// ProviderStats holds provider statistics.
 type ProviderStats struct {
 	TotalProviders  int
 	ActiveProviders int
 }
 
-// SyncStats holds sync statistics
+// SyncStats holds sync statistics.
 type SyncStats struct {
 	TotalSyncs  int
 	SuccessRate float64
 	FailedSyncs int
 }
 
-// GetSyncStatusForOrg returns sync status for a specific organization
+// GetSyncStatusForOrg returns sync status for a specific organization.
 func (s *Service) GetSyncStatusForOrg(ctx context.Context, orgID xid.ID) (*SyncStatus, error) {
 	// Count active providers
 	activeProviders, err := s.repo.db.NewSelect().
@@ -690,6 +687,7 @@ func (s *Service) GetSyncStatusForOrg(ctx context.Context, orgID xid.ID) (*SyncS
 
 	// Get last sync time
 	var lastEvent schema.SCIMSyncEvent
+
 	err = s.repo.db.NewSelect().
 		Model(&lastEvent).
 		Join("JOIN scim_providers ON scim_providers.id = scim_sync_event.provider_id").
@@ -705,10 +703,12 @@ func (s *Service) GetSyncStatusForOrg(ctx context.Context, orgID xid.ID) (*SyncS
 
 	status := "healthy"
 	message := "All systems operational"
+
 	if failedSyncs > 0 {
 		status = "warning"
 		message = fmt.Sprintf("%d failed syncs in the last 24 hours", failedSyncs)
 	}
+
 	if activeProviders == 0 {
 		status = "inactive"
 		message = "No active providers configured"
@@ -723,7 +723,7 @@ func (s *Service) GetSyncStatusForOrg(ctx context.Context, orgID xid.ID) (*SyncS
 	}, nil
 }
 
-// GetProviderStatsForOrg returns provider statistics for an organization
+// GetProviderStatsForOrg returns provider statistics for an organization.
 func (s *Service) GetProviderStatsForOrg(ctx context.Context, orgID xid.ID) (*ProviderStats, error) {
 	// Query total providers
 	totalProviders, err := s.repo.db.NewSelect().
@@ -750,7 +750,7 @@ func (s *Service) GetProviderStatsForOrg(ctx context.Context, orgID xid.ID) (*Pr
 	}, nil
 }
 
-// GetConfigForOrg returns SCIM configuration for an organization
+// GetConfigForOrg returns SCIM configuration for an organization.
 func (s *Service) GetConfigForOrg(ctx context.Context, orgID xid.ID) (*Config, error) {
 	// TODO: Load org-specific overrides from database
 	// For now, return the base config
@@ -758,8 +758,8 @@ func (s *Service) GetConfigForOrg(ctx context.Context, orgID xid.ID) (*Config, e
 	return s.config, nil
 }
 
-// GetProvidersForOrg returns SCIM providers for an organization
-func (s *Service) GetProvidersForOrg(ctx context.Context, orgID xid.ID) ([]interface{}, error) {
+// GetProvidersForOrg returns SCIM providers for an organization.
+func (s *Service) GetProvidersForOrg(ctx context.Context, orgID xid.ID) ([]any, error) {
 	var providers []*schema.SCIMProvider
 
 	err := s.repo.db.NewSelect().
@@ -767,13 +767,12 @@ func (s *Service) GetProvidersForOrg(ctx context.Context, orgID xid.ID) ([]inter
 		Where("organization_id = ?", orgID).
 		Order("created_at DESC").
 		Scan(ctx)
-
 	if err != nil {
-		return []interface{}{}, nil
+		return []any{}, nil
 	}
 
 	// Convert to interface{} slice
-	result := make([]interface{}, len(providers))
+	result := make([]any, len(providers))
 	for i, provider := range providers {
 		result[i] = provider
 	}
@@ -781,8 +780,8 @@ func (s *Service) GetProvidersForOrg(ctx context.Context, orgID xid.ID) ([]inter
 	return result, nil
 }
 
-// GetRecentEventsForOrg returns recent sync events for an organization
-func (s *Service) GetRecentEventsForOrg(ctx context.Context, orgID xid.ID, limit int) ([]interface{}, error) {
+// GetRecentEventsForOrg returns recent sync events for an organization.
+func (s *Service) GetRecentEventsForOrg(ctx context.Context, orgID xid.ID, limit int) ([]any, error) {
 	var events []*schema.SCIMSyncEvent
 
 	err := s.repo.db.NewSelect().
@@ -792,13 +791,12 @@ func (s *Service) GetRecentEventsForOrg(ctx context.Context, orgID xid.ID, limit
 		Order("scim_sync_event.created_at DESC").
 		Limit(limit).
 		Scan(ctx)
-
 	if err != nil {
-		return []interface{}{}, nil
+		return []any{}, nil
 	}
 
 	// Convert to interface{} slice
-	result := make([]interface{}, len(events))
+	result := make([]any, len(events))
 	for i, event := range events {
 		result[i] = event
 	}
@@ -806,7 +804,7 @@ func (s *Service) GetRecentEventsForOrg(ctx context.Context, orgID xid.ID, limit
 	return result, nil
 }
 
-// GetSyncStatsForOrg returns sync statistics for an organization
+// GetSyncStatsForOrg returns sync statistics for an organization.
 func (s *Service) GetSyncStatsForOrg(ctx context.Context, orgID xid.ID) (*SyncStats, error) {
 	// Query total syncs
 	totalSyncs, err := s.repo.db.NewSelect().
@@ -831,6 +829,7 @@ func (s *Service) GetSyncStatsForOrg(ctx context.Context, orgID xid.ID) (*SyncSt
 
 	// Calculate success rate
 	successRate := 0.0
+
 	if totalSyncs > 0 {
 		successfulSyncs := totalSyncs - failedSyncs
 		successRate = float64(successfulSyncs) / float64(totalSyncs) * 100

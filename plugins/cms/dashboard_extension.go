@@ -3,10 +3,12 @@ package cms
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
@@ -23,13 +25,13 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardExtension implements ui.DashboardExtension for the CMS plugin
+// DashboardExtension implements ui.DashboardExtension for the CMS plugin.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension
+// NewDashboardExtension creates a new dashboard extension.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -37,17 +39,17 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// SetRegistry sets the extension registry reference (deprecated but kept for compatibility)
-func (e *DashboardExtension) SetRegistry(registry interface{}) {
+// SetRegistry sets the extension registry reference (deprecated but kept for compatibility).
+func (e *DashboardExtension) SetRegistry(registry any) {
 	// No longer needed - layout handled by ForgeUI
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "cms"
 }
 
-// NavigationItems returns navigation items for the dashboard
+// NavigationItems returns navigation items for the dashboard.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -60,6 +62,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp == nil {
 					return basePath + "/cms"
 				}
+
 				return basePath + "/app/" + currentApp.ID.String() + "/cms"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -78,7 +81,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns dashboard routes
+// Routes returns dashboard routes.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// CMS Settings Page (in Settings section)
@@ -384,12 +387,12 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated)
+// SettingsSections returns settings sections (deprecated).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return nil
 }
 
-// SettingsPages returns settings pages
+// SettingsPages returns settings pages.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -406,7 +409,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// DashboardWidgets returns dashboard widgets
+// DashboardWidgets returns dashboard widgets.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -422,7 +425,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for CMS
+// BridgeFunctions returns bridge functions for CMS.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		// Content Type Operations
@@ -603,17 +606,19 @@ func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 // Bridge Function Implementations
 // =============================================================================
 
-// buildContextFromBridge builds a Go context with app ID, env ID, and user ID from bridge context
+// buildContextFromBridge builds a Go context with app ID, env ID, and user ID from bridge context.
 func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, appID string) (context.Context, error) {
 	// Parse and set app ID
 	id, err := xid.FromString(appID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid appId")
 	}
+
 	goCtx := contexts.SetAppID(context.Background(), id)
 
 	// Extract environment ID from request or cookie
 	envIDSet := false
+
 	if req := bridgeCtx.Request(); req != nil {
 		// Try to get envId from request parameter
 		if envIDStr := req.FormValue("envId"); envIDStr != "" {
@@ -646,6 +651,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 						if environment.Name == "production" || environment.Name == "default" {
 							goCtx = contexts.SetEnvironmentID(goCtx, environment.ID)
 							envIDSet = true
+
 							break
 						}
 					}
@@ -676,21 +682,21 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 // =============================================================================
 
 type BridgeContentTypeInput struct {
-	AppID string `json:"appId" validate:"required"`
+	AppID string `json:"appId"          validate:"required"`
 	Name  string `json:"name,omitempty"`
 }
 
 type BridgeCreateContentTypeInput struct {
-	AppID       string `json:"appId" validate:"required"`
-	Title       string `json:"title" validate:"required"`
-	Name        string `json:"name" validate:"required"`
+	AppID       string `json:"appId"                 validate:"required"`
+	Title       string `json:"title"                 validate:"required"`
+	Name        string `json:"name"                  validate:"required"`
 	Description string `json:"description,omitempty"`
 	Icon        string `json:"icon,omitempty"`
 }
 
 type BridgeUpdateContentTypeInput struct {
-	AppID       string                       `json:"appId" validate:"required"`
-	Name        string                       `json:"name" validate:"required"`
+	AppID       string                       `json:"appId"                 validate:"required"`
+	Name        string                       `json:"name"                  validate:"required"`
 	Title       string                       `json:"title,omitempty"`
 	Description string                       `json:"description,omitempty"`
 	Icon        string                       `json:"icon,omitempty"`
@@ -793,17 +799,17 @@ func (e *DashboardExtension) bridgeGetContentTypeStats(ctx bridge.Context, input
 // =============================================================================
 
 type BridgeFieldInput struct {
-	AppID     string `json:"appId" validate:"required"`
-	TypeName  string `json:"typeName" validate:"required"`
+	AppID     string `json:"appId"               validate:"required"`
+	TypeName  string `json:"typeName"            validate:"required"`
 	FieldName string `json:"fieldName,omitempty"`
 }
 
 type BridgeCreateFieldInput struct {
-	AppID       string                `json:"appId" validate:"required"`
-	TypeName    string                `json:"typeName" validate:"required"`
-	Title       string                `json:"title" validate:"required"`
-	Name        string                `json:"name" validate:"required"`
-	Type        string                `json:"type" validate:"required"`
+	AppID       string                `json:"appId"                 validate:"required"`
+	TypeName    string                `json:"typeName"              validate:"required"`
+	Title       string                `json:"title"                 validate:"required"`
+	Name        string                `json:"name"                  validate:"required"`
+	Type        string                `json:"type"                  validate:"required"`
 	Description string                `json:"description,omitempty"`
 	Required    bool                  `json:"required,omitempty"`
 	Unique      bool                  `json:"unique,omitempty"`
@@ -813,9 +819,9 @@ type BridgeCreateFieldInput struct {
 }
 
 type BridgeUpdateFieldInput struct {
-	AppID       string                `json:"appId" validate:"required"`
-	TypeName    string                `json:"typeName" validate:"required"`
-	FieldName   string                `json:"fieldName" validate:"required"`
+	AppID       string                `json:"appId"                 validate:"required"`
+	TypeName    string                `json:"typeName"              validate:"required"`
+	FieldName   string                `json:"fieldName"             validate:"required"`
 	Title       string                `json:"title,omitempty"`
 	Description string                `json:"description,omitempty"`
 	Required    *bool                 `json:"required,omitempty"`
@@ -826,12 +832,12 @@ type BridgeUpdateFieldInput struct {
 }
 
 type BridgeReorderFieldsInput struct {
-	AppID      string   `json:"appId" validate:"required"`
-	TypeName   string   `json:"typeName" validate:"required"`
+	AppID      string   `json:"appId"      validate:"required"`
+	TypeName   string   `json:"typeName"   validate:"required"`
 	FieldOrder []string `json:"fieldOrder" validate:"required"`
 }
 
-func (e *DashboardExtension) bridgeListFields(ctx bridge.Context, input BridgeFieldInput) (map[string]interface{}, error) {
+func (e *DashboardExtension) bridgeListFields(ctx bridge.Context, input BridgeFieldInput) (map[string]any, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
 		return nil, err
@@ -853,7 +859,7 @@ func (e *DashboardExtension) bridgeListFields(ctx bridge.Context, input BridgeFi
 		return nil, err
 	}
 
-	return map[string]interface{}{"fields": fields}, nil
+	return map[string]any{"fields": fields}, nil
 }
 
 func (e *DashboardExtension) bridgeAddField(ctx bridge.Context, input BridgeCreateFieldInput) (*core.ContentFieldDTO, error) {
@@ -939,7 +945,7 @@ func (e *DashboardExtension) bridgeDeleteField(ctx bridge.Context, input BridgeF
 	return map[string]bool{"success": true}, nil
 }
 
-func (e *DashboardExtension) bridgeReorderFields(ctx bridge.Context, input BridgeReorderFieldsInput) (map[string]interface{}, error) {
+func (e *DashboardExtension) bridgeReorderFields(ctx bridge.Context, input BridgeReorderFieldsInput) (map[string]any, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
 		return nil, err
@@ -975,6 +981,7 @@ func (e *DashboardExtension) bridgeReorderFields(ctx bridge.Context, input Bridg
 		if !ok {
 			return nil, errs.BadRequest("field not found: " + fieldName)
 		}
+
 		fieldOrders[i] = core.FieldOrderItem{
 			FieldID: fieldID,
 			Order:   i,
@@ -988,11 +995,11 @@ func (e *DashboardExtension) bridgeReorderFields(ctx bridge.Context, input Bridg
 		return nil, err
 	}
 
-	return map[string]interface{}{"message": "fields reordered", "success": true}, nil
+	return map[string]any{"message": "fields reordered", "success": true}, nil
 }
 
-func (e *DashboardExtension) bridgeGetFieldTypes(ctx bridge.Context, input map[string]interface{}) (map[string]interface{}, error) {
-	return map[string]interface{}{
+func (e *DashboardExtension) bridgeGetFieldTypes(ctx bridge.Context, input map[string]any) (map[string]any, error) {
+	return map[string]any{
 		"fieldTypes": core.GetAllFieldTypes(),
 	}, nil
 }
@@ -1002,44 +1009,44 @@ func (e *DashboardExtension) bridgeGetFieldTypes(ctx bridge.Context, input map[s
 // =============================================================================
 
 type BridgeEntryInput struct {
-	AppID    string `json:"appId" validate:"required"`
-	TypeName string `json:"typeName" validate:"required"`
+	AppID    string `json:"appId"             validate:"required"`
+	TypeName string `json:"typeName"          validate:"required"`
 	EntryID  string `json:"entryId,omitempty"`
 }
 
 type BridgeEntriesQueryInput struct {
-	AppID     string                 `json:"appId" validate:"required"`
-	TypeName  string                 `json:"typeName" validate:"required"`
-	Page      int                    `json:"page"`
-	PageSize  int                    `json:"pageSize"`
-	Search    string                 `json:"search"`
-	Status    string                 `json:"status"`
-	SortBy    string                 `json:"sortBy"`
-	SortOrder string                 `json:"sortOrder"`
-	Filters   map[string]interface{} `json:"filters"`
-	Select    []string               `json:"select"`
-	Populate  []string               `json:"populate"`
+	AppID     string         `json:"appId"     validate:"required"`
+	TypeName  string         `json:"typeName"  validate:"required"`
+	Page      int            `json:"page"`
+	PageSize  int            `json:"pageSize"`
+	Search    string         `json:"search"`
+	Status    string         `json:"status"`
+	SortBy    string         `json:"sortBy"`
+	SortOrder string         `json:"sortOrder"`
+	Filters   map[string]any `json:"filters"`
+	Select    []string       `json:"select"`
+	Populate  []string       `json:"populate"`
 }
 
 type BridgeCreateEntryInput struct {
-	AppID    string                 `json:"appId" validate:"required"`
-	TypeName string                 `json:"typeName" validate:"required"`
-	Data     map[string]interface{} `json:"data" validate:"required"`
-	Status   string                 `json:"status,omitempty"`
+	AppID    string         `json:"appId"            validate:"required"`
+	TypeName string         `json:"typeName"         validate:"required"`
+	Data     map[string]any `json:"data"             validate:"required"`
+	Status   string         `json:"status,omitempty"`
 }
 
 type BridgeUpdateEntryInput struct {
-	AppID    string                 `json:"appId" validate:"required"`
-	TypeName string                 `json:"typeName" validate:"required"`
-	EntryID  string                 `json:"entryId" validate:"required"`
-	Data     map[string]interface{} `json:"data" validate:"required"`
-	Status   string                 `json:"status,omitempty"`
+	AppID    string         `json:"appId"            validate:"required"`
+	TypeName string         `json:"typeName"         validate:"required"`
+	EntryID  string         `json:"entryId"          validate:"required"`
+	Data     map[string]any `json:"data"             validate:"required"`
+	Status   string         `json:"status,omitempty"`
 }
 
 type BridgeBulkOperationInput struct {
-	AppID    string   `json:"appId" validate:"required"`
+	AppID    string   `json:"appId"    validate:"required"`
 	TypeName string   `json:"typeName" validate:"required"`
-	IDs      []string `json:"ids" validate:"required"`
+	IDs      []string `json:"ids"      validate:"required"`
 }
 
 func (e *DashboardExtension) bridgeGetEntries(ctx bridge.Context, input BridgeEntriesQueryInput) (*core.ListEntriesResponse, error) {
@@ -1052,6 +1059,7 @@ func (e *DashboardExtension) bridgeGetEntries(ctx bridge.Context, input BridgeEn
 	if input.Page == 0 {
 		input.Page = 1
 	}
+
 	if input.PageSize == 0 {
 		input.PageSize = 20
 	}
@@ -1219,7 +1227,7 @@ func (e *DashboardExtension) bridgeGetEntryStats(ctx bridge.Context, input Bridg
 	return e.plugin.entrySvc.GetStats(goCtx, contentTypeID)
 }
 
-func (e *DashboardExtension) bridgeBulkPublish(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]interface{}, error) {
+func (e *DashboardExtension) bridgeBulkPublish(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]any, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
 		return nil, err
@@ -1231,6 +1239,7 @@ func (e *DashboardExtension) bridgeBulkPublish(ctx bridge.Context, input BridgeB
 		if err != nil {
 			return nil, errs.BadRequest("invalid entry ID: " + idStr)
 		}
+
 		ids[i] = id
 	}
 
@@ -1239,14 +1248,14 @@ func (e *DashboardExtension) bridgeBulkPublish(ctx bridge.Context, input BridgeB
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"message": "entries published",
 		"count":   len(ids),
 		"success": true,
 	}, nil
 }
 
-func (e *DashboardExtension) bridgeBulkUnpublish(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]interface{}, error) {
+func (e *DashboardExtension) bridgeBulkUnpublish(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]any, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
 		return nil, err
@@ -1258,6 +1267,7 @@ func (e *DashboardExtension) bridgeBulkUnpublish(ctx bridge.Context, input Bridg
 		if err != nil {
 			return nil, errs.BadRequest("invalid entry ID: " + idStr)
 		}
+
 		ids[i] = id
 	}
 
@@ -1266,14 +1276,14 @@ func (e *DashboardExtension) bridgeBulkUnpublish(ctx bridge.Context, input Bridg
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"message": "entries unpublished",
 		"count":   len(ids),
 		"success": true,
 	}, nil
 }
 
-func (e *DashboardExtension) bridgeBulkDelete(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]interface{}, error) {
+func (e *DashboardExtension) bridgeBulkDelete(ctx bridge.Context, input BridgeBulkOperationInput) (map[string]any, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
 		return nil, err
@@ -1285,6 +1295,7 @@ func (e *DashboardExtension) bridgeBulkDelete(ctx bridge.Context, input BridgeBu
 		if err != nil {
 			return nil, errs.BadRequest("invalid entry ID: " + idStr)
 		}
+
 		ids[i] = id
 	}
 
@@ -1293,7 +1304,7 @@ func (e *DashboardExtension) bridgeBulkDelete(ctx bridge.Context, input BridgeBu
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"message": "entries deleted",
 		"count":   len(ids),
 		"success": true,
@@ -1305,22 +1316,22 @@ func (e *DashboardExtension) bridgeBulkDelete(ctx bridge.Context, input BridgeBu
 // =============================================================================
 
 type BridgeComponentSchemaInput struct {
-	AppID string `json:"appId" validate:"required"`
+	AppID string `json:"appId"          validate:"required"`
 	Name  string `json:"name,omitempty"`
 }
 
 type BridgeCreateComponentSchemaInput struct {
-	AppID       string                   `json:"appId" validate:"required"`
-	Title       string                   `json:"title" validate:"required"`
-	Name        string                   `json:"name" validate:"required"`
+	AppID       string                   `json:"appId"                 validate:"required"`
+	Title       string                   `json:"title"                 validate:"required"`
+	Name        string                   `json:"name"                  validate:"required"`
 	Description string                   `json:"description,omitempty"`
 	Icon        string                   `json:"icon,omitempty"`
 	Fields      []core.NestedFieldDefDTO `json:"fields,omitempty"`
 }
 
 type BridgeUpdateComponentSchemaInput struct {
-	AppID       string                   `json:"appId" validate:"required"`
-	Name        string                   `json:"name" validate:"required"`
+	AppID       string                   `json:"appId"                 validate:"required"`
+	Name        string                   `json:"name"                  validate:"required"`
 	Title       string                   `json:"title,omitempty"`
 	Description string                   `json:"description,omitempty"`
 	Icon        string                   `json:"icon,omitempty"`
@@ -1415,8 +1426,8 @@ func (e *DashboardExtension) bridgeDeleteComponentSchema(ctx bridge.Context, inp
 // =============================================================================
 
 type BridgeRevisionInput struct {
-	AppID    string `json:"appId" validate:"required"`
-	EntryID  string `json:"entryId" validate:"required"`
+	AppID    string `json:"appId"              validate:"required"`
+	EntryID  string `json:"entryId"            validate:"required"`
 	Version  int    `json:"version,omitempty"`
 	Page     int    `json:"page,omitempty"`
 	PageSize int    `json:"pageSize,omitempty"`
@@ -1436,6 +1447,7 @@ func (e *DashboardExtension) bridgeListRevisions(ctx bridge.Context, input Bridg
 	if input.Page == 0 {
 		input.Page = 1
 	}
+
 	if input.PageSize == 0 {
 		input.PageSize = 20
 	}
@@ -1499,11 +1511,11 @@ func (e *DashboardExtension) bridgeRestoreRevision(ctx bridge.Context, input Bri
 // Helper Methods
 // =============================================================================
 
-// extractAppFromURL extracts the app from the URL parameter
+// extractAppFromURL extracts the app from the URL parameter.
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.RequiredField("appId")
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -1514,17 +1526,18 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	return &app.App{ID: appID}, nil
 }
 
-// getBasePath returns the dashboard base path
+// getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
 	return e.baseUIPath
 }
 
-// injectContext injects app and environment IDs into context
+// injectContext injects app and environment IDs into context.
 func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Context {
 	reqCtx := ctx.Request.Context()
 
 	// Get app ID from URL
 	var appID xid.ID
+
 	if appIDStr := ctx.Param("appId"); appIDStr != "" {
 		if id, err := xid.FromString(appIDStr); err == nil {
 			appID = id
@@ -1533,7 +1546,7 @@ func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Cont
 	}
 
 	// Get environment ID from header or context
-	if envIDStr := ctx.Request.Header.Get("X-Environment-ID"); envIDStr != "" {
+	if envIDStr := ctx.Request.Header.Get("X-Environment-Id"); envIDStr != "" {
 		if envID, err := xid.FromString(envIDStr); err == nil {
 			reqCtx = contexts.SetEnvironmentID(reqCtx, envID)
 		}
@@ -1582,7 +1595,7 @@ func (e *DashboardExtension) renderCMSWidget(currentApp *app.App) g.Node {
 			Div(
 				Div(
 					Class("text-2xl font-bold text-slate-900 dark:text-white"),
-					g.Text(fmt.Sprintf("%d", stats.TotalContentTypes)),
+					g.Text(strconv.Itoa(stats.TotalContentTypes)),
 				),
 				Div(
 					Class("text-xs text-slate-500 dark:text-gray-400"),
@@ -1592,7 +1605,7 @@ func (e *DashboardExtension) renderCMSWidget(currentApp *app.App) g.Node {
 			Div(
 				Div(
 					Class("text-2xl font-bold text-slate-900 dark:text-white"),
-					g.Text(fmt.Sprintf("%d", stats.TotalEntries)),
+					g.Text(strconv.Itoa(stats.TotalEntries)),
 				),
 				Div(
 					Class("text-xs text-slate-500 dark:text-gray-400"),
@@ -1630,7 +1643,7 @@ func (e *DashboardExtension) ServeCMSSettings(ctx *router.PageContext) (g.Node, 
 	return content, nil
 }
 
-// renderCMSSettingsContent renders the CMS settings page content
+// renderCMSSettingsContent renders the CMS settings page content.
 func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, basePath string, contentTypes []*core.ContentTypeSummaryDTO, stats *core.CMSStatsDTO) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 
@@ -1667,7 +1680,7 @@ func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, baseP
 					),
 					Div(
 						H3(Class("text-2xl font-bold text-slate-900 dark:text-white"),
-							g.Text(fmt.Sprintf("%d", totalTypes))),
+							g.Text(strconv.Itoa(totalTypes))),
 						P(Class("text-sm text-slate-600 dark:text-gray-400"),
 							g.Text("Content Types")),
 					),
@@ -1685,7 +1698,7 @@ func (e *DashboardExtension) renderCMSSettingsContent(currentApp *app.App, baseP
 					),
 					Div(
 						H3(Class("text-2xl font-bold text-slate-900 dark:text-white"),
-							g.Text(fmt.Sprintf("%d", totalEntries))),
+							g.Text(strconv.Itoa(totalEntries))),
 						P(Class("text-sm text-slate-600 dark:text-gray-400"),
 							g.Text("Total Entries")),
 					),
@@ -1817,10 +1830,12 @@ func (e *DashboardExtension) ServeContentTypesList(ctx *router.PageContext) (g.N
 	reqCtx := e.injectContext(ctx)
 
 	searchQuery := ctx.Query("search")
+
 	page, _ := strconv.Atoi(ctx.Query("page"))
 	if page < 1 {
 		page = 1
 	}
+
 	pageSize := 20
 
 	// Get content types
@@ -1875,10 +1890,12 @@ func (e *DashboardExtension) HandleCreateContentType(ctx *router.PageContext) (g
 	result, err := e.plugin.contentTypeSvc.Create(reqCtx, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/create?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+result.Name, http.StatusSeeOther)
+
 	return nil, nil
 }
 
@@ -1910,6 +1927,7 @@ func (e *DashboardExtension) ServeContentTypeDetail(ctx *router.PageContext) (g.
 
 	// Get all content types for relation field dropdown
 	allContentTypes := []*core.ContentTypeSummaryDTO{}
+
 	ctResult, _ := e.plugin.contentTypeSvc.List(reqCtx, &core.ListContentTypesQuery{PageSize: 100})
 	if ctResult != nil {
 		allContentTypes = ctResult.ContentTypes
@@ -1917,6 +1935,7 @@ func (e *DashboardExtension) ServeContentTypeDetail(ctx *router.PageContext) (g.
 
 	// Get all component schemas for nested field dropdowns
 	allComponentSchemas := []*core.ComponentSchemaSummaryDTO{}
+
 	csResult, _ := e.plugin.componentSchemaSvc.List(reqCtx, &core.ListComponentSchemasQuery{PageSize: 100})
 	if csResult != nil {
 		allComponentSchemas = csResult.Components
@@ -1927,7 +1946,7 @@ func (e *DashboardExtension) ServeContentTypeDetail(ctx *router.PageContext) (g.
 	return content, nil
 }
 
-// HandleAddField handles adding a new field to a content type
+// HandleAddField handles adding a new field to a content type.
 func (e *DashboardExtension) HandleAddField(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -1943,6 +1962,7 @@ func (e *DashboardExtension) HandleAddField(ctx *router.PageContext) (g.Node, er
 	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -1966,15 +1986,17 @@ func (e *DashboardExtension) HandleAddField(ctx *router.PageContext) (g.Node, er
 	if err != nil {
 		// Redirect back with error
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	// Redirect back to content type detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateField handles updating a field in a content type
+// HandleUpdateField handles updating a field in a content type.
 func (e *DashboardExtension) HandleUpdateField(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -1991,6 +2013,7 @@ func (e *DashboardExtension) HandleUpdateField(ctx *router.PageContext) (g.Node,
 	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2008,14 +2031,17 @@ func (e *DashboardExtension) HandleUpdateField(ctx *router.PageContext) (g.Node,
 		v := ctx.Request.FormValue("required") == "true"
 		req.Required = &v
 	}
+
 	if ctx.Request.FormValue("unique") != "" {
 		v := ctx.Request.FormValue("unique") == "true"
 		req.Unique = &v
 	}
+
 	if ctx.Request.FormValue("indexed") != "" {
 		v := ctx.Request.FormValue("indexed") == "true"
 		req.Indexed = &v
 	}
+
 	if ctx.Request.FormValue("localized") != "" {
 		v := ctx.Request.FormValue("localized") == "true"
 		req.Localized = &v
@@ -2025,15 +2051,17 @@ func (e *DashboardExtension) HandleUpdateField(ctx *router.PageContext) (g.Node,
 	_, err = e.plugin.fieldSvc.UpdateByName(reqCtx, contentTypeID, fieldName, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	// Redirect back to content type detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleDeleteField handles deleting a field from a content type
+// HandleDeleteField handles deleting a field from a content type.
 func (e *DashboardExtension) HandleDeleteField(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -2050,6 +2078,7 @@ func (e *DashboardExtension) HandleDeleteField(ctx *router.PageContext) (g.Node,
 	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2059,15 +2088,17 @@ func (e *DashboardExtension) HandleDeleteField(ctx *router.PageContext) (g.Node,
 	err = e.plugin.fieldSvc.DeleteByName(reqCtx, contentTypeID, fieldName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	// Redirect back to content type detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateDisplaySettings handles updating content type display settings
+// HandleUpdateDisplaySettings handles updating content type display settings.
 func (e *DashboardExtension) HandleUpdateDisplaySettings(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -2083,6 +2114,7 @@ func (e *DashboardExtension) HandleUpdateDisplaySettings(ctx *router.PageContext
 	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2116,15 +2148,17 @@ func (e *DashboardExtension) HandleUpdateDisplaySettings(ctx *router.PageContext
 	_, err = e.plugin.contentTypeSvc.Update(reqCtx, contentTypeID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	// Redirect back to content type detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?success=Display+settings+saved", http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateFeatureSettings handles updating content type feature settings
+// HandleUpdateFeatureSettings handles updating content type feature settings.
 func (e *DashboardExtension) HandleUpdateFeatureSettings(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -2140,6 +2174,7 @@ func (e *DashboardExtension) HandleUpdateFeatureSettings(ctx *router.PageContext
 	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2175,15 +2210,17 @@ func (e *DashboardExtension) HandleUpdateFeatureSettings(ctx *router.PageContext
 	_, err = e.plugin.contentTypeSvc.Update(reqCtx, contentTypeID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	// Redirect back to content type detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?success=Feature+settings+saved", http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleDeleteContentType handles deleting a content type
+// HandleDeleteContentType handles deleting a content type.
 func (e *DashboardExtension) HandleDeleteContentType(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -2199,6 +2236,7 @@ func (e *DashboardExtension) HandleDeleteContentType(ctx *router.PageContext) (g
 	contentType, err := e.plugin.contentTypeSvc.GetByName(reqCtx, typeName)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?error=Content+type+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2208,6 +2246,7 @@ func (e *DashboardExtension) HandleDeleteContentType(ctx *router.PageContext) (g
 	entries, _ := e.plugin.entrySvc.List(reqCtx, contentTypeID, &core.ListEntriesQuery{PageSize: 1})
 	if entries != nil && entries.TotalItems > 0 {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error=Cannot+delete+content+type+with+existing+entries.+Delete+all+entries+first.", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2215,11 +2254,13 @@ func (e *DashboardExtension) HandleDeleteContentType(ctx *router.PageContext) (g
 	err = e.plugin.contentTypeSvc.Delete(reqCtx, contentTypeID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	// Redirect back to content types list
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types?success=Content+type+deleted+successfully", http.StatusSeeOther)
+
 	return nil, nil
 }
 
@@ -2228,7 +2269,6 @@ func (e *DashboardExtension) HandleDeleteContentType(ctx *router.PageContext) (g
 // =============================================================================
 
 func (e *DashboardExtension) ServeEntriesList(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2239,10 +2279,12 @@ func (e *DashboardExtension) ServeEntriesList(ctx *router.PageContext) (g.Node, 
 	typeName := ctx.Param("typeName")
 	searchQuery := ctx.Query("search")
 	statusFilter := ctx.Query("status")
+
 	page, _ := strconv.Atoi(ctx.Query("page"))
 	if page < 1 {
 		page = 1
 	}
+
 	pageSize := 20
 
 	// Get content type
@@ -2253,6 +2295,7 @@ func (e *DashboardExtension) ServeEntriesList(ctx *router.PageContext) (g.Node, 
 
 	// Get entries
 	contentTypeID, _ := xid.FromString(contentType.ID)
+
 	result, err := e.plugin.entrySvc.List(reqCtx, contentTypeID, &core.ListEntriesQuery{
 		Search:   searchQuery,
 		Status:   statusFilter,
@@ -2272,7 +2315,6 @@ func (e *DashboardExtension) ServeEntriesList(ctx *router.PageContext) (g.Node, 
 }
 
 func (e *DashboardExtension) ServeCreateEntry(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2318,18 +2360,21 @@ func (e *DashboardExtension) HandleCreateEntry(ctx *router.PageContext) (g.Node,
 
 	// Parse form data into map
 	data := make(map[string]any)
+
 	for _, field := range contentType.Fields {
 		value := ctx.Request.FormValue("data[" + field.Name + "]")
 
 		// Handle boolean fields specially (checkboxes send "true" string or nothing)
 		if field.Type == "boolean" {
 			data[field.Name] = value == "true" || value == "on" || value == "1"
+
 			continue
 		}
 
 		if value != "" {
 			// Parse JSON for object, array, oneOf, and json field types
-			if field.Type == "object" || field.Type == "array" || field.Type == "oneOf" || field.Type == "json" {
+			switch field.Type {
+			case "object", "array", "oneOf", "json":
 				var parsedValue any
 				if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
 					data[field.Name] = parsedValue
@@ -2337,7 +2382,7 @@ func (e *DashboardExtension) HandleCreateEntry(ctx *router.PageContext) (g.Node,
 					// If parsing fails, store as-is (validation will catch it)
 					data[field.Name] = value
 				}
-			} else if field.Type == "number" || field.Type == "integer" || field.Type == "float" {
+			case "number", "integer", "float":
 				// Parse number fields to preserve numeric types
 				if field.Type == "integer" {
 					if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
@@ -2352,7 +2397,7 @@ func (e *DashboardExtension) HandleCreateEntry(ctx *router.PageContext) (g.Node,
 						data[field.Name] = value
 					}
 				}
-			} else {
+			default:
 				data[field.Name] = value
 			}
 		}
@@ -2370,27 +2415,31 @@ func (e *DashboardExtension) HandleCreateEntry(ctx *router.PageContext) (g.Node,
 		errorMsg := err.Error()
 
 		// Try to extract validation details from the error
-		if cmsErr, ok := err.(*errs.AuthsomeError); ok {
+		cmsErr := &errs.AuthsomeError{}
+		if errors.As(err, &cmsErr) {
 			if cmsErr.Code == core.ErrCodeEntryValidationFailed {
 				if details, ok := cmsErr.Details.(map[string]string); ok && len(details) > 0 {
 					errorMsg = "Validation failed:\n"
+					var errorMsgSb2377 strings.Builder
 					for field, msg := range details {
-						errorMsg += fmt.Sprintf("• %s: %s\n", field, msg)
+						errorMsgSb2377.WriteString(fmt.Sprintf("• %s: %s\n", field, msg))
 					}
+					errorMsg += errorMsgSb2377.String()
 				}
 			}
 		}
 
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/create?error="+url.QueryEscape(errorMsg), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/"+result.ID, http.StatusSeeOther)
+
 	return nil, nil
 }
 
 func (e *DashboardExtension) ServeEntryDetail(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2420,6 +2469,7 @@ func (e *DashboardExtension) ServeEntryDetail(ctx *router.PageContext) (g.Node, 
 
 	// Get revisions
 	var revisionDTOs []*core.ContentRevisionDTO
+
 	if e.plugin.revisionSvc != nil {
 		revisions, _ := e.plugin.revisionSvc.List(reqCtx, entryID, &core.ListRevisionsQuery{PageSize: 5})
 		if revisions != nil && revisions.Items != nil {
@@ -2444,7 +2494,6 @@ func (e *DashboardExtension) ServeEntryDetail(ctx *router.PageContext) (g.Node, 
 }
 
 func (e *DashboardExtension) ServeEditEntry(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2507,18 +2556,21 @@ func (e *DashboardExtension) HandleUpdateEntry(ctx *router.PageContext) (g.Node,
 
 	// Parse form data into map
 	data := make(map[string]any)
+
 	for _, field := range contentType.Fields {
 		value := ctx.Request.FormValue("data[" + field.Name + "]")
 
 		// Handle boolean fields specially (checkboxes send "true" string or nothing)
 		if field.Type == "boolean" {
 			data[field.Name] = value == "true" || value == "on" || value == "1"
+
 			continue
 		}
 
 		if value != "" {
 			// Parse JSON for object, array, oneOf, and json field types
-			if field.Type == "object" || field.Type == "array" || field.Type == "oneOf" || field.Type == "json" {
+			switch field.Type {
+			case "object", "array", "oneOf", "json":
 				var parsedValue any
 				if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
 					data[field.Name] = parsedValue
@@ -2526,7 +2578,7 @@ func (e *DashboardExtension) HandleUpdateEntry(ctx *router.PageContext) (g.Node,
 					// If parsing fails, store as-is (validation will catch it)
 					data[field.Name] = value
 				}
-			} else if field.Type == "number" || field.Type == "integer" || field.Type == "float" {
+			case "number", "integer", "float":
 				// Parse number fields to preserve numeric types
 				if field.Type == "integer" {
 					if intVal, err := strconv.ParseInt(value, 10, 64); err == nil {
@@ -2541,7 +2593,7 @@ func (e *DashboardExtension) HandleUpdateEntry(ctx *router.PageContext) (g.Node,
 						data[field.Name] = value
 					}
 				}
-			} else {
+			default:
 				data[field.Name] = value
 			}
 		}
@@ -2560,26 +2612,31 @@ func (e *DashboardExtension) HandleUpdateEntry(ctx *router.PageContext) (g.Node,
 		errorMsg := err.Error()
 
 		// Try to extract validation details from the error
-		if cmsErr, ok := err.(*errs.AuthsomeError); ok {
+		cmsErr := &errs.AuthsomeError{}
+		if errors.As(err, &cmsErr) {
 			if cmsErr.Code == core.ErrCodeEntryValidationFailed {
 				if details, ok := cmsErr.Details.(map[string]string); ok && len(details) > 0 {
 					errorMsg = "Validation failed:\n"
+					var errorMsgSb2567 strings.Builder
 					for field, msg := range details {
-						errorMsg += fmt.Sprintf("• %s: %s\n", field, msg)
+						errorMsgSb2567.WriteString(fmt.Sprintf("• %s: %s\n", field, msg))
 					}
+					errorMsg += errorMsgSb2567.String()
 				}
 			}
 		}
 
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr+"/edit?error="+url.QueryEscape(errorMsg), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries/"+entryIDStr, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleDeleteEntry handles deleting a content entry
+// HandleDeleteEntry handles deleting a content entry.
 func (e *DashboardExtension) HandleDeleteEntry(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -2596,6 +2653,7 @@ func (e *DashboardExtension) HandleDeleteEntry(ctx *router.PageContext) (g.Node,
 	entryID, err := xid.FromString(entryIDStr)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries?error=Invalid+entry+ID", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2603,10 +2661,12 @@ func (e *DashboardExtension) HandleDeleteEntry(ctx *router.PageContext) (g.Node,
 	err = e.plugin.entrySvc.Delete(reqCtx, entryID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/types/"+typeName+"/entries?success=Entry+deleted+successfully", http.StatusSeeOther)
+
 	return nil, nil
 }
 
@@ -2615,7 +2675,6 @@ func (e *DashboardExtension) HandleDeleteEntry(ctx *router.PageContext) (g.Node,
 // =============================================================================
 
 func (e *DashboardExtension) ServeComponentSchemasList(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2625,10 +2684,12 @@ func (e *DashboardExtension) ServeComponentSchemasList(ctx *router.PageContext) 
 	basePath := e.getBasePath()
 
 	searchQuery := ctx.Query("search")
+
 	page, _ := strconv.Atoi(ctx.Query("page"))
 	if page < 1 {
 		page = 1
 	}
+
 	pageSize := 20
 
 	// Get component schemas
@@ -2647,7 +2708,6 @@ func (e *DashboardExtension) ServeComponentSchemasList(ctx *router.PageContext) 
 }
 
 func (e *DashboardExtension) ServeCreateComponentSchema(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2673,10 +2733,12 @@ func (e *DashboardExtension) HandleCreateComponentSchema(ctx *router.PageContext
 
 	// Parse nested fields from JSON
 	var fields []core.NestedFieldDefDTO
+
 	fieldsJSON := ctx.Request.FormValue("fields")
 	if fieldsJSON != "" {
 		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
 			http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/create?error=Invalid+fields+format", http.StatusSeeOther)
+
 			return nil, nil
 		}
 	}
@@ -2694,15 +2756,16 @@ func (e *DashboardExtension) HandleCreateComponentSchema(ctx *router.PageContext
 	result, err := e.plugin.componentSchemaSvc.Create(reqCtx, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/create?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+result.Name, http.StatusSeeOther)
+
 	return nil, nil
 }
 
 func (e *DashboardExtension) ServeComponentSchemaDetail(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -2739,6 +2802,7 @@ func (e *DashboardExtension) HandleUpdateComponentSchema(ctx *router.PageContext
 	component, err := e.plugin.componentSchemaSvc.GetByName(reqCtx, componentSlug)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components?error=Component+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2746,10 +2810,12 @@ func (e *DashboardExtension) HandleUpdateComponentSchema(ctx *router.PageContext
 
 	// Parse nested fields from JSON
 	var fields []core.NestedFieldDefDTO
+
 	fieldsJSON := ctx.Request.FormValue("fields")
 	if fieldsJSON != "" {
 		if err := json.Unmarshal([]byte(fieldsJSON), &fields); err != nil {
 			http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?error=Invalid+fields+format", http.StatusSeeOther)
+
 			return nil, nil
 		}
 	}
@@ -2766,10 +2832,12 @@ func (e *DashboardExtension) HandleUpdateComponentSchema(ctx *router.PageContext
 	_, err = e.plugin.componentSchemaSvc.Update(reqCtx, componentID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?success=Component+updated", http.StatusSeeOther)
+
 	return nil, nil
 }
 
@@ -2788,6 +2856,7 @@ func (e *DashboardExtension) HandleDeleteComponentSchema(ctx *router.PageContext
 	component, err := e.plugin.componentSchemaSvc.GetByName(reqCtx, componentSlug)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components?error=Component+not+found", http.StatusSeeOther)
+
 		return nil, nil
 	}
 
@@ -2797,10 +2866,12 @@ func (e *DashboardExtension) HandleDeleteComponentSchema(ctx *router.PageContext
 	err = e.plugin.componentSchemaSvc.Delete(reqCtx, componentID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components/"+componentSlug+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, appBase+"/cms/components?success=Component+deleted", http.StatusSeeOther)
+
 	return nil, nil
 }
 
@@ -2808,7 +2879,7 @@ func (e *DashboardExtension) HandleDeleteComponentSchema(ctx *router.PageContext
 // Helper Functions
 // =============================================================================
 
-// resolveComponentReferences resolves ComponentRef to NestedFields for object/array fields
+// resolveComponentReferences resolves ComponentRef to NestedFields for object/array fields.
 func (e *DashboardExtension) resolveComponentReferences(ctx context.Context, contentType *core.ContentTypeDTO) {
 	if contentType == nil || len(contentType.Fields) == 0 {
 		return
@@ -2820,7 +2891,7 @@ func (e *DashboardExtension) resolveComponentReferences(ctx context.Context, con
 	}
 }
 
-// resolveFieldComponentRef resolves a single field's ComponentRef recursively
+// resolveFieldComponentRef resolves a single field's ComponentRef recursively.
 func (e *DashboardExtension) resolveFieldComponentRef(ctx context.Context, field *core.ContentFieldDTO) {
 	if field == nil {
 		return
@@ -2843,6 +2914,7 @@ func (e *DashboardExtension) resolveFieldComponentRef(ctx context.Context, field
 				e.resolveNestedFieldComponentRef(ctx, nestedField)
 			}
 		}
+
 		return
 	}
 
@@ -2865,6 +2937,7 @@ func (e *DashboardExtension) resolveFieldComponentRef(ctx context.Context, field
 				nestedField := &schemaOpt.NestedFields[i]
 				if nestedField.Options != nil && nestedField.Options.ComponentRef != "" {
 					e.resolveNestedFieldComponentRef(ctx, nestedField)
+
 					modified = true
 				}
 			}
@@ -2877,7 +2950,7 @@ func (e *DashboardExtension) resolveFieldComponentRef(ctx context.Context, field
 	}
 }
 
-// resolveNestedFieldComponentRef resolves ComponentRef for nested fields recursively
+// resolveNestedFieldComponentRef resolves ComponentRef for nested fields recursively.
 func (e *DashboardExtension) resolveNestedFieldComponentRef(ctx context.Context, field *core.NestedFieldDefDTO) {
 	if field == nil || field.Options == nil {
 		return
@@ -2900,6 +2973,7 @@ func (e *DashboardExtension) resolveNestedFieldComponentRef(ctx context.Context,
 				e.resolveNestedFieldComponentRef(ctx, nestedField)
 			}
 		}
+
 		return
 	}
 
@@ -2921,6 +2995,7 @@ func (e *DashboardExtension) resolveNestedFieldComponentRef(ctx context.Context,
 				nestedField := &schemaOpt.NestedFields[i]
 				if nestedField.Options != nil && nestedField.Options.ComponentRef != "" {
 					e.resolveNestedFieldComponentRef(ctx, nestedField)
+
 					modified = true
 				}
 			}

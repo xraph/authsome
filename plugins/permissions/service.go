@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/permissions/core"
 	"github.com/xraph/authsome/plugins/permissions/engine"
 	"github.com/xraph/authsome/plugins/permissions/handlers"
@@ -17,7 +18,7 @@ import (
 )
 
 // Service is the main permissions service
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type Service struct {
 	config    *Config
 	db        *bun.DB
@@ -37,12 +38,12 @@ type Service struct {
 	policyIndexMu      sync.RWMutex
 }
 
-// SetMigrationService sets the migration service
+// SetMigrationService sets the migration service.
 func (s *Service) SetMigrationService(svc *migration.RBACMigrationService) {
 	s.migrationService = svc
 }
 
-// NewService creates a new permissions service with all dependencies
+// NewService creates a new permissions service with all dependencies.
 func NewService(db *bun.DB, config *Config, logger forge.Logger) *Service {
 	repo := storage.NewRepository(db)
 	cache := storage.NewMemoryCache(config.Cache)
@@ -51,9 +52,11 @@ func NewService(db *bun.DB, config *Config, logger forge.Logger) *Service {
 	compilerConfig := engine.CompilerConfig{
 		MaxComplexity: config.Engine.MaxPolicyComplexity,
 	}
+
 	compiler, err := engine.NewCompiler(compilerConfig)
 	if err != nil {
 		logger.Error("failed to create CEL compiler", forge.F("error", err.Error()))
+
 		compiler = nil
 	}
 
@@ -82,10 +85,10 @@ func NewService(db *bun.DB, config *Config, logger forge.Logger) *Service {
 // POLICY OPERATIONS
 // =============================================================================
 
-// CreatePolicy creates a new permission policy
+// CreatePolicy creates a new permission policy.
 func (s *Service) CreatePolicy(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, userID xid.ID, req *handlers.CreatePolicyRequest) (*core.Policy, error) {
 	if s.compiler == nil {
-		return nil, fmt.Errorf("CEL compiler not initialized")
+		return nil, errs.InternalServerErrorWithMessage("CEL compiler not initialized")
 	}
 
 	// 1. Validate the CEL expression
@@ -98,6 +101,7 @@ func (s *Service) CreatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate expression complexity: %w", err)
 	}
+
 	if complexity > s.compiler.GetMaxComplexity() {
 		return nil, fmt.Errorf("expression complexity %d exceeds maximum %d", complexity, s.compiler.GetMaxComplexity())
 	}
@@ -143,7 +147,7 @@ func (s *Service) CreatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	}
 
 	// 7. Create audit log entry
-	s.createAuditEvent(ctx, appID, envID, orgID, userID, "create_policy", "policy", policy.ID, nil, map[string]interface{}{
+	s.createAuditEvent(ctx, appID, envID, orgID, userID, "create_policy", "policy", policy.ID, nil, map[string]any{
 		"name":         policy.Name,
 		"resourceType": policy.ResourceType,
 		"actions":      policy.Actions,
@@ -158,29 +162,31 @@ func (s *Service) CreatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	return policy, nil
 }
 
-// GetPolicy retrieves a policy by ID
+// GetPolicy retrieves a policy by ID.
 func (s *Service) GetPolicy(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, policyID xid.ID) (*core.Policy, error) {
 	policy, err := s.repo.GetPolicy(ctx, policyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
+
 	if policy == nil {
-		return nil, fmt.Errorf("policy not found")
+		return nil, errs.NotFound("policy not found")
 	}
 
 	// Verify policy belongs to app/env/org
 	if policy.AppID != appID || policy.EnvironmentID != envID {
-		return nil, fmt.Errorf("policy not found")
+		return nil, errs.NotFound("policy not found")
 	}
+
 	if orgID != nil && policy.UserOrganizationID != nil && *policy.UserOrganizationID != *orgID {
-		return nil, fmt.Errorf("policy not found")
+		return nil, errs.NotFound("policy not found")
 	}
 
 	return policy, nil
 }
 
-// ListPolicies lists policies for an app/env/org
-func (s *Service) ListPolicies(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, filters map[string]interface{}) ([]*core.Policy, int, error) {
+// ListPolicies lists policies for an app/env/org.
+func (s *Service) ListPolicies(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, filters map[string]any) ([]*core.Policy, int, error) {
 	// Convert filters to PolicyFilters
 	pf := storage.PolicyFilters{
 		Limit:  100,
@@ -190,18 +196,23 @@ func (s *Service) ListPolicies(ctx context.Context, appID, envID xid.ID, orgID *
 	if limit, ok := filters["limit"].(int); ok {
 		pf.Limit = limit
 	}
+
 	if offset, ok := filters["offset"].(int); ok {
 		pf.Offset = offset
 	}
+
 	if resourceType, ok := filters["resourceType"].(string); ok {
 		pf.ResourceType = &resourceType
 	}
+
 	if actions, ok := filters["actions"].([]string); ok {
 		pf.Actions = actions
 	}
+
 	if enabled, ok := filters["enabled"].(bool); ok {
 		pf.Enabled = &enabled
 	}
+
 	if namespaceID, ok := filters["namespaceId"].(xid.ID); ok {
 		pf.NamespaceID = &namespaceID
 	}
@@ -214,7 +225,7 @@ func (s *Service) ListPolicies(ctx context.Context, appID, envID xid.ID, orgID *
 	return policies, len(policies), nil
 }
 
-// UpdatePolicy updates an existing policy
+// UpdatePolicy updates an existing policy.
 func (s *Service) UpdatePolicy(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, userID xid.ID, policyID xid.ID, req *handlers.UpdatePolicyRequest) (*core.Policy, error) {
 	// 1. Get existing policy
 	policy, err := s.GetPolicy(ctx, appID, envID, orgID, policyID)
@@ -222,7 +233,7 @@ func (s *Service) UpdatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 		return nil, err
 	}
 
-	oldValue := map[string]interface{}{
+	oldValue := map[string]any{
 		"name":         policy.Name,
 		"description":  policy.Description,
 		"expression":   policy.Expression,
@@ -236,25 +247,32 @@ func (s *Service) UpdatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	if req.Name != "" {
 		policy.Name = req.Name
 	}
+
 	if req.Description != "" {
 		policy.Description = req.Description
 	}
+
 	if req.Expression != "" {
 		// Validate new expression
 		if err := s.compiler.Validate(req.Expression); err != nil {
 			return nil, fmt.Errorf("invalid policy expression: %w", err)
 		}
+
 		policy.Expression = req.Expression
 	}
+
 	if req.ResourceType != "" {
 		policy.ResourceType = req.ResourceType
 	}
+
 	if len(req.Actions) > 0 {
 		policy.Actions = req.Actions
 	}
+
 	if req.Priority != 0 {
 		policy.Priority = req.Priority
 	}
+
 	if req.Enabled != nil {
 		policy.Enabled = *req.Enabled
 	}
@@ -282,7 +300,7 @@ func (s *Service) UpdatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	}
 
 	// 6. Create audit log entry
-	newValue := map[string]interface{}{
+	newValue := map[string]any{
 		"name":         policy.Name,
 		"description":  policy.Description,
 		"expression":   policy.Expression,
@@ -296,7 +314,7 @@ func (s *Service) UpdatePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	return policy, nil
 }
 
-// DeletePolicy deletes a policy
+// DeletePolicy deletes a policy.
 func (s *Service) DeletePolicy(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, policyID xid.ID) error {
 	// 1. Verify policy exists and belongs to scope
 	policy, err := s.GetPolicy(ctx, appID, envID, orgID, policyID)
@@ -313,7 +331,7 @@ func (s *Service) DeletePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	s.removeCompiledPolicy(policyID.String())
 
 	// 4. Create audit log entry
-	s.createAuditEvent(ctx, appID, envID, orgID, xid.NilID(), "delete_policy", "policy", policyID, map[string]interface{}{
+	s.createAuditEvent(ctx, appID, envID, orgID, xid.NilID(), "delete_policy", "policy", policyID, map[string]any{
 		"name":         policy.Name,
 		"resourceType": policy.ResourceType,
 	}, nil)
@@ -323,10 +341,10 @@ func (s *Service) DeletePolicy(ctx context.Context, appID, envID xid.ID, orgID *
 	return nil
 }
 
-// ValidatePolicy validates a policy expression
+// ValidatePolicy validates a policy expression.
 func (s *Service) ValidatePolicy(ctx context.Context, req *handlers.ValidatePolicyRequest) (*handlers.ValidatePolicyResponse, error) {
 	if s.compiler == nil {
-		return nil, fmt.Errorf("CEL compiler not initialized")
+		return nil, errs.InternalServerErrorWithMessage("CEL compiler not initialized")
 	}
 
 	response := &handlers.ValidatePolicyResponse{
@@ -338,6 +356,7 @@ func (s *Service) ValidatePolicy(ctx context.Context, req *handlers.ValidatePoli
 	if err := s.compiler.Validate(req.Expression); err != nil {
 		response.Valid = false
 		response.Error = err.Error()
+
 		return response, nil
 	}
 
@@ -346,6 +365,7 @@ func (s *Service) ValidatePolicy(ctx context.Context, req *handlers.ValidatePoli
 	if err != nil {
 		response.Valid = false
 		response.Error = fmt.Sprintf("failed to estimate complexity: %v", err)
+
 		return response, nil
 	}
 
@@ -360,10 +380,10 @@ func (s *Service) ValidatePolicy(ctx context.Context, req *handlers.ValidatePoli
 	return response, nil
 }
 
-// TestPolicy tests a policy against test cases
+// TestPolicy tests a policy against test cases.
 func (s *Service) TestPolicy(ctx context.Context, req *handlers.TestPolicyRequest) (*handlers.TestPolicyResponse, error) {
 	if s.compiler == nil {
-		return nil, fmt.Errorf("CEL compiler not initialized")
+		return nil, errs.InternalServerErrorWithMessage("CEL compiler not initialized")
 	}
 
 	// Create a temporary policy for testing
@@ -414,6 +434,7 @@ func (s *Service) TestPolicy(ctx context.Context, req *handlers.TestPolicyReques
 		} else {
 			result.Actual = decision.Allowed
 			result.Passed = decision.Allowed == tc.Expected
+
 			result.EvaluationTimeMs = float64(decision.EvaluationTime.Microseconds()) / 1000
 			if !result.Passed {
 				response.Passed = false
@@ -430,7 +451,7 @@ func (s *Service) TestPolicy(ctx context.Context, req *handlers.TestPolicyReques
 // RESOURCE OPERATIONS
 // =============================================================================
 
-// CreateResource creates a new resource definition
+// CreateResource creates a new resource definition.
 func (s *Service) CreateResource(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, req *handlers.CreateResourceRequest) (*core.ResourceDefinition, error) {
 	namespaceID, err := xid.FromString(req.NamespaceID)
 	if err != nil {
@@ -454,17 +475,17 @@ func (s *Service) CreateResource(ctx context.Context, appID, envID xid.ID, orgID
 	return res, nil
 }
 
-// GetResource retrieves a resource definition by ID
+// GetResource retrieves a resource definition by ID.
 func (s *Service) GetResource(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, resourceID xid.ID) (*core.ResourceDefinition, error) {
 	return s.repo.GetResourceDefinition(ctx, resourceID)
 }
 
-// ListResources lists resource definitions for a namespace
+// ListResources lists resource definitions for a namespace.
 func (s *Service) ListResources(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, namespaceID xid.ID) ([]*core.ResourceDefinition, error) {
 	return s.repo.ListResourceDefinitions(ctx, namespaceID)
 }
 
-// DeleteResource deletes a resource definition
+// DeleteResource deletes a resource definition.
 func (s *Service) DeleteResource(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, resourceID xid.ID) error {
 	return s.repo.DeleteResourceDefinition(ctx, resourceID)
 }
@@ -473,7 +494,7 @@ func (s *Service) DeleteResource(ctx context.Context, appID, envID xid.ID, orgID
 // ACTION OPERATIONS
 // =============================================================================
 
-// CreateAction creates a new action definition
+// CreateAction creates a new action definition.
 func (s *Service) CreateAction(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, req *handlers.CreateActionRequest) (*core.ActionDefinition, error) {
 	namespaceID, err := xid.FromString(req.NamespaceID)
 	if err != nil {
@@ -496,12 +517,12 @@ func (s *Service) CreateAction(ctx context.Context, appID, envID xid.ID, orgID *
 	return action, nil
 }
 
-// ListActions lists action definitions for a namespace
+// ListActions lists action definitions for a namespace.
 func (s *Service) ListActions(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, namespaceID xid.ID) ([]*core.ActionDefinition, error) {
 	return s.repo.ListActionDefinitions(ctx, namespaceID)
 }
 
-// DeleteAction deletes an action definition
+// DeleteAction deletes an action definition.
 func (s *Service) DeleteAction(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, actionID xid.ID) error {
 	return s.repo.DeleteActionDefinition(ctx, actionID)
 }
@@ -510,7 +531,7 @@ func (s *Service) DeleteAction(ctx context.Context, appID, envID xid.ID, orgID *
 // NAMESPACE OPERATIONS
 // =============================================================================
 
-// CreateNamespace creates a new namespace
+// CreateNamespace creates a new namespace.
 func (s *Service) CreateNamespace(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, userID xid.ID, req *handlers.CreateNamespaceRequest) (*core.Namespace, error) {
 	now := time.Now()
 	ns := &core.Namespace{
@@ -530,6 +551,7 @@ func (s *Service) CreateNamespace(ctx context.Context, appID, envID xid.ID, orgI
 		if err != nil {
 			return nil, fmt.Errorf("invalid template ID: %w", err)
 		}
+
 		ns.TemplateID = &templateID
 	}
 
@@ -537,37 +559,38 @@ func (s *Service) CreateNamespace(ctx context.Context, appID, envID xid.ID, orgI
 		return nil, fmt.Errorf("failed to create namespace: %w", err)
 	}
 
-	s.createAuditEvent(ctx, appID, envID, orgID, userID, "create_namespace", "namespace", ns.ID, nil, map[string]interface{}{
+	s.createAuditEvent(ctx, appID, envID, orgID, userID, "create_namespace", "namespace", ns.ID, nil, map[string]any{
 		"name": ns.Name,
 	})
 
 	return ns, nil
 }
 
-// GetNamespace retrieves a namespace by ID
+// GetNamespace retrieves a namespace by ID.
 func (s *Service) GetNamespace(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, namespaceID xid.ID) (*core.Namespace, error) {
 	ns, err := s.repo.GetNamespace(ctx, namespaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get namespace: %w", err)
 	}
+
 	if ns == nil {
-		return nil, fmt.Errorf("namespace not found")
+		return nil, errs.NotFound("namespace not found")
 	}
 
 	// Verify namespace belongs to scope
 	if ns.AppID != appID || ns.EnvironmentID != envID {
-		return nil, fmt.Errorf("namespace not found")
+		return nil, errs.NotFound("namespace not found")
 	}
 
 	return ns, nil
 }
 
-// ListNamespaces lists namespaces for an app/env/org
+// ListNamespaces lists namespaces for an app/env/org.
 func (s *Service) ListNamespaces(ctx context.Context, appID, envID xid.ID, orgID *xid.ID) ([]*core.Namespace, error) {
 	return s.repo.ListNamespaces(ctx, appID, envID, orgID)
 }
 
-// UpdateNamespace updates an existing namespace
+// UpdateNamespace updates an existing namespace.
 func (s *Service) UpdateNamespace(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, namespaceID xid.ID, req *handlers.UpdateNamespaceRequest) (*core.Namespace, error) {
 	ns, err := s.GetNamespace(ctx, appID, envID, orgID, namespaceID)
 	if err != nil {
@@ -577,6 +600,7 @@ func (s *Service) UpdateNamespace(ctx context.Context, appID, envID xid.ID, orgI
 	if req.Name != "" {
 		ns.Name = req.Name
 	}
+
 	if req.Description != "" {
 		ns.Description = req.Description
 	}
@@ -590,7 +614,7 @@ func (s *Service) UpdateNamespace(ctx context.Context, appID, envID xid.ID, orgI
 	return ns, nil
 }
 
-// DeleteNamespace deletes a namespace
+// DeleteNamespace deletes a namespace.
 func (s *Service) DeleteNamespace(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, namespaceID xid.ID) error {
 	// Check if namespace has policies
 	policies, err := s.repo.ListPolicies(ctx, appID, envID, orgID, storage.PolicyFilters{
@@ -600,14 +624,15 @@ func (s *Service) DeleteNamespace(ctx context.Context, appID, envID xid.ID, orgI
 	if err != nil {
 		return fmt.Errorf("failed to check namespace policies: %w", err)
 	}
+
 	if len(policies) > 0 {
-		return fmt.Errorf("cannot delete namespace with existing policies")
+		return errs.BadRequest("cannot delete namespace with existing policies")
 	}
 
 	return s.repo.DeleteNamespace(ctx, namespaceID)
 }
 
-// CreateDefaultNamespace creates a default namespace for a new app/env or organization
+// CreateDefaultNamespace creates a default namespace for a new app/env or organization.
 func (s *Service) CreateDefaultNamespace(ctx context.Context, appID, envID xid.ID, orgID *xid.ID) error {
 	req := &handlers.CreateNamespaceRequest{
 		Name:            "default",
@@ -616,6 +641,7 @@ func (s *Service) CreateDefaultNamespace(ctx context.Context, appID, envID xid.I
 	}
 
 	_, err := s.CreateNamespace(ctx, appID, envID, orgID, xid.NilID(), req)
+
 	return err
 }
 
@@ -623,7 +649,7 @@ func (s *Service) CreateDefaultNamespace(ctx context.Context, appID, envID xid.I
 // EVALUATION OPERATIONS (THE HEART OF PERMISSIONS)
 // =============================================================================
 
-// Evaluate evaluates a permission check - THE CORE FEATURE
+// Evaluate evaluates a permission check - THE CORE FEATURE.
 func (s *Service) Evaluate(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, userID xid.ID, req *handlers.EvaluateRequest) (*engine.Decision, error) {
 	startTime := time.Now()
 
@@ -637,8 +663,9 @@ func (s *Service) Evaluate(ctx context.Context, appID, envID xid.ID, orgID *xid.
 
 	// Add user ID to principal if not present
 	if evalCtx.Principal == nil {
-		evalCtx.Principal = make(map[string]interface{})
+		evalCtx.Principal = make(map[string]any)
 	}
+
 	if _, ok := evalCtx.Principal["id"]; !ok && !userID.IsNil() {
 		evalCtx.Principal["id"] = userID.String()
 	}
@@ -677,22 +704,25 @@ func (s *Service) Evaluate(ctx context.Context, appID, envID xid.ID, orgID *xid.
 	return decision, nil
 }
 
-// EvaluateBatch evaluates multiple permission checks efficiently
+// EvaluateBatch evaluates multiple permission checks efficiently.
 func (s *Service) EvaluateBatch(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, userID xid.ID, req *handlers.BatchEvaluateRequest) ([]*handlers.BatchEvaluationResult, error) {
 	results := make([]*handlers.BatchEvaluationResult, len(req.Requests))
 
 	// Use goroutines for parallel evaluation
 	var wg sync.WaitGroup
+
 	errCh := make(chan error, len(req.Requests))
 
 	for i, evalReq := range req.Requests {
 		wg.Add(1)
+
 		go func(idx int, r handlers.EvaluateRequest) {
 			defer wg.Done()
 
 			decision, err := s.Evaluate(ctx, appID, envID, orgID, userID, &r)
 			if err != nil {
 				errCh <- fmt.Errorf("request %d failed: %w", idx, err)
+
 				results[idx] = &handlers.BatchEvaluationResult{
 					ResourceType: r.ResourceType,
 					ResourceID:   r.ResourceID,
@@ -700,6 +730,7 @@ func (s *Service) EvaluateBatch(ctx context.Context, appID, envID xid.ID, orgID 
 					Allowed:      false,
 					Error:        err.Error(),
 				}
+
 				return
 			}
 
@@ -719,17 +750,20 @@ func (s *Service) EvaluateBatch(ctx context.Context, appID, envID xid.ID, orgID 
 	return results, nil
 }
 
-// getApplicablePolicies retrieves and compiles policies applicable to the request
+// getApplicablePolicies retrieves and compiles policies applicable to the request.
 func (s *Service) getApplicablePolicies(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, resourceType, action string) ([]*engine.CompiledPolicy, error) {
 	// Build cache key
 	cacheKey := buildPolicyCacheKey(appID, envID, orgID, resourceType, action)
 
 	// Check in-memory compiled cache first
 	s.compiledPoliciesMu.RLock()
+
 	if policies, ok := s.policyIndex[cacheKey]; ok {
 		s.compiledPoliciesMu.RUnlock()
+
 		return policies, nil
 	}
+
 	s.compiledPoliciesMu.RUnlock()
 
 	// Fetch from database
@@ -740,6 +774,7 @@ func (s *Service) getApplicablePolicies(ctx context.Context, appID, envID xid.ID
 
 	// Filter by action and compile
 	var compiled []*engine.CompiledPolicy
+
 	for _, policy := range dbPolicies {
 		if !policy.Enabled {
 			continue
@@ -747,12 +782,15 @@ func (s *Service) getApplicablePolicies(ctx context.Context, appID, envID xid.ID
 
 		// Check if action matches
 		actionMatches := false
+
 		for _, a := range policy.Actions {
 			if a == "*" || a == action {
 				actionMatches = true
+
 				break
 			}
 		}
+
 		if !actionMatches {
 			continue
 		}
@@ -764,6 +802,7 @@ func (s *Service) getApplicablePolicies(ctx context.Context, appID, envID xid.ID
 				forge.F("policyId", policy.ID.String()),
 				forge.F("error", err.Error()),
 			)
+
 			continue
 		}
 
@@ -784,12 +823,12 @@ func (s *Service) getApplicablePolicies(ctx context.Context, appID, envID xid.ID
 // TEMPLATE OPERATIONS
 // =============================================================================
 
-// ListTemplates lists available policy templates
+// ListTemplates lists available policy templates.
 func (s *Service) ListTemplates(ctx context.Context) ([]*core.PolicyTemplate, error) {
 	return getBuiltInTemplates(), nil
 }
 
-// GetTemplate retrieves a specific policy template
+// GetTemplate retrieves a specific policy template.
 func (s *Service) GetTemplate(ctx context.Context, templateID string) (*core.PolicyTemplate, error) {
 	templates := getBuiltInTemplates()
 	for _, t := range templates {
@@ -797,10 +836,11 @@ func (s *Service) GetTemplate(ctx context.Context, templateID string) (*core.Pol
 			return t, nil
 		}
 	}
+
 	return nil, fmt.Errorf("template not found: %s", templateID)
 }
 
-// InstantiateTemplate creates a policy from a template
+// InstantiateTemplate creates a policy from a template.
 func (s *Service) InstantiateTemplate(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, userID xid.ID, templateID string, req *handlers.InstantiateTemplateRequest) (*core.Policy, error) {
 	// Get template
 	template, err := s.GetTemplate(ctx, templateID)
@@ -838,10 +878,10 @@ func (s *Service) InstantiateTemplate(ctx context.Context, appID, envID xid.ID, 
 // MIGRATION OPERATIONS
 // =============================================================================
 
-// MigrateFromRBAC migrates RBAC policies to permissions
+// MigrateFromRBAC migrates RBAC policies to permissions.
 func (s *Service) MigrateFromRBAC(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, req *handlers.MigrateRBACRequest) (*core.MigrationStatus, error) {
 	if s.migrationService == nil {
-		return nil, fmt.Errorf("migration service not configured")
+		return nil, errs.InternalServerErrorWithMessage("migration service not configured")
 	}
 
 	startTime := time.Now()
@@ -897,11 +937,11 @@ func (s *Service) MigrateFromRBAC(ctx context.Context, appID, envID xid.ID, orgI
 	return status, nil
 }
 
-// GetMigrationStatus retrieves migration status
+// GetMigrationStatus retrieves migration status.
 func (s *Service) GetMigrationStatus(ctx context.Context, appID, envID xid.ID, orgID *xid.ID) (*core.MigrationStatus, error) {
 	// Check if there's an ongoing or completed migration
 	// For now, return a basic status based on existing policies
-	policies, total, err := s.ListPolicies(ctx, appID, envID, orgID, map[string]interface{}{"limit": 1})
+	policies, total, err := s.ListPolicies(ctx, appID, envID, orgID, map[string]any{"limit": 1})
 	if err != nil {
 		return nil, fmt.Errorf("failed to check migration status: %w", err)
 	}
@@ -925,8 +965,8 @@ func (s *Service) GetMigrationStatus(ctx context.Context, appID, envID xid.ID, o
 // AUDIT & ANALYTICS OPERATIONS
 // =============================================================================
 
-// ListAuditEvents lists audit log entries
-func (s *Service) ListAuditEvents(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, filters map[string]interface{}) ([]*core.AuditEvent, int, error) {
+// ListAuditEvents lists audit log entries.
+func (s *Service) ListAuditEvents(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, filters map[string]any) ([]*core.AuditEvent, int, error) {
 	af := storage.AuditFilters{
 		Limit:  100,
 		Offset: 0,
@@ -935,6 +975,7 @@ func (s *Service) ListAuditEvents(ctx context.Context, appID, envID xid.ID, orgI
 	if limit, ok := filters["limit"].(int); ok {
 		af.Limit = limit
 	}
+
 	if offset, ok := filters["offset"].(int); ok {
 		af.Offset = offset
 	}
@@ -947,16 +988,17 @@ func (s *Service) ListAuditEvents(ctx context.Context, appID, envID xid.ID, orgI
 	return events, len(events), nil
 }
 
-// GetAnalytics retrieves analytics data
-func (s *Service) GetAnalytics(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, timeRange map[string]interface{}) (*handlers.AnalyticsSummary, error) {
+// GetAnalytics retrieves analytics data.
+func (s *Service) GetAnalytics(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, timeRange map[string]any) (*handlers.AnalyticsSummary, error) {
 	// Get policy counts
-	policies, totalPolicies, err := s.ListPolicies(ctx, appID, envID, orgID, map[string]interface{}{})
+	policies, totalPolicies, err := s.ListPolicies(ctx, appID, envID, orgID, map[string]any{})
 	if err != nil {
 		s.logger.Warn("failed to get policies for analytics", forge.F("error", err.Error()))
 	}
 
 	// Count active policies
 	activePolicies := 0
+
 	for _, p := range policies {
 		if p.Enabled {
 			activePolicies++
@@ -1001,14 +1043,15 @@ func (s *Service) GetAnalytics(ctx context.Context, appID, envID xid.ID, orgID *
 // =============================================================================
 
 // WarmCache pre-loads and compiles all active policies for a given scope into the cache
-// This is called during plugin initialization to ensure fast permission evaluation from the start
+// This is called during plugin initialization to ensure fast permission evaluation from the start.
 func (s *Service) WarmCache(ctx context.Context, appID, envID xid.ID, orgID *xid.ID) error {
 	if s.compiler == nil {
-		return fmt.Errorf("CEL compiler not initialized")
+		return errs.InternalServerErrorWithMessage("CEL compiler not initialized")
 	}
 
 	// Fetch all enabled policies for the scope
 	enabledFilter := true
+
 	policies, err := s.repo.ListPolicies(ctx, appID, envID, orgID, storage.PolicyFilters{
 		Enabled: &enabledFilter,
 		Limit:   1000, // Reasonable limit for initial cache warm
@@ -1019,6 +1062,7 @@ func (s *Service) WarmCache(ctx context.Context, appID, envID xid.ID, orgID *xid
 
 	if len(policies) == 0 {
 		s.logger.Debug("no policies found for cache warming")
+
 		return nil
 	}
 
@@ -1034,12 +1078,15 @@ func (s *Service) WarmCache(ctx context.Context, appID, envID xid.ID, orgID *xid
 				forge.F("policy_id", policy.ID.String()),
 				forge.F("error", err.Error()),
 			)
+
 			failedCount++
+
 			continue
 		}
 
 		// Add to cache
 		s.cacheCompiledPolicy(compiled)
+
 		compiledCount++
 	}
 
@@ -1055,10 +1102,11 @@ func (s *Service) WarmCache(ctx context.Context, appID, envID xid.ID, orgID *xid
 }
 
 // WarmCacheForAllApps warms the cache for all apps and environments
-// This should be called sparingly as it can be resource intensive
+// This should be called sparingly as it can be resource intensive.
 func (s *Service) WarmCacheForAllApps(ctx context.Context) error {
 	// Fetch all enabled policies without scope restriction
 	enabledFilter := true
+
 	policies, err := s.repo.ListPolicies(ctx, xid.NilID(), xid.NilID(), nil, storage.PolicyFilters{
 		Enabled: &enabledFilter,
 		Limit:   5000, // Higher limit for global warm
@@ -1069,6 +1117,7 @@ func (s *Service) WarmCacheForAllApps(ctx context.Context) error {
 
 	if len(policies) == 0 {
 		s.logger.Debug("no policies found for global cache warming")
+
 		return nil
 	}
 
@@ -1079,10 +1128,12 @@ func (s *Service) WarmCacheForAllApps(ctx context.Context) error {
 		compiled, err := s.compiler.Compile(policy)
 		if err != nil {
 			failedCount++
+
 			continue
 		}
 
 		s.cacheCompiledPolicy(compiled)
+
 		compiledCount++
 	}
 
@@ -1095,14 +1146,14 @@ func (s *Service) WarmCacheForAllApps(ctx context.Context) error {
 	return nil
 }
 
-// InvalidateUserCache invalidates the cache for a specific user
+// InvalidateUserCache invalidates the cache for a specific user.
 func (s *Service) InvalidateUserCache(ctx context.Context, userID xid.ID) error {
 	// Clear compiled policies that might reference this user
 	// In practice, you'd have a user->policies mapping
 	return nil
 }
 
-// InvalidateAppCache invalidates the cache for a specific app
+// InvalidateAppCache invalidates the cache for a specific app.
 func (s *Service) InvalidateAppCache(ctx context.Context, appID xid.ID) error {
 	s.compiledPoliciesMu.Lock()
 	defer s.compiledPoliciesMu.Unlock()
@@ -1117,10 +1168,11 @@ func (s *Service) InvalidateAppCache(ctx context.Context, appID xid.ID) error {
 	if s.cache != nil {
 		return s.cache.DeleteByApp(ctx, appID)
 	}
+
 	return nil
 }
 
-// InvalidateEnvironmentCache invalidates the cache for a specific environment
+// InvalidateEnvironmentCache invalidates the cache for a specific environment.
 func (s *Service) InvalidateEnvironmentCache(ctx context.Context, appID, envID xid.ID) error {
 	s.compiledPoliciesMu.Lock()
 	defer s.compiledPoliciesMu.Unlock()
@@ -1135,10 +1187,11 @@ func (s *Service) InvalidateEnvironmentCache(ctx context.Context, appID, envID x
 	if s.cache != nil {
 		return s.cache.DeleteByEnvironment(ctx, appID, envID)
 	}
+
 	return nil
 }
 
-// InvalidateOrganizationCache invalidates the cache for a specific organization
+// InvalidateOrganizationCache invalidates the cache for a specific organization.
 func (s *Service) InvalidateOrganizationCache(ctx context.Context, appID, envID, orgID xid.ID) error {
 	s.compiledPoliciesMu.Lock()
 	defer s.compiledPoliciesMu.Unlock()
@@ -1153,6 +1206,7 @@ func (s *Service) InvalidateOrganizationCache(ctx context.Context, appID, envID,
 	if s.cache != nil {
 		return s.cache.DeleteByOrganization(ctx, appID, envID, orgID)
 	}
+
 	return nil
 }
 
@@ -1160,26 +1214,29 @@ func (s *Service) InvalidateOrganizationCache(ctx context.Context, appID, envID,
 // LIFECYCLE OPERATIONS
 // =============================================================================
 
-// Migrate runs database migrations
+// Migrate runs database migrations.
 func (s *Service) Migrate(ctx context.Context) error {
 	// Migrations are handled by the plugin's Migrate method
 	return nil
 }
 
-// Shutdown gracefully shuts down the service
+// Shutdown gracefully shuts down the service.
 func (s *Service) Shutdown(ctx context.Context) error {
 	s.logger.Info("shutting down permissions service")
+
 	return nil
 }
 
-// Health checks service health
+// Health checks service health.
 func (s *Service) Health(ctx context.Context) error {
 	if s.compiler == nil {
-		return fmt.Errorf("CEL compiler not initialized")
+		return errs.InternalServerErrorWithMessage("CEL compiler not initialized")
 	}
+
 	if s.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
+
 	return nil
 }
 
@@ -1187,7 +1244,7 @@ func (s *Service) Health(ctx context.Context) error {
 // INTERNAL HELPER METHODS
 // =============================================================================
 
-// cacheCompiledPolicy adds a compiled policy to the in-memory cache
+// cacheCompiledPolicy adds a compiled policy to the in-memory cache.
 func (s *Service) cacheCompiledPolicy(policy *engine.CompiledPolicy) {
 	s.compiledPoliciesMu.Lock()
 	defer s.compiledPoliciesMu.Unlock()
@@ -1200,6 +1257,7 @@ func (s *Service) cacheCompiledPolicy(policy *engine.CompiledPolicy) {
 		if policy.UserOrganizationID != nil {
 			orgIDStr = policy.UserOrganizationID.String()
 		}
+
 		key := fmt.Sprintf("%s:%s:%s:%s:%s",
 			policy.AppID.String(),
 			policy.EnvironmentID.String(),
@@ -1211,7 +1269,7 @@ func (s *Service) cacheCompiledPolicy(policy *engine.CompiledPolicy) {
 	}
 }
 
-// removeCompiledPolicy removes a policy from the in-memory cache
+// removeCompiledPolicy removes a policy from the in-memory cache.
 func (s *Service) removeCompiledPolicy(policyID string) {
 	s.compiledPoliciesMu.Lock()
 	defer s.compiledPoliciesMu.Unlock()
@@ -1226,11 +1284,13 @@ func (s *Service) removeCompiledPolicy(policyID string) {
 	// Remove from index
 	for key, policies := range s.policyIndex {
 		var filtered []*engine.CompiledPolicy
+
 		for _, p := range policies {
 			if p.PolicyID.String() != policyID {
 				filtered = append(filtered, p)
 			}
 		}
+
 		if len(filtered) == 0 {
 			delete(s.policyIndex, key)
 		} else {
@@ -1241,8 +1301,8 @@ func (s *Service) removeCompiledPolicy(policyID string) {
 	_ = policy // Suppress unused variable warning
 }
 
-// createAuditEvent creates an audit log entry
-func (s *Service) createAuditEvent(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, actorID xid.ID, action, resourceType string, resourceID xid.ID, oldValue, newValue map[string]interface{}) {
+// createAuditEvent creates an audit log entry.
+func (s *Service) createAuditEvent(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, actorID xid.ID, action, resourceType string, resourceID xid.ID, oldValue, newValue map[string]any) {
 	event := &core.AuditEvent{
 		ID:                 xid.New(),
 		AppID:              appID,
@@ -1262,33 +1322,36 @@ func (s *Service) createAuditEvent(ctx context.Context, appID, envID xid.ID, org
 	}
 }
 
-// buildPolicyCacheKey builds a cache key for policies
+// buildPolicyCacheKey builds a cache key for policies.
 func buildPolicyCacheKey(appID, envID xid.ID, orgID *xid.ID, resourceType, action string) string {
 	var orgIDStr string
 	if orgID != nil {
 		orgIDStr = orgID.String()
 	}
+
 	return fmt.Sprintf("%s:%s:%s:%s:%s", appID.String(), envID.String(), orgIDStr, resourceType, action)
 }
 
-// keyBelongsToApp checks if a cache key belongs to an app
+// keyBelongsToApp checks if a cache key belongs to an app.
 func keyBelongsToApp(key string, appID xid.ID) bool {
 	return len(key) >= 20 && key[:20] == appID.String()
 }
 
-// keyBelongsToEnv checks if a cache key belongs to an environment
+// keyBelongsToEnv checks if a cache key belongs to an environment.
 func keyBelongsToEnv(key string, appID, envID xid.ID) bool {
 	prefix := appID.String() + ":" + envID.String()
+
 	return len(key) >= len(prefix) && key[:len(prefix)] == prefix
 }
 
-// keyBelongsToOrg checks if a cache key belongs to an organization
+// keyBelongsToOrg checks if a cache key belongs to an organization.
 func keyBelongsToOrg(key string, appID, envID, orgID xid.ID) bool {
 	prefix := appID.String() + ":" + envID.String() + ":" + orgID.String()
+
 	return len(key) >= len(prefix) && key[:len(prefix)] == prefix
 }
 
-// convertToResourceAttributes converts request attributes to core attributes
+// convertToResourceAttributes converts request attributes to core attributes.
 func convertToResourceAttributes(attrs []handlers.ResourceAttributeRequest) []core.ResourceAttribute {
 	result := make([]core.ResourceAttribute, len(attrs))
 	for i, a := range attrs {
@@ -1300,39 +1363,44 @@ func convertToResourceAttributes(attrs []handlers.ResourceAttributeRequest) []co
 			Description: a.Description,
 		}
 	}
+
 	return result
 }
 
-// substituteParameter replaces a parameter in an expression
-func substituteParameter(expression, paramName string, value interface{}) string {
+// substituteParameter replaces a parameter in an expression.
+func substituteParameter(expression, paramName string, value any) string {
 	// Simple string replacement - in production, use proper templating
 	placeholder := fmt.Sprintf("{{%s}}", paramName)
+
 	return replaceAll(expression, placeholder, fmt.Sprintf("%v", value))
 }
 
-// replaceAll replaces all occurrences of old with new in s
+// replaceAll replaces all occurrences of old with new in s.
 func replaceAll(s, old, new string) string {
 	for {
 		idx := indexOf(s, old)
 		if idx == -1 {
 			break
 		}
+
 		s = s[:idx] + new + s[idx+len(old):]
 	}
+
 	return s
 }
 
-// indexOf finds the index of substr in s, or -1 if not found
+// indexOf finds the index of substr in s, or -1 if not found.
 func indexOf(s, substr string) int {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return i
 		}
 	}
+
 	return -1
 }
 
-// getBuiltInTemplates returns the built-in policy templates
+// getBuiltInTemplates returns the built-in policy templates.
 func getBuiltInTemplates() []*core.PolicyTemplate {
 	return []*core.PolicyTemplate{
 		{

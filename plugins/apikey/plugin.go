@@ -2,7 +2,6 @@ package apikey
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements API key authentication for external clients
+// Plugin implements API key authentication for external clients.
 type Plugin struct {
 	service            *apikey.Service
 	userSvc            *user.Service
@@ -30,66 +29,66 @@ type Plugin struct {
 	dashboardExtension *DashboardExtension
 }
 
-// PluginOption is a functional option for configuring the API key plugin
+// PluginOption is a functional option for configuring the API key plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithDefaultRateLimit sets the default rate limit
+// WithDefaultRateLimit sets the default rate limit.
 func WithDefaultRateLimit(limit int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DefaultRateLimit = limit
 	}
 }
 
-// WithMaxRateLimit sets the maximum rate limit
+// WithMaxRateLimit sets the maximum rate limit.
 func WithMaxRateLimit(limit int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxRateLimit = limit
 	}
 }
 
-// WithDefaultExpiry sets the default key expiry
+// WithDefaultExpiry sets the default key expiry.
 func WithDefaultExpiry(expiry time.Duration) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DefaultExpiry = expiry
 	}
 }
 
-// WithMaxKeysPerUser sets the maximum keys per user
+// WithMaxKeysPerUser sets the maximum keys per user.
 func WithMaxKeysPerUser(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxKeysPerUser = max
 	}
 }
 
-// WithMaxKeysPerOrg sets the maximum keys per organization
+// WithMaxKeysPerOrg sets the maximum keys per organization.
 func WithMaxKeysPerOrg(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxKeysPerOrg = max
 	}
 }
 
-// WithKeyLength sets the API key length
+// WithKeyLength sets the API key length.
 func WithKeyLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.KeyLength = length
 	}
 }
 
-// WithAllowQueryParam sets whether to allow API keys in query params
+// WithAllowQueryParam sets whether to allow API keys in query params.
 func WithAllowQueryParam(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowQueryParam = allow
 	}
 }
 
-// WithAutoCleanup sets the auto cleanup configuration
+// WithAutoCleanup sets the auto cleanup configuration.
 func WithAutoCleanup(enabled bool, interval time.Duration) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoCleanup.Enabled = enabled
@@ -97,7 +96,7 @@ func WithAutoCleanup(enabled bool, interval time.Duration) PluginOption {
 	}
 }
 
-// NewPlugin creates a new API key plugin instance with optional configuration
+// NewPlugin creates a new API key plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -112,15 +111,15 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "apikey"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
-		return fmt.Errorf("auth instance cannot be nil")
+		return errs.InternalServerErrorWithMessage("auth instance cannot be nil")
 	}
 
 	db := authInstance.GetDB()
@@ -133,6 +132,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		// Use defaults if binding fails
 		p.config = p.defaultConfig
 	}
+
 	p.config.Validate() // Ensure defaults are set
 
 	// Get services from registry
@@ -140,10 +140,12 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	rateLimitSvc := serviceRegistry.RateLimitService()
 
 	userSvcInterface := serviceRegistry.UserService()
+
 	var userSvc *user.Service
 	if userSvcInterface != nil {
 		userSvc, _ = userSvcInterface.(*user.Service)
 	}
+
 	p.userSvc = userSvc
 
 	// Initialize repository
@@ -183,7 +185,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
 		return nil
@@ -276,42 +278,45 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// Middleware returns the authentication middleware
+// Middleware returns the authentication middleware.
 func (p *Plugin) Middleware() func(next func(forge.Context) error) func(forge.Context) error {
 	if p.middleware == nil {
 		return func(next func(forge.Context) error) func(forge.Context) error {
 			return next
 		}
 	}
+
 	return p.middleware.Authenticate
 }
 
-// RequireAPIKey returns middleware that requires a valid API key
+// RequireAPIKey returns middleware that requires a valid API key.
 func (p *Plugin) RequireAPIKey(scopes ...string) func(next func(forge.Context) error) func(forge.Context) error {
 	if p.middleware == nil {
 		return func(next func(forge.Context) error) func(forge.Context) error {
 			return next
 		}
 	}
+
 	return p.middleware.RequireAPIKey(scopes...)
 }
 
-// RequirePermission returns middleware that requires specific permissions
+// RequirePermission returns middleware that requires specific permissions.
 func (p *Plugin) RequirePermission(permissions ...string) func(next func(forge.Context) error) func(forge.Context) error {
 	if p.middleware == nil {
 		return func(next func(forge.Context) error) func(forge.Context) error {
 			return next
 		}
 	}
+
 	return p.middleware.RequirePermission(permissions...)
 }
 
-// Service returns the API key service for direct access
+// Service returns the API key service for direct access.
 func (p *Plugin) Service() *apikey.Service {
 	return p.service
 }
 
-// RegisterHooks registers plugin hooks with the hook registry
+// RegisterHooks registers plugin hooks with the hook registry.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// API Key plugin can register hooks for:
 	// - Before/after key creation
@@ -321,21 +326,21 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// RegisterServiceDecorators allows plugins to replace core services with decorated versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// API Key plugin doesn't decorate core services
 	// It provides its own service that's already registered
 	return nil
 }
 
-// Migrate runs plugin migrations
+// Migrate runs plugin migrations.
 func (p *Plugin) Migrate() error {
 	// Migrations are handled by the main migration system
 	// The api_keys table is already created in core migrations
 	return nil
 }
 
-// startCleanupScheduler starts a background goroutine to cleanup expired API keys
+// startCleanupScheduler starts a background goroutine to cleanup expired API keys.
 func (p *Plugin) startCleanupScheduler() {
 	if p.service == nil {
 		return
@@ -361,7 +366,7 @@ func (p *Plugin) startCleanupScheduler() {
 	}()
 }
 
-// runCleanup executes the cleanup of expired API keys
+// runCleanup executes the cleanup of expired API keys.
 func (p *Plugin) runCleanup() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -369,6 +374,7 @@ func (p *Plugin) runCleanup() {
 	count, err := p.service.CleanupExpired(ctx)
 	if err != nil {
 		log.Printf("[APIKey Plugin] Cleanup failed: %v", err)
+
 		return
 	}
 
@@ -377,7 +383,7 @@ func (p *Plugin) runCleanup() {
 	}
 }
 
-// StopCleanupScheduler stops the cleanup scheduler (for graceful shutdown)
+// StopCleanupScheduler stops the cleanup scheduler (for graceful shutdown).
 func (p *Plugin) StopCleanupScheduler() {
 	if p.cleanupTicker != nil {
 		p.cleanupTicker.Stop()
@@ -387,10 +393,11 @@ func (p *Plugin) StopCleanupScheduler() {
 }
 
 // DashboardExtension returns the dashboard extension for this plugin
-// This implements the PluginWithDashboardExtension interface
+// This implements the PluginWithDashboardExtension interface.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	if p.dashboardExtension == nil {
 		p.dashboardExtension = NewDashboardExtension(p)
 	}
+
 	return p.dashboardExtension
 }

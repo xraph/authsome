@@ -22,22 +22,22 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardExtension implements ui.DashboardExtension for the secrets plugin
+// DashboardExtension implements ui.DashboardExtension for the secrets plugin.
 type DashboardExtension struct {
 	plugin *Plugin
 }
 
-// NewDashboardExtension creates a new dashboard extension
+// NewDashboardExtension creates a new dashboard extension.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{plugin: plugin}
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "secrets"
 }
 
-// NavigationItems returns navigation items for the dashboard
+// NavigationItems returns navigation items for the dashboard.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -50,6 +50,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp == nil {
 					return basePath + "/secrets"
 				}
+
 				return basePath + "/app/" + currentApp.ID.String() + "/secrets"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -64,7 +65,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 
 // Routes returns dashboard routes
 // Note: All secrets routes use /secrets/ prefix (not /settings/secrets/) to ensure
-// they get the dashboard layout instead of settings layout
+// they get the dashboard layout instead of settings layout.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Secrets list page
@@ -190,18 +191,18 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated)
+// SettingsSections returns settings sections (deprecated).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return nil
 }
 
 // SettingsPages returns settings pages
-// Note: Secrets is a main navigation item (not a settings page), so we return nil here
+// Note: Secrets is a main navigation item (not a settings page), so we return nil here.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return nil
 }
 
-// DashboardWidgets returns dashboard widgets
+// DashboardWidgets returns dashboard widgets.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -217,7 +218,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the secrets plugin
+// BridgeFunctions returns bridge functions for the secrets plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		{
@@ -257,19 +258,19 @@ func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 // Bridge Handler Types
 // =============================================================================
 
-// RevealSecretInput is the input for revealing a secret
+// RevealSecretInput is the input for revealing a secret.
 type RevealSecretInput struct {
 	AppID    string `json:"appId"`
 	SecretID string `json:"secretId"`
 }
 
-// RevealSecretOutput is the output for revealing a secret
+// RevealSecretOutput is the output for revealing a secret.
 type RevealSecretOutput struct {
-	Value     interface{} `json:"value"`
-	ValueType string      `json:"valueType"`
+	Value     any    `json:"value"`
+	ValueType string `json:"valueType"`
 }
 
-// GetSecretsInput is the input for listing secrets
+// GetSecretsInput is the input for listing secrets.
 type GetSecretsInput struct {
 	AppID    string `json:"appId"`
 	Page     int    `json:"page"`
@@ -277,7 +278,7 @@ type GetSecretsInput struct {
 	Search   string `json:"search"`
 }
 
-// SecretItem represents a secret in the list
+// SecretItem represents a secret in the list.
 type SecretItem struct {
 	ID          string   `json:"id"`
 	Path        string   `json:"path"`
@@ -290,7 +291,7 @@ type SecretItem struct {
 	UpdatedAt   string   `json:"updatedAt"`
 }
 
-// GetSecretsOutput is the output for listing secrets
+// GetSecretsOutput is the output for listing secrets.
 type GetSecretsOutput struct {
 	Secrets    []SecretItem `json:"secrets"`
 	Total      int64        `json:"total"`
@@ -299,54 +300,54 @@ type GetSecretsOutput struct {
 	TotalPages int          `json:"totalPages"`
 }
 
-// GetSecretInput is the input for getting a secret
+// GetSecretInput is the input for getting a secret.
 type GetSecretInput struct {
 	AppID    string `json:"appId"`
 	SecretID string `json:"secretId"`
 }
 
-// GetSecretOutput is the output for getting a secret
+// GetSecretOutput is the output for getting a secret.
 type GetSecretOutput struct {
 	Secret SecretItem `json:"secret"`
 }
 
-// CreateSecretInput is the input for creating a secret
+// CreateSecretInput is the input for creating a secret.
 type CreateSecretInput struct {
-	AppID       string      `json:"appId"`
-	Path        string      `json:"path"`
-	Value       interface{} `json:"value"`
-	Description string      `json:"description"`
-	ValueType   string      `json:"valueType"`
-	Tags        []string    `json:"tags"`
+	AppID       string   `json:"appId"`
+	Path        string   `json:"path"`
+	Value       any      `json:"value"`
+	Description string   `json:"description"`
+	ValueType   string   `json:"valueType"`
+	Tags        []string `json:"tags"`
 }
 
-// CreateSecretOutput is the output for creating a secret
+// CreateSecretOutput is the output for creating a secret.
 type CreateSecretOutput struct {
 	Secret SecretItem `json:"secret"`
 }
 
-// UpdateSecretInput is the input for updating a secret
+// UpdateSecretInput is the input for updating a secret.
 type UpdateSecretInput struct {
-	AppID        string      `json:"appId"`
-	SecretID     string      `json:"secretId"`
-	Value        interface{} `json:"value"`
-	Description  string      `json:"description"`
-	Tags         []string    `json:"tags"`
-	ChangeReason string      `json:"changeReason"`
+	AppID        string   `json:"appId"`
+	SecretID     string   `json:"secretId"`
+	Value        any      `json:"value"`
+	Description  string   `json:"description"`
+	Tags         []string `json:"tags"`
+	ChangeReason string   `json:"changeReason"`
 }
 
-// UpdateSecretOutput is the output for updating a secret
+// UpdateSecretOutput is the output for updating a secret.
 type UpdateSecretOutput struct {
 	Secret SecretItem `json:"secret"`
 }
 
-// DeleteSecretInput is the input for deleting a secret
+// DeleteSecretInput is the input for deleting a secret.
 type DeleteSecretInput struct {
 	AppID    string `json:"appId"`
 	SecretID string `json:"secretId"`
 }
 
-// DeleteSecretOutput is the output for deleting a secret
+// DeleteSecretOutput is the output for deleting a secret.
 type DeleteSecretOutput struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
@@ -356,7 +357,7 @@ type DeleteSecretOutput struct {
 // Bridge Handler Implementations
 // =============================================================================
 
-// bridgeRevealSecret handles the revealSecret bridge call
+// bridgeRevealSecret handles the revealSecret bridge call.
 func (e *DashboardExtension) bridgeRevealSecret(ctx bridge.Context, input RevealSecretInput) (*RevealSecretOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -387,7 +388,7 @@ func (e *DashboardExtension) bridgeRevealSecret(ctx bridge.Context, input Reveal
 	}, nil
 }
 
-// bridgeGetSecrets handles the getSecrets bridge call
+// bridgeGetSecrets handles the getSecrets bridge call.
 func (e *DashboardExtension) bridgeGetSecrets(ctx bridge.Context, input GetSecretsInput) (*GetSecretsOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -395,10 +396,8 @@ func (e *DashboardExtension) bridgeGetSecrets(ctx bridge.Context, input GetSecre
 	}
 
 	// Set defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 25
@@ -450,7 +449,7 @@ func (e *DashboardExtension) bridgeGetSecrets(ctx bridge.Context, input GetSecre
 	}, nil
 }
 
-// bridgeGetSecret handles the getSecret bridge call
+// bridgeGetSecret handles the getSecret bridge call.
 func (e *DashboardExtension) bridgeGetSecret(ctx bridge.Context, input GetSecretInput) (*GetSecretOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -484,7 +483,7 @@ func (e *DashboardExtension) bridgeGetSecret(ctx bridge.Context, input GetSecret
 	}, nil
 }
 
-// bridgeCreateSecret handles the createSecret bridge call
+// bridgeCreateSecret handles the createSecret bridge call.
 func (e *DashboardExtension) bridgeCreateSecret(ctx bridge.Context, input CreateSecretInput) (*CreateSecretOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -502,7 +501,7 @@ func (e *DashboardExtension) bridgeCreateSecret(ctx bridge.Context, input Create
 
 	secret, err := e.plugin.Service().Create(goCtx, createReq)
 	if err != nil {
-		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to create secret: %s", err.Error()))
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to create secret: "+err.Error())
 	}
 
 	return &CreateSecretOutput{
@@ -520,7 +519,7 @@ func (e *DashboardExtension) bridgeCreateSecret(ctx bridge.Context, input Create
 	}, nil
 }
 
-// bridgeUpdateSecret handles the updateSecret bridge call
+// bridgeUpdateSecret handles the updateSecret bridge call.
 func (e *DashboardExtension) bridgeUpdateSecret(ctx bridge.Context, input UpdateSecretInput) (*UpdateSecretOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -547,7 +546,7 @@ func (e *DashboardExtension) bridgeUpdateSecret(ctx bridge.Context, input Update
 
 	secret, err := e.plugin.Service().Update(goCtx, secretID, updateReq)
 	if err != nil {
-		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to update secret: %s", err.Error()))
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update secret: "+err.Error())
 	}
 
 	return &UpdateSecretOutput{
@@ -565,7 +564,7 @@ func (e *DashboardExtension) bridgeUpdateSecret(ctx bridge.Context, input Update
 	}, nil
 }
 
-// bridgeDeleteSecret handles the deleteSecret bridge call
+// bridgeDeleteSecret handles the deleteSecret bridge call.
 func (e *DashboardExtension) bridgeDeleteSecret(ctx bridge.Context, input DeleteSecretInput) (*DeleteSecretOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -581,7 +580,7 @@ func (e *DashboardExtension) bridgeDeleteSecret(ctx bridge.Context, input Delete
 	// Delete secret
 	err = e.plugin.Service().Delete(goCtx, secretID)
 	if err != nil {
-		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to delete secret: %s", err.Error()))
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to delete secret: "+err.Error())
 	}
 
 	return &DeleteSecretOutput{
@@ -590,7 +589,7 @@ func (e *DashboardExtension) bridgeDeleteSecret(ctx bridge.Context, input Delete
 	}, nil
 }
 
-// buildContextFromBridge creates a Go context from a bridge context with app/env IDs
+// buildContextFromBridge creates a Go context from a bridge context with app/env IDs.
 func (e *DashboardExtension) buildContextFromBridge(ctx bridge.Context, appIDStr string) (context.Context, error) {
 	// Get the context from the HTTP request (already enriched by middleware)
 	var goCtx context.Context
@@ -606,6 +605,7 @@ func (e *DashboardExtension) buildContextFromBridge(ctx bridge.Context, appIDStr
 		if err != nil {
 			return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid appId")
 		}
+
 		goCtx = contexts.SetAppID(goCtx, appID)
 
 		// Ensure environment ID is set
@@ -628,20 +628,21 @@ func (e *DashboardExtension) buildContextFromBridge(ctx bridge.Context, appIDStr
 // Helper Methods
 // =============================================================================
 
-// getUserFromContext extracts the current user from the request context
+// getUserFromContext extracts the current user from the request context.
 func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
 	reqCtx := ctx.Request.Context()
 	if u, ok := reqCtx.Value("user").(*user.User); ok {
 		return u
 	}
+
 	return nil
 }
 
-// extractAppFromURL extracts the app from the URL parameter
+// extractAppFromURL extracts the app from the URL parameter.
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.RequiredField("appId")
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -652,7 +653,7 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	return &app.App{ID: appID}, nil
 }
 
-// getBasePath returns the dashboard base path
+// getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
 	return "/api/identity/ui"
 }
@@ -680,6 +681,7 @@ func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Cont
 	// Fallback: Manually enrich context if middleware didn't do it
 	// This handles edge cases or direct API access
 	var appID xid.ID
+
 	if appIDStr := ctx.Param("appId"); appIDStr != "" {
 		if id, err := xid.FromString(appIDStr); err == nil {
 			appID = id
@@ -691,6 +693,7 @@ func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Cont
 	if envCookie, err := ctx.Request.Cookie("authsome_environment"); err == nil && envCookie != nil && envCookie.Value != "" {
 		if envID, err := xid.FromString(envCookie.Value); err == nil && !envID.IsNil() {
 			reqCtx = contexts.SetEnvironmentID(reqCtx, envID)
+
 			return reqCtx
 		}
 	}
@@ -707,12 +710,13 @@ func (e *DashboardExtension) injectContext(ctx *router.PageContext) context.Cont
 	return reqCtx
 }
 
-// parseSecretID parses a secret ID from URL parameter
+// parseSecretID parses a secret ID from URL parameter.
 func (e *DashboardExtension) parseSecretID(ctx *router.PageContext) (xid.ID, error) {
 	idStr := ctx.Param("secretId")
 	if idStr == "" {
-		return xid.NilID(), fmt.Errorf("secret ID is required")
+		return xid.NilID(), errs.RequiredField("secretId")
 	}
+
 	return xid.FromString(idStr)
 }
 
@@ -729,6 +733,7 @@ func (e *DashboardExtension) renderSecretsWidget(currentApp *app.App) g.Node {
 
 	// Try to get stats - use default context handling
 	stats, err := e.plugin.Service().GetStats(ctx)
+
 	count := 0
 	if err == nil && stats != nil {
 		count = stats.TotalSecrets
@@ -738,7 +743,7 @@ func (e *DashboardExtension) renderSecretsWidget(currentApp *app.App) g.Node {
 		Class("text-center"),
 		Div(
 			Class("text-2xl font-bold text-slate-900 dark:text-white"),
-			g.Text(fmt.Sprintf("%d", count)),
+			g.Text(strconv.Itoa(count)),
 		),
 		Div(
 			Class("text-sm text-slate-500 dark:text-gray-400"),
@@ -751,7 +756,7 @@ func (e *DashboardExtension) renderSecretsWidget(currentApp *app.App) g.Node {
 // Common UI Components
 // =============================================================================
 
-// statsCard renders a statistics card
+// statsCard renders a statistics card.
 func (e *DashboardExtension) statsCard(title, value string, icon g.Node) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -769,9 +774,10 @@ func (e *DashboardExtension) statsCard(title, value string, icon g.Node) g.Node 
 	)
 }
 
-// statusBadge renders a status badge
+// statusBadge renders a status badge.
 func (e *DashboardExtension) statusBadge(status string) g.Node {
 	var classes string
+
 	switch status {
 	case "active", "success":
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
@@ -782,12 +788,14 @@ func (e *DashboardExtension) statusBadge(status string) g.Node {
 	default:
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 	}
+
 	return Span(Class(classes), g.Text(status))
 }
 
-// valueTypeBadge renders a value type badge
+// valueTypeBadge renders a value type badge.
 func (e *DashboardExtension) valueTypeBadge(valueType string) g.Node {
 	var classes, icon string
+
 	switch valueType {
 	case "json":
 		classes = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
@@ -810,7 +818,7 @@ func (e *DashboardExtension) valueTypeBadge(valueType string) g.Node {
 	)
 }
 
-// renderPagination renders pagination controls
+// renderPagination renders pagination controls.
 func (e *DashboardExtension) renderPagination(currentPage, totalPages int, baseURL string) g.Node {
 	if totalPages <= 1 {
 		return nil
@@ -832,13 +840,13 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, baseU
 		if i == currentPage {
 			items = append(items, Span(
 				Class("px-3 py-2 text-sm font-medium text-white bg-violet-600 border border-violet-600 rounded-md"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			items = append(items, A(
 				Href(fmt.Sprintf("%s?page=%d", baseURL, i)),
 				Class("px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			items = append(items, Span(
@@ -882,6 +890,7 @@ func (e *DashboardExtension) renderSecretsNav(currentApp *app.App, basePath, act
 	navItems := make([]g.Node, 0, len(items))
 	for _, item := range items {
 		isActive := activePage == item.page
+
 		classes := "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors "
 		if isActive {
 			classes += "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
@@ -907,7 +916,7 @@ func (e *DashboardExtension) renderSecretsNav(currentApp *app.App, basePath, act
 // Page Handlers - Placeholders (to be implemented in pages/ folder)
 // =============================================================================
 
-// ServeSecretsListPage serves the secrets list page
+// ServeSecretsListPage serves the secrets list page.
 func (e *DashboardExtension) ServeSecretsListPage(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -924,6 +933,7 @@ func (e *DashboardExtension) ServeSecretsListPage(ctx *router.PageContext) (g.No
 			if v == "" {
 				return ""
 			}
+
 			return v
 		}(),
 		Search: func() string {
@@ -931,6 +941,7 @@ func (e *DashboardExtension) ServeSecretsListPage(ctx *router.PageContext) (g.No
 			if v == "" {
 				return ""
 			}
+
 			return v
 		}(),
 		PageSize: 20,
@@ -942,6 +953,7 @@ func (e *DashboardExtension) ServeSecretsListPage(ctx *router.PageContext) (g.No
 		if v == "" {
 			return ""
 		}
+
 		return v
 	}(); p != "" {
 		if parsed, err := strconv.Atoi(p); err == nil {
@@ -963,7 +975,7 @@ func (e *DashboardExtension) ServeSecretsListPage(ctx *router.PageContext) (g.No
 	return content, nil
 }
 
-// ServeCreateSecretPage serves the create secret page
+// ServeCreateSecretPage serves the create secret page.
 func (e *DashboardExtension) ServeCreateSecretPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -977,7 +989,7 @@ func (e *DashboardExtension) ServeCreateSecretPage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// HandleCreateSecret handles the create secret form submission
+// HandleCreateSecret handles the create secret form submission.
 func (e *DashboardExtension) HandleCreateSecret(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1005,15 +1017,17 @@ func (e *DashboardExtension) HandleCreateSecret(ctx *router.PageContext) (g.Node
 	if err != nil {
 		basePath := e.getBasePath()
 		content := e.renderCreateSecretForm(currentApp, basePath, req, err.Error())
+
 		return content, nil
 	}
 
 	// Redirect to list
 	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets", http.StatusFound)
+
 	return nil, nil
 }
 
-// ServeSecretDetailPage serves the secret detail page
+// ServeSecretDetailPage serves the secret detail page.
 func (e *DashboardExtension) ServeSecretDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1044,7 +1058,7 @@ func (e *DashboardExtension) ServeSecretDetailPage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// ServeEditSecretPage serves the edit secret page
+// ServeEditSecretPage serves the edit secret page.
 func (e *DashboardExtension) ServeEditSecretPage(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1071,7 +1085,7 @@ func (e *DashboardExtension) ServeEditSecretPage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// HandleUpdateSecret handles the update secret form submission
+// HandleUpdateSecret handles the update secret form submission.
 func (e *DashboardExtension) HandleUpdateSecret(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1095,9 +1109,11 @@ func (e *DashboardExtension) HandleUpdateSecret(ctx *router.PageContext) (g.Node
 	if value := ctx.Request.FormValue("value"); value != "" {
 		req.Value = value
 	}
+
 	if valueType := ctx.Request.FormValue("valueType"); valueType != "" {
 		req.ValueType = valueType
 	}
+
 	if tags := ctx.Request.FormValue("tags"); tags != "" {
 		req.Tags = splitTags(tags)
 	}
@@ -1108,15 +1124,17 @@ func (e *DashboardExtension) HandleUpdateSecret(ctx *router.PageContext) (g.Node
 		secret, _ := e.plugin.Service().Get(reqCtx, secretID)
 		basePath := e.getBasePath()
 		content := e.renderEditSecretForm(currentApp, basePath, secret, err.Error())
+
 		return content, nil
 	}
 
 	// Redirect to detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets/"+secretID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleDeleteSecret handles the delete secret action
+// HandleDeleteSecret handles the delete secret action.
 func (e *DashboardExtension) HandleDeleteSecret(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1136,10 +1154,11 @@ func (e *DashboardExtension) HandleDeleteSecret(ctx *router.PageContext) (g.Node
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets", http.StatusFound)
+
 	return nil, nil
 }
 
-// ServeVersionHistoryPage serves the version history page
+// ServeVersionHistoryPage serves the version history page.
 func (e *DashboardExtension) ServeVersionHistoryPage(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1160,11 +1179,13 @@ func (e *DashboardExtension) ServeVersionHistoryPage(ctx *router.PageContext) (g
 	}
 
 	page := 1
+
 	if p := func() string {
 		v := ctx.Request.URL.Query().Get("page")
 		if v == "" {
 			return ""
 		}
+
 		return v
 	}(); p != "" {
 		if parsed, err := strconv.Atoi(p); err == nil {
@@ -1181,7 +1202,7 @@ func (e *DashboardExtension) ServeVersionHistoryPage(ctx *router.PageContext) (g
 	return content, nil
 }
 
-// HandleRollback handles the rollback action
+// HandleRollback handles the rollback action.
 func (e *DashboardExtension) HandleRollback(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1197,6 +1218,7 @@ func (e *DashboardExtension) HandleRollback(ctx *router.PageContext) (g.Node, er
 	}
 
 	versionStr := ctx.Param("version")
+
 	version, err := strconv.Atoi(versionStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid version number")
@@ -1208,10 +1230,11 @@ func (e *DashboardExtension) HandleRollback(ctx *router.PageContext) (g.Node, er
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, e.getBasePath()+"/app/"+currentApp.ID.String()+"/secrets/"+secretID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleRevealValue handles the reveal value AJAX request
+// HandleRevealValue handles the reveal value AJAX request.
 func (e *DashboardExtension) HandleRevealValue(ctx *router.PageContext) (g.Node, error) {
 	// Use injectContext to properly set app/environment IDs in context
 	reqCtx := e.injectContext(ctx)
@@ -1241,7 +1264,7 @@ func (e *DashboardExtension) HandleRevealValue(ctx *router.PageContext) (g.Node,
 // Page Rendering Methods
 // =============================================================================
 
-// renderSecretsListContent renders the secrets list page content
+// renderSecretsListContent renders the secrets list page content.
 func (e *DashboardExtension) renderSecretsListContent(
 	currentApp *app.App,
 	basePath string,
@@ -1252,7 +1275,7 @@ func (e *DashboardExtension) renderSecretsListContent(
 	return pages.SecretsListPage(currentApp, basePath, secrets, pag, query)
 }
 
-// renderCreateSecretForm renders the create secret form
+// renderCreateSecretForm renders the create secret form.
 func (e *DashboardExtension) renderCreateSecretForm(
 	currentApp *app.App,
 	basePath string,
@@ -1262,7 +1285,7 @@ func (e *DashboardExtension) renderCreateSecretForm(
 	return pages.CreateSecretPage(currentApp, basePath, prefill, errorMsg)
 }
 
-// renderSecretDetailContent renders the secret detail page content
+// renderSecretDetailContent renders the secret detail page content.
 func (e *DashboardExtension) renderSecretDetailContent(
 	currentApp *app.App,
 	basePath string,
@@ -1272,7 +1295,7 @@ func (e *DashboardExtension) renderSecretDetailContent(
 	return pages.SecretDetailPage(currentApp, basePath, secret, versions)
 }
 
-// renderEditSecretForm renders the edit secret form
+// renderEditSecretForm renders the edit secret form.
 func (e *DashboardExtension) renderEditSecretForm(
 	currentApp *app.App,
 	basePath string,
@@ -1282,7 +1305,7 @@ func (e *DashboardExtension) renderEditSecretForm(
 	return pages.EditSecretPage(currentApp, basePath, secret, errorMsg)
 }
 
-// renderVersionHistoryContent renders the version history page content
+// renderVersionHistoryContent renders the version history page content.
 func (e *DashboardExtension) renderVersionHistoryContent(
 	currentApp *app.App,
 	basePath string,

@@ -11,19 +11,20 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// DatabaseKeyStore manages keys persisted in the database
+// DatabaseKeyStore manages keys persisted in the database.
 type DatabaseKeyStore struct {
 	db     *bun.DB
 	appID  xid.ID
 	cache  *KeyStore // In-memory cache
-	logger interface{ Printf(string, ...interface{}) }
+	logger interface{ Printf(string, ...any) }
 }
 
-// NewDatabaseKeyStore creates a key store backed by the database
-func NewDatabaseKeyStore(db *bun.DB, appID xid.ID, logger interface{ Printf(string, ...interface{}) }) (*DatabaseKeyStore, error) {
+// NewDatabaseKeyStore creates a key store backed by the database.
+func NewDatabaseKeyStore(db *bun.DB, appID xid.ID, logger interface{ Printf(string, ...any) }) (*DatabaseKeyStore, error) {
 	dks := &DatabaseKeyStore{
 		db:     db,
 		appID:  appID,
@@ -35,6 +36,7 @@ func NewDatabaseKeyStore(db *bun.DB, appID xid.ID, logger interface{ Printf(stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key cache: %w", err)
 	}
+
 	dks.cache = cache
 
 	// Load keys from database
@@ -49,12 +51,13 @@ func NewDatabaseKeyStore(db *bun.DB, appID xid.ID, logger interface{ Printf(stri
 	return dks, nil
 }
 
-// loadKeysFromDatabase loads all active keys from the database into the cache
+// loadKeysFromDatabase loads all active keys from the database into the cache.
 func (dks *DatabaseKeyStore) loadKeysFromDatabase() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var jwtKeys []schema.JWTKey
+
 	err := dks.db.NewSelect().
 		Model(&jwtKeys).
 		Where("app_id = ? OR is_platform_key = true", dks.appID).
@@ -66,7 +69,7 @@ func (dks *DatabaseKeyStore) loadKeysFromDatabase() error {
 	}
 
 	if len(jwtKeys) == 0 {
-		return fmt.Errorf("no keys found in database")
+		return errs.NotFound("no keys found in database")
 	}
 
 	dks.logger.Printf("Loaded %d JWT keys from database", len(jwtKeys))
@@ -76,6 +79,7 @@ func (dks *DatabaseKeyStore) loadKeysFromDatabase() error {
 		keyPair, err := dks.parseKeyPair(&jwtKey)
 		if err != nil {
 			dks.logger.Printf("Failed to parse key %s: %v", jwtKey.KeyID, err)
+
 			continue
 		}
 
@@ -85,6 +89,7 @@ func (dks *DatabaseKeyStore) loadKeysFromDatabase() error {
 		if i == 0 {
 			dks.cache.activeKey = keyPair.ID
 		}
+
 		dks.cache.mu.Unlock()
 
 		dks.logger.Printf("Loaded JWT key %s (active: %v)", keyPair.ID, i == 0)
@@ -93,12 +98,12 @@ func (dks *DatabaseKeyStore) loadKeysFromDatabase() error {
 	return nil
 }
 
-// parseKeyPair converts a database JWTKey to an in-memory KeyPair
+// parseKeyPair converts a database JWTKey to an in-memory KeyPair.
 func (dks *DatabaseKeyStore) parseKeyPair(jwtKey *schema.JWTKey) (*KeyPair, error) {
 	// Parse private key
 	block, _ := pem.Decode(jwtKey.PrivateKey)
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode private key PEM")
+		return nil, errs.InternalServerErrorWithMessage("failed to decode private key PEM")
 	}
 
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
@@ -121,7 +126,7 @@ func (dks *DatabaseKeyStore) parseKeyPair(jwtKey *schema.JWTKey) (*KeyPair, erro
 	return keyPair, nil
 }
 
-// generateAndPersistKey generates a new key pair and persists it to the database
+// generateAndPersistKey generates a new key pair and persists it to the database.
 func (dks *DatabaseKeyStore) generateAndPersistKey() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -136,7 +141,7 @@ func (dks *DatabaseKeyStore) generateAndPersistKey() error {
 	// Get the newly generated key
 	activeKey := dks.cache.GetActiveKey()
 	if activeKey == nil {
-		return fmt.Errorf("failed to get generated key")
+		return errs.InternalServerErrorWithMessage("failed to get generated key")
 	}
 
 	// Encode private key to PEM
@@ -151,6 +156,7 @@ func (dks *DatabaseKeyStore) generateAndPersistKey() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal public key: %w", err)
 	}
+
 	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: publicKeyBytes,
@@ -185,17 +191,17 @@ func (dks *DatabaseKeyStore) generateAndPersistKey() error {
 	return nil
 }
 
-// GetActiveKey returns the current active signing key
+// GetActiveKey returns the current active signing key.
 func (dks *DatabaseKeyStore) GetActiveKey() *KeyPair {
 	return dks.cache.GetActiveKey()
 }
 
-// GetKey retrieves a specific key by ID (used for verification)
+// GetKey retrieves a specific key by ID (used for verification).
 func (dks *DatabaseKeyStore) GetKey(kid string) *KeyPair {
 	return dks.cache.GetKey(kid)
 }
 
-// GetJWKS returns the public JWKS for all active keys
+// GetJWKS returns the public JWKS for all active keys.
 func (dks *DatabaseKeyStore) GetJWKS() (*JWKS, error) {
 	keys := dks.cache.GetAllValidKeys()
 	jwks := &JWKS{
@@ -221,28 +227,28 @@ func (dks *DatabaseKeyStore) GetJWKS() (*JWKS, error) {
 	return jwks, nil
 }
 
-// GetAllValidKeys returns all valid (non-expired) keys
+// GetAllValidKeys returns all valid (non-expired) keys.
 func (dks *DatabaseKeyStore) GetAllValidKeys() []*KeyPair {
 	return dks.cache.GetAllValidKeys()
 }
 
-// GetLastRotation returns when keys were last rotated
+// GetLastRotation returns when keys were last rotated.
 func (dks *DatabaseKeyStore) GetLastRotation() time.Time {
 	return dks.cache.GetLastRotation()
 }
 
-// RotateKeys generates a new key and deactivates old ones
+// RotateKeys generates a new key and deactivates old ones.
 func (dks *DatabaseKeyStore) RotateKeys() error {
 	return dks.generateAndPersistKey()
 }
 
-// ShouldRotate checks if keys should be rotated
+// ShouldRotate checks if keys should be rotated.
 func (dks *DatabaseKeyStore) ShouldRotate() bool {
 	return dks.cache.ShouldRotate()
 }
 
-// NewDatabaseJWKSService creates a JWKS service backed by the database
-func NewDatabaseJWKSService(db *bun.DB, appID xid.ID, logger interface{ Printf(string, ...interface{}) }) (*JWKSService, error) {
+// NewDatabaseJWKSService creates a JWKS service backed by the database.
+func NewDatabaseJWKSService(db *bun.DB, appID xid.ID, logger interface{ Printf(string, ...any) }) (*JWKSService, error) {
 	keyStore, err := NewDatabaseKeyStore(db, appID, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database key store: %w", err)

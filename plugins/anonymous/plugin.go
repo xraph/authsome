@@ -1,13 +1,12 @@
 package anonymous
 
 import (
-	"fmt"
-
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
+	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
@@ -21,7 +20,7 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// Config holds the anonymous plugin configuration
+// Config holds the anonymous plugin configuration.
 type Config struct {
 	// EnableAnonymous enables anonymous user creation
 	EnableAnonymous bool `json:"enableAnonymous"`
@@ -33,7 +32,7 @@ type Config struct {
 	AutoConvert bool `json:"autoConvert"`
 }
 
-// DefaultConfig returns the default anonymous plugin configuration
+// DefaultConfig returns the default anonymous plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		EnableAnonymous:      true,
@@ -43,45 +42,45 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the anonymous plugin
+// PluginOption is a functional option for configuring the anonymous plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithEnableAnonymous sets whether anonymous users are enabled
+// WithEnableAnonymous sets whether anonymous users are enabled.
 func WithEnableAnonymous(enable bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnableAnonymous = enable
 	}
 }
 
-// WithSessionExpiryHours sets the session expiry time
+// WithSessionExpiryHours sets the session expiry time.
 func WithSessionExpiryHours(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SessionExpiryHours = hours
 	}
 }
 
-// WithCleanupIntervalHours sets the cleanup interval
+// WithCleanupIntervalHours sets the cleanup interval.
 func WithCleanupIntervalHours(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.CleanupIntervalHours = hours
 	}
 }
 
-// WithAutoConvert sets whether auto-conversion is enabled
+// WithAutoConvert sets whether auto-conversion is enabled.
 func WithAutoConvert(enable bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoConvert = enable
 	}
 }
 
-// NewPlugin creates a new anonymous plugin instance with optional configuration
+// NewPlugin creates a new anonymous plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -98,10 +97,10 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 
 func (p *Plugin) ID() string { return "anonymous" }
 
-// Init accepts auth instance with GetDB method
+// Init accepts auth instance with GetDB method.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("anonymous plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("anonymous plugin requires auth instance")
 	}
 
 	// Store auth instance for cookie support
@@ -110,12 +109,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for anonymous plugin")
+		return errs.InternalServerErrorWithMessage("database not available for anonymous plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for anonymous plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for anonymous plugin")
 	}
 
 	// Initialize logger
@@ -144,7 +143,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers Anonymous plugin routes
+// RegisterRoutes registers Anonymous plugin routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil

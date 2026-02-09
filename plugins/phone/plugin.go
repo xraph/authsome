@@ -2,7 +2,6 @@ package phone
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -32,7 +31,7 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// Config holds the phone plugin configuration
+// Config holds the phone plugin configuration.
 type Config struct {
 	// CodeLength is the length of the verification code
 	CodeLength int `json:"codeLength"`
@@ -51,7 +50,7 @@ type Config struct {
 	RateLimit RateLimitConfig `json:"rateLimit"`
 }
 
-// RateLimitConfig holds rate limiting configuration
+// RateLimitConfig holds rate limiting configuration.
 type RateLimitConfig struct {
 	// Enabled enables rate limiting
 	Enabled bool `json:"enabled"`
@@ -74,7 +73,7 @@ type RateLimitConfig struct {
 	VerifyPerIP RateLimitRule `json:"verifyPerIp"`
 }
 
-// RateLimitRule defines a rate limit rule
+// RateLimitRule defines a rate limit rule.
 type RateLimitRule struct {
 	// Window is the time window for the rate limit (e.g., "1m", "1h")
 	Window time.Duration `json:"window"`
@@ -82,7 +81,7 @@ type RateLimitRule struct {
 	Max int `json:"max"`
 }
 
-// DefaultConfig returns the default phone plugin configuration
+// DefaultConfig returns the default phone plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		CodeLength:          6,
@@ -116,66 +115,66 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the phone plugin
+// PluginOption is a functional option for configuring the phone plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithCodeLength sets the verification code length
+// WithCodeLength sets the verification code length.
 func WithCodeLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.CodeLength = length
 	}
 }
 
-// WithExpiryMinutes sets the code expiry time
+// WithExpiryMinutes sets the code expiry time.
 func WithExpiryMinutes(minutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.ExpiryMinutes = minutes
 	}
 }
 
-// WithMaxAttempts sets the maximum verification attempts
+// WithMaxAttempts sets the maximum verification attempts.
 func WithMaxAttempts(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxAttempts = max
 	}
 }
 
-// WithRateLimitSendCodePerPhone sets the send code rate limit per phone
+// WithRateLimitSendCodePerPhone sets the send code rate limit per phone.
 func WithRateLimitSendCodePerPhone(window time.Duration, max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RateLimit.SendCodePerPhone = RateLimitRule{Window: window, Max: max}
 	}
 }
 
-// WithSMSProvider sets the SMS provider
+// WithSMSProvider sets the SMS provider.
 func WithSMSProvider(provider string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SMSProvider = provider
 	}
 }
 
-// WithAllowImplicitSignup sets whether implicit signup is allowed
+// WithAllowImplicitSignup sets whether implicit signup is allowed.
 func WithAllowImplicitSignup(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowImplicitSignup = allow
 	}
 }
 
-// WithDevExposeCode sets whether to expose codes in dev mode
+// WithDevExposeCode sets whether to expose codes in dev mode.
 func WithDevExposeCode(expose bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DevExposeCode = expose
 	}
 }
 
-// NewPlugin creates a new phone plugin instance with optional configuration
+// NewPlugin creates a new phone plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -194,7 +193,7 @@ func (p *Plugin) ID() string { return "phone" }
 
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("phone plugin requires auth instance")
+		return errs.BadRequest("phone plugin requires auth instance")
 	}
 
 	// Store auth instance for middleware access
@@ -203,12 +202,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for phone plugin")
+		return errs.InternalServerErrorWithMessage("database not available for phone plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for phone plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for phone plugin")
 	}
 
 	// Initialize logger
@@ -264,6 +263,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Setup rate limiting storage
 	var rateLimitStorage rl.Storage
+
 	if p.config.RateLimit.Enabled {
 		if p.config.RateLimit.UseRedis {
 			// Create Redis client for distributed rate limiting
@@ -278,14 +278,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			if err := redisClient.Ping(ctx).Err(); err != nil {
 				p.logger.Error("failed to connect to Redis, falling back to memory storage",
 					forge.F("error", err.Error()))
+
 				rateLimitStorage = storage.NewMemoryStorage()
 			} else {
 				rateLimitStorage = storage.NewRedisStorage(redisClient)
+
 				p.logger.Info("using Redis for rate limiting",
 					forge.F("addr", p.config.RateLimit.RedisAddr))
 			}
 		} else {
 			rateLimitStorage = storage.NewMemoryStorage()
+
 			p.logger.Info("using in-memory storage for rate limiting")
 		}
 	} else {
@@ -322,6 +325,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(handler)
 		}
+
 		return handler
 	}
 
@@ -358,6 +362,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
 	)
+
 	return nil
 }
 
@@ -369,10 +374,12 @@ func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 	_, err := p.db.NewCreateTable().Model((*schema.PhoneVerification)(nil)).IfNotExists().Exec(ctx)
+
 	return err
 }
 
-// Type alias for route registration
+// Type alias for route registration.
 type ErrorResponse = errs.AuthsomeError

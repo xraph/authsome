@@ -6,6 +6,7 @@ import (
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 func init() {
@@ -16,8 +17,10 @@ func init() {
 
 		// Helper function to check if table exists
 		tableExists := func(tableName string) (bool, error) {
-			var exists bool
-			var query string
+			var (
+				exists bool
+				query  string
+			)
 
 			if isPostgres {
 				query = fmt.Sprintf("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '%s')", tableName)
@@ -28,26 +31,32 @@ func init() {
 			}
 
 			err := db.NewRaw(query).Scan(ctx, &exists)
+
 			return exists, err
 		}
 
 		// Helper function to check if column exists
 		columnExists := func(tableName, columnName string) (bool, error) {
-			var exists bool
-			var query string
+			var (
+				exists bool
+				query  string
+			)
 
 			if isPostgres {
 				query = fmt.Sprintf("SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = '%s' AND column_name = '%s')", tableName, columnName)
 			} else if isSQLite {
 				// For SQLite, we need to parse PRAGMA table_info
 				var count int
+
 				err := db.NewRaw(fmt.Sprintf("SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name = '%s'", tableName, columnName)).Scan(ctx, &count)
+
 				return count > 0, err
 			} else {
 				return false, fmt.Errorf("unsupported database dialect: %s", db.Dialect().Name())
 			}
 
 			err := db.NewRaw(query).Scan(ctx, &exists)
+
 			return exists, err
 		}
 
@@ -73,8 +82,10 @@ func init() {
 					if err != nil {
 						return fmt.Errorf("failed to add app_id column: %w", err)
 					}
+
 					_, err = db.ExecContext(ctx, `ALTER TABLE attribute_mappings ADD COLUMN environment_id VARCHAR(20)`)
 				}
+
 				if err != nil {
 					return fmt.Errorf("failed to add columns to attribute_mappings: %w", err)
 				}
@@ -133,8 +144,10 @@ func init() {
 					if err != nil {
 						return fmt.Errorf("failed to add app_id column to group_mappings: %w", err)
 					}
+
 					_, err = db.ExecContext(ctx, `ALTER TABLE group_mappings ADD COLUMN environment_id VARCHAR(20)`)
 				}
+
 				if err != nil {
 					return fmt.Errorf("failed to add columns to group_mappings: %w", err)
 				}
@@ -209,7 +222,7 @@ func init() {
 		} else {
 			// For SQLite, we'd need to recreate the table without these columns
 			// This is complex, so we'll just return an error for now
-			return fmt.Errorf("rollback not supported for SQLite - manual intervention required")
+			return errs.InternalServerErrorWithMessage("rollback not supported for SQLite - manual intervention required")
 		}
 
 		return nil

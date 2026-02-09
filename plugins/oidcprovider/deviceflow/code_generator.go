@@ -5,29 +5,33 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// CodeGenerator generates device codes and user codes
+// CodeGenerator generates device codes and user codes.
 type CodeGenerator struct {
 	userCodeLength int
 	userCodeFormat string
 }
 
-// NewCodeGenerator creates a new code generator
+// NewCodeGenerator creates a new code generator.
 func NewCodeGenerator(userCodeLength int, userCodeFormat string) *CodeGenerator {
 	if userCodeLength <= 0 {
 		userCodeLength = 8
 	}
+
 	if userCodeFormat == "" {
 		userCodeFormat = "XXXX-XXXX"
 	}
+
 	return &CodeGenerator{
 		userCodeLength: userCodeLength,
 		userCodeFormat: userCodeFormat,
 	}
 }
 
-// GenerateDeviceCode generates a long, secure device code (32+ bytes, URL-safe base64)
+// GenerateDeviceCode generates a long, secure device code (32+ bytes, URL-safe base64).
 func (g *CodeGenerator) GenerateDeviceCode() (string, error) {
 	// Generate 32 random bytes (256 bits)
 	b := make([]byte, 32)
@@ -40,7 +44,7 @@ func (g *CodeGenerator) GenerateDeviceCode() (string, error) {
 }
 
 // GenerateUserCode generates a short, human-typable code
-// Uses base20 charset (BCDFGHJKLMNPQRSTVWXZ) to avoid ambiguous characters
+// Uses base20 charset (BCDFGHJKLMNPQRSTVWXZ) to avoid ambiguous characters.
 func (g *CodeGenerator) GenerateUserCode() (string, error) {
 	// Base20 charset without ambiguous characters (no 0, O, I, 1, etc.)
 	const charset = "BCDFGHJKLMNPQRSTVWXZ"
@@ -53,21 +57,23 @@ func (g *CodeGenerator) GenerateUserCode() (string, error) {
 
 	// Generate random characters
 	chars := make([]byte, xCount)
+
 	randBytes := make([]byte, xCount)
 	if _, err := rand.Read(randBytes); err != nil {
 		return "", fmt.Errorf("failed to generate user code: %w", err)
 	}
 
-	for i := 0; i < xCount; i++ {
+	for i := range xCount {
 		chars[i] = charset[int(randBytes[i])%len(charset)]
 	}
 
 	// Format the code according to the format string
 	if strings.Contains(g.userCodeFormat, "X") {
 		result := g.userCodeFormat
-		for i := 0; i < xCount; i++ {
+		for i := range xCount {
 			result = strings.Replace(result, "X", string(chars[i]), 1)
 		}
+
 		return result, nil
 	}
 
@@ -75,24 +81,25 @@ func (g *CodeGenerator) GenerateUserCode() (string, error) {
 	return string(chars), nil
 }
 
-// ValidateUserCodeFormat validates the user code format string
+// ValidateUserCodeFormat validates the user code format string.
 func ValidateUserCodeFormat(format string) error {
 	if format == "" {
-		return fmt.Errorf("user code format cannot be empty")
+		return errs.InvalidInput("format", "user code format cannot be empty")
 	}
 
 	xCount := strings.Count(format, "X")
 	if xCount < 6 {
-		return fmt.Errorf("user code format must contain at least 6 'X' placeholders")
+		return errs.InvalidInput("format", "user code format must contain at least 6 'X' placeholders")
 	}
+
 	if xCount > 12 {
-		return fmt.Errorf("user code format must contain at most 12 'X' placeholders")
+		return errs.InvalidInput("format", "user code format must contain at most 12 'X' placeholders")
 	}
 
 	// Check for only allowed characters: X, -, space
 	for _, ch := range format {
 		if ch != 'X' && ch != '-' && ch != ' ' {
-			return fmt.Errorf("user code format can only contain 'X', '-', and space characters")
+			return errs.InvalidInput("format", "user code format can only contain 'X', '-', and space characters")
 		}
 	}
 

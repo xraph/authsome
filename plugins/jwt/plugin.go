@@ -1,17 +1,16 @@
 package jwt
 
 import (
-	"fmt"
-
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/jwt"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/responses"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the JWT authentication plugin
+// Plugin implements the JWT authentication plugin.
 type Plugin struct {
 	service       *jwt.Service
 	handler       *Handler
@@ -20,7 +19,7 @@ type Plugin struct {
 	defaultConfig Config
 }
 
-// Config holds the JWT plugin configuration
+// Config holds the JWT plugin configuration.
 type Config struct {
 	// Issuer is the JWT issuer claim
 	Issuer string `json:"issuer"`
@@ -34,7 +33,7 @@ type Config struct {
 	IncludeAppIDClaim bool `json:"includeAppIDClaim"`
 }
 
-// DefaultConfig returns the default JWT plugin configuration
+// DefaultConfig returns the default JWT plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		Issuer:               "authsome",
@@ -45,52 +44,52 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the JWT plugin
+// PluginOption is a functional option for configuring the JWT plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithIssuer sets the JWT issuer
+// WithIssuer sets the JWT issuer.
 func WithIssuer(issuer string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Issuer = issuer
 	}
 }
 
-// WithAccessExpiry sets the access token expiry
+// WithAccessExpiry sets the access token expiry.
 func WithAccessExpiry(seconds int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AccessExpirySeconds = seconds
 	}
 }
 
-// WithRefreshExpiry sets the refresh token expiry
+// WithRefreshExpiry sets the refresh token expiry.
 func WithRefreshExpiry(seconds int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RefreshExpirySeconds = seconds
 	}
 }
 
-// WithSigningAlgorithm sets the signing algorithm
+// WithSigningAlgorithm sets the signing algorithm.
 func WithSigningAlgorithm(algorithm string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SigningAlgorithm = algorithm
 	}
 }
 
-// WithIncludeAppIDClaim sets whether to include app_id claim
+// WithIncludeAppIDClaim sets whether to include app_id claim.
 func WithIncludeAppIDClaim(include bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.IncludeAppIDClaim = include
 	}
 }
 
-// NewPlugin creates a new JWT plugin instance with optional configuration
+// NewPlugin creates a new JWT plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -105,15 +104,15 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// Init initializes the JWT plugin
+// Init initializes the JWT plugin.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("jwt plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("jwt plugin requires auth instance")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for jwt plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for jwt plugin")
 	}
 
 	// Initialize logger
@@ -133,7 +132,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	p.service = serviceRegistry.JWTService()
 
 	if p.service == nil {
-		return fmt.Errorf("JWT service not available in service registry")
+		return errs.InternalServerErrorWithMessage("JWT service not available in service registry")
 	}
 
 	p.handler = NewHandler(p.service)
@@ -146,20 +145,20 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "jwt"
 }
 
-// GetHandler returns the JWT handler
+// GetHandler returns the JWT handler.
 func (p *Plugin) GetHandler() *Handler {
 	return p.handler
 }
 
-// RegisterRoutes registers the JWT plugin's HTTP routes
+// RegisterRoutes registers the JWT plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
-		return fmt.Errorf("jwt plugin not initialized")
+		return errs.InternalServerErrorWithMessage("jwt plugin not initialized")
 	}
 
 	// JWT key management routes
@@ -227,23 +226,24 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	p.logger.Debug("JWT routes registered")
+
 	return nil
 }
 
-// RegisterHooks registers plugin hooks (no-op for JWT)
+// RegisterHooks registers plugin hooks (no-op for JWT).
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators (no-op for JWT)
+// RegisterServiceDecorators registers service decorators (no-op for JWT).
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error {
 	return nil
 }
 
-// Migrate runs plugin migrations (no-op for JWT - migrations handled at app level)
+// Migrate runs plugin migrations (no-op for JWT - migrations handled at app level).
 func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// ErrorResponse represents an error response for JWT operations - use shared response from core
+// ErrorResponse represents an error response for JWT operations - use shared response from core.
 type ErrorResponse = responses.ErrorResponse

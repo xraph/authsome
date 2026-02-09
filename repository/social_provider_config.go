@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// SocialProviderConfigRepository handles social provider config persistence
+// SocialProviderConfigRepository handles social provider config persistence.
 type SocialProviderConfigRepository interface {
 	// Create creates a new social provider config
 	Create(ctx context.Context, config *schema.SocialProviderConfig) error
@@ -52,7 +53,7 @@ type socialProviderConfigRepository struct {
 	db *bun.DB
 }
 
-// NewSocialProviderConfigRepository creates a new social provider config repository
+// NewSocialProviderConfigRepository creates a new social provider config repository.
 func NewSocialProviderConfigRepository(db *bun.DB) SocialProviderConfigRepository {
 	return &socialProviderConfigRepository{db: db}
 }
@@ -70,6 +71,7 @@ func (r *socialProviderConfigRepository) Create(ctx context.Context, config *sch
 	if err != nil {
 		return errs.Wrap(err, errs.CodeInternalError, "failed to create social provider config", http.StatusInternalServerError)
 	}
+
 	return nil
 }
 
@@ -81,12 +83,14 @@ func (r *socialProviderConfigRepository) FindByID(ctx context.Context, id xid.ID
 		Where("spc.deleted_at IS NULL").
 		Scan(ctx)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errs.New(errs.CodeNotFound, "social provider config not found", http.StatusNotFound)
 	}
+
 	if err != nil {
 		return nil, errs.Wrap(err, errs.CodeInternalError, "failed to find social provider config", http.StatusInternalServerError)
 	}
+
 	return config, nil
 }
 
@@ -100,17 +104,20 @@ func (r *socialProviderConfigRepository) FindByProvider(ctx context.Context, app
 		Where("spc.deleted_at IS NULL").
 		Scan(ctx)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil // Not found is not an error for this method
 	}
+
 	if err != nil {
 		return nil, errs.Wrap(err, errs.CodeInternalError, "failed to find social provider config", http.StatusInternalServerError)
 	}
+
 	return config, nil
 }
 
 func (r *socialProviderConfigRepository) ListByEnvironment(ctx context.Context, appID, envID xid.ID) ([]*schema.SocialProviderConfig, error) {
 	var configs []*schema.SocialProviderConfig
+
 	err := r.db.NewSelect().
 		Model(&configs).
 		Where("spc.app_id = ?", appID).
@@ -118,15 +125,16 @@ func (r *socialProviderConfigRepository) ListByEnvironment(ctx context.Context, 
 		Where("spc.deleted_at IS NULL").
 		Order("spc.provider_name ASC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, errs.Wrap(err, errs.CodeInternalError, "failed to list social provider configs", http.StatusInternalServerError)
 	}
+
 	return configs, nil
 }
 
 func (r *socialProviderConfigRepository) ListEnabledByEnvironment(ctx context.Context, appID, envID xid.ID) ([]*schema.SocialProviderConfig, error) {
 	var configs []*schema.SocialProviderConfig
+
 	err := r.db.NewSelect().
 		Model(&configs).
 		Where("spc.app_id = ?", appID).
@@ -135,10 +143,10 @@ func (r *socialProviderConfigRepository) ListEnabledByEnvironment(ctx context.Co
 		Where("spc.deleted_at IS NULL").
 		Order("spc.provider_name ASC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, errs.Wrap(err, errs.CodeInternalError, "failed to list enabled social provider configs", http.StatusInternalServerError)
 	}
+
 	return configs, nil
 }
 
@@ -150,7 +158,6 @@ func (r *socialProviderConfigRepository) Update(ctx context.Context, config *sch
 		WherePK().
 		Where("deleted_at IS NULL").
 		Exec(ctx)
-
 	if err != nil {
 		return errs.Wrap(err, errs.CodeInternalError, "failed to update social provider config", http.StatusInternalServerError)
 	}
@@ -165,6 +172,7 @@ func (r *socialProviderConfigRepository) Update(ctx context.Context, config *sch
 
 func (r *socialProviderConfigRepository) Delete(ctx context.Context, id xid.ID) error {
 	now := time.Now()
+
 	result, err := r.db.NewUpdate().
 		Model((*schema.SocialProviderConfig)(nil)).
 		Set("deleted_at = ?", now).
@@ -172,7 +180,6 @@ func (r *socialProviderConfigRepository) Delete(ctx context.Context, id xid.ID) 
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
-
 	if err != nil {
 		return errs.Wrap(err, errs.CodeInternalError, "failed to delete social provider config", http.StatusInternalServerError)
 	}
@@ -190,7 +197,6 @@ func (r *socialProviderConfigRepository) HardDelete(ctx context.Context, id xid.
 		Model((*schema.SocialProviderConfig)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-
 	if err != nil {
 		return errs.Wrap(err, errs.CodeInternalError, "failed to permanently delete social provider config", http.StatusInternalServerError)
 	}
@@ -211,7 +217,6 @@ func (r *socialProviderConfigRepository) SetEnabled(ctx context.Context, id xid.
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
-
 	if err != nil {
 		return errs.Wrap(err, errs.CodeInternalError, "failed to toggle social provider config", http.StatusInternalServerError)
 	}
@@ -231,10 +236,10 @@ func (r *socialProviderConfigRepository) CountByEnvironment(ctx context.Context,
 		Where("environment_id = ?", envID).
 		Where("deleted_at IS NULL").
 		Count(ctx)
-
 	if err != nil {
 		return 0, errs.Wrap(err, errs.CodeInternalError, "failed to count social provider configs", http.StatusInternalServerError)
 	}
+
 	return count, nil
 }
 
@@ -246,9 +251,9 @@ func (r *socialProviderConfigRepository) ExistsByProvider(ctx context.Context, a
 		Where("provider_name = ?", providerName).
 		Where("deleted_at IS NULL").
 		Exists(ctx)
-
 	if err != nil {
 		return false, errs.Wrap(err, errs.CodeInternalError, "failed to check if social provider config exists", http.StatusInternalServerError)
 	}
+
 	return exists, nil
 }

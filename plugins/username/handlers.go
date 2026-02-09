@@ -1,6 +1,7 @@
 package username
 
 import (
+	"errors"
 	"net"
 	"net/http"
 	"time"
@@ -13,62 +14,64 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler exposes HTTP endpoints for username auth
+// Handler exposes HTTP endpoints for username auth.
 type Handler struct {
 	svc   *Service
 	rl    *rl.Service
 	twofa *repo.TwoFARepository
 }
 
-// Request types
+// Request types.
 type SignUpRequest struct {
-	Username string `json:"username" validate:"required" example:"johndoe"`
-	Password string `json:"password" validate:"required" example:"SecureP@ss123"`
+	Username string `example:"johndoe"       json:"username" validate:"required"`
+	Password string `example:"SecureP@ss123" json:"password" validate:"required"`
 }
 
 type SignInRequest struct {
-	Username string `json:"username" validate:"required" example:"johndoe"`
-	Password string `json:"password" validate:"required" example:"SecureP@ss123"`
-	Remember bool   `json:"remember" example:"false"`
+	Username string `example:"johndoe"       json:"username" validate:"required"`
+	Password string `example:"SecureP@ss123" json:"password" validate:"required"`
+	Remember bool   `example:"false"         json:"remember"`
 }
 
-// Response types
+// Response types.
 type SignUpResponse struct {
-	Status  string `json:"status" example:"created"`
-	Message string `json:"message,omitempty" example:"User created successfully"`
+	Status  string `example:"created"                   json:"status"`
+	Message string `example:"User created successfully" json:"message,omitempty"`
 }
 
 type SignInResponse struct {
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session"`
-	Token   string           `json:"token" example:"session_token_abc123"`
+	Token   string           `example:"session_token_abc123" json:"token"`
 }
 
 type TwoFARequiredResponse struct {
 	User         *user.User `json:"user"`
-	RequireTwoFA bool       `json:"require_twofa" example:"true"`
-	DeviceID     string     `json:"device_id" example:"device_fingerprint"`
+	RequireTwoFA bool       `example:"true"               json:"require_twofa"`
+	DeviceID     string     `example:"device_fingerprint" json:"device_id"`
 }
 
 type AccountLockedResponse struct {
-	Code          string    `json:"code" example:"ACCOUNT_LOCKED"`
-	Message       string    `json:"message" example:"Account locked due to too many failed login attempts"`
-	LockedUntil   time.Time `json:"locked_until" example:"2025-11-20T12:00:00Z"`
-	LockedMinutes int       `json:"locked_minutes" example:"15"`
+	Code          string    `example:"ACCOUNT_LOCKED"                                       json:"code"`
+	Message       string    `example:"Account locked due to too many failed login attempts" json:"message"`
+	LockedUntil   time.Time `example:"2025-11-20T12:00:00Z"                                 json:"locked_until"`
+	LockedMinutes int       `example:"15"                                                   json:"locked_minutes"`
 }
 
 func NewHandler(s *Service, rls *rl.Service, tf *repo.TwoFARepository) *Handler {
 	return &Handler{svc: s, rl: rls, twofa: tf}
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	// Check for account lockout error
-	if lockoutErr, ok := err.(*AccountLockoutError); ok {
+	lockoutErr := &AccountLockoutError{}
+	if errors.As(err, &lockoutErr) {
 		return c.JSON(http.StatusForbidden, &AccountLockedResponse{
 			Code:          "ACCOUNT_LOCKED",
 			Message:       "Account locked due to too many failed login attempts",
@@ -80,16 +83,17 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// extractIP extracts IP address from request
+// extractIP extracts IP address from request.
 func extractIP(c forge.Context) string {
 	ip := c.Request().RemoteAddr
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	return ip
 }
 
-// SignUp handles user registration with username and password
+// SignUp handles user registration with username and password.
 func (h *Handler) SignUp(c forge.Context) error {
 	var req SignUpRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -103,10 +107,12 @@ func (h *Handler) SignUp(c forge.Context) error {
 	// Rate limiting
 	if h.rl != nil {
 		key := "username:signup:" + ip
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, "/username/signup")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 		}
+
 		if !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.RateLimitExceeded(15*time.Minute))
 		}
@@ -124,7 +130,7 @@ func (h *Handler) SignUp(c forge.Context) error {
 	})
 }
 
-// SignIn handles user authentication with username and password
+// SignIn handles user authentication with username and password.
 func (h *Handler) SignIn(c forge.Context) error {
 	var req SignInRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -138,10 +144,12 @@ func (h *Handler) SignIn(c forge.Context) error {
 	// Rate limiting
 	if h.rl != nil {
 		key := "username:signin:" + ip
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, "/username/signin")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 		}
+
 		if !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.RateLimitExceeded(15*time.Minute))
 		}

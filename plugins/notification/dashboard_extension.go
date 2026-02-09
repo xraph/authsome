@@ -16,13 +16,13 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardExtension provides dashboard UI for notifications
+// DashboardExtension provides dashboard UI for notifications.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension
+// NewDashboardExtension creates a new dashboard extension.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -30,12 +30,12 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// ExtensionID returns the extension ID
+// ExtensionID returns the extension ID.
 func (e *DashboardExtension) ExtensionID() string {
 	return "notification"
 }
 
-// Routes returns routes for the notification plugin
+// Routes returns routes for the notification plugin.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Main notifications overview
@@ -137,7 +137,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsPages returns settings pages for the notification plugin
+// SettingsPages returns settings pages for the notification plugin.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -165,12 +165,12 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// SettingsSections returns empty settings sections for now
+// SettingsSections returns empty settings sections for now.
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{}
 }
 
-// NavigationItems returns the main "Notifications" navigation item
+// NavigationItems returns the main "Notifications" navigation item.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -185,6 +185,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp != nil {
 					return basePath + "/app/" + currentApp.ID.String() + "/notifications"
 				}
+
 				return basePath + "/dashboard/"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -195,7 +196,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// DashboardWidgets returns the notification stats widget
+// DashboardWidgets returns the notification stats widget.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -213,12 +214,12 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the notification plugin
+// BridgeFunctions returns bridge functions for the notification plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return e.getBridgeFunctions()
 }
 
-// ServeSettings renders the notification settings page
+// ServeSettings renders the notification settings page.
 func (e *DashboardExtension) ServeSettings(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -226,6 +227,7 @@ func (e *DashboardExtension) ServeSettings(ctx *router.PageContext) (g.Node, err
 	}
 
 	basePath := e.getBasePath()
+
 	return pages.SettingsPage(currentApp, basePath), nil
 }
 
@@ -234,7 +236,7 @@ func (e *DashboardExtension) ServeSettings(ctx *router.PageContext) (g.Node, err
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.RequiredField("app_id")
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -253,7 +255,7 @@ func (e *DashboardExtension) getBasePath() string {
 // Page Handlers
 // =============================================================================
 
-// ServeOverview renders the notifications overview page
+// ServeOverview renders the notifications overview page.
 func (e *DashboardExtension) ServeOverview(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -261,10 +263,11 @@ func (e *DashboardExtension) ServeOverview(ctx *router.PageContext) (g.Node, err
 	}
 
 	basePath := e.getBasePath()
+
 	return pages.OverviewPage(currentApp, basePath), nil
 }
 
-// ServeTemplatesList renders the templates list page
+// ServeTemplatesList renders the templates list page.
 func (e *DashboardExtension) ServeTemplatesList(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -272,10 +275,11 @@ func (e *DashboardExtension) ServeTemplatesList(ctx *router.PageContext) (g.Node
 	}
 
 	basePath := e.getBasePath()
+
 	return pages.TemplatesListPage(currentApp, basePath), nil
 }
 
-// ServeHistoryList renders the notification history list page
+// ServeHistoryList renders the notification history list page.
 func (e *DashboardExtension) ServeHistoryList(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -283,10 +287,11 @@ func (e *DashboardExtension) ServeHistoryList(ctx *router.PageContext) (g.Node, 
 	}
 
 	basePath := e.getBasePath()
+
 	return pages.HistoryListPage(currentApp, basePath), nil
 }
 
-// ServeProviders renders the providers settings page
+// ServeProviders renders the providers settings page.
 func (e *DashboardExtension) ServeProviders(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -294,10 +299,11 @@ func (e *DashboardExtension) ServeProviders(ctx *router.PageContext) (g.Node, er
 	}
 
 	basePath := e.getBasePath()
+
 	return pages.ProvidersPage(currentApp, basePath), nil
 }
 
-// ServeAnalytics renders the analytics page
+// ServeAnalytics renders the analytics page.
 func (e *DashboardExtension) ServeAnalytics(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -305,10 +311,11 @@ func (e *DashboardExtension) ServeAnalytics(ctx *router.PageContext) (g.Node, er
 	}
 
 	basePath := e.getBasePath()
+
 	return pages.AnalyticsPage(currentApp, basePath), nil
 }
 
-// RenderDashboardWidget renders the notification stats widget for the main dashboard
+// RenderDashboardWidget renders the notification stats widget for the main dashboard.
 func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *app.App) g.Node {
 	return Div(
 		g.Attr("x-data", fmt.Sprintf(`{
@@ -377,7 +384,7 @@ func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *
 	)
 }
 
-// ServeEmailBuilder renders the email builder for new templates
+// ServeEmailBuilder renders the email builder for new templates.
 func (e *DashboardExtension) ServeEmailBuilder(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -392,7 +399,7 @@ func (e *DashboardExtension) ServeEmailBuilder(ctx *router.PageContext) (g.Node,
 	return pages.EmailBuilderPage(currentApp, basePath, "", document), nil
 }
 
-// ServeEmailBuilderWithTemplate renders the email builder with an existing template
+// ServeEmailBuilderWithTemplate renders the email builder with an existing template.
 func (e *DashboardExtension) ServeEmailBuilderWithTemplate(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -400,6 +407,7 @@ func (e *DashboardExtension) ServeEmailBuilderWithTemplate(ctx *router.PageConte
 	}
 
 	templateIDStr := ctx.Param("templateId")
+
 	templateID, err := xid.FromString(templateIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid template ID")
@@ -417,12 +425,14 @@ func (e *DashboardExtension) ServeEmailBuilderWithTemplate(ctx *router.PageConte
 
 	// Check if template has builder JSON in metadata
 	isVisualBuilder := false
+
 	var builderBlocks string
 
 	if template.Metadata != nil {
 		if builderType, ok := template.Metadata["builderType"].(string); ok && builderType == "visual" {
 			isVisualBuilder = true
 		}
+
 		if blocks, ok := template.Metadata["builderBlocks"].(string); ok {
 			builderBlocks = blocks
 		}
@@ -433,12 +443,13 @@ func (e *DashboardExtension) ServeEmailBuilderWithTemplate(ctx *router.PageConte
 		document, err = builder.FromJSON(builderBlocks)
 		if err != nil {
 			e.plugin.logger.Error("failed to parse builder JSON", forge.F("error", err))
+
 			document = builder.NewDocument()
 		}
 	} else {
 		// Create new document with HTML block containing the template body
 		document = builder.NewDocument()
-		_, _ = document.AddBlock(builder.BlockTypeHTML, map[string]interface{}{
+		_, _ = document.AddBlock(builder.BlockTypeHTML, map[string]any{
 			"html": template.Body,
 		}, document.Root)
 	}

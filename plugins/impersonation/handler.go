@@ -1,6 +1,8 @@
 package impersonation
 
 import (
+	"errors"
+
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/impersonation"
@@ -11,16 +13,16 @@ import (
 )
 
 // Handler handles impersonation HTTP requests
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type Handler struct {
 	service *impersonation.Service
 	config  Config
 }
 
-// Request types
+// Request types.
 type StartImpersonationRequest struct {
-	TargetUserID    string `json:"target_user_id" validate:"required"`
-	Reason          string `json:"reason" validate:"required"`
+	TargetUserID    string `json:"target_user_id"   validate:"required"`
+	Reason          string `json:"reason"           validate:"required"`
 	TicketNumber    string `json:"ticket_number"`
 	DurationMinutes int    `json:"duration_minutes"`
 }
@@ -55,13 +57,13 @@ type VerifyImpersonationRequest struct {
 	SessionID string `path:"sessionId" validate:"required"`
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-// NewHandler creates a new impersonation handler
+// NewHandler creates a new impersonation handler.
 func NewHandler(service *impersonation.Service, config Config) *Handler {
 	return &Handler{
 		service: service,
@@ -69,7 +71,7 @@ func NewHandler(service *impersonation.Service, config Config) *Handler {
 	}
 }
 
-// StartImpersonation handles POST /impersonation/start
+// StartImpersonation handles POST /impersonation/start.
 func (h *Handler) StartImpersonation(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -97,6 +99,7 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	if !envID.IsNil() {
 		envIDPtr = &envID
 	}
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -119,7 +122,8 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	resp, err := h.service.Start(c.Request().Context(), req)
 	if err != nil {
 		// Handle structured errors
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
@@ -130,7 +134,7 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// EndImpersonation handles POST /impersonation/end
+// EndImpersonation handles POST /impersonation/end.
 func (h *Handler) EndImpersonation(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -158,6 +162,7 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 	if !envID.IsNil() {
 		envIDPtr = &envID
 	}
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -175,7 +180,8 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 	resp, err := h.service.End(c.Request().Context(), req)
 	if err != nil {
 		// Handle structured errors
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
@@ -186,7 +192,7 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// GetImpersonation handles GET /impersonation/:id
+// GetImpersonation handles GET /impersonation/:id.
 func (h *Handler) GetImpersonation(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -212,6 +218,7 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 	if !envID.IsNil() {
 		envIDPtr = &envID
 	}
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -227,7 +234,8 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 	session, err := h.service.Get(c.Request().Context(), req)
 	if err != nil {
 		// Handle structured errors
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
 
@@ -238,7 +246,7 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 	return c.JSON(200, session)
 }
 
-// ListImpersonations handles GET /impersonation
+// ListImpersonations handles GET /impersonation.
 func (h *Handler) ListImpersonations(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -262,6 +270,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 
 	// Optional filters from query params
 	var impersonatorID *xid.ID
+
 	if reqParams.ImpersonatorID != "" {
 		id, err := xid.FromString(reqParams.ImpersonatorID)
 		if err == nil {
@@ -270,6 +279,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	}
 
 	var targetUserID *xid.ID
+
 	if reqParams.TargetUserID != "" {
 		id, err := xid.FromString(reqParams.TargetUserID)
 		if err == nil {
@@ -282,6 +292,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	if !envID.IsNil() {
 		envIDPtr = &envID
 	}
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -308,7 +319,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// ListAuditEvents handles GET /impersonation/audit
+// ListAuditEvents handles GET /impersonation/audit.
 func (h *Handler) ListAuditEvents(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -332,6 +343,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 
 	// Optional filters
 	var impersonationID *xid.ID
+
 	if reqParams.ImpersonationID != "" {
 		id, err := xid.FromString(reqParams.ImpersonationID)
 		if err == nil {
@@ -349,6 +361,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 	if !envID.IsNil() {
 		envIDPtr = &envID
 	}
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -374,7 +387,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 	return c.JSON(200, resp)
 }
 
-// VerifyImpersonation handles GET /impersonation/verify/:sessionId
+// VerifyImpersonation handles GET /impersonation/verify/:sessionId.
 func (h *Handler) VerifyImpersonation(c forge.Context) error {
 	var reqParams VerifyImpersonationRequest
 	if err := c.BindRequest(&reqParams); err != nil {

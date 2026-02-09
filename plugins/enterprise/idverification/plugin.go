@@ -7,12 +7,13 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the identity verification plugin
+// Plugin implements the identity verification plugin.
 type Plugin struct {
 	config         Config
 	service        *Service
@@ -24,51 +25,52 @@ type Plugin struct {
 	webhookService *webhook.Service
 }
 
-// NewPlugin creates a new identity verification plugin
+// NewPlugin creates a new identity verification plugin.
 func NewPlugin() *Plugin {
 	return &Plugin{}
 }
 
-// ID returns the plugin ID
+// ID returns the plugin ID.
 func (p *Plugin) ID() string {
 	return "idverification"
 }
 
-// Name returns the plugin name
+// Name returns the plugin name.
 func (p *Plugin) Name() string {
 	return "Identity Verification (KYC)"
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Enterprise-grade identity verification and KYC compliance with support for multiple providers (Onfido, Jumio, Stripe Identity)"
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return "1.0.0"
 }
 
-// Init initializes the plugin
-func (p *Plugin) Init(container interface{}) error {
+// Init initializes the plugin.
+func (p *Plugin) Init(container any) error {
 	// Type assert the container to get dependencies
 	// This assumes a DI container pattern
-	deps, ok := container.(map[string]interface{})
+	deps, ok := container.(map[string]any)
 	if !ok {
-		return fmt.Errorf("invalid container type")
+		return errs.BadRequest("invalid container type")
 	}
 
 	// Get database
 	db, ok := deps["db"].(*bun.DB)
 	if !ok {
-		return fmt.Errorf("database not found in container")
+		return errs.InternalServerErrorWithMessage("database not found in container")
 	}
+
 	p.db = db
 
 	// Get config manager
 	configManager, ok := deps["config"].(forge.ConfigManager)
 	if !ok {
-		return fmt.Errorf("config manager not found in container")
+		return errs.InternalServerErrorWithMessage("config manager not found in container")
 	}
 
 	// Bind configuration
@@ -101,6 +103,7 @@ func (p *Plugin) Init(container interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}
+
 	p.service = service
 
 	// Create handler
@@ -112,7 +115,7 @@ func (p *Plugin) Init(container interface{}) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin routes
+// RegisterRoutes registers the plugin routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled {
 		return nil
@@ -236,7 +239,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// Migrate runs database migrations for the plugin
+// Migrate runs database migrations for the plugin.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
@@ -368,63 +371,64 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// GetService returns the verification service
+// GetService returns the verification service.
 func (p *Plugin) GetService() *Service {
 	return p.service
 }
 
-// GetConfig returns the plugin configuration
+// GetConfig returns the plugin configuration.
 func (p *Plugin) GetConfig() Config {
 	return p.config
 }
 
-// IsEnabled returns whether the plugin is enabled
+// IsEnabled returns whether the plugin is enabled.
 func (p *Plugin) IsEnabled() bool {
 	return p.config.Enabled
 }
 
-// GetHandler returns the HTTP handler
+// GetHandler returns the HTTP handler.
 func (p *Plugin) GetHandler() *Handler {
 	return p.handler
 }
 
-// GetMiddleware returns the verification middleware
+// GetMiddleware returns the verification middleware.
 func (p *Plugin) GetMiddleware() *Middleware {
 	return p.middleware
 }
 
 // Middleware returns the LoadVerificationStatus middleware function
-// This is a convenience method for registering the middleware with Forge
+// This is a convenience method for registering the middleware with Forge.
 func (p *Plugin) Middleware() func(next func(forge.Context) error) func(forge.Context) error {
 	if p.middleware == nil {
 		return func(next func(forge.Context) error) func(forge.Context) error {
 			return next
 		}
 	}
+
 	return p.middleware.LoadVerificationStatus
 }
 
-// Response types for identity verification routes
+// Response types for identity verification routes.
 type IDVerificationErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type IDVerificationSessionResponse struct {
-	Session interface{} `json:"session"`
+	Session any `json:"session"`
 }
 
 type IDVerificationResponse struct {
-	Verification interface{} `json:"verification"`
+	Verification any `json:"verification"`
 }
 
 type IDVerificationListResponse struct {
-	Verifications []interface{} `json:"verifications"`
+	Verifications []any `json:"verifications"`
 }
 
 type IDVerificationStatusResponse struct {
-	Status interface{} `json:"status"`
+	Status any `json:"status"`
 }
 
 type IDVerificationWebhookResponse struct {
-	Status string `json:"status" example:"processed"`
+	Status string `example:"processed" json:"status"`
 }

@@ -8,10 +8,11 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// Service handles identity verification operations
+// Service handles identity verification operations.
 type Service struct {
 	repo           Repository
 	config         Config
@@ -20,7 +21,7 @@ type Service struct {
 	providers      map[string]Provider // Provider interface for different KYC providers
 }
 
-// NewService creates a new identity verification service
+// NewService creates a new identity verification service.
 func NewService(
 	repo Repository,
 	config Config,
@@ -45,6 +46,7 @@ func NewService(
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize Onfido provider: %w", err)
 		}
+
 		s.providers["onfido"] = provider
 	}
 
@@ -53,6 +55,7 @@ func NewService(
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize Jumio provider: %w", err)
 		}
+
 		s.providers["jumio"] = provider
 	}
 
@@ -61,13 +64,14 @@ func NewService(
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize Stripe Identity provider: %w", err)
 		}
+
 		s.providers["stripe_identity"] = provider
 	}
 
 	return s, nil
 }
 
-// CreateVerificationSession creates a new verification session for a user with V2 context
+// CreateVerificationSession creates a new verification session for a user with V2 context.
 func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSessionRequest) (*schema.IdentityVerificationSession, error) {
 	// Check if user exists and is not blocked
 	status, err := s.repo.GetUserVerificationStatus(ctx, req.AppID, req.OrganizationID, req.UserID)
@@ -76,6 +80,7 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 			"reason": status.BlockReason,
 			"app_id": req.AppID.String(),
 		})
+
 		return nil, ErrVerificationBlocked
 	}
 
@@ -85,6 +90,7 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 		if err != nil {
 			return nil, fmt.Errorf("failed to check rate limit: %w", err)
 		}
+
 		if count >= s.config.MaxVerificationsPerDay {
 			return nil, ErrRateLimitExceeded
 		}
@@ -113,6 +119,7 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 
 	// Convert environment ID to string pointer for schema
 	var envIDStr *string
+
 	if req.EnvironmentID != nil && !req.EnvironmentID.IsNil() {
 		str := req.EnvironmentID.String()
 		envIDStr = &str
@@ -154,7 +161,7 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 	return session, nil
 }
 
-// GetVerificationSession retrieves a verification session with V2 context
+// GetVerificationSession retrieves a verification session with V2 context.
 func (s *Service) GetVerificationSession(ctx context.Context, appID xid.ID, sessionID string) (*schema.IdentityVerificationSession, error) {
 	session, err := s.repo.GetSessionByID(ctx, appID, sessionID)
 	if err != nil {
@@ -172,13 +179,14 @@ func (s *Service) GetVerificationSession(ctx context.Context, appID xid.ID, sess
 			session.UpdatedAt = time.Now()
 			_ = s.repo.UpdateSession(ctx, session)
 		}
+
 		return session, ErrSessionExpired
 	}
 
 	return session, nil
 }
 
-// CreateVerification creates a new verification record with V2 context
+// CreateVerification creates a new verification record with V2 context.
 func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificationRequest) (*schema.IdentityVerification, error) {
 	// Check if user is blocked
 	status, err := s.repo.GetUserVerificationStatus(ctx, req.AppID, req.OrganizationID, req.UserID)
@@ -192,6 +200,7 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 		if err != nil {
 			return nil, fmt.Errorf("failed to check attempts: %w", err)
 		}
+
 		if count >= s.config.MaxVerificationAttempts {
 			return nil, ErrMaxAttemptsReached
 		}
@@ -199,6 +208,7 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 
 	// Convert environment ID to string pointer for schema
 	var envIDStr *string
+
 	if req.EnvironmentID != nil && !req.EnvironmentID.IsNil() {
 		str := req.EnvironmentID.String()
 		envIDStr = &str
@@ -239,7 +249,7 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 	return verification, nil
 }
 
-// ProcessVerificationResult processes the result from a provider with V2 context
+// ProcessVerificationResult processes the result from a provider with V2 context.
 func (s *Service) ProcessVerificationResult(ctx context.Context, appID xid.ID, verificationID string, result *VerificationResult) error {
 	verification, err := s.repo.GetVerificationByID(ctx, appID, verificationID)
 	if err != nil {
@@ -265,19 +275,24 @@ func (s *Service) ProcessVerificationResult(ctx context.Context, appID xid.ID, v
 	if result.FirstName != "" {
 		verification.FirstName = result.FirstName
 	}
+
 	if result.LastName != "" {
 		verification.LastName = result.LastName
 	}
+
 	if result.DateOfBirth != nil {
 		verification.DateOfBirth = result.DateOfBirth
 		verification.Age = calculateAge(*result.DateOfBirth)
 	}
+
 	if result.DocumentNumber != "" {
 		verification.DocumentNumber = result.DocumentNumber
 	}
+
 	if result.DocumentCountry != "" {
 		verification.DocumentCountry = result.DocumentCountry
 	}
+
 	if result.Nationality != "" {
 		verification.Nationality = result.Nationality
 	}
@@ -327,7 +342,7 @@ func (s *Service) ProcessVerificationResult(ctx context.Context, appID xid.ID, v
 	return nil
 }
 
-// GetVerification retrieves a verification by ID with V2 context
+// GetVerification retrieves a verification by ID with V2 context.
 func (s *Service) GetVerification(ctx context.Context, appID xid.ID, id string) (*schema.IdentityVerification, error) {
 	verification, err := s.repo.GetVerificationByID(ctx, appID, id)
 	if err != nil {
@@ -341,12 +356,12 @@ func (s *Service) GetVerification(ctx context.Context, appID xid.ID, id string) 
 	return verification, nil
 }
 
-// GetUserVerifications retrieves all verifications for a user with V2 context
+// GetUserVerifications retrieves all verifications for a user with V2 context.
 func (s *Service) GetUserVerifications(ctx context.Context, appID xid.ID, userID xid.ID, limit, offset int) ([]*schema.IdentityVerification, error) {
 	return s.repo.GetVerificationsByUserID(ctx, appID, userID, limit, offset)
 }
 
-// GetUserVerificationStatus retrieves the verification status for a user with V2 context
+// GetUserVerificationStatus retrieves the verification status for a user with V2 context.
 func (s *Service) GetUserVerificationStatus(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID) (*schema.UserVerificationStatus, error) {
 	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
@@ -372,10 +387,10 @@ func (s *Service) GetUserVerificationStatus(ctx context.Context, appID xid.ID, o
 	return status, nil
 }
 
-// RequestReverification initiates a re-verification for a user with V2 context
+// RequestReverification initiates a re-verification for a user with V2 context.
 func (s *Service) RequestReverification(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID, reason string) error {
 	if !s.config.EnableReverification {
-		return fmt.Errorf("reverification is not enabled")
+		return errs.BadRequest("reverification is not enabled")
 	}
 
 	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
@@ -384,7 +399,7 @@ func (s *Service) RequestReverification(ctx context.Context, appID xid.ID, orgID
 	}
 
 	if status == nil {
-		return fmt.Errorf("user has no verification status")
+		return errs.NotFound("user has no verification status")
 	}
 
 	status.RequiresReverification = true
@@ -402,7 +417,7 @@ func (s *Service) RequestReverification(ctx context.Context, appID xid.ID, orgID
 	return nil
 }
 
-// BlockUser blocks a user from verification with V2 context
+// BlockUser blocks a user from verification with V2 context.
 func (s *Service) BlockUser(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID, reason string) error {
 	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
@@ -443,7 +458,7 @@ func (s *Service) BlockUser(ctx context.Context, appID xid.ID, orgID xid.ID, use
 	return nil
 }
 
-// UnblockUser unblocks a user with V2 context
+// UnblockUser unblocks a user with V2 context.
 func (s *Service) UnblockUser(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID) error {
 	status, err := s.repo.GetUserVerificationStatus(ctx, appID, orgID, userID)
 	if err != nil {
@@ -451,7 +466,7 @@ func (s *Service) UnblockUser(ctx context.Context, appID xid.ID, orgID xid.ID, u
 	}
 
 	if status == nil {
-		return fmt.Errorf("user has no verification status")
+		return errs.NotFound("user has no verification status")
 	}
 
 	status.IsBlocked = false
@@ -514,12 +529,15 @@ func (s *Service) applyBusinessRules(verification *schema.IdentityVerification) 
 	// Check document type
 	if verification.DocumentType != "" {
 		allowed := false
+
 		for _, docType := range s.config.AcceptedDocuments {
 			if docType == verification.DocumentType {
 				allowed = true
+
 				break
 			}
 		}
+
 		if !allowed {
 			return ErrDocumentNotSupported
 		}
@@ -528,12 +546,15 @@ func (s *Service) applyBusinessRules(verification *schema.IdentityVerification) 
 	// Check country
 	if len(s.config.AcceptedCountries) > 0 && verification.DocumentCountry != "" {
 		allowed := false
+
 		for _, country := range s.config.AcceptedCountries {
 			if country == verification.DocumentCountry {
 				allowed = true
+
 				break
 			}
 		}
+
 		if !allowed {
 			return ErrCountryNotSupported
 		}
@@ -581,6 +602,7 @@ func (s *Service) updateUserVerificationStatus(ctx context.Context, verification
 		status.AgeVerified = verification.IsVerified
 	case "aml":
 		status.AMLScreened = true
+
 		status.AMLClear = !verification.IsOnSanctionsList && !verification.IsPEP
 		if status.AMLScreened {
 			status.LastAMLVerificationID = verification.ID
@@ -619,17 +641,20 @@ func (s *Service) updateUserVerificationStatus(ctx context.Context, verification
 }
 
 func (s *Service) sendWebhook(ctx context.Context, verification *schema.IdentityVerification) {
-	eventType := fmt.Sprintf("verification.%s", verification.Status)
+	eventType := "verification." + verification.Status
 
 	// Check if this event type should be sent
 	if len(s.config.WebhookEvents) > 0 {
 		found := false
+
 		for _, event := range s.config.WebhookEvents {
 			if event == eventType {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			return
 		}
@@ -648,9 +673,11 @@ func (s *Service) audit(ctx context.Context, action, userID, orgID string, metad
 
 func calculateAge(dob time.Time) int {
 	now := time.Now()
+
 	years := now.Year() - dob.Year()
 	if now.YearDay() < dob.YearDay() {
 		years--
 	}
+
 	return years
 }

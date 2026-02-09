@@ -1,6 +1,7 @@
 package mfa
 
 import (
+	"errors"
 	"net"
 	"net/http"
 
@@ -11,22 +12,22 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler provides HTTP endpoints for MFA operations
+// Handler provides HTTP endpoints for MFA operations.
 type Handler struct {
 	service *Service
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type MessageResponse = responses.MessageResponse
 
 type FactorsResponse struct {
-	Factors interface{} `json:"factors"`
-	Count   int         `json:"count"`
+	Factors any `json:"factors"`
+	Count   int `json:"count"`
 }
 
 type DevicesResponse struct {
-	Devices interface{} `json:"devices"`
-	Count   int         `json:"count"`
+	Devices any `json:"devices"`
+	Count   int `json:"count"`
 }
 
 type MFAConfigResponse struct {
@@ -35,14 +36,14 @@ type MFAConfigResponse struct {
 	AllowedFactorTypes  []string `json:"allowed_factor_types"`
 }
 
-// NewHandler creates a new MFA handler
+// NewHandler creates a new MFA handler.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
 // ==================== Factor Management ====================
 
-// EnrollFactor handles POST /mfa/factors/enroll
+// EnrollFactor handles POST /mfa/factors/enroll.
 func (h *Handler) EnrollFactor(c forge.Context) error {
 	// Get user ID from context (set by auth middleware)
 	userID, err := getUserIDFromContext(c)
@@ -68,7 +69,7 @@ func (h *Handler) EnrollFactor(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// ListFactors handles GET /mfa/factors
+// ListFactors handles GET /mfa/factors.
 func (h *Handler) ListFactors(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -88,7 +89,7 @@ func (h *Handler) ListFactors(c forge.Context) error {
 	return c.JSON(http.StatusOK, &FactorsResponse{Factors: factors, Count: len(factors)})
 }
 
-// GetFactor handles GET /mfa/factors/:id
+// GetFactor handles GET /mfa/factors/:id.
 func (h *Handler) GetFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -118,7 +119,7 @@ func (h *Handler) GetFactor(c forge.Context) error {
 	return c.JSON(http.StatusOK, factor)
 }
 
-// UpdateFactor handles PUT /mfa/factors/:id
+// UpdateFactor handles PUT /mfa/factors/:id.
 func (h *Handler) UpdateFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -140,21 +141,25 @@ func (h *Handler) UpdateFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
+
 	if factor.UserID != userID {
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
 
 	// Convert UpdateFactorRequest to map for service layer
-	updates := make(map[string]interface{})
+	updates := make(map[string]any)
 	if req.Name != nil {
 		updates["name"] = *req.Name
 	}
+
 	if req.Priority != nil {
 		updates["priority"] = *req.Priority
 	}
+
 	if req.Status != nil {
 		updates["status"] = *req.Status
 	}
+
 	if req.Metadata != nil {
 		updates["metadata"] = req.Metadata
 	}
@@ -166,7 +171,7 @@ func (h *Handler) UpdateFactor(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "factor updated"})
 }
 
-// DeleteFactor handles DELETE /mfa/factors/:id
+// DeleteFactor handles DELETE /mfa/factors/:id.
 func (h *Handler) DeleteFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -188,6 +193,7 @@ func (h *Handler) DeleteFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
+
 	if factor.UserID != userID {
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
@@ -199,7 +205,7 @@ func (h *Handler) DeleteFactor(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "factor deleted"})
 }
 
-// VerifyFactor handles POST /mfa/factors/:id/verify
+// VerifyFactor handles POST /mfa/factors/:id/verify.
 func (h *Handler) VerifyFactor(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -221,6 +227,7 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("MFA factor not found"))
 	}
+
 	if factor.UserID != userID {
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("access", "factor"))
 	}
@@ -234,7 +241,7 @@ func (h *Handler) VerifyFactor(c forge.Context) error {
 
 // ==================== Challenge & Verification ====================
 
-// InitiateChallenge handles POST /mfa/challenge
+// InitiateChallenge handles POST /mfa/challenge.
 func (h *Handler) InitiateChallenge(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -263,6 +270,7 @@ func (h *Handler) InitiateChallenge(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	req.Metadata["ip_address"] = ip
 	req.Metadata["user_agent"] = c.Request().UserAgent()
 
@@ -274,7 +282,7 @@ func (h *Handler) InitiateChallenge(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// VerifyChallenge handles POST /mfa/verify
+// VerifyChallenge handles POST /mfa/verify.
 func (h *Handler) VerifyChallenge(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -287,14 +295,7 @@ func (h *Handler) VerifyChallenge(c forge.Context) error {
 	}
 
 	// Create service request
-	req := VerificationRequest{
-		ChallengeID:    reqDTO.ChallengeID,
-		FactorID:       reqDTO.FactorID,
-		Code:           reqDTO.Code,
-		Data:           reqDTO.Data,
-		RememberDevice: reqDTO.RememberDevice,
-		DeviceInfo:     reqDTO.DeviceInfo,
-	}
+	req := VerificationRequest(reqDTO)
 
 	// Verify challenge belongs to user (done in service)
 	resp, err := h.service.VerifyChallenge(c.Request().Context(), &req)
@@ -307,7 +308,7 @@ func (h *Handler) VerifyChallenge(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// GetChallengeStatus handles GET /mfa/challenge/:id
+// GetChallengeStatus handles GET /mfa/challenge/:id.
 func (h *Handler) GetChallengeStatus(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -334,7 +335,7 @@ func (h *Handler) GetChallengeStatus(c forge.Context) error {
 
 // ==================== Trusted Devices ====================
 
-// TrustDevice handles POST /mfa/devices/trust
+// TrustDevice handles POST /mfa/devices/trust.
 func (h *Handler) TrustDevice(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -359,7 +360,7 @@ func (h *Handler) TrustDevice(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "device trusted"})
 }
 
-// ListTrustedDevices handles GET /mfa/devices
+// ListTrustedDevices handles GET /mfa/devices.
 func (h *Handler) ListTrustedDevices(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -374,7 +375,7 @@ func (h *Handler) ListTrustedDevices(c forge.Context) error {
 	return c.JSON(http.StatusOK, &DevicesResponse{Devices: devices, Count: len(devices)})
 }
 
-// RevokeTrustedDevice handles DELETE /mfa/devices/:id
+// RevokeTrustedDevice handles DELETE /mfa/devices/:id.
 func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -403,7 +404,7 @@ func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 
 // ==================== Status & Info ====================
 
-// GetStatus handles GET /mfa/status
+// GetStatus handles GET /mfa/status.
 func (h *Handler) GetStatus(c forge.Context) error {
 	userID, err := getUserIDFromContext(c)
 	if err != nil {
@@ -420,7 +421,7 @@ func (h *Handler) GetStatus(c forge.Context) error {
 	return c.JSON(http.StatusOK, status)
 }
 
-// GetPolicy handles GET /mfa/policy
+// GetPolicy handles GET /mfa/policy.
 func (h *Handler) GetPolicy(c forge.Context) error {
 	// TODO: Get organization ID from context
 	// For now, return config-based policy
@@ -440,7 +441,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 
 // ==================== Admin Endpoints ====================
 
-// AdminPolicyRequest represents a request to update MFA policy
+// AdminPolicyRequest represents a request to update MFA policy.
 type AdminPolicyRequest struct {
 	RequiredFactors int      `json:"requiredFactors"` // Number of factors required
 	AllowedTypes    []string `json:"allowedTypes"`    // e.g., ["totp", "sms", "email", "webauthn", "backup"]
@@ -448,7 +449,7 @@ type AdminPolicyRequest struct {
 	Enabled         bool     `json:"enabled"`         // Enable/disable MFA requirement
 }
 
-// AdminBypassRequest represents a request to grant temporary MFA bypass
+// AdminBypassRequest represents a request to grant temporary MFA bypass.
 type AdminBypassRequest struct {
 	UserID   xid.ID `json:"userId"`
 	Duration int    `json:"duration"` // Bypass duration in seconds
@@ -456,7 +457,7 @@ type AdminBypassRequest struct {
 }
 
 // AdminGetPolicy handles GET /mfa/admin/policy
-// Gets the current MFA policy for an app
+// Gets the current MFA policy for an app.
 func (h *Handler) AdminGetPolicy(c forge.Context) error {
 	_ = c.Request().Context() // ctx for future use
 
@@ -477,7 +478,7 @@ func (h *Handler) AdminGetPolicy(c forge.Context) error {
 
 	// TODO: Load policy from database for this app
 	// For now, return default policy
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"appId":           appID.String(),
 		"requiredFactors": 1,
 		"allowedTypes":    []string{"totp", "sms", "email", "webauthn", "backup"},
@@ -489,7 +490,7 @@ func (h *Handler) AdminGetPolicy(c forge.Context) error {
 }
 
 // AdminUpdatePolicy handles PUT /mfa/admin/policy
-// Updates the MFA policy for an app (admin only)
+// Updates the MFA policy for an app (admin only).
 func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -501,6 +502,7 @@ func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
 
 	// Get org context (optional)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -537,7 +539,7 @@ func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
 }
 
 // AdminGrantBypass handles POST /mfa/admin/bypass
-// Grants temporary MFA bypass for a user (admin only)
+// Grants temporary MFA bypass for a user (admin only).
 func (h *Handler) AdminGrantBypass(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -586,7 +588,7 @@ func (h *Handler) AdminGrantBypass(c forge.Context) error {
 }
 
 // AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
-// Resets all MFA factors for a user (admin only)
+// Resets all MFA factors for a user (admin only).
 func (h *Handler) AdminResetUserMFA(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -622,7 +624,7 @@ func (h *Handler) AdminResetUserMFA(c forge.Context) error {
 		return handleError(c, err, "RESET_MFA_FAILED", "Failed to reset user MFA", http.StatusInternalServerError)
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"message": "MFA reset successfully",
 		"userId":  userID.String(),
 		"appId":   appID.String(),
@@ -631,30 +633,34 @@ func (h *Handler) AdminResetUserMFA(c forge.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// getUserAppID extracts app ID from request context
+// getUserAppID extracts app ID from request context.
 func getUserAppID(c forge.Context) xid.ID {
 	appID, ok := contexts.GetAppID(c.Request().Context())
 	if !ok {
 		return xid.NilID()
 	}
+
 	return appID
 }
 
 // ==================== Helper Functions ====================
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// getUserIDFromContext extracts user ID from request context
+// getUserIDFromContext extracts user ID from request context.
 func getUserIDFromContext(c forge.Context) (xid.ID, error) {
 	userID, err := contexts.RequireUserID(c.Request().Context())
 	if err != nil {
 		return xid.NilID(), err
 	}
+
 	return userID, nil
 }

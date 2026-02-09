@@ -1,7 +1,7 @@
 package anonymous
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -23,41 +23,43 @@ func NewHandler(s *Service, authInst core.Authsome) *Handler {
 	return &Handler{svc: s, authInst: authInst}
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 
-// Request types
+// Request types.
 type SignInRequest struct {
 	// Empty for now, could add options later
 }
 
 type LinkRequest struct {
-	Email    string `json:"email" validate:"required,email" example:"user@example.com"`
-	Password string `json:"password" validate:"required,min=8" example:"password123"`
-	Name     string `json:"name" example:"John Doe"`
+	Email    string `example:"user@example.com" json:"email"    validate:"required,email"`
+	Password string `example:"password123"      json:"password" validate:"required,min=8"`
+	Name     string `example:"John Doe"         json:"name"`
 }
 
-// Plugin-specific responses
+// Plugin-specific responses.
 type SignInResponse struct {
-	Token   string      `json:"token" example:"session_token_abc123"`
-	Session interface{} `json:"session"`
-	User    interface{} `json:"user"`
+	Token   string `example:"session_token_abc123" json:"token"`
+	Session any    `json:"session"`
+	User    any    `json:"user"`
 }
 
 type LinkResponse struct {
-	User    interface{} `json:"user"`
-	Message string      `json:"message"`
+	User    any    `json:"user"`
+	Message string `json:"message"`
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// SignIn creates a guest user and session
+// SignIn creates a guest user and session.
 func (h *Handler) SignIn(c forge.Context) error {
 	// Get app and environment context
 	appID, ok := contexts.GetAppID(c.Request().Context())
@@ -72,6 +74,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	// Get optional organization context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -79,6 +82,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 
 	// Optional body (for future extensions)
 	var req SignInRequest
+
 	_ = c.BindRequest(&req)
 
 	// Create guest session
@@ -102,7 +106,7 @@ func (h *Handler) SignIn(c forge.Context) error {
 	})
 }
 
-// Link upgrades an anonymous session to a real account
+// Link upgrades an anonymous session to a real account.
 func (h *Handler) Link(c forge.Context) error {
 	var req LinkRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -114,6 +118,7 @@ func (h *Handler) Link(c forge.Context) error {
 	if ck, err := c.Request().Cookie("session_token"); err == nil && ck != nil {
 		token = ck.Value
 	}
+
 	if token == "" {
 		// Try Authorization header
 		if authHeader := c.Request().Header.Get("Authorization"); authHeader != "" {
@@ -132,6 +137,6 @@ func (h *Handler) Link(c forge.Context) error {
 
 	return c.JSON(http.StatusOK, LinkResponse{
 		User:    u,
-		Message: fmt.Sprintf("Successfully linked account to %s", u.Email),
+		Message: "Successfully linked account to " + u.Email,
 	})
 }

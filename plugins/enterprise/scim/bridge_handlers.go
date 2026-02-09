@@ -2,7 +2,6 @@ package scim
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/rs/xid"
@@ -15,12 +14,12 @@ import (
 // Bridge Function Types
 // =============================================================================
 
-// GetOverviewInput is the input for getting SCIM overview
+// GetOverviewInput is the input for getting SCIM overview.
 type GetOverviewInput struct {
 	AppID string `json:"appId"`
 }
 
-// GetOverviewOutput is the output for SCIM overview
+// GetOverviewOutput is the output for SCIM overview.
 type GetOverviewOutput struct {
 	Stats          OverviewStats         `json:"stats"`
 	RecentActivity []ActivityItem        `json:"recentActivity"`
@@ -28,7 +27,7 @@ type GetOverviewOutput struct {
 	QuickActions   []QuickActionItem     `json:"quickActions"`
 }
 
-// OverviewStats contains overview statistics
+// OverviewStats contains overview statistics.
 type OverviewStats struct {
 	TotalProviders   int    `json:"totalProviders,omitempty"`
 	ActiveProviders  int    `json:"activeProviders,omitempty"`
@@ -40,7 +39,7 @@ type OverviewStats struct {
 	SyncErrors       int    `json:"syncErrors,omitempty"`
 }
 
-// ActivityItem represents a recent activity item
+// ActivityItem represents a recent activity item.
 type ActivityItem struct {
 	ID          string `json:"id"`
 	Type        string `json:"type,omitempty"`
@@ -50,7 +49,7 @@ type ActivityItem struct {
 	Provider    string `json:"provider,omitempty"`
 }
 
-// ProviderSummaryItem represents a provider summary
+// ProviderSummaryItem represents a provider summary.
 type ProviderSummaryItem struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
@@ -61,7 +60,7 @@ type ProviderSummaryItem struct {
 	GroupCount int    `json:"groupCount,omitempty"`
 }
 
-// QuickActionItem represents a quick action
+// QuickActionItem represents a quick action.
 type QuickActionItem struct {
 	ID          string `json:"id"`
 	Label       string `json:"label"`
@@ -70,7 +69,7 @@ type QuickActionItem struct {
 	Action      string `json:"action"`
 }
 
-// GetProvidersInput is the input for listing providers
+// GetProvidersInput is the input for listing providers.
 type GetProvidersInput struct {
 	AppID    string `json:"appId"`
 	Page     int    `json:"page,omitempty"`
@@ -79,7 +78,7 @@ type GetProvidersInput struct {
 	Status   string `json:"status,omitempty"`
 }
 
-// ProviderItem represents a SCIM provider
+// ProviderItem represents a SCIM provider.
 type ProviderItem struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
@@ -93,7 +92,7 @@ type ProviderItem struct {
 	CreatedAt      string `json:"createdAt"`
 }
 
-// GetProvidersOutput is the output for listing providers
+// GetProvidersOutput is the output for listing providers.
 type GetProvidersOutput struct {
 	Providers  []ProviderItem `json:"providers"`
 	Total      int            `json:"total"`
@@ -102,13 +101,13 @@ type GetProvidersOutput struct {
 	TotalPages int            `json:"totalPages"`
 }
 
-// GetProviderInput is the input for getting a provider
+// GetProviderInput is the input for getting a provider.
 type GetProviderInput struct {
 	AppID      string `json:"appId"`
 	ProviderID string `json:"providerId"`
 }
 
-// ProviderDetailOutput is the output for provider details
+// ProviderDetailOutput is the output for provider details.
 type ProviderDetailOutput struct {
 	Provider      ProviderItem        `json:"provider"`
 	Configuration ProviderConfig      `json:"configuration"`
@@ -116,7 +115,7 @@ type ProviderDetailOutput struct {
 	Stats         BridgeProviderStats `json:"stats"`
 }
 
-// ProviderConfig represents provider configuration
+// ProviderConfig represents provider configuration.
 type ProviderConfig struct {
 	EndpointURL       string   `json:"endpointUrl,omitempty"`
 	AuthMethod        string   `json:"authMethod,omitempty"`
@@ -129,7 +128,7 @@ type ProviderConfig struct {
 	AttributeMappings []string `json:"attributeMappings,omitempty"`
 }
 
-// SyncHistoryItem represents a sync history entry
+// SyncHistoryItem represents a sync history entry.
 type SyncHistoryItem struct {
 	ID            string `json:"id"`
 	StartTime     string `json:"startTime"`
@@ -144,7 +143,7 @@ type SyncHistoryItem struct {
 	ErrorMessage  string `json:"errorMessage,omitempty"`
 }
 
-// BridgeProviderStats contains provider statistics for bridge
+// BridgeProviderStats contains provider statistics for bridge.
 type BridgeProviderStats struct {
 	TotalUsers       int    `json:"totalUsers,omitempty"`
 	TotalGroups      int    `json:"totalGroups,omitempty"`
@@ -155,7 +154,7 @@ type BridgeProviderStats struct {
 	LastSyncDuration string `json:"lastSyncDuration,omitempty"`
 }
 
-// CreateProviderInput is the input for creating a provider
+// CreateProviderInput is the input for creating a provider.
 type CreateProviderInput struct {
 	AppID           string `json:"appId"`
 	Name            string `json:"name"`
@@ -166,13 +165,13 @@ type CreateProviderInput struct {
 	EnableGroupSync bool   `json:"enableGroupSync,omitempty"`
 }
 
-// CreateProviderOutput is the output for creating a provider
+// CreateProviderOutput is the output for creating a provider.
 type CreateProviderOutput struct {
 	Provider ProviderItem `json:"provider"`
 	Token    string       `json:"token"`
 }
 
-// UpdateProviderInput is the input for updating a provider
+// UpdateProviderInput is the input for updating a provider.
 type UpdateProviderInput struct {
 	AppID           string `json:"appId"`
 	ProviderID      string `json:"providerId"`
@@ -186,33 +185,33 @@ type UpdateProviderInput struct {
 	DefaultRole     string `json:"defaultRole,omitempty"`
 }
 
-// DeleteProviderInput is the input for deleting a provider
+// DeleteProviderInput is the input for deleting a provider.
 type DeleteProviderInput struct {
 	AppID      string `json:"appId"`
 	ProviderID string `json:"providerId"`
 }
 
-// TriggerSyncInput is the input for triggering a sync
+// TriggerSyncInput is the input for triggering a sync.
 type TriggerSyncInput struct {
 	AppID      string `json:"appId"`
 	ProviderID string `json:"providerId"`
 	FullSync   bool   `json:"fullSync,omitempty"`
 }
 
-// TriggerSyncOutput is the output for triggering a sync
+// TriggerSyncOutput is the output for triggering a sync.
 type TriggerSyncOutput struct {
 	SyncID  string `json:"syncId,omitempty"`
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
 }
 
-// TestConnectionInput is the input for testing a connection
+// TestConnectionInput is the input for testing a connection.
 type TestConnectionInput struct {
 	AppID      string `json:"appId"`
 	ProviderID string `json:"providerId"`
 }
 
-// TestConnectionOutput is the output for testing a connection
+// TestConnectionOutput is the output for testing a connection.
 type TestConnectionOutput struct {
 	Success      bool   `json:"success"`
 	Message      string `json:"message,omitempty"`
@@ -220,14 +219,14 @@ type TestConnectionOutput struct {
 	Details      string `json:"details,omitempty"`
 }
 
-// GetTokensInput is the input for listing tokens
+// GetTokensInput is the input for listing tokens.
 type GetTokensInput struct {
 	AppID    string `json:"appId"`
 	Page     int    `json:"page,omitempty"`
 	PageSize int    `json:"pageSize,omitempty"`
 }
 
-// TokenItem represents a SCIM token
+// TokenItem represents a SCIM token.
 type TokenItem struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
@@ -240,7 +239,7 @@ type TokenItem struct {
 	CreatedAt   string   `json:"createdAt"`
 }
 
-// GetTokensOutput is the output for listing tokens
+// GetTokensOutput is the output for listing tokens.
 type GetTokensOutput struct {
 	Tokens     []TokenItem `json:"tokens"`
 	Total      int         `json:"total"`
@@ -249,7 +248,7 @@ type GetTokensOutput struct {
 	TotalPages int         `json:"totalPages"`
 }
 
-// CreateTokenInput is the input for creating a token
+// CreateTokenInput is the input for creating a token.
 type CreateTokenInput struct {
 	AppID       string   `json:"appId"`
 	Name        string   `json:"name"`
@@ -258,31 +257,31 @@ type CreateTokenInput struct {
 	ExpiresIn   int      `json:"expiresIn,omitempty"` // days
 }
 
-// CreateTokenOutput is the output for creating a token
+// CreateTokenOutput is the output for creating a token.
 type CreateTokenOutput struct {
 	Token     TokenItem `json:"token"`
 	PlainText string    `json:"plainText"` // Only shown once
 }
 
-// RevokeTokenInput is the input for revoking a token
+// RevokeTokenInput is the input for revoking a token.
 type RevokeTokenInput struct {
 	AppID   string `json:"appId"`
 	TokenID string `json:"tokenId"`
 }
 
-// RotateTokenInput is the input for rotating a token
+// RotateTokenInput is the input for rotating a token.
 type RotateTokenInput struct {
 	AppID   string `json:"appId"`
 	TokenID string `json:"tokenId"`
 }
 
-// RotateTokenOutput is the output for rotating a token
+// RotateTokenOutput is the output for rotating a token.
 type RotateTokenOutput struct {
 	Token     TokenItem `json:"token"`
 	PlainText string    `json:"plainText"` // Only shown once
 }
 
-// GetLogsInput is the input for getting logs
+// GetLogsInput is the input for getting logs.
 type GetLogsInput struct {
 	AppID      string `json:"appId"`
 	Page       int    `json:"page,omitempty"`
@@ -294,7 +293,7 @@ type GetLogsInput struct {
 	EndDate    string `json:"endDate,omitempty"`
 }
 
-// LogItem represents a SCIM log entry
+// LogItem represents a SCIM log entry.
 type LogItem struct {
 	ID         string `json:"id"`
 	EventType  string `json:"eventType,omitempty"`
@@ -307,7 +306,7 @@ type LogItem struct {
 	Timestamp  string `json:"timestamp"`
 }
 
-// GetLogsOutput is the output for getting logs
+// GetLogsOutput is the output for getting logs.
 type GetLogsOutput struct {
 	Logs       []LogItem `json:"logs"`
 	Total      int       `json:"total"`
@@ -316,12 +315,12 @@ type GetLogsOutput struct {
 	TotalPages int       `json:"totalPages"`
 }
 
-// GetConfigInput is the input for getting configuration
+// GetConfigInput is the input for getting configuration.
 type GetConfigInput struct {
 	AppID string `json:"appId"`
 }
 
-// SCIMConfigOutput is the output for SCIM configuration
+// SCIMConfigOutput is the output for SCIM configuration.
 type SCIMConfigOutput struct {
 	UserProvisioning BridgeUserProvisioningConfig `json:"userProvisioning"`
 	GroupSync        BridgeGroupSyncConfig        `json:"groupSync"`
@@ -329,7 +328,7 @@ type SCIMConfigOutput struct {
 	AttributeMapping BridgeAttributeMappingConfig `json:"attributeMapping"`
 }
 
-// BridgeUserProvisioningConfig contains user provisioning settings for bridge
+// BridgeUserProvisioningConfig contains user provisioning settings for bridge.
 type BridgeUserProvisioningConfig struct {
 	AutoActivate       bool   `json:"autoActivate,omitempty"`
 	SendWelcomeEmail   bool   `json:"sendWelcomeEmail,omitempty"`
@@ -338,7 +337,7 @@ type BridgeUserProvisioningConfig struct {
 	RequireEmailVerify bool   `json:"requireEmailVerify,omitempty"`
 }
 
-// BridgeGroupSyncConfig contains group sync settings for bridge
+// BridgeGroupSyncConfig contains group sync settings for bridge.
 type BridgeGroupSyncConfig struct {
 	Enabled       bool `json:"enabled,omitempty"`
 	SyncToTeams   bool `json:"syncToTeams,omitempty"`
@@ -347,7 +346,7 @@ type BridgeGroupSyncConfig struct {
 	DeleteOrphans bool `json:"deleteOrphans,omitempty"`
 }
 
-// BridgeSecurityConfig contains security settings for bridge
+// BridgeSecurityConfig contains security settings for bridge.
 type BridgeSecurityConfig struct {
 	RequireHTTPS     bool `json:"requireHttps,omitempty"`
 	RateLimitEnabled bool `json:"rateLimitEnabled,omitempty"`
@@ -356,7 +355,7 @@ type BridgeSecurityConfig struct {
 	AuditAllRequests bool `json:"auditAllRequests,omitempty"`
 }
 
-// BridgeAttributeMappingConfig contains attribute mapping settings for bridge
+// BridgeAttributeMappingConfig contains attribute mapping settings for bridge.
 type BridgeAttributeMappingConfig struct {
 	EmailMapping   string            `json:"emailMapping,omitempty"`
 	NameMapping    string            `json:"nameMapping,omitempty"`
@@ -365,7 +364,7 @@ type BridgeAttributeMappingConfig struct {
 	CustomMappings map[string]string `json:"customMappings,omitempty"`
 }
 
-// UpdateConfigInput is the input for updating configuration
+// UpdateConfigInput is the input for updating configuration.
 type UpdateConfigInput struct {
 	AppID            string                        `json:"appId"`
 	Section          string                        `json:"section"`
@@ -375,7 +374,7 @@ type UpdateConfigInput struct {
 	AttributeMapping *BridgeAttributeMappingConfig `json:"attributeMapping,omitempty"`
 }
 
-// GenericSuccessOutput is a generic success response
+// GenericSuccessOutput is a generic success response.
 type GenericSuccessOutput struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
@@ -385,7 +384,7 @@ type GenericSuccessOutput struct {
 // Bridge Handler Implementations
 // =============================================================================
 
-// bridgeGetOverview handles the getOverview bridge call
+// bridgeGetOverview handles the getOverview bridge call.
 func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOverviewInput) (*GetOverviewOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -404,6 +403,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 			if p.Status == "active" {
 				activeProviders++
 			}
+
 			providerSummaries = append(providerSummaries, ProviderSummaryItem{
 				ID:         p.ID.String(),
 				Name:       p.Name,
@@ -421,6 +421,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	orgID := xid.ID{}
 	tokens, _, _ := e.plugin.service.ListProvisioningTokens(goCtx, appID, envID, orgID, 100, 0)
 	activeTokens := 0
+
 	if tokens != nil {
 		for _, t := range tokens {
 			if t.RevokedAt == nil && (t.ExpiresAt == nil || t.ExpiresAt.After(time.Now())) {
@@ -433,6 +434,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	events, _ := e.plugin.service.GetRecentActivity(goCtx, appID, nil, 10)
 	recentActivity := []ActivityItem{}
 	syncErrors := 0
+
 	var lastSyncTime time.Time
 
 	if events != nil {
@@ -441,6 +443,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 			if ev.ErrorMessage != nil && *ev.ErrorMessage != "" {
 				description = *ev.ErrorMessage
 			}
+
 			recentActivity = append(recentActivity, ActivityItem{
 				ID:          ev.ID.String(),
 				Type:        ev.EventType,
@@ -452,6 +455,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 			if ev.Status == "error" || ev.Status == "failed" {
 				syncErrors++
 			}
+
 			if lastSyncTime.IsZero() || ev.CreatedAt.After(lastSyncTime) {
 				lastSyncTime = ev.CreatedAt
 			}
@@ -480,7 +484,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	}, nil
 }
 
-// bridgeGetProviders handles the getProviders bridge call
+// bridgeGetProviders handles the getProviders bridge call.
 func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetProvidersInput) (*GetProvidersOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -488,6 +492,7 @@ func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetPro
 	}
 
 	appID, _ := xid.FromString(input.AppID)
+
 	providers, err := e.plugin.service.ListProviders(goCtx, appID, nil)
 	if err != nil {
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch providers")
@@ -499,6 +504,7 @@ func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetPro
 		if p.BaseURL != nil {
 			endpointURL = *p.BaseURL
 		}
+
 		items = append(items, ProviderItem{
 			ID:             p.ID.String(),
 			Name:           p.Name,
@@ -514,26 +520,27 @@ func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetPro
 	}
 
 	// Apply pagination
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 25
 	}
 
 	total := len(items)
+
 	totalPages := total / pageSize
 	if total%pageSize > 0 {
 		totalPages++
 	}
 
 	start := (page - 1) * pageSize
+
 	end := start + pageSize
 	if start > total {
 		start = total
 	}
+
 	if end > total {
 		end = total
 	}
@@ -547,7 +554,7 @@ func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetPro
 	}, nil
 }
 
-// bridgeGetProvider handles the getProvider bridge call
+// bridgeGetProvider handles the getProvider bridge call.
 func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProviderInput) (*ProviderDetailOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -567,16 +574,19 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 	// Get sync history
 	events, _ := e.plugin.service.GetProviderSyncHistory(goCtx, providerID, 10)
 	syncHistory := make([]SyncHistoryItem, 0)
+
 	if events != nil {
 		for _, ev := range events {
 			errMsg := ""
 			if ev.ErrorMessage != nil {
 				errMsg = *ev.ErrorMessage
 			}
+
 			errCount := 0
 			if ev.Status == "failed" || ev.Status == "error" {
 				errCount = 1
 			}
+
 			syncHistory = append(syncHistory, SyncHistoryItem{
 				ID:            ev.ID.String(),
 				StartTime:     ev.CreatedAt.Format(time.RFC3339),
@@ -632,7 +642,7 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 	}, nil
 }
 
-// bridgeCreateProvider handles the createProvider bridge call
+// bridgeCreateProvider handles the createProvider bridge call.
 func (e *DashboardExtension) bridgeCreateProvider(ctx bridge.Context, input CreateProviderInput) (*CreateProviderOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -644,9 +654,10 @@ func (e *DashboardExtension) bridgeCreateProvider(ctx bridge.Context, input Crea
 	// Create token for this provider
 	envID := xid.ID{}
 	orgID := xid.ID{}
+
 	tokenPlainText, token, err := e.plugin.service.CreateProvisioningToken(goCtx, appID, envID, orgID, input.Name+" Token", "Auto-generated token for "+input.Name, []string{"users:read", "users:write", "groups:read", "groups:write"}, nil)
 	if err != nil {
-		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to create token: %s", err.Error()))
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to create token: "+err.Error())
 	}
 
 	// TODO: Actually create the provider once CreateProvider method is implemented
@@ -664,7 +675,7 @@ func (e *DashboardExtension) bridgeCreateProvider(ctx bridge.Context, input Crea
 	}, nil
 }
 
-// bridgeDeleteProvider handles the deleteProvider bridge call
+// bridgeDeleteProvider handles the deleteProvider bridge call.
 func (e *DashboardExtension) bridgeDeleteProvider(ctx bridge.Context, input DeleteProviderInput) (*GenericSuccessOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -686,7 +697,7 @@ func (e *DashboardExtension) bridgeDeleteProvider(ctx bridge.Context, input Dele
 	}, nil
 }
 
-// bridgeTriggerSync handles the triggerSync bridge call
+// bridgeTriggerSync handles the triggerSync bridge call.
 func (e *DashboardExtension) bridgeTriggerSync(ctx bridge.Context, input TriggerSyncInput) (*TriggerSyncOutput, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -706,7 +717,7 @@ func (e *DashboardExtension) bridgeTriggerSync(ctx bridge.Context, input Trigger
 	}, nil
 }
 
-// bridgeTestConnection handles the testConnection bridge call
+// bridgeTestConnection handles the testConnection bridge call.
 func (e *DashboardExtension) bridgeTestConnection(ctx bridge.Context, input TestConnectionInput) (*TestConnectionOutput, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -727,7 +738,7 @@ func (e *DashboardExtension) bridgeTestConnection(ctx bridge.Context, input Test
 	}, nil
 }
 
-// bridgeGetTokens handles the getTokens bridge call
+// bridgeGetTokens handles the getTokens bridge call.
 func (e *DashboardExtension) bridgeGetTokens(ctx bridge.Context, input GetTokensInput) (*GetTokensOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -737,6 +748,7 @@ func (e *DashboardExtension) bridgeGetTokens(ctx bridge.Context, input GetTokens
 	appID, _ := xid.FromString(input.AppID)
 	envID := xid.ID{}
 	orgID := xid.ID{}
+
 	tokens, _, err := e.plugin.service.ListProvisioningTokens(goCtx, appID, envID, orgID, 100, 0)
 	if err != nil {
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch tokens")
@@ -768,26 +780,27 @@ func (e *DashboardExtension) bridgeGetTokens(ctx bridge.Context, input GetTokens
 	}
 
 	// Apply pagination
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 25
 	}
 
 	total := len(items)
+
 	totalPages := total / pageSize
 	if total%pageSize > 0 {
 		totalPages++
 	}
 
 	start := (page - 1) * pageSize
+
 	end := start + pageSize
 	if start > total {
 		start = total
 	}
+
 	if end > total {
 		end = total
 	}
@@ -801,7 +814,7 @@ func (e *DashboardExtension) bridgeGetTokens(ctx bridge.Context, input GetTokens
 	}, nil
 }
 
-// bridgeCreateToken handles the createToken bridge call
+// bridgeCreateToken handles the createToken bridge call.
 func (e *DashboardExtension) bridgeCreateToken(ctx bridge.Context, input CreateTokenInput) (*CreateTokenOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -811,6 +824,7 @@ func (e *DashboardExtension) bridgeCreateToken(ctx bridge.Context, input CreateT
 	appID, _ := xid.FromString(input.AppID)
 
 	var expiresAt *time.Time
+
 	if input.ExpiresIn > 0 {
 		exp := time.Now().AddDate(0, 0, input.ExpiresIn)
 		expiresAt = &exp
@@ -818,9 +832,10 @@ func (e *DashboardExtension) bridgeCreateToken(ctx bridge.Context, input CreateT
 
 	envID := xid.ID{}
 	orgID := xid.ID{}
+
 	plainText, token, err := e.plugin.service.CreateProvisioningToken(goCtx, appID, envID, orgID, input.Name, input.Description, input.Scopes, expiresAt)
 	if err != nil {
-		return nil, bridge.NewError(bridge.ErrCodeInternal, fmt.Sprintf("failed to create token: %s", err.Error()))
+		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to create token: "+err.Error())
 	}
 
 	// Get token prefix
@@ -844,7 +859,7 @@ func (e *DashboardExtension) bridgeCreateToken(ctx bridge.Context, input CreateT
 	}, nil
 }
 
-// bridgeRevokeToken handles the revokeToken bridge call
+// bridgeRevokeToken handles the revokeToken bridge call.
 func (e *DashboardExtension) bridgeRevokeToken(ctx bridge.Context, input RevokeTokenInput) (*GenericSuccessOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -861,7 +876,7 @@ func (e *DashboardExtension) bridgeRevokeToken(ctx bridge.Context, input RevokeT
 	}, nil
 }
 
-// bridgeRotateToken handles the rotateToken bridge call
+// bridgeRotateToken handles the rotateToken bridge call.
 func (e *DashboardExtension) bridgeRotateToken(ctx bridge.Context, input RotateTokenInput) (*RotateTokenOutput, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -873,7 +888,7 @@ func (e *DashboardExtension) bridgeRotateToken(ctx bridge.Context, input RotateT
 	return nil, bridge.NewError(bridge.ErrCodeInternal, "token rotation not yet implemented - please revoke and create a new token")
 }
 
-// bridgeGetLogs handles the getLogs bridge call
+// bridgeGetLogs handles the getLogs bridge call.
 func (e *DashboardExtension) bridgeGetLogs(ctx bridge.Context, input GetLogsInput) (*GetLogsOutput, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -882,10 +897,8 @@ func (e *DashboardExtension) bridgeGetLogs(ctx bridge.Context, input GetLogsInpu
 
 	appID, _ := xid.FromString(input.AppID)
 
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 25
@@ -902,10 +915,12 @@ func (e *DashboardExtension) bridgeGetLogs(ctx bridge.Context, input GetLogsInpu
 		if ev.ResourceID != nil {
 			resourceID = ev.ResourceID.String()
 		}
+
 		details := ""
 		if ev.ErrorMessage != nil {
 			details = *ev.ErrorMessage
 		}
+
 		items = append(items, LogItem{
 			ID:         ev.ID.String(),
 			EventType:  ev.EventType,
@@ -920,6 +935,7 @@ func (e *DashboardExtension) bridgeGetLogs(ctx bridge.Context, input GetLogsInpu
 	}
 
 	total := len(items)
+
 	totalPages := total / pageSize
 	if total%pageSize > 0 {
 		totalPages++
@@ -934,7 +950,7 @@ func (e *DashboardExtension) bridgeGetLogs(ctx bridge.Context, input GetLogsInpu
 	}, nil
 }
 
-// bridgeGetConfig handles the getConfig bridge call
+// bridgeGetConfig handles the getConfig bridge call.
 func (e *DashboardExtension) bridgeGetConfig(ctx bridge.Context, input GetConfigInput) (*SCIMConfigOutput, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -970,7 +986,7 @@ func (e *DashboardExtension) bridgeGetConfig(ctx bridge.Context, input GetConfig
 	}, nil
 }
 
-// bridgeUpdateConfig handles the updateConfig bridge call
+// bridgeUpdateConfig handles the updateConfig bridge call.
 func (e *DashboardExtension) bridgeUpdateConfig(ctx bridge.Context, input UpdateConfigInput) (*GenericSuccessOutput, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -1012,7 +1028,7 @@ func (e *DashboardExtension) bridgeUpdateConfig(ctx bridge.Context, input Update
 // Bridge Registration
 // =============================================================================
 
-// getBridgeFunctions returns the bridge functions for registration
+// getBridgeFunctions returns the bridge functions for registration.
 func (e *DashboardExtension) getBridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		// Overview
@@ -1097,7 +1113,7 @@ func (e *DashboardExtension) getBridgeFunctions() []ui.BridgeFunction {
 // Helper Functions
 // =============================================================================
 
-// buildContextFromBridge creates a Go context from a bridge context with app/env IDs
+// buildContextFromBridge creates a Go context from a bridge context with app/env IDs.
 func (e *DashboardExtension) buildContextFromBridge(ctx bridge.Context, appIDStr string) (context.Context, error) {
 	var goCtx context.Context
 	if req := ctx.Request(); req != nil {
@@ -1111,27 +1127,31 @@ func (e *DashboardExtension) buildContextFromBridge(ctx bridge.Context, appIDStr
 		if err != nil {
 			return nil, bridge.NewError(bridge.ErrCodeBadRequest, "invalid appId")
 		}
+
 		goCtx = contexts.SetAppID(goCtx, appID)
 	}
 
 	return goCtx, nil
 }
 
-// formatTime formats a time pointer to string
+// formatTime formats a time pointer to string.
 func formatTime(t *time.Time) string {
 	if t == nil || t.IsZero() {
 		return ""
 	}
+
 	return t.Format(time.RFC3339)
 }
 
-// getProviderStatus returns the status string for a provider
+// getProviderStatus returns the status string for a provider.
 func getProviderStatus(p *SCIMProvider) string {
 	if p.Status != "active" {
 		return p.Status
 	}
+
 	if p.LastSyncStatus == "error" || p.LastSyncStatus == "failed" {
 		return "error"
 	}
+
 	return "active"
 }

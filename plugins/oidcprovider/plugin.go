@@ -3,9 +3,9 @@ package oidcprovider
 import (
 	"context"
 	"fmt"
-	"github.com/rs/xid"
 	"time"
 
+	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
@@ -13,13 +13,14 @@ import (
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/oidcprovider/deviceflow"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
-// Config represents the OIDC Provider configuration
+// Config represents the OIDC Provider configuration.
 type Config struct {
 	// Issuer URL for the OIDC Provider
 	Issuer string `json:"issuer"`
@@ -64,7 +65,7 @@ type Config struct {
 	} `json:"deviceFlow"`
 }
 
-// Plugin wires the OIDC Provider service and registers routes
+// Plugin wires the OIDC Provider service and registers routes.
 type Plugin struct {
 	db                  *bun.DB
 	service             *Service
@@ -78,24 +79,24 @@ type Plugin struct {
 	basePath            string // Base path from auth instance (e.g., "/api/identity")
 }
 
-// PluginOption is a functional option for configuring the OIDC provider plugin
+// PluginOption is a functional option for configuring the OIDC provider plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithIssuer sets the OIDC issuer URL
+// WithIssuer sets the OIDC issuer URL.
 func WithIssuer(issuer string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Issuer = issuer
 	}
 }
 
-// WithAudience sets the expected JWT audience for validation
+// WithAudience sets the expected JWT audience for validation.
 func WithAudience(audience string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Audience = audience
@@ -103,112 +104,112 @@ func WithAudience(audience string) PluginOption {
 }
 
 // WithJWTValidationEnabled enables JWT validation strategy
-// When enabled, OAuth/OIDC JWTs can be used to authenticate API requests globally
+// When enabled, OAuth/OIDC JWTs can be used to authenticate API requests globally.
 func WithJWTValidationEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnableJWTValidation = enabled
 	}
 }
 
-// WithPrivateKeyPath sets the path to the RSA private key file
+// WithPrivateKeyPath sets the path to the RSA private key file.
 func WithPrivateKeyPath(path string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Keys.PrivateKeyPath = path
 	}
 }
 
-// WithPublicKeyPath sets the path to the RSA public key file
+// WithPublicKeyPath sets the path to the RSA public key file.
 func WithPublicKeyPath(path string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Keys.PublicKeyPath = path
 	}
 }
 
-// WithKeyRotationInterval sets the key rotation interval
+// WithKeyRotationInterval sets the key rotation interval.
 func WithKeyRotationInterval(interval string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Keys.RotationInterval = interval
 	}
 }
 
-// WithKeyLifetime sets the key lifetime
+// WithKeyLifetime sets the key lifetime.
 func WithKeyLifetime(lifetime string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Keys.KeyLifetime = lifetime
 	}
 }
 
-// WithAccessTokenExpiry sets the access token expiry duration
+// WithAccessTokenExpiry sets the access token expiry duration.
 func WithAccessTokenExpiry(expiry string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Tokens.AccessTokenExpiry = expiry
 	}
 }
 
-// WithIDTokenExpiry sets the ID token expiry duration
+// WithIDTokenExpiry sets the ID token expiry duration.
 func WithIDTokenExpiry(expiry string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Tokens.IDTokenExpiry = expiry
 	}
 }
 
-// WithRefreshTokenExpiry sets the refresh token expiry duration
+// WithRefreshTokenExpiry sets the refresh token expiry duration.
 func WithRefreshTokenExpiry(expiry string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Tokens.RefreshTokenExpiry = expiry
 	}
 }
 
-// WithDeviceFlowEnabled enables or disables the device flow
+// WithDeviceFlowEnabled enables or disables the device flow.
 func WithDeviceFlowEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.Enabled = enabled
 	}
 }
 
-// WithDeviceFlowCodeExpiry sets the device code expiry duration
+// WithDeviceFlowCodeExpiry sets the device code expiry duration.
 func WithDeviceFlowCodeExpiry(expiry string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.CodeExpiry = expiry
 	}
 }
 
-// WithDeviceFlowUserCodeLength sets the length of the user code
+// WithDeviceFlowUserCodeLength sets the length of the user code.
 func WithDeviceFlowUserCodeLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.UserCodeLength = length
 	}
 }
 
-// WithDeviceFlowUserCodeFormat sets the format of the user code (e.g., "XXXX-XXXX")
+// WithDeviceFlowUserCodeFormat sets the format of the user code (e.g., "XXXX-XXXX").
 func WithDeviceFlowUserCodeFormat(format string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.UserCodeFormat = format
 	}
 }
 
-// WithDeviceFlowPollingInterval sets the polling interval in seconds
+// WithDeviceFlowPollingInterval sets the polling interval in seconds.
 func WithDeviceFlowPollingInterval(interval int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.PollingInterval = interval
 	}
 }
 
-// WithDeviceFlowVerificationURI sets the verification URI for device flow
+// WithDeviceFlowVerificationURI sets the verification URI for device flow.
 func WithDeviceFlowVerificationURI(uri string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.VerificationURI = uri
 	}
 }
 
-// WithDeviceFlowMaxPollAttempts sets the maximum number of polling attempts
+// WithDeviceFlowMaxPollAttempts sets the maximum number of polling attempts.
 func WithDeviceFlowMaxPollAttempts(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.MaxPollAttempts = max
 	}
 }
 
-// WithDeviceFlowCleanupInterval sets the cleanup interval for expired device codes
+// WithDeviceFlowCleanupInterval sets the cleanup interval for expired device codes.
 func WithDeviceFlowCleanupInterval(interval string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.CleanupInterval = interval
@@ -226,14 +227,14 @@ func WithDeviceFlowLoginURL(loginURL string) PluginOption {
 
 // WithDeviceFlowAPIMode enables API mode for device flow authentication
 // When enabled, returns JSON with loginUrl instead of HTTP redirect (better for SPAs/mobile apps)
-// Default is false (HTML redirect mode for backward compatibility)
+// Default is false (HTML redirect mode for backward compatibility).
 func WithDeviceFlowAPIMode(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.APIMode = enabled
 	}
 }
 
-// WithDeviceFlowConfig sets all device flow configuration at once
+// WithDeviceFlowConfig sets all device flow configuration at once.
 func WithDeviceFlowConfig(enabled bool, codeExpiry string, userCodeLength int, userCodeFormat string, pollingInterval int, verificationURI string, maxPollAttempts int, cleanupInterval string, loginURL string, apiMode bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DeviceFlow.Enabled = enabled
@@ -249,7 +250,7 @@ func WithDeviceFlowConfig(enabled bool, codeExpiry string, userCodeLength int, u
 	}
 }
 
-// NewPlugin creates a new OIDC provider plugin instance with optional configuration
+// NewPlugin creates a new OIDC provider plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		defaultConfig: DefaultConfig(),
@@ -264,30 +265,30 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 
 func (p *Plugin) ID() string { return "oidcprovider" }
 
-// loggerAdapter adapts forge.Logger to Printf interface
+// loggerAdapter adapts forge.Logger to Printf interface.
 type loggerAdapter struct {
 	logger forge.Logger
 }
 
-func (la *loggerAdapter) Printf(format string, args ...interface{}) {
+func (la *loggerAdapter) Printf(format string, args ...any) {
 	la.logger.Info(fmt.Sprintf(format, args...))
 }
 
-// Init accepts auth instance with GetDB method
+// Init accepts auth instance with GetDB method.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("oidcprovider plugin requires auth instance")
+		return errs.BadRequest("oidcprovider plugin requires auth instance")
 	}
 
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for oidcprovider plugin")
+		return errs.InternalServerErrorWithMessage("database not available for oidcprovider plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for oidcprovider plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for oidcprovider plugin")
 	}
 
 	// Initialize logger
@@ -323,6 +324,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get app context for key storage
 	appSvc := authInst.GetServiceRegistry().AppService()
 	appID := xid.NilID() // Use platform keys by default
+
 	if appSvc != nil {
 		// Try to get platform app ID
 		if platformApp, err := appSvc.GetPlatformApp(context.Background()); err == nil && platformApp != nil {
@@ -356,18 +358,23 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		if p.config.DeviceFlow.UserCodeLength > 0 {
 			deviceFlowConfig.UserCodeLength = p.config.DeviceFlow.UserCodeLength
 		}
+
 		if p.config.DeviceFlow.UserCodeFormat != "" {
 			deviceFlowConfig.UserCodeFormat = p.config.DeviceFlow.UserCodeFormat
 		}
+
 		if p.config.DeviceFlow.PollingInterval > 0 {
 			deviceFlowConfig.PollingInterval = p.config.DeviceFlow.PollingInterval
 		}
+
 		if p.config.DeviceFlow.VerificationURI != "" {
 			deviceFlowConfig.VerificationURI = p.config.DeviceFlow.VerificationURI
 		}
+
 		if p.config.DeviceFlow.MaxPollAttempts > 0 {
 			deviceFlowConfig.MaxPollAttempts = p.config.DeviceFlow.MaxPollAttempts
 		}
+
 		if p.config.DeviceFlow.CleanupInterval != "" {
 			if cleanup, err := time.ParseDuration(p.config.DeviceFlow.CleanupInterval); err == nil {
 				deviceFlowConfig.CleanupInterval = cleanup
@@ -441,22 +448,22 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterHooks registers plugin hooks
+// RegisterHooks registers plugin hooks.
 func (p *Plugin) RegisterHooks(hooksRegistry *hooks.HookRegistry) error {
 	// No hooks to register currently
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators
+// RegisterServiceDecorators registers service decorators.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// No service decorators to register currently
 	return nil
 }
 
-// RegisterRoutes mounts OIDC Provider endpoints
+// RegisterRoutes mounts OIDC Provider endpoints.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	// Create oauth2 group at root level (not under /api/auth)
@@ -667,18 +674,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	p.logger.Debug("OIDC provider routes registered")
+
 	return nil
 }
 
-// Migrate runs database migrations
+// Migrate runs database migrations.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
+
 	if p.db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerErrorWithMessage("database not available")
 	}
 
 	// Create tables
-	models := []interface{}{
+	models := []any{
 		(*schema.OAuthClient)(nil),
 		(*schema.AuthorizationCode)(nil),
 		(*schema.OAuthToken)(nil),
@@ -793,33 +802,36 @@ func (p *Plugin) Migrate() error {
 	}
 
 	p.logger.Info("OIDC provider migrations completed")
+
 	return nil
 }
 
 // DashboardExtension implements the PluginWithDashboardExtension interface
-// This allows the dashboard plugin to discover and register our UI components
+// This allows the dashboard plugin to discover and register our UI components.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	return p.dashboardExt
 }
 
-// RegisterExtensions registers the plugin with the extension registry (deprecated - use DashboardExtension)
-func (p *Plugin) RegisterExtensions(reg interface{}) error {
+// RegisterExtensions registers the plugin with the extension registry (deprecated - use DashboardExtension).
+func (p *Plugin) RegisterExtensions(reg any) error {
 	// Try to register dashboard extension
 	if dashReg, ok := reg.(interface {
-		Register(ext interface{}) error
+		Register(ext any) error
 	}); ok {
 		if err := dashReg.Register(p.dashboardExt); err != nil {
 			p.logger.Error("failed to register OIDC provider dashboard extension",
 				forge.F("error", err.Error()))
+
 			return err
 		}
+
 		p.logger.Info("OIDC provider dashboard extension registered")
 	}
 
 	return nil
 }
 
-// Shutdown performs cleanup when the plugin is shutting down
+// Shutdown performs cleanup when the plugin is shutting down.
 func (p *Plugin) Shutdown() error {
 	if p.service != nil {
 		p.service.StopKeyRotation()
@@ -828,16 +840,18 @@ func (p *Plugin) Shutdown() error {
 	// Stop device code cleanup if running
 	if p.deviceCleanupTicker != nil {
 		p.deviceCleanupTicker.Stop()
+
 		if p.deviceCleanupDone != nil {
 			close(p.deviceCleanupDone)
 		}
 	}
 
 	p.logger.Info("OIDC provider plugin shutdown complete")
+
 	return nil
 }
 
-// startDeviceCodeCleanup starts a background job to clean up expired device codes
+// startDeviceCodeCleanup starts a background job to clean up expired device codes.
 func (p *Plugin) startDeviceCodeCleanup(deviceFlowSvc *deviceflow.Service, interval time.Duration) {
 	if interval == 0 {
 		interval = 5 * time.Minute // Default to 5 minutes
@@ -877,6 +891,7 @@ func (p *Plugin) startDeviceCodeCleanup(deviceFlowSvc *deviceflow.Service, inter
 
 			case <-p.deviceCleanupDone:
 				p.logger.Info("device code cleanup job stopped")
+
 				return
 			}
 		}

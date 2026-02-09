@@ -22,7 +22,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the plugins.Plugin interface for Username auth
+// Plugin implements the plugins.Plugin interface for Username auth.
 type Plugin struct {
 	service       *Service
 	db            *bun.DB
@@ -33,7 +33,7 @@ type Plugin struct {
 	usernameRepo  *repo.UsernameRepository
 }
 
-// Config holds the username plugin configuration
+// Config holds the username plugin configuration.
 type Config struct {
 	// Password requirements (existing)
 	MinPasswordLength  int  `json:"minPasswordLength"`
@@ -63,7 +63,7 @@ type Config struct {
 	RateLimit RateLimitConfig `json:"rateLimit"`
 }
 
-// RateLimitConfig holds rate limiting configuration
+// RateLimitConfig holds rate limiting configuration.
 type RateLimitConfig struct {
 	Enabled       bool   `json:"enabled"`
 	UseRedis      bool   `json:"useRedis"`
@@ -76,13 +76,13 @@ type RateLimitConfig struct {
 	SignInPerUser RateLimitRule `json:"signinPerUser"`
 }
 
-// RateLimitRule defines a rate limit rule
+// RateLimitRule defines a rate limit rule.
 type RateLimitRule struct {
 	Window time.Duration `json:"window"`
 	Max    int           `json:"max"`
 }
 
-// DefaultConfig returns the default username plugin configuration
+// DefaultConfig returns the default username plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		// Password requirements
@@ -122,115 +122,115 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the username plugin
+// PluginOption is a functional option for configuring the username plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithMinPasswordLength sets the minimum password length
+// WithMinPasswordLength sets the minimum password length.
 func WithMinPasswordLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MinPasswordLength = length
 	}
 }
 
-// WithMaxPasswordLength sets the maximum password length
+// WithMaxPasswordLength sets the maximum password length.
 func WithMaxPasswordLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxPasswordLength = length
 	}
 }
 
-// WithRequireUppercase sets whether uppercase letters are required
+// WithRequireUppercase sets whether uppercase letters are required.
 func WithRequireUppercase(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireUppercase = required
 	}
 }
 
-// WithRequireLowercase sets whether lowercase letters are required
+// WithRequireLowercase sets whether lowercase letters are required.
 func WithRequireLowercase(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireLowercase = required
 	}
 }
 
-// WithRequireNumber sets whether numbers are required
+// WithRequireNumber sets whether numbers are required.
 func WithRequireNumber(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireNumber = required
 	}
 }
 
-// WithRequireSpecialChar sets whether special characters are required
+// WithRequireSpecialChar sets whether special characters are required.
 func WithRequireSpecialChar(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireSpecialChar = required
 	}
 }
 
-// WithAllowUsernameLogin sets whether username login is allowed
+// WithAllowUsernameLogin sets whether username login is allowed.
 func WithAllowUsernameLogin(allowed bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowUsernameLogin = allowed
 	}
 }
 
-// WithLockoutEnabled sets whether account lockout is enabled
+// WithLockoutEnabled sets whether account lockout is enabled.
 func WithLockoutEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.LockoutEnabled = enabled
 	}
 }
 
-// WithMaxFailedAttempts sets the maximum failed attempts before lockout
+// WithMaxFailedAttempts sets the maximum failed attempts before lockout.
 func WithMaxFailedAttempts(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxFailedAttempts = max
 	}
 }
 
-// WithLockoutDuration sets the account lockout duration
+// WithLockoutDuration sets the account lockout duration.
 func WithLockoutDuration(duration time.Duration) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.LockoutDuration = duration
 	}
 }
 
-// WithPasswordHistorySize sets the password history size
+// WithPasswordHistorySize sets the password history size.
 func WithPasswordHistorySize(size int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.PasswordHistorySize = size
 	}
 }
 
-// WithPreventPasswordReuse sets whether password reuse is prevented
+// WithPreventPasswordReuse sets whether password reuse is prevented.
 func WithPreventPasswordReuse(prevent bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.PreventPasswordReuse = prevent
 	}
 }
 
-// WithPasswordExpiryEnabled sets whether password expiry is enabled
+// WithPasswordExpiryEnabled sets whether password expiry is enabled.
 func WithPasswordExpiryEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.PasswordExpiryEnabled = enabled
 	}
 }
 
-// WithPasswordExpiryDays sets the password expiry days
+// WithPasswordExpiryDays sets the password expiry days.
 func WithPasswordExpiryDays(days int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.PasswordExpiryDays = days
 	}
 }
 
-// NewPlugin creates a new username plugin instance with optional configuration
+// NewPlugin creates a new username plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -247,10 +247,10 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 
 func (p *Plugin) ID() string { return "username" }
 
-// Init accepts auth instance with GetDB method
+// Init accepts auth instance with GetDB method.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("username plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("username plugin requires auth instance")
 	}
 
 	p.authInst = authInst
@@ -258,12 +258,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for username plugin")
+		return errs.InternalServerErrorWithMessage("database not available for username plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for username plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for username plugin")
 	}
 
 	// Initialize logger
@@ -305,7 +305,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers Username plugin routes
+// RegisterRoutes registers Username plugin routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
@@ -313,6 +313,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Setup rate limiting storage
 	var rateLimitStorage rl.Storage
+
 	if p.config.RateLimit.Enabled {
 		if p.config.RateLimit.UseRedis {
 			// Create Redis client for distributed rate limiting
@@ -327,14 +328,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			if err := redisClient.Ping(ctx).Err(); err != nil {
 				p.logger.Error("failed to connect to Redis, falling back to memory storage",
 					forge.F("error", err.Error()))
+
 				rateLimitStorage = storage.NewMemoryStorage()
 			} else {
 				rateLimitStorage = storage.NewRedisStorage(redisClient)
+
 				p.logger.Info("using Redis for rate limiting",
 					forge.F("addr", p.config.RateLimit.RedisAddr))
 			}
 		} else {
 			rateLimitStorage = storage.NewMemoryStorage()
+
 			p.logger.Info("using in-memory storage for rate limiting")
 		}
 	} else {
@@ -386,19 +390,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Username", "Authentication"),
 		forge.WithValidation(true),
 	)
+
 	return nil
 }
 
-// RegisterHooks placeholder
+// RegisterHooks placeholder.
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
 
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
-// Migrate creates database tables for username plugin features
+// Migrate creates database tables for username plugin features.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 
 	// Create failed_login_attempts table

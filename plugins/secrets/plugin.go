@@ -20,20 +20,20 @@ import (
 )
 
 const (
-	// PluginID is the unique identifier for the secrets plugin
+	// PluginID is the unique identifier for the secrets plugin.
 	PluginID = "secrets"
-	// PluginName is the human-readable name
+	// PluginName is the human-readable name.
 	PluginName = "Secrets Manager"
-	// PluginVersion is the current version
+	// PluginVersion is the current version.
 	PluginVersion = "1.0.0"
-	// PluginDescription describes the plugin
+	// PluginDescription describes the plugin.
 	PluginDescription = "Secure secrets and configuration management with encryption, versioning, and Forge ConfigSource integration"
 
-	// Environment variable for master key
+	// Environment variable for master key.
 	EnvMasterKey = "AUTHSOME_SECRETS_MASTER_KEY"
 )
 
-// Plugin implements the secrets management plugin for AuthSome
+// Plugin implements the secrets management plugin for AuthSome.
 type Plugin struct {
 	config        *Config
 	defaultConfig *Config
@@ -53,67 +53,72 @@ type Plugin struct {
 	dashboardExtOnce sync.Once
 }
 
-// PluginOption is a functional option for configuring the plugin
+// PluginOption is a functional option for configuring the plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration
+// WithDefaultConfig sets the default configuration.
 func WithDefaultConfig(cfg *Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithMasterKey sets the encryption master key
+// WithMasterKey sets the encryption master key.
 func WithMasterKey(key string) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Encryption.MasterKey = key
 	}
 }
 
-// WithConfigSourceEnabled enables the Forge ConfigSource integration
+// WithConfigSourceEnabled enables the Forge ConfigSource integration.
 func WithConfigSourceEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.ConfigSource.Enabled = enabled
 	}
 }
 
-// WithConfigSourcePrefix sets the config source prefix
+// WithConfigSourcePrefix sets the config source prefix.
 func WithConfigSourcePrefix(prefix string) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.ConfigSource.Prefix = prefix
 	}
 }
 
-// WithAuditEnabled enables/disables audit logging
+// WithAuditEnabled enables/disables audit logging.
 func WithAuditEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Audit.EnableAccessLog = enabled
 	}
 }
 
-// WithMaxVersions sets the maximum versions to keep
+// WithMaxVersions sets the maximum versions to keep.
 func WithMaxVersions(max int) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Versioning.MaxVersions = max
 	}
 }
 
-// NewPlugin creates a new secrets plugin instance
+// NewPlugin creates a new secrets plugin instance.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		defaultConfig: DefaultConfig(),
@@ -132,34 +137,34 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 // Plugin Interface Implementation
 // =============================================================================
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return PluginDescription
 }
 
 // Priority returns the plugin initialization priority
 // Lower values = higher priority (load first)
-// Secrets should load early to provide config values
+// Secrets should load early to provide config values.
 func (p *Plugin) Priority() int {
 	return -100 // High priority
 }
 
-// Init initializes the plugin with dependencies from the Auth instance
+// Init initializes the plugin with dependencies from the Auth instance.
 func (p *Plugin) Init(auth core.Authsome) error {
 	p.authInst = auth
 	p.db = auth.GetDB()
@@ -170,6 +175,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 
 	// Load configuration
 	configManager := forgeApp.Config()
+
 	p.config = p.defaultConfig
 	if p.config == nil {
 		p.config = DefaultConfig()
@@ -201,6 +207,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 
 	// Initialize encryption service
 	var err error
+
 	p.encryption, err = NewEncryptionService(p.config.Encryption.MasterKey)
 	if err != nil {
 		return errs.InternalServerError("failed to initialize encryption", err)
@@ -211,6 +218,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 		if err := p.encryption.TestEncryption(); err != nil {
 			return errs.InternalServerError("encryption test failed", err)
 		}
+
 		p.logger.Debug("encryption service verified")
 	}
 
@@ -240,10 +248,10 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
-		return fmt.Errorf("secrets handler not initialized; call Init first")
+		return errs.InternalServerErrorWithMessage("secrets handler not initialized; call Init first")
 	}
 
 	// API routes under /secrets
@@ -342,16 +350,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Secrets"))
 
 	p.logger.Debug("registered secrets routes")
+
 	return nil
 }
 
-// RegisterHooks registers the plugin's hooks
+// RegisterHooks registers the plugin's hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// Note: The hook registry doesn't support generic custom event hooks.
 	// Config source refresh is handled directly in the service methods.
 	// If auto-refresh is needed, the service will call refreshConfigSources after
 	// create/update/delete operations.
-
 	if p.config.ConfigSource.Enabled && p.config.ConfigSource.AutoRefresh {
 		p.logger.Debug("config source auto-refresh enabled; refresh will be triggered by service operations")
 	}
@@ -359,13 +367,13 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows the plugin to decorate core services
+// RegisterServiceDecorators allows the plugin to decorate core services.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// No service decorators needed for secrets plugin
 	return nil
 }
 
-// RegisterRoles registers RBAC roles for the plugin
+// RegisterRoles registers RBAC roles for the plugin.
 func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	// Register secrets admin role
 	err := roleRegistry.RegisterRole(&rbac.RoleDefinition{
@@ -399,18 +407,20 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	}
 
 	p.logger.Debug("registered secrets RBAC roles")
+
 	return nil
 }
 
-// DashboardExtension returns the dashboard extension for the plugin
+// DashboardExtension returns the dashboard extension for the plugin.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtOnce.Do(func() {
 		p.dashboardExt = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExt
 }
 
-// Migrate runs database migrations for the plugin
+// Migrate runs database migrations for the plugin.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
@@ -460,6 +470,7 @@ func (p *Plugin) Migrate() error {
 	}
 
 	p.logger.Info("secrets migrations completed")
+
 	return nil
 }
 
@@ -467,16 +478,17 @@ func (p *Plugin) Migrate() error {
 // ConfigSource Integration
 // =============================================================================
 
-// GetConfigSource returns a config source for the given app/environment
+// GetConfigSource returns a config source for the given app/environment.
 func (p *Plugin) GetConfigSource(appID, envID string) *SecretsConfigSource {
 	key := appID + ":" + envID
+
 	return p.configSources[key]
 }
 
-// CreateConfigSource creates a new config source for an app/environment
+// CreateConfigSource creates a new config source for an app/environment.
 func (p *Plugin) CreateConfigSource(appID, envID string) (*SecretsConfigSource, error) {
 	if !p.config.ConfigSource.Enabled {
-		return nil, fmt.Errorf("config source integration is not enabled")
+		return nil, errs.BadRequest("config source integration is not enabled")
 	}
 
 	key := appID + ":" + envID
@@ -497,10 +509,11 @@ func (p *Plugin) CreateConfigSource(appID, envID string) (*SecretsConfigSource, 
 	)
 
 	p.configSources[key] = source
+
 	return source, nil
 }
 
-// refreshConfigSources refreshes all config sources
+// refreshConfigSources refreshes all config sources.
 func (p *Plugin) refreshConfigSources(ctx context.Context) {
 	for _, source := range p.configSources {
 		if err := source.Reload(ctx); err != nil {
@@ -515,17 +528,17 @@ func (p *Plugin) refreshConfigSources(ctx context.Context) {
 // Public Accessors
 // =============================================================================
 
-// Service returns the secrets service
+// Service returns the secrets service.
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// Config returns the plugin configuration
+// Config returns the plugin configuration.
 func (p *Plugin) Config() *Config {
 	return p.config
 }
 
-// Logger returns the plugin logger
+// Logger returns the plugin logger.
 func (p *Plugin) Logger() forge.Logger {
 	return p.logger
 }

@@ -9,28 +9,26 @@ import (
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/identity/verificationsession"
 	"github.com/stripe/stripe-go/v79/webhook"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// StripeIdentityProvider implements the Provider interface for Stripe Identity
+// StripeIdentityProvider implements the Provider interface for Stripe Identity.
 type StripeIdentityProvider struct {
 	config  StripeIdentityConfig
 	useMock bool // Toggle between mock and real implementation
 }
 
-// NewStripeIdentityProvider creates a new Stripe Identity provider
+// NewStripeIdentityProvider creates a new Stripe Identity provider.
 func NewStripeIdentityProvider(config StripeIdentityConfig) (*StripeIdentityProvider, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("Stripe API key is required")
+		return nil, errs.RequiredField("api_key")
 	}
 
 	// Set Stripe API key
 	stripe.Key = config.APIKey
 
 	// Determine if we should use mock based on API key prefix
-	useMock := false
-	if config.UseMock || config.APIKey == "mock" || config.APIKey == "test_mock" {
-		useMock = true
-	}
+	useMock := config.UseMock || config.APIKey == "mock" || config.APIKey == "test_mock"
 
 	return &StripeIdentityProvider{
 		config:  config,
@@ -38,7 +36,7 @@ func NewStripeIdentityProvider(config StripeIdentityConfig) (*StripeIdentityProv
 	}, nil
 }
 
-// CreateSession creates a Stripe Identity verification session
+// CreateSession creates a Stripe Identity verification session.
 func (p *StripeIdentityProvider) CreateSession(ctx context.Context, req *ProviderSessionRequest) (*ProviderSession, error) {
 	// Use mock for testing/development
 	if p.useMock {
@@ -64,6 +62,7 @@ func (p *StripeIdentityProvider) CreateSession(ctx context.Context, req *Provide
 		for i, t := range p.config.AllowedTypes {
 			allowedTypes[i] = stripe.String(t)
 		}
+
 		params.Options.Document.AllowedTypes = allowedTypes
 	}
 
@@ -105,7 +104,7 @@ func (p *StripeIdentityProvider) CreateSession(ctx context.Context, req *Provide
 	}, nil
 }
 
-// GetSession retrieves a Stripe Identity verification session status
+// GetSession retrieves a Stripe Identity verification session status.
 func (p *StripeIdentityProvider) GetSession(ctx context.Context, sessionID string) (*ProviderSession, error) {
 	// Use mock for testing/development
 	if p.useMock {
@@ -130,7 +129,7 @@ func (p *StripeIdentityProvider) GetSession(ctx context.Context, sessionID strin
 	}, nil
 }
 
-// GetCheck retrieves a Stripe Identity verification result
+// GetCheck retrieves a Stripe Identity verification result.
 func (p *StripeIdentityProvider) GetCheck(ctx context.Context, sessionID string) (*ProviderCheckResult, error) {
 	// Use mock for testing/development
 	if p.useMock {
@@ -180,6 +179,7 @@ func (p *StripeIdentityProvider) GetCheck(ctx context.Context, sessionID string)
 		if outputs.FirstName != "" {
 			result.FirstName = outputs.FirstName
 		}
+
 		if outputs.LastName != "" {
 			result.LastName = outputs.LastName
 		}
@@ -189,8 +189,9 @@ func (p *StripeIdentityProvider) GetCheck(ctx context.Context, sessionID string)
 	if session.LastError != nil {
 		// Store error code in Properties for consistency with other providers
 		if result.Properties == nil {
-			result.Properties = make(map[string]interface{})
+			result.Properties = make(map[string]any)
 		}
+
 		result.Properties["error_code"] = string(session.LastError.Code)
 	}
 
@@ -213,10 +214,10 @@ func (p *StripeIdentityProvider) GetCheck(ctx context.Context, sessionID string)
 	return result, nil
 }
 
-// VerifyWebhook verifies a Stripe webhook signature
+// VerifyWebhook verifies a Stripe webhook signature.
 func (p *StripeIdentityProvider) VerifyWebhook(signature, payload string) (bool, error) {
 	if p.config.WebhookSecret == "" {
-		return false, fmt.Errorf("webhook secret not configured")
+		return false, errs.BadRequest("webhook secret not configured")
 	}
 
 	// Use mock for testing
@@ -231,7 +232,6 @@ func (p *StripeIdentityProvider) VerifyWebhook(signature, payload string) (bool,
 		signature,
 		p.config.WebhookSecret,
 	)
-
 	if err != nil {
 		return false, fmt.Errorf("webhook verification failed: %w", err)
 	}
@@ -239,7 +239,7 @@ func (p *StripeIdentityProvider) VerifyWebhook(signature, payload string) (bool,
 	return true, nil
 }
 
-// ParseWebhook parses a Stripe webhook payload
+// ParseWebhook parses a Stripe webhook payload.
 func (p *StripeIdentityProvider) ParseWebhook(payload []byte) (*WebhookPayload, error) {
 	var event stripe.Event
 	if err := json.Unmarshal(payload, &event); err != nil {
@@ -247,9 +247,9 @@ func (p *StripeIdentityProvider) ParseWebhook(payload []byte) (*WebhookPayload, 
 	}
 
 	// Convert RawMessage to map for RawPayload
-	var rawData map[string]interface{}
+	var rawData map[string]any
 	if err := json.Unmarshal(event.Data.Raw, &rawData); err != nil {
-		rawData = make(map[string]interface{})
+		rawData = make(map[string]any)
 	}
 
 	result := &WebhookPayload{
@@ -265,11 +265,13 @@ func (p *StripeIdentityProvider) ParseWebhook(payload []byte) (*WebhookPayload, 
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return nil, fmt.Errorf("failed to parse session: %w", err)
 		}
+
 		result.Status = string(session.Status)
 		// Store session ID in metadata
 		if result.RawPayload == nil {
-			result.RawPayload = make(map[string]interface{})
+			result.RawPayload = make(map[string]any)
 		}
+
 		result.RawPayload["session_id"] = session.ID
 
 	case "identity.verification_session.requires_input":
@@ -277,10 +279,12 @@ func (p *StripeIdentityProvider) ParseWebhook(payload []byte) (*WebhookPayload, 
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return nil, fmt.Errorf("failed to parse session: %w", err)
 		}
+
 		result.Status = string(session.Status)
 		if result.RawPayload == nil {
-			result.RawPayload = make(map[string]interface{})
+			result.RawPayload = make(map[string]any)
 		}
+
 		result.RawPayload["session_id"] = session.ID
 		if session.LastError != nil {
 			result.RawPayload["error_code"] = string(session.LastError.Code)
@@ -291,10 +295,12 @@ func (p *StripeIdentityProvider) ParseWebhook(payload []byte) (*WebhookPayload, 
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return nil, fmt.Errorf("failed to parse session: %w", err)
 		}
+
 		result.Status = "canceled"
 		if result.RawPayload == nil {
-			result.RawPayload = make(map[string]interface{})
+			result.RawPayload = make(map[string]any)
 		}
+
 		result.RawPayload["session_id"] = session.ID
 
 	case "identity.verification_session.processing":
@@ -302,17 +308,19 @@ func (p *StripeIdentityProvider) ParseWebhook(payload []byte) (*WebhookPayload, 
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return nil, fmt.Errorf("failed to parse session: %w", err)
 		}
+
 		result.Status = "processing"
 		if result.RawPayload == nil {
-			result.RawPayload = make(map[string]interface{})
+			result.RawPayload = make(map[string]any)
 		}
+
 		result.RawPayload["session_id"] = session.ID
 	}
 
 	return result, nil
 }
 
-// GetProviderName returns the provider name
+// GetProviderName returns the provider name.
 func (p *StripeIdentityProvider) GetProviderName() string {
 	return "stripe_identity"
 }

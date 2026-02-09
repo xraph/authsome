@@ -2,6 +2,7 @@ package scim
 
 import (
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
@@ -10,22 +11,22 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// OrganizationUIExtension implements ui.OrganizationUIExtension to extend organization pages
+// OrganizationUIExtension implements ui.OrganizationUIExtension to extend organization pages.
 type OrganizationUIExtension struct {
 	plugin *Plugin
 }
 
-// NewOrganizationUIExtension creates a new organization UI extension
+// NewOrganizationUIExtension creates a new organization UI extension.
 func NewOrganizationUIExtension(plugin *Plugin) *OrganizationUIExtension {
 	return &OrganizationUIExtension{plugin: plugin}
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *OrganizationUIExtension) ExtensionID() string {
 	return "scim"
 }
 
-// OrganizationWidgets returns widgets for the organization detail page
+// OrganizationWidgets returns widgets for the organization detail page.
 func (e *OrganizationUIExtension) OrganizationWidgets() []ui.OrganizationWidget {
 	return []ui.OrganizationWidget{
 		{
@@ -49,7 +50,7 @@ func (e *OrganizationUIExtension) OrganizationWidgets() []ui.OrganizationWidget 
 	}
 }
 
-// OrganizationTabs returns full-page tabs for organization content
+// OrganizationTabs returns full-page tabs for organization content.
 func (e *OrganizationUIExtension) OrganizationTabs() []ui.OrganizationTab {
 	return []ui.OrganizationTab{
 		{
@@ -82,7 +83,7 @@ func (e *OrganizationUIExtension) OrganizationTabs() []ui.OrganizationTab {
 	}
 }
 
-// OrganizationActions returns action buttons for the organization header
+// OrganizationActions returns action buttons for the organization header.
 func (e *OrganizationUIExtension) OrganizationActions() []ui.OrganizationAction {
 	return []ui.OrganizationAction{
 		{
@@ -97,7 +98,7 @@ func (e *OrganizationUIExtension) OrganizationActions() []ui.OrganizationAction 
 	}
 }
 
-// OrganizationQuickLinks returns quick access cards
+// OrganizationQuickLinks returns quick access cards.
 func (e *OrganizationUIExtension) OrganizationQuickLinks() []ui.OrganizationQuickLink {
 	return []ui.OrganizationQuickLink{
 		{
@@ -127,7 +128,7 @@ func (e *OrganizationUIExtension) OrganizationQuickLinks() []ui.OrganizationQuic
 	}
 }
 
-// OrganizationSettingsSections returns settings sections for org settings
+// OrganizationSettingsSections returns settings sections for org settings.
 func (e *OrganizationUIExtension) OrganizationSettingsSections() []ui.OrganizationSettingsSection {
 	return []ui.OrganizationSettingsSection{}
 }
@@ -290,9 +291,9 @@ func (e *OrganizationUIExtension) renderMonitoringTab(ctx ui.OrgExtensionContext
 		// Stats Grid
 		Div(
 			Class("grid grid-cols-1 md:grid-cols-3 gap-4"),
-			e.renderStatCard("Total Syncs", fmt.Sprintf("%d", stats.TotalSyncs), lucide.RefreshCw(Class("size-6 text-indigo-600"))),
+			e.renderStatCard("Total Syncs", strconv.Itoa(stats.TotalSyncs), lucide.RefreshCw(Class("size-6 text-indigo-600"))),
 			e.renderStatCard("Success Rate", fmt.Sprintf("%.1f%%", stats.SuccessRate), lucide.Check(Class("size-6 text-green-600"))),
-			e.renderStatCard("Failed", fmt.Sprintf("%d", stats.FailedSyncs), lucide.X(Class("size-6 text-red-600"))),
+			e.renderStatCard("Failed", strconv.Itoa(stats.FailedSyncs), lucide.X(Class("size-6 text-red-600"))),
 		),
 
 		// Recent Events
@@ -416,7 +417,7 @@ func (e *OrganizationUIExtension) renderProviderCard(ctx ui.OrgExtensionContext,
 					g.Text(provider.Type)),
 			),
 			Div(
-				Class(fmt.Sprintf("flex items-center gap-1 text-sm %s", statusColor)),
+				Class("flex items-center gap-1 text-sm "+statusColor),
 				statusIcon,
 				g.Text(statusText),
 			),

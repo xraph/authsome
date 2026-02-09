@@ -2,7 +2,6 @@ package mfa
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
@@ -18,7 +17,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the plugins.Plugin interface for Multi-Factor Authentication
+// Plugin implements the plugins.Plugin interface for Multi-Factor Authentication.
 type Plugin struct {
 	db              *bun.DB
 	service         *Service
@@ -35,38 +34,38 @@ type Plugin struct {
 	// passkeyService  *passkey.Service // Uncomment when passkey is stable
 }
 
-// PluginOption is a functional option for configuring the MFA plugin
+// PluginOption is a functional option for configuring the MFA plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg *Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithEnabled sets whether MFA is enabled
+// WithEnabled sets whether MFA is enabled.
 func WithEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Enabled = enabled
 	}
 }
 
-// WithRequireForAllUsers sets whether MFA is required for all users
+// WithRequireForAllUsers sets whether MFA is required for all users.
 func WithRequireForAllUsers(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireForAllUsers = required
 	}
 }
 
-// WithGracePeriodDays sets the grace period in days
+// WithGracePeriodDays sets the grace period in days.
 func WithGracePeriodDays(days int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.GracePeriodDays = days
 	}
 }
 
-// WithTOTP sets the TOTP configuration
+// WithTOTP sets the TOTP configuration.
 func WithTOTP(enabled bool, issuer string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.TOTP.Enabled = enabled
@@ -74,7 +73,7 @@ func WithTOTP(enabled bool, issuer string) PluginOption {
 	}
 }
 
-// WithSMS sets the SMS configuration
+// WithSMS sets the SMS configuration.
 func WithSMS(enabled bool, codeLength, expiryMinutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SMS.Enabled = enabled
@@ -83,7 +82,7 @@ func WithSMS(enabled bool, codeLength, expiryMinutes int) PluginOption {
 	}
 }
 
-// WithEmail sets the email configuration
+// WithEmail sets the email configuration.
 func WithEmail(enabled bool, codeLength, expiryMinutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Email.Enabled = enabled
@@ -92,7 +91,7 @@ func WithEmail(enabled bool, codeLength, expiryMinutes int) PluginOption {
 	}
 }
 
-// WithBackupCodes sets the backup codes configuration
+// WithBackupCodes sets the backup codes configuration.
 func WithBackupCodes(enabled bool, count, length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.BackupCodes.Enabled = enabled
@@ -101,7 +100,7 @@ func WithBackupCodes(enabled bool, count, length int) PluginOption {
 	}
 }
 
-// WithAdaptiveMFA sets the adaptive MFA configuration
+// WithAdaptiveMFA sets the adaptive MFA configuration.
 func WithAdaptiveMFA(enabled bool, threshold float64) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AdaptiveMFA.Enabled = enabled
@@ -109,7 +108,7 @@ func WithAdaptiveMFA(enabled bool, threshold float64) PluginOption {
 	}
 }
 
-// NewPlugin creates a new MFA plugin with optional configuration
+// NewPlugin creates a new MFA plugin with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -127,12 +126,12 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "mfa"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
 		return errs.InternalServerError("auth instance is nil", nil)
@@ -196,7 +195,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	return nil
 }
 
-// initializeDependentServices initializes services from other plugins
+// initializeDependentServices initializes services from other plugins.
 func (p *Plugin) initializeDependentServices(db *bun.DB, authInstance core.Authsome) {
 	// Initialize twofa service (for TOTP and backup codes)
 	twofaRepo := repo.NewTwoFARepository(db)
@@ -246,7 +245,7 @@ func (p *Plugin) initializeDependentServices(db *bun.DB, authInstance core.Auths
 	// passkey service would be initialized here when stable
 }
 
-// registerFactorAdapters registers all available factor adapters
+// registerFactorAdapters registers all available factor adapters.
 func (p *Plugin) registerFactorAdapters() {
 	// Register TOTP adapter
 	if p.config.TOTP.Enabled && p.twofaService != nil {
@@ -279,10 +278,10 @@ func (p *Plugin) registerFactorAdapters() {
 	// }
 }
 
-// RegisterRoutes registers MFA endpoints
+// RegisterRoutes registers MFA endpoints.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized, Init must be called first")
+		return errs.InternalServerErrorWithMessage("service not initialized, Init must be called first")
 	}
 
 	// Create handler
@@ -293,7 +292,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Add a test endpoint to verify MFA is loaded
 	router.GET("/mfa/ping", func(c forge.Context) error {
-		return c.JSON(200, map[string]interface{}{
+		return c.JSON(200, map[string]any{
 			"plugin":            "mfa",
 			"version":           "1.0.0",
 			"enabled":           p.config.Enabled,
@@ -304,7 +303,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers MFA-related hooks
+// RegisterHooks registers MFA-related hooks.
 func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error {
 	// MFA can register hooks for:
 	// - After user creation: suggest MFA enrollment
@@ -315,7 +314,7 @@ func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows MFA to enhance core services
+// RegisterServiceDecorators allows MFA to enhance core services.
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error {
 	// MFA could decorate:
 	// - AuthService: add MFA checks after password verification
@@ -325,7 +324,7 @@ func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error {
 	return nil
 }
 
-// Migrate creates required database tables
+// Migrate creates required database tables.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
@@ -334,7 +333,7 @@ func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
 	// Create MFA tables
-	tables := []interface{}{
+	tables := []any{
 		(*schema.MFAFactor)(nil),
 		(*schema.MFAChallenge)(nil),
 		(*schema.MFASession)(nil),
@@ -361,7 +360,7 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// createIndexes creates database indexes for MFA tables
+// createIndexes creates database indexes for MFA tables.
 func (p *Plugin) createIndexes(ctx context.Context) error {
 	// Index on user_id for fast lookups
 	indexes := []string{
@@ -388,18 +387,19 @@ func (p *Plugin) createIndexes(ctx context.Context) error {
 	return nil
 }
 
-// Service returns the MFA service (for use by middleware and other components)
+// Service returns the MFA service (for use by middleware and other components).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// Config returns the plugin configuration
+// Config returns the plugin configuration.
 func (p *Plugin) Config() *Config {
 	return p.config
 }
 
-// WithConfig sets custom configuration
+// WithConfig sets custom configuration.
 func (p *Plugin) WithConfig(config *Config) *Plugin {
 	p.config = config
+
 	return p
 }

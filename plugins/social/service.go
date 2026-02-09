@@ -15,12 +15,13 @@ import (
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/social/providers"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 )
 
-// Service handles social OAuth flows
+// Service handles social OAuth flows.
 type Service struct {
 	config      Config
 	providers   map[string]providers.Provider
@@ -35,7 +36,7 @@ type Service struct {
 	envMutex     sync.RWMutex                             // Protect envProviders map
 }
 
-// NewService creates a new social auth service
+// NewService creates a new social auth service.
 func NewService(config Config, socialRepo repository.SocialAccountRepository, userSvc *user.Service, stateStore StateStore, auditSvc *audit.Service) *Service {
 	s := &Service{
 		config:       config,
@@ -53,7 +54,7 @@ func NewService(config Config, socialRepo repository.SocialAccountRepository, us
 	return s
 }
 
-// initializeProviders creates provider instances based on configuration
+// initializeProviders creates provider instances based on configuration.
 func (s *Service) initializeProviders() {
 	baseURL := s.config.BaseURL
 	if baseURL == "" {
@@ -66,73 +67,89 @@ func (s *Service) initializeProviders() {
 		pc.Google.RedirectURL = baseURL + "/api/auth/callback/google"
 		s.providers["google"] = providers.NewGoogleProvider(*pc.Google)
 	}
+
 	if pc.GitHub != nil && pc.GitHub.Enabled {
 		pc.GitHub.RedirectURL = baseURL + "/api/auth/callback/github"
 		s.providers["github"] = providers.NewGitHubProvider(*pc.GitHub)
 	}
+
 	if pc.Microsoft != nil && pc.Microsoft.Enabled {
 		pc.Microsoft.RedirectURL = baseURL + "/api/auth/callback/microsoft"
 		s.providers["microsoft"] = providers.NewMicrosoftProvider(*pc.Microsoft)
 	}
+
 	if pc.Apple != nil && pc.Apple.Enabled {
 		pc.Apple.RedirectURL = baseURL + "/api/auth/callback/apple"
 		s.providers["apple"] = providers.NewAppleProvider(*pc.Apple)
 	}
+
 	if pc.Facebook != nil && pc.Facebook.Enabled {
 		pc.Facebook.RedirectURL = baseURL + "/api/auth/callback/facebook"
 		s.providers["facebook"] = providers.NewFacebookProvider(*pc.Facebook)
 	}
+
 	if pc.Discord != nil && pc.Discord.Enabled {
 		pc.Discord.RedirectURL = baseURL + "/api/auth/callback/discord"
 		s.providers["discord"] = providers.NewDiscordProvider(*pc.Discord)
 	}
+
 	if pc.Twitter != nil && pc.Twitter.Enabled {
 		pc.Twitter.RedirectURL = baseURL + "/api/auth/callback/twitter"
 		s.providers["twitter"] = providers.NewTwitterProvider(*pc.Twitter)
 	}
+
 	if pc.LinkedIn != nil && pc.LinkedIn.Enabled {
 		pc.LinkedIn.RedirectURL = baseURL + "/api/auth/callback/linkedin"
 		s.providers["linkedin"] = providers.NewLinkedInProvider(*pc.LinkedIn)
 	}
+
 	if pc.Spotify != nil && pc.Spotify.Enabled {
 		pc.Spotify.RedirectURL = baseURL + "/api/auth/callback/spotify"
 		s.providers["spotify"] = providers.NewSpotifyProvider(*pc.Spotify)
 	}
+
 	if pc.Twitch != nil && pc.Twitch.Enabled {
 		pc.Twitch.RedirectURL = baseURL + "/api/auth/callback/twitch"
 		s.providers["twitch"] = providers.NewTwitchProvider(*pc.Twitch)
 	}
+
 	if pc.Dropbox != nil && pc.Dropbox.Enabled {
 		pc.Dropbox.RedirectURL = baseURL + "/api/auth/callback/dropbox"
 		s.providers["dropbox"] = providers.NewDropboxProvider(*pc.Dropbox)
 	}
+
 	if pc.GitLab != nil && pc.GitLab.Enabled {
 		pc.GitLab.RedirectURL = baseURL + "/api/auth/callback/gitlab"
 		s.providers["gitlab"] = providers.NewGitLabProvider(*pc.GitLab)
 	}
+
 	if pc.LINE != nil && pc.LINE.Enabled {
 		pc.LINE.RedirectURL = baseURL + "/api/auth/callback/line"
 		s.providers["line"] = providers.NewLINEProvider(*pc.LINE)
 	}
+
 	if pc.Reddit != nil && pc.Reddit.Enabled {
 		pc.Reddit.RedirectURL = baseURL + "/api/auth/callback/reddit"
 		s.providers["reddit"] = providers.NewRedditProvider(*pc.Reddit)
 	}
+
 	if pc.Slack != nil && pc.Slack.Enabled {
 		pc.Slack.RedirectURL = baseURL + "/api/auth/callback/slack"
 		s.providers["slack"] = providers.NewSlackProvider(*pc.Slack)
 	}
+
 	if pc.Bitbucket != nil && pc.Bitbucket.Enabled {
 		pc.Bitbucket.RedirectURL = baseURL + "/api/auth/callback/bitbucket"
 		s.providers["bitbucket"] = providers.NewBitbucketProvider(*pc.Bitbucket)
 	}
+
 	if pc.Notion != nil && pc.Notion.Enabled {
 		pc.Notion.RedirectURL = baseURL + "/api/auth/callback/notion"
 		s.providers["notion"] = providers.NewNotionProvider(*pc.Notion)
 	}
 }
 
-// GetAuthorizationURL generates an OAuth authorization URL
+// GetAuthorizationURL generates an OAuth authorization URL.
 func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string) (string, error) {
 	// Extract environment ID from context
 	envID := getEnvironmentIDFromContext(ctx)
@@ -146,6 +163,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","app_id":"%s","env_id":"%s","error":"%s"}`, providerName, appID.String(), envID.String(), err.Error()))
 		}
+
 		return "", fmt.Errorf("failed to load provider configuration: %w", err)
 	}
 
@@ -158,6 +176,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","app_id":"%s","env_id":"%s"}`, providerName, appID.String(), envID.String()))
 		}
+
 		return "", fmt.Errorf("provider %s not configured", providerName)
 	}
 
@@ -187,8 +206,10 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 				providerName, appID.String(), func() string {
 					if len(extraScopes) > 0 {
 						b, _ := json.Marshal(extraScopes)
+
 						return string(b)
 					}
+
 					return "[]"
 				}()))
 	}
@@ -196,7 +217,7 @@ func (s *Service) GetAuthorizationURL(ctx context.Context, providerName string, 
 	return authURL, nil
 }
 
-// GetLinkAccountURL generates a URL to link an additional provider to an existing user
+// GetLinkAccountURL generates a URL to link an additional provider to an existing user.
 func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string) (string, error) {
 	// Extract environment ID from context
 	envID := getEnvironmentIDFromContext(ctx)
@@ -215,6 +236,7 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","user_id":"%s","action":"link"}`, providerName, userID.String()))
 		}
+
 		return "", fmt.Errorf("provider %s not configured", providerName)
 	}
 
@@ -244,12 +266,12 @@ func (s *Service) GetLinkAccountURL(ctx context.Context, providerName string, us
 	return authURL, nil
 }
 
-// HandleCallback processes the OAuth callback
+// HandleCallback processes the OAuth callback.
 func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, code string) (*CallbackResult, error) {
 	// Audit: callback received
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, string(audit.ActionSocialCallbackReceived),
-			fmt.Sprintf("provider:%s", providerName),
+			"provider:"+providerName,
 			"", "",
 			fmt.Sprintf(`{"provider":"%s"}`, providerName))
 	}
@@ -267,7 +289,8 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 				"", "",
 				fmt.Sprintf(`{"expected":"%s","got":"%s"}`, state.Provider, providerName))
 		}
-		return nil, fmt.Errorf("state provider mismatch")
+
+		return nil, errs.BadRequest("state provider mismatch")
 	}
 
 	// Extract environment ID from context
@@ -286,6 +309,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 
 	// Exchange code for token
 	oauth2Config := provider.GetOAuth2Config()
+
 	token, err := oauth2Config.Exchange(ctx, code)
 	if err != nil {
 		// Audit: token exchange failed
@@ -295,13 +319,14 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","error":"%s"}`, providerName, err.Error()))
 		}
+
 		return nil, fmt.Errorf("failed to exchange code: %w", err)
 	}
 
 	// Audit: token exchange success
 	if s.audit != nil {
 		_ = s.audit.Log(ctx, nil, string(audit.ActionSocialTokenExchangeSuccess),
-			fmt.Sprintf("provider:%s", providerName),
+			"provider:"+providerName,
 			"", "",
 			fmt.Sprintf(`{"provider":"%s","app_id":"%s"}`, providerName, state.AppID.String()))
 	}
@@ -328,7 +353,8 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 				"", "",
 				fmt.Sprintf(`{"provider":"%s","email":"%s"}`, providerName, userInfo.Email))
 		}
-		return nil, fmt.Errorf("email not verified by provider")
+
+		return nil, errs.BadRequest("email not verified by provider")
 	}
 
 	// Check if social account already exists
@@ -349,12 +375,14 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		if existingAccount != nil {
 			// Update existing account with new scopes/tokens
 			existingAccount.AccessToken = token.AccessToken
+
 			existingAccount.RefreshToken = token.RefreshToken
 			if token.Expiry.IsZero() {
 				existingAccount.ExpiresAt = nil
 			} else {
 				existingAccount.ExpiresAt = &token.Expiry
 			}
+
 			existingAccount.Scope = provider.GetOAuth2Config().Scopes[0] // Join scopes
 			if err := s.socialRepo.Update(ctx, existingAccount); err != nil {
 				return nil, fmt.Errorf("failed to update social account: %w", err)
@@ -426,7 +454,8 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 						UserOrgID:     state.UserOrganizationID,
 					}, nil
 				}
-				return nil, fmt.Errorf("user with email already exists")
+
+				return nil, errs.BadRequest("user with email already exists")
 			}
 		}
 
@@ -444,11 +473,11 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 		}, nil
 	}
 
-	return nil, fmt.Errorf("user does not exist and auto-creation is disabled")
+	return nil, errs.BadRequest("user does not exist and auto-creation is disabled")
 }
 
 // CreateSocialAccount creates a new social account record
-// This is called after user creation to link the OAuth provider
+// This is called after user creation to link the OAuth provider.
 func (s *Service) CreateSocialAccount(ctx context.Context, userID, appID xid.ID, userOrganizationID *xid.ID, provider string, userInfo *providers.UserInfo, token *oauth2.Token) error {
 	rawJSON, _ := json.Marshal(userInfo.Raw)
 
@@ -479,12 +508,13 @@ func (s *Service) CreateSocialAccount(ctx context.Context, userID, appID xid.ID,
 	return s.socialRepo.Create(ctx, account)
 }
 
-// generateState creates a secure state token
+// generateState creates a secure state token.
 func (s *Service) generateState(ctx context.Context, provider string, appID xid.ID, userOrganizationID *xid.ID, extraScopes []string, linkUserID *xid.ID) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
+
 	stateToken := base64.URLEncoding.EncodeToString(b)
 
 	state := &OAuthState{
@@ -509,7 +539,7 @@ func (s *Service) generateState(ctx context.Context, provider string, appID xid.
 	return stateToken, nil
 }
 
-// verifyState validates and retrieves the state
+// verifyState validates and retrieves the state.
 func (s *Service) verifyState(ctx context.Context, stateToken string) (*OAuthState, error) {
 	state, err := s.stateStore.Get(ctx, stateToken)
 	if err != nil {
@@ -520,6 +550,7 @@ func (s *Service) verifyState(ctx context.Context, stateToken string) (*OAuthSta
 				"", "",
 				fmt.Sprintf(`{"error":"%s"}`, err.Error()))
 		}
+
 		return nil, err
 	}
 
@@ -529,7 +560,7 @@ func (s *Service) verifyState(ctx context.Context, stateToken string) (*OAuthSta
 	return state, nil
 }
 
-// CallbackResult holds the result of OAuth callback processing
+// CallbackResult holds the result of OAuth callback processing.
 type CallbackResult struct {
 	User          *user.User          // Nil for new users, populated for existing users
 	OAuthUserInfo *providers.UserInfo // OAuth provider user info (always populated)
@@ -542,7 +573,7 @@ type CallbackResult struct {
 	UserOrgID     *xid.ID // Optional user organization ID from state
 }
 
-// ListProviders returns available providers for a specific environment
+// ListProviders returns available providers for a specific environment.
 func (s *Service) ListProviders(ctx context.Context, appID, envID xid.ID) []string {
 	// Ensure providers are loaded for this environment
 	providers, err := s.ensureProvidersLoaded(ctx, appID, envID)
@@ -555,15 +586,16 @@ func (s *Service) ListProviders(ctx context.Context, appID, envID xid.ID) []stri
 	for name := range providers {
 		providerNames = append(providerNames, name)
 	}
+
 	return providerNames
 }
 
-// UnlinkAccount removes a social account link
+// UnlinkAccount removes a social account link.
 func (s *Service) UnlinkAccount(ctx context.Context, userID xid.ID, provider string) error {
 	return s.socialRepo.Unlink(ctx, userID, provider)
 }
 
-// SetConfigRepository sets the config repository for DB-backed configuration
+// SetConfigRepository sets the config repository for DB-backed configuration.
 func (s *Service) SetConfigRepository(repo repository.SocialProviderConfigRepository) {
 	s.configRepo = repo
 }
@@ -572,7 +604,7 @@ func (s *Service) SetConfigRepository(repo repository.SocialProviderConfigReposi
 // and merges them with the current configuration. DB configs take precedence over code-based configs.
 func (s *Service) LoadConfigForEnvironment(ctx context.Context, appID, envID xid.ID) error {
 	if s.configRepo == nil {
-		return fmt.Errorf("config repository not set")
+		return errs.InternalServerErrorWithMessage("config repository not set")
 	}
 
 	// Get enabled configurations from database
@@ -621,6 +653,7 @@ func (s *Service) LoadConfigForEnvironment(ctx context.Context, appID, envID xid
 			if accessType, ok := cfg.AdvancedConfig["accessType"].(string); ok {
 				providerConfig.AccessType = accessType
 			}
+
 			if prompt, ok := cfg.AdvancedConfig["prompt"].(string); ok {
 				providerConfig.Prompt = prompt
 			}
@@ -636,17 +669,18 @@ func (s *Service) LoadConfigForEnvironment(ctx context.Context, appID, envID xid
 	return nil
 }
 
-// getEnvironmentIDFromContext extracts environment ID from context using the contexts package
+// getEnvironmentIDFromContext extracts environment ID from context using the contexts package.
 func getEnvironmentIDFromContext(ctx context.Context) xid.ID {
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return xid.NilID()
 	}
+
 	return envID
 }
 
 // ensureProvidersLoaded ensures that providers are loaded for the given environment
-// It uses a cache to avoid reloading on every request
+// It uses a cache to avoid reloading on every request.
 func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID) (map[string]providers.Provider, error) {
 	// If no config repo is set, use static providers
 	if s.configRepo == nil {
@@ -688,6 +722,7 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 	// If no configs found in DB, use static providers as fallback
 	if len(configs) == 0 {
 		s.envProviders[envKey] = s.providers
+
 		return s.providers, nil
 	}
 
@@ -731,6 +766,7 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 			if accessType, ok := cfg.AdvancedConfig["accessType"].(string); ok {
 				providerConfig.AccessType = accessType
 			}
+
 			if prompt, ok := cfg.AdvancedConfig["prompt"].(string); ok {
 				providerConfig.Prompt = prompt
 			}
@@ -751,15 +787,17 @@ func (s *Service) ensureProvidersLoaded(ctx context.Context, appID, envID xid.ID
 }
 
 // InvalidateEnvironmentCache clears the cache for a specific environment
-// This should be called when provider configurations are updated
+// This should be called when provider configurations are updated.
 func (s *Service) InvalidateEnvironmentCache(appID, envID xid.ID) {
 	envKey := fmt.Sprintf("%s:%s", appID.String(), envID.String())
+
 	s.envMutex.Lock()
 	defer s.envMutex.Unlock()
+
 	delete(s.envProviders, envKey)
 }
 
-// createProviderInstance creates a provider instance for the given provider name and config
+// createProviderInstance creates a provider instance for the given provider name and config.
 func (s *Service) createProviderInstance(providerName string, cfg providers.ProviderConfig) providers.Provider {
 	switch providerName {
 	case "google":
@@ -802,7 +840,7 @@ func (s *Service) createProviderInstance(providerName string, cfg providers.Prov
 }
 
 // GetProviderConfig returns the current provider configuration for a specific provider
-// This can be used to inspect what's currently configured
+// This can be used to inspect what's currently configured.
 func (s *Service) GetProviderConfig(providerName string) *providers.ProviderConfig {
 	provider, ok := s.providers[providerName]
 	if !ok {
@@ -810,6 +848,7 @@ func (s *Service) GetProviderConfig(providerName string) *providers.ProviderConf
 	}
 
 	oauth2Config := provider.GetOAuth2Config()
+
 	return &providers.ProviderConfig{
 		ClientID:    oauth2Config.ClientID,
 		RedirectURL: oauth2Config.RedirectURL,
@@ -818,8 +857,9 @@ func (s *Service) GetProviderConfig(providerName string) *providers.ProviderConf
 	}
 }
 
-// IsProviderEnabled checks if a provider is currently enabled and configured
+// IsProviderEnabled checks if a provider is currently enabled and configured.
 func (s *Service) IsProviderEnabled(providerName string) bool {
 	_, ok := s.providers[providerName]
+
 	return ok
 }

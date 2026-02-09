@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/providers/email"
 	"github.com/xraph/authsome/providers/sms"
 	repo "github.com/xraph/authsome/repository"
@@ -23,7 +24,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the notification template management plugin
+// Plugin implements the notification template management plugin.
 type Plugin struct {
 	service                *notification.Service
 	templateSvc            *TemplateService
@@ -42,45 +43,45 @@ type Plugin struct {
 	logger                 forge.Logger
 }
 
-// PluginOption is a functional option for configuring the notification plugin
+// PluginOption is a functional option for configuring the notification plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithAddDefaultTemplates sets whether to add default templates
+// WithAddDefaultTemplates sets whether to add default templates.
 func WithAddDefaultTemplates(add bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AddDefaultTemplates = add
 	}
 }
 
-// WithDefaultLanguage sets the default language
+// WithDefaultLanguage sets the default language.
 func WithDefaultLanguage(lang string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DefaultLanguage = lang
 	}
 }
 
-// WithAllowOrgOverrides sets whether to allow organization overrides
+// WithAllowOrgOverrides sets whether to allow organization overrides.
 func WithAllowAppOverrides(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowAppOverrides = allow
 	}
 }
 
-// WithAutoSendWelcome sets whether to auto-send welcome emails
+// WithAutoSendWelcome sets whether to auto-send welcome emails.
 func WithAutoSendWelcome(auto bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoSendWelcome = auto
 	}
 }
 
-// WithRetryConfig sets the retry configuration
+// WithRetryConfig sets the retry configuration.
 func WithRetryConfig(attempts int, delay time.Duration) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RetryAttempts = attempts
@@ -88,7 +89,7 @@ func WithRetryConfig(attempts int, delay time.Duration) PluginOption {
 	}
 }
 
-// WithEmailProvider sets the email provider configuration
+// WithEmailProvider sets the email provider configuration.
 func WithEmailProvider(provider, from, fromName string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Providers.Email.Provider = provider
@@ -97,7 +98,7 @@ func WithEmailProvider(provider, from, fromName string) PluginOption {
 	}
 }
 
-// WithSMSProvider sets the SMS provider configuration
+// WithSMSProvider sets the SMS provider configuration.
 func WithSMSProvider(provider, from string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Providers.SMS.Provider = provider
@@ -105,7 +106,7 @@ func WithSMSProvider(provider, from string) PluginOption {
 	}
 }
 
-// NewPlugin creates a new notification plugin instance with optional configuration
+// NewPlugin creates a new notification plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -120,22 +121,22 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "notification"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("notification plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("notification plugin requires auth instance")
 	}
 
 	p.authInst = authInst
 
 	db := authInst.GetDB()
 	if db == nil {
-		return fmt.Errorf("database not available for notification plugin")
+		return errs.InternalServerErrorWithMessage("database not available for notification plugin")
 	}
 
 	p.db = db
@@ -209,6 +210,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 				retryConfig.BackoffDurations = append(retryConfig.BackoffDurations, duration)
 			}
 		}
+
 		if len(retryConfig.BackoffDurations) == 0 {
 			retryConfig.BackoffDurations = notification.DefaultRetryConfig().BackoffDurations
 		}
@@ -229,13 +231,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		// Create async adapter
 		baseAdapter := NewAdapter(p.templateSvc)
 		p.asyncAdapter = NewAsyncAdapter(baseAdapter, p.config.Async, p.dispatcher, p.retryService)
-
 	}
 
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil || p.templateSvc == nil {
 		return nil
@@ -383,7 +384,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers plugin hooks
+// RegisterHooks registers plugin hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if hookRegistry == nil {
 		return nil
@@ -391,7 +392,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 	// Register app creation hook to auto-populate default templates
 	if p.config.AutoPopulateTemplates {
-		hookRegistry.RegisterAfterAppCreate(func(ctx context.Context, app interface{}) error {
+		hookRegistry.RegisterAfterAppCreate(func(ctx context.Context, app any) error {
 			// Type assert to get app details
 			if appData, ok := app.(*schema.App); ok && !appData.IsPlatform {
 				// Initialize default templates for new app
@@ -399,6 +400,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 					// Log error but don't fail app creation
 				}
 			}
+
 			return nil
 		})
 	}
@@ -412,6 +414,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			if p.service != nil && p.templateSvc != nil && createdUser != nil && createdUser.Email != "" {
 				// Get platform app ID
 				var platformApp schema.App
+
 				err := p.db.NewSelect().
 					Model(&platformApp).
 					Where("is_platform = ?", true).
@@ -436,6 +439,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 					// Log error but don't fail user creation (should rarely happen with async)
 				}
 			}
+
 			return nil
 		})
 	}
@@ -446,16 +450,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -476,6 +479,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			// Use async adapter for fire-and-forget low priority notification
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendNewDeviceLogin(ctx, appID, user.Email, userName, deviceName, location, timestamp, ipAddress)
 			if err != nil {
 				// This should rarely happen since async adapter fires-and-forgets for low priority
@@ -490,16 +494,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -513,6 +516,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendDeviceRemoved(ctx, appID, user.Email, userName, deviceName, timestamp)
 			if err != nil {
 			}
@@ -527,16 +531,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -550,6 +553,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendEmailChangeRequest(ctx, appID, oldEmail, userName, newEmail, confirmationUrl, timestamp)
 			if err != nil {
 			}
@@ -563,16 +567,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -586,6 +589,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendEmailChanged(ctx, appID, user.Email, userName, oldEmail, timestamp)
 			if err != nil {
 			}
@@ -599,16 +603,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -622,6 +625,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendUsernameChanged(ctx, appID, user.Email, userName, oldUsername, newUsername, timestamp)
 			if err != nil {
 			}
@@ -635,16 +639,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details before deletion (may already be deleted, so this might not work)
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				// User already deleted, can't send notification
@@ -659,6 +662,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendAccountDeleted(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
 			}
@@ -672,16 +676,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -695,6 +698,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendAccountSuspended(ctx, appID, user.Email, userName, reason, timestamp)
 			if err != nil {
 			}
@@ -708,16 +712,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -731,6 +734,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendAccountReactivated(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
 			}
@@ -744,16 +748,15 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			// Get app context
 			appID, ok := contexts.GetAppID(ctx)
 			if !ok || appID.IsNil() {
-
 				return nil
 			}
 
 			// Get user details
 			userSvc := p.authInst.GetServiceRegistry().UserService()
 			if userSvc == nil {
-
 				return nil
 			}
+
 			user, err := userSvc.FindByID(ctx, userID)
 			if err != nil || user == nil {
 				return nil
@@ -767,6 +770,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 
 			timestamp := time.Now().Format(time.RFC3339)
 			adapter := p.getAsyncAdapter()
+
 			err = adapter.SendPasswordChanged(ctx, appID, user.Email, userName, timestamp)
 			if err != nil {
 			}
@@ -778,45 +782,47 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// Start async infrastructure if enabled
 	if p.dispatcher != nil {
 		p.dispatcher.Start()
-
 	}
+
 	if p.retryService != nil {
 		p.retryService.Start()
-
 	}
 
 	return nil
 }
 
-// Stop gracefully stops the plugin's background services
+// Stop gracefully stops the plugin's background services.
 func (p *Plugin) Stop() {
 	if p.dispatcher != nil {
 		p.dispatcher.Stop()
 	}
+
 	if p.retryService != nil {
 		p.retryService.Stop()
 	}
 }
 
-// getAdapter returns the async adapter if available, otherwise returns the base adapter
+// getAdapter returns the async adapter if available, otherwise returns the base adapter.
 func (p *Plugin) getAdapter() *Adapter {
 	if p.asyncAdapter != nil {
 		return p.asyncAdapter.Adapter
 	}
+
 	return NewAdapter(p.templateSvc)
 }
 
-// getAsyncAdapter returns the async adapter if available, otherwise creates a new base adapter
+// getAsyncAdapter returns the async adapter if available, otherwise creates a new base adapter.
 func (p *Plugin) getAsyncAdapter() *AsyncAdapter {
 	if p.asyncAdapter != nil {
 		return p.asyncAdapter
 	}
 	// Fallback to sync adapter wrapped in async adapter with async disabled
 	baseAdapter := NewAdapter(p.templateSvc)
+
 	return NewAsyncAdapter(baseAdapter, AsyncConfig{Enabled: false}, nil, nil)
 }
 
-// RegisterServiceDecorators registers the notification service and adapter
+// RegisterServiceDecorators registers the notification service and adapter.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	if services == nil {
 		return nil
@@ -841,7 +847,7 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 	return nil
 }
 
-// Migrate runs database migrations
+// Migrate runs database migrations.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
@@ -979,16 +985,18 @@ func (p *Plugin) Migrate() error {
 		if err := p.addDefaultTemplates(ctx); err != nil {
 			return fmt.Errorf("failed to add default templates: %w", err)
 		}
+
 		p.defaultsAdded = true
 	}
 
 	return nil
 }
 
-// addDefaultTemplates adds default notification templates
+// addDefaultTemplates adds default notification templates.
 func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
 	// Get platform app ID
 	var platformApp schema.App
+
 	err := p.db.NewSelect().
 		Model(&platformApp).
 		Where("is_platform = ?", true).
@@ -1006,31 +1014,33 @@ func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
 	return nil
 }
 
-// GetService returns the notification service for use by other plugins
+// GetService returns the notification service for use by other plugins.
 func (p *Plugin) GetService() *notification.Service {
 	return p.service
 }
 
-// GetTemplateService returns the template service for use by other plugins
+// GetTemplateService returns the template service for use by other plugins.
 func (p *Plugin) GetTemplateService() *TemplateService {
 	return p.templateSvc
 }
 
-// DashboardExtension returns the dashboard extension interface implementation
+// DashboardExtension returns the dashboard extension interface implementation.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtensionOnce.Do(func() {
 		p.dashboardExtension = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExtension
 }
 
-// registerProviders registers email and SMS providers based on configuration
+// registerProviders registers email and SMS providers based on configuration.
 func (p *Plugin) registerProviders() error {
 	// Register email provider
 	emailProvider, err := p.createEmailProvider()
 	if err != nil {
 		return fmt.Errorf("failed to create email provider: %w", err)
 	}
+
 	if emailProvider != nil {
 		if err := p.service.RegisterProvider(emailProvider); err != nil {
 			return fmt.Errorf("failed to register email provider: %w", err)
@@ -1042,6 +1052,7 @@ func (p *Plugin) registerProviders() error {
 	if err != nil {
 		return fmt.Errorf("failed to create SMS provider: %w", err)
 	}
+
 	if smsProvider != nil {
 		if err := p.service.RegisterProvider(smsProvider); err != nil {
 			return fmt.Errorf("failed to register SMS provider: %w", err)
@@ -1051,7 +1062,7 @@ func (p *Plugin) registerProviders() error {
 	return nil
 }
 
-// createEmailProvider creates an email provider based on configuration
+// createEmailProvider creates an email provider based on configuration.
 func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 	// Import email providers
 	emailProviders := struct {
@@ -1132,7 +1143,7 @@ func (p *Plugin) createEmailProvider() (notification.Provider, error) {
 	}
 }
 
-// createSMSProvider creates an SMS provider based on configuration
+// createSMSProvider creates an SMS provider based on configuration.
 func (p *Plugin) createSMSProvider() (notification.Provider, error) {
 	// SMS provider is optional - return nil if not configured
 	if p.config.Providers.SMS == nil {
@@ -1171,62 +1182,66 @@ func (p *Plugin) createSMSProvider() (notification.Provider, error) {
 
 // Helper functions to extract config values
 
-func getStringConfig(config map[string]interface{}, key string, defaultValue string) string {
+func getStringConfig(config map[string]any, key string, defaultValue string) string {
 	if val, ok := config[key].(string); ok {
 		return val
 	}
+
 	return defaultValue
 }
 
-func getIntConfig(config map[string]interface{}, key string, defaultValue int) int {
+func getIntConfig(config map[string]any, key string, defaultValue int) int {
 	if val, ok := config[key].(int); ok {
 		return val
 	}
+
 	if val, ok := config[key].(float64); ok {
 		return int(val)
 	}
+
 	return defaultValue
 }
 
-func getBoolConfig(config map[string]interface{}, key string, defaultValue bool) bool {
+func getBoolConfig(config map[string]any, key string, defaultValue bool) bool {
 	if val, ok := config[key].(bool); ok {
 		return val
 	}
+
 	return defaultValue
 }
 
-// Response types for notification routes
+// Response types for notification routes.
 type NotificationErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type NotificationStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type NotificationTemplateResponse struct {
-	Template interface{} `json:"template"`
+	Template any `json:"template"`
 }
 
 type NotificationTemplateListResponse struct {
-	Templates []interface{} `json:"templates"`
-	Total     int           `json:"total" example:"10"`
+	Templates []any `json:"templates"`
+	Total     int   `example:"10"     json:"total"`
 }
 
 type NotificationPreviewResponse struct {
-	Subject string `json:"subject" example:"Welcome to AuthSome"`
-	Body    string `json:"body" example:"Hello {{name}}, welcome to AuthSome!"`
+	Subject string `example:"Welcome to AuthSome"                  json:"subject"`
+	Body    string `example:"Hello {{name}}, welcome to AuthSome!" json:"body"`
 }
 
 type NotificationResponse struct {
-	Notification interface{} `json:"notification"`
+	Notification any `json:"notification"`
 }
 
 type NotificationListResponse struct {
-	Notifications []interface{} `json:"notifications"`
-	Total         int           `json:"total" example:"50"`
+	Notifications []any `json:"notifications"`
+	Total         int   `example:"50"         json:"total"`
 }
 
 type NotificationWebhookResponse struct {
-	Status string `json:"status" example:"processed"`
+	Status string `example:"processed" json:"status"`
 }

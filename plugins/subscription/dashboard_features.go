@@ -17,10 +17,9 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ServeFeaturesListPage renders the features list dashboard
+// ServeFeaturesListPage renders the features list dashboard.
 func (e *DashboardExtension) ServeFeaturesListPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -39,6 +38,7 @@ func (e *DashboardExtension) ServeFeaturesListPage(ctx *router.PageContext) (g.N
 
 	// Count by type
 	allFeatures, _, _ := e.plugin.featureSvc.List(reqCtx, currentApp.ID, "", false, 1, 10000)
+
 	typeCounts := make(map[string]int)
 	for _, f := range allFeatures {
 		typeCounts[string(f.Type)]++
@@ -122,16 +122,16 @@ func (e *DashboardExtension) ServeFeaturesListPage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// ServeFeatureDetailPage renders the feature detail page
+// ServeFeatureDetailPage renders the feature detail page.
 func (e *DashboardExtension) ServeFeatureDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -142,7 +142,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(ctx *router.PageContext) (g.
 
 	feature, err := e.plugin.featureSvc.GetByID(reqCtx, featureID)
 	if err != nil {
-		return nil, fmt.Errorf("feature not found")
+		return nil, errs.NotFound("feature not found")
 	}
 
 	// Get plans using this feature
@@ -309,7 +309,7 @@ func (e *DashboardExtension) ServeFeatureDetailPage(ctx *router.PageContext) (g.
 					e.detailRow("Unit", g.Text(feature.Unit)),
 					e.detailRow("Reset Period", e.resetPeriodBadge(string(feature.ResetPeriod))),
 					e.detailRow("Public", e.boolBadge(feature.IsPublic)),
-					e.detailRow("Display Order", g.Text(fmt.Sprintf("%d", feature.DisplayOrder))),
+					e.detailRow("Display Order", g.Text(strconv.Itoa(feature.DisplayOrder))),
 					e.detailRow("Created", g.Text(feature.CreatedAt.Format("Jan 2, 2006 15:04"))),
 				),
 			),
@@ -357,10 +357,9 @@ func (e *DashboardExtension) ServeFeatureDetailPage(ctx *router.PageContext) (g.
 	return content, nil
 }
 
-// ServeFeatureUsagePage renders the feature usage monitoring page
+// ServeFeatureUsagePage renders the feature usage monitoring page.
 func (e *DashboardExtension) ServeFeatureUsagePage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -428,8 +427,10 @@ func (e *DashboardExtension) renderFeatureTypeFilterTabs(currentType string, cou
 	}
 
 	var tabs []g.Node
+
 	for _, t := range types {
 		isActive := currentType == t.key
+
 		count := counts[t.key]
 		if t.key == "" {
 			count = 0
@@ -447,6 +448,7 @@ func (e *DashboardExtension) renderFeatureTypeFilterTabs(currentType string, cou
 		if isActive {
 			tabClass = "px-4 py-2 text-sm font-medium text-violet-600 border-b-2 border-violet-600"
 		}
+
 		tabs = append(tabs, A(
 			Href(href),
 			Class(tabClass),
@@ -549,15 +551,16 @@ func (e *DashboardExtension) renderFeaturesTable(ctx context.Context, features [
 
 func (e *DashboardExtension) renderFeatureTiersTable(tiers []core.FeatureTier) g.Node {
 	var rows []g.Node
+
 	for _, t := range tiers {
-		upToText := fmt.Sprintf("%d", t.UpTo)
+		upToText := strconv.FormatInt(t.UpTo, 10)
 		if t.UpTo == -1 {
 			upToText = "Unlimited"
 		}
 
 		rows = append(rows, Tr(
 			Class("hover:bg-slate-50 dark:hover:bg-slate-700"),
-			Td(Class("px-6 py-4"), g.Text(fmt.Sprintf("%d", t.TierOrder+1))),
+			Td(Class("px-6 py-4"), g.Text(strconv.Itoa(t.TierOrder+1))),
 			Td(Class("px-6 py-4"), g.Text(upToText)),
 			Td(Class("px-6 py-4"), g.Text(t.Value)),
 			Td(Class("px-6 py-4"), g.Text(t.Label)),
@@ -588,6 +591,7 @@ func (e *DashboardExtension) renderFeatureTiersTable(tiers []core.FeatureTier) g
 
 func (e *DashboardExtension) renderFeaturePlansTable(ctx context.Context, links []*core.PlanFeatureLink, currentApp *app.App, basePath string) g.Node {
 	var rows []g.Node
+
 	for _, link := range links {
 		plan, err := e.plugin.planSvc.GetByID(ctx, link.PlanID)
 		if err != nil {
@@ -599,7 +603,7 @@ func (e *DashboardExtension) renderFeaturePlansTable(ctx context.Context, links 
 		if link.IsBlocked {
 			valueDisplay = "Blocked"
 		} else if link.Value != "" {
-			var val interface{}
+			var val any
 			if json.Unmarshal([]byte(link.Value), &val) == nil {
 				switch v := val.(type) {
 				case bool:
@@ -709,6 +713,7 @@ func (e *DashboardExtension) boolBadge(value bool) g.Node {
 			g.Text("Yes"),
 		)
 	}
+
 	return Span(
 		Class("inline-flex items-center gap-1 text-slate-400"),
 		lucide.X(Class("size-4")),
@@ -743,10 +748,9 @@ func (e *DashboardExtension) detailRow(label string, value g.Node) g.Node {
 	)
 }
 
-// ServeFeatureCreatePage renders the feature creation form
+// ServeFeatureCreatePage renders the feature creation form.
 func (e *DashboardExtension) ServeFeatureCreatePage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -776,16 +780,16 @@ func (e *DashboardExtension) ServeFeatureCreatePage(ctx *router.PageContext) (g.
 	return content, nil
 }
 
-// ServeFeatureEditPage renders the feature edit form
+// ServeFeatureEditPage renders the feature edit form.
 func (e *DashboardExtension) ServeFeatureEditPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -796,7 +800,7 @@ func (e *DashboardExtension) ServeFeatureEditPage(ctx *router.PageContext) (g.No
 
 	feature, err := e.plugin.featureSvc.GetByID(reqCtx, featureID)
 	if err != nil {
-		return nil, fmt.Errorf("feature not found")
+		return nil, errs.NotFound("feature not found")
 	}
 
 	content := Div(
@@ -821,7 +825,7 @@ func (e *DashboardExtension) ServeFeatureEditPage(ctx *router.PageContext) (g.No
 	return content, nil
 }
 
-// HandleCreateFeature handles the feature creation form submission
+// HandleCreateFeature handles the feature creation form submission.
 func (e *DashboardExtension) HandleCreateFeature(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -859,14 +863,16 @@ func (e *DashboardExtension) HandleCreateFeature(ctx *router.PageContext) (g.Nod
 	feature, err := e.plugin.featureSvc.Create(reqCtx, currentApp.ID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/create?error="+err.Error(), http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+feature.ID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleUpdateFeature handles the feature update form submission
+// HandleUpdateFeature handles the feature update form submission.
 func (e *DashboardExtension) HandleUpdateFeature(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -877,6 +883,7 @@ func (e *DashboardExtension) HandleUpdateFeature(ctx *router.PageContext) (g.Nod
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -907,14 +914,16 @@ func (e *DashboardExtension) HandleUpdateFeature(ctx *router.PageContext) (g.Nod
 	_, err = e.plugin.featureSvc.Update(reqCtx, featureID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"/edit?error="+err.Error(), http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr, http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleDeleteFeature handles feature deletion
+// HandleDeleteFeature handles feature deletion.
 func (e *DashboardExtension) HandleDeleteFeature(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -925,6 +934,7 @@ func (e *DashboardExtension) HandleDeleteFeature(ctx *router.PageContext) (g.Nod
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -937,15 +947,17 @@ func (e *DashboardExtension) HandleDeleteFeature(ctx *router.PageContext) (g.Nod
 		// URL encode the error message
 		errorMsg := err.Error()
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr+"?error="+errorMsg, http.StatusFound)
+
 		return nil, nil
 	}
 
 	// Success - redirect to features list with success message
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features?success=Feature+deleted+successfully", http.StatusFound)
+
 	return nil, nil
 }
 
-// ServePlanFeaturesPage renders the plan features management page
+// ServePlanFeaturesPage renders the plan features management page.
 func (e *DashboardExtension) ServePlanFeaturesPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -956,6 +968,7 @@ func (e *DashboardExtension) ServePlanFeaturesPage(ctx *router.PageContext) (g.N
 	}
 
 	planIDStr := ctx.Param("id")
+
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid plan ID")
@@ -1011,7 +1024,7 @@ func (e *DashboardExtension) ServePlanFeaturesPage(ctx *router.PageContext) (g.N
 				H1(Class("text-3xl font-bold text-slate-900 dark:text-white"),
 					g.Text("Manage Plan Features")),
 				P(Class("mt-2 text-slate-600 dark:text-gray-400"),
-					g.Text(fmt.Sprintf("Configure features for %s", plan.Name))),
+					g.Text("Configure features for "+plan.Name)),
 			),
 		),
 
@@ -1038,7 +1051,7 @@ func (e *DashboardExtension) ServePlanFeaturesPage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// HandleLinkFeatureToPlan handles linking a feature to a plan
+// HandleLinkFeatureToPlan handles linking a feature to a plan.
 func (e *DashboardExtension) HandleLinkFeatureToPlan(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1049,6 +1062,7 @@ func (e *DashboardExtension) HandleLinkFeatureToPlan(ctx *router.PageContext) (g
 	}
 
 	planIDStr := ctx.Param("id")
+
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid plan ID")
@@ -1058,9 +1072,11 @@ func (e *DashboardExtension) HandleLinkFeatureToPlan(ctx *router.PageContext) (g
 
 	// Parse form
 	featureIDStr := ctx.Request.FormValue("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error=Invalid feature ID", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -1078,14 +1094,16 @@ func (e *DashboardExtension) HandleLinkFeatureToPlan(ctx *router.PageContext) (g
 	_, err = e.plugin.featureSvc.LinkToPlan(reqCtx, planID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error(), http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleUnlinkFeatureFromPlan handles unlinking a feature from a plan
+// HandleUnlinkFeatureFromPlan handles unlinking a feature from a plan.
 func (e *DashboardExtension) HandleUnlinkFeatureFromPlan(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1096,12 +1114,14 @@ func (e *DashboardExtension) HandleUnlinkFeatureFromPlan(ctx *router.PageContext
 	}
 
 	planIDStr := ctx.Param("id")
+
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -1112,14 +1132,16 @@ func (e *DashboardExtension) HandleUnlinkFeatureFromPlan(ctx *router.PageContext
 	err = e.plugin.featureSvc.UnlinkFromPlan(reqCtx, planID, featureID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error(), http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleUpdatePlanFeatureLink handles updating a feature-plan link
+// HandleUpdatePlanFeatureLink handles updating a feature-plan link.
 func (e *DashboardExtension) HandleUpdatePlanFeatureLink(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1130,12 +1152,14 @@ func (e *DashboardExtension) HandleUpdatePlanFeatureLink(ctx *router.PageContext
 	}
 
 	planIDStr := ctx.Param("id")
+
 	planID, err := xid.FromString(planIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid plan ID")
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -1157,10 +1181,12 @@ func (e *DashboardExtension) HandleUpdatePlanFeatureLink(ctx *router.PageContext
 	_, err = e.plugin.featureSvc.UpdatePlanLink(reqCtx, planID, featureID, req)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features?error="+err.Error(), http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planIDStr+"/features", http.StatusFound)
+
 	return nil, nil
 }
 
@@ -1322,7 +1348,7 @@ func (e *DashboardExtension) renderFeatureForm(currentApp *app.App, basePath str
 					Label(For("displayOrder"), Class("block text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Display Order")),
 					Input(
 						Type("number"), Name("displayOrder"), ID("displayOrder"),
-						Value(fmt.Sprintf("%d", displayOrder)),
+						Value(strconv.Itoa(displayOrder)),
 						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
 					),
 				),
@@ -1394,8 +1420,10 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 	for _, feature := range features {
 		link, isLinked := linkedMap[feature.ID.String()]
 
-		var valueDisplay string
-		var valueInput g.Node
+		var (
+			valueDisplay string
+			valueInput   g.Node
+		)
 
 		if isLinked && link != nil {
 			// Parse value for display
@@ -1412,6 +1440,7 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 			if link != nil && link.Value != "" {
 				json.Unmarshal([]byte(link.Value), &checked)
 			}
+
 			valueInput = Div(
 				Class("flex items-center gap-2"),
 				Input(
@@ -1424,12 +1453,14 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 			)
 		case core.FeatureTypeLimit, core.FeatureTypeMetered:
 			var limitVal string
+
 			if link != nil && link.Value != "" {
 				var val float64
 				if json.Unmarshal([]byte(link.Value), &val) == nil {
 					limitVal = fmt.Sprintf("%.0f", val)
 				}
 			}
+
 			valueInput = Input(
 				Type("number"), Name("value"),
 				Value(limitVal),

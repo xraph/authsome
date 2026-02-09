@@ -2,17 +2,17 @@ package twofa
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the plugins.Plugin interface for Two-Factor Authentication
+// Plugin implements the plugins.Plugin interface for Two-Factor Authentication.
 type Plugin struct {
 	service       *Service
 	db            *bun.DB
@@ -22,7 +22,7 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// Config holds the 2FA plugin configuration
+// Config holds the 2FA plugin configuration.
 type Config struct {
 	// TOTPIssuer is the issuer name shown in authenticator apps
 	TOTPIssuer string `json:"totpIssuer"`
@@ -44,7 +44,7 @@ type Config struct {
 	RequireFor2FA bool `json:"requireFor2FA"`
 }
 
-// DefaultConfig returns the default 2FA plugin configuration
+// DefaultConfig returns the default 2FA plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		TOTPIssuer:        "AuthSome",
@@ -59,73 +59,73 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the 2FA plugin
+// PluginOption is a functional option for configuring the 2FA plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithTOTPIssuer sets the TOTP issuer name
+// WithTOTPIssuer sets the TOTP issuer name.
 func WithTOTPIssuer(issuer string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.TOTPIssuer = issuer
 	}
 }
 
-// WithTOTPPeriod sets the TOTP time period
+// WithTOTPPeriod sets the TOTP time period.
 func WithTOTPPeriod(period int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.TOTPPeriod = period
 	}
 }
 
-// WithBackupCodeCount sets the number of backup codes
+// WithBackupCodeCount sets the number of backup codes.
 func WithBackupCodeCount(count int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.BackupCodeCount = count
 	}
 }
 
-// WithBackupCodeLength sets the backup code length
+// WithBackupCodeLength sets the backup code length.
 func WithBackupCodeLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.BackupCodeLength = length
 	}
 }
 
-// WithOTPExpiryMinutes sets the OTP expiry time
+// WithOTPExpiryMinutes sets the OTP expiry time.
 func WithOTPExpiryMinutes(minutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.OTPExpiryMinutes = minutes
 	}
 }
 
-// WithMaxOTPAttempts sets the max OTP attempts
+// WithMaxOTPAttempts sets the max OTP attempts.
 func WithMaxOTPAttempts(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxOTPAttempts = max
 	}
 }
 
-// WithTrustedDeviceDays sets the trusted device duration
+// WithTrustedDeviceDays sets the trusted device duration.
 func WithTrustedDeviceDays(days int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.TrustedDeviceDays = days
 	}
 }
 
-// WithRequireFor2FA sets whether 2FA is required for all users
+// WithRequireFor2FA sets whether 2FA is required for all users.
 func WithRequireFor2FA(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireFor2FA = required
 	}
 }
 
-// NewPlugin creates a new 2FA plugin instance with optional configuration
+// NewPlugin creates a new 2FA plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -144,7 +144,7 @@ func (p *Plugin) ID() string { return "twofa" }
 
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("twofa plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("twofa plugin requires auth instance")
 	}
 
 	// Store auth instance for middleware access
@@ -153,12 +153,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for twofa plugin")
+		return errs.InternalServerErrorWithMessage("database not available for twofa plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for twofa plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for twofa plugin")
 	}
 
 	// Initialize logger
@@ -191,7 +191,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers 2FA endpoints under the auth base
+// RegisterRoutes registers 2FA endpoints under the auth base.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the correct basePath by the auth mount
 	h := NewHandler(p.service)
@@ -204,6 +204,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(handler)
 		}
+
 		return handler
 	}
 
@@ -262,6 +263,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("2FA", "Status"),
 		forge.WithValidation(true),
 	)
+
 	return nil
 }
 
@@ -272,44 +274,49 @@ func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 	// Create required tables if not exist
 	if _, err := p.db.NewCreateTable().Model((*schema.TwoFASecret)(nil)).IfNotExists().Exec(ctx); err != nil {
 		return err
 	}
+
 	if _, err := p.db.NewCreateTable().Model((*schema.BackupCode)(nil)).IfNotExists().Exec(ctx); err != nil {
 		return err
 	}
+
 	if _, err := p.db.NewCreateTable().Model((*schema.TrustedDevice)(nil)).IfNotExists().Exec(ctx); err != nil {
 		return err
 	}
+
 	if _, err := p.db.NewCreateTable().Model((*schema.OTPCode)(nil)).IfNotExists().Exec(ctx); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-// Response types for 2FA routes
+// Response types for 2FA routes.
 type TwoFAErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type TwoFAEnableResponse struct {
-	Status  string `json:"status" example:"2fa_enabled"`
-	TOTPURI string `json:"totp_uri,omitempty" example:"otpauth://totp/AuthSome:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=AuthSome"`
+	Status  string `example:"2fa_enabled"                                                                      json:"status"`
+	TOTPURI string `example:"otpauth://totp/AuthSome:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=AuthSome" json:"totp_uri,omitempty"`
 }
 
 type TwoFABackupCodesResponse struct {
-	Codes []string `json:"codes" example:"12345678,87654321"`
+	Codes []string `example:"12345678,87654321" json:"codes"`
 }
 
 type TwoFASendOTPResponse struct {
-	Status string `json:"status" example:"otp_sent"`
-	Code   string `json:"code,omitempty" example:"123456"`
+	Status string `example:"otp_sent" json:"status"`
+	Code   string `example:"123456"   json:"code,omitempty"`
 }
 
 type TwoFAStatusDetailResponse struct {
-	Enabled bool   `json:"enabled" example:"true"`
-	Method  string `json:"method,omitempty" example:"totp"`
-	Trusted bool   `json:"trusted,omitempty" example:"false"`
+	Enabled bool   `example:"true"  json:"enabled"`
+	Method  string `example:"totp"  json:"method,omitempty"`
+	Trusted bool   `example:"false" json:"trusted,omitempty"`
 }

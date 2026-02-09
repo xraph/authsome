@@ -3,6 +3,7 @@ package social
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -14,9 +15,8 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ServeProvidersListPage renders the social providers list page
+// ServeProvidersListPage renders the social providers list page.
 func (e *DashboardExtension) ServeProvidersListPage(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -44,6 +44,7 @@ func (e *DashboardExtension) ServeProvidersListPage(ctx *router.PageContext) (g.
 
 	// Count enabled providers
 	enabledCount := 0
+
 	for _, cfg := range configs {
 		if cfg.IsEnabled {
 			enabledCount++
@@ -59,9 +60,9 @@ func (e *DashboardExtension) ServeProvidersListPage(ctx *router.PageContext) (g.
 		// Stats cards
 		Div(
 			Class("grid gap-4 md:grid-cols-3"),
-			e.renderStatCard("Configured", fmt.Sprintf("%d", len(configs)), lucide.Settings(Class("size-5 text-blue-500"))),
-			e.renderStatCard("Enabled", fmt.Sprintf("%d", enabledCount), lucide.Check(Class("size-5 text-green-500"))),
-			e.renderStatCard("Available", fmt.Sprintf("%d", len(schema.SupportedProviders)), lucide.Globe(Class("size-5 text-violet-500"))),
+			e.renderStatCard("Configured", strconv.Itoa(len(configs)), lucide.Settings(Class("size-5 text-blue-500"))),
+			e.renderStatCard("Enabled", strconv.Itoa(enabledCount), lucide.Check(Class("size-5 text-green-500"))),
+			e.renderStatCard("Available", strconv.Itoa(len(schema.SupportedProviders)), lucide.Globe(Class("size-5 text-violet-500"))),
 		),
 
 		// Add provider button
@@ -85,9 +86,8 @@ func (e *DashboardExtension) ServeProvidersListPage(ctx *router.PageContext) (g.
 	return content, nil
 }
 
-// ServeProviderAddPage renders the add provider form
+// ServeProviderAddPage renders the add provider form.
 func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -103,6 +103,7 @@ func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.No
 
 	// Get already configured providers
 	existingConfigs, _ := e.configRepo.ListByEnvironment(reqCtx, currentApp.ID, envID)
+
 	configuredProviders := make(map[string]bool)
 	for _, cfg := range existingConfigs {
 		configuredProviders[cfg.ProviderName] = true
@@ -110,6 +111,7 @@ func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.No
 
 	// Get available (unconfigured) providers
 	availableProviders := []string{}
+
 	for _, provider := range schema.SupportedProviders {
 		if !configuredProviders[provider] {
 			availableProviders = append(availableProviders, provider)
@@ -165,6 +167,7 @@ func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.No
 									g.Text(displayName),
 								))
 							}
+
 							return nodes
 						}()),
 					),
@@ -330,9 +333,8 @@ func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.No
 	return content, nil
 }
 
-// ServeProviderEditPage renders the edit provider form
+// ServeProviderEditPage renders the edit provider form.
 func (e *DashboardExtension) ServeProviderEditPage(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -534,7 +536,7 @@ func (e *DashboardExtension) ServeProviderEditPage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// Helper: render provider cards
+// Helper: render provider cards.
 func (e *DashboardExtension) renderProviderCards(ctx context.Context, basePath, appID string, configured map[string]*schema.SocialProviderConfig) []g.Node {
 	cards := make([]g.Node, 0, len(schema.SupportedProviders))
 
@@ -550,9 +552,11 @@ func (e *DashboardExtension) renderProviderCard(basePath, appID, providerName st
 	displayName := schema.GetProviderDisplayName(providerName)
 
 	// Determine status
-	var statusBadge g.Node
-	var cardClasses string
-	var actionsNode g.Node
+	var (
+		statusBadge g.Node
+		cardClasses string
+		actionsNode g.Node
+	)
 
 	if isConfigured && config != nil && config.IsEnabled {
 		statusBadge = Span(
@@ -579,6 +583,7 @@ func (e *DashboardExtension) renderProviderCard(basePath, appID, providerName st
 	// Build actions based on configuration state
 	if isConfigured && config != nil {
 		configID := config.ID.String()
+
 		var toggleButton g.Node
 		if config.IsEnabled {
 			toggleButton = Button(

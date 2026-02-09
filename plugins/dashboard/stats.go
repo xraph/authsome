@@ -10,9 +10,10 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// DashboardStats represents statistics for the dashboard
+// DashboardStats represents statistics for the dashboard.
 type DashboardStats struct {
 	TotalUsers     int
 	ActiveUsers    int
@@ -27,7 +28,7 @@ type DashboardStats struct {
 	Plugins        []PluginItem
 }
 
-// ActivityItem represents a recent activity entry
+// ActivityItem represents a recent activity entry.
 type ActivityItem struct {
 	Title       string
 	Description string
@@ -35,14 +36,14 @@ type ActivityItem struct {
 	Type        string // success, warning, error, info
 }
 
-// StatusItem represents a system status entry
+// StatusItem represents a system status entry.
 type StatusItem struct {
 	Name   string
 	Status string // operational, degraded, down
 	Color  string // green, yellow, red
 }
 
-// PluginItem represents a plugin entry
+// PluginItem represents a plugin entry.
 type PluginItem struct {
 	ID          string
 	Name        string
@@ -52,12 +53,12 @@ type PluginItem struct {
 	Icon        string // lucide icon name
 }
 
-// getDashboardStats fetches dashboard statistics
+// getDashboardStats fetches dashboard statistics.
 func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error) {
 	// Extract app ID from context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
-		return nil, fmt.Errorf("app context required for dashboard stats")
+		return nil, errs.RequiredField("appId")
 	}
 
 	// Count total users for this app
@@ -67,6 +68,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	userFilter := &user.CountUsersFilter{
 		AppID: appID,
 	}
+
 	totalUsers, err := h.userSvc.CountUsers(ctx, userFilter)
 	if err != nil {
 		totalUsers = 0
@@ -78,6 +80,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 		AppID:        appID,
 		CreatedSince: &startOfToday,
 	}
+
 	newUsersToday, err = h.userSvc.CountUsers(ctx, newUserFilter)
 	if err != nil {
 		newUsersToday = 0
@@ -93,6 +96,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	}
 	sessionResponse, err := h.sessionSvc.ListSessions(ctx, sessionFilter)
 	allSessions := []*session.Session{}
+
 	if err != nil {
 	} else if sessionResponse != nil {
 		allSessions = sessionResponse.Data
@@ -148,7 +152,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	return stats, nil
 }
 
-// getFailedLoginCount returns count of failed login attempts in last 24 hours
+// getFailedLoginCount returns count of failed login attempts in last 24 hours.
 func (h *Handler) getFailedLoginCount(ctx context.Context) int {
 	if h.auditSvc == nil {
 		return 0
@@ -188,7 +192,7 @@ func (h *Handler) getFailedLoginCount(ctx context.Context) int {
 	return len(eventsResponse.Data)
 }
 
-// getRecentActivity fetches recent activity from audit log
+// getRecentActivity fetches recent activity from audit log.
 func (h *Handler) getRecentActivity(ctx context.Context) []ActivityItem {
 	if h.auditSvc == nil {
 		return []ActivityItem{}
@@ -228,7 +232,7 @@ func (h *Handler) getRecentActivity(ctx context.Context) []ActivityItem {
 	return activities
 }
 
-// auditEventToActivity converts an audit event to an activity item
+// auditEventToActivity converts an audit event to an activity item.
 func (h *Handler) auditEventToActivity(event *audit.Event) ActivityItem {
 	var title, description, eventType string
 
@@ -320,7 +324,7 @@ func (h *Handler) auditEventToActivity(event *audit.Event) ActivityItem {
 	}
 }
 
-// getSystemStatus returns current system status
+// getSystemStatus returns current system status.
 func (h *Handler) getSystemStatus() []StatusItem {
 	return []StatusItem{
 		{
@@ -351,7 +355,7 @@ func (h *Handler) getSystemStatus() []StatusItem {
 	}
 }
 
-// formatTimeAgo formats a time as "X minutes ago"
+// formatTimeAgo formats a time as "X minutes ago".
 func formatTimeAgo(t time.Time) string {
 	diff := time.Since(t)
 
@@ -363,25 +367,28 @@ func formatTimeAgo(t time.Time) string {
 		if mins == 1 {
 			return "1 minute ago"
 		}
+
 		return fmt.Sprintf("%d minutes ago", mins)
 	case diff < 24*time.Hour:
 		hours := int(diff.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
+
 		return fmt.Sprintf("%d hours ago", hours)
 	case diff < 7*24*time.Hour:
 		days := int(diff.Hours() / 24)
 		if days == 1 {
 			return "1 day ago"
 		}
+
 		return fmt.Sprintf("%d days ago", days)
 	default:
 		return t.Format("Jan 2, 2006")
 	}
 }
 
-// Plugin metadata map
+// Plugin metadata map.
 var pluginMetadata = map[string]struct {
 	Name        string
 	Description string
@@ -419,7 +426,7 @@ var pluginMetadata = map[string]struct {
 	"stepup":         {"Step-Up Auth", "Additional authentication for sensitive operations", "security", "Lock"},
 }
 
-// getPluginInfo returns information about installed plugins
+// getPluginInfo returns information about installed plugins.
 func (h *Handler) getPluginInfo() []PluginItem {
 	plugins := make([]PluginItem, 0)
 

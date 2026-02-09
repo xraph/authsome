@@ -38,7 +38,7 @@ import (
 //go:embed static/*/**
 var assets embed.FS
 
-// Plugin implements the dashboard plugin for AuthSome
+// Plugin implements the dashboard plugin for AuthSome.
 type Plugin struct {
 	log               forge.Logger
 	handler           *Handler
@@ -71,7 +71,7 @@ type Plugin struct {
 	layoutManager *layouts.LayoutManager
 }
 
-// Config holds the dashboard plugin configuration
+// Config holds the dashboard plugin configuration.
 type Config struct {
 	// EnableSignup allows new users to sign up for dashboard access
 	EnableSignup bool `json:"enableSignup"`
@@ -92,59 +92,59 @@ type Config struct {
 	DefaultTheme string `json:"defaultTheme"`
 }
 
-// PluginOption is a functional option for configuring the dashboard plugin
+// PluginOption is a functional option for configuring the dashboard plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithEnableSignup sets whether signup is enabled
+// WithEnableSignup sets whether signup is enabled.
 func WithEnableSignup(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnableSignup = enabled
 	}
 }
 
-// WithRequireEmailVerification sets whether email verification is required
+// WithRequireEmailVerification sets whether email verification is required.
 func WithRequireEmailVerification(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireEmailVerification = required
 	}
 }
 
-// WithSessionDuration sets the session duration in hours
+// WithSessionDuration sets the session duration in hours.
 func WithSessionDuration(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SessionDuration = hours
 	}
 }
 
-// WithMaxLoginAttempts sets the maximum login attempts
+// WithMaxLoginAttempts sets the maximum login attempts.
 func WithMaxLoginAttempts(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxLoginAttempts = max
 	}
 }
 
-// WithLockoutDuration sets the lockout duration in minutes
+// WithLockoutDuration sets the lockout duration in minutes.
 func WithLockoutDuration(minutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.LockoutDuration = minutes
 	}
 }
 
-// WithDefaultTheme sets the default theme
+// WithDefaultTheme sets the default theme.
 func WithDefaultTheme(theme string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DefaultTheme = theme
 	}
 }
 
-// NewPlugin creates a new dashboard plugin instance with optional configuration
+// NewPlugin creates a new dashboard plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -166,27 +166,27 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the unique identifier for this plugin
+// ID returns the unique identifier for this plugin.
 func (p *Plugin) ID() string {
 	return "dashboard"
 }
 
 // Dependencies declares the plugin dependencies
-// Dashboard requires multiapp plugin for environment management
+// Dashboard requires multiapp plugin for environment management.
 func (p *Plugin) Dependencies() []string {
 	return []string{"multiapp"}
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
-		return fmt.Errorf("dashboard plugin requires auth instance with GetDB, GetServiceRegistry, GetHookRegistry, GetBasePath, GetPluginRegistry, and GetForgeApp methods")
+		return errs.BadRequest("dashboard plugin requires auth instance with GetDB, GetServiceRegistry, GetHookRegistry, GetBasePath, GetPluginRegistry, and GetForgeApp methods")
 	}
 
 	// Get Forge app and config manager
 	forgeApp := authInstance.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available")
+		return errs.InternalServerErrorWithMessage("forge app not available")
 	}
 
 	p.log = forgeApp.Logger().With(forge.F("plugin", "dashboard"))
@@ -215,6 +215,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if db == nil {
 		return errs.InternalServerError("database not available", nil)
 	}
+
 	p.db = db
 
 	// Get base path (e.g., "/api/auth")
@@ -236,6 +237,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 			if pluginID == "multiapp" {
 				p.isMultiAppMode = true
 			}
+
 			p.log.Debug("enabled plugin", forge.F("plugin", pluginID))
 		}
 	} else {
@@ -273,22 +275,22 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Get required services from registry using specific getters
 	p.userSvc = serviceRegistry.UserService()
 	if p.userSvc == nil {
-		return fmt.Errorf("user service not found in registry")
+		return errs.InternalServerErrorWithMessage("user service not found in registry")
 	}
 
 	p.sessionSvc = serviceRegistry.SessionService()
 	if p.sessionSvc == nil {
-		return fmt.Errorf("session service not found in registry")
+		return errs.InternalServerErrorWithMessage("session service not found in registry")
 	}
 
 	p.auditSvc = serviceRegistry.AuditService()
 	if p.auditSvc == nil {
-		return fmt.Errorf("audit service not found in registry")
+		return errs.InternalServerErrorWithMessage("audit service not found in registry")
 	}
 
 	p.rbacSvc = serviceRegistry.RBACService()
 	if p.rbacSvc == nil {
-		return fmt.Errorf("rbac service not found in registry")
+		return errs.InternalServerErrorWithMessage("rbac service not found in registry")
 	}
 
 	// Get API Key service if plugin is enabled
@@ -297,12 +299,13 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Get App service (required for multi-app support)
 	p.appService = serviceRegistry.AppService()
 	if p.appService == nil {
-		return fmt.Errorf("app service not found in registry")
+		return errs.InternalServerErrorWithMessage("app service not found in registry")
 	}
 
 	// Get Environment service (optional - only available with multiapp plugin)
 	// If not available, dashboard will operate without environment management features
 	p.envSvc = serviceRegistry.EnvironmentService()
+
 	envService := p.envSvc
 	if envService == nil {
 		p.log.Warn("environment service not available - dashboard will operate without environment management")
@@ -318,6 +321,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize CSRF protector: %w", err)
 	}
+
 	p.csrfProtector = csrfProtector
 
 	// Note: Role registration now happens via RegisterRoles() method (PluginWithRoles interface)
@@ -335,9 +339,11 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Setup default RBAC policies for immediate use (backward compatibility)
 	// The role bootstrap will ensure these are persisted
 	p.log.Debug("setting up default RBAC policies")
+
 	if err := SetupDefaultPolicies(p.rbacSvc); err != nil {
 		return fmt.Errorf("failed to setup default policies: %w", err)
 	}
+
 	p.log.Debug("default RBAC policies configured")
 
 	services := services.NewServices(
@@ -456,11 +462,11 @@ func (p *Plugin) initializeForgeUI() {
 }
 
 // RegisterRoles implements the PluginWithRoles optional interface
-// This is called automatically during server initialization to register dashboard roles
-func (p *Plugin) RegisterRoles(registry interface{}) error {
+// This is called automatically during server initialization to register dashboard roles.
+func (p *Plugin) RegisterRoles(registry any) error {
 	roleRegistry, ok := registry.(*rbac.RoleRegistry)
 	if !ok {
-		return fmt.Errorf("invalid role registry type")
+		return errs.BadRequest("invalid role registry type")
 	}
 
 	// Dashboard plugin extends/modifies the default roles with additional permissions
@@ -474,7 +480,7 @@ func (p *Plugin) RegisterRoles(registry interface{}) error {
 }
 
 // PlatformOrgContext middleware injects platform organization context into all dashboard requests
-// Dashboard always operates in the context of the platform organization without requiring API keys
+// Dashboard always operates in the context of the platform organization without requiring API keys.
 func (p *Plugin) PlatformOrgContext() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -490,7 +496,7 @@ func (p *Plugin) PlatformOrgContext() func(func(forge.Context) error) func(forge
 	}
 }
 
-// AppContext middleware injects app context into dashboard requests for authless routes
+// AppContext middleware injects app context into dashboard requests for authless routes.
 func (p *Plugin) AppContext() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -502,12 +508,12 @@ func (p *Plugin) AppContext() func(func(forge.Context) error) func(forge.Context
 	}
 }
 
-// ForgeUIApp returns the ForgeUI App instance
+// ForgeUIApp returns the ForgeUI App instance.
 func (p *Plugin) ForgeUIApp() *forgeui.App {
 	return p.fuiApp
 }
 
-// ForgeUIBridge returns the ForgeUI Bridge instance
+// ForgeUIBridge returns the ForgeUI Bridge instance.
 func (p *Plugin) ForgeUIBridge() *bridge.Bridge {
 	return p.fuiBridge
 }
@@ -521,10 +527,10 @@ func (p *Plugin) registerForgeUIRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterRoutes registers the dashboard routes
+// RegisterRoutes registers the dashboard routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
-		return fmt.Errorf("dashboard handler not initialized; call Init first")
+		return errs.InternalServerErrorWithMessage("dashboard handler not initialized; call Init first")
 	}
 
 	// Pass extension registry to handler and vice versa (for extension rendering)
@@ -558,6 +564,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				if ext == nil {
 					p.log.Warn("plugin returned nil dashboard extension",
 						forge.F("plugin", plugin.ID()))
+
 					continue
 				}
 
@@ -565,13 +572,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 					p.log.Error("failed to register dashboard extension",
 						forge.F("plugin", plugin.ID()),
 						forge.F("error", err.Error()))
+
 					continue
 				}
+
 				p.log.Info("registered dashboard extension",
 					forge.F("plugin", plugin.ID()),
 					forge.F("extension", ext.ExtensionID()))
 			}
 		}
+
 		p.log.Debug("dashboard extension discovery complete",
 			forge.F("extensions", len(p.extensionRegistry.List())))
 	}
@@ -600,6 +610,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.F("functionCount", len(functions)))
 		}
 	}
+
 	p.log.Debug("extension bridge functions registered")
 
 	if err := p.layoutManager.RegisterLayouts(); err != nil {
@@ -620,8 +631,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Bridge endpoints need to be accessible without dashboard auth middleware
 	// Use our custom middleware to enrich the bridge context with user, app, and environment IDs
 	bridgeHTTPHandler := p.BridgeContextMiddleware()
+
 	uiRouter.POST("/api/bridge", func(c forge.Context) error {
 		bridgeHTTPHandler.ServeHTTP(c.Response(), c.Request())
+
 		return nil
 	})
 
@@ -634,9 +647,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if strings.HasSuffix(path, "/api/bridge") || strings.Contains(path, "/api/bridge") {
 			p.log.Debug("⚠️ fuiHandler skipping bridge request - should be handled by middleware",
 				forge.F("path", path))
+
 			return c.String(http.StatusNotFound, "Bridge endpoint not found in wildcard handler")
 		}
+
 		http.StripPrefix(stripPrefix, p.fuiApp.Handler()).ServeHTTP(c.Response(), c.Request())
+
 		return nil
 	}
 
@@ -754,45 +770,45 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// DTOs for dashboard routes
+// DTOs for dashboard routes.
 type DashboardErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type DashboardStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type DashboardHTMLResponse struct {
-	HTML string `json:"html" example:"<html>...</html>"`
+	HTML string `example:"<html>...</html>" json:"html"`
 }
 
 type DashboardPingResponse struct {
-	Message string `json:"message" example:"Dashboard plugin is working!"`
+	Message string `example:"Dashboard plugin is working!" json:"message"`
 }
 
 type DashboardLoginResponse struct {
-	RedirectURL string `json:"redirect_url" example:"/ui/"`
+	RedirectURL string `example:"/ui/" json:"redirect_url"`
 }
 
 type DashboardStaticResponse struct {
-	ContentType string `json:"content_type" example:"text/css"`
+	ContentType string `example:"text/css" json:"content_type"`
 	Content     []byte `json:"content"`
 }
 
-// RegisterHooks registers hooks for the dashboard plugin
+// RegisterHooks registers hooks for the dashboard plugin.
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	// Dashboard plugin doesn't need hooks
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators
+// RegisterServiceDecorators registers service decorators.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Dashboard plugin doesn't need service decorators
 	return nil
 }
 
-// Migrate runs database migrations for the dashboard plugin
+// Migrate runs database migrations for the dashboard plugin.
 func (p *Plugin) Migrate() error {
 	// Dashboard plugin doesn't need database migrations
 	return nil

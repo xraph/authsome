@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
@@ -12,12 +13,12 @@ import (
 // =============================================================================
 
 // ScopeResolver resolves compliance profiles based on hierarchical scopes
-// Supports inheritance where child scopes can make policies MORE strict (never less)
+// Supports inheritance where child scopes can make policies MORE strict (never less).
 type ScopeResolver struct {
 	repo Repository
 }
 
-// NewScopeResolver creates a new scope resolver
+// NewScopeResolver creates a new scope resolver.
 func NewScopeResolver(repo Repository) *ScopeResolver {
 	return &ScopeResolver{
 		repo: repo,
@@ -25,10 +26,10 @@ func NewScopeResolver(repo Repository) *ScopeResolver {
 }
 
 // Resolve retrieves the effective compliance profile for a scope
-// Walks up the hierarchy and merges profiles with child overrides taking precedence
+// Walks up the hierarchy and merges profiles with child overrides taking precedence.
 func (r *ScopeResolver) Resolve(ctx context.Context, scope *audit.Scope) (*ComplianceProfile, error) {
 	if scope == nil {
-		return nil, fmt.Errorf("scope cannot be nil")
+		return nil, errs.InvalidInput("scope", "scope cannot be nil")
 	}
 
 	// Get profile for this scope
@@ -43,6 +44,7 @@ func (r *ScopeResolver) Resolve(ctx context.Context, scope *audit.Scope) (*Compl
 		if err != nil {
 			return nil, err
 		}
+
 		if parentScope != nil {
 			return r.Resolve(ctx, parentScope)
 		}
@@ -52,7 +54,7 @@ func (r *ScopeResolver) Resolve(ctx context.Context, scope *audit.Scope) (*Compl
 }
 
 // ResolveWithInheritance resolves profile with full inheritance chain
-// Returns the merged profile from system → app → org → team → role → user
+// Returns the merged profile from system → app → org → team → role → user.
 func (r *ScopeResolver) ResolveWithInheritance(ctx context.Context, scope *audit.Scope) (*ComplianceProfile, error) {
 	// Build inheritance chain
 	chain, err := r.buildInheritanceChain(ctx, scope)
@@ -61,7 +63,7 @@ func (r *ScopeResolver) ResolveWithInheritance(ctx context.Context, scope *audit
 	}
 
 	if len(chain) == 0 {
-		return nil, fmt.Errorf("no compliance profile found in scope hierarchy")
+		return nil, errs.NotFound("no compliance profile found in scope hierarchy")
 	}
 
 	// Start with system-level defaults (root of chain)
@@ -76,11 +78,12 @@ func (r *ScopeResolver) ResolveWithInheritance(ctx context.Context, scope *audit
 }
 
 // Inherit merges parent and child profiles with child overrides
-// Child can make policies MORE strict (never less)
+// Child can make policies MORE strict (never less).
 func (r *ScopeResolver) Inherit(parent, child *ComplianceProfile) *ComplianceProfile {
 	if parent == nil {
 		return child
 	}
+
 	if child == nil {
 		return parent
 	}
@@ -136,7 +139,7 @@ func (r *ScopeResolver) Inherit(parent, child *ComplianceProfile) *CompliancePro
 }
 
 // ValidateInheritance checks if child profile violates parent constraints
-// Returns error if child is LESS strict than parent
+// Returns error if child is LESS strict than parent.
 func (r *ScopeResolver) ValidateInheritance(parent, child *ComplianceProfile) error {
 	if parent == nil || child == nil {
 		return nil
@@ -144,7 +147,7 @@ func (r *ScopeResolver) ValidateInheritance(parent, child *ComplianceProfile) er
 
 	// Validate security requirements (child must be >= parent)
 	if parent.MFARequired && !child.MFARequired {
-		return fmt.Errorf("child scope cannot disable MFA when parent requires it")
+		return errs.BadRequest("child scope cannot disable MFA when parent requires it")
 	}
 
 	if child.PasswordMinLength < parent.PasswordMinLength {
@@ -153,19 +156,19 @@ func (r *ScopeResolver) ValidateInheritance(parent, child *ComplianceProfile) er
 	}
 
 	if parent.PasswordRequireUpper && !child.PasswordRequireUpper {
-		return fmt.Errorf("child cannot disable uppercase requirement when parent requires it")
+		return errs.BadRequest("child cannot disable uppercase requirement when parent requires it")
 	}
 
 	if parent.PasswordRequireLower && !child.PasswordRequireLower {
-		return fmt.Errorf("child cannot disable lowercase requirement when parent requires it")
+		return errs.BadRequest("child cannot disable lowercase requirement when parent requires it")
 	}
 
 	if parent.PasswordRequireNumber && !child.PasswordRequireNumber {
-		return fmt.Errorf("child cannot disable number requirement when parent requires it")
+		return errs.BadRequest("child cannot disable number requirement when parent requires it")
 	}
 
 	if parent.PasswordRequireSymbol && !child.PasswordRequireSymbol {
-		return fmt.Errorf("child cannot disable symbol requirement when parent requires it")
+		return errs.BadRequest("child cannot disable symbol requirement when parent requires it")
 	}
 
 	// Password expiry - 0 means never expires, so child can't have longer expiry than parent
@@ -198,7 +201,7 @@ func (r *ScopeResolver) ValidateInheritance(parent, child *ComplianceProfile) er
 // PRIVATE HELPER METHODS
 // =============================================================================
 
-// getProfileForScope retrieves profile directly for a scope (no inheritance)
+// getProfileForScope retrieves profile directly for a scope (no inheritance).
 func (r *ScopeResolver) getProfileForScope(ctx context.Context, scope *audit.Scope) (*ComplianceProfile, error) {
 	// For now, only app-level profiles are stored in DB
 	// Future: Support org, team, role, user-level profiles
@@ -210,7 +213,7 @@ func (r *ScopeResolver) getProfileForScope(ctx context.Context, scope *audit.Sco
 	return nil, nil
 }
 
-// getParentScope retrieves the parent scope
+// getParentScope retrieves the parent scope.
 func (r *ScopeResolver) getParentScope(ctx context.Context, scope *audit.Scope) (*audit.Scope, error) {
 	if scope.ParentID == nil {
 		return nil, nil
@@ -218,6 +221,7 @@ func (r *ScopeResolver) getParentScope(ctx context.Context, scope *audit.Scope) 
 
 	// Determine parent type based on current type
 	var parentType audit.ScopeType
+
 	switch scope.Type {
 	case audit.ScopeTypeUser:
 		parentType = audit.ScopeTypeRole
@@ -241,7 +245,7 @@ func (r *ScopeResolver) getParentScope(ctx context.Context, scope *audit.Scope) 
 	}, nil
 }
 
-// buildInheritanceChain walks up the scope hierarchy
+// buildInheritanceChain walks up the scope hierarchy.
 func (r *ScopeResolver) buildInheritanceChain(ctx context.Context, scope *audit.Scope) ([]*ComplianceProfile, error) {
 	chain := make([]*ComplianceProfile, 0)
 
@@ -273,6 +277,7 @@ func max(a, b int) int {
 	if a > b {
 		return a
 	}
+
 	return b
 }
 
@@ -281,12 +286,15 @@ func minPositive(a, b int) int {
 	if a == 0 {
 		return b
 	}
+
 	if b == 0 {
 		return a
 	}
+
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -317,6 +325,7 @@ func (r *ScopeResolver) mergeDataResidency(parent, child string) string {
 	if child != "" {
 		return child
 	}
+
 	return parent
 }
 
@@ -324,6 +333,7 @@ func (r *ScopeResolver) coalesce(preferred, fallback string) string {
 	if preferred != "" {
 		return preferred
 	}
+
 	return fallback
 }
 
@@ -331,6 +341,7 @@ func (r *ScopeResolver) mergeMetadata(parent, child map[string]interface{}) map[
 	if parent == nil {
 		return child
 	}
+
 	if child == nil {
 		return parent
 	}
@@ -340,6 +351,7 @@ func (r *ScopeResolver) mergeMetadata(parent, child map[string]interface{}) map[
 	for k, v := range parent {
 		merged[k] = v
 	}
+
 	for k, v := range child {
 		merged[k] = v
 	}

@@ -21,13 +21,13 @@ import (
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface
-// This allows the multisession plugin to add its own screens to the dashboard
+// This allows the multisession plugin to add its own screens to the dashboard.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension for multisession
+// NewDashboardExtension creates a new dashboard extension for multisession.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -35,17 +35,17 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// SetRegistry sets the extension registry reference (deprecated but kept for compatibility)
-func (e *DashboardExtension) SetRegistry(registry interface{}) {
+// SetRegistry sets the extension registry reference (deprecated but kept for compatibility).
+func (e *DashboardExtension) SetRegistry(registry any) {
 	// No longer needed - layout handled by ForgeUI
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "multisession"
 }
 
-// NavigationItems returns navigation items to register
+// NavigationItems returns navigation items to register.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -60,6 +60,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp != nil {
 					return basePath + "/app/" + currentApp.ID.String() + "/multisession"
 				}
+
 				return basePath + ""
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -70,7 +71,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns routes to register under /app/:appId/
+// Routes returns routes to register under /app/:appId/.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		{
@@ -154,12 +155,12 @@ func (e *DashboardExtension) Routes() []ui.Route {
 }
 
 // SettingsSections returns settings sections to add to the settings page
-// Deprecated: Use SettingsPages() instead
+// Deprecated: Use SettingsPages() instead.
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return nil
 }
 
-// SettingsPages returns full settings pages for the new sidebar layout
+// SettingsPages returns full settings pages for the new sidebar layout.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -176,7 +177,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// DashboardWidgets returns widgets to show on the main dashboard
+// DashboardWidgets returns widgets to show on the main dashboard.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -194,25 +195,26 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the multisession plugin
+// BridgeFunctions returns bridge functions for the multisession plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return e.getBridgeFunctions()
 }
 
 // Helper methods using dashboard handler
 
-func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) interface{} {
+func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) any {
 	reqCtx := ctx.Request.Context()
-	if u, ok := reqCtx.Value("user").(interface{}); ok {
+	if u, ok := reqCtx.Value("user").(any); ok {
 		return u
 	}
+
 	return nil
 }
 
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.RequiredField("appId")
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -227,7 +229,7 @@ func (e *DashboardExtension) getBasePath() string {
 	return e.baseUIPath
 }
 
-// ServeMultiSessionPage renders the multi-session management page using v2 pages
+// ServeMultiSessionPage renders the multi-session management page using v2 pages.
 func (e *DashboardExtension) ServeMultiSessionPage(ctx *router.PageContext) (g.Node, error) {
 	// Authentication is handled by route middleware (RequireAuth: true)
 	currentApp, err := e.extractAppFromURL(ctx)
@@ -242,12 +244,12 @@ func (e *DashboardExtension) ServeMultiSessionPage(ctx *router.PageContext) (g.N
 }
 
 // ServeMultiSessionPageLegacy renders the multi-session management page with legacy layout
-// Deprecated: Use ServeMultiSessionPage with v2 pages instead
+// Deprecated: Use ServeMultiSessionPage with v2 pages instead.
 func (e *DashboardExtension) ServeMultiSessionPageLegacy(ctx *router.PageContext) (g.Node, error) {
-
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, "/api/auth/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -271,7 +273,7 @@ func (e *DashboardExtension) ServeMultiSessionPageLegacy(ctx *router.PageContext
 	return content, nil
 }
 
-// renderPageContent renders the main content for the multisession page
+// renderPageContent renders the main content for the multisession page.
 func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentApp *app.App, basePath string, page, pageSize int, deviceFilter, statusFilter, searchQuery, view string) g.Node {
 	reqCtx := ctx.Request.Context()
 
@@ -284,8 +286,11 @@ func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentA
 		},
 	})
 
-	var sessions []*session.Session
-	var totalSessions int64
+	var (
+		sessions      []*session.Session
+		totalSessions int64
+	)
+
 	if err == nil && sessionsResp != nil {
 		sessions = sessionsResp.Data
 		if sessionsResp.Pagination != nil {
@@ -337,10 +342,10 @@ func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentA
 		// Stats cards row
 		Div(
 			Class("grid gap-4 sm:grid-cols-2 lg:grid-cols-4"),
-			e.renderStatCard("Total Sessions", fmt.Sprintf("%d", totalSessions), lucide.Layers(Class("size-5")), "bg-blue-500", ""),
-			e.renderStatCard("Active Sessions", fmt.Sprintf("%d", stats.Active), lucide.Activity(Class("size-5")), "bg-emerald-500", ""),
-			e.renderStatCard("Mobile Devices", fmt.Sprintf("%d", stats.Mobile), lucide.Smartphone(Class("size-5")), "bg-violet-500", ""),
-			e.renderStatCard("Unique Users", fmt.Sprintf("%d", stats.UniqueUsers), lucide.Users(Class("size-5")), "bg-amber-500", ""),
+			e.renderStatCard("Total Sessions", strconv.FormatInt(totalSessions, 10), lucide.Layers(Class("size-5")), "bg-blue-500", ""),
+			e.renderStatCard("Active Sessions", strconv.Itoa(stats.Active), lucide.Activity(Class("size-5")), "bg-emerald-500", ""),
+			e.renderStatCard("Mobile Devices", strconv.Itoa(stats.Mobile), lucide.Smartphone(Class("size-5")), "bg-violet-500", ""),
+			e.renderStatCard("Unique Users", strconv.Itoa(stats.UniqueUsers), lucide.Users(Class("size-5")), "bg-amber-500", ""),
 		),
 
 		// Filter and search bar
@@ -366,6 +371,7 @@ func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentA
 							if view == "grid" {
 								return "bg-slate-100 text-slate-900 dark:bg-gray-700 dark:text-white"
 							}
+
 							return "text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
 						}()),
 						lucide.LayoutGrid(Class("size-4")),
@@ -376,6 +382,7 @@ func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentA
 							if view == "list" {
 								return "bg-slate-100 text-slate-900 dark:bg-gray-700 dark:text-white"
 							}
+
 							return "text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
 						}()),
 						lucide.List(Class("size-4")),
@@ -431,7 +438,7 @@ func (e *DashboardExtension) renderPageContent(ctx *router.PageContext, currentA
 	)
 }
 
-// Session statistics structure
+// Session statistics structure.
 type sessionStats struct {
 	Active       int
 	ExpiringSoon int
@@ -477,6 +484,7 @@ func (e *DashboardExtension) calculateSessionStats(sessions []*session.Session) 
 	}
 
 	stats.UniqueUsers = len(userMap)
+
 	return stats
 }
 
@@ -487,12 +495,14 @@ func (e *DashboardExtension) filterSessions(sessions []*session.Session, deviceF
 
 	now := time.Now()
 	soonThreshold := 24 * time.Hour
+
 	var filtered []*session.Session
 
 	for _, sess := range sessions {
 		// Device filter
 		if deviceFilter != "" {
 			device := ParseUserAgent(sess.UserAgent)
+
 			switch deviceFilter {
 			case "mobile":
 				if !device.IsMobile {
@@ -540,7 +550,7 @@ func (e *DashboardExtension) filterSessions(sessions []*session.Session, deviceF
 	return filtered
 }
 
-// renderStatCard renders a stat card with icon and gradient
+// renderStatCard renders a stat card with icon and gradient.
 func (e *DashboardExtension) renderStatCard(label, value string, icon g.Node, bgColor, change string) g.Node {
 	return Div(
 		Class("group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-gray-800 dark:bg-gray-900"),
@@ -564,7 +574,7 @@ func (e *DashboardExtension) renderStatCard(label, value string, icon g.Node, bg
 	)
 }
 
-// renderFilterTab renders a filter tab button
+// renderFilterTab renders a filter tab button.
 func (e *DashboardExtension) renderFilterTab(label, value, current, view string, currentApp *app.App, basePath string, count int64) g.Node {
 	isActive := current == value
 	classes := "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all "
@@ -581,10 +591,12 @@ func (e *DashboardExtension) renderFilterTab(label, value, current, view string,
 	}
 
 	href := fmt.Sprintf("%s/app/%s/multisession", basePath, currentApp.ID.String())
+
 	queryParams := []string{}
 	if value != "" {
 		queryParams = append(queryParams, "status="+value)
 	}
+
 	if view != "" && view != "grid" {
 		queryParams = append(queryParams, "view="+view)
 	}
@@ -598,11 +610,11 @@ func (e *DashboardExtension) renderFilterTab(label, value, current, view string,
 		Class(classes),
 		g.Text(label),
 		Span(Class(badgeClasses),
-			g.Text(fmt.Sprintf("%d", count))),
+			g.Text(strconv.FormatInt(count, 10))),
 	)
 }
 
-// renderSessionsList renders sessions in a list layout
+// renderSessionsList renders sessions in a list layout.
 func (e *DashboardExtension) renderSessionsList(sessions []*session.Session, currentApp *app.App, basePath string) g.Node {
 	return Div(
 		Class("overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -629,7 +641,7 @@ func (e *DashboardExtension) renderSessionsList(sessions []*session.Session, cur
 	)
 }
 
-// renderSessionListRow renders a single session row
+// renderSessionListRow renders a single session row.
 func (e *DashboardExtension) renderSessionListRow(sess *session.Session, currentApp *app.App, basePath string) g.Node {
 	device := ParseUserAgent(sess.UserAgent)
 	isActive := IsSessionActive(sess.ExpiresAt)
@@ -722,7 +734,7 @@ func (e *DashboardExtension) renderSessionListRow(sess *session.Session, current
 	)
 }
 
-// renderSessionsGrid renders sessions in a modern card grid
+// renderSessionsGrid renders sessions in a modern card grid.
 func (e *DashboardExtension) renderSessionsGrid(sessions []*session.Session, currentApp *app.App, basePath string) g.Node {
 	cards := make([]g.Node, 0, len(sessions))
 
@@ -736,7 +748,7 @@ func (e *DashboardExtension) renderSessionsGrid(sessions []*session.Session, cur
 	)
 }
 
-// renderSessionCard renders a single session card
+// renderSessionCard renders a single session card.
 func (e *DashboardExtension) renderSessionCard(sess *session.Session, currentApp *app.App, basePath string) g.Node {
 	device := ParseUserAgent(sess.UserAgent)
 	isActive := IsSessionActive(sess.ExpiresAt)
@@ -861,7 +873,7 @@ func (e *DashboardExtension) renderSessionCard(sess *session.Session, currentApp
 	)
 }
 
-// getDeviceBgColor returns a background color class based on device type
+// getDeviceBgColor returns a background color class based on device type.
 func (e *DashboardExtension) getDeviceBgColor(device *DeviceInfo) string {
 	switch {
 	case device.IsMobile:
@@ -875,7 +887,7 @@ func (e *DashboardExtension) getDeviceBgColor(device *DeviceInfo) string {
 	}
 }
 
-// getDeviceIcon returns an appropriate icon based on device type
+// getDeviceIcon returns an appropriate icon based on device type.
 func (e *DashboardExtension) getDeviceIcon(device *DeviceInfo) g.Node {
 	iconClass := "size-6 text-slate-600 dark:text-gray-400"
 
@@ -891,7 +903,7 @@ func (e *DashboardExtension) getDeviceIcon(device *DeviceInfo) g.Node {
 	}
 }
 
-// getStatusBadgeClasses returns classes for status badge
+// getStatusBadgeClasses returns classes for status badge.
 func (e *DashboardExtension) getStatusBadgeClasses(status string) string {
 	switch status {
 	case "Active":
@@ -905,7 +917,7 @@ func (e *DashboardExtension) getStatusBadgeClasses(status string) string {
 	}
 }
 
-// renderEmptyState renders the empty state
+// renderEmptyState renders the empty state.
 func (e *DashboardExtension) renderEmptyState(currentApp *app.App, basePath string) g.Node {
 	return Div(
 		Class("rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-900"),
@@ -920,7 +932,7 @@ func (e *DashboardExtension) renderEmptyState(currentApp *app.App, basePath stri
 	)
 }
 
-// renderPagination renders pagination controls
+// renderPagination renders pagination controls.
 func (e *DashboardExtension) renderPagination(currentPage, totalPages int, currentApp *app.App, basePath, deviceFilter, statusFilter, view string) g.Node {
 	if totalPages <= 1 {
 		return nil
@@ -931,12 +943,15 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, curre
 		if deviceFilter != "" {
 			url += "&device=" + deviceFilter
 		}
+
 		if statusFilter != "" {
 			url += "&status=" + statusFilter
 		}
+
 		if view != "" && view != "grid" {
 			url += "&view=" + view
 		}
+
 		return url
 	}
 
@@ -957,13 +972,13 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, curre
 		if i == currentPage {
 			items = append(items, Span(
 				Class("inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == 1 || i == totalPages || (i >= currentPage-1 && i <= currentPage+1) {
 			items = append(items, A(
 				Href(buildURL(i)),
 				Class("inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"),
-				g.Text(fmt.Sprintf("%d", i)),
+				g.Text(strconv.Itoa(i)),
 			))
 		} else if i == currentPage-2 || i == currentPage+2 {
 			items = append(items, Span(
@@ -990,7 +1005,7 @@ func (e *DashboardExtension) renderPagination(currentPage, totalPages int, curre
 }
 
 // ServeSessionDetailPage renders detailed information about a single session
-// ServeSessionDetailPage renders the session detail page using v2 pages
+// ServeSessionDetailPage renders the session detail page using v2 pages.
 func (e *DashboardExtension) ServeSessionDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// Authentication is handled by route middleware (RequireAuth: true)
 	currentApp, err := e.extractAppFromURL(ctx)
@@ -1010,9 +1025,8 @@ func (e *DashboardExtension) ServeSessionDetailPage(ctx *router.PageContext) (g.
 }
 
 // ServeSessionDetailPageLegacy renders the session detail page with legacy layout
-// Deprecated: Use ServeSessionDetailPage with v2 pages instead
+// Deprecated: Use ServeSessionDetailPage with v2 pages instead.
 func (e *DashboardExtension) ServeSessionDetailPageLegacy(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1029,6 +1043,7 @@ func (e *DashboardExtension) ServeSessionDetailPageLegacy(ctx *router.PageContex
 	}
 
 	reqCtx := ctx.Request.Context()
+
 	sess, err := e.plugin.service.sessionSvc.FindByID(reqCtx, sessionID)
 	if err != nil {
 		return nil, errs.NotFound("Session not found")
@@ -1041,7 +1056,7 @@ func (e *DashboardExtension) ServeSessionDetailPageLegacy(ctx *router.PageContex
 	return content, nil
 }
 
-// renderSessionDetailContent renders the session detail page content
+// renderSessionDetailContent renders the session detail page content.
 func (e *DashboardExtension) renderSessionDetailContent(sess *session.Session, currentApp *app.App, basePath string) g.Node {
 	device := ParseUserAgent(sess.UserAgent)
 	isActive := IsSessionActive(sess.ExpiresAt)
@@ -1212,23 +1227,25 @@ func (e *DashboardExtension) renderSessionDetailContent(sess *session.Session, c
 	)
 }
 
-// renderOptionalIDRow renders a detail row for an optional ID
+// renderOptionalIDRow renders a detail row for an optional ID.
 func (e *DashboardExtension) renderOptionalIDRow(label string, id *xid.ID, icon g.Node) g.Node {
 	if id == nil {
 		return nil
 	}
+
 	return e.renderDetailRow(label, id.String(), icon)
 }
 
-// renderTimeRow renders a detail row for an optional time
+// renderTimeRow renders a detail row for an optional time.
 func (e *DashboardExtension) renderTimeRow(label string, t *time.Time, format string, icon g.Node) g.Node {
 	if t == nil {
 		return nil
 	}
+
 	return e.renderDetailRow(label, t.Format(format), icon)
 }
 
-// getLargeDeviceIcon returns a larger icon for the detail page
+// getLargeDeviceIcon returns a larger icon for the detail page.
 func (e *DashboardExtension) getLargeDeviceIcon(device *DeviceInfo) g.Node {
 	iconClass := "size-8"
 
@@ -1244,11 +1261,12 @@ func (e *DashboardExtension) getLargeDeviceIcon(device *DeviceInfo) g.Node {
 	}
 }
 
-// renderDetailRow renders a detail row with icon, label, and value
+// renderDetailRow renders a detail row with icon, label, and value.
 func (e *DashboardExtension) renderDetailRow(label, value string, icon g.Node) g.Node {
 	if value == "" {
 		value = "N/A"
 	}
+
 	return Div(
 		Class("flex items-start gap-3"),
 		icon,
@@ -1262,7 +1280,7 @@ func (e *DashboardExtension) renderDetailRow(label, value string, icon g.Node) g
 }
 
 // ServeUserSessionsPage renders all sessions for a specific user
-// ServeUserSessionsPage renders the user sessions page using v2 pages
+// ServeUserSessionsPage renders the user sessions page using v2 pages.
 func (e *DashboardExtension) ServeUserSessionsPage(ctx *router.PageContext) (g.Node, error) {
 	// Authentication is handled by route middleware (RequireAuth: true)
 	currentApp, err := e.extractAppFromURL(ctx)
@@ -1282,9 +1300,8 @@ func (e *DashboardExtension) ServeUserSessionsPage(ctx *router.PageContext) (g.N
 }
 
 // ServeUserSessionsPageLegacy renders the user sessions page with legacy layout
-// Deprecated: Use ServeUserSessionsPage with v2 pages instead
+// Deprecated: Use ServeUserSessionsPage with v2 pages instead.
 func (e *DashboardExtension) ServeUserSessionsPageLegacy(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1323,9 +1340,10 @@ func (e *DashboardExtension) ServeUserSessionsPageLegacy(ctx *router.PageContext
 	return content, nil
 }
 
-// renderUserSessionsContent renders the user sessions page content
+// renderUserSessionsContent renders the user sessions page content.
 func (e *DashboardExtension) renderUserSessionsContent(userID xid.ID, sessions []*session.Session, currentApp *app.App, basePath string) g.Node {
 	activeCount := 0
+
 	for _, sess := range sessions {
 		if IsSessionActive(sess.ExpiresAt) {
 			activeCount++
@@ -1369,14 +1387,14 @@ func (e *DashboardExtension) renderUserSessionsContent(userID xid.ID, sessions [
 					Div(
 						Class("text-right"),
 						Div(Class("text-2xl font-bold text-slate-900 dark:text-white"),
-							g.Text(fmt.Sprintf("%d", len(sessions)))),
+							g.Text(strconv.Itoa(len(sessions)))),
 						Div(Class("text-sm text-slate-500 dark:text-gray-400"),
 							g.Text("Total Sessions")),
 					),
 					Div(
 						Class("text-right"),
 						Div(Class("text-2xl font-bold text-emerald-600 dark:text-emerald-400"),
-							g.Text(fmt.Sprintf("%d", activeCount))),
+							g.Text(strconv.Itoa(activeCount))),
 						Div(Class("text-sm text-slate-500 dark:text-gray-400"),
 							g.Text("Active")),
 					),
@@ -1414,7 +1432,7 @@ func (e *DashboardExtension) renderUserSessionsContent(userID xid.ID, sessions [
 	)
 }
 
-// RenderDashboardWidget renders the dashboard widget showing session stats
+// RenderDashboardWidget renders the dashboard widget showing session stats.
 func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *app.App) g.Node {
 	return Div(
 		Class("space-y-4"),
@@ -1464,7 +1482,7 @@ func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *
 
 // Action handlers
 
-// RevokeSession handles session revocation
+// RevokeSession handles session revocation.
 func (e *DashboardExtension) RevokeSession(ctx *router.PageContext) (g.Node, error) {
 	sessionIDStr := ctx.Param("sessionId")
 	if sessionIDStr == "" {
@@ -1478,21 +1496,24 @@ func (e *DashboardExtension) RevokeSession(ctx *router.PageContext) (g.Node, err
 
 	reqCtx := ctx.Request.Context()
 	if err := e.plugin.service.sessionSvc.RevokeByID(reqCtx, sessionID); err != nil {
-		return nil, fmt.Errorf("Failed to revoke session")
+		return nil, errs.InternalServerErrorWithMessage("Failed to revoke session")
 	}
 
 	currentApp, _ := e.extractAppFromURL(ctx)
+
 	basePath := e.getBasePath()
 	if currentApp != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/multisession", http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/", http.StatusFound)
+
 	return nil, nil
 }
 
-// RevokeAllUserSessions handles revoking all sessions for a user
+// RevokeAllUserSessions handles revoking all sessions for a user.
 func (e *DashboardExtension) RevokeAllUserSessions(ctx *router.PageContext) (g.Node, error) {
 	userIDStr := ctx.Param("userId")
 	if userIDStr == "" {
@@ -1517,9 +1538,8 @@ func (e *DashboardExtension) RevokeAllUserSessions(ctx *router.PageContext) (g.N
 			Offset: 0,
 		},
 	})
-
 	if err != nil {
-		return nil, fmt.Errorf("Failed to fetch user sessions")
+		return nil, errs.InternalServerErrorWithMessage("Failed to fetch user sessions")
 	}
 
 	// Revoke all sessions
@@ -1532,15 +1552,17 @@ func (e *DashboardExtension) RevokeAllUserSessions(ctx *router.PageContext) (g.N
 	basePath := e.getBasePath()
 	if currentApp != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/multisession", http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/", http.StatusFound)
+
 	return nil, nil
 }
 
 // ServeSettings renders the multisession settings page
-// ServeSettings renders the settings page using v2 pages
+// ServeSettings renders the settings page using v2 pages.
 func (e *DashboardExtension) ServeSettings(ctx *router.PageContext) (g.Node, error) {
 	// Authentication is handled by route middleware (RequireAuth: true, RequireAdmin: true)
 	currentApp, err := e.extractAppFromURL(ctx)
@@ -1555,19 +1577,19 @@ func (e *DashboardExtension) ServeSettings(ctx *router.PageContext) (g.Node, err
 }
 
 // ServeSettingsLegacy renders the settings page with legacy layout
-// Deprecated: Use ServeSettings with v2 pages instead
+// Deprecated: Use ServeSettings with v2 pages instead.
 func (e *DashboardExtension) ServeSettingsLegacy(ctx *router.PageContext) (g.Node, error) {
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	content := e.renderSettingsContent(currentApp, e.getBasePath())
+
 	return content, nil
 }
 
-// renderSettingsContent renders the settings page content
+// renderSettingsContent renders the settings page content.
 func (e *DashboardExtension) renderSettingsContent(currentApp *app.App, basePath string) g.Node {
 	cfg := e.plugin.config
 
@@ -1742,7 +1764,7 @@ func (e *DashboardExtension) renderSettingsContent(currentApp *app.App, basePath
 	)
 }
 
-// SaveSettings handles saving multisession settings
+// SaveSettings handles saving multisession settings.
 func (e *DashboardExtension) SaveSettings(ctx *router.PageContext) (g.Node, error) {
 	if err := ctx.Request.ParseForm(); err != nil {
 		return nil, errs.BadRequest("Invalid form data")
@@ -1752,6 +1774,7 @@ func (e *DashboardExtension) SaveSettings(ctx *router.PageContext) (g.Node, erro
 
 	// Parse max sessions per user
 	maxSessions := 10
+
 	if val := form.Get("maxSessionsPerUser"); val != "" {
 		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 && parsed <= 100 {
 			maxSessions = parsed
@@ -1760,6 +1783,7 @@ func (e *DashboardExtension) SaveSettings(ctx *router.PageContext) (g.Node, erro
 
 	// Parse session expiry hours
 	sessionExpiry := 720
+
 	if val := form.Get("sessionExpiryHours"); val != "" {
 		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 && parsed <= 8760 {
 			sessionExpiry = parsed
@@ -1777,13 +1801,16 @@ func (e *DashboardExtension) SaveSettings(ctx *router.PageContext) (g.Node, erro
 	e.plugin.config.AllowCrossPlatform = allowCrossPlatform
 
 	currentApp, _ := e.extractAppFromURL(ctx)
+
 	basePath := e.getBasePath()
 	if currentApp != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/multisession?saved=true", http.StatusFound)
+
 		return nil, nil
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/settings/multisession?saved=true", http.StatusFound)
+
 	return nil, nil
 }
 
@@ -1794,9 +1821,11 @@ func queryIntDefault(ctx *router.PageContext, name string, defaultValue int) int
 	if str == "" {
 		return defaultValue
 	}
+
 	val, err := strconv.Atoi(str)
 	if err != nil {
 		return defaultValue
 	}
+
 	return val
 }

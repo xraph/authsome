@@ -12,10 +12,11 @@ import (
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the AuthSome plugin interface for compliance
+// Plugin implements the AuthSome plugin interface for compliance.
 type Plugin struct {
 	service      *Service
 	config       *Config
@@ -23,53 +24,54 @@ type Plugin struct {
 	handler      *Handler
 }
 
-// NewPlugin creates a new compliance plugin
+// NewPlugin creates a new compliance plugin.
 func NewPlugin() *Plugin {
 	return &Plugin{
 		config: DefaultConfig(),
 	}
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "compliance"
 }
 
-// Name returns the plugin name
+// Name returns the plugin name.
 func (p *Plugin) Name() string {
 	return "Enterprise Compliance & Audit"
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Comprehensive compliance management for SOC 2, HIPAA, PCI-DSS, GDPR, and ISO 27001"
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return "1.0.0"
 }
 
-// Init initializes the plugin with AuthSome dependencies
+// Init initializes the plugin with AuthSome dependencies.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("compliance plugin requires Auth instance")
+		return errs.InternalServerErrorWithMessage("compliance plugin requires Auth instance")
 	}
 
 	db := authInst.GetDB()
 	if db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerErrorWithMessage("database not available")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available")
+		return errs.InternalServerErrorWithMessage("forge app not available")
 	}
 
 	configManager := forgeApp.Config()
+
 	serviceRegistry := authInst.GetServiceRegistry()
 	if serviceRegistry == nil {
-		return fmt.Errorf("service registry not available")
+		return errs.InternalServerErrorWithMessage("service registry not available")
 	}
 
 	// Load configuration from Forge config manager
@@ -78,6 +80,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		// Use defaults if binding fails
 		config = *DefaultConfig()
 	}
+
 	config.Validate() // Ensure defaults are set
 	p.config = &config
 
@@ -129,7 +132,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if !p.config.Enabled || p.handler == nil {
 		return nil
@@ -413,7 +416,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// registerHooks registers lifecycle hooks
+// registerHooks registers lifecycle hooks.
 func (p *Plugin) registerHooks(hookRegistry *hooks.HookRegistry) error {
 	// Register user lifecycle hooks
 	hookRegistry.RegisterAfterUserCreate(p.onUserCreated)
@@ -503,113 +506,113 @@ func (p *Plugin) onSessionCreated(ctx context.Context, sess *session.Session) er
 	return nil
 }
 
-// RegisterHooks registers plugin hooks with the hook registry (implements Plugin interface)
+// RegisterHooks registers plugin hooks with the hook registry (implements Plugin interface).
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return p.registerHooks(hookRegistry)
 }
 
-// RegisterServiceDecorators allows plugins to replace core services with decorated versions
+// RegisterServiceDecorators allows plugins to replace core services with decorated versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Compliance plugin doesn't decorate core services
 	// It provides its own service that's accessed via the plugin
 	return nil
 }
 
-// Migrate performs database migrations
+// Migrate performs database migrations.
 func (p *Plugin) Migrate() error {
 	// Database migrations will be handled by migration system
 	// The schema is defined in schema.go and will be registered in migrations/bun/
 	return nil
 }
 
-// Service returns the compliance service for direct access (optional public method)
+// Service returns the compliance service for direct access (optional public method).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// PolicyEngine returns the policy engine for direct access (optional public method)
+// PolicyEngine returns the policy engine for direct access (optional public method).
 func (p *Plugin) PolicyEngine() *PolicyEngine {
 	return p.policyEngine
 }
 
-// DTOs for compliance routes
+// DTOs for compliance routes.
 type ComplianceStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
 type ComplianceProfileResponse struct {
-	ID string `json:"id" example:"profile_123"`
+	ID string `example:"profile_123" json:"id"`
 }
 
 type ComplianceStatusDetailsResponse struct {
-	Status string `json:"status" example:"compliant"`
+	Status string `example:"compliant" json:"status"`
 }
 
 type ComplianceDashboardResponse struct {
-	Metrics interface{} `json:"metrics"`
+	Metrics any `json:"metrics"`
 }
 
 type ComplianceCheckResponse struct {
-	ID string `json:"id" example:"check_123"`
+	ID string `example:"check_123" json:"id"`
 }
 
 type ComplianceChecksResponse struct {
-	Checks []interface{} `json:"checks"`
+	Checks []any `json:"checks"`
 }
 
 type ComplianceViolationsResponse struct {
-	Violations []interface{} `json:"violations"`
+	Violations []any `json:"violations"`
 }
 
 type ComplianceViolationResponse struct {
-	ID string `json:"id" example:"violation_123"`
+	ID string `example:"violation_123" json:"id"`
 }
 
 type ComplianceReportResponse struct {
-	ID string `json:"id" example:"report_123"`
+	ID string `example:"report_123" json:"id"`
 }
 
 type ComplianceReportsResponse struct {
-	Reports []interface{} `json:"reports"`
+	Reports []any `json:"reports"`
 }
 
 type ComplianceReportFileResponse struct {
-	ContentType string `json:"content_type" example:"application/pdf"`
+	ContentType string `example:"application/pdf" json:"content_type"`
 	Data        []byte `json:"data"`
 }
 
 type ComplianceEvidenceResponse struct {
-	ID string `json:"id" example:"evidence_123"`
+	ID string `example:"evidence_123" json:"id"`
 }
 
 type ComplianceEvidencesResponse struct {
-	Evidence []interface{} `json:"evidence"`
+	Evidence []any `json:"evidence"`
 }
 
 type CompliancePolicyResponse struct {
-	ID string `json:"id" example:"policy_123"`
+	ID string `example:"policy_123" json:"id"`
 }
 
 type CompliancePoliciesResponse struct {
-	Policies []interface{} `json:"policies"`
+	Policies []any `json:"policies"`
 }
 
 type ComplianceTrainingResponse struct {
-	ID string `json:"id" example:"training_123"`
+	ID string `example:"training_123" json:"id"`
 }
 
 type ComplianceTrainingsResponse struct {
-	Training []interface{} `json:"training"`
+	Training []any `json:"training"`
 }
 
 type ComplianceUserTrainingResponse struct {
-	UserID string `json:"user_id" example:"user_123"`
+	UserID string `example:"user_123" json:"user_id"`
 }
 
 type ComplianceTemplatesResponse struct {
-	Templates []interface{} `json:"templates"`
+	Templates []any `json:"templates"`
 }
 
 type ComplianceTemplateResponse struct {
-	Standard string `json:"standard" example:"GDPR"`
+	Standard string `example:"GDPR" json:"standard"`
 }

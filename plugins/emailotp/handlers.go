@@ -2,6 +2,7 @@ package emailotp
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 
@@ -25,36 +26,38 @@ func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome) *Handler {
 	return &Handler{svc: s, rl: rls, authInst: authInst}
 }
 
-// Request types
+// Request types.
 type SendRequest struct {
-	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
 
 type VerifyRequest struct {
-	Email    string `json:"email" validate:"required,email" example:"user@example.com"`
-	OTP      string `json:"otp" validate:"required" example:"123456"`
-	Remember bool   `json:"remember" example:"false"`
+	Email    string `example:"user@example.com" json:"email"    validate:"required,email"`
+	OTP      string `example:"123456"           json:"otp"      validate:"required"`
+	Remember bool   `example:"false"            json:"remember"`
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type VerifyResponse = responses.VerifyResponse
 
-// Plugin-specific response
+// Plugin-specific response.
 type SendResponse struct {
-	Status string `json:"status" example:"sent"`
-	DevOTP string `json:"dev_otp,omitempty" example:"123456"`
+	Status string `example:"sent"   json:"status"`
+	DevOTP string `example:"123456" json:"dev_otp,omitempty"`
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// Send handles sending of OTP to email
+// Send handles sending of OTP to email.
 func (h *Handler) Send(c forge.Context) error {
 	var req SendRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -70,10 +73,12 @@ func (h *Handler) Send(c forge.Context) error {
 	// Basic rate limit: per email for the send path
 	if h.rl != nil {
 		key := "emailotp:send:" + req.Email
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, "/api/auth/email-otp/send")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errs.New("RATE_LIMIT_ERROR", "Rate limit check failed", http.StatusInternalServerError).WithError(err))
 		}
+
 		if !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests, please try again later", http.StatusTooManyRequests))
 		}
@@ -83,6 +88,7 @@ func (h *Handler) Send(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	otp, err := h.svc.SendOTP(c.Request().Context(), appID, req.Email, ip, ua)
@@ -97,10 +103,11 @@ func (h *Handler) Send(c forge.Context) error {
 	if otp != "" {
 		response.DevOTP = otp
 	}
+
 	return c.JSON(http.StatusOK, response)
 }
 
-// Verify checks the OTP and creates a session on success
+// Verify checks the OTP and creates a session on success.
 func (h *Handler) Verify(c forge.Context) error {
 	var req VerifyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -120,6 +127,7 @@ func (h *Handler) Verify(c forge.Context) error {
 
 	// Get optional organization context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -129,6 +137,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	res, err := h.svc.VerifyOTP(c.Request().Context(), appID, envID, orgIDPtr, req.Email, req.OTP, req.Remember, ip, ua)

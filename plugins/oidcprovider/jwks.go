@@ -13,14 +13,15 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// JWKS represents a JSON Web Key Set
+// JWKS represents a JSON Web Key Set.
 type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
-// JWK represents a JSON Web Key
+// JWK represents a JSON Web Key.
 type JWK struct {
 	KeyType   string `json:"kty"`
 	Use       string `json:"use"`
@@ -30,7 +31,7 @@ type JWK struct {
 	E         string `json:"e"` // RSA exponent
 }
 
-// KeyPair represents an RSA key pair with metadata
+// KeyPair represents an RSA key pair with metadata.
 type KeyPair struct {
 	ID         string
 	PrivateKey *rsa.PrivateKey
@@ -40,7 +41,7 @@ type KeyPair struct {
 	Active     bool // Whether this key is used for signing new tokens
 }
 
-// KeyStoreInterface defines the interface for key storage backends
+// KeyStoreInterface defines the interface for key storage backends.
 type KeyStoreInterface interface {
 	GetActiveKey() *KeyPair
 	GetKey(kid string) *KeyPair
@@ -50,7 +51,7 @@ type KeyStoreInterface interface {
 	GetLastRotation() time.Time
 }
 
-// KeyStore manages multiple key pairs for rotation (in-memory implementation)
+// KeyStore manages multiple key pairs for rotation (in-memory implementation).
 type KeyStore struct {
 	keys             map[string]*KeyPair
 	activeKey        string
@@ -60,22 +61,23 @@ type KeyStore struct {
 	lastRotation     time.Time
 }
 
-// Ensure KeyStore implements KeyStoreInterface
+// Ensure KeyStore implements KeyStoreInterface.
 var _ KeyStoreInterface = (*KeyStore)(nil)
 
-// GetLastRotation returns the last rotation time
+// GetLastRotation returns the last rotation time.
 func (ks *KeyStore) GetLastRotation() time.Time {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
+
 	return ks.lastRotation
 }
 
-// JWKSService manages JSON Web Key Sets for the OIDC Provider
+// JWKSService manages JSON Web Key Sets for the OIDC Provider.
 type JWKSService struct {
 	keyStore KeyStoreInterface // Can be in-memory or database-backed
 }
 
-// NewKeyStore creates a new key store with initial key pair
+// NewKeyStore creates a new key store with initial key pair.
 func NewKeyStore() (*KeyStore, error) {
 	ks := &KeyStore{
 		keys:             make(map[string]*KeyPair),
@@ -91,7 +93,7 @@ func NewKeyStore() (*KeyStore, error) {
 	return ks, nil
 }
 
-// NewKeyStoreFromFiles creates a new key store with keys loaded from files
+// NewKeyStoreFromFiles creates a new key store with keys loaded from files.
 func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLifetime string) (*KeyStore, error) {
 	// Parse duration strings
 	rotationDur, err := time.ParseDuration(rotationInterval)
@@ -118,10 +120,11 @@ func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLi
 
 	block, _ := pem.Decode(privateKeyData)
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block from private key")
+		return nil, errs.InternalServerErrorWithMessage("failed to decode PEM block from private key")
 	}
 
 	var privateKey *rsa.PrivateKey
+
 	switch block.Type {
 	case "RSA PRIVATE KEY":
 		privateKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
@@ -130,10 +133,12 @@ func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLi
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse PKCS8 private key: %w", err)
 		}
+
 		var ok bool
+
 		privateKey, ok = key.(*rsa.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("private key is not RSA")
+			return nil, errs.InternalServerErrorWithMessage("private key is not RSA")
 		}
 	default:
 		return nil, fmt.Errorf("unsupported private key type: %s", block.Type)
@@ -161,7 +166,7 @@ func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLi
 	return ks, nil
 }
 
-// generateNewKey creates a new RSA key pair and adds it to the store
+// generateNewKey creates a new RSA key pair and adds it to the store.
 func (ks *KeyStore) generateNewKey() error {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
@@ -197,7 +202,7 @@ func (ks *KeyStore) generateNewKey() error {
 	return nil
 }
 
-// GetActiveKey returns the current active key pair for signing
+// GetActiveKey returns the current active key pair for signing.
 func (ks *KeyStore) GetActiveKey() *KeyPair {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
@@ -209,7 +214,7 @@ func (ks *KeyStore) GetActiveKey() *KeyPair {
 	return ks.keys[ks.activeKey]
 }
 
-// GetKeyByID returns a key pair by its ID
+// GetKeyByID returns a key pair by its ID.
 func (ks *KeyStore) GetKeyByID(keyID string) *KeyPair {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
@@ -217,17 +222,18 @@ func (ks *KeyStore) GetKeyByID(keyID string) *KeyPair {
 	return ks.keys[keyID]
 }
 
-// GetKey is an alias for GetKeyByID (implements KeyStoreInterface)
+// GetKey is an alias for GetKeyByID (implements KeyStoreInterface).
 func (ks *KeyStore) GetKey(kid string) *KeyPair {
 	return ks.GetKeyByID(kid)
 }
 
-// GetAllValidKeys returns all keys that haven't expired
+// GetAllValidKeys returns all keys that haven't expired.
 func (ks *KeyStore) GetAllValidKeys() []*KeyPair {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
 
 	var validKeys []*KeyPair
+
 	now := time.Now()
 
 	for _, key := range ks.keys {
@@ -239,7 +245,7 @@ func (ks *KeyStore) GetAllValidKeys() []*KeyPair {
 	return validKeys
 }
 
-// RotateKeys generates a new key and cleans up expired keys
+// RotateKeys generates a new key and cleans up expired keys.
 func (ks *KeyStore) RotateKeys() error {
 	// Generate new key
 	if err := ks.generateNewKey(); err != nil {
@@ -252,7 +258,7 @@ func (ks *KeyStore) RotateKeys() error {
 	return nil
 }
 
-// cleanupExpiredKeys removes expired keys from the store
+// cleanupExpiredKeys removes expired keys from the store.
 func (ks *KeyStore) cleanupExpiredKeys() {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
@@ -265,7 +271,7 @@ func (ks *KeyStore) cleanupExpiredKeys() {
 	}
 }
 
-// ShouldRotate checks if keys should be rotated based on the rotation interval
+// ShouldRotate checks if keys should be rotated based on the rotation interval.
 func (ks *KeyStore) ShouldRotate() bool {
 	activeKey := ks.GetActiveKey()
 	if activeKey == nil {
@@ -275,7 +281,7 @@ func (ks *KeyStore) ShouldRotate() bool {
 	return time.Since(activeKey.CreatedAt) >= ks.rotationInterval
 }
 
-// NewJWKSService creates a new JWKS service
+// NewJWKSService creates a new JWKS service.
 func NewJWKSService() (*JWKSService, error) {
 	keyStore, err := NewKeyStore()
 	if err != nil {
@@ -287,7 +293,7 @@ func NewJWKSService() (*JWKSService, error) {
 	}, nil
 }
 
-// NewJWKSServiceFromFiles creates a JWKS service with keys loaded from files
+// NewJWKSServiceFromFiles creates a JWKS service with keys loaded from files.
 func NewJWKSServiceFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLifetime string) (*JWKSService, error) {
 	keyStore, err := NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLifetime)
 	if err != nil {
@@ -299,16 +305,18 @@ func NewJWKSServiceFromFiles(privateKeyPath, publicKeyPath, rotationInterval, ke
 	}, nil
 }
 
-// GetJWKS returns the current JSON Web Key Set
+// GetJWKS returns the current JSON Web Key Set.
 func (j *JWKSService) GetJWKS() (*JWKS, error) {
 	validKeys := j.keyStore.GetAllValidKeys()
 
 	var jwks []JWK
+
 	for _, keyPair := range validKeys {
 		jwk, err := j.rsaPublicKeyToJWK(keyPair.PublicKey, keyPair.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert key %s to JWK: %w", keyPair.ID, err)
 		}
+
 		jwks = append(jwks, *jwk)
 	}
 
@@ -317,54 +325,57 @@ func (j *JWKSService) GetJWKS() (*JWKS, error) {
 	}, nil
 }
 
-// GetActiveKeyPair returns the current active key pair for signing
+// GetActiveKeyPair returns the current active key pair for signing.
 func (j *JWKSService) GetActiveKeyPair() *KeyPair {
 	return j.keyStore.GetActiveKey()
 }
 
-// RotateKeys triggers key rotation
+// RotateKeys triggers key rotation.
 func (j *JWKSService) RotateKeys() error {
 	return j.keyStore.RotateKeys()
 }
 
-// ShouldRotate checks if keys should be rotated
+// ShouldRotate checks if keys should be rotated.
 func (j *JWKSService) ShouldRotate() bool {
 	return j.keyStore.ShouldRotate()
 }
 
-// GetCurrentKeyID returns the ID of the current active key
+// GetCurrentKeyID returns the ID of the current active key.
 func (j *JWKSService) GetCurrentKeyID() string {
 	activeKey := j.keyStore.GetActiveKey()
 	if activeKey == nil {
 		return ""
 	}
+
 	return activeKey.ID
 }
 
-// GetLastRotation returns the last key rotation time
+// GetLastRotation returns the last key rotation time.
 func (j *JWKSService) GetLastRotation() time.Time {
 	return j.keyStore.GetLastRotation()
 }
 
-// GetCurrentPrivateKey returns the private key of the current active key
+// GetCurrentPrivateKey returns the private key of the current active key.
 func (j *JWKSService) GetCurrentPrivateKey() *rsa.PrivateKey {
 	activeKey := j.keyStore.GetActiveKey()
 	if activeKey == nil {
 		return nil
 	}
+
 	return activeKey.PrivateKey
 }
 
-// GetPublicKey returns the public key for a given key ID
+// GetPublicKey returns the public key for a given key ID.
 func (j *JWKSService) GetPublicKey(keyID string) (*rsa.PublicKey, error) {
 	keyPair := j.keyStore.GetKey(keyID)
 	if keyPair == nil {
 		return nil, fmt.Errorf("key not found: %s", keyID)
 	}
+
 	return keyPair.PublicKey, nil
 }
 
-// rsaPublicKeyToJWK converts an RSA public key to JWK format
+// rsaPublicKeyToJWK converts an RSA public key to JWK format.
 func (j *JWKSService) rsaPublicKeyToJWK(publicKey *rsa.PublicKey, keyID string) (*JWK, error) {
 	// Convert RSA modulus (N) to base64url
 	nBytes := publicKey.N.Bytes()
@@ -384,7 +395,7 @@ func (j *JWKSService) rsaPublicKeyToJWK(publicKey *rsa.PublicKey, keyID string) 
 	}, nil
 }
 
-// GetKeyByID returns a specific key by its ID
+// GetKeyByID returns a specific key by its ID.
 func (j *JWKSService) GetKeyByID(keyID string) (*JWK, error) {
 	jwks, err := j.GetJWKS()
 	if err != nil {

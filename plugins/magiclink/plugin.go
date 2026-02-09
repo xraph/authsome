@@ -2,7 +2,6 @@ package magiclink
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -15,6 +14,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
@@ -32,7 +32,7 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// Config holds the magic link plugin configuration
+// Config holds the magic link plugin configuration.
 type Config struct {
 	// ExpiryMinutes is the magic link expiry time in minutes
 	ExpiryMinutes int `json:"expiryMinutes"`
@@ -46,7 +46,7 @@ type Config struct {
 	DevExposeURL bool `json:"devExposeURL"`
 }
 
-// DefaultConfig returns the default magic link plugin configuration
+// DefaultConfig returns the default magic link plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		ExpiryMinutes:       15,
@@ -56,45 +56,45 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the magic link plugin
+// PluginOption is a functional option for configuring the magic link plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithExpiryMinutes sets the magic link expiry time
+// WithExpiryMinutes sets the magic link expiry time.
 func WithExpiryMinutes(minutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.ExpiryMinutes = minutes
 	}
 }
 
-// WithBaseURL sets the base URL for magic links
+// WithBaseURL sets the base URL for magic links.
 func WithBaseURL(url string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.BaseURL = url
 	}
 }
 
-// WithAllowImplicitSignup sets whether implicit signup is allowed
+// WithAllowImplicitSignup sets whether implicit signup is allowed.
 func WithAllowImplicitSignup(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowImplicitSignup = allow
 	}
 }
 
-// WithRateLimitPerHour sets the rate limit per hour
+// WithRateLimitPerHour sets the rate limit per hour.
 func WithRateLimitPerHour(limit int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RateLimitPerHour = limit
 	}
 }
 
-// NewPlugin creates a new magic link plugin instance with optional configuration
+// NewPlugin creates a new magic link plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -113,7 +113,7 @@ func (p *Plugin) ID() string { return "magiclink" }
 
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("magiclink plugin requires auth instance")
+		return errs.BadRequest("magiclink plugin requires auth instance")
 	}
 
 	// Store auth instance for middleware access
@@ -122,12 +122,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for magiclink plugin")
+		return errs.InternalServerErrorWithMessage("database not available for magiclink plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for magiclink plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for magiclink plugin")
 	}
 
 	// Initialize logger
@@ -177,7 +177,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// createAuthCompletionService creates the authentication completion service
+// createAuthCompletionService creates the authentication completion service.
 func (p *Plugin) createAuthCompletionService() *authflow.CompletionService {
 	serviceRegistry := p.authInst.GetServiceRegistry()
 	if serviceRegistry == nil {
@@ -185,10 +185,12 @@ func (p *Plugin) createAuthCompletionService() *authflow.CompletionService {
 	}
 
 	// Get services from registry
-	var authService authflow.AuthServiceInterface
-	var appService authflow.AppServiceInterface
-	var deviceService authflow.DeviceServiceInterface
-	var auditService authflow.AuditServiceInterface
+	var (
+		authService   authflow.AuthServiceInterface
+		appService    authflow.AppServiceInterface
+		deviceService authflow.DeviceServiceInterface
+		auditService  authflow.AuditServiceInterface
+	)
 
 	// Get services from registry (they return concrete types directly)
 	authService = serviceRegistry.AuthService()
@@ -236,6 +238,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(handler)
 		}
+
 		return handler
 	}
 
@@ -258,6 +261,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("MagicLink", "Authentication"),
 	)
+
 	return nil
 }
 
@@ -269,7 +273,9 @@ func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 	_, err := p.db.NewCreateTable().Model((*schema.MagicLink)(nil)).IfNotExists().Exec(ctx)
+
 	return err
 }

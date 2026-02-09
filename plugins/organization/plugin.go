@@ -17,13 +17,14 @@ import (
 	"github.com/xraph/authsome/core/responses"
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 	orgrepo "github.com/xraph/authsome/repository/organization"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the user-created organizations plugin
+// Plugin implements the user-created organizations plugin.
 type Plugin struct {
 	// Core services
 	orgService *organization.Service
@@ -52,7 +53,7 @@ type Plugin struct {
 	rbacService *rbac.Service
 
 	// Notification adapter
-	notifAdapter interface{}
+	notifAdapter any
 
 	// Auth instance (for accessing service registry and hooks)
 	authInst core.Authsome
@@ -61,73 +62,73 @@ type Plugin struct {
 	initialized bool
 }
 
-// PluginOption is a functional option for configuring the plugin
+// PluginOption is a functional option for configuring the plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithMaxOrganizationsPerUser sets the maximum organizations per user
+// WithMaxOrganizationsPerUser sets the maximum organizations per user.
 func WithMaxOrganizationsPerUser(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxOrganizationsPerUser = max
 	}
 }
 
-// WithMaxMembersPerOrganization sets the maximum members per organization
+// WithMaxMembersPerOrganization sets the maximum members per organization.
 func WithMaxMembersPerOrganization(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxMembersPerOrganization = max
 	}
 }
 
-// WithMaxTeamsPerOrganization sets the maximum teams per organization
+// WithMaxTeamsPerOrganization sets the maximum teams per organization.
 func WithMaxTeamsPerOrganization(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxTeamsPerOrganization = max
 	}
 }
 
-// WithEnableUserCreation sets whether user creation is enabled
+// WithEnableUserCreation sets whether user creation is enabled.
 func WithEnableUserCreation(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnableUserCreation = enabled
 	}
 }
 
-// WithRequireInvitation sets whether invitation is required
+// WithRequireInvitation sets whether invitation is required.
 func WithRequireInvitation(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireInvitation = required
 	}
 }
 
-// WithAllowAppLevelRoles sets whether app-level (global) RBAC roles can be used for organization membership
+// WithAllowAppLevelRoles sets whether app-level (global) RBAC roles can be used for organization membership.
 func WithAllowAppLevelRoles(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowAppLevelRoles = allow
 	}
 }
 
-// WithInvitationExpiryHours sets the invitation expiry hours
+// WithInvitationExpiryHours sets the invitation expiry hours.
 func WithInvitationExpiryHours(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.InvitationExpiryHours = hours
 	}
 }
 
-// WithEnforceUniqueSlug sets whether to enforce unique slugs within app+environment scope
+// WithEnforceUniqueSlug sets whether to enforce unique slugs within app+environment scope.
 func WithEnforceUniqueSlug(enforce bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnforceUniqueSlug = enforce
 	}
 }
 
-// NewPlugin creates a new organization plugin instance with optional configuration
+// NewPlugin creates a new organization plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -150,15 +151,15 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "organization"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
-		return fmt.Errorf("invalid auth instance type")
+		return errs.BadRequest("invalid auth instance type")
 	}
 
 	// Prevent double initialization
@@ -182,6 +183,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if rbacSvc == nil {
 		p.logger.Warn("RBAC service not available, authorization checks may not work properly")
 	}
+
 	p.rbacService = rbacSvc
 
 	// Get notification adapter from service registry
@@ -221,18 +223,21 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 			p.config.MaxOrganizationsPerUser = 5
 		}
 	}
+
 	if p.config.MaxMembersPerOrganization == 0 {
 		p.config.MaxMembersPerOrganization = p.defaultConfig.MaxMembersPerOrganization
 		if p.config.MaxMembersPerOrganization == 0 {
 			p.config.MaxMembersPerOrganization = 50
 		}
 	}
+
 	if p.config.MaxTeamsPerOrganization == 0 {
 		p.config.MaxTeamsPerOrganization = p.defaultConfig.MaxTeamsPerOrganization
 		if p.config.MaxTeamsPerOrganization == 0 {
 			p.config.MaxTeamsPerOrganization = 20
 		}
 	}
+
 	if p.config.InvitationExpiryHours == 0 {
 		p.config.InvitationExpiryHours = p.defaultConfig.InvitationExpiryHours
 		if p.config.InvitationExpiryHours == 0 {
@@ -351,7 +356,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Organization management routes
 	orgGroup := router.Group("/organizations")
@@ -421,7 +426,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("organization.members.list"),
 				forge.WithSummary("List organization members"),
 				forge.WithDescription("List all members of an organization with their roles and status"),
-				forge.WithResponseSchema(200, "Members retrieved", map[string]interface{}{}),
+				forge.WithResponseSchema(200, "Members retrieved", map[string]any{}),
 				forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
 			)
@@ -430,7 +435,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("organization.members.invite"),
 				forge.WithSummary("Invite member to organization"),
 				forge.WithDescription("Send an invitation to a user to join the organization"),
-				forge.WithResponseSchema(201, "Invitation sent", map[string]interface{}{}),
+				forge.WithResponseSchema(201, "Invitation sent", map[string]any{}),
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
 				forge.WithValidation(true),
@@ -440,7 +445,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("organization.members.update"),
 				forge.WithSummary("Update member"),
 				forge.WithDescription("Update member role or status within the organization"),
-				forge.WithResponseSchema(200, "Member updated", map[string]interface{}{}),
+				forge.WithResponseSchema(200, "Member updated", map[string]any{}),
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
@@ -465,7 +470,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("organization.teams.list"),
 				forge.WithSummary("List teams"),
 				forge.WithDescription("List all teams within the organization"),
-				forge.WithResponseSchema(200, "Teams retrieved", map[string]interface{}{}),
+				forge.WithResponseSchema(200, "Teams retrieved", map[string]any{}),
 				forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
 			)
@@ -474,7 +479,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("organization.teams.create"),
 				forge.WithSummary("Create team"),
 				forge.WithDescription("Create a new team within the organization"),
-				forge.WithResponseSchema(201, "Team created", map[string]interface{}{}),
+				forge.WithResponseSchema(201, "Team created", map[string]any{}),
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
 				forge.WithValidation(true),
@@ -484,7 +489,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithName("organization.teams.update"),
 				forge.WithSummary("Update team"),
 				forge.WithDescription("Update team details (name, description, etc.)"),
-				forge.WithResponseSchema(200, "Team updated", map[string]interface{}{}),
+				forge.WithResponseSchema(200, "Team updated", map[string]any{}),
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
@@ -510,7 +515,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithName("organization.invitations.accept"),
 			forge.WithSummary("Accept organization invitation"),
 			forge.WithDescription("Accept an organization invitation and become a member"),
-			forge.WithResponseSchema(200, "Invitation accepted", map[string]interface{}{}),
+			forge.WithResponseSchema(200, "Invitation accepted", map[string]any{}),
 			forge.WithResponseSchema(400, "Invalid or expired invitation", ErrorResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", ErrorResponse{}),
 			forge.WithTags("Organizations", "Invitations"),
@@ -529,7 +534,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers the plugin's hooks
+// RegisterHooks registers the plugin's hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	if hookRegistry == nil || p.notifAdapter == nil {
 		return nil
@@ -538,6 +543,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	adapter, ok := p.notifAdapter.(*notificationPlugin.Adapter)
 	if !ok {
 		p.logger.Warn("notification adapter type assertion failed in RegisterHooks")
+
 		return nil
 	}
 
@@ -546,10 +552,11 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	p.logger.Debug("organization plugin will handle invitation notifications via service wrapper")
 
 	// Hook: After member added - send notification
-	hookRegistry.RegisterAfterMemberAdd(func(ctx context.Context, memberInterface interface{}) error {
+	hookRegistry.RegisterAfterMemberAdd(func(ctx context.Context, memberInterface any) error {
 		member, ok := memberInterface.(*organization.Member)
 		if !ok {
 			p.logger.Warn("invalid member type in AfterMemberAdd hook")
+
 			return nil
 		}
 
@@ -557,6 +564,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		appID, ok := contexts.GetAppID(ctx)
 		if !ok || appID.IsNil() {
 			p.logger.Warn("app context not available in after member add hook")
+
 			return nil
 		}
 
@@ -564,6 +572,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		org, err := p.orgService.FindOrganizationByID(ctx, member.OrganizationID)
 		if err != nil {
 			p.logger.Error("failed to get organization in member add hook", forge.F("error", err.Error()))
+
 			return nil
 		}
 
@@ -571,11 +580,14 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		userSvc := p.authInst.GetServiceRegistry().UserService()
 		if userSvc == nil {
 			p.logger.Warn("user service not available")
+
 			return nil
 		}
+
 		newMember, err := userSvc.FindByID(ctx, member.UserID)
 		if err != nil || newMember == nil {
 			p.logger.Error("failed to get user details in member add hook", forge.F("error", err.Error()))
+
 			return nil
 		}
 
@@ -601,6 +613,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		appID, ok := contexts.GetAppID(ctx)
 		if !ok || appID.IsNil() {
 			p.logger.Warn("app context not available in after member remove hook")
+
 			return nil
 		}
 
@@ -608,6 +621,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		org, err := p.orgService.FindOrganizationByID(ctx, orgID)
 		if err != nil {
 			p.logger.Error("failed to get organization in member remove hook", forge.F("error", err.Error()))
+
 			return nil
 		}
 
@@ -615,11 +629,14 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		userSvc := p.authInst.GetServiceRegistry().UserService()
 		if userSvc == nil {
 			p.logger.Warn("user service not available")
+
 			return nil
 		}
+
 		removedUser, err := userSvc.FindByID(ctx, userID)
 		if err != nil || removedUser == nil {
 			p.logger.Error("failed to get user details in member remove hook", forge.F("error", err.Error()))
+
 			return nil
 		}
 
@@ -630,6 +647,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		}
 
 		timestamp := time.Now().Format(time.RFC3339)
+
 		err = adapter.SendOrgMemberRemoved(ctx, appID, removedUser.Email, userName, memberName, org.Name, timestamp)
 		if err != nil {
 			p.logger.Error("failed to send member removed notification",
@@ -646,6 +664,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		appID, ok := contexts.GetAppID(ctx)
 		if !ok || appID.IsNil() {
 			p.logger.Warn("app context not available in after member role change hook")
+
 			return nil
 		}
 
@@ -653,6 +672,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		org, err := p.orgService.FindOrganizationByID(ctx, orgID)
 		if err != nil {
 			p.logger.Error("failed to get organization in role change hook", forge.F("error", err.Error()))
+
 			return nil
 		}
 
@@ -660,11 +680,14 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		userSvc := p.authInst.GetServiceRegistry().UserService()
 		if userSvc == nil {
 			p.logger.Warn("user service not available")
+
 			return nil
 		}
+
 		member, err := userSvc.FindByID(ctx, userID)
 		if err != nil || member == nil {
 			p.logger.Error("failed to get user details in role change hook", forge.F("error", err.Error()))
+
 			return nil
 		}
 
@@ -690,6 +713,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		appID, ok := contexts.GetAppID(ctx)
 		if !ok || appID.IsNil() {
 			p.logger.Warn("app context not available in after org delete hook")
+
 			return nil
 		}
 
@@ -703,11 +727,12 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	})
 
 	p.logger.Debug("registered organization notification hooks")
+
 	return nil
 }
 
 // SendInvitationNotification sends an org.invite notification when an invitation is created
-// This should be called by handlers after creating an invitation
+// This should be called by handlers after creating an invitation.
 func (p *Plugin) SendInvitationNotification(ctx context.Context, invitation *organization.Invitation, inviter *user.User, org *organization.Organization) error {
 	if p.notifAdapter == nil {
 		return nil
@@ -722,11 +747,12 @@ func (p *Plugin) SendInvitationNotification(ctx context.Context, invitation *org
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
 		p.logger.Warn("app context not available for invitation notification")
+
 		return nil
 	}
 
 	// Build invite URL (this should be configurable)
-	inviteURL := fmt.Sprintf("/invite/%s", invitation.Token)
+	inviteURL := "/invite/" + invitation.Token
 
 	// Calculate expiry duration
 	expiresIn := fmt.Sprintf("%d hours", p.config.InvitationExpiryHours)
@@ -748,25 +774,25 @@ func (p *Plugin) SendInvitationNotification(ctx context.Context, invitation *org
 		inviteURL,
 		expiresIn,
 	)
-
 	if err != nil {
 		p.logger.Error("failed to send invitation notification",
 			forge.F("error", err.Error()),
 			forge.F("org_id", org.ID.String()))
+
 		return err
 	}
 
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators
+// RegisterServiceDecorators registers service decorators.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	services.SetOrganizationService(p.orgService)
 
 	return nil
 }
 
-// Migrate runs the plugin's database migrations
+// Migrate runs the plugin's database migrations.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
@@ -813,20 +839,21 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// DashboardExtension returns the dashboard extension interface implementation
+// DashboardExtension returns the dashboard extension interface implementation.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtensionOnce.Do(func() {
 		p.dashboardExtension = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExtension
 }
 
 // RegisterRoles implements the PluginWithRoles interface
-// This registers organization-related permissions for platform roles
-func (p *Plugin) RegisterRoles(reg interface{}) error {
+// This registers organization-related permissions for platform roles.
+func (p *Plugin) RegisterRoles(reg any) error {
 	roleRegistry, ok := reg.(*rbac.RoleRegistry)
 	if !ok {
-		return fmt.Errorf("invalid role registry type")
+		return errs.InternalServerErrorWithMessage("invalid role registry type")
 	}
 
 	// Extend Owner role with full organization management permissions
@@ -921,20 +948,20 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 }
 
 // GetOrganizationUIRegistry returns the UI registry for accessing registered extensions
-// This is used by the dashboard extension to render extension widgets, tabs, and actions
+// This is used by the dashboard extension to render extension widgets, tabs, and actions.
 func (p *Plugin) GetOrganizationUIRegistry() *OrganizationUIRegistry {
 	return p.uiRegistry
 }
 
-// DTOs for organization routes - use shared responses from core
+// DTOs for organization routes - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type StatusResponse = responses.StatusResponse
 
-// OrganizationsListResponse represents a list of organizations
+// OrganizationsListResponse represents a list of organizations.
 type OrganizationsListResponse []schema.Organization
 
-// MembersListResponse represents a list of members
+// MembersListResponse represents a list of members.
 type MembersListResponse []schema.OrganizationMember
 
-// TeamsListResponse represents a list of teams
+// TeamsListResponse represents a list of teams.
 type TeamsListResponse []schema.OrganizationTeam

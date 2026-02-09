@@ -1,6 +1,7 @@
 package phone
 
 import (
+	"errors"
 	"net"
 	"net/http"
 
@@ -19,43 +20,45 @@ type Handler struct {
 	authInst core.Authsome
 }
 
-// Request types
+// Request types.
 type SendCodeRequest struct {
-	Phone string `json:"phone" validate:"required" example:"+1234567890"`
+	Phone string `example:"+1234567890" json:"phone" validate:"required"`
 }
 
 type VerifyRequest struct {
-	Phone    string `json:"phone" validate:"required" example:"+1234567890"`
-	Code     string `json:"code" validate:"required" example:"123456"`
-	Email    string `json:"email" validate:"required,email" example:"user@example.com"`
-	Remember bool   `json:"remember" example:"false"`
+	Phone    string `example:"+1234567890"      json:"phone"    validate:"required"`
+	Code     string `example:"123456"           json:"code"     validate:"required"`
+	Email    string `example:"user@example.com" json:"email"    validate:"required,email"`
+	Remember bool   `example:"false"            json:"remember"`
 }
 
-// Response types
+// Response types.
 type SendCodeResponse struct {
-	Status  string `json:"status" example:"sent"`
-	DevCode string `json:"dev_code,omitempty" example:"123456"`
+	Status  string `example:"sent"   json:"status"`
+	DevCode string `example:"123456" json:"dev_code,omitempty"`
 }
 
 type PhoneVerifyResponse struct {
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session"`
-	Token   string           `json:"token" example:"session_token_abc123"`
+	Token   string           `example:"session_token_abc123" json:"token"`
 }
 
 func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome) *Handler {
 	return &Handler{svc: s, rl: rls, authInst: authInst}
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// SendCode handles sending of verification code via SMS
+// SendCode handles sending of verification code via SMS.
 func (h *Handler) SendCode(c forge.Context) error {
 	var req SendCodeRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -64,10 +67,12 @@ func (h *Handler) SendCode(c forge.Context) error {
 
 	if h.rl != nil {
 		key := "phone:send:" + req.Phone
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, "/api/auth/phone/send-code")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errs.New("RATE_LIMIT_ERROR", "Rate limit check failed", http.StatusInternalServerError).WithError(err))
 		}
+
 		if !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests, please try again later", http.StatusTooManyRequests))
 		}
@@ -77,6 +82,7 @@ func (h *Handler) SendCode(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	code, err := h.svc.SendCode(c.Request().Context(), req.Phone, ip, ua)
@@ -88,10 +94,11 @@ func (h *Handler) SendCode(c forge.Context) error {
 	if code != "" {
 		res.DevCode = code
 	}
+
 	return c.JSON(http.StatusOK, res)
 }
 
-// Verify checks the code and creates a session on success
+// Verify checks the code and creates a session on success.
 func (h *Handler) Verify(c forge.Context) error {
 	var req VerifyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -102,12 +109,14 @@ func (h *Handler) Verify(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	authRes, err := h.svc.Verify(c.Request().Context(), req.Phone, req.Code, req.Email, req.Remember, ip, ua)
 	if err != nil {
 		return handleError(c, err, "VERIFY_CODE_FAILED", "Failed to verify code", http.StatusBadRequest)
 	}
+
 	if authRes == nil {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired verification code", http.StatusUnauthorized))
 	}
@@ -124,7 +133,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	})
 }
 
-// SignIn aliases to Verify for convenience
+// SignIn aliases to Verify for convenience.
 func (h *Handler) SignIn(c forge.Context) error {
 	var req VerifyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -135,12 +144,14 @@ func (h *Handler) SignIn(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	authRes, err := h.svc.Verify(c.Request().Context(), req.Phone, req.Code, req.Email, req.Remember, ip, ua)
 	if err != nil {
 		return handleError(c, err, "SIGNIN_FAILED", "Failed to sign in", http.StatusBadRequest)
 	}
+
 	if authRes == nil {
 		return c.JSON(http.StatusUnauthorized, errs.New("INVALID_CODE", "Invalid or expired verification code", http.StatusUnauthorized))
 	}

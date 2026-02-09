@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
@@ -24,7 +25,7 @@ const (
 	PluginVersion = "1.0.0"
 )
 
-// Plugin implements the SCIM 2.0 provisioning plugin for enterprise identity providers
+// Plugin implements the SCIM 2.0 provisioning plugin for enterprise identity providers.
 type Plugin struct {
 	config  *Config
 	service *Service
@@ -33,7 +34,7 @@ type Plugin struct {
 	// Dependencies
 	db             *bun.DB
 	userService    user.ServiceInterface // Use interface to support decorated services
-	orgService     interface{}           // Use interface{} to support both core and multitenancy org services
+	orgService     any                   // Use interface{} to support both core and multitenancy org services
 	auditService   *audit.Service
 	webhookService *webhook.Service
 
@@ -48,44 +49,47 @@ type Plugin struct {
 	log forge.Logger
 }
 
-// PluginOption is a functional option for configuring the SCIM plugin
+// PluginOption is a functional option for configuring the SCIM plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg *Config) PluginOption {
 	return func(p *Plugin) {
 		p.config = cfg
 	}
 }
 
-// WithAuthMethod sets the authentication method (bearer or oauth2)
+// WithAuthMethod sets the authentication method (bearer or oauth2).
 func WithAuthMethod(method string) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.AuthMethod = method
 	}
 }
 
-// WithRateLimit configures rate limiting
+// WithRateLimit configures rate limiting.
 func WithRateLimit(enabled bool, requestsPerMin, burstSize int) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.RateLimit.Enabled = enabled
 		p.config.RateLimit.RequestsPerMin = requestsPerMin
 		p.config.RateLimit.BurstSize = burstSize
 	}
 }
 
-// WithUserProvisioning configures user provisioning behavior
+// WithUserProvisioning configures user provisioning behavior.
 func WithUserProvisioning(autoActivate, sendWelcomeEmail, preventDuplicates bool, defaultRole string) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.UserProvisioning.AutoActivate = autoActivate
 		p.config.UserProvisioning.SendWelcomeEmail = sendWelcomeEmail
 		p.config.UserProvisioning.PreventDuplicates = preventDuplicates
@@ -93,12 +97,13 @@ func WithUserProvisioning(autoActivate, sendWelcomeEmail, preventDuplicates bool
 	}
 }
 
-// WithGroupSync configures group synchronization
+// WithGroupSync configures group synchronization.
 func WithGroupSync(enabled, syncToTeams, syncToRoles, createMissing bool) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.GroupSync.Enabled = enabled
 		p.config.GroupSync.SyncToTeams = syncToTeams
 		p.config.GroupSync.SyncToRoles = syncToRoles
@@ -106,48 +111,52 @@ func WithGroupSync(enabled, syncToTeams, syncToRoles, createMissing bool) Plugin
 	}
 }
 
-// WithJITProvisioning configures Just-In-Time provisioning
+// WithJITProvisioning configures Just-In-Time provisioning.
 func WithJITProvisioning(enabled, createOnFirstLogin, updateOnLogin bool) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.JITProvisioning.Enabled = enabled
 		p.config.JITProvisioning.CreateOnFirstLogin = createOnFirstLogin
 		p.config.JITProvisioning.UpdateOnLogin = updateOnLogin
 	}
 }
 
-// WithWebhooks configures provisioning event webhooks
+// WithWebhooks configures provisioning event webhooks.
 func WithWebhooks(enabled bool, urls []string, retryAttempts int) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.Webhooks.Enabled = enabled
 		p.config.Webhooks.WebhookURLs = urls
 		p.config.Webhooks.RetryAttempts = retryAttempts
 	}
 }
 
-// WithBulkOperations configures bulk operation limits
+// WithBulkOperations configures bulk operation limits.
 func WithBulkOperations(enabled bool, maxOps, maxPayloadBytes int) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.BulkOperations.Enabled = enabled
 		p.config.BulkOperations.MaxOperations = maxOps
 		p.config.BulkOperations.MaxPayloadBytes = maxPayloadBytes
 	}
 }
 
-// WithSecurity configures security settings
+// WithSecurity configures security settings.
 func WithSecurity(requireHTTPS, auditAll, maskSensitive bool, ipWhitelist []string) PluginOption {
 	return func(p *Plugin) {
 		if p.config == nil {
 			p.config = DefaultConfig()
 		}
+
 		p.config.Security.RequireHTTPS = requireHTTPS
 		p.config.Security.AuditAllOperations = auditAll
 		p.config.Security.MaskSensitiveData = maskSensitive
@@ -155,7 +164,7 @@ func WithSecurity(requireHTTPS, auditAll, maskSensitive bool, ipWhitelist []stri
 	}
 }
 
-// NewPlugin creates a new SCIM plugin instance
+// NewPlugin creates a new SCIM plugin instance.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		config: DefaultConfig(),
@@ -174,43 +183,43 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name (optional, for dashboard display)
+// Name returns the human-readable plugin name (optional, for dashboard display).
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version (optional, for compatibility checks)
+// Version returns the plugin version (optional, for compatibility checks).
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description (optional, for documentation)
+// Description returns the plugin description (optional, for documentation).
 func (p *Plugin) Description() string {
 	return "Enterprise-grade SCIM 2.0 provisioning for automated user/group sync with Okta, Azure AD, OneLogin, and other identity providers"
 }
 
-// Init initializes the plugin with dependencies from the Auth instance
+// Init initializes the plugin with dependencies from the Auth instance.
 func (p *Plugin) Init(auth core.Authsome) error {
 	// Get service registry and database from auth instance
 	serviceRegistry := auth.GetServiceRegistry()
 	if serviceRegistry == nil {
-		return fmt.Errorf("service registry not available")
+		return errs.InternalServerErrorWithMessage("service registry not available")
 	}
 
 	p.db = auth.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for SCIM plugin - ensure database is properly initialized before authsome")
+		return errs.InternalServerErrorWithMessage("database not available for SCIM plugin - ensure database is properly initialized before authsome")
 	}
 
 	// Get required services from registry
 	p.userService = serviceRegistry.UserService()
 	if p.userService == nil {
-		return fmt.Errorf("user service not found in registry")
+		return errs.InternalServerErrorWithMessage("user service not found in registry")
 	}
 
 	// Get organization/app service (required for SCIM)
@@ -219,19 +228,19 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	// - *organization.Service (from organization plugin) - Organization mode
 	p.orgService = serviceRegistry.OrganizationService()
 	if p.orgService == nil {
-		return fmt.Errorf("organization or app service not found in registry - SCIM requires multitenancy or organization plugin")
+		return errs.InternalServerErrorWithMessage("organization or app service not found in registry - SCIM requires multitenancy or organization plugin")
 	}
 
 	// Get audit service
 	p.auditService = serviceRegistry.AuditService()
 	if p.auditService == nil {
-		return fmt.Errorf("audit service not found in registry")
+		return errs.InternalServerErrorWithMessage("audit service not found in registry")
 	}
 
 	// Get webhook service
 	p.webhookService = serviceRegistry.WebhookService()
 	if p.webhookService == nil {
-		return fmt.Errorf("webhook service not found in registry")
+		return errs.InternalServerErrorWithMessage("webhook service not found in registry")
 	}
 
 	// Load configuration
@@ -273,10 +282,10 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers SCIM 2.0 compliant HTTP routes
+// RegisterRoutes registers SCIM 2.0 compliant HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
-		return fmt.Errorf("SCIM handler not initialized; call Init first")
+		return errs.InternalServerErrorWithMessage("SCIM handler not initialized; call Init first")
 	}
 
 	// Create middleware chain for SCIM endpoints (auth, org resolution, rate limiting)
@@ -596,7 +605,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers lifecycle hooks for SCIM events
+// RegisterHooks registers lifecycle hooks for SCIM events.
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	// Hook into user lifecycle to send provisioning webhooks
 	hooks.RegisterAfterUserCreate(p.handleUserCreated)
@@ -609,20 +618,21 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows SCIM plugin to enhance core services
+// RegisterServiceDecorators allows SCIM plugin to enhance core services.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// SCIM plugin doesn't need to decorate core services
 	// It operates alongside them
 	return nil
 }
 
-// Migrate runs database migrations for SCIM-specific tables
+// Migrate runs database migrations for SCIM-specific tables.
 func (p *Plugin) Migrate() error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	ctx := context.Background()
+
 	return p.service.Migrate(ctx)
 }
 
@@ -632,7 +642,7 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 	// Send provisioning webhook when user is created via SCIM
 	// Note: In production, you'd want to check if this user was SCIM-provisioned
 	// by querying the SCIM repository for a matching external_id
-	return p.service.SendProvisioningWebhook(ctx, "user.created", map[string]interface{}{
+	return p.service.SendProvisioningWebhook(ctx, "user.created", map[string]any{
 		"user_id": u.ID.String(),
 		"email":   u.Email,
 		"source":  "scim",
@@ -641,7 +651,7 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 
 func (p *Plugin) handleUserUpdated(ctx context.Context, u *user.User) error {
 	// Send provisioning webhook when user is updated via SCIM
-	return p.service.SendProvisioningWebhook(ctx, "user.updated", map[string]interface{}{
+	return p.service.SendProvisioningWebhook(ctx, "user.updated", map[string]any{
 		"user_id": u.ID.String(),
 		"email":   u.Email,
 		"source":  "scim",
@@ -650,13 +660,13 @@ func (p *Plugin) handleUserUpdated(ctx context.Context, u *user.User) error {
 
 func (p *Plugin) handleUserDeleted(ctx context.Context, userID xid.ID) error {
 	// Send provisioning webhook when user is deleted via SCIM
-	return p.service.SendProvisioningWebhook(ctx, "user.deleted", map[string]interface{}{
+	return p.service.SendProvisioningWebhook(ctx, "user.deleted", map[string]any{
 		"user_id": userID.String(),
 		"source":  "scim",
 	})
 }
 
-func (p *Plugin) handleOrganizationCreated(ctx context.Context, org interface{}) error {
+func (p *Plugin) handleOrganizationCreated(ctx context.Context, org any) error {
 	// Initialize default SCIM configuration for new organization
 	// The org parameter is of type interface{} to match the hook signature
 	// In production, you'd extract the org ID and initialize SCIM config
@@ -664,61 +674,63 @@ func (p *Plugin) handleOrganizationCreated(ctx context.Context, org interface{})
 	return nil
 }
 
-// Service returns the SCIM service for programmatic access
+// Service returns the SCIM service for programmatic access.
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// Shutdown gracefully shuts down the plugin
+// Shutdown gracefully shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	if p.service != nil {
 		return p.service.Shutdown(ctx)
 	}
+
 	return nil
 }
 
-// Health checks plugin health
+// Health checks plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
+
 	return p.service.Health(ctx)
 }
 
 // Response types for admin endpoints (for API documentation)
 
-// SCIMErrorResponse represents an error response for admin endpoints
+// SCIMErrorResponse represents an error response for admin endpoints.
 type SCIMErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
-// SCIMStatusResponse represents a status response
+// SCIMStatusResponse represents a status response.
 type SCIMStatusResponse struct {
-	Message string `json:"message" example:"Operation successful"`
+	Message string `example:"Operation successful" json:"message"`
 }
 
-// SCIMTokenResponse represents a token creation response
+// SCIMTokenResponse represents a token creation response.
 type SCIMTokenResponse struct {
-	Token   string `json:"token" example:"scim_abc123"`
-	ID      string `json:"id" example:"01HZ"`
-	Name    string `json:"name" example:"Production SCIM Token"`
-	Message string `json:"message" example:"Store this token securely"`
+	Token   string `example:"scim_abc123"               json:"token"`
+	ID      string `example:"01HZ"                      json:"id"`
+	Name    string `example:"Production SCIM Token"     json:"name"`
+	Message string `example:"Store this token securely" json:"message"`
 }
 
-// SCIMTokenListResponse represents a list of tokens response
+// SCIMTokenListResponse represents a list of tokens response.
 type SCIMTokenListResponse struct {
 	Tokens []SCIMTokenInfo `json:"tokens"`
-	Total  int             `json:"total" example:"5"`
-	Limit  int             `json:"limit" example:"50"`
-	Offset int             `json:"offset" example:"0"`
+	Total  int             `example:"5"   json:"total"`
+	Limit  int             `example:"50"  json:"limit"`
+	Offset int             `example:"0"   json:"offset"`
 }
 
-// SCIMTokenInfo represents token information (without sensitive data)
+// SCIMTokenInfo represents token information (without sensitive data).
 type SCIMTokenInfo struct {
-	ID          string     `json:"id" example:"01HZ..."`
-	Name        string     `json:"name" example:"Production SCIM Token"`
-	Description string     `json:"description" example:"Token for Okta provisioning"`
-	Scopes      []string   `json:"scopes" example:"users,groups"`
+	ID          string     `example:"01HZ..."                     json:"id"`
+	Name        string     `example:"Production SCIM Token"       json:"name"`
+	Description string     `example:"Token for Okta provisioning" json:"description"`
+	Scopes      []string   `example:"users,groups"                json:"scopes"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
@@ -726,46 +738,47 @@ type SCIMTokenInfo struct {
 	RevokedAt   *time.Time `json:"revoked_at"`
 }
 
-// SCIMAttributeMappingsResponse represents attribute mappings response
+// SCIMAttributeMappingsResponse represents attribute mappings response.
 type SCIMAttributeMappingsResponse struct {
-	Mappings map[string]string `json:"mappings" example:"userName:email,displayName:name"`
+	Mappings map[string]string `example:"userName:email,displayName:name" json:"mappings"`
 }
 
-// SCIMLogsResponse represents provisioning logs response
+// SCIMLogsResponse represents provisioning logs response.
 type SCIMLogsResponse struct {
 	Logs   []SCIMLogInfo `json:"logs"`
-	Total  int           `json:"total" example:"100"`
-	Limit  int           `json:"limit" example:"50"`
-	Offset int           `json:"offset" example:"0"`
+	Total  int           `example:"100" json:"total"`
+	Limit  int           `example:"50"  json:"limit"`
+	Offset int           `example:"0"   json:"offset"`
 }
 
-// SCIMLogInfo represents a single log entry
+// SCIMLogInfo represents a single log entry.
 type SCIMLogInfo struct {
-	ID           string    `json:"id" example:"01HZ..."`
-	Operation    string    `json:"operation" example:"CREATE_USER"`
-	ResourceType string    `json:"resource_type" example:"User"`
-	ResourceID   string    `json:"resource_id" example:"01HZ..."`
-	Method       string    `json:"method" example:"POST"`
-	Path         string    `json:"path" example:"/scim/v2/Users"`
-	StatusCode   int       `json:"status_code" example:"201"`
-	Success      bool      `json:"success" example:"true"`
+	ID           string    `example:"01HZ..."        json:"id"`
+	Operation    string    `example:"CREATE_USER"    json:"operation"`
+	ResourceType string    `example:"User"           json:"resource_type"`
+	ResourceID   string    `example:"01HZ..."        json:"resource_id"`
+	Method       string    `example:"POST"           json:"method"`
+	Path         string    `example:"/scim/v2/Users" json:"path"`
+	StatusCode   int       `example:"201"            json:"status_code"`
+	Success      bool      `example:"true"           json:"success"`
 	ErrorMessage string    `json:"error_message"`
 	CreatedAt    time.Time `json:"created_at"`
-	DurationMS   int       `json:"duration_ms" example:"45"`
+	DurationMS   int       `example:"45"             json:"duration_ms"`
 }
 
-// SCIMStatsResponse represents provisioning statistics response
+// SCIMStatsResponse represents provisioning statistics response.
 type SCIMStatsResponse struct {
-	SCIMMetrics map[string]interface{} `json:"scim_metrics"`
+	SCIMMetrics map[string]any `json:"scim_metrics"`
 }
 
 // DashboardExtension returns the dashboard extension for the SCIM plugin
 // This allows the plugin to extend the dashboard with SCIM-specific UI
-// This implements the PluginWithDashboardExtension interface
+// This implements the PluginWithDashboardExtension interface.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtOnce.Do(func() {
 		p.dashboardExt = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExt
 }
 
@@ -776,6 +789,7 @@ func (p *Plugin) ExtensionID() string {
 	if p.orgUIExt == nil {
 		return ""
 	}
+
 	return p.orgUIExt.ExtensionID()
 }
 
@@ -783,6 +797,7 @@ func (p *Plugin) OrganizationWidgets() []ui.OrganizationWidget {
 	if p.orgUIExt == nil {
 		return []ui.OrganizationWidget{}
 	}
+
 	return p.orgUIExt.OrganizationWidgets()
 }
 
@@ -790,6 +805,7 @@ func (p *Plugin) OrganizationTabs() []ui.OrganizationTab {
 	if p.orgUIExt == nil {
 		return []ui.OrganizationTab{}
 	}
+
 	return p.orgUIExt.OrganizationTabs()
 }
 
@@ -797,6 +813,7 @@ func (p *Plugin) OrganizationActions() []ui.OrganizationAction {
 	if p.orgUIExt == nil {
 		return []ui.OrganizationAction{}
 	}
+
 	return p.orgUIExt.OrganizationActions()
 }
 
@@ -804,6 +821,7 @@ func (p *Plugin) OrganizationQuickLinks() []ui.OrganizationQuickLink {
 	if p.orgUIExt == nil {
 		return []ui.OrganizationQuickLink{}
 	}
+
 	return p.orgUIExt.OrganizationQuickLinks()
 }
 
@@ -811,5 +829,6 @@ func (p *Plugin) OrganizationSettingsSections() []ui.OrganizationSettingsSection
 	if p.orgUIExt == nil {
 		return []ui.OrganizationSettingsSection{}
 	}
+
 	return p.orgUIExt.OrganizationSettingsSections()
 }

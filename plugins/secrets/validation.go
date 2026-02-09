@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/secrets/core"
 )
 
@@ -17,14 +18,14 @@ type SchemaValidator struct {
 	// schemas map[string]*jsonschema.Schema // cached compiled schemas
 }
 
-// NewSchemaValidator creates a new schema validator
+// NewSchemaValidator creates a new schema validator.
 func NewSchemaValidator() *SchemaValidator {
 	return &SchemaValidator{}
 }
 
 // ValidateValue validates a value against an optional JSON schema.
 // If schemaJSON is empty, only basic type validation is performed.
-func (v *SchemaValidator) ValidateValue(value interface{}, valueType core.SecretValueType, schemaJSON string) error {
+func (v *SchemaValidator) ValidateValue(value any, valueType core.SecretValueType, schemaJSON string) error {
 	// Basic type validation
 	if err := v.validateType(value, valueType); err != nil {
 		return err
@@ -40,8 +41,8 @@ func (v *SchemaValidator) ValidateValue(value interface{}, valueType core.Secret
 	return nil
 }
 
-// validateType performs basic type validation based on value type
-func (v *SchemaValidator) validateType(value interface{}, valueType core.SecretValueType) error {
+// validateType performs basic type validation based on value type.
+func (v *SchemaValidator) validateType(value any, valueType core.SecretValueType) error {
 	switch valueType {
 	case core.SecretValueTypePlain:
 		// Plain values must be strings
@@ -60,7 +61,7 @@ func (v *SchemaValidator) validateType(value interface{}, valueType core.SecretV
 		// YAML values can be any valid YAML type
 		// If it's a string, try to parse it as YAML
 		if str, ok := value.(string); ok {
-			var parsed interface{}
+			var parsed any
 			if err := yaml.Unmarshal([]byte(str), &parsed); err != nil {
 				return core.ErrValidationFailed("invalid YAML value", err)
 			}
@@ -83,22 +84,24 @@ func (v *SchemaValidator) validateType(value interface{}, valueType core.SecretV
 	return nil
 }
 
-// validateAgainstSchema validates a value against a JSON Schema
-func (v *SchemaValidator) validateAgainstSchema(value interface{}, valueType core.SecretValueType, schemaJSON string) error {
+// validateAgainstSchema validates a value against a JSON Schema.
+func (v *SchemaValidator) validateAgainstSchema(value any, valueType core.SecretValueType, schemaJSON string) error {
 	// Parse the schema to validate it's valid JSON
-	var schema map[string]interface{}
+	var schema map[string]any
 	if err := json.Unmarshal([]byte(schemaJSON), &schema); err != nil {
 		return core.ErrSchemaInvalid("schema is not valid JSON", err)
 	}
 
 	// For YAML values, convert to JSON-compatible format first
-	var jsonValue interface{}
+	var jsonValue any
+
 	if valueType == core.SecretValueTypeYAML {
 		if str, ok := value.(string); ok {
-			var parsed interface{}
+			var parsed any
 			if err := yaml.Unmarshal([]byte(str), &parsed); err != nil {
 				return core.ErrValidationFailed("failed to parse YAML for schema validation", err)
 			}
+
 			jsonValue = convertYAMLToJSON(parsed)
 		} else {
 			jsonValue = value
@@ -116,8 +119,8 @@ func (v *SchemaValidator) validateAgainstSchema(value interface{}, valueType cor
 	}
 
 	// Validate required fields for objects
-	if required, ok := schema["required"].([]interface{}); ok {
-		if objMap, ok := jsonValue.(map[string]interface{}); ok {
+	if required, ok := schema["required"].([]any); ok {
+		if objMap, ok := jsonValue.(map[string]any); ok {
 			for _, req := range required {
 				if reqStr, ok := req.(string); ok {
 					if _, exists := objMap[reqStr]; !exists {
@@ -136,6 +139,7 @@ func (v *SchemaValidator) validateAgainstSchema(value interface{}, valueType cor
 					return core.ErrValidationFailed(fmt.Sprintf("string length must be at least %d", int(minLen)), nil)
 				}
 			}
+
 			if maxLen, ok := schema["maxLength"].(float64); ok {
 				if len(str) > int(maxLen) {
 					return core.ErrValidationFailed(fmt.Sprintf("string length must be at most %d", int(maxLen)), nil)
@@ -147,8 +151,8 @@ func (v *SchemaValidator) validateAgainstSchema(value interface{}, valueType cor
 	return nil
 }
 
-// validateSchemaType validates a value against a JSON Schema type
-func (v *SchemaValidator) validateSchemaType(value interface{}, schemaType string) error {
+// validateSchemaType validates a value against a JSON Schema type.
+func (v *SchemaValidator) validateSchemaType(value any, schemaType string) error {
 	switch schemaType {
 	case "string":
 		if _, ok := value.(string); !ok {
@@ -166,11 +170,11 @@ func (v *SchemaValidator) validateSchemaType(value interface{}, schemaType strin
 			return core.ErrValidationFailed("value must be a boolean", nil)
 		}
 	case "object":
-		if _, ok := value.(map[string]interface{}); !ok {
+		if _, ok := value.(map[string]any); !ok {
 			return core.ErrValidationFailed("value must be an object", nil)
 		}
 	case "array":
-		if _, ok := value.([]interface{}); !ok {
+		if _, ok := value.([]any); !ok {
 			return core.ErrValidationFailed("value must be an array", nil)
 		}
 	case "null":
@@ -178,24 +182,26 @@ func (v *SchemaValidator) validateSchemaType(value interface{}, schemaType strin
 			return core.ErrValidationFailed("value must be null", nil)
 		}
 	}
+
 	return nil
 }
 
-// ParseValue parses a raw string value based on the value type
-func (v *SchemaValidator) ParseValue(raw string, valueType core.SecretValueType) (interface{}, error) {
+// ParseValue parses a raw string value based on the value type.
+func (v *SchemaValidator) ParseValue(raw string, valueType core.SecretValueType) (any, error) {
 	switch valueType {
 	case core.SecretValueTypePlain:
 		return raw, nil
 
 	case core.SecretValueTypeJSON:
-		var result interface{}
+		var result any
 		if err := json.Unmarshal([]byte(raw), &result); err != nil {
 			return nil, core.ErrDeserializationFailed("json", err)
 		}
+
 		return result, nil
 
 	case core.SecretValueTypeYAML:
-		var result interface{}
+		var result any
 		if err := yaml.Unmarshal([]byte(raw), &result); err != nil {
 			return nil, core.ErrDeserializationFailed("yaml", err)
 		}
@@ -212,20 +218,22 @@ func (v *SchemaValidator) ParseValue(raw string, valueType core.SecretValueType)
 	}
 }
 
-// SerializeValue serializes a value for storage based on the value type
-func (v *SchemaValidator) SerializeValue(value interface{}, valueType core.SecretValueType) ([]byte, error) {
+// SerializeValue serializes a value for storage based on the value type.
+func (v *SchemaValidator) SerializeValue(value any, valueType core.SecretValueType) ([]byte, error) {
 	switch valueType {
 	case core.SecretValueTypePlain:
 		if str, ok := value.(string); ok {
 			return []byte(str), nil
 		}
-		return nil, core.ErrSerializationFailed("plain", fmt.Errorf("value must be a string"))
+
+		return nil, core.ErrSerializationFailed("plain", errs.BadRequest("value must be a string"))
 
 	case core.SecretValueTypeJSON:
 		data, err := json.Marshal(value)
 		if err != nil {
 			return nil, core.ErrSerializationFailed("json", err)
 		}
+
 		return data, nil
 
 	case core.SecretValueTypeYAML:
@@ -238,31 +246,33 @@ func (v *SchemaValidator) SerializeValue(value interface{}, valueType core.Secre
 		if err != nil {
 			return nil, core.ErrSerializationFailed("yaml", err)
 		}
+
 		return data, nil
 
 	case core.SecretValueTypeBinary:
 		if str, ok := value.(string); ok {
 			return []byte(str), nil
 		}
-		return nil, core.ErrSerializationFailed("binary", fmt.Errorf("value must be a base64-encoded string"))
+
+		return nil, core.ErrSerializationFailed("binary", errs.BadRequest("value must be a base64-encoded string"))
 
 	default:
 		return nil, core.ErrInvalidValueType(string(valueType))
 	}
 }
 
-// DeserializeValue deserializes stored bytes back to a value based on the value type
-func (v *SchemaValidator) DeserializeValue(data []byte, valueType core.SecretValueType) (interface{}, error) {
+// DeserializeValue deserializes stored bytes back to a value based on the value type.
+func (v *SchemaValidator) DeserializeValue(data []byte, valueType core.SecretValueType) (any, error) {
 	return v.ParseValue(string(data), valueType)
 }
 
-// DetectValueType attempts to detect the value type from the value content
-func (v *SchemaValidator) DetectValueType(value interface{}) core.SecretValueType {
+// DetectValueType attempts to detect the value type from the value content.
+func (v *SchemaValidator) DetectValueType(value any) core.SecretValueType {
 	switch val := value.(type) {
 	case string:
 		// Check if it's valid JSON
 		if strings.HasPrefix(strings.TrimSpace(val), "{") || strings.HasPrefix(strings.TrimSpace(val), "[") {
-			var js interface{}
+			var js any
 			if err := json.Unmarshal([]byte(val), &js); err == nil {
 				return core.SecretValueTypeJSON
 			}
@@ -270,7 +280,7 @@ func (v *SchemaValidator) DetectValueType(value interface{}) core.SecretValueTyp
 
 		// Check if it looks like YAML (has key: value patterns)
 		if strings.Contains(val, ":") && (strings.Contains(val, "\n") || strings.HasPrefix(val, "---")) {
-			var ym interface{}
+			var ym any
 			if err := yaml.Unmarshal([]byte(val), &ym); err == nil {
 				// Only return YAML if it parsed to something other than a plain string
 				if _, isStr := ym.(string); !isStr {
@@ -289,7 +299,7 @@ func (v *SchemaValidator) DetectValueType(value interface{}) core.SecretValueTyp
 
 		return core.SecretValueTypePlain
 
-	case map[string]interface{}, []interface{}:
+	case map[string]any, []any:
 		return core.SecretValueTypeJSON
 
 	default:
@@ -297,13 +307,13 @@ func (v *SchemaValidator) DetectValueType(value interface{}) core.SecretValueTyp
 	}
 }
 
-// ValidateSchema validates that a JSON schema is valid
+// ValidateSchema validates that a JSON schema is valid.
 func (v *SchemaValidator) ValidateSchema(schemaJSON string) error {
 	if schemaJSON == "" {
 		return nil
 	}
 
-	var schema map[string]interface{}
+	var schema map[string]any
 	if err := json.Unmarshal([]byte(schemaJSON), &schema); err != nil {
 		return core.ErrSchemaInvalid("schema is not valid JSON", err)
 	}
@@ -326,29 +336,32 @@ func (v *SchemaValidator) ValidateSchema(schemaJSON string) error {
 
 // Helper functions
 
-// convertYAMLToJSON converts YAML-parsed values to JSON-compatible types
-func convertYAMLToJSON(value interface{}) interface{} {
+// convertYAMLToJSON converts YAML-parsed values to JSON-compatible types.
+func convertYAMLToJSON(value any) any {
 	switch v := value.(type) {
-	case map[interface{}]interface{}:
+	case map[any]any:
 		// YAML maps have interface{} keys, convert to string keys
-		result := make(map[string]interface{})
+		result := make(map[string]any)
 		for key, val := range v {
 			result[fmt.Sprintf("%v", key)] = convertYAMLToJSON(val)
 		}
+
 		return result
 
-	case map[string]interface{}:
-		result := make(map[string]interface{})
+	case map[string]any:
+		result := make(map[string]any)
 		for key, val := range v {
 			result[key] = convertYAMLToJSON(val)
 		}
+
 		return result
 
-	case []interface{}:
-		result := make([]interface{}, len(v))
+	case []any:
+		result := make([]any, len(v))
 		for i, val := range v {
 			result[i] = convertYAMLToJSON(val)
 		}
+
 		return result
 
 	default:
@@ -356,23 +369,25 @@ func convertYAMLToJSON(value interface{}) interface{} {
 	}
 }
 
-// isPrintableASCII checks if a string contains only printable ASCII characters
+// isPrintableASCII checks if a string contains only printable ASCII characters.
 func isPrintableASCII(s string) bool {
 	for _, r := range s {
 		if r < 32 || r > 126 {
 			return false
 		}
 	}
+
 	return true
 }
 
-// FormatValue formats a value for display based on its type
-func FormatValue(value interface{}, valueType core.SecretValueType) string {
+// FormatValue formats a value for display based on its type.
+func FormatValue(value any, valueType core.SecretValueType) string {
 	switch valueType {
 	case core.SecretValueTypePlain:
 		if str, ok := value.(string); ok {
 			return str
 		}
+
 		return fmt.Sprintf("%v", value)
 
 	case core.SecretValueTypeJSON:
@@ -380,22 +395,26 @@ func FormatValue(value interface{}, valueType core.SecretValueType) string {
 		if err != nil {
 			return fmt.Sprintf("%v", value)
 		}
+
 		return string(data)
 
 	case core.SecretValueTypeYAML:
 		if str, ok := value.(string); ok {
 			return str
 		}
+
 		data, err := yaml.Marshal(value)
 		if err != nil {
 			return fmt.Sprintf("%v", value)
 		}
+
 		return string(data)
 
 	case core.SecretValueTypeBinary:
 		if str, ok := value.(string); ok {
 			return str
 		}
+
 		return fmt.Sprintf("%v", value)
 
 	default:

@@ -3,22 +3,24 @@ package social
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// StateStore defines the interface for OAuth state storage
+// StateStore defines the interface for OAuth state storage.
 type StateStore interface {
 	Set(ctx context.Context, key string, state *OAuthState, ttl time.Duration) error
 	Get(ctx context.Context, key string) (*OAuthState, error)
 	Delete(ctx context.Context, key string) error
 }
 
-// OAuthState stores temporary OAuth state data
+// OAuthState stores temporary OAuth state data.
 type OAuthState struct {
 	Provider           string    `json:"provider"`
 	AppID              xid.ID    `json:"app_id"`
@@ -33,7 +35,7 @@ type OAuthState struct {
 // MEMORY STATE STORE
 // =============================================================================
 
-// MemoryStateStore is an in-memory implementation of StateStore
+// MemoryStateStore is an in-memory implementation of StateStore.
 type MemoryStateStore struct {
 	mu     sync.RWMutex
 	states map[string]*stateEntry
@@ -44,7 +46,7 @@ type stateEntry struct {
 	expiresAt time.Time
 }
 
-// NewMemoryStateStore creates a new in-memory state store
+// NewMemoryStateStore creates a new in-memory state store.
 func NewMemoryStateStore() *MemoryStateStore {
 	s := &MemoryStateStore{
 		states: make(map[string]*stateEntry),
@@ -56,7 +58,7 @@ func NewMemoryStateStore() *MemoryStateStore {
 	return s
 }
 
-// Set stores a state with TTL
+// Set stores a state with TTL.
 func (s *MemoryStateStore) Set(ctx context.Context, key string, state *OAuthState, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -69,45 +71,48 @@ func (s *MemoryStateStore) Set(ctx context.Context, key string, state *OAuthStat
 	return nil
 }
 
-// Get retrieves a state
+// Get retrieves a state.
 func (s *MemoryStateStore) Get(ctx context.Context, key string) (*OAuthState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	entry, ok := s.states[key]
 	if !ok {
-		return nil, fmt.Errorf("state not found")
+		return nil, errs.NotFound("state not found")
 	}
 
 	if time.Now().After(entry.expiresAt) {
-		return nil, fmt.Errorf("state expired")
+		return nil, errs.BadRequest("state expired")
 	}
 
 	return entry.state, nil
 }
 
-// Delete removes a state
+// Delete removes a state.
 func (s *MemoryStateStore) Delete(ctx context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	delete(s.states, key)
+
 	return nil
 }
 
-// cleanup periodically removes expired states
+// cleanup periodically removes expired states.
 func (s *MemoryStateStore) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		s.mu.Lock()
+
 		now := time.Now()
 		for key, entry := range s.states {
 			if now.After(entry.expiresAt) {
 				delete(s.states, key)
 			}
 		}
+
 		s.mu.Unlock()
 	}
 }
@@ -116,19 +121,19 @@ func (s *MemoryStateStore) cleanup() {
 // REDIS STATE STORE
 // =============================================================================
 
-// RedisStateStore is a Redis-backed implementation of StateStore
+// RedisStateStore is a Redis-backed implementation of StateStore.
 type RedisStateStore struct {
 	client *redis.Client
 }
 
-// NewRedisStateStore creates a new Redis state store
+// NewRedisStateStore creates a new Redis state store.
 func NewRedisStateStore(client *redis.Client) *RedisStateStore {
 	return &RedisStateStore{
 		client: client,
 	}
 }
 
-// Set stores a state with TTL in Redis
+// Set stores a state with TTL in Redis.
 func (s *RedisStateStore) Set(ctx context.Context, key string, state *OAuthState, ttl time.Duration) error {
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -145,14 +150,15 @@ func (s *RedisStateStore) Set(ctx context.Context, key string, state *OAuthState
 	return nil
 }
 
-// Get retrieves a state from Redis
+// Get retrieves a state from Redis.
 func (s *RedisStateStore) Get(ctx context.Context, key string) (*OAuthState, error) {
 	redisKey := "oauth_state:" + key
 
 	data, err := s.client.Get(ctx, redisKey).Bytes()
-	if err == redis.Nil {
-		return nil, fmt.Errorf("state not found")
+	if errors.Is(err, redis.Nil) {
+		return nil, errs.NotFound("state not found")
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve state from Redis: %w", err)
 	}
@@ -165,7 +171,7 @@ func (s *RedisStateStore) Get(ctx context.Context, key string) (*OAuthState, err
 	return &state, nil
 }
 
-// Delete removes a state from Redis
+// Delete removes a state from Redis.
 func (s *RedisStateStore) Delete(ctx context.Context, key string) error {
 	redisKey := "oauth_state:" + key
 
@@ -176,7 +182,7 @@ func (s *RedisStateStore) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Ensure implementations satisfy the interface
+// Ensure implementations satisfy the interface.
 var (
 	_ StateStore = (*MemoryStateStore)(nil)
 	_ StateStore = (*RedisStateStore)(nil)

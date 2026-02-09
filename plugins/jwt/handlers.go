@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -11,19 +12,19 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles JWT-related HTTP requests
+// Handler handles JWT-related HTTP requests.
 type Handler struct {
 	service *jwt.Service
 }
 
-// Request types
+// Request types.
 type CreateJWTKeyRequest struct {
-	IsPlatformKey bool                   `json:"isPlatformKey"`
-	Algorithm     string                 `json:"algorithm" validate:"required"`
-	KeyType       string                 `json:"keyType" validate:"required"`
-	Curve         string                 `json:"curve"`
-	ExpiresAt     *time.Time             `json:"expiresAt"`
-	Metadata      map[string]interface{} `json:"metadata"`
+	IsPlatformKey bool           `json:"isPlatformKey"`
+	Algorithm     string         `json:"algorithm"     validate:"required"`
+	KeyType       string         `json:"keyType"       validate:"required"`
+	Curve         string         `json:"curve"`
+	ExpiresAt     *time.Time     `json:"expiresAt"`
+	Metadata      map[string]any `json:"metadata"`
 }
 
 type ListJWTKeysRequest struct {
@@ -34,38 +35,40 @@ type ListJWTKeysRequest struct {
 }
 
 type GenerateTokenRequest struct {
-	UserID      string                 `json:"userId" validate:"required"`
-	SessionID   string                 `json:"sessionId"`
-	TokenType   string                 `json:"tokenType" validate:"required"`
-	Scopes      []string               `json:"scopes"`
-	Permissions []string               `json:"permissions"`
-	Audience    []string               `json:"audience"`
-	ExpiresIn   time.Duration          `json:"expiresIn"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	UserID      string         `json:"userId"      validate:"required"`
+	SessionID   string         `json:"sessionId"`
+	TokenType   string         `json:"tokenType"   validate:"required"`
+	Scopes      []string       `json:"scopes"`
+	Permissions []string       `json:"permissions"`
+	Audience    []string       `json:"audience"`
+	ExpiresIn   time.Duration  `json:"expiresIn"`
+	Metadata    map[string]any `json:"metadata"`
 }
 
 type VerifyTokenRequest struct {
-	Token     string   `json:"token" validate:"required"`
+	Token     string   `json:"token"     validate:"required"`
 	Audience  []string `json:"audience"`
 	TokenType string   `json:"tokenType"`
 }
 
-// NewHandler creates a new JWT handler
+// NewHandler creates a new JWT handler.
 func NewHandler(service *jwt.Service) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// CreateJWTKey creates a new JWT signing key
+// CreateJWTKey creates a new JWT signing key.
 func (h *Handler) CreateJWTKey(c forge.Context) error {
 	var req CreateJWTKeyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -96,7 +99,7 @@ func (h *Handler) CreateJWTKey(c forge.Context) error {
 	return c.JSON(http.StatusCreated, key)
 }
 
-// ListJWTKeys lists JWT signing keys
+// ListJWTKeys lists JWT signing keys.
 func (h *Handler) ListJWTKeys(c forge.Context) error {
 	// Get app ID from context
 	appID, ok := contexts.GetAppID(c.Request().Context())
@@ -113,6 +116,7 @@ func (h *Handler) ListJWTKeys(c forge.Context) error {
 	if req.Page == 0 {
 		req.Page = 1
 	}
+
 	if req.Limit == 0 {
 		req.Limit = 20
 	}
@@ -137,7 +141,7 @@ func (h *Handler) ListJWTKeys(c forge.Context) error {
 	return c.JSON(http.StatusOK, pageResp)
 }
 
-// GetJWKS returns the JSON Web Key Set
+// GetJWKS returns the JSON Web Key Set.
 func (h *Handler) GetJWKS(c forge.Context) error {
 	// Get app ID from context
 	appID, ok := contexts.GetAppID(c.Request().Context())
@@ -153,7 +157,7 @@ func (h *Handler) GetJWKS(c forge.Context) error {
 	return c.JSON(http.StatusOK, jwks)
 }
 
-// GenerateToken generates a new JWT token
+// GenerateToken generates a new JWT token.
 func (h *Handler) GenerateToken(c forge.Context) error {
 	var req GenerateTokenRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -186,7 +190,7 @@ func (h *Handler) GenerateToken(c forge.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// VerifyToken verifies a JWT token
+// VerifyToken verifies a JWT token.
 func (h *Handler) VerifyToken(c forge.Context) error {
 	var req VerifyTokenRequest
 	if err := c.BindRequest(&req); err != nil {

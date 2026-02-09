@@ -2,6 +2,7 @@ package scim
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -17,13 +18,13 @@ import (
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface
-// This allows the SCIM plugin to add its own screens to the dashboard
+// This allows the SCIM plugin to add its own screens to the dashboard.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension for SCIM
+// NewDashboardExtension creates a new dashboard extension for SCIM.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -31,12 +32,12 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "scim"
 }
 
-// NavigationItems returns navigation items to register
+// NavigationItems returns navigation items to register.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -49,6 +50,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp == nil {
 					return basePath + "/scim"
 				}
+
 				return basePath + "/app/" + currentApp.ID.String() + "/scim"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -61,7 +63,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 
 // Routes returns routes to register under /dashboard/app/:appId/
 // Note: All SCIM routes use /scim/ prefix (not /settings/scim-*) to ensure
-// they get the dashboard layout instead of settings layout
+// they get the dashboard layout instead of settings layout.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Main SCIM Dashboard (Overview)
@@ -149,13 +151,13 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated, using SettingsPages instead)
+// SettingsSections returns settings sections (deprecated, using SettingsPages instead).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{} // Using SettingsPages instead
 }
 
 // SettingsPages returns settings pages
-// Note: SCIM is a main navigation item (not a settings page), so we return nil here
+// Note: SCIM is a main navigation item (not a settings page), so we return nil here.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return nil
 }
@@ -164,7 +166,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 // V2 Page Handlers (using Alpine.js and ForgeUI components)
 // =============================================================================
 
-// ServeSCIMOverviewPage serves the SCIM overview page using v2 Alpine.js components
+// ServeSCIMOverviewPage serves the SCIM overview page using v2 Alpine.js components.
 func (e *DashboardExtension) ServeSCIMOverviewPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -174,6 +176,7 @@ func (e *DashboardExtension) ServeSCIMOverviewPage(ctx *router.PageContext) (g.N
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -182,7 +185,7 @@ func (e *DashboardExtension) ServeSCIMOverviewPage(ctx *router.PageContext) (g.N
 	return pages.SCIMOverviewPage(currentApp, e.getBasePath()), nil
 }
 
-// ServeProvidersPage serves the SCIM providers list page
+// ServeProvidersPage serves the SCIM providers list page.
 func (e *DashboardExtension) ServeProvidersPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -191,6 +194,7 @@ func (e *DashboardExtension) ServeProvidersPage(ctx *router.PageContext) (g.Node
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -199,7 +203,7 @@ func (e *DashboardExtension) ServeProvidersPage(ctx *router.PageContext) (g.Node
 	return pages.ProvidersListPage(currentApp, e.getBasePath()), nil
 }
 
-// ServeAddProviderPage serves the add provider form page
+// ServeAddProviderPage serves the add provider form page.
 func (e *DashboardExtension) ServeAddProviderPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -208,6 +212,7 @@ func (e *DashboardExtension) ServeAddProviderPage(ctx *router.PageContext) (g.No
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -216,7 +221,7 @@ func (e *DashboardExtension) ServeAddProviderPage(ctx *router.PageContext) (g.No
 	return pages.AddProviderPage(currentApp, e.getBasePath()), nil
 }
 
-// ServeProviderDetailPageV2 serves the provider detail page
+// ServeProviderDetailPageV2 serves the provider detail page.
 func (e *DashboardExtension) ServeProviderDetailPageV2(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -225,6 +230,7 @@ func (e *DashboardExtension) ServeProviderDetailPageV2(ctx *router.PageContext) 
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -235,7 +241,7 @@ func (e *DashboardExtension) ServeProviderDetailPageV2(ctx *router.PageContext) 
 	return pages.ProvidersListPage(currentApp, e.getBasePath()), nil
 }
 
-// ServeTokensPage serves the SCIM tokens management page
+// ServeTokensPage serves the SCIM tokens management page.
 func (e *DashboardExtension) ServeTokensPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -244,6 +250,7 @@ func (e *DashboardExtension) ServeTokensPage(ctx *router.PageContext) (g.Node, e
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -252,7 +259,7 @@ func (e *DashboardExtension) ServeTokensPage(ctx *router.PageContext) (g.Node, e
 	return pages.TokensListPage(currentApp, e.getBasePath()), nil
 }
 
-// ServeLogsPageV2 serves the SCIM event logs page
+// ServeLogsPageV2 serves the SCIM event logs page.
 func (e *DashboardExtension) ServeLogsPageV2(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -261,6 +268,7 @@ func (e *DashboardExtension) ServeLogsPageV2(ctx *router.PageContext) (g.Node, e
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -269,7 +277,7 @@ func (e *DashboardExtension) ServeLogsPageV2(ctx *router.PageContext) (g.Node, e
 	return pages.LogsPage(currentApp, e.getBasePath()), nil
 }
 
-// ServeConfigPageV2 serves the SCIM configuration page
+// ServeConfigPageV2 serves the SCIM configuration page.
 func (e *DashboardExtension) ServeConfigPageV2(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -278,6 +286,7 @@ func (e *DashboardExtension) ServeConfigPageV2(ctx *router.PageContext) (g.Node,
 				currentApp = a
 			}
 		}
+
 		if currentApp == nil {
 			return nil, errs.BadRequest("Invalid app context")
 		}
@@ -303,7 +312,7 @@ func (e *DashboardExtension) ServeConfigPageV2(ctx *router.PageContext) (g.Node,
 	), nil
 }
 
-// DashboardWidgets returns widgets to show on the main dashboard
+// DashboardWidgets returns widgets to show on the main dashboard.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -329,14 +338,14 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the SCIM plugin
+// BridgeFunctions returns bridge functions for the SCIM plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return e.getBridgeFunctions()
 }
 
 // Helper methods
 
-// getUserFromContext extracts the current user from the request context
+// getUserFromContext extracts the current user from the request context.
 func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.User {
 	// Extract user from context directly
 	if userVal := ctx.Request.Context().Value("user"); userVal != nil {
@@ -344,10 +353,11 @@ func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.U
 			return u
 		}
 	}
+
 	return nil
 }
 
-// extractAppFromURL extracts the app from the URL parameter
+// extractAppFromURL extracts the app from the URL parameter.
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	// Extract app from context
 	if appVal := ctx.Request.Context().Value("app"); appVal != nil {
@@ -355,15 +365,16 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 			return a, nil
 		}
 	}
-	return nil, fmt.Errorf("app not found in context")
-}
 
-// getBasePath returns the dashboard base path
+		return nil, errs.BadRequest("app not found in context")
+	}
+
+// getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
 	return e.baseUIPath
 }
 
-// detectMode determines if we're in app or organization mode
+// detectMode determines if we're in app or organization mode.
 func (e *DashboardExtension) detectMode() string {
 	// Check if organization service is available (indicates organization mode)
 	if e.plugin.orgService != nil {
@@ -372,10 +383,11 @@ func (e *DashboardExtension) detectMode() string {
 		// This is a simple heuristic - in production you'd have a more reliable way
 		return "organization" // For now, assume organization mode if orgService exists
 	}
+
 	return "app"
 }
 
-// getOrgFromContext tries to extract organization ID from context or URL
+// getOrgFromContext tries to extract organization ID from context or URL.
 func (e *DashboardExtension) getOrgFromContext(ctx *router.PageContext) (*xid.ID, error) {
 	// Try to get from URL parameter first
 	orgIDStr := ctx.Param("orgId")
@@ -384,6 +396,7 @@ func (e *DashboardExtension) getOrgFromContext(ctx *router.PageContext) (*xid.ID
 		if err != nil {
 			return nil, fmt.Errorf("invalid org ID: %w", err)
 		}
+
 		return &orgID, nil
 	}
 
@@ -394,6 +407,7 @@ func (e *DashboardExtension) getOrgFromContext(ctx *router.PageContext) (*xid.ID
 		if err != nil {
 			return nil, fmt.Errorf("invalid org ID: %w", err)
 		}
+
 		return &orgID, nil
 	}
 
@@ -402,8 +416,8 @@ func (e *DashboardExtension) getOrgFromContext(ctx *router.PageContext) (*xid.ID
 		return nil, nil
 	}
 
-	return nil, fmt.Errorf("organization ID required but not found")
-}
+		return nil, errs.BadRequest("organization ID required but not found")
+	}
 
 // Main Dashboard Handlers
 
@@ -431,6 +445,7 @@ func (e *DashboardExtension) ServeSCIMDashboard(ctx *router.PageContext) (g.Node
 	} else {
 		stats, err = e.plugin.service.GetDashboardStats(reqCtx, currentApp.ID, nil)
 	}
+
 	if err != nil {
 		stats = &DashboardStats{
 			TotalSyncs:     0,
@@ -448,6 +463,7 @@ func (e *DashboardExtension) ServeSCIMDashboard(ctx *router.PageContext) (g.Node
 	} else {
 		syncStatus, err = e.plugin.service.GetSyncStatus(reqCtx, currentApp.ID, nil)
 	}
+
 	if err != nil {
 		syncStatus = &SyncStatus{
 			IsHealthy:       false,
@@ -464,6 +480,7 @@ func (e *DashboardExtension) ServeSCIMDashboard(ctx *router.PageContext) (g.Node
 	} else {
 		recentActivity, err = e.plugin.service.GetRecentActivity(reqCtx, currentApp.ID, nil, 5)
 	}
+
 	if err != nil {
 		recentActivity = []*SCIMSyncEvent{}
 	}
@@ -475,6 +492,7 @@ func (e *DashboardExtension) ServeSCIMDashboard(ctx *router.PageContext) (g.Node
 	} else {
 		failedOps, err = e.plugin.service.GetFailedEvents(reqCtx, currentApp.ID, nil, 5)
 	}
+
 	if err != nil {
 		failedOps = []*SCIMSyncEvent{}
 	}
@@ -512,6 +530,7 @@ func (e *DashboardExtension) ServeSyncStatusPage(ctx *router.PageContext) (g.Nod
 	} else {
 		syncStatus, err = e.plugin.service.GetSyncStatus(reqCtx, currentApp.ID, nil)
 	}
+
 	if err != nil {
 		return nil, errs.InternalServerError("Failed to fetch sync status", err)
 	}
@@ -543,10 +562,10 @@ func (e *DashboardExtension) renderDashboardPage(basePath string, currentApp *ap
 		// Stats Grid
 		Div(
 			Class("grid grid-cols-1 md:grid-cols-4 gap-4"),
-			e.renderStatCard("Total Syncs", fmt.Sprintf("%d", stats.TotalSyncs), lucide.RefreshCw(Class("size-6 text-indigo-600"))),
+			e.renderStatCard("Total Syncs", strconv.Itoa(stats.TotalSyncs), lucide.RefreshCw(Class("size-6 text-indigo-600"))),
 			e.renderStatCard("Success Rate", fmt.Sprintf("%.1f%%", stats.SuccessRate), lucide.Check(Class("size-6 text-green-600"))),
-			e.renderStatCard("Failed", fmt.Sprintf("%d", stats.FailedSyncs), lucide.X(Class("size-6 text-red-600"))),
-			e.renderStatCard("Active Providers", fmt.Sprintf("%d", syncStatus.ActiveProviders), lucide.Cloud(Class("size-6 text-blue-600"))),
+			e.renderStatCard("Failed", strconv.Itoa(stats.FailedSyncs), lucide.X(Class("size-6 text-red-600"))),
+			e.renderStatCard("Active Providers", strconv.Itoa(syncStatus.ActiveProviders), lucide.Cloud(Class("size-6 text-blue-600"))),
 		),
 
 		// Status Card
@@ -642,13 +661,13 @@ func (e *DashboardExtension) renderStatusCard(syncStatus *SyncStatus) g.Node {
 	}
 
 	return Div(
-		Class(fmt.Sprintf("rounded-lg border p-6 %s", statusColor)),
+		Class("rounded-lg border p-6 "+statusColor),
 		Div(
 			Class("flex items-center gap-4"),
 			statusIcon,
 			Div(
 				Class("flex-1"),
-				H3(Class(fmt.Sprintf("text-lg font-semibold mb-1 %s", statusText)),
+				H3(Class("text-lg font-semibold mb-1 "+statusText),
 					g.Text(syncStatus.Status)),
 				P(Class("text-sm opacity-80"),
 					g.Text(syncStatus.Message)),
@@ -730,7 +749,7 @@ func (e *DashboardExtension) renderEventRow(event *SCIMSyncEvent) g.Node {
 
 // buildPageData is removed - PageData no longer used in ForgeUI v2
 
-// RenderSCIMStatusWidget renders the SCIM status widget for the dashboard
+// RenderSCIMStatusWidget renders the SCIM status widget for the dashboard.
 func (e *DashboardExtension) RenderSCIMStatusWidget(basePath string, currentApp *app.App) g.Node {
 	if currentApp == nil {
 		return Div(Class("text-gray-500"), g.Text("No app context"))
@@ -767,7 +786,7 @@ func (e *DashboardExtension) RenderSCIMStatusWidget(basePath string, currentApp 
 	)
 }
 
-// RenderSyncStatsWidget renders the sync statistics widget
+// RenderSyncStatsWidget renders the sync statistics widget.
 func (e *DashboardExtension) RenderSyncStatsWidget(basePath string, currentApp *app.App) g.Node {
 	if currentApp == nil {
 		return Div(Class("text-gray-500"), g.Text("No app context"))

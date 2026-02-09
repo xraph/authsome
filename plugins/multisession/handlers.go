@@ -1,6 +1,7 @@
 package multisession
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -14,7 +15,7 @@ import (
 
 type Handler struct{ svc *Service }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -26,13 +27,13 @@ type SessionTokenResponse struct {
 	Token   string           `json:"token"`
 }
 
-// RevokeResponse represents the response from revoking sessions
+// RevokeResponse represents the response from revoking sessions.
 type RevokeResponse struct {
 	RevokedCount int    `json:"revokedCount"`
 	Status       string `json:"status"`
 }
 
-// SessionStatsResponse represents aggregated session statistics
+// SessionStatsResponse represents aggregated session statistics.
 type SessionStatsResponse struct {
 	TotalSessions  int     `json:"totalSessions"`
 	ActiveSessions int     `json:"activeSessions"`
@@ -42,27 +43,29 @@ type SessionStatsResponse struct {
 	NewestSession  *string `json:"newestSession,omitempty"` // ISO8601 timestamp
 }
 
-// SetActiveRequest represents the request to set an active session
+// SetActiveRequest represents the request to set an active session.
 type SetActiveRequest struct {
 	ID string `json:"id"`
 }
 
-// RevokeAllRequest represents the request to revoke all sessions
+// RevokeAllRequest represents the request to revoke all sessions.
 type RevokeAllRequest struct {
 	IncludeCurrentSession bool `json:"includeCurrentSession"`
 }
 
 func NewHandler(s *Service) *Handler { return &Handler{svc: s} }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// List returns sessions for the current user with optional filtering
+// List returns sessions for the current user with optional filtering.
 func (h *Handler) List(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -85,13 +88,16 @@ func (h *Handler) List(c forge.Context) error {
 	if req.Limit <= 0 {
 		req.Limit = 50
 	}
+
 	if req.Limit > 100 {
 		req.Limit = 100 // Cap at 100
 	}
+
 	if req.SortBy == nil || *req.SortBy == "" {
 		defaultSort := "created_at"
 		req.SortBy = &defaultSort
 	}
+
 	if req.SortOrder == nil || *req.SortOrder == "" {
 		defaultOrder := "desc"
 		req.SortOrder = &defaultOrder
@@ -101,10 +107,11 @@ func (h *Handler) List(c forge.Context) error {
 	if err != nil {
 		return handleError(c, err, "LIST_SESSIONS_FAILED", "Failed to list sessions", http.StatusBadRequest)
 	}
+
 	return c.JSON(http.StatusOK, out)
 }
 
-// SetActive switches the current session cookie to the provided session id
+// SetActive switches the current session cookie to the provided session id.
 func (h *Handler) SetActive(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -126,13 +133,16 @@ func (h *Handler) SetActive(c forge.Context) error {
 	if err := c.BindRequest(&body); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest).WithError(err))
 	}
+
 	if body.ID == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_SESSION_ID", "Session ID is required", http.StatusBadRequest))
 	}
+
 	sid, err := xid.FromString(body.ID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_SESSION_ID", "Invalid session ID format", http.StatusBadRequest).WithError(err))
 	}
+
 	sess, err := h.svc.Find(c.Request().Context(), uid, sid)
 	if err != nil {
 		return handleError(c, err, "SESSION_NOT_FOUND", "Session not found", http.StatusNotFound)
@@ -140,10 +150,11 @@ func (h *Handler) SetActive(c forge.Context) error {
 	// Set cookie header manually (no helper on Context)
 	cookieStr := fmt.Sprintf("session_token=%s; Path=/; HttpOnly; SameSite=Lax", sess.Token)
 	c.SetHeader("Set-Cookie", cookieStr)
+
 	return c.JSON(http.StatusOK, &SessionTokenResponse{Session: sess, Token: sess.Token})
 }
 
-// Delete revokes a session by id for the current user
+// Delete revokes a session by id for the current user.
 func (h *Handler) Delete(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -160,17 +171,20 @@ func (h *Handler) Delete(c forge.Context) error {
 	if idStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_SESSION_ID", "Session ID is required", http.StatusBadRequest))
 	}
+
 	sid, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_SESSION_ID", "Invalid session ID format", http.StatusBadRequest).WithError(err))
 	}
+
 	if err := h.svc.Delete(c.Request().Context(), uid, sid); err != nil {
 		return handleError(c, err, "DELETE_SESSION_FAILED", "Failed to delete session", http.StatusBadRequest)
 	}
+
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "deleted"})
 }
 
-// GetCurrent returns details about the currently active session
+// GetCurrent returns details about the currently active session.
 func (h *Handler) GetCurrent(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -203,7 +217,7 @@ func (h *Handler) GetCurrent(c forge.Context) error {
 	return c.JSON(http.StatusOK, &SessionTokenResponse{Session: sess, Token: token})
 }
 
-// GetByID returns details about a specific session by ID
+// GetByID returns details about a specific session by ID.
 func (h *Handler) GetByID(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -220,6 +234,7 @@ func (h *Handler) GetByID(c forge.Context) error {
 	if idStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_SESSION_ID", "Session ID is required", http.StatusBadRequest))
 	}
+
 	sid, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_SESSION_ID", "Invalid session ID format", http.StatusBadRequest).WithError(err))
@@ -233,7 +248,7 @@ func (h *Handler) GetByID(c forge.Context) error {
 	return c.JSON(http.StatusOK, &SessionTokenResponse{Session: sess, Token: sess.Token})
 }
 
-// RevokeAll revokes all sessions for the current user
+// RevokeAll revokes all sessions for the current user.
 func (h *Handler) RevokeAll(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -273,7 +288,7 @@ func (h *Handler) RevokeAll(c forge.Context) error {
 	})
 }
 
-// RevokeOthers revokes all sessions except the current one
+// RevokeOthers revokes all sessions except the current one.
 func (h *Handler) RevokeOthers(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -308,7 +323,7 @@ func (h *Handler) RevokeOthers(c forge.Context) error {
 	})
 }
 
-// Refresh extends the current session's expiry time
+// Refresh extends the current session's expiry time.
 func (h *Handler) Refresh(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -340,7 +355,7 @@ func (h *Handler) Refresh(c forge.Context) error {
 	return c.JSON(http.StatusOK, &SessionTokenResponse{Session: sess, Token: sess.Token})
 }
 
-// GetStats returns aggregated session statistics for the current user
+// GetStats returns aggregated session statistics for the current user.
 func (h *Handler) GetStats(c forge.Context) error {
 	// Get auth context (works for both API key and session auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -370,6 +385,7 @@ func (h *Handler) GetStats(c forge.Context) error {
 		oldest := stats.OldestSession.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
 		response.OldestSession = &oldest
 	}
+
 	if stats.NewestSession != nil {
 		newest := stats.NewestSession.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
 		response.NewestSession = &newest
@@ -383,18 +399,20 @@ func (h *Handler) GetStats(c forge.Context) error {
 // =============================================================================
 
 // getUserIDFromAuthContext extracts user ID from auth context
-// Works with both session and API key authentication
+// Works with both session and API key authentication.
 func getUserIDFromAuthContext(authCtx *contexts.AuthContext) xid.ID {
 	if authCtx.User != nil {
 		return authCtx.User.ID
 	}
+
 	if authCtx.Session != nil {
 		return authCtx.Session.UserID
 	}
+
 	return xid.NilID()
 }
 
-// getSessionTokenFromAuthContext extracts session token from auth context or cookie fallback
+// getSessionTokenFromAuthContext extracts session token from auth context or cookie fallback.
 func getSessionTokenFromAuthContext(c forge.Context, authCtx *contexts.AuthContext) string {
 	// Priority 1: Session from auth context
 	if authCtx.Session != nil && authCtx.Session.Token != "" {

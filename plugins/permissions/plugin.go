@@ -31,7 +31,7 @@ const (
 )
 
 // Plugin implements the AuthSome plugin interface for advanced permissions
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type Plugin struct {
 	config        *Config
 	defaultConfig *Config
@@ -53,77 +53,83 @@ type Plugin struct {
 	migrationHandler *handlers.MigrationHandler
 }
 
-// PluginOption is a functional option for configuring the permissions plugin
+// PluginOption is a functional option for configuring the permissions plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg *Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithMode sets the evaluation mode
+// WithMode sets the evaluation mode.
 func WithMode(mode string) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Mode = mode
 	}
 }
 
-// WithCacheBackend sets the cache backend
+// WithCacheBackend sets the cache backend.
 func WithCacheBackend(backend string) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Cache.Backend = backend
 	}
 }
 
-// WithCacheEnabled sets whether caching is enabled
+// WithCacheEnabled sets whether caching is enabled.
 func WithCacheEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Cache.Enabled = enabled
 	}
 }
 
-// WithParallelEvaluation sets whether parallel evaluation is enabled
+// WithParallelEvaluation sets whether parallel evaluation is enabled.
 func WithParallelEvaluation(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Engine.ParallelEvaluation = enabled
 	}
 }
 
-// WithMaxPoliciesPerOrg sets the maximum policies per organization
+// WithMaxPoliciesPerOrg sets the maximum policies per organization.
 func WithMaxPoliciesPerOrg(max int) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Engine.MaxPoliciesPerOrg = max
 	}
 }
 
-// WithMetricsEnabled sets whether metrics are enabled
+// WithMetricsEnabled sets whether metrics are enabled.
 func WithMetricsEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Performance.EnableMetrics = enabled
 	}
 }
 
-// NewPlugin creates a new permissions plugin instance
+// NewPlugin creates a new permissions plugin instance.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		defaultConfig: DefaultConfig(),
@@ -137,30 +143,30 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Enterprise-grade permissions system with ABAC, dynamic resources, and CEL policy language"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("permissions plugin requires auth instance")
+		return errs.BadRequest("permissions plugin requires auth instance")
 	}
 
 	p.authInst = authInst
@@ -168,13 +174,13 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get database
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for permissions plugin")
+		return errs.InternalServerErrorWithMessage("database not available for permissions plugin")
 	}
 
 	// Get Forge app for config and logger
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for permissions plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for permissions plugin")
 	}
 
 	// Initialize logger
@@ -182,6 +188,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 	// Get config manager and bind configuration
 	configManager := forgeApp.Config()
+
 	p.config = DefaultConfig()
 	if err := configManager.BindWithDefault("auth.permissions", p.config, *p.defaultConfig); err != nil {
 		// Log warning but continue with defaults
@@ -239,7 +246,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// initAttributeProviders initializes the attribute providers for policy evaluation
+// initAttributeProviders initializes the attribute providers for policy evaluation.
 func (p *Plugin) initAttributeProviders() error {
 	// Create attribute cache
 	attrCache := engine.NewSimpleAttributeCache()
@@ -274,10 +281,11 @@ func (p *Plugin) initAttributeProviders() error {
 	}
 
 	p.logger.Debug("attribute providers initialized")
+
 	return nil
 }
 
-// initMigrationService initializes the RBAC migration service
+// initMigrationService initializes the RBAC migration service.
 func (p *Plugin) initMigrationService() error {
 	// Create migration config
 	migrationConfig := migration.DefaultMigrationConfig()
@@ -298,38 +306,40 @@ func (p *Plugin) initMigrationService() error {
 	p.migrationHandler = handlers.NewMigrationHandler(p.migrationService)
 
 	p.logger.Debug("migration service initialized")
+
 	return nil
 }
 
-// forgeLoggerAdapter adapts forge.Logger to migration.Logger interface
+// forgeLoggerAdapter adapts forge.Logger to migration.Logger interface.
 type forgeLoggerAdapter struct {
 	logger forge.Logger
 }
 
-func (l *forgeLoggerAdapter) Info(msg string, fields ...interface{}) {
+func (l *forgeLoggerAdapter) Info(msg string, fields ...any) {
 	l.logger.Info(msg, toForgeFields(fields)...)
 }
 
-func (l *forgeLoggerAdapter) Warn(msg string, fields ...interface{}) {
+func (l *forgeLoggerAdapter) Warn(msg string, fields ...any) {
 	l.logger.Warn(msg, toForgeFields(fields)...)
 }
 
-func (l *forgeLoggerAdapter) Error(msg string, fields ...interface{}) {
+func (l *forgeLoggerAdapter) Error(msg string, fields ...any) {
 	l.logger.Error(msg, toForgeFields(fields)...)
 }
 
-// toForgeFields converts variadic interface{} to forge.F fields
-func toForgeFields(fields []interface{}) []forge.Field {
+// toForgeFields converts variadic interface{} to forge.F fields.
+func toForgeFields(fields []any) []forge.Field {
 	result := make([]forge.Field, 0, len(fields)/2)
 	for i := 0; i+1 < len(fields); i += 2 {
 		if key, ok := fields[i].(string); ok {
 			result = append(result, forge.F(key, fields[i+1]))
 		}
 	}
+
 	return result
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
 		return nil
@@ -767,7 +777,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers lifecycle hooks
+// RegisterHooks registers lifecycle hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// Store hook registry for later use
 	p.hookRegistry = hookRegistry
@@ -782,6 +792,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			forge.F("cache_hit", decision.CacheHit),
 			forge.F("latency_ms", decision.EvaluationTimeMs),
 		)
+
 		return nil
 	})
 
@@ -791,9 +802,11 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			forge.F("policy_id", policyID.String()),
 			forge.F("action", action),
 		)
+
 		if p.service != nil {
 			p.service.removeCompiledPolicy(policyID.String())
 		}
+
 		return nil
 	})
 
@@ -803,15 +816,17 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 			forge.F("scope", scope),
 			forge.F("id", id.String()),
 		)
+
 		return nil
 	})
 
 	p.logger.Debug("permission hooks registered")
+
 	return nil
 }
 
 // RegisterServiceDecorators allows plugins to replace core services with decorated versions
-// This is called automatically by AuthSome after all services are initialized
+// This is called automatically by AuthSome after all services are initialized.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Auto-wire services from the service registry
 	if err := p.autoWireServices(services); err != nil {
@@ -836,10 +851,10 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 	return nil
 }
 
-// autoWireServices automatically wires all available services from the registry
+// autoWireServices automatically wires all available services from the registry.
 func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
 	if services == nil {
-		return fmt.Errorf("service registry is nil")
+		return errs.InternalServerErrorWithMessage("service registry is nil")
 	}
 
 	// Get RBAC service for migration
@@ -854,10 +869,12 @@ func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
 	// Wire RBAC migration service with full repository access
 	if rbacSvc != nil {
 		// Get repositories from AuthSome's Repository() if available
-		var roleRepo rbac.RoleRepository
-		var permRepo rbac.PermissionRepository
-		var rolePermRepo rbac.RolePermissionRepository
-		var policyRepo rbac.PolicyRepository
+		var (
+			roleRepo     rbac.RoleRepository
+			permRepo     rbac.PermissionRepository
+			rolePermRepo rbac.RolePermissionRepository
+			policyRepo   rbac.PolicyRepository
+		)
 
 		if p.authInst != nil {
 			repo := p.authInst.Repository()
@@ -890,8 +907,10 @@ func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
 	// Wire user attribute provider with services
 	if userSvc != nil {
 		// Create user role adapter for RBAC data
-		var rbacProvider providers.AuthsomeRBACService
-		var memberProvider providers.AuthsomeMemberService
+		var (
+			rbacProvider   providers.AuthsomeRBACService
+			memberProvider providers.AuthsomeMemberService
+		)
 
 		if p.authInst != nil {
 			repo := p.authInst.Repository()
@@ -927,16 +946,16 @@ func (p *Plugin) autoWireServices(services *registry.ServiceRegistry) error {
 	return nil
 }
 
-// Migrate runs database migrations for the plugin
+// Migrate runs database migrations for the plugin.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
-		return fmt.Errorf("database not initialized")
+		return errs.InternalServerErrorWithMessage("database not initialized")
 	}
 
 	ctx := context.Background()
 
 	// Create tables
-	models := []interface{}{
+	models := []any{
 		(*schema.PermissionPolicy)(nil),
 		(*schema.PermissionNamespace)(nil),
 		(*schema.PermissionResource)(nil),
@@ -967,7 +986,7 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// createIndexes creates database indexes for optimal performance
+// createIndexes creates database indexes for optimal performance.
 func (p *Plugin) createIndexes(ctx context.Context) error {
 	// PermissionPolicy indexes
 	if _, err := p.db.NewCreateIndex().
@@ -1123,37 +1142,37 @@ func (p *Plugin) createIndexes(ctx context.Context) error {
 	return nil
 }
 
-// Service returns the permissions service (for programmatic access)
+// Service returns the permissions service (for programmatic access).
 func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// AttributeResolver returns the attribute resolver for registering custom providers
+// AttributeResolver returns the attribute resolver for registering custom providers.
 func (p *Plugin) AttributeResolver() *engine.AttributeResolver {
 	return p.attributeResolver
 }
 
-// ResourceRegistry returns the resource provider registry for registering resource loaders
+// ResourceRegistry returns the resource provider registry for registering resource loaders.
 func (p *Plugin) ResourceRegistry() *providers.ResourceProviderRegistry {
 	return p.resourceRegistry
 }
 
 // RegisterResourceLoader registers a resource loader for a specific resource type
-// This allows external code to provide resource data for policy evaluation
+// This allows external code to provide resource data for policy evaluation.
 func (p *Plugin) RegisterResourceLoader(resourceType string, loader providers.ResourceLoader) {
 	if p.resourceRegistry != nil {
 		p.resourceRegistry.Register(resourceType, loader)
 	}
 }
 
-// RegisterResourceLoaderFunc registers a function as a resource loader
+// RegisterResourceLoaderFunc registers a function as a resource loader.
 func (p *Plugin) RegisterResourceLoaderFunc(resourceType string, fn providers.ResourceLoaderFunc) {
 	if p.resourceRegistry != nil {
 		p.resourceRegistry.RegisterFunc(resourceType, fn)
 	}
 }
 
-// MigrationService returns the RBAC migration service (for programmatic access)
+// MigrationService returns the RBAC migration service (for programmatic access).
 func (p *Plugin) MigrationService() *migration.RBACMigrationService {
 	return p.migrationService
 }
@@ -1163,10 +1182,10 @@ func (p *Plugin) MigrationService() *migration.RBACMigrationService {
 // =============================================================================
 
 // WireUserAttributeProvider wires the user attribute provider to AuthSome services
-// This should be called after plugin initialization when services are available
+// This should be called after plugin initialization when services are available.
 func (p *Plugin) WireUserAttributeProvider(cfg providers.AuthsomeUserProviderConfig) error {
 	if p.attributeResolver == nil {
-		return fmt.Errorf("attribute resolver not initialized")
+		return errs.InternalServerErrorWithMessage("attribute resolver not initialized")
 	}
 
 	// Create new user provider with services
@@ -1182,14 +1201,15 @@ func (p *Plugin) WireUserAttributeProvider(cfg providers.AuthsomeUserProviderCon
 
 	// Store reference for later use
 	_ = userProvider
+
 	return nil
 }
 
 // WireMigrationService wires the migration service to RBAC repositories
-// This should be called after plugin initialization when RBAC services are available
+// This should be called after plugin initialization when RBAC services are available.
 func (p *Plugin) WireMigrationService(rbacAdapter *migration.RBACServiceAdapter) error {
 	if p.migrationService == nil {
-		return fmt.Errorf("migration service not initialized")
+		return errs.InternalServerErrorWithMessage("migration service not initialized")
 	}
 
 	// Create new migration service with repositories
@@ -1212,20 +1232,22 @@ func (p *Plugin) WireMigrationService(rbacAdapter *migration.RBACServiceAdapter)
 	p.migrationHandler = handlers.NewMigrationHandler(p.migrationService)
 
 	p.logger.Debug("migration service wired to RBAC")
+
 	return nil
 }
 
 // WireFromAuthsome wires all services from the AuthSome instance
-// This is the recommended method to call after plugin initialization
+// This is the recommended method to call after plugin initialization.
 func (p *Plugin) WireFromAuthsome() error {
 	if p.authInst == nil {
-		return fmt.Errorf("auth instance not available")
+		return errs.InternalServerErrorWithMessage("auth instance not available")
 	}
 
 	// Get service registry for service access
 	serviceRegistry := p.authInst.GetServiceRegistry()
 	if serviceRegistry == nil {
 		p.logger.Warn("service registry not available, services will not be wired")
+
 		return nil
 	}
 
@@ -1265,10 +1287,11 @@ func (p *Plugin) WireFromAuthsome() error {
 	}
 
 	p.logger.Debug("services wired from AuthSome")
+
 	return nil
 }
 
-// userServiceAdapter adapts user.ServiceInterface to providers.AuthsomeUserService
+// userServiceAdapter adapts user.ServiceInterface to providers.AuthsomeUserService.
 type userServiceAdapter struct {
 	userSvc user.ServiceInterface
 }
@@ -1278,10 +1301,11 @@ func (a *userServiceAdapter) FindByID(ctx context.Context, id xid.ID) (providers
 	if err != nil {
 		return nil, err
 	}
+
 	return &userAdapter{user: u}, nil
 }
 
-// userAdapter adapts user.User to providers.AuthsomeUser
+// userAdapter adapts user.User to providers.AuthsomeUser.
 type userAdapter struct {
 	user *user.User
 }
@@ -1295,43 +1319,45 @@ func (a *userAdapter) GetUsername() string    { return a.user.Username }
 func (a *userAdapter) GetImage() string       { return a.user.Image }
 func (a *userAdapter) GetCreatedAt() string   { return a.user.CreatedAt.Format("2006-01-02T15:04:05Z") }
 
-// migrationPolicyRepoAdapter adapts the permissions Service to migration.PolicyRepository
+// migrationPolicyRepoAdapter adapts the permissions Service to migration.PolicyRepository.
 type migrationPolicyRepoAdapter struct {
 	permissionsRepo *Service
 }
 
-// CreatePolicy creates a policy through the permissions service
+// CreatePolicy creates a policy through the permissions service.
 func (a *migrationPolicyRepoAdapter) CreatePolicy(ctx context.Context, policy *permCore.Policy) error {
 	if a.permissionsRepo == nil {
-		return fmt.Errorf("permissions repository not available")
+		return errs.InternalServerErrorWithMessage("permissions repository not available")
 	}
 
 	// Use the service's repo directly
 	return a.permissionsRepo.repo.CreatePolicy(ctx, policy)
 }
 
-// GetPoliciesByResourceType retrieves policies by resource type
+// GetPoliciesByResourceType retrieves policies by resource type.
 func (a *migrationPolicyRepoAdapter) GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) ([]*permCore.Policy, error) {
 	if a.permissionsRepo == nil {
-		return nil, fmt.Errorf("permissions repository not available")
+		return nil, errs.InternalServerErrorWithMessage("permissions repository not available")
 	}
 
 	return a.permissionsRepo.repo.GetPoliciesByResourceType(ctx, appID, envID, userOrgID, resourceType)
 }
 
-// Shutdown gracefully shuts down the plugin
+// Shutdown gracefully shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	if p.service != nil {
 		return p.service.Shutdown(ctx)
 	}
+
 	return nil
 }
 
-// Health checks plugin health
+// Health checks plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
+
 	return p.service.Health(ctx)
 }
 
@@ -1339,7 +1365,7 @@ func (p *Plugin) Health(ctx context.Context) error {
 // REPOSITORY ADAPTERS
 // =============================================================================
 
-// roleRepoAdapter adapts repository.RoleRepository to rbac.RoleRepository
+// roleRepoAdapter adapts repository.RoleRepository to rbac.RoleRepository.
 type roleRepoAdapter struct {
 	repo *mainRepo.RoleRepository
 }
@@ -1348,6 +1374,7 @@ func newRoleRepoAdapter(repo *mainRepo.RoleRepository) rbac.RoleRepository {
 	if repo == nil {
 		return nil
 	}
+
 	return &roleRepoAdapter{repo: repo}
 }
 
@@ -1403,7 +1430,7 @@ func (a *roleRepoAdapter) CloneRole(ctx context.Context, templateID xid.ID, orgI
 	return a.repo.CloneRole(ctx, templateID, orgID, customName)
 }
 
-// permissionRepoAdapter adapts repository.PermissionRepository to rbac.PermissionRepository
+// permissionRepoAdapter adapts repository.PermissionRepository to rbac.PermissionRepository.
 type permissionRepoAdapter struct {
 	repo *mainRepo.PermissionRepository
 }
@@ -1412,6 +1439,7 @@ func newPermissionRepoAdapter(repo *mainRepo.PermissionRepository) rbac.Permissi
 	if repo == nil {
 		return nil
 	}
+
 	return &permissionRepoAdapter{repo: repo}
 }
 
@@ -1451,7 +1479,7 @@ func (a *permissionRepoAdapter) CreateCustomPermission(ctx context.Context, name
 	return a.repo.CreateCustomPermission(ctx, name, description, category, orgID)
 }
 
-// rolePermissionRepoAdapter creates and wraps mainRepo.RolePermissionRepository
+// rolePermissionRepoAdapter creates and wraps mainRepo.RolePermissionRepository.
 type rolePermissionRepoAdapter struct {
 	repo *mainRepo.RolePermissionRepository
 }
@@ -1460,6 +1488,7 @@ func newRolePermissionRepoAdapter(db *bun.DB) rbac.RolePermissionRepository {
 	if db == nil {
 		return nil
 	}
+
 	return &rolePermissionRepoAdapter{repo: mainRepo.NewRolePermissionRepository(db)}
 }
 
@@ -1483,7 +1512,7 @@ func (a *rolePermissionRepoAdapter) ReplaceRolePermissions(ctx context.Context, 
 	return a.repo.ReplaceRolePermissions(ctx, roleID, permissionIDs)
 }
 
-// userRoleRepoAdapter adapts repository.UserRoleRepository to rbac.UserRoleRepository
+// userRoleRepoAdapter adapts repository.UserRoleRepository to rbac.UserRoleRepository.
 type userRoleRepoAdapter struct {
 	repo *mainRepo.UserRoleRepository
 }
@@ -1492,6 +1521,7 @@ func newUserRoleRepoAdapter(repo *mainRepo.UserRoleRepository) rbac.UserRoleRepo
 	if repo == nil {
 		return nil
 	}
+
 	return &userRoleRepoAdapter{repo: repo}
 }
 
@@ -1563,7 +1593,7 @@ func (a *userRoleRepoAdapter) ListAllUserRolesInApp(ctx context.Context, appID, 
 	return a.repo.ListAllUserRolesInApp(ctx, appID, envID)
 }
 
-// policyRepoAdapter adapts repository.PolicyRepository to rbac.PolicyRepository
+// policyRepoAdapter adapts repository.PolicyRepository to rbac.PolicyRepository.
 type policyRepoAdapter struct {
 	repo *mainRepo.PolicyRepository
 }
@@ -1572,6 +1602,7 @@ func newPolicyRepoAdapter(repo *mainRepo.PolicyRepository) rbac.PolicyRepository
 	if repo == nil {
 		return nil
 	}
+
 	return &policyRepoAdapter{repo: repo}
 }
 
@@ -1583,7 +1614,7 @@ func (a *policyRepoAdapter) Create(ctx context.Context, expression string) error
 	return a.repo.Create(ctx, expression)
 }
 
-// memberServiceAdapter adapts organization.Service to providers.AuthsomeMemberService
+// memberServiceAdapter adapts organization.Service to providers.AuthsomeMemberService.
 type memberServiceAdapter struct {
 	orgSvc *organization.Service
 }
@@ -1592,6 +1623,7 @@ func newMemberServiceAdapter(orgSvc *organization.Service) providers.AuthsomeMem
 	if orgSvc == nil {
 		return nil
 	}
+
 	return &memberServiceAdapter{orgSvc: orgSvc}
 }
 
@@ -1619,7 +1651,7 @@ func (a *memberServiceAdapter) GetUserMembershipsForUser(ctx context.Context, us
 	return result, nil
 }
 
-// membershipAdapter adapts membership data to providers.AuthsomeMembership
+// membershipAdapter adapts membership data to providers.AuthsomeMembership.
 type membershipAdapter struct {
 	organizationID xid.ID
 	role           string

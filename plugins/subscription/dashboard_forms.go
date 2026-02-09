@@ -3,6 +3,7 @@ package subscription
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/rs/xid"
@@ -13,7 +14,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ServePlanCreatePage renders the plan creation form
+// ServePlanCreatePage renders the plan creation form.
 func (e *DashboardExtension) ServePlanCreatePage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -290,7 +291,7 @@ func (e *DashboardExtension) ServePlanCreatePage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// ServePlanEditPage renders the plan edit form
+// ServePlanEditPage renders the plan edit form.
 func (e *DashboardExtension) ServePlanEditPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -540,10 +541,9 @@ func (e *DashboardExtension) ServePlanEditPage(ctx *router.PageContext) (g.Node,
 	return content, nil
 }
 
-// ServeAddOnCreatePage renders the add-on creation form
+// ServeAddOnCreatePage renders the add-on creation form.
 func (e *DashboardExtension) ServeAddOnCreatePage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -668,10 +668,9 @@ func (e *DashboardExtension) ServeAddOnCreatePage(ctx *router.PageContext) (g.No
 	return content, nil
 }
 
-// ServeCouponCreatePage renders the coupon creation form
+// ServeCouponCreatePage renders the coupon creation form.
 func (e *DashboardExtension) ServeCouponCreatePage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -809,7 +808,7 @@ func (e *DashboardExtension) ServeCouponCreatePage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// renderBillingPatternFields renders fields specific to each billing pattern
+// renderBillingPatternFields renders fields specific to each billing pattern.
 func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node {
 	// Default values
 	minSeats := 1
@@ -825,18 +824,23 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 			if v, ok := plan.Metadata["min_seats"].(float64); ok {
 				minSeats = int(v)
 			}
+
 			if v, ok := plan.Metadata["max_seats"].(float64); ok {
 				maxSeats = int(v)
 			}
+
 			if v, ok := plan.Metadata["seat_price"].(float64); ok {
 				seatPrice = int64(v)
 			}
+
 			if v, ok := plan.Metadata["unit_price"].(float64); ok {
 				unitPrice = int64(v)
 			}
+
 			if v, ok := plan.Metadata["unit_name"].(string); ok {
 				unitName = v
 			}
+
 			if v, ok := plan.Metadata["hybrid_base_price"].(float64); ok {
 				hybridBasePrice = int64(v)
 			}
@@ -853,7 +857,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 		// Per Seat Fields
 		Div(
 			ID("per_seat_fields"),
-			StyleAttr(fmt.Sprintf("display: %s", boolToDisplay(selectedPattern == "per_seat"))),
+			StyleAttr("display: "+boolToDisplay(selectedPattern == "per_seat")),
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-2"),
 
 			Div(
@@ -878,7 +882,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 					Label(For("min_seats"), Class("block text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Minimum Seats")),
 					Input(
 						Type("number"), Name("min_seats"), ID("min_seats"),
-						Min("1"), Value(fmt.Sprintf("%d", minSeats)),
+						Min("1"), Value(strconv.Itoa(minSeats)),
 						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
 					),
 					P(Class("mt-1 text-xs text-slate-500"), g.Text("Minimum number of seats required")),
@@ -887,7 +891,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 					Label(For("max_seats"), Class("block text-sm font-medium text-slate-700 dark:text-gray-300"), g.Text("Maximum Seats")),
 					Input(
 						Type("number"), Name("max_seats"), ID("max_seats"),
-						Min("0"), Value(fmt.Sprintf("%d", maxSeats)),
+						Min("0"), Value(strconv.Itoa(maxSeats)),
 						Class("mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"),
 					),
 					P(Class("mt-1 text-xs text-slate-500"), g.Text("0 = unlimited")),
@@ -898,7 +902,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 		// Tiered Pricing Fields
 		Div(
 			ID("tiered_fields"),
-			StyleAttr(fmt.Sprintf("display: %s", boolToDisplay(selectedPattern == "tiered"))),
+			StyleAttr("display: "+boolToDisplay(selectedPattern == "tiered")),
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-2"),
 
 			Div(
@@ -937,7 +941,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 		// Usage-based Fields
 		Div(
 			ID("usage_fields"),
-			StyleAttr(fmt.Sprintf("display: %s", boolToDisplay(selectedPattern == "usage"))),
+			StyleAttr("display: "+boolToDisplay(selectedPattern == "usage")),
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6"),
 
 			Div(
@@ -986,7 +990,7 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 		// Hybrid Fields
 		Div(
 			ID("hybrid_fields"),
-			StyleAttr(fmt.Sprintf("display: %s", boolToDisplay(selectedPattern == "hybrid"))),
+			StyleAttr("display: "+boolToDisplay(selectedPattern == "hybrid")),
 			Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 space-y-6"),
 
 			Div(
@@ -1041,12 +1045,13 @@ func (e *DashboardExtension) renderBillingPatternFields(plan *core.Plan) g.Node 
 	})
 }
 
-// renderFeatureSelectionList renders the feature selection checkboxes
+// renderFeatureSelectionList renders the feature selection checkboxes.
 func (e *DashboardExtension) renderFeatureSelectionList(features []*core.Feature, linkedMap map[string]*core.PlanFeatureLink) g.Node {
 	var rows []g.Node
 
 	for _, feature := range features {
 		isLinked := false
+
 		var linkValue string
 
 		if linkedMap != nil {
@@ -1060,6 +1065,7 @@ func (e *DashboardExtension) renderFeatureSelectionList(features []*core.Feature
 
 		// Build value input based on feature type
 		var valueInput g.Node
+
 		switch feature.Type {
 		case core.FeatureTypeBoolean:
 			checked := isLinked && (linkValue == "" || linkValue == "true")
@@ -1080,6 +1086,7 @@ func (e *DashboardExtension) renderFeatureSelectionList(features []*core.Feature
 			)
 		case core.FeatureTypeLimit, core.FeatureTypeMetered:
 			var limitVal string
+
 			if isLinked && linkValue != "" {
 				var val float64
 				if json.Unmarshal([]byte(linkValue), &val) == nil {
@@ -1088,6 +1095,7 @@ func (e *DashboardExtension) renderFeatureSelectionList(features []*core.Feature
 					limitVal = linkValue
 				}
 			}
+
 			valueInput = Div(
 				Class("flex items-center gap-2"),
 				Input(
@@ -1165,15 +1173,16 @@ func (e *DashboardExtension) renderFeatureSelectionList(features []*core.Feature
 	)
 }
 
-// Helper for bool to display style
+// Helper for bool to display style.
 func boolToDisplay(b bool) string {
 	if b {
 		return "block"
 	}
+
 	return "none"
 }
 
-// billingPatternLabel returns a human-readable label for billing pattern
+// billingPatternLabel returns a human-readable label for billing pattern.
 func billingPatternLabel(pattern core.BillingPattern) string {
 	labels := map[core.BillingPattern]string{
 		core.BillingPatternFlat:    "Flat Rate",
@@ -1185,10 +1194,11 @@ func billingPatternLabel(pattern core.BillingPattern) string {
 	if label, ok := labels[pattern]; ok {
 		return label
 	}
+
 	return string(pattern)
 }
 
-// Helper for int64 to string
+// Helper for int64 to string.
 func itoa(i int64) string {
-	return fmt.Sprintf("%d", i)
+	return strconv.FormatInt(i, 10)
 }

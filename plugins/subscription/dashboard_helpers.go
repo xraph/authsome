@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,10 +11,12 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// calculateDateRange converts "7d", "30d", "90d" to start/end dates
+// calculateDateRange converts "7d", "30d", "90d" to start/end dates.
 func calculateDateRange(rangeStr string) (time.Time, time.Time) {
 	end := time.Now()
+
 	var start time.Time
+
 	switch rangeStr {
 	case "7d":
 		start = end.AddDate(0, 0, -7)
@@ -24,47 +27,55 @@ func calculateDateRange(rangeStr string) (time.Time, time.Time) {
 	default:
 		start = end.AddDate(0, 0, -30)
 	}
+
 	return start, end
 }
 
-// formatNumber formats large numbers with commas
+// formatNumber formats large numbers with commas.
 func formatNumber(n int64) string {
 	if n < 0 {
 		return "-" + formatNumber(-n)
 	}
+
 	if n < 1000 {
-		return fmt.Sprintf("%d", n)
+		return strconv.FormatInt(n, 10)
 	}
 
 	// Convert to string and add commas
-	str := fmt.Sprintf("%d", n)
+	str := strconv.FormatInt(n, 10)
+
 	var result strings.Builder
+
 	for i, c := range str {
 		if i > 0 && (len(str)-i)%3 == 0 {
 			result.WriteString(",")
 		}
+
 		result.WriteRune(c)
 	}
+
 	return result.String()
 }
 
-// formatLimit handles -1 (unlimited) special case
+// formatLimit handles -1 (unlimited) special case.
 func formatLimit(limit int64) string {
 	if limit == -1 || limit == 0 {
 		return "Unlimited"
 	}
+
 	return formatNumber(limit)
 }
 
-// calculatePercent calculates usage percentage
+// calculatePercent calculates usage percentage.
 func calculatePercent(usage, limit int64) float64 {
 	if limit == -1 || limit == 0 {
 		return 0
 	}
+
 	return float64(usage) / float64(limit) * 100
 }
 
-// renderProgressBar creates a visual progress bar
+// renderProgressBar creates a visual progress bar.
 func renderProgressBar(percent float64) g.Node {
 	// Cap at 100%
 	if percent > 100 {
@@ -75,6 +86,7 @@ func renderProgressBar(percent float64) g.Node {
 	if percent > 75 {
 		color = "bg-yellow-500"
 	}
+
 	if percent > 90 {
 		color = "bg-red-500"
 	}
@@ -95,13 +107,14 @@ func renderProgressBar(percent float64) g.Node {
 	)
 }
 
-// renderDateRangeFilter renders the date range filter buttons
+// renderDateRangeFilter renders the date range filter buttons.
 func renderDateRangeFilter(currentPath, activeRange string) g.Node {
 	buttonClass := func(rangeStr string) string {
 		base := "px-4 py-2 text-sm font-medium rounded-lg transition-colors"
 		if rangeStr == activeRange {
 			return base + " bg-violet-600 text-white"
 		}
+
 		return base + " bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
 	}
 
@@ -125,7 +138,7 @@ func renderDateRangeFilter(currentPath, activeRange string) g.Node {
 	)
 }
 
-// renderEmptyState renders an empty state message
+// renderEmptyState renders an empty state message.
 func renderEmptyState(icon g.Node, title, description string) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-12 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -144,10 +157,12 @@ func renderEmptyState(icon g.Node, title, description string) g.Node {
 	)
 }
 
-// renderStatusBadge renders a subscription status badge
+// renderStatusBadge renders a subscription status badge.
 func renderStatusBadge(status string) g.Node {
-	var colorClass string
-	var displayText string
+	var (
+		colorClass  string
+		displayText string
+	)
 
 	switch status {
 	case "active":
@@ -171,12 +186,12 @@ func renderStatusBadge(status string) g.Node {
 	}
 
 	return Span(
-		Class(fmt.Sprintf("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium %s", colorClass)),
+		Class("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium "+colorClass),
 		g.Text(displayText),
 	)
 }
 
-// renderSimpleLineChart renders a simple ASCII-style line chart or placeholder
+// renderSimpleLineChart renders a simple ASCII-style line chart or placeholder.
 func renderSimpleLineChart(dataPoints []int64, labels []string) g.Node {
 	if len(dataPoints) == 0 {
 		return renderEmptyState(
@@ -199,7 +214,7 @@ func renderSimpleLineChart(dataPoints []int64, labels []string) g.Node {
 	)
 }
 
-// renderMetricChange renders a metric change indicator with arrow
+// renderMetricChange renders a metric change indicator with arrow.
 func renderMetricChange(change float64) g.Node {
 	if change == 0 {
 		return Span(
@@ -208,9 +223,11 @@ func renderMetricChange(change float64) g.Node {
 		)
 	}
 
-	var colorClass string
-	var icon g.Node
-	var prefix string
+	var (
+		colorClass string
+		icon       g.Node
+		prefix     string
+	)
 
 	if change > 0 {
 		colorClass = "text-green-600 dark:text-green-400"
@@ -223,7 +240,7 @@ func renderMetricChange(change float64) g.Node {
 	}
 
 	return Span(
-		Class(fmt.Sprintf("inline-flex items-center gap-1 text-sm font-medium %s", colorClass)),
+		Class("inline-flex items-center gap-1 text-sm font-medium "+colorClass),
 		icon,
 		g.Text(fmt.Sprintf("%s%.1f%%", prefix, change)),
 	)

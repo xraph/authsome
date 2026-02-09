@@ -2,6 +2,7 @@ package magiclink
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -33,25 +34,27 @@ func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome, authComplet
 	}
 }
 
-// Request types
+// Request types.
 type SendRequest struct {
-	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
 
-// Response types
+// Response types.
 type ErrorResponse = responses.ErrorResponse
 type VerifyResponse = responses.VerifyResponse
 
 type SendResponse struct {
-	Status string `json:"status" example:"sent"`
-	DevURL string `json:"dev_url,omitempty" example:"http://localhost:3000/magic-link/verify?token=abc123"`
+	Status string `example:"sent"                                                 json:"status"`
+	DevURL string `example:"http://localhost:3000/magic-link/verify?token=abc123" json:"dev_url,omitempty"`
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
@@ -70,10 +73,12 @@ func (h *Handler) Send(c forge.Context) error {
 	// Rate limiting
 	if h.rl != nil {
 		key := "magiclink:send:" + req.Email
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, "/api/auth/magic-link/send")
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, errs.New("RATE_LIMIT_ERROR", "Rate limit check failed", http.StatusInternalServerError).WithError(err))
 		}
+
 		if !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many requests, please try again later", http.StatusTooManyRequests))
 		}
@@ -84,6 +89,7 @@ func (h *Handler) Send(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	// Call service with explicit appID
@@ -97,15 +103,18 @@ func (h *Handler) Send(c forge.Context) error {
 	if url != "" {
 		response.DevURL = url
 	}
+
 	return c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) Verify(c forge.Context) error {
 	q := c.Request().URL.Query()
+
 	token := q.Get("token")
 	if token == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_TOKEN", "Token parameter is required", http.StatusBadRequest))
 	}
+
 	remember := q.Get("remember") == "true"
 
 	// Get app and environment context (required for session creation)
@@ -121,6 +130,7 @@ func (h *Handler) Verify(c forge.Context) error {
 
 	// Get optional organization context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
+
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -131,6 +141,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	if host, _, err := net.SplitHostPort(ip); err == nil {
 		ip = host
 	}
+
 	ua := c.Request().UserAgent()
 
 	// Call service to verify token and get user info
@@ -141,8 +152,10 @@ func (h *Handler) Verify(c forge.Context) error {
 
 	// Use centralized authentication completion service for signup/signin
 	if h.authCompletion != nil {
-		var authResp *responses.AuthResponse
-		var authErr error
+		var (
+			authResp *responses.AuthResponse
+			authErr  error
+		)
 
 		if result.IsNewUser {
 			// New user signup - CompleteSignUpOrSignIn will create user and add membership

@@ -3,12 +3,13 @@ package compliance
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// RegisterModels registers compliance models with Bun
+// RegisterModels registers compliance models with Bun.
 func RegisterModels(db *bun.DB) {
 	db.RegisterModel(
 		(*ComplianceProfile)(nil),
@@ -21,9 +22,9 @@ func RegisterModels(db *bun.DB) {
 	)
 }
 
-// CreateTables creates all compliance tables
+// CreateTables creates all compliance tables.
 func CreateTables(ctx context.Context, db *bun.DB) error {
-	models := []interface{}{
+	models := []any{
 		(*ComplianceProfile)(nil),
 		(*ComplianceCheck)(nil),
 		(*ComplianceViolation)(nil),
@@ -47,7 +48,7 @@ func CreateTables(ctx context.Context, db *bun.DB) error {
 	return createIndexes(ctx, db)
 }
 
-// createIndexes creates database indexes for optimal performance
+// createIndexes creates database indexes for optimal performance.
 func createIndexes(ctx context.Context, db *bun.DB) error {
 	indexes := []string{
 		// Compliance Profiles
@@ -109,7 +110,7 @@ func createIndexes(ctx context.Context, db *bun.DB) error {
 	return nil
 }
 
-// DropTables drops all compliance tables (for testing)
+// DropTables drops all compliance tables (for testing).
 func DropTables(ctx context.Context, db *bun.DB) error {
 	tables := []string{
 		"compliance_training",
@@ -135,13 +136,13 @@ func DropTables(ctx context.Context, db *bun.DB) error {
 	return nil
 }
 
-// BunRepository implements the Repository interface using Bun ORM
+// BunRepository implements the Repository interface using Bun ORM.
 type BunRepository struct {
 	db *bun.DB
 }
 
-// NewBunRepository creates a new Bun repository
-func NewBunRepository(db interface{}) Repository {
+// NewBunRepository creates a new Bun repository.
+func NewBunRepository(db any) Repository {
 	return &BunRepository{
 		db: db.(*bun.DB),
 	}
@@ -152,34 +153,41 @@ func NewBunRepository(db interface{}) Repository {
 
 func (r *BunRepository) CreateProfile(ctx context.Context, profile *ComplianceProfile) error {
 	_, err := r.db.NewInsert().Model(profile).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetProfile(ctx context.Context, id string) (*ComplianceProfile, error) {
 	profile := new(ComplianceProfile)
+
 	err := r.db.NewSelect().Model(profile).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return profile, err
 }
 
 func (r *BunRepository) GetProfileByApp(ctx context.Context, appID string) (*ComplianceProfile, error) {
 	profile := new(ComplianceProfile)
+
 	err := r.db.NewSelect().Model(profile).Where("app_id = ?", appID).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return profile, err
 }
 
 func (r *BunRepository) UpdateProfile(ctx context.Context, profile *ComplianceProfile) error {
 	_, err := r.db.NewUpdate().Model(profile).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) DeleteProfile(ctx context.Context, id string) error {
 	_, err := r.db.NewDelete().Model((*ComplianceProfile)(nil)).Where("id = ?", id).Exec(ctx)
+
 	return err
 }
 
@@ -189,9 +197,11 @@ func (r *BunRepository) ListProfiles(ctx context.Context, filter *ListProfilesFi
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.Status != nil {
 		baseQuery = baseQuery.Where("status = ?", *filter.Status)
 	}
+
 	if filter.Standard != nil {
 		baseQuery = baseQuery.Where("? = ANY(standards)", *filter.Standard)
 	}
@@ -204,6 +214,7 @@ func (r *BunRepository) ListProfiles(ctx context.Context, filter *ListProfilesFi
 	baseQuery = baseQuery.Limit(filter.Limit).Offset(filter.Offset)
 
 	var profiles []*ComplianceProfile
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -218,15 +229,18 @@ func (r *BunRepository) ListProfiles(ctx context.Context, filter *ListProfilesFi
 
 func (r *BunRepository) CreateCheck(ctx context.Context, check *ComplianceCheck) error {
 	_, err := r.db.NewInsert().Model(check).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetCheck(ctx context.Context, id string) (*ComplianceCheck, error) {
 	check := new(ComplianceCheck)
+
 	err := r.db.NewSelect().Model(check).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return check, err
 }
 
@@ -236,15 +250,19 @@ func (r *BunRepository) ListChecks(ctx context.Context, filter *ListChecksFilter
 	if filter.ProfileID != nil {
 		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
 	}
+
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.CheckType != nil {
 		baseQuery = baseQuery.Where("check_type = ?", *filter.CheckType)
 	}
+
 	if filter.Status != nil {
 		baseQuery = baseQuery.Where("status = ?", *filter.Status)
 	}
+
 	if filter.SinceBefore != nil {
 		baseQuery = baseQuery.Where("last_checked_at >= ?", *filter.SinceBefore)
 	}
@@ -257,6 +275,7 @@ func (r *BunRepository) ListChecks(ctx context.Context, filter *ListChecksFilter
 	baseQuery = baseQuery.Order("last_checked_at DESC").Limit(filter.Limit).Offset(filter.Offset)
 
 	var checks []*ComplianceCheck
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -271,28 +290,34 @@ func (r *BunRepository) ListChecks(ctx context.Context, filter *ListChecksFilter
 
 func (r *BunRepository) UpdateCheck(ctx context.Context, check *ComplianceCheck) error {
 	_, err := r.db.NewUpdate().Model(check).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetDueChecks(ctx context.Context) ([]*ComplianceCheck, error) {
 	var checks []*ComplianceCheck
+
 	err := r.db.NewSelect().Model(&checks).
 		Where("next_check_at <= NOW()").
 		Scan(ctx)
+
 	return checks, err
 }
 
 func (r *BunRepository) CreateViolation(ctx context.Context, violation *ComplianceViolation) error {
 	_, err := r.db.NewInsert().Model(violation).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetViolation(ctx context.Context, id string) (*ComplianceViolation, error) {
 	violation := new(ComplianceViolation)
+
 	err := r.db.NewSelect().Model(violation).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return violation, err
 }
 
@@ -302,18 +327,23 @@ func (r *BunRepository) ListViolations(ctx context.Context, filter *ListViolatio
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.ProfileID != nil {
 		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
 	}
+
 	if filter.UserID != nil {
 		baseQuery = baseQuery.Where("user_id = ?", *filter.UserID)
 	}
+
 	if filter.Status != nil {
 		baseQuery = baseQuery.Where("status = ?", *filter.Status)
 	}
+
 	if filter.Severity != nil {
 		baseQuery = baseQuery.Where("severity = ?", *filter.Severity)
 	}
+
 	if filter.ViolationType != nil {
 		baseQuery = baseQuery.Where("violation_type = ?", *filter.ViolationType)
 	}
@@ -326,6 +356,7 @@ func (r *BunRepository) ListViolations(ctx context.Context, filter *ListViolatio
 	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
 
 	var violations []*ComplianceViolation
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -340,6 +371,7 @@ func (r *BunRepository) ListViolations(ctx context.Context, filter *ListViolatio
 
 func (r *BunRepository) UpdateViolation(ctx context.Context, violation *ComplianceViolation) error {
 	_, err := r.db.NewUpdate().Model(violation).WherePK().Exec(ctx)
+
 	return err
 }
 
@@ -351,6 +383,7 @@ func (r *BunRepository) ResolveViolation(ctx context.Context, id, resolvedBy str
 		Set("resolved_at = NOW()").
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -360,6 +393,7 @@ func (r *BunRepository) CountViolations(ctx context.Context, appID string, statu
 		Where("app_id = ?", appID).
 		Where("status = ?", status).
 		Count(ctx)
+
 	return count, err
 }
 
@@ -368,15 +402,18 @@ func (r *BunRepository) CountViolations(ctx context.Context, appID string, statu
 
 func (r *BunRepository) CreateReport(ctx context.Context, report *ComplianceReport) error {
 	_, err := r.db.NewInsert().Model(report).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetReport(ctx context.Context, id string) (*ComplianceReport, error) {
 	report := new(ComplianceReport)
+
 	err := r.db.NewSelect().Model(report).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return report, err
 }
 
@@ -386,18 +423,23 @@ func (r *BunRepository) ListReports(ctx context.Context, filter *ListReportsFilt
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.ProfileID != nil {
 		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
 	}
+
 	if filter.ReportType != nil {
 		baseQuery = baseQuery.Where("report_type = ?", *filter.ReportType)
 	}
+
 	if filter.Standard != nil {
 		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
 	}
+
 	if filter.Status != nil {
 		baseQuery = baseQuery.Where("status = ?", *filter.Status)
 	}
+
 	if filter.Format != nil {
 		baseQuery = baseQuery.Where("format = ?", *filter.Format)
 	}
@@ -410,6 +452,7 @@ func (r *BunRepository) ListReports(ctx context.Context, filter *ListReportsFilt
 	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
 
 	var reports []*ComplianceReport
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -424,25 +467,30 @@ func (r *BunRepository) ListReports(ctx context.Context, filter *ListReportsFilt
 
 func (r *BunRepository) UpdateReport(ctx context.Context, report *ComplianceReport) error {
 	_, err := r.db.NewUpdate().Model(report).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) DeleteReport(ctx context.Context, id string) error {
 	_, err := r.db.NewDelete().Model((*ComplianceReport)(nil)).Where("id = ?", id).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) CreateEvidence(ctx context.Context, evidence *ComplianceEvidence) error {
 	_, err := r.db.NewInsert().Model(evidence).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetEvidence(ctx context.Context, id string) (*ComplianceEvidence, error) {
 	evidence := new(ComplianceEvidence)
+
 	err := r.db.NewSelect().Model(evidence).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return evidence, err
 }
 
@@ -452,15 +500,19 @@ func (r *BunRepository) ListEvidence(ctx context.Context, filter *ListEvidenceFi
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.ProfileID != nil {
 		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
 	}
+
 	if filter.EvidenceType != nil {
 		baseQuery = baseQuery.Where("evidence_type = ?", *filter.EvidenceType)
 	}
+
 	if filter.Standard != nil {
 		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
 	}
+
 	if filter.ControlID != nil {
 		baseQuery = baseQuery.Where("control_id = ?", *filter.ControlID)
 	}
@@ -473,6 +525,7 @@ func (r *BunRepository) ListEvidence(ctx context.Context, filter *ListEvidenceFi
 	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
 
 	var evidence []*ComplianceEvidence
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -487,29 +540,35 @@ func (r *BunRepository) ListEvidence(ctx context.Context, filter *ListEvidenceFi
 
 func (r *BunRepository) DeleteEvidence(ctx context.Context, id string) error {
 	_, err := r.db.NewDelete().Model((*ComplianceEvidence)(nil)).Where("id = ?", id).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) CreatePolicy(ctx context.Context, policy *CompliancePolicy) error {
 	_, err := r.db.NewInsert().Model(policy).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetPolicy(ctx context.Context, id string) (*CompliancePolicy, error) {
 	policy := new(CompliancePolicy)
+
 	err := r.db.NewSelect().Model(policy).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return policy, err
 }
 
 func (r *BunRepository) GetActivePolicies(ctx context.Context, appID string) ([]*CompliancePolicy, error) {
 	var policies []*CompliancePolicy
+
 	err := r.db.NewSelect().Model(&policies).
 		Where("app_id = ?", appID).
 		Where("status = ?", "active").
 		Scan(ctx)
+
 	return policies, err
 }
 
@@ -519,15 +578,19 @@ func (r *BunRepository) ListPolicies(ctx context.Context, filter *ListPoliciesFi
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.ProfileID != nil {
 		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
 	}
+
 	if filter.PolicyType != nil {
 		baseQuery = baseQuery.Where("policy_type = ?", *filter.PolicyType)
 	}
+
 	if filter.Standard != nil {
 		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
 	}
+
 	if filter.Status != nil {
 		baseQuery = baseQuery.Where("status = ?", *filter.Status)
 	}
@@ -540,6 +603,7 @@ func (r *BunRepository) ListPolicies(ctx context.Context, filter *ListPoliciesFi
 	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
 
 	var policies []*CompliancePolicy
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -554,25 +618,30 @@ func (r *BunRepository) ListPolicies(ctx context.Context, filter *ListPoliciesFi
 
 func (r *BunRepository) UpdatePolicy(ctx context.Context, policy *CompliancePolicy) error {
 	_, err := r.db.NewUpdate().Model(policy).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) DeletePolicy(ctx context.Context, id string) error {
 	_, err := r.db.NewDelete().Model((*CompliancePolicy)(nil)).Where("id = ?", id).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) CreateTraining(ctx context.Context, training *ComplianceTraining) error {
 	_, err := r.db.NewInsert().Model(training).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetTraining(ctx context.Context, id string) (*ComplianceTraining, error) {
 	training := new(ComplianceTraining)
+
 	err := r.db.NewSelect().Model(training).Where("id = ?", id).Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	return training, err
 }
 
@@ -582,18 +651,23 @@ func (r *BunRepository) ListTraining(ctx context.Context, filter *ListTrainingFi
 	if filter.AppID != nil {
 		baseQuery = baseQuery.Where("app_id = ?", *filter.AppID)
 	}
+
 	if filter.ProfileID != nil {
 		baseQuery = baseQuery.Where("profile_id = ?", *filter.ProfileID)
 	}
+
 	if filter.UserID != nil {
 		baseQuery = baseQuery.Where("user_id = ?", *filter.UserID)
 	}
+
 	if filter.TrainingType != nil {
 		baseQuery = baseQuery.Where("training_type = ?", *filter.TrainingType)
 	}
+
 	if filter.Standard != nil {
 		baseQuery = baseQuery.Where("standard = ?", *filter.Standard)
 	}
+
 	if filter.Status != nil {
 		baseQuery = baseQuery.Where("status = ?", *filter.Status)
 	}
@@ -606,6 +680,7 @@ func (r *BunRepository) ListTraining(ctx context.Context, filter *ListTrainingFi
 	baseQuery = baseQuery.Order("created_at DESC").Limit(filter.Limit).Offset(filter.Offset)
 
 	var training []*ComplianceTraining
+
 	if err := baseQuery.Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -620,24 +695,29 @@ func (r *BunRepository) ListTraining(ctx context.Context, filter *ListTrainingFi
 
 func (r *BunRepository) UpdateTraining(ctx context.Context, training *ComplianceTraining) error {
 	_, err := r.db.NewUpdate().Model(training).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetUserTrainingStatus(ctx context.Context, userID string) ([]*ComplianceTraining, error) {
 	var training []*ComplianceTraining
+
 	err := r.db.NewSelect().Model(&training).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Scan(ctx)
+
 	return training, err
 }
 
 func (r *BunRepository) GetOverdueTraining(ctx context.Context, appID string) ([]*ComplianceTraining, error) {
 	var training []*ComplianceTraining
+
 	err := r.db.NewSelect().Model(&training).
 		Where("app_id = ?", appID).
 		Where("status != ?", "completed").
 		Where("expires_at < NOW()").
 		Scan(ctx)
+
 	return training, err
 }

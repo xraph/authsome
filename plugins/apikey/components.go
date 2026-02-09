@@ -3,6 +3,7 @@ package apikey
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -14,7 +15,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// renderAPIKeysListContent renders the main API keys management page content
+// renderAPIKeysListContent renders the main API keys management page content.
 func (e *DashboardExtension) renderAPIKeysListContent(req *http.Request, currentApp *app.App, currentUser *user.User) g.Node {
 	ctx := req.Context()
 
@@ -171,7 +172,7 @@ func (e *DashboardExtension) renderAPIKeysListContent(req *http.Request, current
 	)
 }
 
-// renderKeysTable renders the table of API keys
+// renderKeysTable renders the table of API keys.
 func (e *DashboardExtension) renderKeysTable(keys []*apikey.APIKey, currentApp *app.App, basePath string) g.Node {
 	return Div(
 		Class("bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"),
@@ -196,19 +197,21 @@ func (e *DashboardExtension) renderKeysTable(keys []*apikey.APIKey, currentApp *
 	)
 }
 
-// renderKeyRows renders individual key rows
+// renderKeyRows renders individual key rows.
 func (e *DashboardExtension) renderKeyRows(keys []*apikey.APIKey, currentApp *app.App, basePath string) []g.Node {
 	rows := make([]g.Node, len(keys))
 	for i, key := range keys {
 		rows[i] = e.renderKeyRow(key, currentApp, basePath)
 	}
+
 	return rows
 }
 
-// renderKeyRow renders a single API key row
+// renderKeyRow renders a single API key row.
 func (e *DashboardExtension) renderKeyRow(key *apikey.APIKey, currentApp *app.App, basePath string) g.Node {
 	statusClass := "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
 	statusText := "Active"
+
 	if !key.Active {
 		statusClass = "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
 		statusText = "Revoked"
@@ -226,7 +229,7 @@ func (e *DashboardExtension) renderKeyRow(key *apikey.APIKey, currentApp *app.Ap
 			g.If(key.ExpiresAt != nil,
 				Div(Class("text-xs text-gray-500 dark:text-gray-400 mt-1"),
 					lucide.Clock(Class("inline h-3 w-3 mr-1")),
-					g.Text(fmt.Sprintf("Expires %s", formatTimeAgo(*key.ExpiresAt))),
+					g.Text("Expires "+formatTimeAgo(*key.ExpiresAt)),
 				),
 			),
 		),
@@ -314,7 +317,7 @@ func (e *DashboardExtension) renderKeyRow(key *apikey.APIKey, currentApp *app.Ap
 	)
 }
 
-// renderScopeBadges renders scope badges
+// renderScopeBadges renders scope badges.
 func (e *DashboardExtension) renderScopeBadges(scopes []string) []g.Node {
 	if len(scopes) == 0 {
 		return []g.Node{
@@ -330,10 +333,11 @@ func (e *DashboardExtension) renderScopeBadges(scopes []string) []g.Node {
 			g.Text(scope),
 		)
 	}
+
 	return nodes
 }
 
-// ScopeDefinition defines a scope with metadata
+// ScopeDefinition defines a scope with metadata.
 type ScopeDefinition struct {
 	Value       string
 	Label       string
@@ -342,7 +346,7 @@ type ScopeDefinition struct {
 	Category    string // "read", "write", "admin", "special"
 }
 
-// getScopeDefinitions returns all available scopes organized by category
+// getScopeDefinitions returns all available scopes organized by category.
 func (e *DashboardExtension) getScopeDefinitions() map[string][]ScopeDefinition {
 	return map[string][]ScopeDefinition{
 		"Read Operations (Safe)": {
@@ -381,7 +385,7 @@ func (e *DashboardExtension) getScopeDefinitions() map[string][]ScopeDefinition 
 	}
 }
 
-// renderScopeSelector renders the scope selection UI with categories
+// renderScopeSelector renders the scope selection UI with categories.
 func (e *DashboardExtension) renderScopeSelector() g.Node {
 	scopesByCategory := e.getScopeDefinitions()
 
@@ -426,7 +430,7 @@ func (e *DashboardExtension) renderScopeSelector() g.Node {
 	)
 }
 
-// renderScopeCategories renders all scope categories
+// renderScopeCategories renders all scope categories.
 func (e *DashboardExtension) renderScopeCategories(scopesByCategory map[string][]ScopeDefinition) []g.Node {
 	categories := []string{
 		"Read Operations (Safe)",
@@ -441,10 +445,11 @@ func (e *DashboardExtension) renderScopeCategories(scopesByCategory map[string][
 		scopes := scopesByCategory[category]
 		nodes[i] = e.renderScopeCategory(category, scopes)
 	}
+
 	return nodes
 }
 
-// renderScopeCategory renders a single category of scopes
+// renderScopeCategory renders a single category of scopes.
 func (e *DashboardExtension) renderScopeCategory(categoryName string, scopes []ScopeDefinition) g.Node {
 	return Div(Class("space-y-2"),
 		// Category Header
@@ -458,16 +463,17 @@ func (e *DashboardExtension) renderScopeCategory(categoryName string, scopes []S
 	)
 }
 
-// renderScopeItems renders individual scope checkboxes
+// renderScopeItems renders individual scope checkboxes.
 func (e *DashboardExtension) renderScopeItems(scopes []ScopeDefinition) []g.Node {
 	nodes := make([]g.Node, len(scopes))
 	for i, scope := range scopes {
 		nodes[i] = e.renderScopeItem(scope)
 	}
+
 	return nodes
 }
 
-// renderScopeItem renders a single scope checkbox with Pines-style design
+// renderScopeItem renders a single scope checkbox with Pines-style design.
 func (e *DashboardExtension) renderScopeItem(scope ScopeDefinition) g.Node {
 	// Determine border color and badge based on danger level
 	borderClass := "border-green-200 hover:border-green-300 dark:border-green-800 dark:hover:border-green-700"
@@ -510,7 +516,7 @@ func (e *DashboardExtension) renderScopeItem(scope ScopeDefinition) g.Node {
 			// Title and Badge
 			Span(Class("flex items-center justify-between gap-2"),
 				Span(Class("font-semibold text-sm text-gray-900 dark:text-white"), g.Text(scope.Label)),
-				Span(Class(fmt.Sprintf("inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded %s", badgeClass)),
+				Span(Class("inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded "+badgeClass),
 					badgeIcon,
 					g.Text(badgeText),
 				),
@@ -523,7 +529,7 @@ func (e *DashboardExtension) renderScopeItem(scope ScopeDefinition) g.Node {
 	)
 }
 
-// renderEmptyState renders the empty state when no keys exist
+// renderEmptyState renders the empty state when no keys exist.
 func (e *DashboardExtension) renderEmptyState() g.Node {
 	return Div(Class("text-center py-12 bg-white dark:bg-neutral-800 rounded-xl border border-gray-200 dark:border-neutral-700"),
 		Div(Class("mx-auto size-16 text-gray-400 dark:text-neutral-600 mb-4"),
@@ -541,7 +547,7 @@ func (e *DashboardExtension) renderEmptyState() g.Node {
 	)
 }
 
-// renderCreateModal renders the create API key modal using Alpine.js/Pines dialog pattern
+// renderCreateModal renders the create API key modal using Alpine.js/Pines dialog pattern.
 func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath string) g.Node {
 	actionURL := fmt.Sprintf("%s/app/%s/settings/api-keys/create", basePath, currentApp.ID.String())
 
@@ -737,7 +743,7 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 									Type("number"),
 									ID("rate_limit"),
 									Name("rate_limit"),
-									Value(fmt.Sprintf("%d", e.plugin.config.DefaultRateLimit)),
+									Value(strconv.Itoa(e.plugin.config.DefaultRateLimit)),
 									g.Attr("min", "0"),
 									Class("py-3 px-4 pe-20 block w-full border border-gray-200 rounded-lg text-sm focus:border-violet-500 focus:ring-violet-500 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-300"),
 								),
@@ -800,7 +806,7 @@ func (e *DashboardExtension) renderCreateModal(currentApp *app.App, basePath str
 	)
 }
 
-// renderViewKeyModal renders the modal to display newly created API key using Alpine.js/Pines dialog pattern
+// renderViewKeyModal renders the modal to display newly created API key using Alpine.js/Pines dialog pattern.
 func (e *DashboardExtension) renderViewKeyModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showViewKeyModal"),
@@ -917,7 +923,7 @@ func (e *DashboardExtension) renderViewKeyModal() g.Node {
 	)
 }
 
-// renderRevokeModal renders the confirmation modal for revoking an API key using Alpine.js/Pines dialog pattern
+// renderRevokeModal renders the confirmation modal for revoking an API key using Alpine.js/Pines dialog pattern.
 func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath string) g.Node {
 	actionURL := fmt.Sprintf("%s/app/%s/settings/api-keys/revoke", basePath, currentApp.ID.String())
 
@@ -1037,7 +1043,7 @@ func (e *DashboardExtension) renderRevokeModal(currentApp *app.App, basePath str
 	)
 }
 
-// renderConfigContent renders the configuration page content
+// renderConfigContent renders the configuration page content.
 func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 	basePath := e.getBasePath()
 
@@ -1087,7 +1093,7 @@ func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 							Input(
 								Type("number"),
 								Name("default_rate_limit"),
-								Value(fmt.Sprintf("%d", e.plugin.config.DefaultRateLimit)),
+								Value(strconv.Itoa(e.plugin.config.DefaultRateLimit)),
 								g.Attr("min", "0"),
 								Class("w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"),
 							),
@@ -1098,7 +1104,7 @@ func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 							Input(
 								Type("number"),
 								Name("max_rate_limit"),
-								Value(fmt.Sprintf("%d", e.plugin.config.MaxRateLimit)),
+								Value(strconv.Itoa(e.plugin.config.MaxRateLimit)),
 								g.Attr("min", "0"),
 								Class("w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"),
 							),
@@ -1117,7 +1123,7 @@ func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 							Input(
 								Type("number"),
 								Name("max_keys_per_user"),
-								Value(fmt.Sprintf("%d", e.plugin.config.MaxKeysPerUser)),
+								Value(strconv.Itoa(e.plugin.config.MaxKeysPerUser)),
 								g.Attr("min", "1"),
 								Class("w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"),
 							),
@@ -1128,7 +1134,7 @@ func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 							Input(
 								Type("number"),
 								Name("max_keys_per_org"),
-								Value(fmt.Sprintf("%d", e.plugin.config.MaxKeysPerOrg)),
+								Value(strconv.Itoa(e.plugin.config.MaxKeysPerOrg)),
 								g.Attr("min", "1"),
 								Class("w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"),
 							),
@@ -1139,7 +1145,7 @@ func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 							Input(
 								Type("number"),
 								Name("key_length"),
-								Value(fmt.Sprintf("%d", e.plugin.config.KeyLength)),
+								Value(strconv.Itoa(e.plugin.config.KeyLength)),
 								g.Attr("min", "16"),
 								g.Attr("max", "64"),
 								Class("w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"),
@@ -1194,7 +1200,7 @@ func (e *DashboardExtension) renderConfigContent(currentApp *app.App) g.Node {
 	)
 }
 
-// renderSecurityContent renders the security settings page content
+// renderSecurityContent renders the security settings page content.
 func (e *DashboardExtension) renderSecurityContent(currentApp *app.App) g.Node {
 	basePath := e.getBasePath()
 
@@ -1337,7 +1343,7 @@ func (e *DashboardExtension) renderSecurityContent(currentApp *app.App) g.Node {
 	)
 }
 
-// renderKeyStatsWidget renders the API key statistics widget
+// renderKeyStatsWidget renders the API key statistics widget.
 func (e *DashboardExtension) renderKeyStatsWidget(stats KeyStats) g.Node {
 	return Div(
 		Class("bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6"),
@@ -1353,17 +1359,17 @@ func (e *DashboardExtension) renderKeyStatsWidget(stats KeyStats) g.Node {
 
 		// Stats grid
 		Div(Class("space-y-3"),
-			e.statRow("Active Keys", fmt.Sprintf("%d", stats.TotalActive), "text-green-600 dark:text-green-400"),
-			e.statRow("Used (24h)", fmt.Sprintf("%d", stats.UsedLast24h), "text-blue-600 dark:text-blue-400"),
+			e.statRow("Active Keys", strconv.Itoa(stats.TotalActive), "text-green-600 dark:text-green-400"),
+			e.statRow("Used (24h)", strconv.Itoa(stats.UsedLast24h), "text-blue-600 dark:text-blue-400"),
 			e.statRow("Avg Requests", fmt.Sprintf("%.0f", stats.AvgRequestRate), "text-gray-600 dark:text-gray-400"),
 			g.If(stats.ExpiringSoon > 0,
-				e.statRow("Expiring Soon", fmt.Sprintf("%d", stats.ExpiringSoon), "text-orange-600 dark:text-orange-400"),
+				e.statRow("Expiring Soon", strconv.Itoa(stats.ExpiringSoon), "text-orange-600 dark:text-orange-400"),
 			),
 		),
 	)
 }
 
-// statRow renders a single stat row in the widget
+// statRow renders a single stat row in the widget.
 func (e *DashboardExtension) statRow(label, value, colorClass string) g.Node {
 	return Div(
 		Class("flex items-center justify-between"),
@@ -1372,7 +1378,7 @@ func (e *DashboardExtension) statRow(label, value, colorClass string) g.Node {
 	)
 }
 
-// renderError renders an error message
+// renderError renders an error message.
 func (e *DashboardExtension) renderError(title, message string) g.Node {
 	return Div(Class("bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"),
 		Div(Class("flex items-start gap-2"),
@@ -1385,7 +1391,7 @@ func (e *DashboardExtension) renderError(title, message string) g.Node {
 	)
 }
 
-// formatTimeAgo formats a time as "X ago" or "in X" for future times
+// formatTimeAgo formats a time as "X ago" or "in X" for future times.
 func formatTimeAgo(t time.Time) string {
 	duration := time.Since(t)
 
@@ -1399,18 +1405,21 @@ func formatTimeAgo(t time.Time) string {
 			if mins == 1 {
 				return "in 1 minute"
 			}
+
 			return fmt.Sprintf("in %d minutes", mins)
 		} else if duration < 24*time.Hour {
 			hours := int(duration.Hours())
 			if hours == 1 {
 				return "in 1 hour"
 			}
+
 			return fmt.Sprintf("in %d hours", hours)
 		} else {
 			days := int(duration.Hours() / 24)
 			if days == 1 {
 				return "in 1 day"
 			}
+
 			return fmt.Sprintf("in %d days", days)
 		}
 	}
@@ -1423,18 +1432,21 @@ func formatTimeAgo(t time.Time) string {
 		if mins == 1 {
 			return "1 minute ago"
 		}
+
 		return fmt.Sprintf("%d minutes ago", mins)
 	} else if duration < 24*time.Hour {
 		hours := int(duration.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
+
 		return fmt.Sprintf("%d hours ago", hours)
 	} else {
 		days := int(duration.Hours() / 24)
 		if days == 1 {
 			return "1 day ago"
 		}
+
 		return fmt.Sprintf("%d days ago", days)
 	}
 }

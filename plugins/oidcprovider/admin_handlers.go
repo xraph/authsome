@@ -2,6 +2,7 @@ package oidcprovider
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,13 +15,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// AdminHandler handles admin-only OAuth client management endpoints
+// AdminHandler handles admin-only OAuth client management endpoints.
 type AdminHandler struct {
 	clientRepo      *repo.OAuthClientRepository
 	registrationSvc *RegistrationService
 }
 
-// NewAdminHandler creates a new admin handler
+// NewAdminHandler creates a new admin handler.
 func NewAdminHandler(clientRepo *repo.OAuthClientRepository, registrationSvc *RegistrationService) *AdminHandler {
 	return &AdminHandler{
 		clientRepo:      clientRepo,
@@ -28,7 +29,7 @@ func NewAdminHandler(clientRepo *repo.OAuthClientRepository, registrationSvc *Re
 	}
 }
 
-// RegisterClient handles dynamic client registration (admin only)
+// RegisterClient handles dynamic client registration (admin only).
 func (h *AdminHandler) RegisterClient(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -45,6 +46,7 @@ func (h *AdminHandler) RegisterClient(c forge.Context) error {
 
 	// Org context is optional
 	orgID, ok := contexts.GetOrganizationID(ctx)
+
 	var orgIDPtr *xid.ID
 	if ok && !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -59,16 +61,18 @@ func (h *AdminHandler) RegisterClient(c forge.Context) error {
 	// Register client
 	response, err := h.registrationSvc.RegisterClient(ctx, &req, appID, envID, orgIDPtr)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
 	return c.JSON(http.StatusCreated, response)
 }
 
-// ListClients lists all OAuth clients for the current app/env/org
+// ListClients lists all OAuth clients for the current app/env/org.
 func (h *AdminHandler) ListClients(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -98,9 +102,12 @@ func (h *AdminHandler) ListClients(c forge.Context) error {
 
 	// Check if org-specific or app-level listing
 	orgID, ok := contexts.GetOrganizationID(ctx)
-	var clients []*schema.OAuthClient
-	var total int
-	var err error
+
+	var (
+		clients []*schema.OAuthClient
+		total   int
+		err     error
+	)
 
 	if ok && !orgID.IsNil() {
 		// List org-specific clients
@@ -139,7 +146,7 @@ func (h *AdminHandler) ListClients(c forge.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// GetClient retrieves detailed information about an OAuth client
+// GetClient retrieves detailed information about an OAuth client.
 func (h *AdminHandler) GetClient(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -154,6 +161,7 @@ func (h *AdminHandler) GetClient(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.DatabaseError("find client", err))
 	}
+
 	if client == nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("client not found"))
 	}
@@ -188,7 +196,7 @@ func (h *AdminHandler) GetClient(c forge.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// UpdateClient updates an existing OAuth client
+// UpdateClient updates an existing OAuth client.
 func (h *AdminHandler) UpdateClient(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -209,6 +217,7 @@ func (h *AdminHandler) UpdateClient(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.DatabaseError("find client", err))
 	}
+
 	if client == nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("client not found"))
 	}
@@ -217,43 +226,56 @@ func (h *AdminHandler) UpdateClient(c forge.Context) error {
 	if req.Name != "" {
 		client.Name = req.Name
 	}
+
 	if len(req.RedirectURIs) > 0 {
 		client.RedirectURIs = req.RedirectURIs
 		client.RedirectURI = req.RedirectURIs[0] // Update legacy field
 	}
+
 	if len(req.PostLogoutRedirectURIs) > 0 {
 		client.PostLogoutRedirectURIs = req.PostLogoutRedirectURIs
 	}
+
 	if len(req.GrantTypes) > 0 {
 		client.GrantTypes = req.GrantTypes
 	}
+
 	if len(req.ResponseTypes) > 0 {
 		client.ResponseTypes = req.ResponseTypes
 	}
+
 	if len(req.AllowedScopes) > 0 {
 		client.AllowedScopes = req.AllowedScopes
 	}
+
 	if req.TokenEndpointAuthMethod != "" {
 		client.TokenEndpointAuthMethod = req.TokenEndpointAuthMethod
 	}
+
 	if req.RequirePKCE != nil {
 		client.RequirePKCE = *req.RequirePKCE
 	}
+
 	if req.RequireConsent != nil {
 		client.RequireConsent = *req.RequireConsent
 	}
+
 	if req.TrustedClient != nil {
 		client.TrustedClient = *req.TrustedClient
 	}
+
 	if req.LogoURI != "" {
 		client.LogoURI = req.LogoURI
 	}
+
 	if req.PolicyURI != "" {
 		client.PolicyURI = req.PolicyURI
 	}
+
 	if req.TosURI != "" {
 		client.TosURI = req.TosURI
 	}
+
 	if len(req.Contacts) > 0 {
 		client.Contacts = req.Contacts
 	}
@@ -293,7 +315,7 @@ func (h *AdminHandler) UpdateClient(c forge.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// DeleteClient deletes an OAuth client
+// DeleteClient deletes an OAuth client.
 func (h *AdminHandler) DeleteClient(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -308,6 +330,7 @@ func (h *AdminHandler) DeleteClient(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, errs.DatabaseError("find client", err))
 	}
+
 	if client == nil {
 		return c.JSON(http.StatusNotFound, errs.NotFound("client not found"))
 	}

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +13,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// RoleRepository provides basic CRUD for roles
+// RoleRepository provides basic CRUD for roles.
 type RoleRepository struct{ db *bun.DB }
 
 func NewRoleRepository(db *bun.DB) *RoleRepository { return &RoleRepository{db: db} }
@@ -22,11 +23,13 @@ func (r *RoleRepository) Create(ctx context.Context, role *schema.Role) error {
 	if role.ID.IsNil() {
 		role.ID = xid.New()
 	}
-	if role.AuditableModel.CreatedBy.IsNil() {
-		role.AuditableModel.CreatedBy = xid.New()
+
+	if role.CreatedBy.IsNil() {
+		role.CreatedBy = xid.New()
 	}
-	if role.AuditableModel.UpdatedBy.IsNil() {
-		role.AuditableModel.UpdatedBy = role.AuditableModel.CreatedBy
+
+	if role.UpdatedBy.IsNil() {
+		role.UpdatedBy = role.CreatedBy
 	}
 
 	// Ensure environment_id is set
@@ -48,6 +51,7 @@ func (r *RoleRepository) Create(ctx context.Context, role *schema.Role) error {
 	}
 
 	_, err := r.db.NewInsert().Model(role).Exec(ctx)
+
 	return err
 }
 
@@ -58,6 +62,7 @@ func (r *RoleRepository) Update(ctx context.Context, role *schema.Role) error {
 		Model(role).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
@@ -66,11 +71,13 @@ func (r *RoleRepository) Delete(ctx context.Context, roleID xid.ID) error {
 		Model((*schema.Role)(nil)).
 		Where("id = ?", roleID).
 		Exec(ctx)
+
 	return err
 }
 
 func (r *RoleRepository) FindByID(ctx context.Context, roleID xid.ID) (*schema.Role, error) {
 	var role schema.Role
+
 	err := r.db.NewSelect().
 		Model(&role).
 		Where("id = ?", roleID).
@@ -78,22 +85,27 @@ func (r *RoleRepository) FindByID(ctx context.Context, roleID xid.ID) (*schema.R
 	if err != nil {
 		return nil, err
 	}
+
 	return &role, nil
 }
 
 func (r *RoleRepository) ListByOrg(ctx context.Context, orgID *string) ([]schema.Role, error) {
 	var rows []schema.Role
+
 	q := r.db.NewSelect().Model(&rows)
 	if orgID != nil {
 		q = q.Where("app_id = ?", *orgID)
 	}
+
 	err := q.Scan(ctx)
+
 	return rows, err
 }
 
-// FindByNameAndApp finds a role by name within an app (deprecated, use FindByNameAppEnv)
+// FindByNameAndApp finds a role by name within an app (deprecated, use FindByNameAppEnv).
 func (r *RoleRepository) FindByNameAndApp(ctx context.Context, name string, appID xid.ID) (*schema.Role, error) {
 	var role schema.Role
+
 	err := r.db.NewSelect().
 		Model(&role).
 		Where("name = ?", name).
@@ -102,12 +114,14 @@ func (r *RoleRepository) FindByNameAndApp(ctx context.Context, name string, appI
 	if err != nil {
 		return nil, err
 	}
+
 	return &role, nil
 }
 
-// FindByNameAppEnv finds a role by name, app, and environment
+// FindByNameAppEnv finds a role by name, app, and environment.
 func (r *RoleRepository) FindByNameAppEnv(ctx context.Context, name string, appID, envID xid.ID) (*schema.Role, error) {
 	var role schema.Role
+
 	err := r.db.NewSelect().
 		Model(&role).
 		Where("name = ?", name).
@@ -117,12 +131,14 @@ func (r *RoleRepository) FindByNameAppEnv(ctx context.Context, name string, appI
 	if err != nil {
 		return nil, err
 	}
+
 	return &role, nil
 }
 
-// GetRoleTemplates gets all role templates for an app (templates have organization_id = NULL and is_template = true)
+// GetRoleTemplates gets all role templates for an app (templates have organization_id = NULL and is_template = true).
 func (r *RoleRepository) GetRoleTemplates(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error) {
 	var roles []*schema.Role
+
 	query := r.db.NewSelect().
 		Model(&roles).
 		Where("app_id = ?", appID).
@@ -133,15 +149,16 @@ func (r *RoleRepository) GetRoleTemplates(ctx context.Context, appID, envID xid.
 
 	err := query.Scan(ctx)
 	if err != nil {
-
 		return nil, err
 	}
+
 	return roles, nil
 }
 
-// GetOwnerRole gets the role marked as the owner role for an app
+// GetOwnerRole gets the role marked as the owner role for an app.
 func (r *RoleRepository) GetOwnerRole(ctx context.Context, appID, envID xid.ID) (*schema.Role, error) {
 	var role schema.Role
+
 	err := r.db.NewSelect().
 		Model(&role).
 		Where("app_id = ?", appID).
@@ -151,17 +168,20 @@ func (r *RoleRepository) GetOwnerRole(ctx context.Context, appID, envID xid.ID) 
 		Limit(1).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("owner role not found for app %s environment %s", appID.String(), envID.String())
 		}
+
 		return nil, err
 	}
+
 	return &role, nil
 }
 
-// GetOrgRoles gets all roles specific to an organization
+// GetOrgRoles gets all roles specific to an organization.
 func (r *RoleRepository) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error) {
 	var roles []*schema.Role
+
 	err := r.db.NewSelect().
 		Model(&roles).
 		Where("organization_id = ?", orgID).
@@ -171,12 +191,14 @@ func (r *RoleRepository) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) (
 	if err != nil {
 		return nil, err
 	}
+
 	return roles, nil
 }
 
-// GetOrgRoleWithPermissions gets a role with its permissions loaded
+// GetOrgRoleWithPermissions gets a role with its permissions loaded.
 func (r *RoleRepository) GetOrgRoleWithPermissions(ctx context.Context, roleID xid.ID) (*schema.Role, error) {
 	var role schema.Role
+
 	err := r.db.NewSelect().
 		Model(&role).
 		Where("id = ?", roleID).
@@ -185,13 +207,15 @@ func (r *RoleRepository) GetOrgRoleWithPermissions(ctx context.Context, roleID x
 	if err != nil {
 		return nil, err
 	}
+
 	return &role, nil
 }
 
-// CloneRole clones a role template for an organization
+// CloneRole clones a role template for an organization.
 func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID xid.ID, customName *string) (*schema.Role, error) {
 	// Get the template role with its permissions
 	var template schema.Role
+
 	err := r.db.NewSelect().
 		Model(&template).
 		Where("id = ?", templateID).
@@ -209,6 +233,7 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 
 	// Check if role already exists for this organization (idempotent behavior)
 	var existingRole schema.Role
+
 	err = r.db.NewSelect().
 		Model(&existingRole).
 		Where("app_id = ?", template.AppID).
@@ -217,7 +242,6 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 		Where("name = ?", roleName).
 		Where("is_template = ?", false).
 		Scan(ctx)
-
 	if err == nil {
 		// Role already exists, return it (idempotent)
 
@@ -286,6 +310,7 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 		if err != nil {
 			// Rollback: delete the created role
 			_, _ = r.db.NewDelete().Model(newRole).WherePK().Exec(ctx)
+
 			return nil, fmt.Errorf("failed to clone permissions: %w", err)
 		}
 	}
@@ -293,7 +318,7 @@ func (r *RoleRepository) CloneRole(ctx context.Context, templateID xid.ID, orgID
 	return newRole, nil
 }
 
-// FindDuplicateRoles identifies roles that would violate the new uniqueness constraints
+// FindDuplicateRoles identifies roles that would violate the new uniqueness constraints.
 func (r *RoleRepository) FindDuplicateRoles(ctx context.Context) ([]schema.Role, error) {
 	var duplicates []schema.Role
 
@@ -309,12 +334,13 @@ func (r *RoleRepository) FindDuplicateRoles(ctx context.Context) ([]schema.Role,
 			HAVING COUNT(*) > 1
 		)`).
 		Scan(ctx)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
 	// Find org-level duplicates
 	var orgDuplicates []schema.Role
+
 	err = r.db.NewSelect().
 		Model(&orgDuplicates).
 		Where("organization_id IS NOT NULL").
@@ -326,15 +352,16 @@ func (r *RoleRepository) FindDuplicateRoles(ctx context.Context) ([]schema.Role,
 			HAVING COUNT(*) > 1
 		)`).
 		Scan(ctx)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
 	duplicates = append(duplicates, orgDuplicates...)
+
 	return duplicates, nil
 }
 
-// toTitleCase converts a snake_case string to Title Case
+// toTitleCase converts a snake_case string to Title Case.
 func toTitleCase(s string) string {
 	words := strings.Split(s, "_")
 	for i, word := range words {
@@ -342,5 +369,6 @@ func toTitleCase(s string) string {
 			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
 		}
 	}
+
 	return strings.Join(words, " ")
 }

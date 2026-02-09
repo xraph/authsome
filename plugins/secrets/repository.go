@@ -3,6 +3,7 @@ package secrets
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/secrets/schema"
 )
 
-// Repository defines the interface for secret storage operations
+// Repository defines the interface for secret storage operations.
 type Repository interface {
 	// Secret CRUD operations
 	Create(ctx context.Context, secret *schema.Secret) error
@@ -42,12 +43,12 @@ type Repository interface {
 	CountExpiringSecrets(ctx context.Context, appID, envID xid.ID, withinDays int) (int, error)
 }
 
-// bunRepository implements Repository using Bun ORM
+// bunRepository implements Repository using Bun ORM.
 type bunRepository struct {
 	db *bun.DB
 }
 
-// NewRepository creates a new repository instance
+// NewRepository creates a new repository instance.
 func NewRepository(db *bun.DB) Repository {
 	return &bunRepository{db: db}
 }
@@ -56,34 +57,39 @@ func NewRepository(db *bun.DB) Repository {
 // Secret CRUD Operations
 // =============================================================================
 
-// Create creates a new secret
+// Create creates a new secret.
 func (r *bunRepository) Create(ctx context.Context, secret *schema.Secret) error {
 	_, err := r.db.NewInsert().
 		Model(secret).
 		Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a secret by ID
+// FindByID finds a secret by ID.
 func (r *bunRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Secret, error) {
 	secret := new(schema.Secret)
+
 	err := r.db.NewSelect().
 		Model(secret).
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrSecretNotFound(id.String())
 		}
+
 		return nil, err
 	}
+
 	return secret, nil
 }
 
-// FindByPath finds a secret by app, environment, and path
+// FindByPath finds a secret by app, environment, and path.
 func (r *bunRepository) FindByPath(ctx context.Context, appID, envID xid.ID, path string) (*schema.Secret, error) {
 	secret := new(schema.Secret)
+
 	err := r.db.NewSelect().
 		Model(secret).
 		Where("app_id = ?", appID).
@@ -92,15 +98,17 @@ func (r *bunRepository) FindByPath(ctx context.Context, appID, envID xid.ID, pat
 		Where("deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrSecretNotFoundByPath(path)
 		}
+
 		return nil, err
 	}
+
 	return secret, nil
 }
 
-// List lists secrets with filtering and pagination
+// List lists secrets with filtering and pagination.
 func (r *bunRepository) List(ctx context.Context, appID, envID xid.ID, query *core.ListSecretsQuery) ([]*schema.Secret, int, error) {
 	if query == nil {
 		query = &core.ListSecretsQuery{}
@@ -110,9 +118,11 @@ func (r *bunRepository) List(ctx context.Context, appID, envID xid.ID, query *co
 	if query.PageSize <= 0 {
 		query.PageSize = 20
 	}
+
 	if query.Page <= 0 {
 		query.Page = 1
 	}
+
 	if query.PageSize > 100 {
 		query.PageSize = 100
 	}
@@ -185,6 +195,7 @@ func (r *bunRepository) List(ctx context.Context, appID, envID xid.ID, query *co
 
 	// Execute query
 	var secrets []*schema.Secret
+
 	err = q.Scan(ctx, &secrets)
 	if err != nil {
 		return nil, 0, err
@@ -193,7 +204,7 @@ func (r *bunRepository) List(ctx context.Context, appID, envID xid.ID, query *co
 	return secrets, total, nil
 }
 
-// Update updates a secret
+// Update updates a secret.
 func (r *bunRepository) Update(ctx context.Context, secret *schema.Secret) error {
 	secret.UpdatedAt = time.Now().UTC()
 	_, err := r.db.NewUpdate().
@@ -201,10 +212,11 @@ func (r *bunRepository) Update(ctx context.Context, secret *schema.Secret) error
 		WherePK().
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// Delete soft-deletes a secret
+// Delete soft-deletes a secret.
 func (r *bunRepository) Delete(ctx context.Context, id xid.ID) error {
 	now := time.Now().UTC()
 	_, err := r.db.NewUpdate().
@@ -214,10 +226,11 @@ func (r *bunRepository) Delete(ctx context.Context, id xid.ID) error {
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// HardDelete permanently deletes a secret and its versions
+// HardDelete permanently deletes a secret and its versions.
 func (r *bunRepository) HardDelete(ctx context.Context, id xid.ID) error {
 	// Delete versions first
 	_, err := r.db.NewDelete().
@@ -233,6 +246,7 @@ func (r *bunRepository) HardDelete(ctx context.Context, id xid.ID) error {
 		Model((*schema.Secret)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -240,36 +254,41 @@ func (r *bunRepository) HardDelete(ctx context.Context, id xid.ID) error {
 // Version Operations
 // =============================================================================
 
-// CreateVersion creates a new secret version
+// CreateVersion creates a new secret version.
 func (r *bunRepository) CreateVersion(ctx context.Context, version *schema.SecretVersion) error {
 	_, err := r.db.NewInsert().
 		Model(version).
 		Exec(ctx)
+
 	return err
 }
 
-// FindVersion finds a specific version of a secret
+// FindVersion finds a specific version of a secret.
 func (r *bunRepository) FindVersion(ctx context.Context, secretID xid.ID, version int) (*schema.SecretVersion, error) {
 	secretVersion := new(schema.SecretVersion)
+
 	err := r.db.NewSelect().
 		Model(secretVersion).
 		Where("secret_id = ?", secretID).
 		Where("version = ?", version).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrVersionNotFound(secretID.String(), version)
 		}
+
 		return nil, err
 	}
+
 	return secretVersion, nil
 }
 
-// ListVersions lists versions for a secret with pagination
+// ListVersions lists versions for a secret with pagination.
 func (r *bunRepository) ListVersions(ctx context.Context, secretID xid.ID, page, pageSize int) ([]*schema.SecretVersion, int, error) {
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+
 	if page <= 0 {
 		page = 1
 	}
@@ -285,7 +304,9 @@ func (r *bunRepository) ListVersions(ctx context.Context, secretID xid.ID, page,
 
 	// Get versions
 	offset := (page - 1) * pageSize
+
 	var versions []*schema.SecretVersion
+
 	err = r.db.NewSelect().
 		Model(&versions).
 		Where("secret_id = ?", secretID).
@@ -300,10 +321,11 @@ func (r *bunRepository) ListVersions(ctx context.Context, secretID xid.ID, page,
 	return versions, total, nil
 }
 
-// DeleteOldVersions deletes old versions, keeping only the most recent N versions
+// DeleteOldVersions deletes old versions, keeping only the most recent N versions.
 func (r *bunRepository) DeleteOldVersions(ctx context.Context, secretID xid.ID, keepCount int) error {
 	// Get versions to keep
 	var keepVersions []int
+
 	err := r.db.NewSelect().
 		Model((*schema.SecretVersion)(nil)).
 		Column("version").
@@ -325,6 +347,7 @@ func (r *bunRepository) DeleteOldVersions(ctx context.Context, secretID xid.ID, 
 		Where("secret_id = ?", secretID).
 		Where("version NOT IN (?)", bun.In(keepVersions)).
 		Exec(ctx)
+
 	return err
 }
 
@@ -332,22 +355,25 @@ func (r *bunRepository) DeleteOldVersions(ctx context.Context, secretID xid.ID, 
 // Access Log Operations
 // =============================================================================
 
-// LogAccess logs an access event
+// LogAccess logs an access event.
 func (r *bunRepository) LogAccess(ctx context.Context, log *schema.SecretAccessLog) error {
 	_, err := r.db.NewInsert().
 		Model(log).
 		Exec(ctx)
+
 	return err
 }
 
-// ListAccessLogs lists access logs for a secret
+// ListAccessLogs lists access logs for a secret.
 func (r *bunRepository) ListAccessLogs(ctx context.Context, secretID xid.ID, query *core.GetAccessLogsQuery) ([]*schema.SecretAccessLog, int, error) {
 	if query == nil {
 		query = &core.GetAccessLogsQuery{}
 	}
+
 	if query.PageSize <= 0 {
 		query.PageSize = 50
 	}
+
 	if query.Page <= 0 {
 		query.Page = 1
 	}
@@ -359,9 +385,11 @@ func (r *bunRepository) ListAccessLogs(ctx context.Context, secretID xid.ID, que
 	if query.Action != "" {
 		q = q.Where("action = ?", query.Action)
 	}
+
 	if query.FromDate != nil {
 		q = q.Where("created_at >= ?", *query.FromDate)
 	}
+
 	if query.ToDate != nil {
 		q = q.Where("created_at <= ?", *query.ToDate)
 	}
@@ -372,7 +400,9 @@ func (r *bunRepository) ListAccessLogs(ctx context.Context, secretID xid.ID, que
 	}
 
 	offset := (query.Page - 1) * query.PageSize
+
 	var logs []*schema.SecretAccessLog
+
 	err = q.
 		Order("created_at DESC").
 		Limit(query.PageSize).
@@ -385,7 +415,7 @@ func (r *bunRepository) ListAccessLogs(ctx context.Context, secretID xid.ID, que
 	return logs, total, nil
 }
 
-// DeleteOldAccessLogs deletes access logs older than the specified time
+// DeleteOldAccessLogs deletes access logs older than the specified time.
 func (r *bunRepository) DeleteOldAccessLogs(ctx context.Context, olderThan time.Time) (int64, error) {
 	res, err := r.db.NewDelete().
 		Model((*schema.SecretAccessLog)(nil)).
@@ -394,6 +424,7 @@ func (r *bunRepository) DeleteOldAccessLogs(ctx context.Context, olderThan time.
 	if err != nil {
 		return 0, err
 	}
+
 	return res.RowsAffected()
 }
 
@@ -401,7 +432,7 @@ func (r *bunRepository) DeleteOldAccessLogs(ctx context.Context, olderThan time.
 // Stats Operations
 // =============================================================================
 
-// CountSecrets counts total secrets for an app/environment
+// CountSecrets counts total secrets for an app/environment.
 func (r *bunRepository) CountSecrets(ctx context.Context, appID, envID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.Secret)(nil)).
@@ -411,7 +442,7 @@ func (r *bunRepository) CountSecrets(ctx context.Context, appID, envID xid.ID) (
 		Count(ctx)
 }
 
-// CountVersions counts total versions for an app/environment
+// CountVersions counts total versions for an app/environment.
 func (r *bunRepository) CountVersions(ctx context.Context, appID, envID xid.ID) (int, error) {
 	return r.db.NewSelect().
 		Model((*schema.SecretVersion)(nil)).
@@ -422,7 +453,7 @@ func (r *bunRepository) CountVersions(ctx context.Context, appID, envID xid.ID) 
 		Count(ctx)
 }
 
-// GetSecretsByType returns count of secrets grouped by value type
+// GetSecretsByType returns count of secrets grouped by value type.
 func (r *bunRepository) GetSecretsByType(ctx context.Context, appID, envID xid.ID) (map[string]int, error) {
 	var results []struct {
 		ValueType string `bun:"value_type"`
@@ -445,12 +476,14 @@ func (r *bunRepository) GetSecretsByType(ctx context.Context, appID, envID xid.I
 	for _, r := range results {
 		counts[r.ValueType] = r.Count
 	}
+
 	return counts, nil
 }
 
-// CountExpiringSecrets counts secrets expiring within the specified days
+// CountExpiringSecrets counts secrets expiring within the specified days.
 func (r *bunRepository) CountExpiringSecrets(ctx context.Context, appID, envID xid.ID, withinDays int) (int, error) {
 	threshold := time.Now().AddDate(0, 0, withinDays)
+
 	return r.db.NewSelect().
 		Model((*schema.Secret)(nil)).
 		Where("app_id = ?", appID).

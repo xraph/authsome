@@ -2,6 +2,7 @@ package permissions
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 
 	"github.com/rs/xid"
@@ -13,23 +14,23 @@ import (
 )
 
 // Handler handles HTTP requests for the permissions plugin
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type Handler struct {
 	service *Service
 }
 
-// Response types - use from handlers package
+// Response types - use from handlers package.
 type (
 	MessageResponse = handlers.MessageResponse
 	StatusResponse  = handlers.StatusResponse
 )
 
-// NewHandler creates a new handler instance
+// NewHandler creates a new handler instance.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-// extractContext extracts V2 context values (app, env, org, user)
+// extractContext extracts V2 context values (app, env, org, user).
 func extractContext(c forge.Context) (appID, envID xid.ID, orgID *xid.ID, userID xid.ID, err error) {
 	ctx := c.Request().Context()
 
@@ -57,14 +58,15 @@ func extractContext(c forge.Context) (appID, envID xid.ID, orgID *xid.ID, userID
 	return appID, envID, orgID, userID, nil
 }
 
-// getStatusCode extracts HTTP status code from error
+// getStatusCode extracts HTTP status code from error.
 func getStatusCode(err error) int {
 	return errs.GetHTTPStatus(err)
 }
 
-// toErrorResponse converts an error to a JSON-serializable response
-func toErrorResponse(err error) interface{} {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+// toErrorResponse converts an error to a JSON-serializable response.
+func toErrorResponse(err error) any {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return authErr
 	}
 	// Wrap generic errors
@@ -75,7 +77,7 @@ func toErrorResponse(err error) interface{} {
 // POLICY MANAGEMENT
 // =============================================================================
 
-// CreatePolicy handles POST /permissions/policies
+// CreatePolicy handles POST /permissions/policies.
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -97,7 +99,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	return c.JSON(201, handlers.ToPolicyResponse(policy))
 }
 
-// ListPolicies handles GET /permissions/policies
+// ListPolicies handles GET /permissions/policies.
 func (h *Handler) ListPolicies(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -105,13 +107,15 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 	}
 
 	// Build filters from query params
-	filters := make(map[string]interface{})
+	filters := make(map[string]any)
 	if resourceType := c.Query("resourceType"); resourceType != "" {
 		filters["resourceType"] = resourceType
 	}
+
 	if namespaceID := c.Query("namespaceId"); namespaceID != "" {
 		filters["namespaceId"] = namespaceID
 	}
+
 	if enabledStr := c.Query("enabled"); enabledStr != "" {
 		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
 			filters["enabled"] = enabled
@@ -123,10 +127,12 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 	if page < 1 {
 		page = 1
 	}
+
 	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
+
 	filters["page"] = page
 	filters["pageSize"] = pageSize
 
@@ -150,7 +156,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 	})
 }
 
-// GetPolicy handles GET /permissions/policies/:id
+// GetPolicy handles GET /permissions/policies/:id.
 func (h *Handler) GetPolicy(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -159,6 +165,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 
 	// Parse policy ID from URL param
 	policyIDStr := c.Param("id")
+
 	policyID, err := xid.FromString(policyIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
@@ -173,7 +180,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 	return c.JSON(200, handlers.ToPolicyResponse(policy))
 }
 
-// UpdatePolicy handles PUT /permissions/policies/:id
+// UpdatePolicy handles PUT /permissions/policies/:id.
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -182,6 +189,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 
 	// Parse policy ID from URL param
 	policyIDStr := c.Param("id")
+
 	policyID, err := xid.FromString(policyIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
@@ -202,7 +210,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	return c.JSON(200, handlers.ToPolicyResponse(policy))
 }
 
-// DeletePolicy handles DELETE /permissions/policies/:id
+// DeletePolicy handles DELETE /permissions/policies/:id.
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -211,6 +219,7 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 
 	// Parse policy ID from URL param
 	policyIDStr := c.Param("id")
+
 	policyID, err := xid.FromString(policyIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_POLICY_ID", "Invalid policy ID", 400))
@@ -224,7 +233,7 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 	return c.JSON(204, nil)
 }
 
-// ValidatePolicy handles POST /permissions/policies/validate
+// ValidatePolicy handles POST /permissions/policies/validate.
 func (h *Handler) ValidatePolicy(c forge.Context) error {
 	// Parse request
 	var req handlers.ValidatePolicyRequest
@@ -241,7 +250,7 @@ func (h *Handler) ValidatePolicy(c forge.Context) error {
 	return c.JSON(200, validation)
 }
 
-// TestPolicy handles POST /permissions/policies/test
+// TestPolicy handles POST /permissions/policies/test.
 func (h *Handler) TestPolicy(c forge.Context) error {
 	// Parse request
 	var req handlers.TestPolicyRequest
@@ -262,7 +271,7 @@ func (h *Handler) TestPolicy(c forge.Context) error {
 // RESOURCE MANAGEMENT
 // =============================================================================
 
-// CreateResource handles POST /permissions/resources
+// CreateResource handles POST /permissions/resources.
 func (h *Handler) CreateResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -284,7 +293,7 @@ func (h *Handler) CreateResource(c forge.Context) error {
 	return c.JSON(201, handlers.ToResourceResponse(resource))
 }
 
-// ListResources handles GET /permissions/resources
+// ListResources handles GET /permissions/resources.
 func (h *Handler) ListResources(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -318,7 +327,7 @@ func (h *Handler) ListResources(c forge.Context) error {
 	})
 }
 
-// GetResource handles GET /permissions/resources/:id
+// GetResource handles GET /permissions/resources/:id.
 func (h *Handler) GetResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -327,6 +336,7 @@ func (h *Handler) GetResource(c forge.Context) error {
 
 	// Parse resource ID from URL param
 	resourceIDStr := c.Param("id")
+
 	resourceID, err := xid.FromString(resourceIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_RESOURCE_ID", "Invalid resource ID", 400))
@@ -341,7 +351,7 @@ func (h *Handler) GetResource(c forge.Context) error {
 	return c.JSON(200, handlers.ToResourceResponse(resource))
 }
 
-// DeleteResource handles DELETE /permissions/resources/:id
+// DeleteResource handles DELETE /permissions/resources/:id.
 func (h *Handler) DeleteResource(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -350,6 +360,7 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 
 	// Parse resource ID from URL param
 	resourceIDStr := c.Param("id")
+
 	resourceID, err := xid.FromString(resourceIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_RESOURCE_ID", "Invalid resource ID", 400))
@@ -367,7 +378,7 @@ func (h *Handler) DeleteResource(c forge.Context) error {
 // ACTION MANAGEMENT
 // =============================================================================
 
-// CreateAction handles POST /permissions/actions
+// CreateAction handles POST /permissions/actions.
 func (h *Handler) CreateAction(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -389,7 +400,7 @@ func (h *Handler) CreateAction(c forge.Context) error {
 	return c.JSON(201, handlers.ToActionResponse(action))
 }
 
-// ListActions handles GET /permissions/actions
+// ListActions handles GET /permissions/actions.
 func (h *Handler) ListActions(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -423,7 +434,7 @@ func (h *Handler) ListActions(c forge.Context) error {
 	})
 }
 
-// DeleteAction handles DELETE /permissions/actions/:id
+// DeleteAction handles DELETE /permissions/actions/:id.
 func (h *Handler) DeleteAction(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -432,6 +443,7 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 
 	// Parse action ID from URL param
 	actionIDStr := c.Param("id")
+
 	actionID, err := xid.FromString(actionIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_ACTION_ID", "Invalid action ID", 400))
@@ -449,7 +461,7 @@ func (h *Handler) DeleteAction(c forge.Context) error {
 // NAMESPACE MANAGEMENT
 // =============================================================================
 
-// CreateNamespace handles POST /permissions/namespaces
+// CreateNamespace handles POST /permissions/namespaces.
 func (h *Handler) CreateNamespace(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -471,7 +483,7 @@ func (h *Handler) CreateNamespace(c forge.Context) error {
 	return c.JSON(201, handlers.ToNamespaceResponse(namespace))
 }
 
-// ListNamespaces handles GET /permissions/namespaces
+// ListNamespaces handles GET /permissions/namespaces.
 func (h *Handler) ListNamespaces(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -496,7 +508,7 @@ func (h *Handler) ListNamespaces(c forge.Context) error {
 	})
 }
 
-// GetNamespace handles GET /permissions/namespaces/:id
+// GetNamespace handles GET /permissions/namespaces/:id.
 func (h *Handler) GetNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -505,6 +517,7 @@ func (h *Handler) GetNamespace(c forge.Context) error {
 
 	// Parse namespace ID from URL param
 	namespaceIDStr := c.Param("id")
+
 	namespaceID, err := xid.FromString(namespaceIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
@@ -519,7 +532,7 @@ func (h *Handler) GetNamespace(c forge.Context) error {
 	return c.JSON(200, handlers.ToNamespaceResponse(namespace))
 }
 
-// UpdateNamespace handles PUT /permissions/namespaces/:id
+// UpdateNamespace handles PUT /permissions/namespaces/:id.
 func (h *Handler) UpdateNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -528,6 +541,7 @@ func (h *Handler) UpdateNamespace(c forge.Context) error {
 
 	// Parse namespace ID from URL param
 	namespaceIDStr := c.Param("id")
+
 	namespaceID, err := xid.FromString(namespaceIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
@@ -548,7 +562,7 @@ func (h *Handler) UpdateNamespace(c forge.Context) error {
 	return c.JSON(200, handlers.ToNamespaceResponse(namespace))
 }
 
-// DeleteNamespace handles DELETE /permissions/namespaces/:id
+// DeleteNamespace handles DELETE /permissions/namespaces/:id.
 func (h *Handler) DeleteNamespace(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -557,6 +571,7 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 
 	// Parse namespace ID from URL param
 	namespaceIDStr := c.Param("id")
+
 	namespaceID, err := xid.FromString(namespaceIDStr)
 	if err != nil {
 		return c.JSON(400, errs.New("INVALID_NAMESPACE_ID", "Invalid namespace ID", 400))
@@ -574,7 +589,7 @@ func (h *Handler) DeleteNamespace(c forge.Context) error {
 // EVALUATION
 // =============================================================================
 
-// Evaluate handles POST /permissions/evaluate
+// Evaluate handles POST /permissions/evaluate.
 func (h *Handler) Evaluate(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -606,7 +621,7 @@ func (h *Handler) Evaluate(c forge.Context) error {
 	return c.JSON(200, response)
 }
 
-// EvaluateBatch handles POST /permissions/evaluate/batch
+// EvaluateBatch handles POST /permissions/evaluate/batch.
 func (h *Handler) EvaluateBatch(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -627,8 +642,10 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 
 	// Calculate totals
 	var totalTime float64
+
 	successCount := 0
 	failureCount := 0
+
 	for _, r := range results {
 		totalTime += r.EvaluationTimeMs
 		if r.Allowed {
@@ -651,7 +668,7 @@ func (h *Handler) EvaluateBatch(c forge.Context) error {
 // TEMPLATES
 // =============================================================================
 
-// ListTemplates handles GET /permissions/templates
+// ListTemplates handles GET /permissions/templates.
 func (h *Handler) ListTemplates(c forge.Context) error {
 	// Call service
 	templates, err := h.service.ListTemplates(c.Request().Context())
@@ -662,6 +679,7 @@ func (h *Handler) ListTemplates(c forge.Context) error {
 	// Convert to response
 	templateResponses := make([]*handlers.TemplateResponse, 0, len(templates))
 	categories := make(map[string]bool)
+
 	for _, t := range templates {
 		templateResponses = append(templateResponses, toTemplateResponse(t))
 		categories[t.Category] = true
@@ -680,7 +698,7 @@ func (h *Handler) ListTemplates(c forge.Context) error {
 	})
 }
 
-// GetTemplate handles GET /permissions/templates/:id
+// GetTemplate handles GET /permissions/templates/:id.
 func (h *Handler) GetTemplate(c forge.Context) error {
 	templateID := c.Param("id")
 
@@ -693,7 +711,7 @@ func (h *Handler) GetTemplate(c forge.Context) error {
 	return c.JSON(200, toTemplateResponse(template))
 }
 
-// InstantiateTemplate handles POST /permissions/templates/:id/instantiate
+// InstantiateTemplate handles POST /permissions/templates/:id/instantiate.
 func (h *Handler) InstantiateTemplate(c forge.Context) error {
 	appID, envID, orgID, userID, err := extractContext(c)
 	if err != nil {
@@ -718,7 +736,7 @@ func (h *Handler) InstantiateTemplate(c forge.Context) error {
 	return c.JSON(201, handlers.ToPolicyResponse(policy))
 }
 
-// toTemplateResponse converts a core.PolicyTemplate to a handlers.TemplateResponse
+// toTemplateResponse converts a core.PolicyTemplate to a handlers.TemplateResponse.
 func toTemplateResponse(t *core.PolicyTemplate) *handlers.TemplateResponse {
 	return &handlers.TemplateResponse{
 		ID:          t.ID,
@@ -735,7 +753,7 @@ func toTemplateResponse(t *core.PolicyTemplate) *handlers.TemplateResponse {
 // MIGRATION
 // =============================================================================
 
-// MigrateFromRBAC handles POST /permissions/migrate/rbac
+// MigrateFromRBAC handles POST /permissions/migrate/rbac.
 func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -757,7 +775,7 @@ func (h *Handler) MigrateFromRBAC(c forge.Context) error {
 	return c.JSON(200, toMigrationStatusResponse(status))
 }
 
-// GetMigrationStatus handles GET /permissions/migrate/rbac/status
+// GetMigrationStatus handles GET /permissions/migrate/rbac/status.
 func (h *Handler) GetMigrationStatus(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -773,7 +791,7 @@ func (h *Handler) GetMigrationStatus(c forge.Context) error {
 	return c.JSON(200, toMigrationStatusResponse(status))
 }
 
-// toMigrationStatusResponse converts a core.MigrationStatus to a handlers.MigrationStatusResponse
+// toMigrationStatusResponse converts a core.MigrationStatus to a handlers.MigrationStatusResponse.
 func toMigrationStatusResponse(s *core.MigrationStatus) *handlers.MigrationStatusResponse {
 	resp := &handlers.MigrationStatusResponse{
 		AppID:            s.AppID.String(),
@@ -790,10 +808,12 @@ func toMigrationStatusResponse(s *core.MigrationStatus) *handlers.MigrationStatu
 	if s.TotalPolicies > 0 {
 		resp.Progress = float64(s.MigratedCount) / float64(s.TotalPolicies) * 100
 	}
+
 	if s.UserOrganizationID != nil {
 		orgID := s.UserOrganizationID.String()
 		resp.UserOrganizationID = &orgID
 	}
+
 	return resp
 }
 
@@ -801,7 +821,7 @@ func toMigrationStatusResponse(s *core.MigrationStatus) *handlers.MigrationStatu
 // AUDIT & ANALYTICS
 // =============================================================================
 
-// GetAuditLog handles GET /permissions/audit
+// GetAuditLog handles GET /permissions/audit.
 func (h *Handler) GetAuditLog(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -809,13 +829,15 @@ func (h *Handler) GetAuditLog(c forge.Context) error {
 	}
 
 	// Build filters from query params
-	filters := make(map[string]interface{})
+	filters := make(map[string]any)
 	if resourceType := c.Query("resourceType"); resourceType != "" {
 		filters["resourceType"] = resourceType
 	}
+
 	if action := c.Query("action"); action != "" {
 		filters["action"] = action
 	}
+
 	if actorID := c.Query("actorId"); actorID != "" {
 		filters["actorId"] = actorID
 	}
@@ -825,10 +847,12 @@ func (h *Handler) GetAuditLog(c forge.Context) error {
 	if page < 1 {
 		page = 1
 	}
+
 	pageSize, _ := strconv.Atoi(c.Query("pageSize"))
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
+
 	filters["page"] = page
 	filters["pageSize"] = pageSize
 
@@ -852,7 +876,7 @@ func (h *Handler) GetAuditLog(c forge.Context) error {
 	})
 }
 
-// GetAnalytics handles GET /permissions/analytics
+// GetAnalytics handles GET /permissions/analytics.
 func (h *Handler) GetAnalytics(c forge.Context) error {
 	appID, envID, orgID, _, err := extractContext(c)
 	if err != nil {
@@ -860,10 +884,11 @@ func (h *Handler) GetAnalytics(c forge.Context) error {
 	}
 
 	// Build time range from query params
-	timeRange := make(map[string]interface{})
+	timeRange := make(map[string]any)
 	if startTime := c.Query("startTime"); startTime != "" {
 		timeRange["startTime"] = startTime
 	}
+
 	if endTime := c.Query("endTime"); endTime != "" {
 		timeRange["endTime"] = endTime
 	}

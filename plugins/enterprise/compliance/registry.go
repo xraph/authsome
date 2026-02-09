@@ -6,13 +6,14 @@ import (
 	"sync"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // COMPLIANCE CHECK REGISTRY - Pluggable check system
 // =============================================================================
 
-// CheckResult represents the result of a compliance check
+// CheckResult represents the result of a compliance check.
 type CheckResult struct {
 	CheckType string                 `json:"checkType"`
 	Status    string                 `json:"status"` // "passed", "failed", "warning", "error"
@@ -23,10 +24,10 @@ type CheckResult struct {
 }
 
 // ComplianceCheckFunc is a function that performs a compliance check
-// Takes scope, profile, and additional context
+// Takes scope, profile, and additional context.
 type ComplianceCheckFunc func(ctx context.Context, scope *audit.Scope, profile *ComplianceProfile, deps *CheckDependencies) (*CheckResult, error)
 
-// CheckDependencies provides access to services needed by checks
+// CheckDependencies provides access to services needed by checks.
 type CheckDependencies struct {
 	AuditSvc      AuditService
 	UserSvc       UserService
@@ -37,7 +38,7 @@ type CheckDependencies struct {
 	ScopeResolver *ScopeResolver
 }
 
-// CheckMetadata contains metadata about a check
+// CheckMetadata contains metadata about a check.
 type CheckMetadata struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
@@ -47,14 +48,14 @@ type CheckMetadata struct {
 	AutoRun     bool     `json:"autoRun"`   // Run automatically on schedule
 }
 
-// CheckRegistry manages registered compliance checks
+// CheckRegistry manages registered compliance checks.
 type CheckRegistry struct {
 	checks   map[string]ComplianceCheckFunc
 	metadata map[string]*CheckMetadata
 	mu       sync.RWMutex
 }
 
-// NewCheckRegistry creates a new check registry
+// NewCheckRegistry creates a new check registry.
 func NewCheckRegistry() *CheckRegistry {
 	return &CheckRegistry{
 		checks:   make(map[string]ComplianceCheckFunc),
@@ -62,17 +63,17 @@ func NewCheckRegistry() *CheckRegistry {
 	}
 }
 
-// Register registers a new compliance check
+// Register registers a new compliance check.
 func (r *CheckRegistry) Register(checkType string, fn ComplianceCheckFunc, meta *CheckMetadata) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if checkType == "" {
-		return fmt.Errorf("check type cannot be empty")
+		return errs.InvalidInput("checkType", "check type cannot be empty")
 	}
 
 	if fn == nil {
-		return fmt.Errorf("check function cannot be nil")
+		return errs.InvalidInput("fn", "check function cannot be nil")
 	}
 
 	// Check if already registered
@@ -86,7 +87,7 @@ func (r *CheckRegistry) Register(checkType string, fn ComplianceCheckFunc, meta 
 	return nil
 }
 
-// Unregister removes a check from the registry
+// Unregister removes a check from the registry.
 func (r *CheckRegistry) Unregister(checkType string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -101,7 +102,7 @@ func (r *CheckRegistry) Unregister(checkType string) error {
 	return nil
 }
 
-// Execute runs a specific check
+// Execute runs a specific check.
 func (r *CheckRegistry) Execute(ctx context.Context, checkType string, scope *audit.Scope, profile *ComplianceProfile, deps *CheckDependencies) (*CheckResult, error) {
 	r.mu.RLock()
 	fn, exists := r.checks[checkType]
@@ -124,13 +125,15 @@ func (r *CheckRegistry) Execute(ctx context.Context, checkType string, scope *au
 	return result, nil
 }
 
-// ExecuteAll runs all registered checks
+// ExecuteAll runs all registered checks.
 func (r *CheckRegistry) ExecuteAll(ctx context.Context, scope *audit.Scope, profile *ComplianceProfile, deps *CheckDependencies) ([]*CheckResult, error) {
 	r.mu.RLock()
+
 	checkTypes := make([]string, 0, len(r.checks))
 	for checkType := range r.checks {
 		checkTypes = append(checkTypes, checkType)
 	}
+
 	r.mu.RUnlock()
 
 	results := make([]*CheckResult, 0, len(checkTypes))
@@ -145,13 +148,14 @@ func (r *CheckRegistry) ExecuteAll(ctx context.Context, scope *audit.Scope, prof
 				Error:     err,
 			}
 		}
+
 		results = append(results, result)
 	}
 
 	return results, nil
 }
 
-// ExecuteForStandards runs checks relevant to specific compliance standards
+// ExecuteForStandards runs checks relevant to specific compliance standards.
 func (r *CheckRegistry) ExecuteForStandards(ctx context.Context, standards []ComplianceStandard, scope *audit.Scope, profile *ComplianceProfile, deps *CheckDependencies) ([]*CheckResult, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -163,18 +167,22 @@ func (r *CheckRegistry) ExecuteForStandards(ctx context.Context, standards []Com
 	}
 
 	results := make([]*CheckResult, 0)
+
 	for checkType, fn := range r.checks {
 		meta := r.metadata[checkType]
 
 		// Check if this check applies to any of the requested standards
 		if meta != nil && len(meta.Standards) > 0 {
 			applies := false
+
 			for _, std := range meta.Standards {
 				if standardStrs[std] {
 					applies = true
+
 					break
 				}
 			}
+
 			if !applies {
 				continue
 			}
@@ -189,13 +197,14 @@ func (r *CheckRegistry) ExecuteForStandards(ctx context.Context, standards []Com
 				Error:     err,
 			}
 		}
+
 		results = append(results, result)
 	}
 
 	return results, nil
 }
 
-// List returns all registered check types
+// List returns all registered check types.
 func (r *CheckRegistry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -208,7 +217,7 @@ func (r *CheckRegistry) List() []string {
 	return checkTypes
 }
 
-// GetMetadata retrieves metadata for a check
+// GetMetadata retrieves metadata for a check.
 func (r *CheckRegistry) GetMetadata(checkType string) (*CheckMetadata, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -221,7 +230,7 @@ func (r *CheckRegistry) GetMetadata(checkType string) (*CheckMetadata, error) {
 	return meta, nil
 }
 
-// ListMetadata returns metadata for all registered checks
+// ListMetadata returns metadata for all registered checks.
 func (r *CheckRegistry) ListMetadata() map[string]*CheckMetadata {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -239,7 +248,7 @@ func (r *CheckRegistry) ListMetadata() map[string]*CheckMetadata {
 // BUILT-IN CHECKS - Register default compliance checks
 // =============================================================================
 
-// RegisterBuiltInChecks registers all built-in compliance checks
+// RegisterBuiltInChecks registers all built-in compliance checks.
 func RegisterBuiltInChecks(registry *CheckRegistry) error {
 	checks := []struct {
 		Type     string
@@ -335,15 +344,17 @@ func RegisterBuiltInChecks(registry *CheckRegistry) error {
 
 func checkMFACoverage(ctx context.Context, scope *audit.Scope, profile *ComplianceProfile, deps *CheckDependencies) (*CheckResult, error) {
 	// Get users in scope
-	var users []*audit.GenericUser
-	var err error
+	var (
+		users []*audit.GenericUser
+		err   error
+	)
 
 	if deps.UserProvider != nil {
 		users, err = deps.UserProvider.ListUsers(ctx, scope, &audit.UserFilter{
 			Limit: 10000,
 		})
 	} else {
-		return nil, fmt.Errorf("user provider not available")
+		return nil, errs.InternalServerErrorWithMessage("user provider not available")
 	}
 
 	if err != nil {
@@ -471,5 +482,6 @@ func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }

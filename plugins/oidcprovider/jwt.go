@@ -6,15 +6,16 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// JWTService handles JWT token generation and signing for OIDC Provider
+// JWTService handles JWT token generation and signing for OIDC Provider.
 type JWTService struct {
 	jwksService *JWKSService
 	issuer      string
 }
 
-// NewJWTService creates a new JWT service with JWKS service for key management
+// NewJWTService creates a new JWT service with JWKS service for key management.
 func NewJWTService(issuer string, jwksService *JWKSService) (*JWTService, error) {
 	return &JWTService{
 		jwksService: jwksService,
@@ -22,9 +23,10 @@ func NewJWTService(issuer string, jwksService *JWKSService) (*JWTService, error)
 	}, nil
 }
 
-// IDTokenClaims represents the claims for an OIDC ID token
+// IDTokenClaims represents the claims for an OIDC ID token.
 type IDTokenClaims struct {
 	jwt.RegisteredClaims
+
 	Nonce             string `json:"nonce,omitempty"`
 	AuthTime          int64  `json:"auth_time"`
 	SessionState      string `json:"session_state,omitempty"`
@@ -36,17 +38,18 @@ type IDTokenClaims struct {
 	FamilyName        string `json:"family_name,omitempty"`
 }
 
-// AccessTokenClaims represents the claims for an access token
+// AccessTokenClaims represents the claims for an access token.
 type AccessTokenClaims struct {
 	jwt.RegisteredClaims
+
 	Scope     string `json:"scope,omitempty"`
 	ClientID  string `json:"client_id"`
 	TokenType string `json:"token_type"`
 	AppID     string `json:"app_id,omitempty"` // Application ID for AuthSome JWT validation
 }
 
-// GenerateIDToken creates a signed OIDC ID token
-func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime time.Time, userInfo map[string]interface{}) (string, error) {
+// GenerateIDToken creates a signed OIDC ID token.
+func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime time.Time, userInfo map[string]any) (string, error) {
 	now := time.Now()
 
 	claims := IDTokenClaims{
@@ -68,9 +71,11 @@ func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime ti
 		claims.Email = email
 		claims.EmailVerified = true // Assume verified for now
 	}
+
 	if name, ok := userInfo["name"].(string); ok {
 		claims.Name = name
 	}
+
 	if username, ok := userInfo["username"].(string); ok {
 		claims.PreferredUsername = username
 	}
@@ -81,12 +86,12 @@ func (j *JWTService) GenerateIDToken(userID, clientID, nonce string, authTime ti
 	return token.SignedString(j.jwksService.GetCurrentPrivateKey())
 }
 
-// GenerateAccessToken creates a signed access token
+// GenerateAccessToken creates a signed access token.
 func (j *JWTService) GenerateAccessToken(userID, clientID, scope string) (string, error) {
 	return j.GenerateAccessTokenWithAppID(userID, clientID, scope, "")
 }
 
-// GenerateAccessTokenWithAppID creates a signed access token with optional app_id
+// GenerateAccessTokenWithAppID creates a signed access token with optional app_id.
 func (j *JWTService) GenerateAccessTokenWithAppID(userID, clientID, scope, appID string) (string, error) {
 	now := time.Now()
 
@@ -112,9 +117,9 @@ func (j *JWTService) GenerateAccessTokenWithAppID(userID, clientID, scope, appID
 	return token.SignedString(j.jwksService.GetCurrentPrivateKey())
 }
 
-// VerifyToken verifies and parses a JWT token
+// VerifyToken verifies and parses a JWT token.
 func (j *JWTService) VerifyToken(tokenString string) (*jwt.Token, error) {
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		// Verify signing method
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -123,7 +128,7 @@ func (j *JWTService) VerifyToken(tokenString string) (*jwt.Token, error) {
 		// Get key ID from token header
 		kid, ok := token.Header["kid"].(string)
 		if !ok {
-			return nil, fmt.Errorf("missing or invalid kid in token header")
+			return nil, errs.BadRequest("missing or invalid kid in token header")
 		}
 
 		// Get public key for this key ID

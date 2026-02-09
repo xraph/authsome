@@ -23,13 +23,13 @@ import (
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface
-// This allows the API key plugin to add its own screens to the dashboard
+// This allows the API key plugin to add its own screens to the dashboard.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension for API keys
+// NewDashboardExtension creates a new dashboard extension for API keys.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -37,27 +37,27 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// SetRegistry sets the extension registry reference (called by dashboard after registration)
-func (e *DashboardExtension) SetRegistry(registry interface{}) {
+// SetRegistry sets the extension registry reference (called by dashboard after registration).
+func (e *DashboardExtension) SetRegistry(registry any) {
 	// No longer needed - layout handled by ForgeUI
 }
 
-// getBasePath returns the dashboard base path
+// getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
 	return e.baseUIPath
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "apikey"
 }
 
-// NavigationItems returns navigation items to register (none for settings-only plugin)
+// NavigationItems returns navigation items to register (none for settings-only plugin).
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{} // Using settings pages only
 }
 
-// Routes returns routes to register under /dashboard/app/:appId/
+// Routes returns routes to register under /dashboard/app/:appId/.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// API Keys Management Page
@@ -159,12 +159,12 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated, using SettingsPages instead)
+// SettingsSections returns settings sections (deprecated, using SettingsPages instead).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{} // Using SettingsPages instead
 }
 
-// SettingsPages returns full settings pages for the sidebar layout
+// SettingsPages returns full settings pages for the sidebar layout.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -203,7 +203,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// DashboardWidgets returns widgets to show on the main dashboard
+// DashboardWidgets returns widgets to show on the main dashboard.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -221,13 +221,13 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for the apikey plugin
+// BridgeFunctions returns bridge functions for the apikey plugin.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	// No bridge functions for this plugin yet
 	return nil
 }
 
-// ServeAPIKeysListPage renders the API keys management page
+// ServeAPIKeysListPage renders the API keys management page.
 func (e *DashboardExtension) ServeAPIKeysListPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -243,7 +243,7 @@ func (e *DashboardExtension) ServeAPIKeysListPage(ctx *router.PageContext) (g.No
 	return e.renderAPIKeysListContent(ctx.Request, currentApp, currentUser), nil
 }
 
-// ServeAPIKeysConfigPage renders the configuration page
+// ServeAPIKeysConfigPage renders the configuration page.
 func (e *DashboardExtension) ServeAPIKeysConfigPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -253,7 +253,7 @@ func (e *DashboardExtension) ServeAPIKeysConfigPage(ctx *router.PageContext) (g.
 	return e.renderConfigContent(currentApp), nil
 }
 
-// ServeAPIKeysSecurityPage renders the security settings page
+// ServeAPIKeysSecurityPage renders the security settings page.
 func (e *DashboardExtension) ServeAPIKeysSecurityPage(ctx *router.PageContext) (g.Node, error) {
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
@@ -263,13 +263,13 @@ func (e *DashboardExtension) ServeAPIKeysSecurityPage(ctx *router.PageContext) (
 	return e.renderSecurityContent(currentApp), nil
 }
 
-// CreateAPIKey handles API key creation
+// CreateAPIKey handles API key creation.
 func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	w := ctx.ResponseWriter
 
 	// Helper to write JSON response
-	writeJSON := func(status int, data map[string]interface{}) {
+	writeJSON := func(status int, data map[string]any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		json.NewEncoder(w).Encode(data)
@@ -278,7 +278,8 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 	// Extract app from URL
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid request"})
+		writeJSON(400, map[string]any{"success": false, "error": "Invalid request"})
+
 		return nil, nil
 	}
 
@@ -292,12 +293,14 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 	expiresInStr := ctx.Request.FormValue("expires_in")
 
 	if name == "" {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Name is required"})
+		writeJSON(400, map[string]any{"success": false, "error": "Name is required"})
+
 		return nil, nil
 	}
 
 	// Parse key type
 	var keyType apikey.KeyType
+
 	switch keyTypeStr {
 	case "pk":
 		keyType = apikey.KeyTypePublishable
@@ -314,6 +317,7 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 	if scopesStr != "" {
 		scopes = strings.Split(strings.ReplaceAll(scopesStr, " ", ""), ",")
 	}
+
 	if len(scopes) == 0 {
 		// Set default scopes based on key type
 		switch keyType {
@@ -328,6 +332,7 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 
 	// Parse rate limit
 	rateLimit := e.plugin.config.DefaultRateLimit
+
 	if rateLimitStr != "" {
 		if rl, err := strconv.Atoi(rateLimitStr); err == nil {
 			rateLimit = rl
@@ -336,6 +341,7 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 
 	// Parse expiry
 	var expiresAt *time.Time
+
 	if expiresInStr != "" {
 		if days, err := strconv.Atoi(expiresInStr); err == nil && days > 0 {
 			expiry := time.Now().AddDate(0, 0, days)
@@ -359,42 +365,46 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 
 	key, err := e.plugin.service.CreateAPIKey(reqCtx, req)
 	if err != nil {
-		writeJSON(500, map[string]interface{}{"success": false, "error": "Failed to create API key: " + err.Error()})
+		writeJSON(500, map[string]any{"success": false, "error": "Failed to create API key: " + err.Error()})
+
 		return nil, nil
 	}
 
 	// Return success with the new key
-	writeJSON(200, map[string]interface{}{
+	writeJSON(200, map[string]any{
 		"success": true,
 		"key":     key.Key, // The actual API key value
 		"id":      key.ID.String(),
 		"name":    key.Name,
 	})
+
 	return nil, nil
 }
 
-// RotateAPIKey handles API key rotation
+// RotateAPIKey handles API key rotation.
 func (e *DashboardExtension) RotateAPIKey(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	w := ctx.ResponseWriter
 	keyID := ctx.Param("keyId")
 
 	// Helper to write JSON response
-	writeJSON := func(status int, data map[string]interface{}) {
+	writeJSON := func(status int, data map[string]any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		json.NewEncoder(w).Encode(data)
 	}
 
 	if keyID == "" {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Key ID is required"})
+		writeJSON(400, map[string]any{"success": false, "error": "Key ID is required"})
+
 		return nil, nil
 	}
 
 	// Extract app from URL
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid app context"})
+		writeJSON(400, map[string]any{"success": false, "error": "Invalid app context"})
+
 		return nil, nil
 	}
 
@@ -402,7 +412,8 @@ func (e *DashboardExtension) RotateAPIKey(ctx *router.PageContext) (g.Node, erro
 
 	parsedKeyID, err := xid.FromString(keyID)
 	if err != nil {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid key ID format"})
+		writeJSON(400, map[string]any{"success": false, "error": "Invalid key ID format"})
+
 		return nil, nil
 	}
 
@@ -415,40 +426,44 @@ func (e *DashboardExtension) RotateAPIKey(ctx *router.PageContext) (g.Node, erro
 
 	key, err := e.plugin.service.RotateAPIKey(reqCtx, req)
 	if err != nil {
-		writeJSON(500, map[string]interface{}{"success": false, "error": "Failed to rotate API key: " + err.Error()})
+		writeJSON(500, map[string]any{"success": false, "error": "Failed to rotate API key: " + err.Error()})
+
 		return nil, nil
 	}
 
-	writeJSON(200, map[string]interface{}{
+	writeJSON(200, map[string]any{
 		"success": true,
 		"key":     key.Key,
 		"id":      key.ID.String(),
 	})
+
 	return nil, nil
 }
 
-// RevokeAPIKey handles API key revocation
+// RevokeAPIKey handles API key revocation.
 func (e *DashboardExtension) RevokeAPIKey(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	w := ctx.ResponseWriter
 	keyID := ctx.Request.FormValue("key_id")
 
 	// Helper to write JSON response
-	writeJSON := func(status int, data map[string]interface{}) {
+	writeJSON := func(status int, data map[string]any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
 		json.NewEncoder(w).Encode(data)
 	}
 
 	if keyID == "" {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Key ID is required"})
+		writeJSON(400, map[string]any{"success": false, "error": "Key ID is required"})
+
 		return nil, nil
 	}
 
 	// Extract app from URL
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid app context"})
+		writeJSON(400, map[string]any{"success": false, "error": "Invalid app context"})
+
 		return nil, nil
 	}
 
@@ -456,22 +471,25 @@ func (e *DashboardExtension) RevokeAPIKey(ctx *router.PageContext) (g.Node, erro
 
 	parsedKeyID, err := xid.FromString(keyID)
 	if err != nil {
-		writeJSON(400, map[string]interface{}{"success": false, "error": "Invalid key ID format"})
+		writeJSON(400, map[string]any{"success": false, "error": "Invalid key ID format"})
+
 		return nil, nil
 	}
 
 	// Delete the API key
 	err = e.plugin.service.DeleteAPIKey(reqCtx, appID, parsedKeyID, xid.NilID(), nil)
 	if err != nil {
-		writeJSON(500, map[string]interface{}{"success": false, "error": "Failed to revoke API key: " + err.Error()})
+		writeJSON(500, map[string]any{"success": false, "error": "Failed to revoke API key: " + err.Error()})
+
 		return nil, nil
 	}
 
-	writeJSON(200, map[string]interface{}{"success": true, "message": "API key revoked successfully"})
+	writeJSON(200, map[string]any{"success": true, "message": "API key revoked successfully"})
+
 	return nil, nil
 }
 
-// UpdateConfig handles configuration updates
+// UpdateConfig handles configuration updates.
 func (e *DashboardExtension) UpdateConfig(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	defaultRateLimit, _ := strconv.Atoi(ctx.Request.FormValue("default_rate_limit"))
@@ -500,7 +518,7 @@ func (e *DashboardExtension) UpdateConfig(ctx *router.PageContext) (g.Node, erro
 	return nil, nil // Success
 }
 
-// UpdateSecurity handles security settings updates
+// UpdateSecurity handles security settings updates.
 func (e *DashboardExtension) UpdateSecurity(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	allowQueryParam := ctx.Request.FormValue("allow_query_param") == "on"
@@ -515,7 +533,7 @@ func (e *DashboardExtension) UpdateSecurity(ctx *router.PageContext) (g.Node, er
 	return nil, nil // Success
 }
 
-// RenderDashboardWidget renders the API key stats widget
+// RenderDashboardWidget renders the API key stats widget.
 func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *app.App) g.Node {
 	if currentApp == nil {
 		return Div(Class("text-gray-500"), g.Text("No app context"))
@@ -545,12 +563,14 @@ func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) *user.U
 	if u, ok := reqCtx.Value(contexts.UserContextKey).(*user.User); ok {
 		return u
 	}
+
 	return nil
 }
 
 func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.App, error) {
 	// First try to extract app from request context (set by middleware)
 	reqCtx := ctx.Request.Context()
+
 	appVal := reqCtx.Value(contexts.AppContextKey)
 	if appVal != nil {
 		if currentApp, ok := appVal.(*app.App); ok {
@@ -568,7 +588,7 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	// Final fallback: parse app ID from URL and create minimal app
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
-		return nil, fmt.Errorf("app ID is required")
+		return nil, errs.RequiredField("app_id")
 	}
 
 	appID, err := xid.FromString(appIDStr)
@@ -580,7 +600,7 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 	return &app.App{ID: appID}, nil
 }
 
-// KeyStats holds API key statistics
+// KeyStats holds API key statistics.
 type KeyStats struct {
 	TotalActive     int
 	UsedLast24h     int
@@ -590,7 +610,7 @@ type KeyStats struct {
 	MostUsedKeyName string
 }
 
-// getKeyStats fetches API key statistics for the app
+// getKeyStats fetches API key statistics for the app.
 func (e *DashboardExtension) getKeyStats(ctx context.Context, appID xid.ID) (KeyStats, error) {
 	stats := KeyStats{}
 
@@ -641,11 +661,13 @@ func (e *DashboardExtension) getKeyStats(ctx context.Context, appID xid.ID) (Key
 	// Calculate average request rate (simplified)
 	if stats.TotalActive > 0 {
 		totalRequests := int64(0)
+
 		for _, key := range keysResp.Data {
 			if key.Active {
 				totalRequests += key.UsageCount
 			}
 		}
+
 		stats.AvgRequestRate = float64(totalRequests) / float64(stats.TotalActive)
 	}
 

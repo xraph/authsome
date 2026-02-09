@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
@@ -15,13 +16,12 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ServePlanDetailPage renders the plan detail page
+// ServePlanDetailPage renders the plan detail page.
 func (e *DashboardExtension) ServePlanDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid app context")
+		return nil, errs.BadRequest("invalid app context")
 	}
 
 	basePath := e.baseUIPath
@@ -29,12 +29,12 @@ func (e *DashboardExtension) ServePlanDetailPage(ctx *router.PageContext) (g.Nod
 
 	planID, err := xid.FromString(ctx.Param("id"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid plan ID")
+		return nil, errs.BadRequest("invalid plan ID")
 	}
 
 	plan, err := e.plugin.planSvc.GetByID(reqCtx, planID)
 	if err != nil {
-		return nil, fmt.Errorf("plan not found")
+		return nil, errs.NotFound("plan not found")
 	}
 
 	// Get subscription count for this plan
@@ -147,7 +147,7 @@ func (e *DashboardExtension) ServePlanDetailPage(ctx *router.PageContext) (g.Nod
 		Div(
 			Class("grid gap-6 md:grid-cols-4"),
 			e.statsCard("Price", formatMoney(plan.BasePrice, plan.Currency)+"/"+string(plan.BillingInterval), lucide.DollarSign(Class("size-5 text-violet-600"))),
-			e.statsCard("Subscribers", fmt.Sprintf("%d", subCount), lucide.Users(Class("size-5 text-violet-600"))),
+			e.statsCard("Subscribers", strconv.Itoa(subCount), lucide.Users(Class("size-5 text-violet-600"))),
 			e.statsCard("Billing Pattern", string(plan.BillingPattern), lucide.Repeat(Class("size-5 text-violet-600"))),
 			e.statsCard("Trial Days", fmt.Sprintf("%d days", plan.TrialDays), lucide.Clock(Class("size-5 text-violet-600"))),
 		),
@@ -220,10 +220,9 @@ func (e *DashboardExtension) ServePlanDetailPage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// ServeSubscriptionDetailPage renders the subscription detail page
+// ServeSubscriptionDetailPage renders the subscription detail page.
 func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -239,7 +238,7 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext
 
 	sub, err := e.plugin.subscriptionSvc.GetByID(reqCtx, subID)
 	if err != nil {
-		return nil, fmt.Errorf("subscription not found")
+		return nil, errs.NotFound("subscription not found")
 	}
 
 	// Get usage data
@@ -247,6 +246,7 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext
 
 	// Get recent invoices - fetch directly from provider on-demand
 	var invoices []*core.Invoice
+
 	if sub.ProviderSubID != "" && e.plugin.provider != nil {
 		providerInvoices, err := e.plugin.provider.ListSubscriptionInvoices(reqCtx, sub.ProviderSubID, 5)
 		if err == nil {
@@ -348,9 +348,10 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext
 				if sub.Plan != nil {
 					return formatMoney(sub.Plan.BasePrice*int64(sub.Quantity), sub.Plan.Currency)
 				}
+
 				return "-"
 			}(), lucide.DollarSign(Class("size-5 text-violet-600"))),
-			e.statsCard("Quantity", fmt.Sprintf("%d", sub.Quantity), lucide.Hash(Class("size-5 text-violet-600"))),
+			e.statsCard("Quantity", strconv.Itoa(sub.Quantity), lucide.Hash(Class("size-5 text-violet-600"))),
 			e.statsCard("Current Period End", sub.CurrentPeriodEnd.Format("Jan 2, 2006"), lucide.Calendar(Class("size-5 text-violet-600"))),
 			e.statsCard("Created", sub.CreatedAt.Format("Jan 2, 2006"), lucide.Clock(Class("size-5 text-violet-600"))),
 		),
@@ -378,9 +379,11 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext
 						if sub.TrialEnd != nil && !sub.TrialEnd.IsZero() {
 							nodes = append(nodes, detailRow("Trial Ends", sub.TrialEnd.Format("Jan 2, 2006")))
 						}
+
 						if sub.CanceledAt != nil && !sub.CanceledAt.IsZero() {
 							nodes = append(nodes, detailRow("Canceled At", sub.CanceledAt.Format("Jan 2, 2006")))
 						}
+
 						return nodes
 					}()),
 					Div(
@@ -471,10 +474,9 @@ func (e *DashboardExtension) ServeSubscriptionDetailPage(ctx *router.PageContext
 	return content, nil
 }
 
-// ServeAddOnDetailPage renders the add-on detail page
+// ServeAddOnDetailPage renders the add-on detail page.
 func (e *DashboardExtension) ServeAddOnDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -490,7 +492,7 @@ func (e *DashboardExtension) ServeAddOnDetailPage(ctx *router.PageContext) (g.No
 
 	addon, err := e.plugin.addOnSvc.GetByID(reqCtx, addonID)
 	if err != nil {
-		return nil, fmt.Errorf("add-on not found")
+		return nil, errs.NotFound("add-on not found")
 	}
 
 	content := Div(
@@ -555,10 +557,9 @@ func (e *DashboardExtension) ServeAddOnDetailPage(ctx *router.PageContext) (g.No
 	return content, nil
 }
 
-// ServeInvoiceDetailPage renders the invoice detail page
+// ServeInvoiceDetailPage renders the invoice detail page.
 func (e *DashboardExtension) ServeInvoiceDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -574,7 +575,7 @@ func (e *DashboardExtension) ServeInvoiceDetailPage(ctx *router.PageContext) (g.
 
 	invoice, err := e.plugin.invoiceSvc.GetByID(reqCtx, invoiceID)
 	if err != nil {
-		return nil, fmt.Errorf("invoice not found")
+		return nil, errs.NotFound("invoice not found")
 	}
 
 	content := Div(
@@ -644,6 +645,7 @@ func (e *DashboardExtension) ServeInvoiceDetailPage(ctx *router.PageContext) (g.
 				if !invoice.DueDate.IsZero() {
 					return invoice.DueDate.Format("Jan 2, 2006")
 				}
+
 				return "-"
 			}(), lucide.Calendar(Class("size-5 text-violet-600"))),
 		),
@@ -725,10 +727,11 @@ func stringOrDash(s string) string {
 	if s == "" {
 		return "-"
 	}
+
 	return s
 }
 
-// convertProviderInvoicesToCore converts provider invoices to core invoice format for display
+// convertProviderInvoicesToCore converts provider invoices to core invoice format for display.
 func convertProviderInvoicesToCore(providerInvs []*types.ProviderInvoice) []*core.Invoice {
 	if providerInvs == nil {
 		return []*core.Invoice{}
@@ -741,6 +744,7 @@ func convertProviderInvoicesToCore(providerInvs []*types.ProviderInvoice) []*cor
 
 		// Convert status string to core status type
 		status := core.InvoiceStatusDraft
+
 		switch inv.Status {
 		case "open":
 			status = core.InvoiceStatusOpen
@@ -766,6 +770,7 @@ func convertProviderInvoicesToCore(providerInvs []*types.ProviderInvoice) []*cor
 			CreatedAt:      time.Unix(inv.PeriodStart, 0),
 		}
 	}
+
 	return result
 }
 
@@ -773,10 +778,11 @@ func boolToYesNo(b bool) string {
 	if b {
 		return "Yes"
 	}
+
 	return "No"
 }
 
-func renderFeaturesList(features map[string]interface{}) []g.Node {
+func renderFeaturesList(features map[string]any) []g.Node {
 	items := make([]g.Node, 0, len(features))
 	for key, value := range features {
 		items = append(items, Li(
@@ -786,6 +792,7 @@ func renderFeaturesList(features map[string]interface{}) []g.Node {
 				g.Text(fmt.Sprintf("%s: %v", key, value))),
 		))
 	}
+
 	return items
 }
 
@@ -799,6 +806,7 @@ func renderPlanFeaturesList(features []core.PlanFeature) []g.Node {
 				g.Text(fmt.Sprintf("%s: %v", feature.Name, feature.Value))),
 		))
 	}
+
 	return items
 }
 
@@ -839,9 +847,10 @@ func (e *DashboardExtension) renderUsageDataList(usageData map[string]int64) g.N
 		items = append(items, Div(
 			Class("flex justify-between py-2 border-b border-slate-100 dark:border-gray-800 last:border-0"),
 			Span(Class("text-sm text-slate-600 dark:text-gray-400"), g.Text(key)),
-			Span(Class("text-sm font-medium text-slate-900 dark:text-white"), g.Text(fmt.Sprintf("%d", value))),
+			Span(Class("text-sm font-medium text-slate-900 dark:text-white"), g.Text(strconv.FormatInt(value, 10))),
 		))
 	}
+
 	return Div(g.Group(items))
 }
 
@@ -882,6 +891,7 @@ func (e *DashboardExtension) renderInvoicesList(invoices []*core.Invoice, curren
 			),
 		))
 	}
+
 	return Div(g.Group(items))
 }
 
@@ -891,7 +901,7 @@ func (e *DashboardExtension) renderLineItemsTable(invoice *core.Invoice) g.Node 
 		rows = append(rows, Tr(
 			Class("hover:bg-slate-50 dark:hover:bg-gray-800/50"),
 			Td(Class("px-4 py-3 text-sm text-slate-900 dark:text-white"), g.Text(item.Description)),
-			Td(Class("px-4 py-3 text-sm text-slate-600 dark:text-gray-400"), g.Text(fmt.Sprintf("%d", item.Quantity))),
+			Td(Class("px-4 py-3 text-sm text-slate-600 dark:text-gray-400"), g.Text(strconv.FormatInt(item.Quantity, 10))),
 			Td(Class("px-4 py-3 text-sm text-slate-600 dark:text-gray-400"), g.Text(formatMoney(item.UnitAmount, invoice.Currency))),
 			Td(Class("px-4 py-3 text-sm font-medium text-slate-900 dark:text-white"), g.Text(formatMoney(item.Amount, invoice.Currency))),
 		))

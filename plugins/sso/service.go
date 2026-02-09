@@ -20,7 +20,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Service provides SSO operations (registration, callbacks, metadata)
+// Service provides SSO operations (registration, callbacks, metadata).
 type Service struct {
 	mu        sync.RWMutex
 	providers map[string]*schema.SSOProvider // cache keyed by ProviderID
@@ -50,6 +50,7 @@ func NewService(r *repo.SSOProviderRepository, cfg Config, userSvc user.ServiceI
 		stateStore: NewStateStore(), // Initialize OIDC state store
 	}
 	_ = s.saml.NewServiceProvider("authsome-sp", "http://localhost/api/auth/sso/saml2/callback/default", "http://localhost/api/auth/sso/saml2/sp/metadata")
+
 	return s
 }
 
@@ -58,18 +59,22 @@ func (s *Service) RegisterProvider(ctx context.Context, p *schema.SSOProvider) e
 	if p.ID.IsZero() {
 		p.ID = xid.New()
 	}
+
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = time.Now()
 	}
+
 	p.UpdatedAt = time.Now()
 	if s.repo != nil {
 		if err := s.repo.Upsert(ctx, p); err != nil {
 			return err
 		}
 	}
+
 	s.mu.Lock()
 	s.providers[p.ProviderID] = p
 	s.mu.Unlock()
+
 	return nil
 }
 
@@ -84,6 +89,7 @@ func (s *Service) GetProvider(ctx context.Context, providerID string) (*schema.S
 	s.mu.RLock()
 	p, ok := s.providers[cacheKey]
 	s.mu.RUnlock()
+
 	if ok {
 		return p, nil
 	}
@@ -94,11 +100,13 @@ func (s *Service) GetProvider(ctx context.Context, providerID string) (*schema.S
 		if err != nil {
 			return nil, err
 		}
+
 		if dbp != nil {
 			// Cache the result
 			s.mu.Lock()
 			s.providers[cacheKey] = dbp
 			s.mu.Unlock()
+
 			return dbp, nil
 		}
 	}
@@ -106,47 +114,50 @@ func (s *Service) GetProvider(ctx context.Context, providerID string) (*schema.S
 	return nil, errs.NotFound("SSO provider not found")
 }
 
-// SPMetadata returns a minimal placeholder SP metadata string
+// SPMetadata returns a minimal placeholder SP metadata string.
 func (s *Service) SPMetadata() string {
 	if s.saml != nil {
 		return s.saml.Metadata()
 	}
+
 	return "<EntityDescriptor xmlns=\"urn:oasis:names:tc:SAML:2.0:metadata\" entityID=\"authsome-sp\"></EntityDescriptor>"
 }
 
-// InitiateSAMLLogin generates an AuthnRequest and returns the redirect URL
+// InitiateSAMLLogin generates an AuthnRequest and returns the redirect URL.
 func (s *Service) InitiateSAMLLogin(idpURL, relayState string) (string, string, error) {
 	if s.saml == nil {
-		return "", "", fmt.Errorf("SAML service not configured")
+		return "", "", errs.InternalServerErrorWithMessage("SAML service not configured")
 	}
+
 	return s.saml.GenerateAuthnRequest(idpURL, relayState)
 }
 
-// ValidateSAMLResponse performs full SAML response validation
+// ValidateSAMLResponse performs full SAML response validation.
 func (s *Service) ValidateSAMLResponse(b64Response, expectedIssuer, relayState string) (*samsvc.SAMLAssertion, error) {
 	if s.saml == nil {
-		return nil, fmt.Errorf("SAML service not configured")
+		return nil, errs.InternalServerErrorWithMessage("SAML service not configured")
 	}
+
 	return s.saml.ParseAndValidateResponse(b64Response, expectedIssuer, relayState, nil)
 }
 
-// GeneratePKCEChallenge generates PKCE challenge for OIDC flow
+// GeneratePKCEChallenge generates PKCE challenge for OIDC flow.
 func (s *Service) GeneratePKCEChallenge() (*oidcsvc.PKCEChallenge, error) {
 	return s.oidc.GeneratePKCEChallenge()
 }
 
-// ExchangeOIDCCode exchanges authorization code for tokens with PKCE support
+// ExchangeOIDCCode exchanges authorization code for tokens with PKCE support.
 func (s *Service) ExchangeOIDCCode(ctx context.Context, provider *schema.SSOProvider, code, redirectURI, codeVerifier string) (*oidcsvc.OIDCTokenResponse, error) {
 	if provider.Type != "oidc" {
 		return nil, fmt.Errorf("provider %s is not an OIDC provider", provider.ProviderID)
 	}
 
 	if provider.OIDCIssuer == "" {
-		return nil, fmt.Errorf("missing OIDC issuer in provider config")
+		return nil, errs.BadRequest("missing OIDC issuer in provider config")
 	}
 
 	if provider.OIDCClientID == "" {
-		return nil, fmt.Errorf("missing OIDC client ID in provider config")
+		return nil, errs.BadRequest("missing OIDC client ID in provider config")
 	}
 
 	// Fetch token endpoint from OIDC discovery
@@ -158,18 +169,18 @@ func (s *Service) ExchangeOIDCCode(ctx context.Context, provider *schema.SSOProv
 	return s.oidc.ExchangeCodeForTokens(ctx, discovery.TokenEndpoint, provider.OIDCClientID, provider.OIDCClientSecret, code, redirectURI, codeVerifier)
 }
 
-// ValidateOIDCIDToken validates an OIDC ID token
+// ValidateOIDCIDToken validates an OIDC ID token.
 func (s *Service) ValidateOIDCIDToken(ctx context.Context, provider *schema.SSOProvider, idToken, nonce string) (*oidcsvc.OIDCUserInfo, error) {
 	if provider.Type != "oidc" {
 		return nil, fmt.Errorf("provider %s is not an OIDC provider", provider.ProviderID)
 	}
 
 	if provider.OIDCIssuer == "" {
-		return nil, fmt.Errorf("missing OIDC issuer in provider config")
+		return nil, errs.BadRequest("missing OIDC issuer in provider config")
 	}
 
 	if provider.OIDCClientID == "" {
-		return nil, fmt.Errorf("missing OIDC client ID in provider config")
+		return nil, errs.BadRequest("missing OIDC client ID in provider config")
 	}
 
 	// Construct JWKS URL from issuer
@@ -186,24 +197,31 @@ func (s *Service) ValidateOIDCIDToken(ctx context.Context, provider *schema.SSOP
 	if sub, ok := (*claims)["sub"].(string); ok {
 		userInfo.Sub = sub
 	}
+
 	if name, ok := (*claims)["name"].(string); ok {
 		userInfo.Name = name
 	}
+
 	if email, ok := (*claims)["email"].(string); ok {
 		userInfo.Email = email
 	}
+
 	if emailVerified, ok := (*claims)["email_verified"].(bool); ok {
 		userInfo.EmailVerified = emailVerified
 	}
+
 	if givenName, ok := (*claims)["given_name"].(string); ok {
 		userInfo.GivenName = givenName
 	}
+
 	if familyName, ok := (*claims)["family_name"].(string); ok {
 		userInfo.FamilyName = familyName
 	}
+
 	if picture, ok := (*claims)["picture"].(string); ok {
 		userInfo.Picture = picture
 	}
+
 	if preferredUsername, ok := (*claims)["preferred_username"].(string); ok {
 		userInfo.PreferredUsername = preferredUsername
 	}
@@ -211,14 +229,14 @@ func (s *Service) ValidateOIDCIDToken(ctx context.Context, provider *schema.SSOP
 	return userInfo, nil
 }
 
-// GetOIDCUserInfo fetches user information from userinfo endpoint
+// GetOIDCUserInfo fetches user information from userinfo endpoint.
 func (s *Service) GetOIDCUserInfo(ctx context.Context, provider *schema.SSOProvider, accessToken string) (*oidcsvc.OIDCUserInfo, error) {
 	if provider.Type != "oidc" {
 		return nil, fmt.Errorf("provider %s is not an OIDC provider", provider.ProviderID)
 	}
 
 	if provider.OIDCIssuer == "" {
-		return nil, fmt.Errorf("missing OIDC issuer in provider config")
+		return nil, errs.BadRequest("missing OIDC issuer in provider config")
 	}
 
 	// Fetch userinfo endpoint from OIDC discovery
@@ -229,7 +247,7 @@ func (s *Service) GetOIDCUserInfo(ctx context.Context, provider *schema.SSOProvi
 
 	// Some providers might not have userinfo endpoint
 	if discovery.UserinfoEndpoint == "" {
-		return nil, fmt.Errorf("provider does not support userinfo endpoint")
+		return nil, errs.BadRequest("provider does not support userinfo endpoint")
 	}
 
 	return s.oidc.GetUserInfo(ctx, discovery.UserinfoEndpoint, accessToken)
@@ -239,7 +257,7 @@ func (s *Service) GetOIDCUserInfo(ctx context.Context, provider *schema.SSOProvi
 // OIDC LOGIN INITIATION
 // =============================================================================
 
-// InitiateOIDCLogin generates an OIDC authorization URL with PKCE
+// InitiateOIDCLogin generates an OIDC authorization URL with PKCE.
 func (s *Service) InitiateOIDCLogin(
 	ctx context.Context,
 	provider *schema.SSOProvider,
@@ -297,7 +315,7 @@ func (s *Service) InitiateOIDCLogin(
 // =============================================================================
 
 // ProvisionUser finds or creates a user from SSO assertion
-// Implements Just-in-Time (JIT) user provisioning
+// Implements Just-in-Time (JIT) user provisioning.
 func (s *Service) ProvisionUser(
 	ctx context.Context,
 	email string,
@@ -310,6 +328,7 @@ func (s *Service) ProvisionUser(
 
 	// Try to find existing user by email within app scope
 	appID, _ := contexts.GetAppID(ctx)
+
 	usr, err := s.userSvc.FindByAppAndEmail(ctx, appID, email)
 	if err == nil && usr != nil {
 		// User exists - update attributes if configured
@@ -323,6 +342,7 @@ func (s *Service) ProvisionUser(
 				// Log error but don't fail authentication
 			}
 		}
+
 		return usr, nil
 	}
 
@@ -343,7 +363,7 @@ func (s *Service) ProvisionUser(
 	return createdUser, nil
 }
 
-// applyAttributeMapping maps SSO attributes to user fields based on provider configuration
+// applyAttributeMapping maps SSO attributes to user fields based on provider configuration.
 func (s *Service) applyAttributeMapping(usr *user.User, attributes map[string][]string, provider *schema.SSOProvider) {
 	// Use provider-specific attribute mapping if available, otherwise use config default
 	mapping := provider.AttributeMapping
@@ -369,7 +389,7 @@ func (s *Service) applyAttributeMapping(usr *user.User, attributes map[string][]
 	}
 }
 
-// buildCreateUserRequest creates a CreateUserRequest from SSO attributes
+// buildCreateUserRequest creates a CreateUserRequest from SSO attributes.
 func (s *Service) buildCreateUserRequest(
 	ctx context.Context,
 	email string,
@@ -400,6 +420,7 @@ func (s *Service) buildCreateUserRequest(
 	for _, attr := range nameAttrs {
 		if values, ok := attributes[attr]; ok && len(values) > 0 {
 			req.Name = values[0]
+
 			break
 		}
 	}
@@ -416,7 +437,7 @@ func (s *Service) buildCreateUserRequest(
 	return req
 }
 
-// generateRandomPassword generates a secure random password for SSO users
+// generateRandomPassword generates a secure random password for SSO users.
 func generateRandomPassword() string {
 	// SSO users don't need to know their password
 	// Generate a strong random password
@@ -424,10 +445,11 @@ func generateRandomPassword() string {
 	if _, err := rand.Read(bytes); err != nil {
 		return xid.New().String() + xid.New().String()
 	}
+
 	return base64.URLEncoding.EncodeToString(bytes)
 }
 
-// CreateSSOSession creates a session after successful SSO authentication
+// CreateSSOSession creates a session after successful SSO authentication.
 func (s *Service) CreateSSOSession(
 	ctx context.Context,
 	userID xid.ID,
@@ -476,6 +498,7 @@ func (s *Service) CreateSSOSession(
 		if _, err := rand.Read(tokenBytes); err != nil {
 			return nil, "", errs.Wrap(err, errs.CodeInternalError, "failed to generate session token", 500)
 		}
+
 		token = base64.URLEncoding.EncodeToString(tokenBytes)
 	}
 

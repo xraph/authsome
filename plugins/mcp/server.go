@@ -7,9 +7,11 @@ import (
 	"io"
 	"os"
 	"sync"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Server implements the MCP (Model Context Protocol) server
+// Server implements the MCP (Model Context Protocol) server.
 type Server struct {
 	config Config
 	plugin *Plugin
@@ -25,7 +27,7 @@ type Server struct {
 	running bool
 }
 
-// NewServer creates a new MCP server
+// NewServer creates a new MCP server.
 func NewServer(config Config, plugin *Plugin) (*Server, error) {
 	s := &Server{
 		config:    config,
@@ -46,13 +48,16 @@ func NewServer(config Config, plugin *Plugin) (*Server, error) {
 	return s, nil
 }
 
-// Start starts the MCP server
+// Start starts the MCP server.
 func (s *Server) Start(ctx context.Context) error {
 	s.mu.Lock()
+
 	if s.running {
 		s.mu.Unlock()
-		return fmt.Errorf("MCP server already running")
+
+		return errs.Conflict("MCP server already running")
 	}
+
 	s.running = true
 	s.mu.Unlock()
 
@@ -66,20 +71,20 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-// Stop stops the MCP server
+// Stop stops the MCP server.
 func (s *Server) Stop(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.running = false
+
 	return nil
 }
 
-// runStdioServer runs MCP over stdio (for local CLI)
+// runStdioServer runs MCP over stdio (for local CLI).
 func (s *Server) runStdioServer(ctx context.Context) error {
 	// MCP protocol: JSON-RPC over stdio
 	// Read from stdin, write to stdout
-
 	decoder := json.NewDecoder(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 
@@ -95,6 +100,7 @@ func (s *Server) runStdioServer(ctx context.Context) error {
 			if err == io.EOF {
 				return nil
 			}
+
 			return fmt.Errorf("failed to decode request: %w", err)
 		}
 
@@ -108,18 +114,17 @@ func (s *Server) runStdioServer(ctx context.Context) error {
 	}
 }
 
-// runHTTPServer runs MCP over HTTP (for remote access)
+// runHTTPServer runs MCP over HTTP (for remote access).
 func (s *Server) runHTTPServer(ctx context.Context) error {
 	// TODO: Implement HTTP transport
 	// Listen on configured port, handle POST /api/mcp
-	return fmt.Errorf("HTTP transport not yet implemented")
+	return errs.InternalServerErrorWithMessage("HTTP transport not yet implemented")
 }
 
-// handleRequest processes an MCP request
+// handleRequest processes an MCP request.
 func (s *Server) handleRequest(ctx context.Context, req *MCPRequest) *MCPResponse {
 	// TODO: Add authorization check
 	// TODO: Add rate limiting
-
 	switch req.Method {
 	case "resources/list":
 		return s.handleResourcesList(ctx, req)
@@ -139,20 +144,20 @@ func (s *Server) handleRequest(ctx context.Context, req *MCPRequest) *MCPRespons
 			ID:      req.ID,
 			Error: &MCPError{
 				Code:    -32601,
-				Message: fmt.Sprintf("method not found: %s", req.Method),
+				Message: "method not found: " + req.Method,
 			},
 		}
 	}
 }
 
-// handleInitialize handles MCP initialization
+// handleInitialize handles MCP initialization.
 func (s *Server) handleInitialize(ctx context.Context, req *MCPRequest) *MCPResponse {
 	return &MCPResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"protocolVersion": "0.1.0",
-			"capabilities": map[string]interface{}{
+			"capabilities": map[string]any{
 				"resources": map[string]bool{
 					"subscribe":   false, // No streaming support yet
 					"listChanged": false,
@@ -167,7 +172,7 @@ func (s *Server) handleInitialize(ctx context.Context, req *MCPRequest) *MCPResp
 	}
 }
 
-// handlePing handles ping requests
+// handlePing handles ping requests.
 func (s *Server) handlePing(ctx context.Context, req *MCPRequest) *MCPResponse {
 	return &MCPResponse{
 		JSONRPC: "2.0",
@@ -176,23 +181,23 @@ func (s *Server) handlePing(ctx context.Context, req *MCPRequest) *MCPResponse {
 	}
 }
 
-// handleResourcesList lists available resources
+// handleResourcesList lists available resources.
 func (s *Server) handleResourcesList(ctx context.Context, req *MCPRequest) *MCPResponse {
 	resources := s.resources.List()
 
 	return &MCPResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"resources": resources,
 		},
 	}
 }
 
-// handleResourcesRead reads a specific resource
+// handleResourcesRead reads a specific resource.
 func (s *Server) handleResourcesRead(ctx context.Context, req *MCPRequest) *MCPResponse {
 	// Extract URI from params
-	params, ok := req.Params.(map[string]interface{})
+	params, ok := req.Params.(map[string]any)
 	if !ok {
 		return &MCPResponse{
 			JSONRPC: "2.0",
@@ -232,8 +237,8 @@ func (s *Server) handleResourcesRead(ctx context.Context, req *MCPRequest) *MCPR
 	return &MCPResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result: map[string]interface{}{
-			"contents": []map[string]interface{}{
+		Result: map[string]any{
+			"contents": []map[string]any{
 				{
 					"uri":      uri,
 					"mimeType": "application/json",
@@ -244,22 +249,22 @@ func (s *Server) handleResourcesRead(ctx context.Context, req *MCPRequest) *MCPR
 	}
 }
 
-// handleToolsList lists available tools
+// handleToolsList lists available tools.
 func (s *Server) handleToolsList(ctx context.Context, req *MCPRequest) *MCPResponse {
 	tools := s.tools.List(s.config.Mode)
 
 	return &MCPResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"tools": tools,
 		},
 	}
 }
 
-// handleToolsCall executes a tool
+// handleToolsCall executes a tool.
 func (s *Server) handleToolsCall(ctx context.Context, req *MCPRequest) *MCPResponse {
-	params, ok := req.Params.(map[string]interface{})
+	params, ok := req.Params.(map[string]any)
 	if !ok {
 		return &MCPResponse{
 			JSONRPC: "2.0",
@@ -283,7 +288,7 @@ func (s *Server) handleToolsCall(ctx context.Context, req *MCPRequest) *MCPRespo
 		}
 	}
 
-	arguments, _ := params["arguments"].(map[string]interface{})
+	arguments, _ := params["arguments"].(map[string]any)
 
 	// Execute tool
 	result, err := s.tools.Execute(ctx, name, arguments, s.plugin)
@@ -301,8 +306,8 @@ func (s *Server) handleToolsCall(ctx context.Context, req *MCPRequest) *MCPRespo
 	return &MCPResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result: map[string]interface{}{
-			"content": []map[string]interface{}{
+		Result: map[string]any{
+			"content": []map[string]any{
 				{
 					"type": "text",
 					"text": result,
@@ -312,7 +317,7 @@ func (s *Server) handleToolsCall(ctx context.Context, req *MCPRequest) *MCPRespo
 	}
 }
 
-// registerResources registers built-in resources
+// registerResources registers built-in resources.
 func (s *Server) registerResources() {
 	s.resources.Register("authsome://config", &ConfigResource{})
 	s.resources.Register("authsome://schema", &SchemaResource{})
@@ -320,32 +325,32 @@ func (s *Server) registerResources() {
 	// TODO: Add more resources
 }
 
-// registerTools registers built-in tools
+// registerTools registers built-in tools.
 func (s *Server) registerTools() {
 	s.tools.Register("query_user", &QueryUserTool{})
 	s.tools.Register("check_permission", &CheckPermissionTool{})
 	// TODO: Add more tools
 }
 
-// MCPRequest represents an MCP JSON-RPC request
+// MCPRequest represents an MCP JSON-RPC request.
 type MCPRequest struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params,omitempty"`
+	JSONRPC string `json:"jsonrpc"`
+	ID      any    `json:"id"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
 }
 
-// MCPResponse represents an MCP JSON-RPC response
+// MCPResponse represents an MCP JSON-RPC response.
 type MCPResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *MCPError   `json:"error,omitempty"`
+	JSONRPC string    `json:"jsonrpc"`
+	ID      any       `json:"id"`
+	Result  any       `json:"result,omitempty"`
+	Error   *MCPError `json:"error,omitempty"`
 }
 
-// MCPError represents an MCP error
+// MCPError represents an MCP error.
 type MCPError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }

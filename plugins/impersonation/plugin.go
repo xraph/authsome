@@ -12,6 +12,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
@@ -22,7 +23,7 @@ const (
 	PluginVersion = "1.0.0"
 )
 
-// Plugin implements the AuthSome plugin interface for impersonation
+// Plugin implements the AuthSome plugin interface for impersonation.
 type Plugin struct {
 	config      Config
 	service     *impersonation.Service
@@ -31,7 +32,7 @@ type Plugin struct {
 	stopCleanup chan struct{}
 }
 
-// NewPlugin creates a new impersonation plugin instance
+// NewPlugin creates a new impersonation plugin instance.
 func NewPlugin() *Plugin {
 	return &Plugin{
 		config:      DefaultConfig(),
@@ -39,40 +40,40 @@ func NewPlugin() *Plugin {
 	}
 }
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return "Secure admin-to-user impersonation with audit logging, RBAC, and time limits for troubleshooting and support"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("impersonation plugin requires Auth instance")
+		return errs.InternalServerErrorWithMessage("impersonation plugin requires Auth instance")
 	}
 
 	db := authInst.GetDB()
 	if db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerErrorWithMessage("database not available")
 	}
 
 	serviceRegistry := authInst.GetServiceRegistry()
 	if serviceRegistry == nil {
-		return fmt.Errorf("service registry not available")
+		return errs.InternalServerErrorWithMessage("service registry not available")
 	}
 
 	// Validate configuration
@@ -83,25 +84,27 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get required services from registry
 	userSvcInterface := serviceRegistry.UserService()
 	if userSvcInterface == nil {
-		return fmt.Errorf("user service not found in registry")
+		return errs.InternalServerErrorWithMessage("user service not found in registry")
 	}
+
 	userSvc, ok := userSvcInterface.(user.ServiceInterface)
 	if !ok {
-		return fmt.Errorf("invalid user service type")
+		return errs.InternalServerErrorWithMessage("invalid user service type")
 	}
 
 	sessionSvcInterface := serviceRegistry.SessionService()
 	if sessionSvcInterface == nil {
-		return fmt.Errorf("session service not found in registry")
+		return errs.InternalServerErrorWithMessage("session service not found in registry")
 	}
+
 	sessionSvc, ok := sessionSvcInterface.(session.ServiceInterface)
 	if !ok {
-		return fmt.Errorf("invalid session service type")
+		return errs.InternalServerErrorWithMessage("invalid session service type")
 	}
 
 	auditSvc := serviceRegistry.AuditService()
 	if auditSvc == nil {
-		return fmt.Errorf("audit service not found in registry")
+		return errs.InternalServerErrorWithMessage("audit service not found in registry")
 	}
 
 	rbacSvc := serviceRegistry.RBACService()
@@ -149,10 +152,10 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP routes for the plugin
+// RegisterRoutes registers HTTP routes for the plugin.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.handler == nil {
-		return fmt.Errorf("handler not initialized; call Init first")
+		return errs.InternalServerErrorWithMessage("handler not initialized; call Init first")
 	}
 
 	// Create API group for impersonation
@@ -219,9 +222,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// DTOs for impersonation routes (placeholder types)
+// DTOs for impersonation routes (placeholder types).
 type ImpersonationErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 type ImpersonationStartResponse struct {
@@ -232,20 +235,20 @@ type ImpersonationStartResponse struct {
 }
 
 type ImpersonationEndResponse struct {
-	Status  string `json:"status" example:"success"`
+	Status  string `example:"success" json:"status"`
 	EndedAt string `json:"ended_at"`
 }
 
 type ImpersonationSession struct{}
-type ImpersonationListResponse []interface{}
+type ImpersonationListResponse []any
 type ImpersonationVerifyResponse struct {
 	IsImpersonating bool   `json:"is_impersonating"`
 	ImpersonatorID  string `json:"impersonator_id,omitempty"`
 	TargetUserID    string `json:"target_user_id,omitempty"`
 }
-type ImpersonationAuditResponse []interface{}
+type ImpersonationAuditResponse []any
 
-// RegisterHooks registers lifecycle hooks
+// RegisterHooks registers lifecycle hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// Register hooks for impersonation events
 	// For example, you could hook into user login to prevent login during active impersonation
@@ -255,16 +258,16 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators
+// RegisterServiceDecorators registers service decorators.
 func (p *Plugin) RegisterServiceDecorators(serviceRegistry *registry.ServiceRegistry) error {
 	// Impersonation plugin doesn't need to decorate core services
 	return nil
 }
 
-// Migrate runs database migrations for the plugin
+// Migrate runs database migrations for the plugin.
 func (p *Plugin) Migrate() error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	// Migrations will be handled by the main AuthSome migration system
@@ -273,7 +276,7 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// Shutdown gracefully shuts down the plugin
+// Shutdown gracefully shuts down the plugin.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	// Stop cleanup goroutine
 	if p.config.AutoCleanupEnabled {
@@ -283,10 +286,10 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Health checks plugin health
+// Health checks plugin health.
 func (p *Plugin) Health(ctx context.Context) error {
 	if p.service == nil {
-		return fmt.Errorf("service not initialized")
+		return errs.InternalServerErrorWithMessage("service not initialized")
 	}
 
 	// Check if we can query the database
@@ -302,17 +305,17 @@ func (p *Plugin) Health(ctx context.Context) error {
 	return err
 }
 
-// GetService returns the impersonation service for programmatic access
+// GetService returns the impersonation service for programmatic access.
 func (p *Plugin) GetService() *impersonation.Service {
 	return p.service
 }
 
-// GetMiddleware returns the impersonation middleware
+// GetMiddleware returns the impersonation middleware.
 func (p *Plugin) GetMiddleware() *ImpersonationMiddleware {
 	return p.middleware
 }
 
-// runCleanupTask runs a periodic cleanup of expired impersonation sessions
+// runCleanupTask runs a periodic cleanup of expired impersonation sessions.
 func (p *Plugin) runCleanupTask() {
 	ticker := time.NewTicker(p.config.CleanupInterval)
 	defer ticker.Stop()
@@ -322,15 +325,15 @@ func (p *Plugin) runCleanupTask() {
 		case <-ticker.C:
 			p.cleanupExpiredSessions()
 		case <-p.stopCleanup:
-
 			return
 		}
 	}
 }
 
-// cleanupExpiredSessions expires old impersonation sessions
+// cleanupExpiredSessions expires old impersonation sessions.
 func (p *Plugin) cleanupExpiredSessions() {
 	ctx := context.Background()
+
 	count, err := p.service.ExpireSessions(ctx)
 	if err != nil {
 		return

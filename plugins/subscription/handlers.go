@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
 	"github.com/xraph/authsome/plugins/subscription/repository"
@@ -15,20 +16,22 @@ import (
 	"github.com/xraph/forge"
 )
 
-// ctxQueryInt gets an integer query parameter with a default value
+// ctxQueryInt gets an integer query parameter with a default value.
 func ctxQueryInt(c forge.Context, name string, defaultValue int) int {
 	str := c.QueryDefault(name, "")
 	if str == "" {
 		return defaultValue
 	}
+
 	val, err := strconv.Atoi(str)
 	if err != nil {
 		return defaultValue
 	}
+
 	return val
 }
 
-// ctxBody reads the request body
+// ctxBody reads the request body.
 func ctxBody(c forge.Context) ([]byte, error) {
 	return io.ReadAll(c.Request().Body)
 }
@@ -36,10 +39,10 @@ func ctxBody(c forge.Context) ([]byte, error) {
 // Request/Response DTOs
 
 type createPlanRequest struct {
-	Name            string             `json:"name" validate:"required,min=1,max=100"`
-	Slug            string             `json:"slug" validate:"required,min=1,max=50"`
+	Name            string             `json:"name"            validate:"required,min=1,max=100"`
+	Slug            string             `json:"slug"            validate:"required,min=1,max=50"`
 	Description     string             `json:"description"`
-	BillingPattern  string             `json:"billingPattern" validate:"required"`
+	BillingPattern  string             `json:"billingPattern"  validate:"required"`
 	BillingInterval string             `json:"billingInterval" validate:"required"`
 	BasePrice       int64              `json:"basePrice"`
 	Currency        string             `json:"currency"`
@@ -69,7 +72,7 @@ type updatePlanRequest struct {
 
 type createSubscriptionRequest struct {
 	OrganizationID string         `json:"organizationId" validate:"required"`
-	PlanID         string         `json:"planId" validate:"required"`
+	PlanID         string         `json:"planId"         validate:"required"`
 	Quantity       int            `json:"quantity"`
 	StartTrial     bool           `json:"startTrial"`
 	TrialDays      int            `json:"trialDays"`
@@ -94,27 +97,27 @@ type pauseSubscriptionRequest struct {
 
 type recordUsageRequest struct {
 	SubscriptionID string         `json:"subscriptionId" validate:"required"`
-	MetricKey      string         `json:"metricKey" validate:"required"`
-	Quantity       int64          `json:"quantity" validate:"required"`
-	Action         string         `json:"action" validate:"required"`
+	MetricKey      string         `json:"metricKey"      validate:"required"`
+	Quantity       int64          `json:"quantity"       validate:"required"`
+	Action         string         `json:"action"         validate:"required"`
 	Timestamp      *int64         `json:"timestamp"`
 	IdempotencyKey string         `json:"idempotencyKey"`
 	Metadata       map[string]any `json:"metadata"`
 }
 
 type checkoutRequest struct {
-	OrganizationID  string `json:"organizationId" validate:"required"`
-	PlanID          string `json:"planId" validate:"required"`
+	OrganizationID  string `json:"organizationId"  validate:"required"`
+	PlanID          string `json:"planId"          validate:"required"`
 	Quantity        int    `json:"quantity"`
-	SuccessURL      string `json:"successUrl" validate:"required"`
-	CancelURL       string `json:"cancelUrl" validate:"required"`
+	SuccessURL      string `json:"successUrl"      validate:"required"`
+	CancelURL       string `json:"cancelUrl"       validate:"required"`
 	AllowPromoCodes bool   `json:"allowPromoCodes"`
 	TrialDays       int    `json:"trialDays"`
 }
 
 type portalRequest struct {
 	OrganizationID string `json:"organizationId" validate:"required"`
-	ReturnURL      string `json:"returnUrl" validate:"required"`
+	ReturnURL      string `json:"returnUrl"      validate:"required"`
 }
 
 type errorResponse struct {
@@ -124,9 +127,9 @@ type errorResponse struct {
 }
 
 type successResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Message string      `json:"message,omitempty"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // Plan Handlers
@@ -184,7 +187,7 @@ func (p *Plugin) handleListPlans(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"plans": plans,
 		"total": total,
 		"page":  page,
@@ -217,6 +220,7 @@ func (p *Plugin) handleUpdatePlan(c forge.Context) error {
 	}
 
 	var tierMode *core.TierMode
+
 	if req.TierMode != nil {
 		tm := core.TierMode(*req.TierMode)
 		tierMode = &tm
@@ -339,12 +343,14 @@ func (p *Plugin) handleListSubscriptions(c forge.Context) error {
 	status := c.Query("status")
 
 	var orgID, planID *xid.ID
+
 	if orgIDStr := c.Query("organizationId"); orgIDStr != "" {
 		id, err := xid.FromString(orgIDStr)
 		if err == nil {
 			orgID = &id
 		}
 	}
+
 	if planIDStr := c.Query("planId"); planIDStr != "" {
 		id, err := xid.FromString(planIDStr)
 		if err == nil {
@@ -357,7 +363,7 @@ func (p *Plugin) handleListSubscriptions(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"subscriptions": subs,
 		"total":         total,
 		"page":          page,
@@ -404,6 +410,7 @@ func (p *Plugin) handleUpdateSubscription(c forge.Context) error {
 	}
 
 	var planID *xid.ID
+
 	if req.PlanID != nil {
 		id, err := xid.FromString(*req.PlanID)
 		if err == nil {
@@ -518,7 +525,7 @@ func (p *Plugin) handleListAddOns(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"addons": addons,
 		"total":  total,
 		"page":   page,
@@ -551,6 +558,7 @@ func (p *Plugin) handleUpdateAddOn(c forge.Context) error {
 	}
 
 	var tierMode *core.TierMode
+
 	if req.TierMode != nil {
 		tm := core.TierMode(*req.TierMode)
 		tierMode = &tm
@@ -596,12 +604,14 @@ func (p *Plugin) handleListInvoices(c forge.Context) error {
 	status := c.Query("status")
 
 	var orgID, subID *xid.ID
+
 	if orgIDStr := c.Query("organizationId"); orgIDStr != "" {
 		id, err := xid.FromString(orgIDStr)
 		if err == nil {
 			orgID = &id
 		}
 	}
+
 	if subIDStr := c.Query("subscriptionId"); subIDStr != "" {
 		id, err := xid.FromString(subIDStr)
 		if err == nil {
@@ -614,7 +624,7 @@ func (p *Plugin) handleListInvoices(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"invoices": invoices,
 		"total":    total,
 		"page":     page,
@@ -640,11 +650,13 @@ func (p *Plugin) handleSyncInvoices(c forge.Context) error {
 
 	// Get optional subscription ID filter
 	var subID *xid.ID
+
 	if subIDStr := c.Query("subscriptionId"); subIDStr != "" {
 		id, err := xid.FromString(subIDStr)
 		if err != nil {
 			return c.JSON(400, errorResponse{Error: "invalid_id", Message: "invalid subscription ID"})
 		}
+
 		subID = &id
 	}
 
@@ -654,16 +666,18 @@ func (p *Plugin) handleSyncInvoices(c forge.Context) error {
 		return c.JSON(500, errorResponse{Error: "sync_failed", Message: err.Error()})
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"synced":  syncedCount,
 		"message": fmt.Sprintf("Successfully synced %d invoices from Stripe", syncedCount),
 	})
 }
 
-// SyncInvoicesFromStripe syncs invoices from Stripe to the local database (exported for dashboard use)
+// SyncInvoicesFromStripe syncs invoices from Stripe to the local database (exported for dashboard use).
 func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int, error) {
-	var subscriptions []*schema.Subscription
-	var err error
+	var (
+		subscriptions []*schema.Subscription
+		err           error
+	)
 
 	if subID != nil {
 		// Sync for specific subscription
@@ -671,6 +685,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 		if err != nil {
 			return 0, fmt.Errorf("subscription not found: %w", err)
 		}
+
 		subscriptions = []*schema.Subscription{sub}
 	} else {
 		// Sync for all active subscriptions
@@ -679,6 +694,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 			Page:     1,
 			PageSize: 1000,
 		}
+
 		subscriptions, _, err = p.subRepo.List(ctx, filter)
 		if err != nil {
 			return 0, fmt.Errorf("failed to list subscriptions: %w", err)
@@ -686,6 +702,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 	}
 
 	syncedCount := 0
+
 	for _, sub := range subscriptions {
 		if sub.ProviderSubID == "" {
 			continue
@@ -697,6 +714,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 			p.logger.Error("failed to list invoices from provider",
 				forge.F("subscriptionId", sub.ID.String()),
 				forge.F("error", err.Error()))
+
 			continue
 		}
 
@@ -719,9 +737,12 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 					p.logger.Error("failed to update invoice",
 						forge.F("invoiceId", existing.ID.String()),
 						forge.F("error", err.Error()))
+
 					continue
 				}
+
 				syncedCount++
+
 				continue
 			}
 
@@ -729,6 +750,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 			number, err := p.invoiceRepo.GetNextInvoiceNumber(ctx, sub.Plan.AppID)
 			if err != nil {
 				p.logger.Error("failed to generate invoice number", forge.F("error", err.Error()))
+
 				continue
 			}
 
@@ -751,7 +773,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 				ProviderInvoiceID: providerInv.ID,
 				ProviderPDFURL:    providerInv.PDFURL,
 				HostedInvoiceURL:  providerInv.HostedURL,
-				Metadata:          make(map[string]interface{}),
+				Metadata:          make(map[string]any),
 			}
 
 			if providerInv.Status == "paid" {
@@ -762,6 +784,7 @@ func (p *Plugin) SyncInvoicesFromStripe(ctx context.Context, subID *xid.ID) (int
 				p.logger.Error("failed to create invoice",
 					forge.F("providerInvoiceId", providerInv.ID),
 					forge.F("error", err.Error()))
+
 				continue
 			}
 
@@ -878,7 +901,7 @@ func (p *Plugin) handleCreateCheckout(c forge.Context) error {
 		CancelURL:       req.CancelURL,
 		AllowPromoCodes: req.AllowPromoCodes,
 		TrialDays:       req.TrialDays,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"organization_id": orgID.String(),
 			"plan_id":         planID.String(),
 		},
@@ -921,11 +944,13 @@ func (p *Plugin) handleStripeWebhook(c forge.Context) error {
 	if err != nil {
 		return c.JSON(400, errorResponse{Error: "bad_request", Message: "Failed to read request body"})
 	}
+
 	signature := c.Header("Stripe-Signature")
 
 	event, err := p.provider.HandleWebhook(c.Context(), payload, signature)
 	if err != nil {
 		p.logger.Error("webhook verification failed", forge.F("error", err.Error()))
+
 		return c.JSON(400, errorResponse{Error: "webhook_error", Message: err.Error()})
 	}
 
@@ -970,14 +995,14 @@ func (p *Plugin) handleStripeWebhook(c forge.Context) error {
 
 func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *types.WebhookEvent) error {
 	// Extract invoice data from webhook
-	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	invoiceData, ok := event.Data["object"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("invalid invoice data in webhook")
+		return errs.BadRequest("invalid invoice data in webhook")
 	}
 
 	providerInvoiceID, _ := invoiceData["id"].(string)
 	if providerInvoiceID == "" {
-		return fmt.Errorf("missing invoice ID in webhook")
+		return errs.BadRequest("missing invoice ID in webhook")
 	}
 
 	// Check if invoice already exists
@@ -991,6 +1016,7 @@ func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *typ
 	providerSubID, _ := invoiceData["subscription"].(string)
 	if providerSubID == "" {
 		p.logger.Warn("invoice has no subscription", forge.F("invoiceId", providerInvoiceID))
+
 		return nil // Not all invoices are subscription-based
 	}
 
@@ -1015,18 +1041,22 @@ func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *typ
 	if t, ok := invoiceData["total"].(float64); ok {
 		total = int64(t)
 	}
+
 	subtotal := int64(0)
 	if s, ok := invoiceData["subtotal"].(float64); ok {
 		subtotal = int64(s)
 	}
+
 	tax := int64(0)
 	if tx, ok := invoiceData["tax"].(float64); ok {
 		tax = int64(tx)
 	}
+
 	amountDue := int64(0)
 	if a, ok := invoiceData["amount_due"].(float64); ok {
 		amountDue = int64(a)
 	}
+
 	amountPaid := int64(0)
 	if a, ok := invoiceData["amount_paid"].(float64); ok {
 		amountPaid = int64(a)
@@ -1035,6 +1065,7 @@ func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *typ
 	// Parse timestamps
 	periodStart := time.Unix(int64(invoiceData["period_start"].(float64)), 0)
 	periodEnd := time.Unix(int64(invoiceData["period_end"].(float64)), 0)
+
 	dueDate := time.Now().AddDate(0, 0, 14) // Default 14 days
 	if dd, ok := invoiceData["due_date"].(float64); ok && dd > 0 {
 		dueDate = time.Unix(int64(dd), 0)
@@ -1063,7 +1094,7 @@ func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *typ
 		ProviderInvoiceID: providerInvoiceID,
 		ProviderPDFURL:    pdfURL,
 		HostedInvoiceURL:  hostedURL,
-		Metadata:          make(map[string]interface{}),
+		Metadata:          make(map[string]any),
 	}
 
 	// Create invoice in database
@@ -1080,14 +1111,14 @@ func (p *Plugin) handleInvoiceCreatedOrFinalized(ctx context.Context, event *typ
 }
 
 func (p *Plugin) handleInvoicePaid(ctx context.Context, event *types.WebhookEvent) error {
-	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	invoiceData, ok := event.Data["object"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("invalid invoice data in webhook")
+		return errs.BadRequest("invalid invoice data in webhook")
 	}
 
 	providerInvoiceID, _ := invoiceData["id"].(string)
 	if providerInvoiceID == "" {
-		return fmt.Errorf("missing invoice ID in webhook")
+		return errs.BadRequest("missing invoice ID in webhook")
 	}
 
 	// Find invoice by provider ID
@@ -1124,14 +1155,14 @@ func (p *Plugin) handleInvoicePaid(ctx context.Context, event *types.WebhookEven
 }
 
 func (p *Plugin) handleInvoicePaymentFailed(ctx context.Context, event *types.WebhookEvent) error {
-	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	invoiceData, ok := event.Data["object"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("invalid invoice data in webhook")
+		return errs.BadRequest("invalid invoice data in webhook")
 	}
 
 	providerInvoiceID, _ := invoiceData["id"].(string)
 	if providerInvoiceID == "" {
-		return fmt.Errorf("missing invoice ID in webhook")
+		return errs.BadRequest("missing invoice ID in webhook")
 	}
 
 	// Find invoice by provider ID
@@ -1139,6 +1170,7 @@ func (p *Plugin) handleInvoicePaymentFailed(ctx context.Context, event *types.We
 	if err != nil {
 		p.logger.Warn("invoice not found for payment failed event",
 			forge.F("providerInvoiceId", providerInvoiceID))
+
 		return nil
 	}
 
@@ -1161,14 +1193,14 @@ func (p *Plugin) handleInvoicePaymentFailed(ctx context.Context, event *types.We
 }
 
 func (p *Plugin) handleInvoiceUpdated(ctx context.Context, event *types.WebhookEvent) error {
-	invoiceData, ok := event.Data["object"].(map[string]interface{})
+	invoiceData, ok := event.Data["object"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("invalid invoice data in webhook")
+		return errs.BadRequest("invalid invoice data in webhook")
 	}
 
 	providerInvoiceID, _ := invoiceData["id"].(string)
 	if providerInvoiceID == "" {
-		return fmt.Errorf("missing invoice ID in webhook")
+		return errs.BadRequest("missing invoice ID in webhook")
 	}
 
 	// Sync invoice from provider to get latest data
@@ -1238,7 +1270,7 @@ func (p *Plugin) handleCheckFeature(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"feature":   feature,
 		"hasAccess": hasAccess,
 	})
@@ -1271,6 +1303,7 @@ func getAppID(c forge.Context) xid.ID {
 			return id
 		}
 	}
+
 	return xid.ID{}
 }
 
@@ -1278,15 +1311,19 @@ func handleError(c forge.Context, err error) error {
 	if IsNotFoundError(err) {
 		return c.JSON(404, errorResponse{Error: "not_found", Message: err.Error()})
 	}
+
 	if IsValidationError(err) {
 		return c.JSON(400, errorResponse{Error: "validation_error", Message: err.Error()})
 	}
+
 	if IsConflictError(err) {
 		return c.JSON(409, errorResponse{Error: "conflict", Message: err.Error()})
 	}
+
 	if IsLimitError(err) {
 		return c.JSON(403, errorResponse{Error: "limit_exceeded", Message: err.Error()})
 	}
+
 	if IsPaymentError(err) {
 		return c.JSON(402, errorResponse{Error: "payment_required", Message: err.Error()})
 	}
@@ -1294,7 +1331,7 @@ func handleError(c forge.Context, err error) error {
 	return c.JSON(500, errorResponse{Error: "internal_error", Message: err.Error()})
 }
 
-// CheckoutRequest for internal use
+// CheckoutRequest for internal use.
 type CheckoutRequest struct {
 	CustomerID      string
 	PriceID         string
@@ -1303,5 +1340,5 @@ type CheckoutRequest struct {
 	CancelURL       string
 	AllowPromoCodes bool
 	TrialDays       int
-	Metadata        map[string]interface{}
+	Metadata        map[string]any
 }

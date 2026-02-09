@@ -3,20 +3,22 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// SecurityLayer handles authorization and data sanitization for MCP
+// SecurityLayer handles authorization and data sanitization for MCP.
 type SecurityLayer struct {
 	config Config
 	db     *bun.DB
 }
 
-// NewSecurityLayer creates a new security layer
+// NewSecurityLayer creates a new security layer.
 func NewSecurityLayer(config Config, db *bun.DB) *SecurityLayer {
 	return &SecurityLayer{
 		config: config,
@@ -24,7 +26,7 @@ func NewSecurityLayer(config Config, db *bun.DB) *SecurityLayer {
 	}
 }
 
-// AuthorizeRequest checks if a request is authorized
+// AuthorizeRequest checks if a request is authorized.
 func (s *SecurityLayer) AuthorizeRequest(ctx context.Context, operation string, apiKey string) error {
 	// If API key not required (e.g., stdio in dev mode), allow
 	if !s.config.Authorization.RequireAPIKey {
@@ -33,7 +35,7 @@ func (s *SecurityLayer) AuthorizeRequest(ctx context.Context, operation string, 
 
 	// Check if API key provided
 	if apiKey == "" {
-		return fmt.Errorf("API key required but not provided")
+		return errs.BadRequest("API key required but not provided")
 	}
 
 	// Development mode: accept any non-empty key
@@ -44,23 +46,23 @@ func (s *SecurityLayer) AuthorizeRequest(ctx context.Context, operation string, 
 	// Validate API key against database
 	if s.db != nil {
 		var key schema.APIKey
+
 		err := s.db.NewSelect().
 			Model(&key).
 			Where("key = ?", apiKey).
 			Scan(ctx)
-
 		if err != nil {
-			return fmt.Errorf("invalid API key")
+			return errs.BadRequest("invalid API key")
 		}
 
 		// Check if key is active
 		if !key.Active {
-			return fmt.Errorf("API key is inactive")
+			return errs.BadRequest("API key is inactive")
 		}
 
 		// Check if key is expired
 		if key.ExpiresAt != nil && key.ExpiresAt.Before(time.Now()) {
-			return fmt.Errorf("API key has expired")
+			return errs.BadRequest("API key has expired")
 		}
 
 		// Check if key has MCP scope/permission
@@ -77,49 +79,49 @@ func (s *SecurityLayer) AuthorizeRequest(ctx context.Context, operation string, 
 		return nil
 	}
 
-	return fmt.Errorf("API key validation requires database connection")
+	return errs.InternalServerErrorWithMessage("API key validation requires database connection")
 }
 
-// hasPermission checks if API key has permission for operation
+// hasPermission checks if API key has permission for operation.
 func (s *SecurityLayer) hasPermission(key *schema.APIKey, operation string) bool {
 	// API keys have a Permissions map[string]string field
 	// Check for admin permissions
 	if _, hasAdmin := key.Permissions["mcp:admin"]; hasAdmin {
 		return true
 	}
+
 	if _, hasAdmin := key.Permissions["admin"]; hasAdmin {
 		return true
 	}
 
 	// Check if operation requires admin
-	for _, adminOp := range s.config.Authorization.AdminOperations {
-		if adminOp == operation {
-			// Operation requires admin but key doesn't have it
-			_, hasAdmin := key.Permissions["mcp:admin"]
-			return hasAdmin
-		}
+	if slices.Contains(s.config.Authorization.AdminOperations, operation) {
+		// Operation requires admin but key doesn't have it
+		_, hasAdmin := key.Permissions["mcp:admin"]
+
+		return hasAdmin
 	}
 
 	// For read operations, mcp:read is sufficient
 	if strings.HasPrefix(operation, "query_") || strings.HasPrefix(operation, "get_") || strings.HasPrefix(operation, "list_") {
 		_, hasRead := key.Permissions["mcp:read"]
 		_, hasAdmin := key.Permissions["mcp:admin"]
+
 		return hasRead || hasAdmin
 	}
 
 	// For write operations, need mcp:write or mcp:admin
 	_, hasWrite := key.Permissions["mcp:write"]
 	_, hasAdmin := key.Permissions["mcp:admin"]
+
 	return hasWrite || hasAdmin
 }
 
-// CheckOperationAllowed checks if operation is allowed in current mode
+// CheckOperationAllowed checks if operation is allowed in current mode.
 func (s *SecurityLayer) CheckOperationAllowed(operation string) error {
 	// Check if operation is in allowed list
-	for _, allowed := range s.config.Authorization.AllowedOperations {
-		if allowed == operation {
-			return nil
-		}
+	if slices.Contains(s.config.Authorization.AllowedOperations, operation) {
+		return nil
 	}
 
 	// Check if it's an admin operation
@@ -129,6 +131,7 @@ func (s *SecurityLayer) CheckOperationAllowed(operation string) error {
 			if s.config.Mode == ModeAdmin || s.config.Mode == ModeDevelopment {
 				return nil
 			}
+
 			return fmt.Errorf("operation %s requires admin mode", operation)
 		}
 	}
@@ -136,8 +139,8 @@ func (s *SecurityLayer) CheckOperationAllowed(operation string) error {
 	return fmt.Errorf("operation %s not allowed", operation)
 }
 
-// SanitizeData removes sensitive information from data
-func (s *SecurityLayer) SanitizeData(data interface{}, dataType string) interface{} {
+// SanitizeData removes sensitive information from data.
+func (s *SecurityLayer) SanitizeData(data any, dataType string) any {
 	// Type-specific sanitization
 	switch dataType {
 	case "user":
@@ -151,9 +154,9 @@ func (s *SecurityLayer) SanitizeData(data interface{}, dataType string) interfac
 	}
 }
 
-// sanitizeUser removes sensitive user fields
-func (s *SecurityLayer) sanitizeUser(data interface{}) interface{} {
-	userMap, ok := data.(map[string]interface{})
+// sanitizeUser removes sensitive user fields.
+func (s *SecurityLayer) sanitizeUser(data any) any {
+	userMap, ok := data.(map[string]any)
 	if !ok {
 		return data
 	}
@@ -190,9 +193,9 @@ func (s *SecurityLayer) sanitizeUser(data interface{}) interface{} {
 	return userMap
 }
 
-// sanitizeSession removes sensitive session fields
-func (s *SecurityLayer) sanitizeSession(data interface{}) interface{} {
-	sessionMap, ok := data.(map[string]interface{})
+// sanitizeSession removes sensitive session fields.
+func (s *SecurityLayer) sanitizeSession(data any) any {
+	sessionMap, ok := data.(map[string]any)
 	if !ok {
 		return data
 	}
@@ -205,9 +208,9 @@ func (s *SecurityLayer) sanitizeSession(data interface{}) interface{} {
 	return sessionMap
 }
 
-// sanitizeConfig removes secrets from configuration
-func (s *SecurityLayer) sanitizeConfig(data interface{}) interface{} {
-	configMap, ok := data.(map[string]interface{})
+// sanitizeConfig removes secrets from configuration.
+func (s *SecurityLayer) sanitizeConfig(data any) any {
+	configMap, ok := data.(map[string]any)
 	if !ok {
 		return data
 	}
@@ -222,11 +225,12 @@ func (s *SecurityLayer) sanitizeConfig(data interface{}) interface{} {
 			strings.Contains(keyLower, "token") ||
 			(strings.Contains(keyLower, "key") && !strings.Contains(keyLower, "public")) {
 			configMap[key] = "[REDACTED]"
+
 			continue
 		}
 
 		// Recursively sanitize nested objects
-		if nestedMap, ok := val.(map[string]interface{}); ok {
+		if nestedMap, ok := val.(map[string]any); ok {
 			configMap[key] = s.sanitizeConfig(nestedMap)
 		}
 	}
@@ -234,7 +238,7 @@ func (s *SecurityLayer) sanitizeConfig(data interface{}) interface{} {
 	return configMap
 }
 
-// maskString masks part of a string (e.g., email, phone)
+// maskString masks part of a string (e.g., email, phone).
 func maskString(s string) string {
 	if len(s) <= 4 {
 		return "***"
@@ -244,7 +248,7 @@ func maskString(s string) string {
 	return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
 }
 
-// maskIP partially masks an IP address
+// maskIP partially masks an IP address.
 func maskIP(ip string) string {
 	parts := strings.Split(ip, ".")
 	if len(parts) == 4 {

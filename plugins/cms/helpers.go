@@ -3,12 +3,13 @@ package cms
 import (
 	"fmt"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/cms/service"
 	"github.com/xraph/forge"
 	"github.com/xraph/vessel"
 )
 
-// Service name constants for DI container registration
+// Service name constants for DI container registration.
 const (
 	ServiceNamePlugin                 = "cms.plugin"
 	ServiceNameContentTypeService     = "cms.content_type_service"
@@ -18,7 +19,7 @@ const (
 	ServiceNameComponentSchemaService = "cms.component_schema_service"
 )
 
-// ResolveCMSPlugin resolves the CMS plugin from the container
+// ResolveCMSPlugin resolves the CMS plugin from the container.
 func ResolveCMSPlugin(container forge.Container) (*Plugin, error) {
 	plugin, err := vessel.InjectType[*Plugin](container)
 	if plugin != nil {
@@ -29,14 +30,16 @@ func ResolveCMSPlugin(container forge.Container) (*Plugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve CMS plugin: %w", err)
 	}
+
 	plugin, ok := resolved.(*Plugin)
 	if !ok {
-		return nil, fmt.Errorf("invalid CMS plugin type")
+		return nil, errs.BadRequest("invalid CMS plugin type")
 	}
+
 	return plugin, nil
 }
 
-// ResolveContentTypeService resolves the content type service from the container
+// ResolveContentTypeService resolves the content type service from the container.
 func ResolveContentTypeService(container forge.Container) (*service.ContentTypeService, error) {
 	svc, err := vessel.InjectType[*service.ContentTypeService](container)
 	if svc != nil {
@@ -47,14 +50,16 @@ func ResolveContentTypeService(container forge.Container) (*service.ContentTypeS
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve content type service: %w", err)
 	}
+
 	svc, ok := resolved.(*service.ContentTypeService)
 	if !ok {
-		return nil, fmt.Errorf("invalid content type service type")
+		return nil, errs.BadRequest("invalid content type service type")
 	}
+
 	return svc, nil
 }
 
-// ResolveFieldService resolves the content field service from the container
+// ResolveFieldService resolves the content field service from the container.
 func ResolveFieldService(container forge.Container) (*service.ContentFieldService, error) {
 	svc, err := vessel.InjectType[*service.ContentFieldService](container)
 	if svc != nil {
@@ -65,14 +70,16 @@ func ResolveFieldService(container forge.Container) (*service.ContentFieldServic
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve field service: %w", err)
 	}
+
 	svc, ok := resolved.(*service.ContentFieldService)
 	if !ok {
-		return nil, fmt.Errorf("invalid field service type")
+		return nil, errs.BadRequest("invalid field service type")
 	}
+
 	return svc, nil
 }
 
-// ResolveEntryService resolves the content entry service from the container
+// ResolveEntryService resolves the content entry service from the container.
 func ResolveEntryService(container forge.Container) (*service.ContentEntryService, error) {
 	svc, err := vessel.InjectType[*service.ContentEntryService](container)
 	if svc != nil {
@@ -83,14 +90,16 @@ func ResolveEntryService(container forge.Container) (*service.ContentEntryServic
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve entry service: %w", err)
 	}
+
 	svc, ok := resolved.(*service.ContentEntryService)
 	if !ok {
-		return nil, fmt.Errorf("invalid entry service type")
+		return nil, errs.BadRequest("invalid entry service type")
 	}
+
 	return svc, nil
 }
 
-// ResolveRevisionService resolves the revision service from the container
+// ResolveRevisionService resolves the revision service from the container.
 func ResolveRevisionService(container forge.Container) (*service.RevisionService, error) {
 	svc, err := vessel.InjectType[*service.RevisionService](container)
 	if svc != nil {
@@ -101,14 +110,16 @@ func ResolveRevisionService(container forge.Container) (*service.RevisionService
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve revision service: %w", err)
 	}
+
 	svc, ok := resolved.(*service.RevisionService)
 	if !ok {
-		return nil, fmt.Errorf("invalid revision service type")
+		return nil, errs.BadRequest("invalid revision service type")
 	}
+
 	return svc, nil
 }
 
-// ResolveComponentSchemaService resolves the component schema service from the container
+// ResolveComponentSchemaService resolves the component schema service from the container.
 func ResolveComponentSchemaService(container forge.Container) (*service.ComponentSchemaService, error) {
 	svc, err := vessel.InjectType[*service.ComponentSchemaService](container)
 	if svc != nil {
@@ -119,15 +130,17 @@ func ResolveComponentSchemaService(container forge.Container) (*service.Componen
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve component schema service: %w", err)
 	}
+
 	svc, ok := resolved.(*service.ComponentSchemaService)
 	if !ok {
-		return nil, fmt.Errorf("invalid component schema service type")
+		return nil, errs.BadRequest("invalid component schema service type")
 	}
+
 	return svc, nil
 }
 
 // RegisterServices registers all CMS services in the DI container
-// Uses vessel.ProvideConstructor for type-safe, constructor-based dependency injection
+// Uses vessel.ProvideConstructor for type-safe, constructor-based dependency injection.
 func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register plugin itself
 	if err := forge.ProvideConstructor(container, func() (*Plugin, error) {
@@ -139,8 +152,9 @@ func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register content type service
 	if err := forge.ProvideConstructor(container, func() (*service.ContentTypeService, error) {
 		if p.contentTypeSvc == nil {
-			return nil, fmt.Errorf("content type service not initialized")
+			return nil, errs.InternalServerErrorWithMessage("content type service not initialized")
 		}
+
 		return p.contentTypeSvc, nil
 	}, vessel.WithAliases(ServiceNameContentTypeService)); err != nil {
 		return fmt.Errorf("failed to register content type service: %w", err)
@@ -149,8 +163,9 @@ func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register field service
 	if err := forge.ProvideConstructor(container, func() (*service.ContentFieldService, error) {
 		if p.fieldSvc == nil {
-			return nil, fmt.Errorf("field service not initialized")
+			return nil, errs.InternalServerErrorWithMessage("field service not initialized")
 		}
+
 		return p.fieldSvc, nil
 	}, vessel.WithAliases(ServiceNameFieldService)); err != nil {
 		return fmt.Errorf("failed to register field service: %w", err)
@@ -159,8 +174,9 @@ func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register entry service
 	if err := forge.ProvideConstructor(container, func() (*service.ContentEntryService, error) {
 		if p.entrySvc == nil {
-			return nil, fmt.Errorf("entry service not initialized")
+			return nil, errs.InternalServerErrorWithMessage("entry service not initialized")
 		}
+
 		return p.entrySvc, nil
 	}, vessel.WithAliases(ServiceNameEntryService)); err != nil {
 		return fmt.Errorf("failed to register entry service: %w", err)
@@ -169,8 +185,9 @@ func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register revision service
 	if err := forge.ProvideConstructor(container, func() (*service.RevisionService, error) {
 		if p.revisionSvc == nil {
-			return nil, fmt.Errorf("revision service not initialized")
+			return nil, errs.InternalServerErrorWithMessage("revision service not initialized")
 		}
+
 		return p.revisionSvc, nil
 	}, vessel.WithAliases(ServiceNameRevisionService)); err != nil {
 		return fmt.Errorf("failed to register revision service: %w", err)
@@ -179,8 +196,9 @@ func (p *Plugin) RegisterServices(container forge.Container) error {
 	// Register component schema service
 	if err := forge.ProvideConstructor(container, func() (*service.ComponentSchemaService, error) {
 		if p.componentSchemaSvc == nil {
-			return nil, fmt.Errorf("component schema service not initialized")
+			return nil, errs.InternalServerErrorWithMessage("component schema service not initialized")
 		}
+
 		return p.componentSchemaSvc, nil
 	}, vessel.WithAliases(ServiceNameComponentSchemaService)); err != nil {
 		return fmt.Errorf("failed to register component schema service: %w", err)
@@ -189,9 +207,9 @@ func (p *Plugin) RegisterServices(container forge.Container) error {
 	return nil
 }
 
-// GetServices returns a map of all available services for inspection
-func (p *Plugin) GetServices() map[string]interface{} {
-	return map[string]interface{}{
+// GetServices returns a map of all available services for inspection.
+func (p *Plugin) GetServices() map[string]any {
+	return map[string]any{
 		"contentTypeService":     p.contentTypeSvc,
 		"fieldService":           p.fieldSvc,
 		"entryService":           p.entrySvc,
@@ -200,27 +218,27 @@ func (p *Plugin) GetServices() map[string]interface{} {
 	}
 }
 
-// GetContentTypeService returns the content type service directly
+// GetContentTypeService returns the content type service directly.
 func (p *Plugin) GetContentTypeService() *service.ContentTypeService {
 	return p.contentTypeSvc
 }
 
-// GetFieldService returns the content field service directly
+// GetFieldService returns the content field service directly.
 func (p *Plugin) GetFieldService() *service.ContentFieldService {
 	return p.fieldSvc
 }
 
-// GetEntryService returns the content entry service directly
+// GetEntryService returns the content entry service directly.
 func (p *Plugin) GetEntryService() *service.ContentEntryService {
 	return p.entrySvc
 }
 
-// GetRevisionService returns the revision service directly
+// GetRevisionService returns the revision service directly.
 func (p *Plugin) GetRevisionService() *service.RevisionService {
 	return p.revisionSvc
 }
 
-// GetComponentSchemaService returns the component schema service directly
+// GetComponentSchemaService returns the component schema service directly.
 func (p *Plugin) GetComponentSchemaService() *service.ComponentSchemaService {
 	return p.componentSchemaSvc
 }

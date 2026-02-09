@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/xid"
@@ -11,22 +12,23 @@ import (
 	"github.com/xraph/authsome/core/notification"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// AuditServiceAdapter adapts AuthSome's audit service to compliance service expectations
+// AuditServiceAdapter adapts AuthSome's audit service to compliance service expectations.
 type AuditServiceAdapter struct {
 	svc *audit.Service
 }
 
-// NewAuditServiceAdapter creates a new audit service adapter
+// NewAuditServiceAdapter creates a new audit service adapter.
 func NewAuditServiceAdapter(svc *audit.Service) *AuditServiceAdapter {
 	return &AuditServiceAdapter{svc: svc}
 }
 
-// LogEvent logs a compliance audit event
+// LogEvent logs a compliance audit event.
 func (a *AuditServiceAdapter) LogEvent(ctx context.Context, event *AuditEvent) error {
 	if a.svc == nil {
-		return fmt.Errorf("audit service not available")
+		return errs.InternalServerErrorWithMessage("audit service not available")
 	}
 
 	// Convert metadata map to JSON string
@@ -48,10 +50,10 @@ func (a *AuditServiceAdapter) LogEvent(ctx context.Context, event *AuditEvent) e
 	)
 }
 
-// GetOldestLog retrieves the oldest audit log for data retention checks
+// GetOldestLog retrieves the oldest audit log for data retention checks.
 func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, appID string) (*AuditLog, error) {
 	if a.svc == nil {
-		return nil, fmt.Errorf("audit service not available")
+		return nil, errs.InternalServerErrorWithMessage("audit service not available")
 	}
 
 	// Query oldest audit event
@@ -60,6 +62,7 @@ func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, appID string) (*
 	filter := &audit.ListEventsFilter{
 		PaginationParams: pagination.PaginationParams{Limit: 1, Offset: 0},
 	}
+
 	eventsResp, err := a.svc.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -75,20 +78,20 @@ func (a *AuditServiceAdapter) GetOldestLog(ctx context.Context, appID string) (*
 	}, nil
 }
 
-// UserServiceAdapter adapts AuthSome's user service to compliance service expectations
+// UserServiceAdapter adapts AuthSome's user service to compliance service expectations.
 type UserServiceAdapter struct {
 	svc user.ServiceInterface // Use interface to support decorated services
 }
 
-// NewUserServiceAdapter creates a new user service adapter
+// NewUserServiceAdapter creates a new user service adapter.
 func NewUserServiceAdapter(svc user.ServiceInterface) *UserServiceAdapter {
 	return &UserServiceAdapter{svc: svc}
 }
 
-// ListByApp retrieves all users in an app
+// ListByApp retrieves all users in an app.
 func (a *UserServiceAdapter) ListByApp(ctx context.Context, appID string) ([]*User, error) {
 	if a.svc == nil {
-		return nil, fmt.Errorf("user service not available")
+		return nil, errs.InternalServerErrorWithMessage("user service not available")
 	}
 
 	// TODO: Update when multiapp plugin provides app-scoped user listing
@@ -96,10 +99,10 @@ func (a *UserServiceAdapter) ListByApp(ctx context.Context, appID string) ([]*Us
 	return []*User{}, nil
 }
 
-// GetMFAStatus checks if a user has MFA enabled
+// GetMFAStatus checks if a user has MFA enabled.
 func (a *UserServiceAdapter) GetMFAStatus(ctx context.Context, userID string) (bool, error) {
 	if a.svc == nil {
-		return false, fmt.Errorf("user service not available")
+		return false, errs.InternalServerErrorWithMessage("user service not available")
 	}
 
 	// Parse user ID
@@ -118,20 +121,21 @@ func (a *UserServiceAdapter) GetMFAStatus(ctx context.Context, userID string) (b
 	// For now, return false
 	// TODO: Check u.MFAEnabled or similar field when available
 	_ = u
+
 	return false, nil
 }
 
-// AppServiceAdapter adapts the app service (from multiapp plugin)
+// AppServiceAdapter adapts the app service (from multiapp plugin).
 type AppServiceAdapter struct {
-	svc interface{} // Will be app.Service when multiapp plugin is loaded
+	svc any // Will be app.Service when multiapp plugin is loaded
 }
 
-// NewAppServiceAdapter creates a new app service adapter
-func NewAppServiceAdapter(svc interface{}) *AppServiceAdapter {
+// NewAppServiceAdapter creates a new app service adapter.
+func NewAppServiceAdapter(svc any) *AppServiceAdapter {
 	return &AppServiceAdapter{svc: svc}
 }
 
-// Get retrieves an app by ID
+// Get retrieves an app by ID.
 func (a *AppServiceAdapter) Get(ctx context.Context, id string) (*App, error) {
 	if a.svc == nil {
 		// Multiapp plugin not loaded - return default app
@@ -149,17 +153,17 @@ func (a *AppServiceAdapter) Get(ctx context.Context, id string) (*App, error) {
 	}, nil
 }
 
-// EmailServiceAdapter adapts the notification service for email sending
+// EmailServiceAdapter adapts the notification service for email sending.
 type EmailServiceAdapter struct {
 	svc *notification.Service
 }
 
-// NewEmailServiceAdapter creates a new email service adapter
+// NewEmailServiceAdapter creates a new email service adapter.
 func NewEmailServiceAdapter(svc *notification.Service) *EmailServiceAdapter {
 	return &EmailServiceAdapter{svc: svc}
 }
 
-// SendEmail sends an email using the notification service
+// SendEmail sends an email using the notification service.
 func (a *EmailServiceAdapter) SendEmail(ctx context.Context, email *Email) error {
 	if a.svc == nil {
 		// Email service not available - log and continue
@@ -173,15 +177,17 @@ func (a *EmailServiceAdapter) SendEmail(ctx context.Context, email *Email) error
 	return nil
 }
 
-// SendCompliance sends a compliance-related email (convenience method)
+// SendCompliance sends a compliance-related email (convenience method).
 func (a *EmailServiceAdapter) SendCompliance(ctx context.Context, to []string, subject, body string) error {
 	// Join recipients into a comma-separated string
 	toStr := ""
 	if len(to) > 0 {
 		toStr = to[0]
+		var toStrSb182 strings.Builder
 		for i := 1; i < len(to); i++ {
-			toStr += ", " + to[i]
+			toStrSb182.WriteString(", " + to[i])
 		}
+		toStr += toStrSb182.String()
 	}
 
 	return a.SendEmail(ctx, &Email{
@@ -191,13 +197,13 @@ func (a *EmailServiceAdapter) SendCompliance(ctx context.Context, to []string, s
 	})
 }
 
-// SendViolationAlert sends an alert about a compliance violation
+// SendViolationAlert sends an alert about a compliance violation.
 func (a *EmailServiceAdapter) SendViolationAlert(ctx context.Context, violation *ComplianceViolation, recipients []string) error {
 	if a.svc == nil {
 		return nil
 	}
 
-	subject := fmt.Sprintf("Compliance Violation: %s", violation.ViolationType)
+	subject := "Compliance Violation: " + violation.ViolationType
 	body := fmt.Sprintf(`
 A compliance violation has been detected:
 
@@ -212,13 +218,13 @@ Please review and take action.
 	return a.SendCompliance(ctx, recipients, subject, body)
 }
 
-// SendCheckFailure sends an alert about a failed compliance check
+// SendCheckFailure sends an alert about a failed compliance check.
 func (a *EmailServiceAdapter) SendCheckFailure(ctx context.Context, check *ComplianceCheck, recipients []string) error {
 	if a.svc == nil {
 		return nil
 	}
 
-	subject := fmt.Sprintf("Compliance Check Failed: %s", check.CheckType)
+	subject := "Compliance Check Failed: " + check.CheckType
 	body := fmt.Sprintf(`
 A compliance check has failed:
 

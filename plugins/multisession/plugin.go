@@ -1,7 +1,6 @@
 package multisession
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/uptrace/bun"
@@ -15,11 +14,12 @@ import (
 	"github.com/xraph/authsome/core/ui"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/core/webhook"
+	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 )
 
-// Plugin wires the multi-session service and registers routes
+// Plugin wires the multi-session service and registers routes.
 type Plugin struct {
 	db                     *bun.DB
 	service                *Service
@@ -30,7 +30,7 @@ type Plugin struct {
 	dashboardExtensionOnce sync.Once
 }
 
-// Config holds the multisession plugin configuration
+// Config holds the multisession plugin configuration.
 type Config struct {
 	// MaxSessionsPerUser is the maximum concurrent sessions per user
 	MaxSessionsPerUser int `json:"maxSessionsPerUser"`
@@ -42,7 +42,7 @@ type Config struct {
 	AllowCrossPlatform bool `json:"allowCrossPlatform"`
 }
 
-// DefaultConfig returns the default multisession plugin configuration
+// DefaultConfig returns the default multisession plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		MaxSessionsPerUser:   10,
@@ -52,45 +52,45 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the multisession plugin
+// PluginOption is a functional option for configuring the multisession plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithMaxSessionsPerUser sets the maximum concurrent sessions per user
+// WithMaxSessionsPerUser sets the maximum concurrent sessions per user.
 func WithMaxSessionsPerUser(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxSessionsPerUser = max
 	}
 }
 
-// WithEnableDeviceTracking sets whether device tracking is enabled
+// WithEnableDeviceTracking sets whether device tracking is enabled.
 func WithEnableDeviceTracking(enable bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnableDeviceTracking = enable
 	}
 }
 
-// WithSessionExpiryHours sets the session expiry time
+// WithSessionExpiryHours sets the session expiry time.
 func WithSessionExpiryHours(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SessionExpiryHours = hours
 	}
 }
 
-// WithAllowCrossPlatform sets whether cross-platform sessions are allowed
+// WithAllowCrossPlatform sets whether cross-platform sessions are allowed.
 func WithAllowCrossPlatform(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowCrossPlatform = allow
 	}
 }
 
-// NewPlugin creates a new multisession plugin instance with optional configuration
+// NewPlugin creates a new multisession plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -107,21 +107,21 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 
 func (p *Plugin) ID() string { return "multisession" }
 
-// Init accepts auth instance with GetDB method
+// Init accepts auth instance with GetDB method.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("multisession plugin requires auth instance")
+		return errs.BadRequest("multisession plugin requires auth instance")
 	}
 
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for multisession plugin")
+		return errs.InternalServerErrorWithMessage("database not available for multisession plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for multisession plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for multisession plugin")
 	}
 
 	// Initialize logger
@@ -163,7 +163,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes mounts endpoints under /api/auth/multi-session
+// RegisterRoutes mounts endpoints under /api/auth/multi-session.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
@@ -257,12 +257,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Failed to retrieve statistics", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
 	)
+
 	return nil
 }
 
-// Response types for multi-session routes
+// Response types for multi-session routes.
 type MultiSessionErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
 // Note: SessionTokenResponse, StatusResponse, RevokeResponse, and SessionStatsResponse
@@ -273,20 +274,22 @@ func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 func (p *Plugin) Migrate() error                                              { return nil }
 
-// GetAuthService returns the auth service for testing
+// GetAuthService returns the auth service for testing.
 func (p *Plugin) GetAuthService() *auth.Service {
 	if p.service == nil {
 		return nil
 	}
+
 	return p.service.auth
 }
 
 // DashboardExtension implements the PluginWithDashboardExtension interface
 // This allows the multisession plugin to extend the dashboard with custom screens
-// Uses lazy initialization to ensure plugin is fully initialized before creating extension
+// Uses lazy initialization to ensure plugin is fully initialized before creating extension.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtensionOnce.Do(func() {
 		p.dashboardExtension = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExtension
 }

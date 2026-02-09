@@ -21,10 +21,11 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/repository"
 	"github.com/xraph/authsome/plugins/subscription/schema"
 	"github.com/xraph/authsome/plugins/subscription/service"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the subscription plugin for AuthSome
+// Plugin implements the subscription plugin for AuthSome.
 type Plugin struct {
 	db     *bun.DB
 	config Config
@@ -91,38 +92,38 @@ type Plugin struct {
 	paymentHandlers *handlers.PaymentHandlers
 }
 
-// PluginOption is a functional option for configuring the plugin
+// PluginOption is a functional option for configuring the plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithRequireSubscription sets whether subscription is required for org creation
+// WithRequireSubscription sets whether subscription is required for org creation.
 func WithRequireSubscription(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireSubscription = required
 	}
 }
 
-// WithDefaultTrialDays sets the default trial days
+// WithDefaultTrialDays sets the default trial days.
 func WithDefaultTrialDays(days int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DefaultTrialDays = days
 	}
 }
 
-// WithGracePeriodDays sets the grace period for failed payments
+// WithGracePeriodDays sets the grace period for failed payments.
 func WithGracePeriodDays(days int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.GracePeriodDays = days
 	}
 }
 
-// WithStripeConfig sets the Stripe configuration
+// WithStripeConfig sets the Stripe configuration.
 func WithStripeConfig(secretKey, webhookSecret, publishableKey string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Provider = "stripe"
@@ -134,14 +135,14 @@ func WithStripeConfig(secretKey, webhookSecret, publishableKey string) PluginOpt
 	}
 }
 
-// WithAutoSyncSeats enables automatic seat synchronization
+// WithAutoSyncSeats enables automatic seat synchronization.
 func WithAutoSyncSeats(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoSyncSeats = enabled
 	}
 }
 
-// WithAutoSyncPlans enables automatic plan synchronization to payment provider on create/update
+// WithAutoSyncPlans enables automatic plan synchronization to payment provider on create/update.
 func WithAutoSyncPlans(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoSyncPlans = enabled
@@ -149,14 +150,14 @@ func WithAutoSyncPlans(enabled bool) PluginOption {
 }
 
 // WithProvider sets a custom payment provider implementation
-// This allows users to inject their own provider instead of using Stripe or mock provider
+// This allows users to inject their own provider instead of using Stripe or mock provider.
 func WithProvider(provider providers.PaymentProvider) PluginOption {
 	return func(p *Plugin) {
 		p.customProvider = provider
 	}
 }
 
-// NewPlugin creates a new subscription plugin instance
+// NewPlugin creates a new subscription plugin instance.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		defaultConfig:   DefaultConfig(),
@@ -171,26 +172,26 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the unique identifier for this plugin
+// ID returns the unique identifier for this plugin.
 func (p *Plugin) ID() string {
 	return "subscription"
 }
 
-// Dependencies declares the plugin dependencies
+// Dependencies declares the plugin dependencies.
 func (p *Plugin) Dependencies() []string {
 	return []string{"organization"}
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
-		return fmt.Errorf("subscription plugin requires auth instance")
+		return errs.BadRequest("subscription plugin requires auth instance")
 	}
 
 	// Get Forge app
 	forgeApp := authInstance.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available")
+		return errs.InternalServerErrorWithMessage("forge app not available")
 	}
 
 	p.logger = forgeApp.Logger().With(forge.F("plugin", "subscription"))
@@ -210,7 +211,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Get database
 	p.db = authInstance.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available")
+		return errs.InternalServerErrorWithMessage("database not available")
 	}
 
 	// Register schema models with Bun
@@ -241,13 +242,13 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	// Get hook registry
 	p.hookRegistry = authInstance.GetHookRegistry()
 	if p.hookRegistry == nil {
-		return fmt.Errorf("hook registry not available")
+		return errs.InternalServerErrorWithMessage("hook registry not available")
 	}
 
 	// Get service registry
 	serviceRegistry := authInstance.GetServiceRegistry()
 	if serviceRegistry == nil {
-		return fmt.Errorf("service registry not available")
+		return errs.InternalServerErrorWithMessage("service registry not available")
 	}
 
 	// Get organization service for enforcement
@@ -277,6 +278,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.logger.Info("using custom payment provider")
 	} else if p.config.IsStripeConfigured() {
 		var err error
+
 		p.provider, err = stripe.NewStripeProvider(
 			p.config.StripeConfig.SecretKey,
 			p.config.StripeConfig.WebhookSecret,
@@ -360,7 +362,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Plan routes
 	planGroup := router.Group("/subscription/plans")
@@ -670,7 +672,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers hooks for the subscription plugin
+// RegisterHooks registers hooks for the subscription plugin.
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	// Register enforcement hooks
 	if p.config.RequireSubscription {
@@ -683,7 +685,7 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators registers service decorators
+// RegisterServiceDecorators registers service decorators.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Register subscription services in the service registry for DI access
 	// This allows other plugins and components to retrieve subscription services
@@ -691,48 +693,63 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 	if err := services.Register(ServiceNamePlanService, p.planSvc); err != nil {
 		p.logger.Warn("failed to register plan service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameSubService, p.subscriptionSvc); err != nil {
 		p.logger.Warn("failed to register subscription service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameAddOnService, p.addOnSvc); err != nil {
 		p.logger.Warn("failed to register addon service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameInvoiceService, p.invoiceSvc); err != nil {
 		p.logger.Warn("failed to register invoice service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameUsageService, p.usageSvc); err != nil {
 		p.logger.Warn("failed to register usage service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNamePaymentService, p.paymentSvc); err != nil {
 		p.logger.Warn("failed to register payment service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameCustomerService, p.customerSvc); err != nil {
 		p.logger.Warn("failed to register customer service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameEnforcementService, p.enforcementSvc); err != nil {
 		p.logger.Warn("failed to register enforcement service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameFeatureService, p.featureSvc); err != nil {
 		p.logger.Warn("failed to register feature service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameFeatureUsageService, p.featureUsageSvc); err != nil {
 		p.logger.Warn("failed to register feature usage service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameAlertService, p.alertSvc); err != nil {
 		p.logger.Warn("failed to register alert service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameAnalyticsService, p.analyticsSvc); err != nil {
 		p.logger.Warn("failed to register analytics service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameCouponService, p.couponSvc); err != nil {
 		p.logger.Warn("failed to register coupon service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameCurrencyService, p.currencySvc); err != nil {
 		p.logger.Warn("failed to register currency service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameTaxService, p.taxSvc); err != nil {
 		p.logger.Warn("failed to register tax service", forge.F("error", err.Error()))
 	}
+
 	if err := services.Register(ServiceNameHookRegistry, p.subHookRegistry); err != nil {
 		p.logger.Warn("failed to register subscription hook registry", forge.F("error", err.Error()))
 	}
@@ -740,11 +757,11 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 	return nil
 }
 
-// RegisterRoles implements the PluginWithRoles interface
-func (p *Plugin) RegisterRoles(reg interface{}) error {
+// RegisterRoles implements the PluginWithRoles interface.
+func (p *Plugin) RegisterRoles(reg any) error {
 	roleRegistry, ok := reg.(*rbac.RoleRegistry)
 	if !ok {
-		return fmt.Errorf("invalid role registry type")
+		return errs.BadRequest("invalid role registry type")
 	}
 
 	// Register subscription admin role
@@ -784,20 +801,21 @@ func (p *Plugin) RegisterRoles(reg interface{}) error {
 	return nil
 }
 
-// DashboardExtension returns the dashboard extension
+// DashboardExtension returns the dashboard extension.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtOnce.Do(func() {
 		p.dashboardExt = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExt
 }
 
-// Migrate runs database migrations for the subscription plugin
+// Migrate runs database migrations for the subscription plugin.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
 	// Create tables
-	tables := []interface{}{
+	tables := []any{
 		(*schema.SubscriptionPlan)(nil),
 		(*schema.SubscriptionPlanFeature)(nil),
 		(*schema.SubscriptionPlanTier)(nil),
@@ -831,105 +849,106 @@ func (p *Plugin) Migrate() error {
 	}
 
 	p.logger.Info("subscription plugin migrations completed")
+
 	return nil
 }
 
-// GetPlanService returns the plan service
+// GetPlanService returns the plan service.
 func (p *Plugin) GetPlanService() *service.PlanService {
 	return p.planSvc
 }
 
-// GetSubscriptionService returns the subscription service
+// GetSubscriptionService returns the subscription service.
 func (p *Plugin) GetSubscriptionService() *service.SubscriptionService {
 	return p.subscriptionSvc
 }
 
-// GetAddOnService returns the add-on service
+// GetAddOnService returns the add-on service.
 func (p *Plugin) GetAddOnService() *service.AddOnService {
 	return p.addOnSvc
 }
 
-// GetInvoiceService returns the invoice service
+// GetInvoiceService returns the invoice service.
 func (p *Plugin) GetInvoiceService() *service.InvoiceService {
 	return p.invoiceSvc
 }
 
-// GetUsageService returns the usage service
+// GetUsageService returns the usage service.
 func (p *Plugin) GetUsageService() *service.UsageService {
 	return p.usageSvc
 }
 
-// GetPaymentService returns the payment service
+// GetPaymentService returns the payment service.
 func (p *Plugin) GetPaymentService() *service.PaymentService {
 	return p.paymentSvc
 }
 
-// GetCustomerService returns the customer service
+// GetCustomerService returns the customer service.
 func (p *Plugin) GetCustomerService() *service.CustomerService {
 	return p.customerSvc
 }
 
-// GetEnforcementService returns the enforcement service
+// GetEnforcementService returns the enforcement service.
 func (p *Plugin) GetEnforcementService() *service.EnforcementService {
 	return p.enforcementSvc
 }
 
-// GetHookRegistry returns the subscription hook registry
+// GetHookRegistry returns the subscription hook registry.
 func (p *Plugin) GetHookRegistry() *SubscriptionHookRegistry {
 	return p.subHookRegistry
 }
 
-// GetConfig returns the plugin configuration
+// GetConfig returns the plugin configuration.
 func (p *Plugin) GetConfig() Config {
 	return p.config
 }
 
-// GetFeatureService returns the feature service
+// GetFeatureService returns the feature service.
 func (p *Plugin) GetFeatureService() *service.FeatureService {
 	return p.featureSvc
 }
 
-// GetFeatureUsageService returns the feature usage service
+// GetFeatureUsageService returns the feature usage service.
 func (p *Plugin) GetFeatureUsageService() *service.FeatureUsageService {
 	return p.featureUsageSvc
 }
 
-// GetAlertService returns the alert service
+// GetAlertService returns the alert service.
 func (p *Plugin) GetAlertService() *service.AlertService {
 	return p.alertSvc
 }
 
-// GetAnalyticsService returns the analytics service
+// GetAnalyticsService returns the analytics service.
 func (p *Plugin) GetAnalyticsService() *service.AnalyticsService {
 	return p.analyticsSvc
 }
 
-// GetCouponService returns the coupon service
+// GetCouponService returns the coupon service.
 func (p *Plugin) GetCouponService() *service.CouponService {
 	return p.couponSvc
 }
 
-// GetCurrencyService returns the currency service
+// GetCurrencyService returns the currency service.
 func (p *Plugin) GetCurrencyService() *service.CurrencyService {
 	return p.currencySvc
 }
 
-// GetTaxService returns the tax service
+// GetTaxService returns the tax service.
 func (p *Plugin) GetTaxService() *service.TaxService {
 	return p.taxSvc
 }
 
-// GetExportImportService returns the export/import service
+// GetExportImportService returns the export/import service.
 func (p *Plugin) GetExportImportService() *service.ExportImportService {
 	return p.exportImportSvc
 }
 
-// GetProvider returns the payment provider
+// GetProvider returns the payment provider.
 func (p *Plugin) GetProvider() providers.PaymentProvider {
 	return p.provider
 }
 
-// registerFeatureRoutes registers feature management routes
+// registerFeatureRoutes registers feature management routes.
 func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 	// Feature CRUD routes
 	featureGroup := router.Group("/subscription/features")
@@ -1084,7 +1103,7 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 	)
 }
 
-// registerPublicRoutes registers public pricing page routes
+// registerPublicRoutes registers public pricing page routes.
 func (p *Plugin) registerPublicRoutes(router forge.Router) {
 	publicGroup := router.Group("/subscription/public")
 	{

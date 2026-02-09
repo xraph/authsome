@@ -14,16 +14,16 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// Ensure MultiTenantAuthService implements auth.ServiceInterface
+// Ensure MultiTenantAuthService implements auth.ServiceInterface.
 var _ auth.ServiceInterface = (*MultiTenantAuthService)(nil)
 
-// MultiTenantAuthService decorates the core auth service with multi-tenancy capabilities
+// MultiTenantAuthService decorates the core auth service with multi-tenancy capabilities.
 type MultiTenantAuthService struct {
 	authService authsome.AuthService
 	appService  *app.ServiceImpl
 }
 
-// NewMultiTenantAuthService creates a new multi-tenant auth service decorator
+// NewMultiTenantAuthService creates a new multi-tenant auth service decorator.
 func NewMultiTenantAuthService(authService authsome.AuthService, appService *app.ServiceImpl) *MultiTenantAuthService {
 	return &MultiTenantAuthService{
 		authService: authService,
@@ -31,7 +31,7 @@ func NewMultiTenantAuthService(authService authsome.AuthService, appService *app
 	}
 }
 
-// SignIn authenticates a user within an app context
+// SignIn authenticates a user within an app context.
 func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInRequest) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -54,16 +54,17 @@ func (s *MultiTenantAuthService) SignIn(ctx context.Context, req *auth.SignInReq
 	// Verify user is a member of the organization
 	member, err := s.appService.Member.FindMember(ctx, appID, response.User.ID)
 	if err != nil {
-		return nil, fmt.Errorf("user is not a member of this app")
+		return nil, errs.BadRequest("user is not a member of this app")
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	return response, nil
 }
 
-// SignUp registers a new user and adds them to the organization
+// SignUp registers a new user and adds them to the organization.
 func (s *MultiTenantAuthService) SignUp(ctx context.Context, req *auth.SignUpRequest) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -98,13 +99,13 @@ func (s *MultiTenantAuthService) SignUp(ctx context.Context, req *auth.SignUpReq
 	return response, nil
 }
 
-// SignOut signs out a user from the current session
+// SignOut signs out a user from the current session.
 func (s *MultiTenantAuthService) SignOut(ctx context.Context, req *auth.SignOutRequest) error {
 	// Perform sign out
 	return s.authService.SignOut(ctx, req)
 }
 
-// CheckCredentials validates user credentials within app context
+// CheckCredentials validates user credentials within app context.
 func (s *MultiTenantAuthService) CheckCredentials(ctx context.Context, email, password string) (*user.User, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -121,16 +122,17 @@ func (s *MultiTenantAuthService) CheckCredentials(ctx context.Context, email, pa
 	// Verify user is a member of the organization
 	member, err := s.appService.Member.FindMember(ctx, appID, u.ID)
 	if err != nil {
-		return nil, fmt.Errorf("user is not a member of this app")
+		return nil, errs.BadRequest("user is not a member of this app")
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	return u, nil
 }
 
-// CreateSessionForUser creates a session for a user within app context
+// CreateSessionForUser creates a session for a user within app context.
 func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -141,17 +143,18 @@ func (s *MultiTenantAuthService) CreateSessionForUser(ctx context.Context, u *us
 	// Verify user is a member of the organization
 	member, err := s.appService.Member.FindMember(ctx, appID, u.ID)
 	if err != nil {
-		return nil, fmt.Errorf("user is not a member of this app")
+		return nil, errs.BadRequest("user is not a member of this app")
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	// Create session using core service
 	return s.authService.CreateSessionForUser(ctx, u, remember, ipAddress, userAgent)
 }
 
-// GetSession retrieves a session within app context
+// GetSession retrieves a session within app context.
 func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (*responses.AuthResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -170,14 +173,15 @@ func (s *MultiTenantAuthService) GetSession(ctx context.Context, token string) (
 	if err != nil {
 		return nil, errs.InternalServerError("failed to check organization membership", err)
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	return response, nil
 }
 
-// UpdateUser updates a user within app context
+// UpdateUser updates a user within app context.
 func (s *MultiTenantAuthService) UpdateUser(ctx context.Context, id xid.ID, req *user.UpdateUserRequest) (*user.User, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -190,15 +194,16 @@ func (s *MultiTenantAuthService) UpdateUser(ctx context.Context, id xid.ID, req 
 	if err != nil {
 		return nil, errs.InternalServerError("failed to check organization membership", err)
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	// Update user using core service
 	return s.authService.UpdateUser(ctx, id, req)
 }
 
-// RefreshSession refreshes an access token using a refresh token within app context
+// RefreshSession refreshes an access token using a refresh token within app context.
 func (s *MultiTenantAuthService) RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -217,35 +222,36 @@ func (s *MultiTenantAuthService) RefreshSession(ctx context.Context, refreshToke
 	if err != nil {
 		return nil, errs.InternalServerError("failed to check organization membership", err)
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return nil, fmt.Errorf("user membership is not active")
+		return nil, errs.BadRequest("user membership is not active")
 	}
 
 	return response, nil
 }
 
 // RequestPasswordReset initiates a password reset flow
-// Returns token (for URL links) and code (for mobile entry)
+// Returns token (for URL links) and code (for mobile entry).
 func (s *MultiTenantAuthService) RequestPasswordReset(ctx context.Context, email string) (string, string, error) {
 	return s.authService.RequestPasswordReset(ctx, email)
 }
 
-// ResetPassword completes the password reset flow
+// ResetPassword completes the password reset flow.
 func (s *MultiTenantAuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
 	return s.authService.ResetPassword(ctx, token, newPassword)
 }
 
-// ResetPasswordWithCode completes the password reset flow using 6-digit code
+// ResetPasswordWithCode completes the password reset flow using 6-digit code.
 func (s *MultiTenantAuthService) ResetPasswordWithCode(ctx context.Context, code, newPassword string) error {
 	return s.authService.ResetPasswordWithCode(ctx, code, newPassword)
 }
 
-// ValidateResetToken checks if a reset token is valid
+// ValidateResetToken checks if a reset token is valid.
 func (s *MultiTenantAuthService) ValidateResetToken(ctx context.Context, token string) (bool, error) {
 	return s.authService.ValidateResetToken(ctx, token)
 }
 
-// ChangePassword changes a user's password after verifying the old password
+// ChangePassword changes a user's password after verifying the old password.
 func (s *MultiTenantAuthService) ChangePassword(ctx context.Context, userID xid.ID, oldPassword, newPassword string) error {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -258,14 +264,15 @@ func (s *MultiTenantAuthService) ChangePassword(ctx context.Context, userID xid.
 	if err != nil {
 		return errs.InternalServerError("failed to check organization membership", err)
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return fmt.Errorf("user membership is not active")
+		return errs.BadRequest("user membership is not active")
 	}
 
 	return s.authService.ChangePassword(ctx, userID, oldPassword, newPassword)
 }
 
-// RequestEmailChange initiates an email change flow
+// RequestEmailChange initiates an email change flow.
 func (s *MultiTenantAuthService) RequestEmailChange(ctx context.Context, userID xid.ID, newEmail string) (string, error) {
 	// Get organization from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -278,19 +285,20 @@ func (s *MultiTenantAuthService) RequestEmailChange(ctx context.Context, userID 
 	if err != nil {
 		return "", errs.InternalServerError("failed to check organization membership", err)
 	}
+
 	if member.Status != app.MemberStatusActive {
-		return "", fmt.Errorf("user membership is not active")
+		return "", errs.BadRequest("user membership is not active")
 	}
 
 	return s.authService.RequestEmailChange(ctx, userID, newEmail)
 }
 
-// ConfirmEmailChange completes the email change flow
+// ConfirmEmailChange completes the email change flow.
 func (s *MultiTenantAuthService) ConfirmEmailChange(ctx context.Context, token string) error {
 	return s.authService.ConfirmEmailChange(ctx, token)
 }
 
-// ValidateEmailChangeToken checks if an email change token is valid
+// ValidateEmailChangeToken checks if an email change token is valid.
 func (s *MultiTenantAuthService) ValidateEmailChangeToken(ctx context.Context, token string) (bool, error) {
 	return s.authService.ValidateEmailChangeToken(ctx, token)
 }

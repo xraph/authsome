@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/core/session"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 	repo "github.com/xraph/authsome/repository"
 	"github.com/xraph/authsome/schema"
 	"github.com/xraph/forge"
@@ -41,80 +42,80 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// PluginOption is a functional option for configuring the passkey plugin
+// PluginOption is a functional option for configuring the passkey plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithRPID sets the Relying Party ID
+// WithRPID sets the Relying Party ID.
 func WithRPID(rpID string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RPID = rpID
 	}
 }
 
-// WithRPName sets the Relying Party Name
+// WithRPName sets the Relying Party Name.
 func WithRPName(rpName string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RPName = rpName
 	}
 }
 
-// WithTimeout sets the WebAuthn timeout
+// WithTimeout sets the WebAuthn timeout.
 func WithTimeout(timeout time.Duration) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Timeout = timeout
 	}
 }
 
-// WithUserVerification sets the user verification requirement
+// WithUserVerification sets the user verification requirement.
 func WithUserVerification(requirement string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.UserVerification = requirement
 	}
 }
 
-// WithAttestationType sets the attestation conveyance preference
+// WithAttestationType sets the attestation conveyance preference.
 func WithAttestationType(attestation string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AttestationType = attestation
 	}
 }
 
-// WithRPOrigins sets the allowed origins for WebAuthn
+// WithRPOrigins sets the allowed origins for WebAuthn.
 func WithRPOrigins(origins []string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RPOrigins = origins
 	}
 }
 
-// WithRequireResidentKey sets whether resident keys are required
+// WithRequireResidentKey sets whether resident keys are required.
 func WithRequireResidentKey(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireResidentKey = required
 	}
 }
 
-// WithAuthenticatorAttachment sets the authenticator attachment preference
+// WithAuthenticatorAttachment sets the authenticator attachment preference.
 func WithAuthenticatorAttachment(attachment string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AuthenticatorAttachment = attachment
 	}
 }
 
-// WithChallengeStorage sets the challenge storage backend
+// WithChallengeStorage sets the challenge storage backend.
 func WithChallengeStorage(storage string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.ChallengeStorage = storage
 	}
 }
 
-// NewPlugin creates a new passkey plugin instance with optional configuration
+// NewPlugin creates a new passkey plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -143,7 +144,7 @@ func (p *Plugin) ID() string { return "passkey" }
 
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("passkey plugin requires auth instance")
+		return errs.InternalServerErrorWithMessage("passkey plugin requires auth instance")
 	}
 
 	// Store auth instance for middleware access
@@ -152,12 +153,12 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for passkey plugin")
+		return errs.InternalServerErrorWithMessage("database not available for passkey plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for passkey plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for passkey plugin")
 	}
 
 	// Initialize logger
@@ -186,6 +187,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	if err != nil {
 		return fmt.Errorf("failed to create passkey service: %w", err)
 	}
+
 	p.service = service
 
 	p.logger.Info("passkey plugin initialized (PRODUCTION READY)",
@@ -213,6 +215,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(handler)
 		}
+
 		return handler
 	}
 
@@ -294,6 +297,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
 	)
+
 	return nil
 }
 
@@ -305,13 +309,15 @@ func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 	_, err := p.db.NewCreateTable().Model((*schema.Passkey)(nil)).IfNotExists().Exec(ctx)
+
 	return err
 }
 
 // Legacy response type aliases for backward compatibility
-// Use the proper types defined in response_types.go instead
+// Use the proper types defined in response_types.go instead.
 type PasskeyErrorResponse = ErrorResponse
 type PasskeyStatusResponse = StatusResponse
 type PasskeyRegistrationOptionsResponse = BeginRegisterResponse

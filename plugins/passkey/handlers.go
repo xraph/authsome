@@ -2,6 +2,7 @@ package passkey
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/rs/xid"
@@ -14,7 +15,7 @@ type Handler struct {
 	svc *Service
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -23,15 +24,17 @@ func NewHandler(s *Service) *Handler {
 	return &Handler{svc: s}
 }
 
-// handleError returns the error in a structured format
+// handleError returns the error in a structured format.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errors.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
-// BeginRegister initiates passkey registration with WebAuthn challenge
+// BeginRegister initiates passkey registration with WebAuthn challenge.
 func (h *Handler) BeginRegister(c forge.Context) error {
 	var req BeginRegisterRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -51,7 +54,7 @@ func (h *Handler) BeginRegister(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// FinishRegister completes passkey registration with attestation verification
+// FinishRegister completes passkey registration with attestation verification.
 func (h *Handler) FinishRegister(c forge.Context) error {
 	var req FinishRegisterRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -81,7 +84,7 @@ func (h *Handler) FinishRegister(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// BeginLogin initiates passkey authentication with WebAuthn challenge
+// BeginLogin initiates passkey authentication with WebAuthn challenge.
 func (h *Handler) BeginLogin(c forge.Context) error {
 	var req BeginLoginRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -95,6 +98,7 @@ func (h *Handler) BeginLogin(c forge.Context) error {
 		if err != nil {
 			return handleError(c, err, "BEGIN_LOGIN_FAILED", "Failed to begin passkey login", http.StatusBadRequest)
 		}
+
 		return c.JSON(http.StatusOK, resp)
 	}
 
@@ -111,7 +115,7 @@ func (h *Handler) BeginLogin(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// FinishLogin completes passkey authentication with signature verification
+// FinishLogin completes passkey authentication with signature verification.
 func (h *Handler) FinishLogin(c forge.Context) error {
 	var req FinishLoginRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -136,7 +140,7 @@ func (h *Handler) FinishLogin(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// List retrieves all passkeys for a user
+// List retrieves all passkeys for a user.
 func (h *Handler) List(c forge.Context) error {
 	var req ListPasskeysRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -156,7 +160,7 @@ func (h *Handler) List(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// Update updates a passkey's metadata (name)
+// Update updates a passkey's metadata (name).
 func (h *Handler) Update(c forge.Context) error {
 	var req UpdatePasskeyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -176,7 +180,7 @@ func (h *Handler) Update(c forge.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// Delete removes a passkey
+// Delete removes a passkey.
 func (h *Handler) Delete(c forge.Context) error {
 	var req DeletePasskeyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -200,7 +204,7 @@ func (h *Handler) Delete(c forge.Context) error {
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "deleted"})
 }
 
-// Get retrieves a single passkey by ID
+// Get retrieves a single passkey by ID.
 func (h *Handler) Get(c forge.Context) error {
 	var req GetPasskeyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -215,5 +219,6 @@ func (h *Handler) Get(c forge.Context) error {
 	// Get single passkey - could be implemented in service if needed
 	// For now, return not implemented
 	_ = passkeyID
+
 	return c.JSON(http.StatusNotImplemented, errs.NotImplemented("get single passkey"))
 }

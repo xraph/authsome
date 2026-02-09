@@ -8,11 +8,12 @@ import (
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/registry"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
 )
 
 // Plugin implements the MCP (Model Context Protocol) server
-// Exposes AuthSome data and operations to AI assistants
+// Exposes AuthSome data and operations to AI assistants.
 type Plugin struct {
 	config          Config
 	defaultConfig   Config
@@ -23,45 +24,45 @@ type Plugin struct {
 	serviceRegistry *registry.ServiceRegistry
 }
 
-// PluginOption is a functional option for configuring the MCP plugin
+// PluginOption is a functional option for configuring the MCP plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithTransport sets the MCP transport type
+// WithTransport sets the MCP transport type.
 func WithTransport(transport string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Transport = Transport(transport)
 	}
 }
 
-// WithEnabled sets whether MCP is enabled
+// WithEnabled sets whether MCP is enabled.
 func WithEnabled(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Enabled = enabled
 	}
 }
 
-// WithPort sets the HTTP port for MCP server
+// WithPort sets the HTTP port for MCP server.
 func WithPort(port int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.Port = port
 	}
 }
 
-// WithExposeSecrets sets whether to expose secrets (dev only)
+// WithExposeSecrets sets whether to expose secrets (dev only).
 func WithExposeSecrets(expose bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.ExposeSecrets = expose
 	}
 }
 
-// NewPlugin creates a new MCP plugin with optional configuration
+// NewPlugin creates a new MCP plugin with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -84,24 +85,24 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "mcp"
 }
 
-// Init initializes the plugin with auth instance
+// Init initializes the plugin with auth instance.
 func (p *Plugin) Init(auth core.Authsome) error {
 	p.auth = auth
 
 	// Get dependencies
 	p.db = auth.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for mcp plugin")
+		return errs.InternalServerErrorWithMessage("database not available for mcp plugin")
 	}
 
 	forgeApp := auth.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for mcp plugin")
+		return errs.InternalServerErrorWithMessage("forge app not available for mcp plugin")
 	}
 
 	// Initialize logger
@@ -120,11 +121,13 @@ func (p *Plugin) Init(auth core.Authsome) error {
 
 	if !p.config.Enabled {
 		p.logger.Info("MCP plugin initialized but disabled")
+
 		return nil
 	}
 
 	// Initialize MCP server based on transport
 	var err error
+
 	p.server, err = NewServer(p.config, p)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP server: %w", err)
@@ -138,7 +141,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers HTTP endpoints if HTTP transport is enabled
+// RegisterRoutes registers HTTP endpoints if HTTP transport is enabled.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.config.Transport != TransportHTTP {
 		return nil // No routes needed for stdio transport
@@ -150,22 +153,22 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// RegisterHooks registers plugin hooks (none needed for MCP)
+// RegisterHooks registers plugin hooks (none needed for MCP).
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	return nil // MCP is read-mostly, no hooks needed
 }
 
-// RegisterServiceDecorators allows service decoration (none needed for MCP)
+// RegisterServiceDecorators allows service decoration (none needed for MCP).
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	return nil // MCP doesn't modify core services
 }
 
-// Migrate runs database migrations (none needed for MCP)
+// Migrate runs database migrations (none needed for MCP).
 func (p *Plugin) Migrate() error {
 	return nil // MCP doesn't require database schema
 }
 
-// Start starts the MCP server (call after Initialize)
+// Start starts the MCP server (call after Initialize).
 func (p *Plugin) Start(ctx context.Context) error {
 	if !p.config.Enabled {
 		return nil
@@ -174,15 +177,16 @@ func (p *Plugin) Start(ctx context.Context) error {
 	return p.server.Start(ctx)
 }
 
-// Stop gracefully stops the MCP server
+// Stop gracefully stops the MCP server.
 func (p *Plugin) Stop(ctx context.Context) error {
 	if p.server != nil {
 		return p.server.Stop(ctx)
 	}
+
 	return nil
 }
 
-// GetServer returns the underlying MCP server (for CLI/testing)
+// GetServer returns the underlying MCP server (for CLI/testing).
 func (p *Plugin) GetServer() *Server {
 	return p.server
 }

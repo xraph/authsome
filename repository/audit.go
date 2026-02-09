@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/rs/xid"
@@ -11,30 +13,31 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// AuditRepository implements core audit repository using Bun
+// AuditRepository implements core audit repository using Bun.
 type AuditRepository struct {
 	db *bun.DB
 }
 
-// NewAuditRepository creates a new audit repository
+// NewAuditRepository creates a new audit repository.
 func NewAuditRepository(db *bun.DB) *AuditRepository {
 	return &AuditRepository{db: db}
 }
 
-// Create creates a new audit event
+// Create creates a new audit event.
 func (r *AuditRepository) Create(ctx context.Context, e *schema.AuditEvent) error {
 	_, err := r.db.NewInsert().Model(e).Exec(ctx)
+
 	return err
 }
 
-// Get retrieves an audit event by ID
+// Get retrieves an audit event by ID.
 func (r *AuditRepository) Get(ctx context.Context, id xid.ID) (*schema.AuditEvent, error) {
 	var event schema.AuditEvent
+
 	err := r.db.NewSelect().
 		Model(&event).
 		Where("id = ?", id.String()).
 		Scan(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +45,7 @@ func (r *AuditRepository) Get(ctx context.Context, id xid.ID) (*schema.AuditEven
 	return &event, nil
 }
 
-// List returns paginated audit events with optional filters
+// List returns paginated audit events with optional filters.
 func (r *AuditRepository) List(ctx context.Context, filter *audit.ListEventsFilter) (*pagination.PageResponse[*schema.AuditEvent], error) {
 	// Build base query
 	baseQuery := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
@@ -59,12 +62,15 @@ func (r *AuditRepository) List(ctx context.Context, filter *audit.ListEventsFilt
 	// Apply sorting
 	sortBy := "created_at"
 	sortOrder := "DESC"
+
 	if filter.SortBy != nil {
 		sortBy = *filter.SortBy
 	}
+
 	if filter.SortOrder != nil {
 		sortOrder = *filter.SortOrder
 	}
+
 	baseQuery = baseQuery.OrderExpr("? ?", bun.Ident(sortBy), bun.Safe(sortOrder))
 
 	// Apply pagination
@@ -86,7 +92,7 @@ func (r *AuditRepository) List(ctx context.Context, filter *audit.ListEventsFilt
 	return pagination.NewPageResponse(events, int64(total), params), nil
 }
 
-// applyFilters applies filter conditions to the query
+// applyFilters applies filter conditions to the query.
 func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEventsFilter) *bun.SelectQuery {
 	// ========== Full-Text Search ==========
 	if filter.SearchQuery != nil && *filter.SearchQuery != "" {
@@ -135,6 +141,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, id := range filter.AppIDs {
 			appIDStrs[i] = id.String()
 		}
+
 		q = q.Where("app_id IN (?)", bun.In(appIDStrs))
 	}
 
@@ -143,6 +150,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, id := range filter.OrganizationIDs {
 			orgIDStrs[i] = id.String()
 		}
+
 		q = q.Where("organization_id IN (?)", bun.In(orgIDStrs))
 	}
 
@@ -151,6 +159,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, id := range filter.UserIDs {
 			userIDStrs[i] = id.String()
 		}
+
 		q = q.Where("user_id IN (?)", bun.In(userIDStrs))
 	}
 
@@ -171,6 +180,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, source := range filter.Sources {
 			sourceStrs[i] = string(source)
 		}
+
 		q = q.Where("source IN (?)", bun.In(sourceStrs))
 	}
 
@@ -215,6 +225,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, source := range filter.ExcludeSources {
 			sourceStrs[i] = string(source)
 		}
+
 		q = q.Where("source NOT IN (?)", bun.In(sourceStrs))
 	}
 
@@ -249,6 +260,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, id := range filter.ExcludeUserIDs {
 			userIDStrs[i] = id.String()
 		}
+
 		q = q.Where("user_id NOT IN (?)", bun.In(userIDStrs))
 	}
 
@@ -273,6 +285,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, id := range filter.ExcludeAppIDs {
 			appIDStrs[i] = id.String()
 		}
+
 		q = q.Where("app_id NOT IN (?)", bun.In(appIDStrs))
 	}
 
@@ -287,6 +300,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 		for i, id := range filter.ExcludeOrganizationIDs {
 			orgIDStrs[i] = id.String()
 		}
+
 		q = q.Where("organization_id NOT IN (?)", bun.In(orgIDStrs))
 	}
 
@@ -298,7 +312,7 @@ func (r *AuditRepository) applyFilters(q *bun.SelectQuery, filter *audit.ListEve
 	return q
 }
 
-// applyFullTextSearch applies PostgreSQL full-text search
+// applyFullTextSearch applies PostgreSQL full-text search.
 func (r *AuditRepository) applyFullTextSearch(q *bun.SelectQuery, searchQuery string, fields []string) *bun.SelectQuery {
 	// Build search vector based on fields
 	var searchVector string
@@ -320,11 +334,15 @@ func (r *AuditRepository) applyFullTextSearch(q *bun.SelectQuery, searchQuery st
 				vectors = append(vectors, "to_tsvector('english', COALESCE(user_agent, ''))")
 			}
 		}
+
 		if len(vectors) > 0 {
 			searchVector = "(" + vectors[0]
+			var searchVectorSb325 strings.Builder
 			for i := 1; i < len(vectors); i++ {
-				searchVector += " || " + vectors[i]
+				searchVectorSb325.WriteString(" || " + vectors[i])
 			}
+			searchVector += searchVectorSb325.String()
+
 			searchVector += ")"
 		}
 	}
@@ -337,7 +355,7 @@ func (r *AuditRepository) applyFullTextSearch(q *bun.SelectQuery, searchQuery st
 	return q
 }
 
-// applyMetadataFilters applies metadata JSON filters
+// applyMetadataFilters applies metadata JSON filters.
 func (r *AuditRepository) applyMetadataFilters(q *bun.SelectQuery, filters []audit.MetadataFilter) *bun.SelectQuery {
 	for _, filter := range filters {
 		switch filter.Operator {
@@ -364,31 +382,28 @@ func (r *AuditRepository) applyMetadataFilters(q *bun.SelectQuery, filters []aud
 			}
 		}
 	}
+
 	return q
 }
 
-// contains checks if a string slice contains a value
+// contains checks if a string slice contains a value.
 func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(slice, item)
 }
 
 // =============================================================================
 // FULL-TEXT SEARCH IMPLEMENTATION
 // =============================================================================
 
-// Search performs full-text search on audit events (implements audit.SearchRepository)
+// Search performs full-text search on audit events (implements audit.SearchRepository).
 func (r *AuditRepository) Search(ctx context.Context, query *audit.SearchQuery) (*audit.SearchResponse, error) {
 	// Detect database type and route to appropriate implementation
 	// For now, default to PostgreSQL implementation
 	return r.SearchPostgreSQL(ctx, query)
 }
 
-// SearchPostgreSQL performs PostgreSQL tsvector full-text search
+// SearchPostgreSQL performs PostgreSQL tsvector full-text search.
 func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.SearchQuery) (*audit.SearchResponse, error) {
 	// Build base query with relevance ranking
 	baseQuery := r.db.NewSelect().
@@ -416,11 +431,15 @@ func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.Sea
 				vectors = append(vectors, "to_tsvector('english', COALESCE(user_agent, ''))")
 			}
 		}
+
 		if len(vectors) > 0 {
 			searchVector = "(" + vectors[0]
+			var searchVectorSb421 strings.Builder
 			for i := 1; i < len(vectors); i++ {
-				searchVector += " || " + vectors[i]
+				searchVectorSb421.WriteString(" || " + vectors[i])
 			}
+			searchVector += searchVectorSb421.String()
+
 			searchVector += ")"
 		}
 	}
@@ -479,6 +498,7 @@ func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.Sea
 	// Execute query - need custom struct to capture rank
 	type ResultRow struct {
 		schema.AuditEvent
+
 		Rank float64 `bun:"rank"`
 	}
 
@@ -502,6 +522,7 @@ func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.Sea
 	if pageSize == 0 {
 		pageSize = 50
 	}
+
 	currentPage := (query.Offset / pageSize) + 1
 	totalPages := (int(total) + pageSize - 1) / pageSize
 
@@ -523,7 +544,7 @@ func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.Sea
 	}, nil
 }
 
-// SearchSQLite performs SQLite FTS5 full-text search (placeholder for SQLite support)
+// SearchSQLite performs SQLite FTS5 full-text search (placeholder for SQLite support).
 func (r *AuditRepository) SearchSQLite(ctx context.Context, query *audit.SearchQuery) (*audit.SearchResponse, error) {
 	// TODO: Implement SQLite FTS5 search
 	// For now, return error indicating not implemented
@@ -536,7 +557,7 @@ var ErrSearchNotSupported = audit.InvalidFilter("search", "full-text search not 
 // COUNT OPERATIONS
 // =============================================================================
 
-// Count returns the count of audit events matching the filter
+// Count returns the count of audit events matching the filter.
 func (r *AuditRepository) Count(ctx context.Context, filter *audit.ListEventsFilter) (int64, error) {
 	// Build base query
 	q := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
@@ -557,7 +578,7 @@ func (r *AuditRepository) Count(ctx context.Context, filter *audit.ListEventsFil
 // RETENTION/CLEANUP OPERATIONS
 // =============================================================================
 
-// DeleteOlderThan deletes audit events older than the specified time
+// DeleteOlderThan deletes audit events older than the specified time.
 func (r *AuditRepository) DeleteOlderThan(ctx context.Context, filter *audit.DeleteFilter, before time.Time) (int64, error) {
 	// Build delete query
 	q := r.db.NewDelete().Model((*schema.AuditEvent)(nil))
@@ -577,7 +598,7 @@ func (r *AuditRepository) DeleteOlderThan(ctx context.Context, filter *audit.Del
 	return res.RowsAffected()
 }
 
-// applyDeleteFilters applies filter conditions to delete queries
+// applyDeleteFilters applies filter conditions to delete queries.
 func (r *AuditRepository) applyDeleteFilters(q *bun.DeleteQuery, filter *audit.DeleteFilter) *bun.DeleteQuery {
 	if filter == nil {
 		return q
@@ -670,7 +691,7 @@ func (r *AuditRepository) applyDeleteFilters(q *bun.DeleteQuery, filter *audit.D
 // STATISTICS/AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetStatisticsByAction returns aggregated statistics grouped by action
+// GetStatisticsByAction returns aggregated statistics grouped by action.
 func (r *AuditRepository) GetStatisticsByAction(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ActionStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -718,7 +739,7 @@ func (r *AuditRepository) GetStatisticsByAction(ctx context.Context, filter *aud
 	return stats, nil
 }
 
-// GetStatisticsByResource returns aggregated statistics grouped by resource
+// GetStatisticsByResource returns aggregated statistics grouped by resource.
 func (r *AuditRepository) GetStatisticsByResource(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ResourceStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -766,7 +787,7 @@ func (r *AuditRepository) GetStatisticsByResource(ctx context.Context, filter *a
 	return stats, nil
 }
 
-// GetStatisticsByUser returns aggregated statistics grouped by user
+// GetStatisticsByUser returns aggregated statistics grouped by user.
 func (r *AuditRepository) GetStatisticsByUser(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.UserStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -814,13 +835,14 @@ func (r *AuditRepository) GetStatisticsByUser(ctx context.Context, filter *audit
 				stat.UserID = &userID
 			}
 		}
+
 		stats[i] = stat
 	}
 
 	return stats, nil
 }
 
-// applyStatisticsFilters applies filter conditions to statistics queries
+// applyStatisticsFilters applies filter conditions to statistics queries.
 func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *audit.StatisticsFilter) *bun.SelectQuery {
 	if filter == nil {
 		return q
@@ -866,6 +888,7 @@ func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *aud
 		for i, source := range filter.Sources {
 			sourceStrs[i] = string(source)
 		}
+
 		q = q.Where("source IN (?)", bun.In(sourceStrs))
 	}
 
@@ -895,6 +918,7 @@ func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *aud
 		for i, source := range filter.ExcludeSources {
 			sourceStrs[i] = string(source)
 		}
+
 		q = q.Where("source NOT IN (?)", bun.In(sourceStrs))
 	}
 
@@ -929,6 +953,7 @@ func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *aud
 		for i, id := range filter.ExcludeUserIDs {
 			userIDStrs[i] = id.String()
 		}
+
 		q = q.Where("user_id NOT IN (?)", bun.In(userIDStrs))
 	}
 
@@ -939,7 +964,7 @@ func (r *AuditRepository) applyStatisticsFilters(q *bun.SelectQuery, filter *aud
 // UTILITY OPERATIONS
 // =============================================================================
 
-// GetOldestEvent retrieves the oldest audit event matching the filter
+// GetOldestEvent retrieves the oldest audit event matching the filter.
 func (r *AuditRepository) GetOldestEvent(ctx context.Context, filter *audit.ListEventsFilter) (*schema.AuditEvent, error) {
 	// Build base query
 	q := r.db.NewSelect().Model((*schema.AuditEvent)(nil))
@@ -955,12 +980,14 @@ func (r *AuditRepository) GetOldestEvent(ctx context.Context, filter *audit.List
 
 	// Execute query
 	var event schema.AuditEvent
+
 	err := q.Scan(ctx, &event)
 	if err != nil {
 		// Check if it's a no rows error
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
 		}
+
 		return nil, err
 	}
 
@@ -976,10 +1003,11 @@ func (r *AuditRepository) GetOldestEvent(ctx context.Context, filter *audit.List
 // TIME-BASED AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetTimeSeries returns event counts over time with configurable intervals
+// GetTimeSeries returns event counts over time with configurable intervals.
 func (r *AuditRepository) GetTimeSeries(ctx context.Context, filter *audit.TimeSeriesFilter) ([]*audit.TimeSeriesPoint, error) {
 	// Determine the date_trunc interval
 	var truncInterval string
+
 	switch filter.Interval {
 	case audit.IntervalHourly:
 		truncInterval = "hour"
@@ -1026,7 +1054,7 @@ func (r *AuditRepository) GetTimeSeries(ctx context.Context, filter *audit.TimeS
 	return points, nil
 }
 
-// GetStatisticsByHour returns event distribution by hour of day (0-23)
+// GetStatisticsByHour returns event distribution by hour of day (0-23).
 func (r *AuditRepository) GetStatisticsByHour(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.HourStatistic, error) {
 	// Build aggregation query - EXTRACT(HOUR FROM created_at)
 	q := r.db.NewSelect().
@@ -1061,7 +1089,7 @@ func (r *AuditRepository) GetStatisticsByHour(ctx context.Context, filter *audit
 	return stats, nil
 }
 
-// GetStatisticsByDay returns event distribution by day of week
+// GetStatisticsByDay returns event distribution by day of week.
 func (r *AuditRepository) GetStatisticsByDay(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.DayStatistic, error) {
 	// Build aggregation query - EXTRACT(DOW FROM created_at) returns 0=Sunday, 1=Monday, etc.
 	q := r.db.NewSelect().
@@ -1094,6 +1122,7 @@ func (r *AuditRepository) GetStatisticsByDay(ctx context.Context, filter *audit.
 		if r.DayIndex >= 0 && r.DayIndex < 7 {
 			dayName = dayNames[r.DayIndex]
 		}
+
 		stats[i] = &audit.DayStatistic{
 			Day:      dayName,
 			DayIndex: r.DayIndex,
@@ -1104,7 +1133,7 @@ func (r *AuditRepository) GetStatisticsByDay(ctx context.Context, filter *audit.
 	return stats, nil
 }
 
-// GetStatisticsByDate returns daily event counts for a date range
+// GetStatisticsByDate returns daily event counts for a date range.
 func (r *AuditRepository) GetStatisticsByDate(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.DateStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -1143,7 +1172,7 @@ func (r *AuditRepository) GetStatisticsByDate(ctx context.Context, filter *audit
 // IP/NETWORK AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetStatisticsByIPAddress returns event counts grouped by IP address
+// GetStatisticsByIPAddress returns event counts grouped by IP address.
 func (r *AuditRepository) GetStatisticsByIPAddress(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.IPStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -1192,7 +1221,7 @@ func (r *AuditRepository) GetStatisticsByIPAddress(ctx context.Context, filter *
 	return stats, nil
 }
 
-// GetUniqueIPCount returns the count of unique IP addresses
+// GetUniqueIPCount returns the count of unique IP addresses.
 func (r *AuditRepository) GetUniqueIPCount(ctx context.Context, filter *audit.StatisticsFilter) (int64, error) {
 	// Build count query
 	q := r.db.NewSelect().
@@ -1219,7 +1248,7 @@ func (r *AuditRepository) GetUniqueIPCount(ctx context.Context, filter *audit.St
 // MULTI-DIMENSIONAL AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetStatisticsByActionAndUser returns event counts grouped by action and user
+// GetStatisticsByActionAndUser returns event counts grouped by action and user.
 func (r *AuditRepository) GetStatisticsByActionAndUser(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ActionUserStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -1264,13 +1293,14 @@ func (r *AuditRepository) GetStatisticsByActionAndUser(ctx context.Context, filt
 				stat.UserID = &userID
 			}
 		}
+
 		stats[i] = stat
 	}
 
 	return stats, nil
 }
 
-// GetStatisticsByResourceAndAction returns event counts grouped by resource and action
+// GetStatisticsByResourceAndAction returns event counts grouped by resource and action.
 func (r *AuditRepository) GetStatisticsByResourceAndAction(ctx context.Context, filter *audit.StatisticsFilter) ([]*audit.ResourceActionStatistic, error) {
 	// Build aggregation query
 	q := r.db.NewSelect().
@@ -1319,7 +1349,7 @@ func (r *AuditRepository) GetStatisticsByResourceAndAction(ctx context.Context, 
 // AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetDistinctActions returns distinct action values with counts
+// GetDistinctActions returns distinct action values with counts.
 func (r *AuditRepository) GetDistinctActions(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"action"`
@@ -1327,6 +1357,7 @@ func (r *AuditRepository) GetDistinctActions(ctx context.Context, filter *audit.
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("action").
@@ -1352,10 +1383,11 @@ func (r *AuditRepository) GetDistinctActions(ctx context.Context, filter *audit.
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// GetDistinctSources returns distinct source values with counts
+// GetDistinctSources returns distinct source values with counts.
 func (r *AuditRepository) GetDistinctSources(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"source"`
@@ -1363,6 +1395,7 @@ func (r *AuditRepository) GetDistinctSources(ctx context.Context, filter *audit.
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("source").
@@ -1387,10 +1420,11 @@ func (r *AuditRepository) GetDistinctSources(ctx context.Context, filter *audit.
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// GetDistinctResources returns distinct resource values with counts
+// GetDistinctResources returns distinct resource values with counts.
 func (r *AuditRepository) GetDistinctResources(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"resource"`
@@ -1398,6 +1432,7 @@ func (r *AuditRepository) GetDistinctResources(ctx context.Context, filter *audi
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("resource").
@@ -1423,10 +1458,11 @@ func (r *AuditRepository) GetDistinctResources(ctx context.Context, filter *audi
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// GetDistinctUsers returns distinct user values with counts
+// GetDistinctUsers returns distinct user values with counts.
 func (r *AuditRepository) GetDistinctUsers(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"user_id"`
@@ -1434,6 +1470,7 @@ func (r *AuditRepository) GetDistinctUsers(ctx context.Context, filter *audit.Ag
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("user_id").
@@ -1459,10 +1496,11 @@ func (r *AuditRepository) GetDistinctUsers(ctx context.Context, filter *audit.Ag
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// GetDistinctIPs returns distinct IP address values with counts
+// GetDistinctIPs returns distinct IP address values with counts.
 func (r *AuditRepository) GetDistinctIPs(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"ip_address"`
@@ -1470,6 +1508,7 @@ func (r *AuditRepository) GetDistinctIPs(ctx context.Context, filter *audit.Aggr
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("ip_address").
@@ -1495,10 +1534,11 @@ func (r *AuditRepository) GetDistinctIPs(ctx context.Context, filter *audit.Aggr
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// GetDistinctApps returns distinct app values with counts
+// GetDistinctApps returns distinct app values with counts.
 func (r *AuditRepository) GetDistinctApps(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"app_id"`
@@ -1506,6 +1546,7 @@ func (r *AuditRepository) GetDistinctApps(ctx context.Context, filter *audit.Agg
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("app_id").
@@ -1530,10 +1571,11 @@ func (r *AuditRepository) GetDistinctApps(ctx context.Context, filter *audit.Agg
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// GetDistinctOrganizations returns distinct organization values with counts
+// GetDistinctOrganizations returns distinct organization values with counts.
 func (r *AuditRepository) GetDistinctOrganizations(ctx context.Context, filter *audit.AggregationFilter) ([]audit.DistinctValue, error) {
 	type result struct {
 		Value string `bun:"organization_id"`
@@ -1541,6 +1583,7 @@ func (r *AuditRepository) GetDistinctOrganizations(ctx context.Context, filter *
 	}
 
 	var results []result
+
 	q := r.db.NewSelect().
 		Model((*schema.AuditEvent)(nil)).
 		Column("organization_id").
@@ -1566,10 +1609,11 @@ func (r *AuditRepository) GetDistinctOrganizations(ctx context.Context, filter *
 			Count: res.Count,
 		}
 	}
+
 	return values, nil
 }
 
-// applyAggregationFilters applies common filters to aggregation queries
+// applyAggregationFilters applies common filters to aggregation queries.
 func (r *AuditRepository) applyAggregationFilters(q *bun.SelectQuery, filter *audit.AggregationFilter) *bun.SelectQuery {
 	if filter == nil {
 		return q
@@ -1578,17 +1622,22 @@ func (r *AuditRepository) applyAggregationFilters(q *bun.SelectQuery, filter *au
 	if filter.AppID != nil {
 		q = q.Where("app_id = ?", filter.AppID.String())
 	}
+
 	if filter.OrganizationID != nil {
 		q = q.Where("organization_id = ?", filter.OrganizationID.String())
 	}
+
 	if filter.EnvironmentID != nil {
 		q = q.Where("environment_id = ?", filter.EnvironmentID.String())
 	}
+
 	if filter.Since != nil {
 		q = q.Where("created_at >= ?", *filter.Since)
 	}
+
 	if filter.Until != nil {
 		q = q.Where("created_at <= ?", *filter.Until)
 	}
+
 	return q
 }

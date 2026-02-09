@@ -3,27 +3,29 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core/forms"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// formsRepository implements the forms.Repository interface using Bun ORM
+// formsRepository implements the forms.Repository interface using Bun ORM.
 type formsRepository struct {
 	db *bun.DB
 }
 
-// NewFormsRepository creates a new forms repository
+// NewFormsRepository creates a new forms repository.
 func NewFormsRepository(db *bun.DB) forms.Repository {
 	return &formsRepository{
 		db: db,
 	}
 }
 
-// Create creates a new form schema in the database
+// Create creates a new form schema in the database.
 func (r *formsRepository) Create(ctx context.Context, form *schema.FormSchema) error {
 	if form.ID.IsNil() {
 		form.ID = xid.New()
@@ -32,7 +34,6 @@ func (r *formsRepository) Create(ctx context.Context, form *schema.FormSchema) e
 	_, err := r.db.NewInsert().
 		Model(form).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to create form: %w", err)
 	}
@@ -40,45 +41,47 @@ func (r *formsRepository) Create(ctx context.Context, form *schema.FormSchema) e
 	return nil
 }
 
-// GetByID retrieves a form schema by ID
+// GetByID retrieves a form schema by ID.
 func (r *formsRepository) GetByID(ctx context.Context, id xid.ID) (*schema.FormSchema, error) {
 	form := &schema.FormSchema{}
+
 	err := r.db.NewSelect().
 		Model(form).
 		Where("id = ?", id).
 		Scan(ctx)
-
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("form not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.NotFound("form not found")
 		}
+
 		return nil, fmt.Errorf("failed to get form: %w", err)
 	}
 
 	return form, nil
 }
 
-// GetByOrganization retrieves a form schema by organization and type
+// GetByOrganization retrieves a form schema by organization and type.
 func (r *formsRepository) GetByOrganization(ctx context.Context, orgID xid.ID, formType string) (*schema.FormSchema, error) {
 	form := &schema.FormSchema{}
+
 	err := r.db.NewSelect().
 		Model(form).
 		Where("app_id = ? AND type = ? AND is_active = ?", orgID, formType, true).
 		Order("created_at DESC").
 		Limit(1).
 		Scan(ctx)
-
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("form not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.NotFound("form not found")
 		}
+
 		return nil, fmt.Errorf("failed to get form by organization: %w", err)
 	}
 
 	return form, nil
 }
 
-// List retrieves forms for an organization with pagination
+// List retrieves forms for an organization with pagination.
 func (r *formsRepository) List(ctx context.Context, orgID xid.ID, formType string, page, pageSize int) ([]*schema.FormSchema, int, error) {
 	offset := (page - 1) * pageSize
 
@@ -98,12 +101,12 @@ func (r *formsRepository) List(ctx context.Context, orgID xid.ID, formType strin
 
 	// Get forms with pagination
 	var forms []*schema.FormSchema
+
 	err = query.
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Scan(ctx, &forms)
-
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list forms: %w", err)
 	}
@@ -111,13 +114,12 @@ func (r *formsRepository) List(ctx context.Context, orgID xid.ID, formType strin
 	return forms, total, nil
 }
 
-// Update updates an existing form schema
+// Update updates an existing form schema.
 func (r *formsRepository) Update(ctx context.Context, form *schema.FormSchema) error {
 	result, err := r.db.NewUpdate().
 		Model(form).
 		Where("id = ?", form.ID).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to update form: %w", err)
 	}
@@ -128,19 +130,18 @@ func (r *formsRepository) Update(ctx context.Context, form *schema.FormSchema) e
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("form not found")
+		return errs.NotFound("form not found")
 	}
 
 	return nil
 }
 
-// Delete deletes a form schema by ID
+// Delete deletes a form schema by ID.
 func (r *formsRepository) Delete(ctx context.Context, id xid.ID) error {
 	result, err := r.db.NewDelete().
 		Model((*schema.FormSchema)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to delete form: %w", err)
 	}
@@ -151,13 +152,13 @@ func (r *formsRepository) Delete(ctx context.Context, id xid.ID) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("form not found")
+		return errs.NotFound("form not found")
 	}
 
 	return nil
 }
 
-// CreateSubmission creates a new form submission
+// CreateSubmission creates a new form submission.
 func (r *formsRepository) CreateSubmission(ctx context.Context, submission *schema.FormSubmission) error {
 	if submission.ID.IsNil() {
 		submission.ID = xid.New()
@@ -166,7 +167,6 @@ func (r *formsRepository) CreateSubmission(ctx context.Context, submission *sche
 	_, err := r.db.NewInsert().
 		Model(submission).
 		Exec(ctx)
-
 	if err != nil {
 		return fmt.Errorf("failed to create form submission: %w", err)
 	}
@@ -174,25 +174,26 @@ func (r *formsRepository) CreateSubmission(ctx context.Context, submission *sche
 	return nil
 }
 
-// GetSubmissionByID retrieves a form submission by ID
+// GetSubmissionByID retrieves a form submission by ID.
 func (r *formsRepository) GetSubmissionByID(ctx context.Context, id xid.ID) (*schema.FormSubmission, error) {
 	submission := &schema.FormSubmission{}
+
 	err := r.db.NewSelect().
 		Model(submission).
 		Where("id = ?", id).
 		Scan(ctx)
-
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("form submission not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, errs.NotFound("form submission not found")
 		}
+
 		return nil, fmt.Errorf("failed to get form submission: %w", err)
 	}
 
 	return submission, nil
 }
 
-// ListSubmissions retrieves form submissions for a form with pagination
+// ListSubmissions retrieves form submissions for a form with pagination.
 func (r *formsRepository) ListSubmissions(ctx context.Context, formSchemaID xid.ID, page, pageSize int) ([]*schema.FormSubmission, int, error) {
 	offset := (page - 1) * pageSize
 
@@ -208,12 +209,12 @@ func (r *formsRepository) ListSubmissions(ctx context.Context, formSchemaID xid.
 
 	// Get submissions with pagination
 	var submissions []*schema.FormSubmission
+
 	err = query.
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Scan(ctx, &submissions)
-
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list form submissions: %w", err)
 	}
@@ -221,7 +222,7 @@ func (r *formsRepository) ListSubmissions(ctx context.Context, formSchemaID xid.
 	return submissions, total, nil
 }
 
-// GetSubmissionsByUser retrieves form submissions for a user with pagination
+// GetSubmissionsByUser retrieves form submissions for a user with pagination.
 func (r *formsRepository) GetSubmissionsByUser(ctx context.Context, userID xid.ID, page, pageSize int) ([]*schema.FormSubmission, int, error) {
 	offset := (page - 1) * pageSize
 
@@ -237,12 +238,12 @@ func (r *formsRepository) GetSubmissionsByUser(ctx context.Context, userID xid.I
 
 	// Get submissions with pagination
 	var submissions []*schema.FormSubmission
+
 	err = query.
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(pageSize).
 		Scan(ctx, &submissions)
-
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list user form submissions: %w", err)
 	}
@@ -252,15 +253,15 @@ func (r *formsRepository) GetSubmissionsByUser(ctx context.Context, userID xid.I
 
 // Additional helper methods for advanced queries
 
-// GetActiveFormsByType retrieves all active forms of a specific type for an organization
+// GetActiveFormsByType retrieves all active forms of a specific type for an organization.
 func (r *formsRepository) GetActiveFormsByType(ctx context.Context, orgID xid.ID, formType string) ([]*schema.FormSchema, error) {
 	var forms []*schema.FormSchema
+
 	err := r.db.NewSelect().
 		Model(&forms).
 		Where("app_id = ? AND type = ? AND is_active = ?", orgID, formType, true).
 		Order("created_at DESC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active forms by type: %w", err)
 	}
@@ -268,15 +269,15 @@ func (r *formsRepository) GetActiveFormsByType(ctx context.Context, orgID xid.ID
 	return forms, nil
 }
 
-// GetFormVersions retrieves all versions of a form (by name and organization)
+// GetFormVersions retrieves all versions of a form (by name and organization).
 func (r *formsRepository) GetFormVersions(ctx context.Context, orgID xid.ID, name string) ([]*schema.FormSchema, error) {
 	var forms []*schema.FormSchema
+
 	err := r.db.NewSelect().
 		Model(&forms).
 		Where("app_id = ? AND name = ?", orgID, name).
 		Order("version DESC").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get form versions: %w", err)
 	}
@@ -284,7 +285,7 @@ func (r *formsRepository) GetFormVersions(ctx context.Context, orgID xid.ID, nam
 	return forms, nil
 }
 
-// GetSubmissionStats retrieves submission statistics for a form
+// GetSubmissionStats retrieves submission statistics for a form.
 func (r *formsRepository) GetSubmissionStats(ctx context.Context, formSchemaID xid.ID) (*FormSubmissionStats, error) {
 	stats := &FormSubmissionStats{}
 
@@ -296,6 +297,7 @@ func (r *formsRepository) GetSubmissionStats(ctx context.Context, formSchemaID x
 	if err != nil {
 		return nil, fmt.Errorf("failed to count total submissions: %w", err)
 	}
+
 	stats.Total = total
 
 	// Get submissions by status
@@ -311,7 +313,6 @@ func (r *formsRepository) GetSubmissionStats(ctx context.Context, formSchemaID x
 		Where("form_schema_id = ?", formSchemaID).
 		Group("status").
 		Scan(ctx, &statusCounts)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get submission status counts: %w", err)
 	}
@@ -324,7 +325,7 @@ func (r *formsRepository) GetSubmissionStats(ctx context.Context, formSchemaID x
 	return stats, nil
 }
 
-// FormSubmissionStats represents submission statistics for a form
+// FormSubmissionStats represents submission statistics for a form.
 type FormSubmissionStats struct {
 	Total    int            `json:"total"`
 	ByStatus map[string]int `json:"byStatus"`

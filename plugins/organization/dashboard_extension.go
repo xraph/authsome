@@ -2,7 +2,6 @@ package organization
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,13 +26,13 @@ import (
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface
-// This allows the organization plugin to add its own screens to the dashboard
+// This allows the organization plugin to add its own screens to the dashboard.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
 }
 
-// NewDashboardExtension creates a new dashboard extension for organization
+// NewDashboardExtension creates a new dashboard extension for organization.
 func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	return &DashboardExtension{
 		plugin:     plugin,
@@ -41,12 +40,12 @@ func NewDashboardExtension(plugin *Plugin) *DashboardExtension {
 	}
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "organization"
 }
 
-// NavigationItems returns navigation items to register
+// NavigationItems returns navigation items to register.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -61,6 +60,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp != nil {
 					return basePath + "/app/" + currentApp.ID.String() + "/organizations"
 				}
+
 				return basePath + "/"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -71,7 +71,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns routes to register under /app/:appId/
+// Routes returns routes to register under /app/:appId/.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// Organization List
@@ -448,7 +448,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 }
 
 // SettingsSections returns settings sections to add to the settings page
-// Deprecated: Use SettingsPages() instead
+// Deprecated: Use SettingsPages() instead.
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{
 		{
@@ -466,7 +466,7 @@ func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	}
 }
 
-// SettingsPages returns full settings pages for the new sidebar layout
+// SettingsPages returns full settings pages for the new sidebar layout.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -494,7 +494,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// DashboardWidgets returns widgets to show on the main dashboard
+// DashboardWidgets returns widgets to show on the main dashboard.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -514,7 +514,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 
 // BridgeFunctions returns bridge functions for the organization plugin
 // Note: The extension registry will prefix these with "organization." to create
-// the full function name (e.g., "organization.getOrganizations")
+// the full function name (e.g., "organization.getOrganizations").
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		// Simple test function to verify bridge is working
@@ -644,13 +644,12 @@ func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	}
 }
 
-// ServeOrganizationsListPage renders the organizations list page
+// ServeOrganizationsListPage renders the organizations list page.
 func (e *DashboardExtension) ServeOrganizationsListPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid app context")
+		return nil, errs.BadRequest("invalid app context")
 	}
 
 	basePath := e.baseUIPath
@@ -659,7 +658,7 @@ func (e *DashboardExtension) ServeOrganizationsListPage(ctx *router.PageContext)
 	return pages.OrganizationsListPage(currentApp, basePath), nil
 }
 
-// renderOrganizationsListContent renders the main content for organizations list
+// renderOrganizationsListContent renders the main content for organizations list.
 func (e *DashboardExtension) renderOrganizationsListContent(c *router.PageContext, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
 	ctx := c.Request.Context()
 
@@ -680,8 +679,11 @@ func (e *DashboardExtension) renderOrganizationsListContent(c *router.PageContex
 
 	orgsResp, err := e.plugin.orgService.ListOrganizations(ctx, filter)
 
-	var orgs []*coreorg.Organization
-	var totalOrgs int64
+	var (
+		orgs      []*coreorg.Organization
+		totalOrgs int64
+	)
+
 	if err == nil && orgsResp != nil {
 		orgs = orgsResp.Data
 		if orgsResp.Pagination != nil {
@@ -692,6 +694,7 @@ func (e *DashboardExtension) renderOrganizationsListContent(c *router.PageContex
 	// Calculate stats
 	totalMembers := int64(0)
 	totalTeams := int64(0)
+
 	for _, org := range orgs {
 		// Count members for each org
 		membersResp, _ := e.plugin.orgService.ListMembers(ctx, &coreorg.ListMembersFilter{
@@ -735,9 +738,9 @@ func (e *DashboardExtension) renderOrganizationsListContent(c *router.PageContex
 		// Stats cards
 		Div(
 			Class("grid gap-6 md:grid-cols-3"),
-			e.statsCard("Total Organizations", fmt.Sprintf("%d", totalOrgs), lucide.Building2(Class("size-5"))),
-			e.statsCard("Total Members", fmt.Sprintf("%d", totalMembers), lucide.Users(Class("size-5"))),
-			e.statsCard("Total Teams", fmt.Sprintf("%d", totalTeams), lucide.UsersRound(Class("size-5"))),
+			e.statsCard("Total Organizations", strconv.FormatInt(totalOrgs, 10), lucide.Building2(Class("size-5"))),
+			e.statsCard("Total Members", strconv.FormatInt(totalMembers, 10), lucide.Users(Class("size-5"))),
+			e.statsCard("Total Teams", strconv.FormatInt(totalTeams, 10), lucide.UsersRound(Class("size-5"))),
 		),
 
 		// Organizations table
@@ -745,13 +748,12 @@ func (e *DashboardExtension) renderOrganizationsListContent(c *router.PageContex
 	)
 }
 
-// ServeCreateOrganizationPage renders the create organization page
+// ServeCreateOrganizationPage renders the create organization page.
 func (e *DashboardExtension) ServeCreateOrganizationPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid app context")
+		return nil, errs.BadRequest("invalid app context")
 	}
 
 	basePath := e.baseUIPath
@@ -762,13 +764,12 @@ func (e *DashboardExtension) ServeCreateOrganizationPage(ctx *router.PageContext
 	return pages.CreateOrganizationPage(currentApp, basePath, errorMsg), nil
 }
 
-// ServeOrganizationDetailPage renders the organization detail page
+// ServeOrganizationDetailPage renders the organization detail page.
 func (e *DashboardExtension) ServeOrganizationDetailPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid app context")
+		return nil, errs.BadRequest("invalid app context")
 	}
 
 	basePath := e.baseUIPath
@@ -776,20 +777,19 @@ func (e *DashboardExtension) ServeOrganizationDetailPage(ctx *router.PageContext
 	// Get organization ID from URL
 	orgIDStr := ctx.Param("orgId")
 	if orgIDStr == "" {
-		return nil, fmt.Errorf("organization ID is required")
+		return nil, errs.RequiredField("organization ID")
 	}
 
 	// Return ForgeUI page (data loaded via bridge)
 	return pages.OrganizationDetailPage(currentApp, orgIDStr, basePath), nil
 }
 
-// ServeUpdateOrganizationPage renders the update organization form page
+// ServeUpdateOrganizationPage renders the update organization form page.
 func (e *DashboardExtension) ServeUpdateOrganizationPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("invalid app context")
+		return nil, errs.BadRequest("invalid app context")
 	}
 
 	basePath := e.baseUIPath
@@ -797,17 +797,16 @@ func (e *DashboardExtension) ServeUpdateOrganizationPage(ctx *router.PageContext
 	// Get organization ID from URL
 	orgIDStr := ctx.Param("orgId")
 	if orgIDStr == "" {
-		return nil, fmt.Errorf("organization ID is required")
+		return nil, errs.RequiredField("organization ID")
 	}
 
 	// Return ForgeUI page (data loaded via bridge)
 	return pages.UpdateOrganizationPage(currentApp, orgIDStr, basePath), nil
 }
 
-// ServeOrganizationTabContent renders extension tab content
+// ServeOrganizationTabContent renders extension tab content.
 func (e *DashboardExtension) ServeOrganizationTabContent(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -839,7 +838,7 @@ func (e *DashboardExtension) ServeOrganizationTabContent(ctx *router.PageContext
 		AppID:    currentApp.ID,
 		BasePath: basePath,
 		Request:  ctx.Request,
-		GetOrg: func() (interface{}, error) {
+		GetOrg: func() (any, error) {
 			return org, nil
 		},
 		IsAdmin: isAdmin,
@@ -860,10 +859,9 @@ func (e *DashboardExtension) ServeOrganizationTabContent(ctx *router.PageContext
 	return tab.Renderer(extCtx), nil
 }
 
-// ServeOrganizationMembersPage renders the members management page
+// ServeOrganizationMembersPage renders the members management page.
 func (e *DashboardExtension) ServeOrganizationMembersPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -881,7 +879,7 @@ func (e *DashboardExtension) ServeOrganizationMembersPage(ctx *router.PageContex
 	return pages.MembersPage(currentApp, orgIDStr, basePath), nil
 }
 
-// renderMembersPageContent renders the members management content
+// renderMembersPageContent renders the members management content.
 func (e *DashboardExtension) renderMembersPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
 	ctx := c.Request.Context()
 
@@ -941,10 +939,9 @@ func (e *DashboardExtension) renderMembersPageContent(c *router.PageContext, org
 	)
 }
 
-// ServeOrganizationTeamsPage renders the teams management page
+// ServeOrganizationTeamsPage renders the teams management page.
 func (e *DashboardExtension) ServeOrganizationTeamsPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -962,10 +959,9 @@ func (e *DashboardExtension) ServeOrganizationTeamsPage(ctx *router.PageContext)
 	return pages.TeamsPage(currentApp, orgIDStr, basePath), nil
 }
 
-// ServeCreateTeamPage renders the create team form page
+// ServeCreateTeamPage renders the create team form page.
 func (e *DashboardExtension) ServeCreateTeamPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -982,10 +978,9 @@ func (e *DashboardExtension) ServeCreateTeamPage(ctx *router.PageContext) (g.Nod
 	return pages.CreateTeamPage(currentApp, orgIDStr, basePath), nil
 }
 
-// ServeEditTeamPage renders the edit team form page
+// ServeEditTeamPage renders the edit team form page.
 func (e *DashboardExtension) ServeEditTeamPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1007,7 +1002,7 @@ func (e *DashboardExtension) ServeEditTeamPage(ctx *router.PageContext) (g.Node,
 	return pages.EditTeamPage(currentApp, orgIDStr, teamIDStr, basePath), nil
 }
 
-// renderTeamsPageContent renders the teams management content
+// renderTeamsPageContent renders the teams management content.
 func (e *DashboardExtension) renderTeamsPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
 	ctx := c.Request.Context()
 
@@ -1067,10 +1062,9 @@ func (e *DashboardExtension) renderTeamsPageContent(c *router.PageContext, org *
 	)
 }
 
-// ServeOrganizationRolesPage renders the roles page
+// ServeOrganizationRolesPage renders the roles page.
 func (e *DashboardExtension) ServeOrganizationRolesPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1088,7 +1082,7 @@ func (e *DashboardExtension) ServeOrganizationRolesPage(ctx *router.PageContext)
 	return pages.RolesPage(currentApp, orgIDStr, basePath), nil
 }
 
-// renderRolesPageContent renders the roles management content
+// renderRolesPageContent renders the roles management content.
 func (e *DashboardExtension) renderRolesPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
 	ctx := c.Request.Context()
 
@@ -1128,7 +1122,7 @@ func (e *DashboardExtension) renderRolesPageContent(c *router.PageContext, org *
 	)
 }
 
-// renderRolesTable renders the roles table
+// renderRolesTable renders the roles table.
 func (e *DashboardExtension) renderRolesTable(ctx context.Context, roles []*schema.Role, org *coreorg.Organization, currentApp *app.App, canManage bool, basePath string) g.Node {
 	if len(roles) == 0 {
 		return Div(
@@ -1168,15 +1162,17 @@ func (e *DashboardExtension) renderRolesTable(ctx context.Context, roles []*sche
 	)
 }
 
-// renderRoleRow renders a single role row
+// renderRoleRow renders a single role row.
 func (e *DashboardExtension) renderRoleRow(role *schema.Role, org *coreorg.Organization, currentApp *app.App, canManage bool, basePath string) g.Node {
 	// Determine role type
 	roleType := "Custom"
 	roleTypeClass := "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-300"
+
 	if role.TemplateID != nil {
 		roleType = "From Template"
 		roleTypeClass = "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
 	}
+
 	if role.IsOwnerRole {
 		roleType = "Owner Role"
 		roleTypeClass = "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300"
@@ -1225,10 +1221,9 @@ func (e *DashboardExtension) renderRoleRow(role *schema.Role, org *coreorg.Organ
 	)
 }
 
-// ServeOrganizationInvitationsPage renders the invitations page
+// ServeOrganizationInvitationsPage renders the invitations page.
 func (e *DashboardExtension) ServeOrganizationInvitationsPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1246,7 +1241,7 @@ func (e *DashboardExtension) ServeOrganizationInvitationsPage(ctx *router.PageCo
 	return pages.InvitationsPage(currentApp, orgIDStr, basePath), nil
 }
 
-// renderInvitationsPageContent renders the invitations content
+// renderInvitationsPageContent renders the invitations content.
 func (e *DashboardExtension) renderInvitationsPageContent(c *router.PageContext, org *coreorg.Organization, currentApp *app.App, currentUser *user.User, basePath string) g.Node {
 	ctx := c.Request.Context()
 
@@ -1285,10 +1280,9 @@ func (e *DashboardExtension) renderInvitationsPageContent(c *router.PageContext,
 
 // Action Handlers
 
-// CreateOrganization handles organization creation
+// CreateOrganization handles organization creation.
 func (e *DashboardExtension) CreateOrganization(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1327,6 +1321,7 @@ func (e *DashboardExtension) CreateOrganization(ctx *router.PageContext) (g.Node
 	}
 
 	reqCtx := ctx.Request.Context()
+
 	_, err = e.plugin.orgService.CreateOrganization(reqCtx, req, currentUser.ID, currentApp.ID, envID)
 	if err != nil {
 		return nil, errs.InternalServerError("Failed to create organization", err)
@@ -1335,13 +1330,13 @@ func (e *DashboardExtension) CreateOrganization(ctx *router.PageContext) (g.Node
 	// Redirect to organizations list
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// UpdateOrganization handles organization updates
+// UpdateOrganization handles organization updates.
 func (e *DashboardExtension) UpdateOrganization(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1368,6 +1363,7 @@ func (e *DashboardExtension) UpdateOrganization(ctx *router.PageContext) (g.Node
 
 	form := ctx.Request.Form
 	name := form.Get("name")
+
 	req := &coreorg.UpdateOrganizationRequest{
 		Name: &name,
 	}
@@ -1382,13 +1378,13 @@ func (e *DashboardExtension) UpdateOrganization(ctx *router.PageContext) (g.Node
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// DeleteOrganization handles organization deletion
+// DeleteOrganization handles organization deletion.
 func (e *DashboardExtension) DeleteOrganization(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1415,13 +1411,13 @@ func (e *DashboardExtension) DeleteOrganization(ctx *router.PageContext) (g.Node
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// InviteMember handles member invitation
+// InviteMember handles member invitation.
 func (e *DashboardExtension) InviteMember(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1466,13 +1462,13 @@ func (e *DashboardExtension) InviteMember(ctx *router.PageContext) (g.Node, erro
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/members", http.StatusFound)
+
 	return nil, nil
 }
 
-// UpdateMemberRole handles member role updates
+// UpdateMemberRole handles member role updates.
 func (e *DashboardExtension) UpdateMemberRole(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1484,6 +1480,7 @@ func (e *DashboardExtension) UpdateMemberRole(ctx *router.PageContext) (g.Node, 
 	}
 
 	memberIDStr := ctx.Param("memberId")
+
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid member ID")
@@ -1519,13 +1516,13 @@ func (e *DashboardExtension) UpdateMemberRole(ctx *router.PageContext) (g.Node, 
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/members", http.StatusFound)
+
 	return nil, nil
 }
 
-// RemoveMember handles member removal
+// RemoveMember handles member removal.
 func (e *DashboardExtension) RemoveMember(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1537,6 +1534,7 @@ func (e *DashboardExtension) RemoveMember(ctx *router.PageContext) (g.Node, erro
 	}
 
 	memberIDStr := ctx.Param("memberId")
+
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid member ID")
@@ -1558,10 +1556,11 @@ func (e *DashboardExtension) RemoveMember(ctx *router.PageContext) (g.Node, erro
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/members", http.StatusFound)
+
 	return nil, nil
 }
 
-// CreateTeam handles team creation
+// CreateTeam handles team creation.
 func (e *DashboardExtension) CreateTeam(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1611,10 +1610,11 @@ func (e *DashboardExtension) CreateTeam(ctx *router.PageContext) (g.Node, error)
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/teams", http.StatusFound)
+
 	return nil, nil
 }
 
-// UpdateTeam handles team updates
+// UpdateTeam handles team updates.
 func (e *DashboardExtension) UpdateTeam(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1630,6 +1630,7 @@ func (e *DashboardExtension) UpdateTeam(ctx *router.PageContext) (g.Node, error)
 	}
 
 	teamIDStr := ctx.Param("teamId")
+
 	teamID, err := xid.FromString(teamIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid team ID")
@@ -1666,10 +1667,11 @@ func (e *DashboardExtension) UpdateTeam(ctx *router.PageContext) (g.Node, error)
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/teams", http.StatusFound)
+
 	return nil, nil
 }
 
-// DeleteTeam handles team deletion
+// DeleteTeam handles team deletion.
 func (e *DashboardExtension) DeleteTeam(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1685,6 +1687,7 @@ func (e *DashboardExtension) DeleteTeam(ctx *router.PageContext) (g.Node, error)
 	}
 
 	teamIDStr := ctx.Param("teamId")
+
 	teamID, err := xid.FromString(teamIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid team ID")
@@ -1705,10 +1708,11 @@ func (e *DashboardExtension) DeleteTeam(ctx *router.PageContext) (g.Node, error)
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/teams", http.StatusFound)
+
 	return nil, nil
 }
 
-// CancelInvitation handles invitation cancellation
+// CancelInvitation handles invitation cancellation.
 func (e *DashboardExtension) CancelInvitation(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1724,6 +1728,7 @@ func (e *DashboardExtension) CancelInvitation(ctx *router.PageContext) (g.Node, 
 	}
 
 	inviteIDStr := ctx.Param("inviteId")
+
 	inviteID, err := xid.FromString(inviteIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid invitation ID")
@@ -1742,12 +1747,13 @@ func (e *DashboardExtension) CancelInvitation(ctx *router.PageContext) (g.Node, 
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/invitations", http.StatusFound)
+
 	return nil, nil
 }
 
 // ServeRoleTemplatesSettings renders the role templates settings page
 // This is an app-level settings page, not an organization-specific page
-// Note: RequireAuth and RequireAdmin in route config handle authentication/authorization
+// Note: RequireAuth and RequireAdmin in route config handle authentication/authorization.
 func (e *DashboardExtension) ServeRoleTemplatesSettings(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 
@@ -1762,10 +1768,9 @@ func (e *DashboardExtension) ServeRoleTemplatesSettings(ctx *router.PageContext)
 	return content, nil
 }
 
-// ServeCreateRoleTemplate renders the create role template form
+// ServeCreateRoleTemplate renders the create role template form.
 func (e *DashboardExtension) ServeCreateRoleTemplate(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1774,10 +1779,9 @@ func (e *DashboardExtension) ServeCreateRoleTemplate(ctx *router.PageContext) (g
 	return pages.RoleTemplateFormPage(currentApp, "", e.baseUIPath, false), nil
 }
 
-// ServeEditRoleTemplate renders the edit role template form
+// ServeEditRoleTemplate renders the edit role template form.
 func (e *DashboardExtension) ServeEditRoleTemplate(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1792,10 +1796,9 @@ func (e *DashboardExtension) ServeEditRoleTemplate(ctx *router.PageContext) (g.N
 	return pages.RoleTemplateFormPage(currentApp, templateID, e.baseUIPath, true), nil
 }
 
-// ServeOrganizationSettings renders the organization settings page
+// ServeOrganizationSettings renders the organization settings page.
 func (e *DashboardExtension) ServeOrganizationSettings(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1807,10 +1810,9 @@ func (e *DashboardExtension) ServeOrganizationSettings(ctx *router.PageContext) 
 	return content, nil
 }
 
-// SavePluginSettings handles plugin settings updates
+// SavePluginSettings handles plugin settings updates.
 func (e *DashboardExtension) SavePluginSettings(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -1858,10 +1860,11 @@ func (e *DashboardExtension) SavePluginSettings(ctx *router.PageContext) (g.Node
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/organizations?saved=true", http.StatusFound)
+
 	return nil, nil
 }
 
-// CreateRoleTemplate handles role template creation
+// CreateRoleTemplate handles role template creation.
 func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1888,6 +1891,7 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 	if name == "" {
 		errors["name"] = "Role name is required"
 	}
+
 	if len(permissionIDs) == 0 {
 		errors["permissions"] = "At least one permission must be selected"
 	}
@@ -1895,6 +1899,7 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 	if len(errors) > 0 {
 		// basePath := e.baseUIPath
 		content := e.renderCreateRoleTemplateForm(reqCtx, currentApp, e.baseUIPath, errors)
+
 		return content, nil
 	}
 
@@ -1909,6 +1914,7 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 
 	// Get default environment for the app
 	var defaultEnvID xid.ID
+
 	err = e.plugin.db.NewSelect().
 		Table("environments").
 		Column("id").
@@ -1916,7 +1922,6 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 		Where("is_default = ?", true).
 		Limit(1).
 		Scan(reqCtx, &defaultEnvID)
-
 	if err != nil {
 		// If no default environment, try to get the first one
 		err = e.plugin.db.NewSelect().
@@ -1926,7 +1931,6 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 			Order("created_at ASC").
 			Limit(1).
 			Scan(reqCtx, &defaultEnvID)
-
 		if err != nil {
 			return nil, errs.InternalServerError("Failed to get environment", err)
 		}
@@ -1941,10 +1945,11 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/roles?created=true", http.StatusFound)
+
 	return nil, nil
 }
 
-// UpdateRoleTemplate handles role template updates
+// UpdateRoleTemplate handles role template updates.
 func (e *DashboardExtension) UpdateRoleTemplate(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -1955,6 +1960,7 @@ func (e *DashboardExtension) UpdateRoleTemplate(ctx *router.PageContext) (g.Node
 	}
 
 	roleIDStr := ctx.Param("roleId")
+
 	roleID, err := xid.FromString(roleIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid role ID")
@@ -1977,6 +1983,7 @@ func (e *DashboardExtension) UpdateRoleTemplate(ctx *router.PageContext) (g.Node
 	if name == "" {
 		errors["name"] = "Role name is required"
 	}
+
 	if len(permissionIDs) == 0 {
 		errors["permissions"] = "At least one permission must be selected"
 	}
@@ -1984,6 +1991,7 @@ func (e *DashboardExtension) UpdateRoleTemplate(ctx *router.PageContext) (g.Node
 	if len(errors) > 0 {
 		// basePath := e.baseUIPath
 		content := e.renderEditRoleTemplateForm(reqCtx, currentApp, roleID, e.baseUIPath, errors)
+
 		return content, nil
 	}
 
@@ -2005,10 +2013,11 @@ func (e *DashboardExtension) UpdateRoleTemplate(ctx *router.PageContext) (g.Node
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/roles?updated=true", http.StatusFound)
+
 	return nil, nil
 }
 
-// DeleteRoleTemplate handles role template deletion
+// DeleteRoleTemplate handles role template deletion.
 func (e *DashboardExtension) DeleteRoleTemplate(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -2019,6 +2028,7 @@ func (e *DashboardExtension) DeleteRoleTemplate(ctx *router.PageContext) (g.Node
 	}
 
 	roleIDStr := ctx.Param("roleId")
+
 	roleID, err := xid.FromString(roleIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid role ID")
@@ -2031,12 +2041,14 @@ func (e *DashboardExtension) DeleteRoleTemplate(ctx *router.PageContext) (g.Node
 
 	basePath := e.baseUIPath
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/settings/roles?deleted=true", http.StatusFound)
+
 	return nil, nil
 }
 
-// AddCustomPermission handles creating custom permissions inline
+// AddCustomPermission handles creating custom permissions inline.
 func (e *DashboardExtension) AddCustomPermission(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
+
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		return nil, errs.Unauthorized()
@@ -2081,24 +2093,28 @@ func (e *DashboardExtension) AddCustomPermission(ctx *router.PageContext) (g.Nod
 
 // Helper Methods
 
-// Context helpers
+// Context helpers.
 func (e *DashboardExtension) getUserFromContext(c *router.PageContext) *user.User {
 	// Extract user from request context
 	ctx := c.Request.Context()
+
 	userVal := ctx.Value(contexts.UserContextKey)
 	if userVal == nil {
 		return nil
 	}
+
 	currentUser, ok := userVal.(*user.User)
 	if !ok {
 		return nil
 	}
+
 	return currentUser
 }
 
 func (e *DashboardExtension) extractAppFromURL(c *router.PageContext) (*app.App, error) {
 	// First try to extract app from request context (set by middleware)
 	ctx := c.Request.Context()
+
 	appVal := ctx.Value(contexts.AppContextKey)
 	if appVal != nil {
 		if currentApp, ok := appVal.(*app.App); ok {
@@ -2119,6 +2135,7 @@ func (e *DashboardExtension) extractAppFromURL(c *router.PageContext) (*app.App,
 func (e *DashboardExtension) extractEnvironmentFromURL(c *router.PageContext, appID xid.ID) (xid.ID, error) {
 	// First try to extract environment from request context (set by middleware)
 	ctx := c.Request.Context()
+
 	envVal := ctx.Value(contexts.EnvironmentContextKey)
 	if envVal != nil {
 		if currentEnv, ok := envVal.(*environment.Environment); ok {
@@ -2149,6 +2166,7 @@ func (e *DashboardExtension) getCurrentOrganization(c *router.PageContext) (*cor
 	}
 
 	reqCtx := c.Request.Context()
+
 	org, err := e.plugin.orgService.FindOrganizationByID(reqCtx, orgID)
 	if err != nil {
 		return nil, forge.NewHTTPError(http.StatusNotFound, "organization not found")
@@ -2157,7 +2175,7 @@ func (e *DashboardExtension) getCurrentOrganization(c *router.PageContext) (*cor
 	return org, nil
 }
 
-// Permission helpers
+// Permission helpers.
 func (e *DashboardExtension) checkOrgAccess(ctx context.Context, orgID, userID xid.ID) bool {
 	// App admins/owners can access all organizations
 	if e.isAppAdmin(ctx, userID) {
@@ -2165,17 +2183,20 @@ func (e *DashboardExtension) checkOrgAccess(ctx context.Context, orgID, userID x
 	}
 	// Otherwise, check if user is a member of this specific org
 	isMember, _ := e.plugin.orgService.IsMember(ctx, orgID, userID)
+
 	return isMember
 }
 
 func (e *DashboardExtension) checkOrgAdmin(ctx context.Context, orgID, userID xid.ID) bool {
 	isAdmin, _ := e.plugin.orgService.IsAdmin(ctx, orgID, userID)
 	isOwner, _ := e.plugin.orgService.IsOwner(ctx, orgID, userID)
+
 	return isAdmin || isOwner
 }
 
 func (e *DashboardExtension) checkOrgOwner(ctx context.Context, orgID, userID xid.ID) bool {
 	isOwner, _ := e.plugin.orgService.IsOwner(ctx, orgID, userID)
+
 	return isOwner
 }
 
@@ -2186,14 +2207,17 @@ func (e *DashboardExtension) getUserRole(ctx context.Context, orgID, userID xid.
 		if e.isAppAdmin(ctx, userID) {
 			return "admin"
 		}
+
 		return ""
 	}
+
 	return member.Role
 }
 
-// isUserAdmin checks if the user has admin privileges in the organization
+// isUserAdmin checks if the user has admin privileges in the organization.
 func (e *DashboardExtension) isUserAdmin(ctx context.Context, orgID, userID xid.ID) bool {
 	role := e.getUserRole(ctx, orgID, userID)
+
 	return role == "owner" || role == "admin"
 }
 
@@ -2201,7 +2225,7 @@ func (e *DashboardExtension) isUserAdmin(ctx context.Context, orgID, userID xid.
 // It checks:
 // 1. App-level role check (owner/admin/superadmin can manage all orgs in their app)
 // 2. Dynamic RBAC permission (create on members)
-// 3. Organization-level role check (owner/admin)
+// 3. Organization-level role check (owner/admin).
 func (e *DashboardExtension) canManageOrganization(ctx context.Context, orgID, userID xid.ID) bool {
 	// First, check if user is an app owner/admin/superadmin
 	// App owners should be able to manage all organizations in their app
@@ -2225,7 +2249,7 @@ func (e *DashboardExtension) canManageOrganization(ctx context.Context, orgID, u
 }
 
 // isAppAdmin checks if a user has owner/admin/superadmin role at the app level
-// This allows app admins to manage all organizations within their app
+// This allows app admins to manage all organizations within their app.
 func (e *DashboardExtension) isAppAdmin(ctx context.Context, userID xid.ID) bool {
 	// Get the current app from context
 	db := e.plugin.db
@@ -2261,7 +2285,7 @@ func (e *DashboardExtension) isAppAdmin(ctx context.Context, userID xid.ID) bool
 	return false
 }
 
-// Settings rendering
+// Settings rendering.
 func (e *DashboardExtension) RenderSettingsSection(basePath string, currentApp *app.App) g.Node {
 	cfg := e.plugin.config
 
@@ -2400,7 +2424,7 @@ func (e *DashboardExtension) RenderSettingsSection(basePath string, currentApp *
 	)
 }
 
-// Dashboard widget rendering
+// Dashboard widget rendering.
 func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *app.App) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -2484,8 +2508,10 @@ func (e *DashboardExtension) quickLinkCard(title, description, href string, icon
 }
 
 func (e *DashboardExtension) renderRoleBadge(role string) g.Node {
-	var classes string
-	var badgeIcon g.Node
+	var (
+		classes   string
+		badgeIcon g.Node
+	)
 
 	switch role {
 	case "owner":
@@ -2592,6 +2618,7 @@ func (e *DashboardExtension) renderOrganizationRows(ctx context.Context, orgs []
 	for _, org := range orgs {
 		rows = append(rows, e.renderOrganizationRow(ctx, org, currentApp, currentUser, basePath))
 	}
+
 	return rows
 }
 
@@ -2601,6 +2628,7 @@ func (e *DashboardExtension) renderOrganizationRow(ctx context.Context, org *cor
 		OrganizationID:   org.ID,
 		PaginationParams: pagination.PaginationParams{Limit: 1},
 	})
+
 	memberCount := 0
 	if membersResp != nil && membersResp.Pagination != nil {
 		memberCount = int(membersResp.Pagination.Total)
@@ -2611,6 +2639,7 @@ func (e *DashboardExtension) renderOrganizationRow(ctx context.Context, org *cor
 		OrganizationID:   org.ID,
 		PaginationParams: pagination.PaginationParams{Limit: 1},
 	})
+
 	teamCount := 0
 	if teamsResp != nil && teamsResp.Pagination != nil {
 		teamCount = int(teamsResp.Pagination.Total)
@@ -2646,13 +2675,13 @@ func (e *DashboardExtension) renderOrganizationRow(ctx context.Context, org *cor
 		Td(Class("px-6 py-4 whitespace-nowrap"),
 			Div(
 				Class("text-sm text-slate-900 dark:text-white"),
-				g.Text(fmt.Sprintf("%d", memberCount)),
+				g.Text(strconv.Itoa(memberCount)),
 			),
 		),
 		Td(Class("px-6 py-4 whitespace-nowrap"),
 			Div(
 				Class("text-sm text-slate-900 dark:text-white"),
-				g.Text(fmt.Sprintf("%d", teamCount)),
+				g.Text(strconv.Itoa(teamCount)),
 			),
 		),
 		Td(Class("px-6 py-4 whitespace-nowrap"),
@@ -2725,6 +2754,7 @@ func (e *DashboardExtension) renderMemberRows(members []*coreorg.Member, org *co
 	for _, member := range members {
 		rows = append(rows, e.renderMemberRow(member, org, currentApp, userRole, canManage, basePath))
 	}
+
 	return rows
 }
 
@@ -2736,12 +2766,14 @@ func (e *DashboardExtension) renderMemberRow(member *coreorg.Member, org *coreor
 	userName := "Unknown User"
 	userEmail := ""
 	userImage := ""
+
 	if member.User != nil {
 		if member.User.Name != "" {
 			userName = member.User.Name
 		} else if member.User.Email != "" {
 			userName = member.User.Email
 		}
+
 		userEmail = member.User.Email
 		userImage = member.User.Image
 	}
@@ -2868,6 +2900,7 @@ func (e *DashboardExtension) renderTeamRows(ctx context.Context, teams []*coreor
 	for _, team := range teams {
 		rows = append(rows, e.renderTeamRow(ctx, team, org, currentApp, canManage, basePath))
 	}
+
 	return rows
 }
 
@@ -2894,7 +2927,7 @@ func (e *DashboardExtension) renderTeamRow(ctx context.Context, team *coreorg.Te
 		Td(Class("px-6 py-4 whitespace-nowrap"),
 			Div(
 				Class("text-sm text-slate-900 dark:text-white"),
-				g.Text(fmt.Sprintf("%d", memberCount)),
+				g.Text(strconv.Itoa(memberCount)),
 			),
 		),
 		Td(Class("px-6 py-4 whitespace-nowrap"),
@@ -2970,6 +3003,7 @@ func (e *DashboardExtension) renderInvitationRows(invitations []*coreorg.Invitat
 	for _, invite := range invitations {
 		rows = append(rows, e.renderInvitationRow(invite, org, currentApp, basePath))
 	}
+
 	return rows
 }
 
@@ -3147,6 +3181,7 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 	} else {
 		// Get default environment for the app
 		var defaultEnvID xid.ID
+
 		err := e.plugin.db.NewSelect().
 			Table("environments").
 			Column("id").
@@ -3154,7 +3189,6 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 			Where("is_default = ?", true).
 			Limit(1).
 			Scan(ctx, &defaultEnvID)
-
 		if err != nil {
 			// If no default environment, try to get the first one
 			err = e.plugin.db.NewSelect().

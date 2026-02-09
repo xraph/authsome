@@ -13,20 +13,21 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/secrets/core"
 )
 
-// Encryption constants
+// Encryption constants.
 const (
-	// MasterKeyLength is the required length for the master key (32 bytes for AES-256)
+	// MasterKeyLength is the required length for the master key (32 bytes for AES-256).
 	MasterKeyLength = 32
-	// NonceLength is the length of the nonce for AES-GCM (12 bytes)
+	// NonceLength is the length of the nonce for AES-GCM (12 bytes).
 	NonceLength = 12
-	// SaltLength is the length of the salt for key derivation
+	// SaltLength is the length of the salt for key derivation.
 	SaltLength = 32
 )
 
-// Argon2 parameters for key derivation
+// Argon2 parameters for key derivation.
 const (
 	argon2Time    = 1
 	argon2Memory  = 64 * 1024 // 64MB
@@ -73,6 +74,7 @@ func GenerateMasterKey() (string, error) {
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return "", fmt.Errorf("failed to generate master key: %w", err)
 	}
+
 	return base64.StdEncoding.EncodeToString(key), nil
 }
 
@@ -83,10 +85,13 @@ func (e *EncryptionService) DeriveKey(appID, envID string) []byte {
 
 	// Check cache first
 	e.cacheMu.RLock()
+
 	if derivedKey, ok := e.keyCache[cacheKey]; ok {
 		e.cacheMu.RUnlock()
+
 		return derivedKey
 	}
+
 	e.cacheMu.RUnlock()
 
 	// Create a deterministic salt from app and environment IDs
@@ -145,11 +150,11 @@ func (e *EncryptionService) Encrypt(plaintext []byte, appID, envID string) (ciph
 // Decrypt decrypts ciphertext using AES-256-GCM with a key derived for the specific app/environment.
 func (e *EncryptionService) Decrypt(ciphertext, nonce []byte, appID, envID string) ([]byte, error) {
 	if len(ciphertext) == 0 {
-		return nil, core.ErrDecryptionFailed(fmt.Errorf("ciphertext is empty"))
+		return nil, core.ErrDecryptionFailed(errs.BadRequest("ciphertext is empty"))
 	}
 
 	if len(nonce) == 0 {
-		return nil, core.ErrDecryptionFailed(fmt.Errorf("nonce is empty"))
+		return nil, core.ErrDecryptionFailed(errs.BadRequest("nonce is empty"))
 	}
 
 	// Derive the key for this app/environment
@@ -205,14 +210,17 @@ func (e *EncryptionService) ReEncrypt(
 func (e *EncryptionService) ClearKeyCache() {
 	e.cacheMu.Lock()
 	defer e.cacheMu.Unlock()
+
 	e.keyCache = make(map[string][]byte)
 }
 
 // ClearKeyForTenant clears the cached key for a specific tenant.
 func (e *EncryptionService) ClearKeyForTenant(appID, envID string) {
 	cacheKey := appID + ":" + envID
+
 	e.cacheMu.Lock()
 	defer e.cacheMu.Unlock()
+
 	delete(e.keyCache, cacheKey)
 }
 
@@ -221,6 +229,7 @@ func (e *EncryptionService) ValidateMasterKey() error {
 	if e.masterKey == nil || len(e.masterKey) != MasterKeyLength {
 		return core.ErrMasterKeyInvalid("master key is not properly initialized")
 	}
+
 	return nil
 }
 
@@ -241,7 +250,7 @@ func (e *EncryptionService) TestEncryption() error {
 	}
 
 	if string(decrypted) != string(testPlaintext) {
-		return fmt.Errorf("test encryption/decryption round-trip failed: data mismatch")
+		return errs.InternalServerErrorWithMessage("test encryption/decryption round-trip failed: data mismatch")
 	}
 
 	// Clean up test key from cache

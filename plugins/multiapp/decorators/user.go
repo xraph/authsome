@@ -9,20 +9,21 @@ import (
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/user"
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// MultiTenantUserService decorates the user service with multi-tenancy support
+// MultiTenantUserService decorates the user service with multi-tenancy support.
 type MultiTenantUserService struct {
 	userService user.ServiceInterface
 	appService  *coreapp.ServiceImpl
 }
 
-// CountUsers counts users in the specified app
+// CountUsers counts users in the specified app.
 func (s *MultiTenantUserService) CountUsers(ctx context.Context, filter *user.CountUsersFilter) (int, error) {
 	return s.userService.CountUsers(ctx, filter)
 }
 
-// NewMultiTenantUserService creates a new multi-tenant user service decorator
+// NewMultiTenantUserService creates a new multi-tenant user service decorator.
 func NewMultiTenantUserService(userService user.ServiceInterface, appService *coreapp.ServiceImpl) *MultiTenantUserService {
 	return &MultiTenantUserService{
 		userService: userService,
@@ -30,14 +31,17 @@ func NewMultiTenantUserService(userService user.ServiceInterface, appService *co
 	}
 }
 
-// Create creates a new user within an app context
+// Create creates a new user within an app context.
 func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
 
 	// Count users in the app (if appID is available)
-	var usersCount int
-	var err error
+	var (
+		usersCount int
+		err        error
+	)
+
 	if !appID.IsNil() {
 		usersCount, err = s.userService.CountUsers(ctx, &user.CountUsersFilter{
 			AppID: appID,
@@ -81,7 +85,7 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 		}
 
 		// Organizations exist but no context provided - error
-		return nil, fmt.Errorf("app context required")
+		return nil, errs.BadRequest("app context required")
 	}
 
 	// Validate organization exists
@@ -111,12 +115,12 @@ func (s *MultiTenantUserService) Create(ctx context.Context, req *user.CreateUse
 	return newUser, nil
 }
 
-// FindByID finds a user by ID within app context
+// FindByID finds a user by ID within app context.
 func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user.User, error) {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
 	if appID.IsNil() {
-		return nil, fmt.Errorf("app context required")
+		return nil, errs.BadRequest("app context required")
 	}
 
 	// Find user using original service
@@ -130,6 +134,7 @@ func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user
 	if err != nil {
 		return nil, user.UserNotFound(foundUser.ID.String())
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		return nil, user.UserNotFound(foundUser.ID.String())
 	}
@@ -137,7 +142,7 @@ func (s *MultiTenantUserService) FindByID(ctx context.Context, id xid.ID) (*user
 	return foundUser, nil
 }
 
-// FindByEmail finds a user by email within app context
+// FindByEmail finds a user by email within app context.
 func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) (*user.User, error) {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
@@ -163,7 +168,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 		member, err := s.appService.Member.FindMember(ctx, platformOrg.ID, foundUser.ID)
 		if err != nil || member.Status != coreapp.MemberStatusActive {
 			// User is not a platform member - require org context
-			return nil, fmt.Errorf("app context required")
+			return nil, errs.BadRequest("app context required")
 		}
 
 		return foundUser, nil
@@ -180,6 +185,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 	if err != nil {
 		return nil, user.UserNotFound(email)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		return nil, user.UserNotFound(email)
 	}
@@ -187,7 +193,7 @@ func (s *MultiTenantUserService) FindByEmail(ctx context.Context, email string) 
 	return foundUser, nil
 }
 
-// FindByAppAndEmail finds a user by app and email
+// FindByAppAndEmail finds a user by app and email.
 func (s *MultiTenantUserService) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*user.User, error) {
 	// Use the app-scoped search directly
 	foundUser, err := s.userService.FindByAppAndEmail(ctx, appID, email)
@@ -200,6 +206,7 @@ func (s *MultiTenantUserService) FindByAppAndEmail(ctx context.Context, appID xi
 	if err != nil {
 		return nil, user.UserNotFound(email)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		return nil, user.UserNotFound(email)
 	}
@@ -207,12 +214,12 @@ func (s *MultiTenantUserService) FindByAppAndEmail(ctx context.Context, appID xi
 	return foundUser, nil
 }
 
-// FindByUsername finds a user by username within app context
+// FindByUsername finds a user by username within app context.
 func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username string) (*user.User, error) {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
 	if appID.IsNil() {
-		return nil, fmt.Errorf("app context required")
+		return nil, errs.BadRequest("app context required")
 	}
 
 	// Find user using original service
@@ -226,6 +233,7 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 	if err != nil {
 		return nil, user.UserNotFound(username)
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		return nil, user.UserNotFound(username)
 	}
@@ -233,7 +241,7 @@ func (s *MultiTenantUserService) FindByUsername(ctx context.Context, username st
 	return foundUser, nil
 }
 
-// Update updates a user within app context
+// Update updates a user within app context.
 func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *user.UpdateUserRequest) (*user.User, error) {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
@@ -255,7 +263,7 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 		}
 
 		// Organizations exist but no context provided - error
-		return nil, fmt.Errorf("app context required")
+		return nil, errs.BadRequest("app context required")
 	}
 
 	// Check if user is member of the organization
@@ -263,6 +271,7 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 	if err != nil {
 		return nil, user.UserNotFound(u.ID.String())
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		return nil, user.UserNotFound(u.ID.String())
 	}
@@ -271,12 +280,12 @@ func (s *MultiTenantUserService) Update(ctx context.Context, u *user.User, req *
 	return s.userService.Update(ctx, u, req)
 }
 
-// Delete deletes a user within app context
+// Delete deletes a user within app context.
 func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
 	if appID.IsNil() {
-		return fmt.Errorf("app context required")
+		return errs.BadRequest("app context required")
 	}
 
 	// Check if user is member of the organization
@@ -284,6 +293,7 @@ func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	if err != nil {
 		return user.UserNotFound(id.String())
 	}
+
 	if member.Status != coreapp.MemberStatusActive {
 		return user.UserNotFound(id.String())
 	}
@@ -296,28 +306,30 @@ func (s *MultiTenantUserService) Delete(ctx context.Context, id xid.ID) error {
 	return s.userService.Delete(ctx, id)
 }
 
-// GetAppContext gets the organization ID from context
+// GetAppContext gets the organization ID from context.
 func (s *MultiTenantUserService) GetAppContext(ctx context.Context) xid.ID {
 	return s.getAppFromContext(ctx)
 }
 
-// SetOrganizationContext sets the organization ID in context
+// SetOrganizationContext sets the organization ID in context.
 func (s *MultiTenantUserService) SetOrganizationContext(ctx context.Context, appID string) context.Context {
 	id, err := xid.FromString(appID)
 	if err != nil {
 		return ctx
 	}
+
 	return contexts.SetAppID(ctx, id)
 }
 
-// ListUsers lists users within app context with search support
+// ListUsers lists users within app context with search support.
 func (s *MultiTenantUserService) ListUsers(ctx context.Context, filter *user.ListUsersFilter) (*pagination.PageResponse[*user.User], error) {
 	// Get app context if not already in filter
 	if filter.AppID.IsNil() {
 		appID := s.getAppFromContext(ctx)
 		if appID.IsNil() {
-			return nil, fmt.Errorf("app context required")
+			return nil, errs.BadRequest("app context required")
 		}
+
 		filter.AppID = appID
 	}
 
@@ -325,16 +337,17 @@ func (s *MultiTenantUserService) ListUsers(ctx context.Context, filter *user.Lis
 	return s.userService.ListUsers(ctx, filter)
 }
 
-// getAppFromContext extracts organization ID from context
+// getAppFromContext extracts organization ID from context.
 func (s *MultiTenantUserService) getAppFromContext(ctx context.Context) xid.ID {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return xid.NilID()
 	}
+
 	return appID
 }
 
-// UpdatePassword updates a user's password directly
+// UpdatePassword updates a user's password directly.
 func (s *MultiTenantUserService) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
 	// Get app context
 	appID := s.getAppFromContext(ctx)
@@ -344,6 +357,7 @@ func (s *MultiTenantUserService) UpdatePassword(ctx context.Context, userID xid.
 		if err != nil {
 			return user.UserNotFound(userID.String())
 		}
+
 		if member.Status != coreapp.MemberStatusActive {
 			return user.UserNotFound(userID.String())
 		}
@@ -353,22 +367,22 @@ func (s *MultiTenantUserService) UpdatePassword(ctx context.Context, userID xid.
 	return s.userService.UpdatePassword(ctx, userID, hashedPassword)
 }
 
-// SetHookRegistry sets the hook registry for lifecycle events
-func (s *MultiTenantUserService) SetHookRegistry(registry interface{}) {
+// SetHookRegistry sets the hook registry for lifecycle events.
+func (s *MultiTenantUserService) SetHookRegistry(registry any) {
 	s.userService.SetHookRegistry(registry)
 }
 
-// GetHookRegistry returns the hook registry
-func (s *MultiTenantUserService) GetHookRegistry() interface{} {
+// GetHookRegistry returns the hook registry.
+func (s *MultiTenantUserService) GetHookRegistry() any {
 	return s.userService.GetHookRegistry()
 }
 
-// SetVerificationRepo sets the verification repository for password resets
-func (s *MultiTenantUserService) SetVerificationRepo(repo interface{}) {
+// SetVerificationRepo sets the verification repository for password resets.
+func (s *MultiTenantUserService) SetVerificationRepo(repo any) {
 	s.userService.SetVerificationRepo(repo)
 }
 
-// GetVerificationRepo returns the verification repository
-func (s *MultiTenantUserService) GetVerificationRepo() interface{} {
+// GetVerificationRepo returns the verification repository.
+func (s *MultiTenantUserService) GetVerificationRepo() any {
 	return s.userService.GetVerificationRepo()
 }

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/rs/xid"
 	"github.com/uptrace/bun"
@@ -10,20 +11,21 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// SSOProviderRepository provides persistence for SSO provider configurations with multi-tenant scoping
+// SSOProviderRepository provides persistence for SSO provider configurations with multi-tenant scoping.
 type SSOProviderRepository struct{ db *bun.DB }
 
 func NewSSOProviderRepository(db *bun.DB) *SSOProviderRepository {
 	return &SSOProviderRepository{db: db}
 }
 
-// Create inserts a new SSOProvider record
+// Create inserts a new SSOProvider record.
 func (r *SSOProviderRepository) Create(ctx context.Context, p *schema.SSOProvider) error {
 	_, err := r.db.NewInsert().Model(p).Exec(ctx)
+
 	return err
 }
 
-// Upsert creates or updates an SSOProvider by ProviderID within the tenant scope
+// Upsert creates or updates an SSOProvider by ProviderID within the tenant scope.
 func (r *SSOProviderRepository) Upsert(ctx context.Context, p *schema.SSOProvider) error {
 	// Extract tenant context
 	appID, _ := contexts.GetAppID(ctx)
@@ -45,11 +47,13 @@ func (r *SSOProviderRepository) Upsert(ctx context.Context, p *schema.SSOProvide
 	}
 
 	err := query.Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		// Create new provider
 		_, err2 := r.db.NewInsert().Model(p).Exec(ctx)
+
 		return err2
 	}
+
 	if err != nil {
 		return err
 	}
@@ -57,20 +61,23 @@ func (r *SSOProviderRepository) Upsert(ctx context.Context, p *schema.SSOProvide
 	// Update existing provider
 	p.ID = existing.ID
 	_, err = r.db.NewUpdate().Model(p).WherePK().Exec(ctx)
+
 	return err
 }
 
-// FindByProviderID returns an SSOProvider by ProviderID within the tenant scope
+// FindByProviderID returns an SSOProvider by ProviderID within the tenant scope.
 func (r *SSOProviderRepository) FindByProviderID(ctx context.Context, providerID string) (*schema.SSOProvider, error) {
 	// Extract tenant context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, nil // No app context, can't query
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, nil // No env context, can't query
 	}
+
 	orgID, _ := contexts.GetOrganizationID(ctx)
 
 	p := new(schema.SSOProvider)
@@ -88,29 +95,34 @@ func (r *SSOProviderRepository) FindByProviderID(ctx context.Context, providerID
 	}
 
 	err := query.Scan(ctx)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return p, nil
 }
 
-// FindByDomain returns SSO providers matching a domain within the tenant scope
+// FindByDomain returns SSO providers matching a domain within the tenant scope.
 func (r *SSOProviderRepository) FindByDomain(ctx context.Context, domain string) ([]*schema.SSOProvider, error) {
 	// Extract tenant context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, nil
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, nil
 	}
+
 	orgID, _ := contexts.GetOrganizationID(ctx)
 
 	var providers []*schema.SSOProvider
+
 	query := r.db.NewSelect().
 		Model(&providers).
 		Where("domain = ?", domain).
@@ -125,23 +137,27 @@ func (r *SSOProviderRepository) FindByDomain(ctx context.Context, domain string)
 	if err != nil {
 		return nil, err
 	}
+
 	return providers, nil
 }
 
-// List returns all SSO providers within the tenant scope
+// List returns all SSO providers within the tenant scope.
 func (r *SSOProviderRepository) List(ctx context.Context) ([]*schema.SSOProvider, error) {
 	// Extract tenant context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return []*schema.SSOProvider{}, nil
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return []*schema.SSOProvider{}, nil
 	}
+
 	orgID, _ := contexts.GetOrganizationID(ctx)
 
 	var providers []*schema.SSOProvider
+
 	query := r.db.NewSelect().
 		Model(&providers).
 		Where("app_id = ?", appID).
@@ -155,10 +171,11 @@ func (r *SSOProviderRepository) List(ctx context.Context) ([]*schema.SSOProvider
 	if err != nil {
 		return nil, err
 	}
+
 	return providers, nil
 }
 
-// Delete removes an SSO provider by ID within the tenant scope
+// Delete removes an SSO provider by ID within the tenant scope.
 func (r *SSOProviderRepository) Delete(ctx context.Context, id xid.ID) error {
 	// Extract tenant context for safety
 	appID, _ := contexts.GetAppID(ctx)
@@ -176,5 +193,6 @@ func (r *SSOProviderRepository) Delete(ctx context.Context, id xid.ID) error {
 	}
 
 	_, err := query.Exec(ctx)
+
 	return err
 }

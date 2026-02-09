@@ -1,6 +1,8 @@
 package apikey
 
 import (
+	"errors"
+
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/apikey"
 	"github.com/xraph/authsome/core/contexts"
@@ -11,17 +13,17 @@ import (
 )
 
 // Handler handles API key related HTTP requests
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type Handler struct {
 	service *apikey.Service
 	config  Config
 }
 
-// Request types
+// Request types.
 type CreateAPIKeyRequest struct {
-	Name        string            `json:"name" validate:"required"`
+	Name        string            `json:"name"        validate:"required"`
 	Description string            `json:"description"`
-	Scopes      []string          `json:"scopes" validate:"required,min=1"`
+	Scopes      []string          `json:"scopes"      validate:"required,min=1"`
 	Permissions map[string]string `json:"permissions"`
 	RateLimit   int               `json:"rate_limit"`
 	AllowedIPs  []string          `json:"allowed_ips"`
@@ -39,7 +41,7 @@ type GetAPIKeyRequest struct {
 }
 
 type UpdateAPIKeyRequest struct {
-	ID          string            `path:"id" validate:"required"`
+	ID          string            `path:"id"          validate:"required"`
 	Name        *string           `json:"name"`
 	Description *string           `json:"description"`
 	Scopes      []string          `json:"scopes"`
@@ -62,12 +64,12 @@ type VerifyAPIKeyRequest struct {
 }
 
 type AssignRoleRequest struct {
-	ID     string `path:"id" validate:"required"`
+	ID     string `path:"id"     validate:"required"`
 	RoleID string `json:"roleID" validate:"required"`
 }
 
 type UnassignRoleRequest struct {
-	ID     string `path:"id" validate:"required"`
+	ID     string `path:"id"     validate:"required"`
 	RoleID string `path:"roleId" validate:"required"`
 }
 
@@ -79,13 +81,13 @@ type GetEffectivePermissionsRequest struct {
 	ID string `path:"id" validate:"required"`
 }
 
-// Response types
+// Response types.
 type CreateAPIKeyResponse struct {
 	APIKey  *apikey.APIKey `json:"api_key"`
 	Message string         `json:"message"`
 }
 
-// Use shared response type
+// Use shared response type.
 type MessageResponse = responses.MessageResponse
 
 type RotateAPIKeyResponse struct {
@@ -97,7 +99,7 @@ type RolesResponse struct {
 	Roles []*apikey.Role `json:"roles"`
 }
 
-// NewHandler creates a new API key handler
+// NewHandler creates a new API key handler.
 func NewHandler(service *apikey.Service, config Config) *Handler {
 	return &Handler{
 		service: service,
@@ -105,7 +107,7 @@ func NewHandler(service *apikey.Service, config Config) *Handler {
 	}
 }
 
-// CreateAPIKey handles POST /api-keys
+// CreateAPIKey handles POST /api-keys.
 func (h *Handler) CreateAPIKey(c forge.Context) error {
 	// Extract context (set by auth middleware)
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -115,14 +117,19 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 
 	if appID.IsNil() {
 		err := errs.New("MISSING_APP_ID", "App context required", 400)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
+
 	if envID.IsNil() {
 		err := errs.New("MISSING_ENV_ID", "Environment context required", 400)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
+
 	if userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -153,10 +160,13 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 
 	key, err := h.service.CreateAPIKey(c.Request().Context(), serviceReq)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
@@ -166,7 +176,7 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 	})
 }
 
-// ListAPIKeys handles GET /api-keys
+// ListAPIKeys handles GET /api-keys.
 func (h *Handler) ListAPIKeys(c forge.Context) error {
 	// Extract context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -176,6 +186,7 @@ func (h *Handler) ListAPIKeys(c forge.Context) error {
 
 	if appID.IsNil() {
 		err := errs.New("MISSING_APP_ID", "App context required", 400)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -188,6 +199,7 @@ func (h *Handler) ListAPIKeys(c forge.Context) error {
 	if req.Page == 0 {
 		req.Page = 1
 	}
+
 	if req.Limit == 0 {
 		req.Limit = 20
 	}
@@ -206,26 +218,31 @@ func (h *Handler) ListAPIKeys(c forge.Context) error {
 	if !envID.IsNil() {
 		filter.EnvironmentID = &envID
 	}
+
 	if !orgID.IsNil() {
 		filter.OrganizationID = &orgID
 	}
+
 	if !userID.IsNil() {
 		filter.UserID = &userID
 	}
 
 	response, err := h.service.ListAPIKeys(c.Request().Context(), filter)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, response)
 }
 
-// GetAPIKey handles GET /api-keys/:id
+// GetAPIKey handles GET /api-keys/:id.
 func (h *Handler) GetAPIKey(c forge.Context) error {
 	// Extract context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -234,6 +251,7 @@ func (h *Handler) GetAPIKey(c forge.Context) error {
 
 	if appID.IsNil() || userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -245,6 +263,7 @@ func (h *Handler) GetAPIKey(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -255,17 +274,20 @@ func (h *Handler) GetAPIKey(c forge.Context) error {
 
 	key, err := h.service.GetAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, key)
 }
 
-// UpdateAPIKey handles PATCH /api-keys/:id
+// UpdateAPIKey handles PATCH /api-keys/:id.
 func (h *Handler) UpdateAPIKey(c forge.Context) error {
 	// Extract context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -274,6 +296,7 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 
 	if appID.IsNil() || userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -285,6 +308,7 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -304,17 +328,20 @@ func (h *Handler) UpdateAPIKey(c forge.Context) error {
 
 	key, err := h.service.UpdateAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr, serviceReq)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	return c.JSON(200, key)
 }
 
-// DeleteAPIKey handles DELETE /api-keys/:id
+// DeleteAPIKey handles DELETE /api-keys/:id.
 func (h *Handler) DeleteAPIKey(c forge.Context) error {
 	// Extract context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -323,6 +350,7 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 
 	if appID.IsNil() || userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -334,6 +362,7 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -344,10 +373,13 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 
 	err = h.service.DeleteAPIKey(c.Request().Context(), appID, keyID, userID, orgIDPtr)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
@@ -356,7 +388,7 @@ func (h *Handler) DeleteAPIKey(c forge.Context) error {
 	})
 }
 
-// RotateAPIKey handles POST /api-keys/:id/rotate
+// RotateAPIKey handles POST /api-keys/:id/rotate.
 func (h *Handler) RotateAPIKey(c forge.Context) error {
 	// Extract context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -366,6 +398,7 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 
 	if appID.IsNil() || envID.IsNil() || userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication and environment context required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -377,6 +410,7 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -395,10 +429,13 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 
 	newKey, err := h.service.RotateAPIKey(c.Request().Context(), serviceReq)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
@@ -408,7 +445,7 @@ func (h *Handler) RotateAPIKey(c forge.Context) error {
 	})
 }
 
-// VerifyAPIKey handles POST /api-keys/verify
+// VerifyAPIKey handles POST /api-keys/verify.
 func (h *Handler) VerifyAPIKey(c forge.Context) error {
 	var req VerifyAPIKeyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -424,15 +461,19 @@ func (h *Handler) VerifyAPIKey(c forge.Context) error {
 
 	response, err := h.service.VerifyAPIKey(c.Request().Context(), serviceReq)
 	if err != nil {
-		if authErr, ok := err.(*errs.AuthsomeError); ok {
+		authErr := &errs.AuthsomeError{}
+		if errors.As(err, &authErr) {
 			return c.JSON(authErr.HTTPStatus, authErr)
 		}
+
 		internalErr := errs.New("INTERNAL_ERROR", "Internal server error", 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
 	if !response.Valid {
 		err := errs.New("INVALID_KEY", response.Error, 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -443,7 +484,7 @@ func (h *Handler) VerifyAPIKey(c forge.Context) error {
 // RBAC ROLE MANAGEMENT HANDLERS
 // =============================================================================
 
-// AssignRole handles POST /api-keys/:id/roles
+// AssignRole handles POST /api-keys/:id/roles.
 func (h *Handler) AssignRole(c forge.Context) error {
 	// Extract context
 	userID, _ := contexts.GetUserID(c.Request().Context())
@@ -451,6 +492,7 @@ func (h *Handler) AssignRole(c forge.Context) error {
 
 	if userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -462,12 +504,14 @@ func (h *Handler) AssignRole(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	roleID, err := xid.FromString(req.RoleID)
 	if err != nil {
 		authErr := errs.New("INVALID_ROLE_ID", "Invalid role ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -479,6 +523,7 @@ func (h *Handler) AssignRole(c forge.Context) error {
 	// Assign role
 	if err := h.service.AssignRole(c.Request().Context(), keyID, roleID, orgIDPtr, &userID); err != nil {
 		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
@@ -487,7 +532,7 @@ func (h *Handler) AssignRole(c forge.Context) error {
 	})
 }
 
-// UnassignRole handles DELETE /api-keys/:id/roles/:roleId
+// UnassignRole handles DELETE /api-keys/:id/roles/:roleId.
 func (h *Handler) UnassignRole(c forge.Context) error {
 	// Extract context
 	userID, _ := contexts.GetUserID(c.Request().Context())
@@ -495,6 +540,7 @@ func (h *Handler) UnassignRole(c forge.Context) error {
 
 	if userID.IsNil() {
 		err := errs.New("AUTHENTICATION_REQUIRED", "Authentication required", 401)
+
 		return c.JSON(err.HTTPStatus, err)
 	}
 
@@ -506,12 +552,14 @@ func (h *Handler) UnassignRole(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
 	roleID, err := xid.FromString(req.RoleID)
 	if err != nil {
 		authErr := errs.New("INVALID_ROLE_ID", "Invalid role ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -523,6 +571,7 @@ func (h *Handler) UnassignRole(c forge.Context) error {
 	// Unassign role
 	if err := h.service.UnassignRole(c.Request().Context(), keyID, roleID, orgIDPtr, &userID); err != nil {
 		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
@@ -531,7 +580,7 @@ func (h *Handler) UnassignRole(c forge.Context) error {
 	})
 }
 
-// GetRoles handles GET /api-keys/:id/roles
+// GetRoles handles GET /api-keys/:id/roles.
 func (h *Handler) GetRoles(c forge.Context) error {
 	// Extract context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
@@ -544,6 +593,7 @@ func (h *Handler) GetRoles(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -556,6 +606,7 @@ func (h *Handler) GetRoles(c forge.Context) error {
 	roles, err := h.service.GetRoles(c.Request().Context(), keyID, orgIDPtr)
 	if err != nil {
 		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 
@@ -564,7 +615,7 @@ func (h *Handler) GetRoles(c forge.Context) error {
 	})
 }
 
-// GetEffectivePermissions handles GET /api-keys/:id/permissions
+// GetEffectivePermissions handles GET /api-keys/:id/permissions.
 func (h *Handler) GetEffectivePermissions(c forge.Context) error {
 	// Extract context
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
@@ -577,6 +628,7 @@ func (h *Handler) GetEffectivePermissions(c forge.Context) error {
 	keyID, err := xid.FromString(req.ID)
 	if err != nil {
 		authErr := errs.New("INVALID_KEY_ID", "Invalid key ID format", 400)
+
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -589,6 +641,7 @@ func (h *Handler) GetEffectivePermissions(c forge.Context) error {
 	effectivePerms, err := h.service.GetEffectivePermissions(c.Request().Context(), keyID, orgIDPtr)
 	if err != nil {
 		internalErr := errs.New("INTERNAL_ERROR", err.Error(), 500)
+
 		return c.JSON(internalErr.HTTPStatus, internalErr)
 	}
 

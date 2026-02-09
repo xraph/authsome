@@ -2,6 +2,7 @@ package idverification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,18 +17,18 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles HTTP requests for identity verification
+// Handler handles HTTP requests for identity verification.
 type Handler struct {
 	service *Service
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
-// NewHandler creates a new identity verification handler
+// NewHandler creates a new identity verification handler.
 func NewHandler(service *Service) *Handler {
 	return &Handler{
 		service: service,
@@ -35,15 +36,15 @@ func NewHandler(service *Service) *Handler {
 }
 
 // CreateVerificationSession creates a new verification session
-// POST /verification/sessions
+// POST /verification/sessions.
 func (h *Handler) CreateVerificationSession(c forge.Context) error {
 	var req struct {
-		Provider       string                 `json:"provider"`
-		RequiredChecks []string               `json:"requiredChecks"`
-		SuccessURL     string                 `json:"successUrl"`
-		CancelURL      string                 `json:"cancelUrl"`
-		Config         map[string]interface{} `json:"config"`
-		Metadata       map[string]interface{} `json:"metadata"`
+		Provider       string         `json:"provider"`
+		RequiredChecks []string       `json:"requiredChecks"`
+		SuccessURL     string         `json:"successUrl"`
+		CancelURL      string         `json:"cancelUrl"`
+		Config         map[string]any `json:"config"`
+		Metadata       map[string]any `json:"metadata"`
 	}
 
 	if err := c.BindJSON(&req); err != nil {
@@ -69,6 +70,7 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 	}
 
 	envID, _ := contexts.GetEnvironmentID(ctx)
+
 	var envIDPtr *xid.ID
 	if !envID.IsNil() {
 		envIDPtr = &envID
@@ -88,7 +90,6 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 		IPAddress:      c.Request().RemoteAddr,
 		UserAgent:      c.Request().Header.Get("User-Agent"),
 	})
-
 	if err != nil {
 		return handleError(c, err)
 	}
@@ -99,7 +100,7 @@ func (h *Handler) CreateVerificationSession(c forge.Context) error {
 }
 
 // GetVerificationSession retrieves a verification session
-// GET /verification/sessions/:id
+// GET /verification/sessions/:id.
 func (h *Handler) GetVerificationSession(c forge.Context) error {
 	sessionID := c.Param("id")
 	if sessionID == "" {
@@ -107,6 +108,7 @@ func (h *Handler) GetVerificationSession(c forge.Context) error {
 	}
 
 	ctx := c.Request().Context()
+
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("app context required"))
@@ -123,7 +125,7 @@ func (h *Handler) GetVerificationSession(c forge.Context) error {
 }
 
 // GetVerification retrieves a verification by ID
-// GET /verification/:id
+// GET /verification/:id.
 func (h *Handler) GetVerification(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -131,6 +133,7 @@ func (h *Handler) GetVerification(c forge.Context) error {
 	}
 
 	ctx := c.Request().Context()
+
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok || appID.IsNil() {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("app context required"))
@@ -147,7 +150,7 @@ func (h *Handler) GetVerification(c forge.Context) error {
 }
 
 // GetUserVerifications retrieves all verifications for the current user
-// GET /verification/me
+// GET /verification/me.
 func (h *Handler) GetUserVerifications(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -189,7 +192,7 @@ func (h *Handler) GetUserVerifications(c forge.Context) error {
 }
 
 // GetUserVerificationStatus retrieves the verification status for the current user
-// GET /verification/me/status
+// GET /verification/me/status.
 func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -219,7 +222,7 @@ func (h *Handler) GetUserVerificationStatus(c forge.Context) error {
 }
 
 // RequestReverification requests re-verification for the current user
-// POST /verification/me/reverify
+// POST /verification/me/reverify.
 func (h *Handler) RequestReverification(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -252,7 +255,7 @@ func (h *Handler) RequestReverification(c forge.Context) error {
 }
 
 // HandleWebhook handles provider webhook callbacks
-// POST /verification/webhook/:provider
+// POST /verification/webhook/:provider.
 func (h *Handler) HandleWebhook(c forge.Context) error {
 	provider := c.Param("provider")
 	if provider == "" {
@@ -273,7 +276,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 		case "stripe_identity":
 			signature = c.Request().Header.Get("Stripe-Signature")
 		case "onfido":
-			signature = c.Request().Header.Get("X-SHA2-Signature")
+			signature = c.Request().Header.Get("X-Sha2-Signature")
 		}
 	}
 
@@ -282,7 +285,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("webhook processing failed"))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"received": true,
 	})
 }
@@ -290,7 +293,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 // Admin endpoints
 
 // AdminBlockUser blocks a user from verification (admin only)
-// POST /verification/admin/users/:userId/block
+// POST /verification/admin/users/:userId/block.
 func (h *Handler) AdminBlockUser(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -334,7 +337,7 @@ func (h *Handler) AdminBlockUser(c forge.Context) error {
 }
 
 // AdminUnblockUser unblocks a user (admin only)
-// POST /verification/admin/users/:userId/unblock
+// POST /verification/admin/users/:userId/unblock.
 func (h *Handler) AdminUnblockUser(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -370,7 +373,7 @@ func (h *Handler) AdminUnblockUser(c forge.Context) error {
 }
 
 // AdminGetUserVerificationStatus retrieves verification status for any user (admin only)
-// GET /verification/admin/users/:userId/status
+// GET /verification/admin/users/:userId/status.
 func (h *Handler) AdminGetUserVerificationStatus(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -409,7 +412,7 @@ func (h *Handler) AdminGetUserVerificationStatus(c forge.Context) error {
 }
 
 // AdminGetUserVerifications retrieves all verifications for any user (admin only)
-// GET /verification/admin/users/:userId/verifications
+// GET /verification/admin/users/:userId/verifications.
 func (h *Handler) AdminGetUserVerifications(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -465,9 +468,11 @@ func (h *Handler) processWebhook(c forge.Context, provider, signature string, pa
 	ctx := c.Request().Context()
 	// Get the provider instance
 	var p Provider
+
 	for _, prov := range h.service.providers {
 		if prov.GetProviderName() == provider {
 			p = prov
+
 			break
 		}
 	}
@@ -498,7 +503,7 @@ func (h *Handler) processWebhook(c forge.Context, provider, signature string, pa
 	if !ok || appID.IsNil() {
 		// For webhooks, we might need to extract from provider data
 		// For now, log and skip if no app context
-		return fmt.Errorf("app context required for webhook processing")
+		return errs.BadRequest("app context required for webhook processing")
 	}
 
 	// Process based on event type
@@ -527,6 +532,7 @@ func (h *Handler) processWebhook(c forge.Context, provider, signature string, pa
 
 		// Process the result
 		result := convertWebhookToResult(webhook)
+
 		return h.service.ProcessVerificationResult(ctx, appID, verification.ID, result)
 
 	case "check.failed", "verification.failed", "identity.verification_session.requires_input":
@@ -553,22 +559,17 @@ func (h *Handler) isAdmin(ctx context.Context) bool {
 }
 
 func handleError(c forge.Context, err error) error {
-	switch err {
-	case ErrVerificationNotFound, ErrSessionNotFound, ErrDocumentNotFound:
+	switch {
+	case errors.Is(err, ErrVerificationNotFound), errors.Is(err, ErrSessionNotFound), errors.Is(err, ErrDocumentNotFound):
 		return c.JSON(http.StatusNotFound, errs.NotFound(err.Error()))
-
-	case ErrVerificationBlocked, ErrMaxAttemptsReached, ErrRateLimitExceeded:
+	case errors.Is(err, ErrVerificationBlocked), errors.Is(err, ErrMaxAttemptsReached), errors.Is(err, ErrRateLimitExceeded):
 		return c.JSON(http.StatusTooManyRequests, errs.RateLimitExceeded(0))
-
-	case ErrHighRiskDetected, ErrSanctionsListMatch, ErrPEPDetected, ErrAgeBelowMinimum:
+	case errors.Is(err, ErrHighRiskDetected), errors.Is(err, ErrSanctionsListMatch), errors.Is(err, ErrPEPDetected), errors.Is(err, ErrAgeBelowMinimum):
 		return c.JSON(http.StatusForbidden, errs.PermissionDenied("", err.Error()))
-
-	case ErrVerificationExpired, ErrSessionExpired, ErrDocumentExpired:
+	case errors.Is(err, ErrVerificationExpired), errors.Is(err, ErrSessionExpired), errors.Is(err, ErrDocumentExpired):
 		return c.JSON(http.StatusGone, errs.BadRequest(err.Error()))
-
-	case ErrDocumentNotSupported, ErrCountryNotSupported:
+	case errors.Is(err, ErrDocumentNotSupported), errors.Is(err, ErrCountryNotSupported):
 		return c.JSON(http.StatusUnprocessableEntity, errs.BadRequest(err.Error()))
-
 	default:
 		return c.JSON(http.StatusInternalServerError, errs.InternalServerErrorWithMessage("internal server error"))
 	}

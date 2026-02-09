@@ -5,16 +5,18 @@ import (
 	"fmt"
 
 	"github.com/rs/xid"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/twofa"
 )
 
-// BackupCodeFactorAdapter integrates twofa plugin's backup codes as an MFA factor
+// BackupCodeFactorAdapter integrates twofa plugin's backup codes as an MFA factor.
 type BackupCodeFactorAdapter struct {
 	BaseFactorAdapter
+
 	twofaService *twofa.Service
 }
 
-// NewBackupCodeFactorAdapter creates a new backup code factor adapter
+// NewBackupCodeFactorAdapter creates a new backup code factor adapter.
 func NewBackupCodeFactorAdapter(twofaService *twofa.Service, enabled bool) *BackupCodeFactorAdapter {
 	return &BackupCodeFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
@@ -25,10 +27,10 @@ func NewBackupCodeFactorAdapter(twofaService *twofa.Service, enabled bool) *Back
 	}
 }
 
-// Enroll generates backup codes for a user
+// Enroll generates backup codes for a user.
 func (a *BackupCodeFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("backup code factor not available")
+		return nil, errs.BadRequest("backup code factor not available")
 	}
 
 	// Generate backup codes using twofa service
@@ -43,6 +45,7 @@ func (a *BackupCodeFactorAdapter) Enroll(ctx context.Context, userID xid.ID, met
 	}
 
 	factorID := xid.New()
+
 	return &FactorEnrollmentResponse{
 		FactorID: factorID,
 		Type:     FactorTypeBackup,
@@ -55,15 +58,15 @@ func (a *BackupCodeFactorAdapter) Enroll(ctx context.Context, userID xid.ID, met
 	}, nil
 }
 
-// VerifyEnrollment is not needed for backup codes (immediately active)
+// VerifyEnrollment is not needed for backup codes (immediately active).
 func (a *BackupCodeFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	return nil // No verification needed for backup codes
 }
 
-// Challenge creates a backup code verification challenge
+// Challenge creates a backup code verification challenge.
 func (a *BackupCodeFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
-		return nil, fmt.Errorf("backup code factor not available")
+		return nil, errs.BadRequest("backup code factor not available")
 	}
 
 	challenge := &Challenge{
@@ -80,10 +83,10 @@ func (a *BackupCodeFactorAdapter) Challenge(ctx context.Context, factor *Factor,
 	return challenge, nil
 }
 
-// Verify verifies a backup code
+// Verify verifies a backup code.
 func (a *BackupCodeFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
-		return false, fmt.Errorf("backup code factor not available")
+		return false, errs.BadRequest("backup code factor not available")
 	}
 
 	// Use twofa service to verify backup code
