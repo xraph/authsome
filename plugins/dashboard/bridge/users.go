@@ -3,6 +3,7 @@ package bridge
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -330,15 +331,7 @@ func (bm *BridgeManager) getUsersList(ctx bridge.Context, input UsersListInput) 
 
 		// Apply role filter
 		if input.RoleFilter != "" && input.RoleFilter != "all" {
-			hasRole := false
-
-			for _, role := range roles {
-				if role == input.RoleFilter {
-					hasRole = true
-
-					break
-				}
-			}
+			hasRole := slices.Contains(roles, input.RoleFilter)
 
 			if !hasRole {
 				continue
@@ -539,7 +532,7 @@ func (bm *BridgeManager) updateUser(ctx bridge.Context, input UpdateUserInput) (
 
 	// Log audit event if audit service is available
 	if bm.auditSvc != nil {
-		auditData := map[string]interface{}{}
+		auditData := map[string]any{}
 		if input.Name != nil {
 			auditData["name"] = *input.Name
 		}
@@ -911,7 +904,7 @@ func (bm *BridgeManager) updateUserRoles(ctx bridge.Context, input UpdateUserRol
 
 	// Log audit event
 	if bm.auditSvc != nil {
-		auditData := map[string]interface{}{
+		auditData := map[string]any{
 			"roleIds": input.RoleIDs,
 		}
 		auditJSON, _ := json.Marshal(auditData)
@@ -1056,7 +1049,7 @@ func (bm *BridgeManager) updateCurrentUserProfile(ctx bridge.Context, input Upda
 
 	// Log audit event
 	if bm.auditSvc != nil {
-		auditData := map[string]interface{}{}
+		auditData := map[string]any{}
 		if input.Name != nil {
 			auditData["name"] = *input.Name
 		}

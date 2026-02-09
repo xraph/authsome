@@ -209,15 +209,6 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 	}
 }
 
-// Helper function for min.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
-
 // RequireAdmin middleware ensures the user has admin role.
 func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
@@ -320,7 +311,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 				// Get token from form or header
 				submittedToken := c.Request().FormValue("csrf_token")
 				if submittedToken == "" {
-					submittedToken = c.Request().Header.Get("X-CSRF-Token")
+					submittedToken = c.Request().Header.Get("X-Csrf-Token")
 				}
 
 				// Validate token using CSRF protector

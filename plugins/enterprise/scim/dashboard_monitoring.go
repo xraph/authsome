@@ -46,7 +46,7 @@ func (e *DashboardExtension) ServeMonitoringPage(ctx *router.PageContext) (g.Nod
 }
 
 // renderMonitoringPageContent renders the monitoring page content.
-func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID) g.Node {
+func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context, currentApp any, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
 	appID := app.ID
@@ -292,7 +292,7 @@ func (e *DashboardExtension) ServeLogsPage(ctx *router.PageContext) (g.Node, err
 }
 
 // renderLogsPageContent renders the logs page content.
-func (e *DashboardExtension) renderLogsPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID, page int, statusFilter, eventTypeFilter string) g.Node {
+func (e *DashboardExtension) renderLogsPageContent(reqCtx context.Context, currentApp any, orgID *xid.ID, page int, statusFilter, eventTypeFilter string) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
 	appID := app.ID
@@ -451,7 +451,7 @@ func (e *DashboardExtension) ServeStatsPage(ctx *router.PageContext) (g.Node, er
 }
 
 // renderStatsPageContent renders the statistics page content.
-func (e *DashboardExtension) renderStatsPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID) g.Node {
+func (e *DashboardExtension) renderStatsPageContent(reqCtx context.Context, currentApp any, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
 	appID := app.ID
@@ -658,13 +658,4 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 	}
 
 	return nil, nil
-}
-
-// Helper function.
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
 }

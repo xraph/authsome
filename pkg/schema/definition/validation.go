@@ -2,6 +2,7 @@ package definition
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/xraph/authsome/internal/errs"
@@ -108,15 +109,7 @@ func validateField(field Field) error {
 		FieldTypeJSONB, FieldTypeBinary, FieldTypeEnum,
 	}
 
-	isValidType := false
-
-	for _, validType := range validTypes {
-		if field.Type == validType {
-			isValidType = true
-
-			break
-		}
-	}
+	isValidType := slices.Contains(validTypes, field.Type)
 
 	if !isValidType {
 		return fmt.Errorf("invalid field type: %s", field.Type)

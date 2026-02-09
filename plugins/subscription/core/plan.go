@@ -244,11 +244,3 @@ type UpdatePlanRequest struct {
 	IsPublic     *bool          `json:"isPublic,omitempty"`
 	DisplayOrder *int           `json:"displayOrder,omitempty"`
 }
-
-func min(a, b int64) int64 {
-	if a < b {
-		return a
-	}
-
-	return b
-}

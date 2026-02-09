@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sync"
 	"time"
 
@@ -24,7 +25,7 @@ type StreamFilter struct {
 // StreamService manages real-time audit event streaming
 // Note: Requires PostgreSQL LISTEN/NOTIFY support via pgdriver.Listener.
 type StreamService struct {
-	listener  interface{} // pgdriver.Listener interface for PostgreSQL NOTIFY
+	listener  any // pgdriver.Listener interface for PostgreSQL NOTIFY
 	listeners map[string]*clientListener
 	mu        sync.RWMutex
 	ctx       context.Context
@@ -42,7 +43,7 @@ type clientListener struct {
 
 // NewStreamService creates a new stream service
 // listener should be *pgdriver.Listener from github.com/uptrace/bun/driver/pgdriver.
-func NewStreamService(listener interface{}) *StreamService {
+func NewStreamService(listener any) *StreamService {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	svc := &StreamService{
@@ -198,15 +199,7 @@ func (s *StreamService) matchesFilter(event *Event, filter *StreamFilter) bool {
 
 	// Check Actions filter
 	if len(filter.Actions) > 0 {
-		matched := false
-
-		for _, action := range filter.Actions {
-			if event.Action == action {
-				matched = true
-
-				break
-			}
-		}
+		matched := slices.Contains(filter.Actions, event.Action)
 
 		if !matched {
 			return false
@@ -484,15 +477,7 @@ func matchesFilter(event *Event, filter *StreamFilter) bool {
 	}
 
 	if len(filter.Actions) > 0 {
-		matched := false
-
-		for _, action := range filter.Actions {
-			if event.Action == action {
-				matched = true
-
-				break
-			}
-		}
+		matched := slices.Contains(filter.Actions, event.Action)
 
 		if !matched {
 			return false

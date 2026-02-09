@@ -375,6 +375,7 @@ func (r *Renderer) renderAvatar(block Block) g.Node {
 	}
 
 	borderRadius := "50%"
+
 	switch shape {
 	case "square":
 		borderRadius = "0"

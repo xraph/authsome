@@ -381,6 +381,5 @@ func (s *Service) ListPromotions(ctx context.Context, filter *ListPromotionsFilt
 // =============================================================================
 
 func (s *Service) isAllowedType(envType string) bool {
-
 	return slices.Contains(s.config.AllowedTypes, envType)
 }

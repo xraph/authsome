@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -42,19 +43,19 @@ func NewAnalyticsService(repo Repository) *AnalyticsService {
 
 // Baseline represents statistical baseline for user behavior.
 type Baseline struct {
-	UserID           xid.ID                 `json:"userId"`
-	OrganizationID   *xid.ID                `json:"organizationId,omitempty"` // Optional org scope
-	Period           time.Duration          `json:"period"`
-	EventsPerHour    float64                `json:"eventsPerHour"`
-	TopActions       map[string]int         `json:"topActions"`
-	TopResources     map[string]int         `json:"topResources"`
-	TopLocations     []string               `json:"topLocations"`
-	TypicalHours     []int                  `json:"typicalHours"` // Hours of day (0-23)
-	TypicalDays      []time.Weekday         `json:"typicalDays"`  // Days of week
-	UniqueIPCount    int                    `json:"uniqueIpCount"`
-	AvgSessionLength time.Duration          `json:"avgSessionLength"`
-	CalculatedAt     time.Time              `json:"calculatedAt"`
-	Metadata         map[string]interface{} `json:"metadata"`
+	UserID           xid.ID         `json:"userId"`
+	OrganizationID   *xid.ID        `json:"organizationId,omitempty"` // Optional org scope
+	Period           time.Duration  `json:"period"`
+	EventsPerHour    float64        `json:"eventsPerHour"`
+	TopActions       map[string]int `json:"topActions"`
+	TopResources     map[string]int `json:"topResources"`
+	TopLocations     []string       `json:"topLocations"`
+	TypicalHours     []int          `json:"typicalHours"` // Hours of day (0-23)
+	TypicalDays      []time.Weekday `json:"typicalDays"`  // Days of week
+	UniqueIPCount    int            `json:"uniqueIpCount"`
+	AvgSessionLength time.Duration  `json:"avgSessionLength"`
+	CalculatedAt     time.Time      `json:"calculatedAt"`
+	Metadata         map[string]any `json:"metadata"`
 }
 
 // BaselineCalculator calculates behavioral baselines.
@@ -103,7 +104,7 @@ func (bc *BaselineCalculator) CalculateWithOptions(ctx context.Context, userID x
 		TopActions:     make(map[string]int),
 		TopResources:   make(map[string]int),
 		CalculatedAt:   time.Now(),
-		Metadata:       make(map[string]interface{}),
+		Metadata:       make(map[string]any),
 	}
 
 	// Calculate statistics
@@ -237,14 +238,14 @@ func (bc *BaselineCache) Set(userID xid.ID, baseline *Baseline) {
 
 // Anomaly represents a detected anomaly.
 type Anomaly struct {
-	Type        string                 `json:"type"`     // geo_velocity, unusual_action, frequency_spike, etc.
-	Severity    string                 `json:"severity"` // low, medium, high, critical
-	Score       float64                `json:"score"`    // 0-100
-	Event       *Event                 `json:"event"`
-	Baseline    *Baseline              `json:"baseline,omitempty"`
-	Description string                 `json:"description"`
-	Evidence    map[string]interface{} `json:"evidence"`
-	DetectedAt  time.Time              `json:"detectedAt"`
+	Type        string         `json:"type"`     // geo_velocity, unusual_action, frequency_spike, etc.
+	Severity    string         `json:"severity"` // low, medium, high, critical
+	Score       float64        `json:"score"`    // 0-100
+	Event       *Event         `json:"event"`
+	Baseline    *Baseline      `json:"baseline,omitempty"`
+	Description string         `json:"description"`
+	Evidence    map[string]any `json:"evidence"`
+	DetectedAt  time.Time      `json:"detectedAt"`
 }
 
 // AnomalyDetector detects anomalies in audit events.
@@ -306,7 +307,7 @@ func (ad *AnomalyDetector) detectUnusualAction(event *Event, baseline *Baseline)
 			Event:       event,
 			Baseline:    baseline,
 			Description: fmt.Sprintf("Action '%s' is unusual for this user", event.Action),
-			Evidence: map[string]interface{}{
+			Evidence: map[string]any{
 				"action":        event.Action,
 				"normalActions": baseline.TopActions,
 			},
@@ -327,26 +328,10 @@ func (ad *AnomalyDetector) detectTemporalAnomaly(event *Event, baseline *Baselin
 	day := event.CreatedAt.Weekday()
 
 	// Check if hour is typical
-	hourTypical := false
-
-	for _, typicalHour := range baseline.TypicalHours {
-		if hour == typicalHour {
-			hourTypical = true
-
-			break
-		}
-	}
+	hourTypical := slices.Contains(baseline.TypicalHours, hour)
 
 	// Check if day is typical
-	dayTypical := false
-
-	for _, typicalDay := range baseline.TypicalDays {
-		if day == typicalDay {
-			dayTypical = true
-
-			break
-		}
-	}
+	dayTypical := slices.Contains(baseline.TypicalDays, day)
 
 	if !hourTypical || !dayTypical {
 		score := 50.0
@@ -361,7 +346,7 @@ func (ad *AnomalyDetector) detectTemporalAnomaly(event *Event, baseline *Baselin
 			Event:       event,
 			Baseline:    baseline,
 			Description: "Activity at unusual time: " + event.CreatedAt.Format(time.RFC3339),
-			Evidence: map[string]interface{}{
+			Evidence: map[string]any{
 				"hour":         hour,
 				"day":          day.String(),
 				"typicalHours": baseline.TypicalHours,
@@ -423,7 +408,7 @@ func (gvd *GeoVelocityDetector) DetectImpossibleTravel(event1, event2 *Event) (*
 				Score:       95.0,
 				Event:       event2,
 				Description: "Impossible travel detected",
-				Evidence: map[string]interface{}{
+				Evidence: map[string]any{
 					"ip1":      event1.IPAddress,
 					"ip2":      event2.IPAddress,
 					"timeDiff": timeDiff.String(),
@@ -546,15 +531,7 @@ func (re *RiskEngine) calculateContextRisk(event *Event, baseline *Baseline) flo
 	// Check time of day against baseline
 	if baseline != nil && len(baseline.TypicalHours) > 0 {
 		hour := event.CreatedAt.Hour()
-		isTypical := false
-
-		for _, typicalHour := range baseline.TypicalHours {
-			if hour == typicalHour {
-				isTypical = true
-
-				break
-			}
-		}
+		isTypical := slices.Contains(baseline.TypicalHours, hour)
 
 		if !isTypical {
 			risk += 30.0

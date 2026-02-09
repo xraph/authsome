@@ -2,6 +2,7 @@ package pages
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -1446,15 +1447,7 @@ func fieldSelectOptions(fields []*core.ContentFieldDTO, selectedValue string, al
 	for _, field := range fields {
 		// Filter by allowed types if specified
 		if len(allowedTypes) > 0 {
-			allowed := false
-
-			for _, t := range allowedTypes {
-				if field.Type == t {
-					allowed = true
-
-					break
-				}
-			}
+			allowed := slices.Contains(allowedTypes, field.Type)
 
 			if !allowed {
 				continue
@@ -1748,7 +1741,9 @@ func schemaFieldRow(field *core.ContentFieldDTO) g.Node {
 // apiExamplesCard renders example API requests.
 func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 	// Generate sample entry data
-	sampleData := "{\n"
+	var sampleData strings.Builder
+	sampleData.WriteString("{\n")
+
 	var sampleDataSb1732 strings.Builder
 
 	for i, field := range contentType.Fields {
@@ -1757,28 +1752,30 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 		}
 
 		sampleDataSb1732.WriteString(fmt.Sprintf(`    "%s": `, field.Name))
+
 		switch field.Type {
 		case "text", "string", "email", "url", "richtext", "markdown":
-			sampleData += `"sample value"`
+			sampleData.WriteString(`"sample value"`)
 		case "number", "integer", "float":
-			sampleData += "123"
+			sampleData.WriteString("123")
 		case "boolean":
-			sampleData += "true"
+			sampleData.WriteString("true")
 		case "date", "datetime":
-			sampleData += `"2025-01-01T00:00:00Z"`
+			sampleData.WriteString(`"2025-01-01T00:00:00Z"`)
 		case "relation":
-			sampleData += `"related-entry-id"`
+			sampleData.WriteString(`"related-entry-id"`)
 		case "json":
-			sampleData += `{}`
+			sampleData.WriteString(`{}`)
 		case "select", "enum":
-			sampleData += `"option1"`
+			sampleData.WriteString(`"option1"`)
 		default:
-			sampleData += `"value"`
+			sampleData.WriteString(`"value"`)
 		}
 	}
-	sampleData += sampleDataSb1732.String()
 
-	sampleData += "\n}"
+	sampleData.WriteString(sampleDataSb1732.String())
+
+	sampleData.WriteString("\n}")
 
 	return CardWithHeader("Example Requests", nil,
 		Div(
@@ -1797,7 +1794,7 @@ func apiExamplesCard(apiBase string, contentType *core.ContentTypeDTO) g.Node {
 						g.Text(fmt.Sprintf(`curl -X POST %s \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '%s'`, apiBase, sampleData)),
+  -d '%s'`, apiBase, sampleData.String())),
 					),
 				),
 			),
@@ -2914,10 +2911,12 @@ func fieldBuilderAlpineData(field *core.ContentFieldDTO) string {
 
 			if len(opts) > 0 {
 				enumOptionsJSON = "[" + opts[0]
+
 				var enumOptionsJSONSb2883 strings.Builder
 				for i := 1; i < len(opts); i++ {
 					enumOptionsJSONSb2883.WriteString(", " + opts[i])
 				}
+
 				enumOptionsJSON += enumOptionsJSONSb2883.String()
 
 				enumOptionsJSON += "]"

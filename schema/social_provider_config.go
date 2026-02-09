@@ -116,7 +116,6 @@ var ProviderDefaultScopes = map[string][]string{
 
 // IsValidProvider checks if the given provider name is supported.
 func IsValidProvider(name string) bool {
-
 	return slices.Contains(SupportedProviders, name)
 }
 

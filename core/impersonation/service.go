@@ -460,6 +460,7 @@ func (s *Service) auditLog(ctx context.Context, impersonationID *xid.ID, action 
 		for k, v := range metadata {
 			metadataStrSb447.WriteString(fmt.Sprintf("%s=%s; ", k, v))
 		}
+
 		metadataStr += metadataStrSb447.String()
 	}
 

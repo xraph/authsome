@@ -274,7 +274,6 @@ func AllEventTypes() []string {
 
 // IsValidEventType checks if an event type is valid.
 func IsValidEventType(eventType string) bool {
-
 	return slices.Contains(AllEventTypes(), eventType)
 }
 

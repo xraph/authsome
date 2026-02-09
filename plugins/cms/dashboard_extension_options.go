@@ -92,6 +92,7 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 			field := parts[2] // label or value
 
 			choice := choicesMap[index]
+
 			switch field {
 			case "label":
 				choice.Label = val
@@ -208,6 +209,7 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 			field := parts[2] // label or value
 
 			choice := choicesMap[index]
+
 			switch field {
 			case "label":
 				choice.Label = val

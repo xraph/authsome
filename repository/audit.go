@@ -337,10 +337,12 @@ func (r *AuditRepository) applyFullTextSearch(q *bun.SelectQuery, searchQuery st
 
 		if len(vectors) > 0 {
 			searchVector = "(" + vectors[0]
+
 			var searchVectorSb325 strings.Builder
 			for i := 1; i < len(vectors); i++ {
 				searchVectorSb325.WriteString(" || " + vectors[i])
 			}
+
 			searchVector += searchVectorSb325.String()
 
 			searchVector += ")"
@@ -388,7 +390,6 @@ func (r *AuditRepository) applyMetadataFilters(q *bun.SelectQuery, filters []aud
 
 // contains checks if a string slice contains a value.
 func contains(slice []string, item string) bool {
-
 	return slices.Contains(slice, item)
 }
 
@@ -434,10 +435,12 @@ func (r *AuditRepository) SearchPostgreSQL(ctx context.Context, query *audit.Sea
 
 		if len(vectors) > 0 {
 			searchVector = "(" + vectors[0]
+
 			var searchVectorSb421 strings.Builder
 			for i := 1; i < len(vectors); i++ {
 				searchVectorSb421.WriteString(" || " + vectors[i])
 			}
+
 			searchVector += searchVectorSb421.String()
 
 			searchVector += ")"

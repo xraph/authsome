@@ -252,7 +252,7 @@ func (m *Middleware) extractAPIKey(c forge.Context) string {
 	}
 
 	// Method 2: X-API-Key header (common convention)
-	if apiKey := c.Request().Header.Get("X-API-Key"); apiKey != "" {
+	if apiKey := c.Request().Header.Get("X-Api-Key"); apiKey != "" {
 		return apiKey
 	}
 

@@ -3,6 +3,7 @@ package deviceflow
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -81,15 +82,7 @@ func NewService(repo *repo.DeviceCodeRepository, config Config) *Service {
 func (s *Service) InitiateDeviceAuthorization(ctx context.Context, clientID string, scope string, appID, envID xid.ID, orgID *xid.ID) (*schema.DeviceCode, error) {
 	// Validate client is allowed (if whitelist is configured)
 	if len(s.config.AllowedClients) > 0 {
-		allowed := false
-
-		for _, allowedClient := range s.config.AllowedClients {
-			if allowedClient == clientID {
-				allowed = true
-
-				break
-			}
-		}
+		allowed := slices.Contains(s.config.AllowedClients, clientID)
 
 		if !allowed {
 			return nil, errs.PermissionDenied("device_flow", "client")

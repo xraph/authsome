@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/url"
+	"slices"
 	"testing"
 	"time"
 
@@ -354,15 +355,7 @@ func TestGetCACCertificateTypes(t *testing.T) {
 		t.Error("expected certificate types, got empty slice")
 	}
 
-	found := false
-
-	for _, ct := range certTypes {
-		if ct == "ID Certificate" {
-			found = true
-
-			break
-		}
-	}
+	found := slices.Contains(certTypes, "ID Certificate")
 
 	if !found {
 		t.Error("expected to find ID Certificate in types")
@@ -378,9 +371,7 @@ func BenchmarkValidatePIVCard(b *testing.B) {
 	repo := newMockRepository()
 	provider := NewSmartCardProvider(config, repo)
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = provider.ValidatePIVCard(context.Background(), pivCert)
 	}
 }

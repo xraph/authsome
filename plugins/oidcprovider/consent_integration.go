@@ -20,10 +20,10 @@ type ConsentManager struct {
 // This allows optional integration without hard dependency.
 type EnterpriseConsentService interface {
 	// CreateConsent records user consent
-	CreateConsent(ctx context.Context, orgID, userID string, req interface{}) (interface{}, error)
+	CreateConsent(ctx context.Context, orgID, userID string, req any) (any, error)
 
 	// GetConsent retrieves consent status
-	GetConsent(ctx context.Context, id string) (interface{}, error)
+	GetConsent(ctx context.Context, id string) (any, error)
 
 	// RevokeConsent revokes a consent
 	RevokeConsent(ctx context.Context, id string) error
@@ -81,13 +81,13 @@ func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clie
 
 		// Create consent request for enterprise plugin
 		// Note: This uses map[string]interface{} to avoid hard dependency
-		consentReq := map[string]interface{}{
+		consentReq := map[string]any{
 			"userId":      userID.String(),
 			"consentType": "oauth_authorization",
 			"purpose":     "OAuth client: " + clientID,
 			"granted":     granted,
 			"version":     "1.0",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"client_id": clientID,
 				"scope":     scope,
 			},
@@ -142,6 +142,7 @@ func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope s
 	}
 
 	scopeHTML := ""
+
 	var scopeHTMLSb144 strings.Builder
 
 	for _, s := range scopes {
@@ -152,6 +153,7 @@ func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope s
 
 		scopeHTMLSb144.WriteString(fmt.Sprintf(`<li class="scope-item"><span class="scope-icon">✓</span> %s</li>`, description))
 	}
+
 	scopeHTML += scopeHTMLSb144.String()
 
 	// If no logo, use placeholder
@@ -351,7 +353,7 @@ func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope s
 }
 
 // GetConsentPageData returns data for rendering custom consent templates.
-func (cm *ConsentManager) GetConsentPageData(clientName, clientLogoURI, clientDescription, scope string) map[string]interface{} {
+func (cm *ConsentManager) GetConsentPageData(clientName, clientLogoURI, clientDescription, scope string) map[string]any {
 	scopes := strings.Split(scope, " ")
 	scopeDescriptions := []map[string]string{}
 
@@ -376,7 +378,7 @@ func (cm *ConsentManager) GetConsentPageData(clientName, clientLogoURI, clientDe
 		})
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"client_name":        clientName,
 		"client_logo_uri":    clientLogoURI,
 		"client_description": clientDescription,

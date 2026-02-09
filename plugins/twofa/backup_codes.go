@@ -35,7 +35,7 @@ func (s *Service) BackupCodes(ctx context.Context, userID string, count int) ([]
 
 	// Generate new backup codes
 	codes := make([]string, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		// Generate 8-character alphanumeric code
 		code, err := generateBackupCode()
 		if err != nil {

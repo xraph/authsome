@@ -26,7 +26,8 @@ func NewHandler(svc *Service, authInst core.Authsome) *Handler {
 
 // handleError returns structured error response.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
-	if authErr, ok := err.(*errs.AuthsomeError); ok {
+	authErr := &errs.AuthsomeError{}
+	if errs.As(err, &authErr) {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
 
@@ -95,12 +96,12 @@ func (h *Handler) Verify(c forge.Context) error {
 	// Verify token
 	response, err := h.svc.VerifyToken(c.Request().Context(), appID, req.Token, true, ip, ua)
 	if err != nil {
-		switch err {
-		case ErrTokenNotFound:
+		switch {
+		case errs.Is(err, ErrTokenNotFound):
 			return c.JSON(http.StatusNotFound, err)
-		case ErrTokenExpired, ErrTokenAlreadyUsed:
+		case errs.Is(err, ErrTokenExpired), errs.Is(err, ErrTokenAlreadyUsed):
 			return c.JSON(http.StatusGone, err)
-		case ErrAlreadyVerified:
+		case errs.Is(err, ErrAlreadyVerified):
 			return c.JSON(http.StatusBadRequest, err)
 		}
 
@@ -135,12 +136,12 @@ func (h *Handler) Resend(c forge.Context) error {
 	// Resend verification
 	err := h.svc.ResendVerification(c.Request().Context(), appID, req.Email)
 	if err != nil {
-		switch err {
-		case ErrUserNotFound:
+		switch {
+		case errs.Is(err, ErrUserNotFound):
 			return c.JSON(http.StatusNotFound, err)
-		case ErrAlreadyVerified:
+		case errs.Is(err, ErrAlreadyVerified):
 			return c.JSON(http.StatusBadRequest, err)
-		case ErrRateLimitExceeded:
+		case errs.Is(err, ErrRateLimitExceeded):
 			return c.JSON(http.StatusTooManyRequests, err)
 		}
 

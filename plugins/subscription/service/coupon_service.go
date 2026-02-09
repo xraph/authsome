@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -390,15 +391,7 @@ func (s *CouponService) validateCouponUsage(ctx context.Context, coupon *core.Co
 
 	// Check plan applicability
 	if len(coupon.ApplicablePlans) > 0 && req.PlanSlug != "" {
-		found := false
-
-		for _, plan := range coupon.ApplicablePlans {
-			if plan == req.PlanSlug {
-				found = true
-
-				break
-			}
-		}
+		found := slices.Contains(coupon.ApplicablePlans, req.PlanSlug)
 
 		if !found {
 			validationErrors = append(validationErrors, core.ErrCouponNotApplicable.Message)

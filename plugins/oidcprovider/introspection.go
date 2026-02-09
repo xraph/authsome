@@ -2,6 +2,7 @@ package oidcprovider
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/rs/xid"
@@ -20,7 +21,7 @@ type IntrospectionService struct {
 // UserService interface for getting user information during introspection
 // Note: This uses interface{} for userID to allow xid.ID or string.
 type UserService interface {
-	FindByID(ctx context.Context, userID xid.ID) (interface{}, error)
+	FindByID(ctx context.Context, userID xid.ID) (any, error)
 }
 
 // NewIntrospectionService creates a new token introspection service.
@@ -111,7 +112,7 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 		userObj, err := s.userSvc.FindByID(ctx, token.UserID)
 		if err == nil && userObj != nil {
 			// Extract username/email from user object using type assertion or reflection
-			if userMap, ok := userObj.(map[string]interface{}); ok {
+			if userMap, ok := userObj.(map[string]any); ok {
 				if username, ok := userMap["username"].(string); ok && username != "" {
 					response.Username = username
 				} else if email, ok := userMap["email"].(string); ok && email != "" {
@@ -133,15 +134,7 @@ func (s *IntrospectionService) ValidateIntrospectionRequest(req *TokenIntrospect
 	// Validate token_type_hint if provided
 	if req.TokenTypeHint != "" {
 		validHints := []string{"access_token", "refresh_token"}
-		valid := false
-
-		for _, hint := range validHints {
-			if req.TokenTypeHint == hint {
-				valid = true
-
-				break
-			}
-		}
+		valid := slices.Contains(validHints, req.TokenTypeHint)
 
 		if !valid {
 			return errs.BadRequest("invalid token_type_hint: must be 'access_token' or 'refresh_token'")
@@ -209,11 +202,5 @@ func GetTokenScopes(scope string) []string {
 // HasScope checks if a token has a specific scope.
 func HasScope(tokenScope, requiredScope string) bool {
 	scopes := GetTokenScopes(tokenScope)
-	for _, s := range scopes {
-		if s == requiredScope {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(scopes, requiredScope)
 }

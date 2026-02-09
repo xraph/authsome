@@ -1898,6 +1898,7 @@ func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string)
 				}
 			default: // text, email, url, etc.
 				inputType := "text"
+
 				switch field.Type {
 				case "email":
 					inputType = "email"

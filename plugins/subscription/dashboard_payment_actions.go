@@ -50,7 +50,7 @@ func (e *DashboardExtension) HandleSetDefaultPaymentMethod(ctx *router.PageConte
 	}))
 
 	// Set success toast trigger
-	ctx.ResponseWriter.Header().Set("HX-Trigger", `{"showToast": {"message": "Payment method set as default", "type": "success"}}`)
+	ctx.ResponseWriter.Header().Set("Hx-Trigger", `{"showToast": {"message": "Payment method set as default", "type": "success"}}`)
 
 	return html, nil
 }
@@ -81,7 +81,7 @@ func (e *DashboardExtension) HandleRemovePaymentMethod(ctx *router.PageContext) 
 	// Remove payment method
 	if err := e.plugin.paymentSvc.RemovePaymentMethod(reqCtx, pmID); err != nil {
 		// Check if it's trying to delete default payment method
-		ctx.ResponseWriter.Header().Set("HX-Trigger", `{"showToast": {"message": "Cannot remove default payment method", "type": "error"}}`)
+		ctx.ResponseWriter.Header().Set("Hx-Trigger", `{"showToast": {"message": "Cannot remove default payment method", "type": "error"}}`)
 
 		return nil, errs.BadRequest("Cannot remove default payment method")
 	}
@@ -98,7 +98,7 @@ func (e *DashboardExtension) HandleRemovePaymentMethod(ctx *router.PageContext) 
 	}))
 
 	// Set success toast trigger
-	ctx.ResponseWriter.Header().Set("HX-Trigger", `{"showToast": {"message": "Payment method removed", "type": "success"}}`)
+	ctx.ResponseWriter.Header().Set("Hx-Trigger", `{"showToast": {"message": "Payment method removed", "type": "success"}}`)
 
 	return html, nil
 }

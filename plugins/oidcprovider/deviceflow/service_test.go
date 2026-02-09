@@ -109,6 +109,7 @@ func TestDeviceCode_ShouldSlowDown(t *testing.T) {
 			name: "polling too fast",
 			lastPolledAt: func() *time.Time {
 				t := now.Add(-2 * time.Second)
+
 				return &t
 			}(),
 			interval: 5,
@@ -118,6 +119,7 @@ func TestDeviceCode_ShouldSlowDown(t *testing.T) {
 			name: "polling at correct interval",
 			lastPolledAt: func() *time.Time {
 				t := now.Add(-6 * time.Second)
+
 				return &t
 			}(),
 			interval: 5,

@@ -32,7 +32,6 @@ func (p *PagesManager) RegisterPage(ctx *router.PageContext) (g.Node, error) {
 	// 	}
 	// 	// return ctx.Redirect(http.StatusFound, redirect)
 	// }
-
 	redirect := ctx.Query("redirect")
 	errorParam := ctx.Query("error")
 

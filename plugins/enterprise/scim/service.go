@@ -24,19 +24,19 @@ import (
 // Supports both app mode (multitenancy) and organization mode (organization plugin).
 type SCIMOrgService interface {
 	// Member operations
-	AddMember(ctx context.Context, orgID, userID xid.ID, role string) (interface{}, error)
+	AddMember(ctx context.Context, orgID, userID xid.ID, role string) (any, error)
 	IsUserMember(ctx context.Context, orgID, userID xid.ID) (bool, error)
-	ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error)
+	ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]any, error)
 
 	// Team operations
-	CreateTeam(ctx context.Context, orgID xid.ID, req interface{}) (interface{}, error)
-	GetTeam(ctx context.Context, id xid.ID) (interface{}, error)
-	ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error)
-	UpdateTeam(ctx context.Context, id xid.ID, req interface{}) (interface{}, error)
+	CreateTeam(ctx context.Context, orgID xid.ID, req any) (any, error)
+	GetTeam(ctx context.Context, id xid.ID) (any, error)
+	ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]any, error)
+	UpdateTeam(ctx context.Context, id xid.ID, req any) (any, error)
 	DeleteTeam(ctx context.Context, id xid.ID) error
 	AddTeamMember(ctx context.Context, teamID, memberID xid.ID, role string) error
 	RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error
-	ListTeamMembers(ctx context.Context, teamID xid.ID) ([]interface{}, error)
+	ListTeamMembers(ctx context.Context, teamID xid.ID) ([]any, error)
 
 	// Get member ID from user ID (for team operations)
 	GetMemberIDByUserID(ctx context.Context, orgID, userID xid.ID) (xid.ID, error)
@@ -47,7 +47,7 @@ type ServiceConfig struct {
 	Config         *Config
 	Repository     *Repository
 	UserService    user.ServiceInterface // Use interface to support decorated services
-	OrgService     interface{}           // Can be *app.ServiceImpl or *orgplugin.ServiceImpl
+	OrgService     any                   // Can be *app.ServiceImpl or *orgplugin.ServiceImpl
 	AuditService   *audit.Service
 	WebhookService *webhook.Service
 }
@@ -57,7 +57,7 @@ type Service struct {
 	config         *Config
 	repo           *Repository
 	userService    user.ServiceInterface // Use interface to support decorated services
-	orgService     interface{}           // Can be *app.ServiceImpl or *orgplugin.ServiceImpl
+	orgService     any                   // Can be *app.ServiceImpl or *orgplugin.ServiceImpl
 	scimOrgService SCIMOrgService        // Unified interface adapter
 	auditService   *audit.Service
 	webhookService *webhook.Service
@@ -178,7 +178,7 @@ func (s *Service) CreateUser(ctx context.Context, scimUser *SCIMUser, orgID xid.
 
 	// Send webhook if configured
 	if s.config.Webhooks.Enabled && s.config.Webhooks.NotifyOnCreate {
-		err := s.sendProvisioningWebhook(ctx, "user.provisioned", map[string]interface{}{
+		err := s.sendProvisioningWebhook(ctx, "user.provisioned", map[string]any{
 			"user_id":     createdUser.ID.String(),
 			"external_id": scimUser.ExternalID,
 			"org_id":      orgID,
@@ -245,7 +245,7 @@ func (s *Service) UpdateUser(ctx context.Context, id, orgID xid.ID, patch *Patch
 
 	// Send webhook
 	if s.config.Webhooks.Enabled && s.config.Webhooks.NotifyOnUpdate {
-		err := s.sendProvisioningWebhook(ctx, "user.updated", map[string]interface{}{
+		err := s.sendProvisioningWebhook(ctx, "user.updated", map[string]any{
 			"user_id":   authUser.ID.String(),
 			"org_id":    orgID,
 			"operation": "patch",
@@ -320,7 +320,7 @@ func (s *Service) DeleteUser(ctx context.Context, id, orgID xid.ID) error {
 
 	// Send webhook
 	if s.config.Webhooks.Enabled && s.config.Webhooks.NotifyOnDelete {
-		err := s.sendProvisioningWebhook(ctx, "user.deprovisioned", map[string]interface{}{
+		err := s.sendProvisioningWebhook(ctx, "user.deprovisioned", map[string]any{
 			"user_id":   id,
 			"org_id":    orgID,
 			"operation": "delete",
@@ -334,10 +334,7 @@ func (s *Service) DeleteUser(ctx context.Context, id, orgID xid.ID) error {
 // ListUsers lists users with filtering and pagination.
 func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, startIndex, count int) (*ListResponse, error) {
 	// Get paginated members
-	offset := startIndex - 1
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(startIndex-1, 0)
 
 	memberList, err := s.getOrgService().ListMembers(ctx, orgID, count, offset)
 	if err != nil {
@@ -345,7 +342,7 @@ func (s *Service) ListUsers(ctx context.Context, orgID xid.ID, filter string, st
 	}
 
 	// Convert to SCIM users and apply filtering
-	resources := make([]interface{}, 0, len(memberList))
+	resources := make([]any, 0, len(memberList))
 	for _, memberInterface := range memberList {
 		// Extract UserID from member (works for both app.Member and schema.OrganizationMember)
 		var userID xid.ID
@@ -478,7 +475,7 @@ func (s *Service) CreateGroup(ctx context.Context, scimGroup *SCIMGroup, orgID x
 		description := "Synced from SCIM group: " + scimGroup.ExternalID
 
 		// Create team request based on mode
-		var teamReq interface{}
+		var teamReq any
 
 		if s.mode == "organization" {
 			desc := description
@@ -682,7 +679,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 	var (
 		teamName     string
 		teamDesc     *string
-		teamMetadata map[string]interface{}
+		teamMetadata map[string]any
 	)
 
 	switch t := teamInterface.(type) {
@@ -713,7 +710,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 			}
 
 			if metaField := val.FieldByName("Metadata"); metaField.IsValid() {
-				if meta, ok := metaField.Interface().(map[string]interface{}); ok {
+				if meta, ok := metaField.Interface().(map[string]any); ok {
 					teamMetadata = meta
 				}
 			}
@@ -721,7 +718,7 @@ func (s *Service) UpdateGroup(ctx context.Context, id, orgID xid.ID, patch *Patc
 	}
 
 	// Update team
-	var updateReq interface{}
+	var updateReq any
 	if s.mode == "organization" {
 		updateReq = &orgplugin.UpdateTeamRequest{
 			Name:        &teamName,
@@ -750,7 +747,7 @@ func (s *Service) ReplaceGroup(ctx context.Context, id, orgID xid.ID, scimGroup 
 	}
 
 	// Update team properties
-	var updateReq interface{}
+	var updateReq any
 
 	if s.mode == "organization" {
 		name := scimGroup.DisplayName
@@ -805,15 +802,12 @@ func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, s
 			TotalResults: 0,
 			StartIndex:   startIndex,
 			ItemsPerPage: 0,
-			Resources:    []interface{}{},
+			Resources:    []any{},
 		}, nil
 	}
 
 	// Get paginated teams
-	offset := startIndex - 1
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(startIndex-1, 0)
 
 	teamList, err := s.getOrgService().ListTeams(ctx, orgID, count, offset)
 	if err != nil {
@@ -821,7 +815,7 @@ func (s *Service) ListGroups(ctx context.Context, orgID xid.ID, filter string, s
 	}
 
 	// Convert to SCIM groups
-	resources := make([]interface{}, 0, len(teamList))
+	resources := make([]any, 0, len(teamList))
 	for _, teamInterface := range teamList {
 		// Extract team info using reflection
 		var (
@@ -1137,7 +1131,7 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface interface{}, op *PatchOperation, orgID xid.ID) error {
+func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface any, op *PatchOperation, orgID xid.ID) error {
 	// Extract team ID from interface
 	var teamID xid.ID
 
@@ -1166,7 +1160,7 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface in
 			// Name update will be handled by UpdateTeam call
 		} else if op.Path == "members" {
 			// Handle member replacement
-			if members, ok := op.Value.([]interface{}); ok {
+			if members, ok := op.Value.([]any); ok {
 				// Remove all existing members
 				existingMemberList, _ := s.getOrgService().ListTeamMembers(ctx, teamID)
 				for _, memberInterface := range existingMemberList {
@@ -1179,7 +1173,7 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface in
 
 				// Add new members
 				for _, m := range members {
-					if memberMap, ok := m.(map[string]interface{}); ok {
+					if memberMap, ok := m.(map[string]any); ok {
 						if userIDStr, ok := memberMap["value"].(string); ok {
 							userXID, err := xid.FromString(userIDStr)
 							if err != nil {
@@ -1203,9 +1197,9 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface in
 	case "add":
 		if op.Path == "members" {
 			// Add members to group
-			if members, ok := op.Value.([]interface{}); ok {
+			if members, ok := op.Value.([]any); ok {
 				for _, m := range members {
-					if memberMap, ok := m.(map[string]interface{}); ok {
+					if memberMap, ok := m.(map[string]any); ok {
 						if userIDStr, ok := memberMap["value"].(string); ok {
 							userID, err := xid.FromString(userIDStr)
 							if err != nil {
@@ -1247,7 +1241,7 @@ func (s *Service) applyGroupPatchOperation(ctx context.Context, teamInterface in
 }
 
 // Helper to extract member ID from member interface.
-func extractMemberIDFromInterface(member interface{}) xid.ID {
+func extractMemberIDFromInterface(member any) xid.ID {
 	switch m := member.(type) {
 	case *app.Member:
 		return m.ID
@@ -1359,7 +1353,7 @@ func strPtr(s string) *string {
 	return &s
 }
 
-func (s *Service) sendProvisioningWebhook(ctx context.Context, event string, data map[string]interface{}) error {
+func (s *Service) sendProvisioningWebhook(ctx context.Context, event string, data map[string]any) error {
 	if !s.config.Webhooks.Enabled {
 		return nil
 	}
@@ -1651,7 +1645,7 @@ func (s *Service) UpdateAttributeMappings(ctx context.Context, appID, envID, org
 			EnvironmentID:  envID,
 			OrganizationID: orgID,
 			Mappings:       mappings,
-			Metadata:       make(map[string]interface{}),
+			Metadata:       make(map[string]any),
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
@@ -1672,7 +1666,7 @@ func (s *Service) UpdateAttributeMappings(ctx context.Context, appID, envID, org
 // Updated for 3-tier architecture.
 func (s *Service) GetProvisioningLogs(ctx context.Context, appID, envID, orgID xid.ID, action string, limit, offset int) ([]*ProvisioningLog, int, error) {
 	// Build filters
-	filters := make(map[string]interface{})
+	filters := make(map[string]any)
 	if action != "" {
 		filters["operation"] = action
 	}
@@ -1716,7 +1710,7 @@ func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, appID, envID, org
 		EnvironmentID:  envID,
 		OrganizationID: orgID,
 		Mappings:       s.config.AttributeMapping.CustomMapping,
-		Metadata:       make(map[string]interface{}),
+		Metadata:       make(map[string]any),
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -1725,7 +1719,7 @@ func (s *Service) InitializeOrgSCIMConfig(ctx context.Context, appID, envID, org
 }
 
 // SendProvisioningWebhook sends a provisioning webhook.
-func (s *Service) SendProvisioningWebhook(ctx context.Context, event string, data map[string]interface{}) error {
+func (s *Service) SendProvisioningWebhook(ctx context.Context, event string, data map[string]any) error {
 	return s.sendProvisioningWebhook(ctx, event, data)
 }
 
@@ -1742,7 +1736,7 @@ func (s *Service) Health(ctx context.Context) error {
 }
 
 // Helper function to extract UserID from member interface.
-func extractUserIDFromMember(member interface{}) xid.ID {
+func extractUserIDFromMember(member any) xid.ID {
 	// Try app.Member
 	if m, ok := member.(*app.Member); ok {
 		return m.UserID
@@ -1776,7 +1770,7 @@ type appServiceAdapter struct {
 	service *app.ServiceImpl
 }
 
-func (a *appServiceAdapter) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (interface{}, error) {
+func (a *appServiceAdapter) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (any, error) {
 	member := &app.Member{
 		AppID:  orgID,
 		UserID: userID,
@@ -1791,7 +1785,7 @@ func (a *appServiceAdapter) IsUserMember(ctx context.Context, orgID, userID xid.
 	return a.service.IsUserMember(ctx, orgID, userID)
 }
 
-func (a *appServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error) {
+func (a *appServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]any, error) {
 	filter := &app.ListMembersFilter{
 		AppID: orgID,
 	}
@@ -1803,7 +1797,7 @@ func (a *appServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit
 		return nil, err
 	}
 
-	result := make([]interface{}, len(response.Data))
+	result := make([]any, len(response.Data))
 	for i, m := range response.Data {
 		result[i] = m
 	}
@@ -1811,17 +1805,17 @@ func (a *appServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit
 	return result, nil
 }
 
-func (a *appServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req interface{}) (interface{}, error) {
+func (a *appServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req any) (any, error) {
 	// For now, return a placeholder since team creation interface needs proper implementation
 	// TODO: Implement team creation with new app service interface
 	return nil, errs.NotImplemented("team creation via SCIM for app mode")
 }
 
-func (a *appServiceAdapter) GetTeam(ctx context.Context, id xid.ID) (interface{}, error) {
+func (a *appServiceAdapter) GetTeam(ctx context.Context, id xid.ID) (any, error) {
 	return a.service.FindTeamByID(ctx, id)
 }
 
-func (a *appServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error) {
+func (a *appServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]any, error) {
 	filter := &app.ListTeamsFilter{
 		AppID: orgID,
 	}
@@ -1833,7 +1827,7 @@ func (a *appServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, 
 		return nil, err
 	}
 
-	result := make([]interface{}, len(response.Data))
+	result := make([]any, len(response.Data))
 	for i, t := range response.Data {
 		result[i] = t
 	}
@@ -1841,7 +1835,7 @@ func (a *appServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, 
 	return result, nil
 }
 
-func (a *appServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req interface{}) (interface{}, error) {
+func (a *appServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req any) (any, error) {
 	// For now, return a placeholder since team update interface needs proper implementation
 	// TODO: Implement team update with new app service interface
 	return nil, errs.NotImplemented("team update via SCIM for app mode")
@@ -1866,7 +1860,7 @@ func (a *appServiceAdapter) RemoveTeamMember(ctx context.Context, teamID, member
 	return a.service.RemoveTeamMember(ctx, teamID, memberID)
 }
 
-func (a *appServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) ([]interface{}, error) {
+func (a *appServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) ([]any, error) {
 	filter := &app.ListTeamMembersFilter{
 		TeamID: teamID,
 	}
@@ -1878,7 +1872,7 @@ func (a *appServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) 
 		return nil, err
 	}
 
-	result := make([]interface{}, len(response.Data))
+	result := make([]any, len(response.Data))
 	for i, m := range response.Data {
 		result[i] = m
 	}
@@ -1912,7 +1906,7 @@ type orgServiceAdapter struct {
 	service *orgplugin.Service
 }
 
-func (a *orgServiceAdapter) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (interface{}, error) {
+func (a *orgServiceAdapter) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (any, error) {
 	return a.service.AddMember(ctx, orgID, userID, role)
 }
 
@@ -1920,13 +1914,13 @@ func (a *orgServiceAdapter) IsUserMember(ctx context.Context, orgID, userID xid.
 	return a.service.IsMember(ctx, orgID, userID)
 }
 
-func (a *orgServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error) {
+func (a *orgServiceAdapter) ListMembers(ctx context.Context, orgID xid.ID, limit, offset int) ([]any, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return empty to prevent errors
-	return []interface{}{}, errs.NotImplemented("organization service list members pagination")
+	return []any{}, errs.NotImplemented("organization service list members pagination")
 }
 
-func (a *orgServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req interface{}) (interface{}, error) {
+func (a *orgServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req any) (any, error) {
 	teamReq, ok := req.(*orgplugin.CreateTeamRequest)
 	if !ok {
 		// Try to convert from app service request
@@ -1948,18 +1942,18 @@ func (a *orgServiceAdapter) CreateTeam(ctx context.Context, orgID xid.ID, req in
 	return a.service.CreateTeam(ctx, orgID, teamReq, systemUserID)
 }
 
-func (a *orgServiceAdapter) GetTeam(ctx context.Context, id xid.ID) (interface{}, error) {
+func (a *orgServiceAdapter) GetTeam(ctx context.Context, id xid.ID) (any, error) {
 	// TODO: Organization service needs GetTeam method
 	return nil, errs.NotImplemented("organization service get team")
 }
 
-func (a *orgServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]interface{}, error) {
+func (a *orgServiceAdapter) ListTeams(ctx context.Context, orgID xid.ID, limit, offset int) ([]any, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return empty to prevent errors
-	return []interface{}{}, errs.NotImplemented("organization service list teams pagination")
+	return []any{}, errs.NotImplemented("organization service list teams pagination")
 }
 
-func (a *orgServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req interface{}) (interface{}, error) {
+func (a *orgServiceAdapter) UpdateTeam(ctx context.Context, id xid.ID, req any) (any, error) {
 	teamReq, ok := req.(*orgplugin.UpdateTeamRequest)
 	if !ok {
 		// Try to convert from app service request
@@ -1997,10 +1991,10 @@ func (a *orgServiceAdapter) RemoveTeamMember(ctx context.Context, teamID, member
 	return a.service.RemoveTeamMember(ctx, teamID, memberID, systemUserID)
 }
 
-func (a *orgServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) ([]interface{}, error) {
+func (a *orgServiceAdapter) ListTeamMembers(ctx context.Context, teamID xid.ID) ([]any, error) {
 	// TODO: Organization service needs to be updated to use filter-based pagination
 	// For now, return empty to prevent errors
-	return []interface{}{}, errs.NotImplemented("organization service list team members pagination")
+	return []any{}, errs.NotImplemented("organization service list team members pagination")
 }
 
 func (a *orgServiceAdapter) GetMemberIDByUserID(ctx context.Context, orgID, userID xid.ID) (xid.ID, error) {

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -186,7 +187,7 @@ func (s *Service) GetFactor(ctx context.Context, factorID xid.ID) (*Factor, erro
 }
 
 // UpdateFactor updates factor settings.
-func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map[string]interface{}) error {
+func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map[string]any) error {
 	factor, err := s.repo.GetFactor(ctx, factorID)
 	if err != nil {
 		return err
@@ -313,15 +314,7 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	for _, f := range factors {
 		// Check if factor type is in requested types (if specified)
 		if len(req.FactorTypes) > 0 {
-			found := false
-
-			for _, ft := range req.FactorTypes {
-				if f.Type == ft {
-					found = true
-
-					break
-				}
-			}
+			found := slices.Contains(req.FactorTypes, f.Type)
 
 			if !found {
 				continue

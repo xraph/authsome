@@ -3,6 +3,7 @@ package compliance
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/internal/errs"
@@ -273,14 +274,6 @@ func (r *ScopeResolver) buildInheritanceChain(ctx context.Context, scope *audit.
 
 // Utility functions
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-
-	return b
-}
-
 func minPositive(a, b int) int {
 	// 0 means unlimited/disabled
 	if a == 0 {
@@ -337,7 +330,7 @@ func (r *ScopeResolver) coalesce(preferred, fallback string) string {
 	return fallback
 }
 
-func (r *ScopeResolver) mergeMetadata(parent, child map[string]interface{}) map[string]interface{} {
+func (r *ScopeResolver) mergeMetadata(parent, child map[string]any) map[string]any {
 	if parent == nil {
 		return child
 	}
@@ -347,14 +340,10 @@ func (r *ScopeResolver) mergeMetadata(parent, child map[string]interface{}) map[
 	}
 
 	// Deep merge with child taking precedence
-	merged := make(map[string]interface{})
-	for k, v := range parent {
-		merged[k] = v
-	}
+	merged := make(map[string]any)
+	maps.Copy(merged, parent)
 
-	for k, v := range child {
-		merged[k] = v
-	}
+	maps.Copy(merged, child)
 
 	return merged
 }

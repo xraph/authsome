@@ -365,6 +365,7 @@ func CalculateDeviceFingerprint(userAgent, ipAddress string, additionalData map[
 	for key, value := range additionalData {
 		fingerprintSb360.WriteString(fmt.Sprintf("|%s:%s", key, value))
 	}
+
 	fingerprint += fingerprintSb360.String()
 
 	// In production, hash this and store the hash

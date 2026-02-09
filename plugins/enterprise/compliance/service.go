@@ -102,7 +102,7 @@ func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) 
 		Action:     "compliance.profile.created",
 		AppID:      req.AppID,
 		ResourceID: profile.ID,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"standards": profile.Standards,
 		},
 	})
@@ -131,7 +131,7 @@ func (s *Service) CreateProfileFromTemplate(ctx context.Context, appID string, s
 		Action:     "compliance.profile.created_from_template",
 		AppID:      appID,
 		ResourceID: profile.ID,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"template": standard,
 		},
 	})
@@ -222,7 +222,7 @@ func (s *Service) RunCheck(ctx context.Context, profileID, checkType string) (*C
 	}
 
 	var (
-		result   map[string]interface{}
+		result   map[string]any
 		status   string
 		evidence []string
 	)
@@ -273,7 +273,7 @@ func (s *Service) RunCheck(ctx context.Context, profileID, checkType string) (*C
 }
 
 // checkMFACoverage checks MFA adoption rate.
-func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
+func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfile) (map[string]any, string, []string) {
 	// Get all users in app
 	users, err := s.userSvc.ListByApp(ctx, profile.AppID)
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfi
 		coveragePercent = (usersWithMFA * 100) / totalUsers
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"total_users":       totalUsers,
 		"users_with_mfa":    usersWithMFA,
 		"users_without_mfa": len(usersWithoutMFA),
@@ -320,7 +320,7 @@ func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfi
 }
 
 // checkPasswordPolicy verifies password compliance.
-func (s *Service) checkPasswordPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
+func (s *Service) checkPasswordPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]any, string, []string) {
 	// Get users with weak passwords or expired passwords
 	users, _ := s.userSvc.ListByApp(ctx, profile.AppID)
 
@@ -340,7 +340,7 @@ func (s *Service) checkPasswordPolicy(ctx context.Context, profile *CompliancePr
 		// This is a placeholder - real implementation would check against policy
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"total_users":       len(users),
 		"weak_passwords":    weakPasswords,
 		"expired_passwords": expiredPasswords,
@@ -362,9 +362,9 @@ func (s *Service) checkPasswordPolicy(ctx context.Context, profile *CompliancePr
 }
 
 // checkSessionPolicy verifies session compliance.
-func (s *Service) checkSessionPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
+func (s *Service) checkSessionPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]any, string, []string) {
 	// This would integrate with session service to check active sessions
-	result := map[string]interface{}{
+	result := map[string]any{
 		"max_age":      profile.SessionMaxAge,
 		"idle_timeout": profile.SessionIdleTimeout,
 		"ip_binding":   profile.SessionIPBinding,
@@ -374,10 +374,10 @@ func (s *Service) checkSessionPolicy(ctx context.Context, profile *CompliancePro
 }
 
 // checkAccessReview checks if regular access reviews are being performed.
-func (s *Service) checkAccessReview(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
+func (s *Service) checkAccessReview(ctx context.Context, profile *ComplianceProfile) (map[string]any, string, []string) {
 	// Check when last access review was performed
 	// This is a placeholder - would integrate with access review system
-	result := map[string]interface{}{
+	result := map[string]any{
 		"last_review": "2025-10-01",
 		"overdue":     false,
 	}
@@ -386,7 +386,7 @@ func (s *Service) checkAccessReview(ctx context.Context, profile *ComplianceProf
 }
 
 // checkInactiveUsers identifies inactive users.
-func (s *Service) checkInactiveUsers(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
+func (s *Service) checkInactiveUsers(ctx context.Context, profile *ComplianceProfile) (map[string]any, string, []string) {
 	users, _ := s.userSvc.ListByApp(ctx, profile.AppID)
 
 	inactiveThreshold := 90 * 24 * time.Hour // 90 days
@@ -398,7 +398,7 @@ func (s *Service) checkInactiveUsers(ctx context.Context, profile *CompliancePro
 		}
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"total_users":    len(users),
 		"inactive_users": len(inactiveUsers),
 		"threshold_days": 90,
@@ -417,7 +417,7 @@ func (s *Service) checkInactiveUsers(ctx context.Context, profile *CompliancePro
 }
 
 // checkDataRetention verifies data retention compliance.
-func (s *Service) checkDataRetention(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
+func (s *Service) checkDataRetention(ctx context.Context, profile *ComplianceProfile) (map[string]any, string, []string) {
 	// Check audit logs retention
 	oldestLog, _ := s.auditSvc.GetOldestLog(ctx, profile.AppID)
 
@@ -426,7 +426,7 @@ func (s *Service) checkDataRetention(ctx context.Context, profile *CompliancePro
 		retentionDays = int(time.Since(oldestLog.CreatedAt).Hours() / 24)
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"retention_days": retentionDays,
 		"required_days":  profile.RetentionDays,
 		"compliant":      retentionDays >= profile.RetentionDays,
@@ -581,31 +581,31 @@ func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*Compl
 
 // Helper structs and interfaces.
 type CreateProfileRequest struct {
-	AppID                 string                 `json:"appId"`
-	Name                  string                 `json:"name"                  validate:"required"`
-	Standards             []ComplianceStandard   `json:"standards"`
-	MFARequired           bool                   `json:"mfaRequired"`
-	PasswordMinLength     int                    `json:"passwordMinLength"`
-	PasswordRequireUpper  bool                   `json:"passwordRequireUpper"`
-	PasswordRequireLower  bool                   `json:"passwordRequireLower"`
-	PasswordRequireNumber bool                   `json:"passwordRequireNumber"`
-	PasswordRequireSymbol bool                   `json:"passwordRequireSymbol"`
-	PasswordExpiryDays    int                    `json:"passwordExpiryDays"`
-	SessionMaxAge         int                    `json:"sessionMaxAge"`
-	SessionIdleTimeout    int                    `json:"sessionIdleTimeout"`
-	SessionIPBinding      bool                   `json:"sessionIpBinding"`
-	RetentionDays         int                    `json:"retentionDays"`
-	AuditLogExport        bool                   `json:"auditLogExport"`
-	DetailedAuditTrail    bool                   `json:"detailedAuditTrail"`
-	DataResidency         string                 `json:"dataResidency"`
-	EncryptionAtRest      bool                   `json:"encryptionAtRest"`
-	EncryptionInTransit   bool                   `json:"encryptionInTransit"`
-	RBACRequired          bool                   `json:"rbacRequired"`
-	LeastPrivilege        bool                   `json:"leastPrivilege"`
-	RegularAccessReview   bool                   `json:"regularAccessReview"`
-	ComplianceContact     string                 `json:"complianceContact"`
-	DPOContact            string                 `json:"dpoContact"`
-	Metadata              map[string]interface{} `json:"metadata"`
+	AppID                 string               `json:"appId"`
+	Name                  string               `json:"name"                  validate:"required"`
+	Standards             []ComplianceStandard `json:"standards"`
+	MFARequired           bool                 `json:"mfaRequired"`
+	PasswordMinLength     int                  `json:"passwordMinLength"`
+	PasswordRequireUpper  bool                 `json:"passwordRequireUpper"`
+	PasswordRequireLower  bool                 `json:"passwordRequireLower"`
+	PasswordRequireNumber bool                 `json:"passwordRequireNumber"`
+	PasswordRequireSymbol bool                 `json:"passwordRequireSymbol"`
+	PasswordExpiryDays    int                  `json:"passwordExpiryDays"`
+	SessionMaxAge         int                  `json:"sessionMaxAge"`
+	SessionIdleTimeout    int                  `json:"sessionIdleTimeout"`
+	SessionIPBinding      bool                 `json:"sessionIpBinding"`
+	RetentionDays         int                  `json:"retentionDays"`
+	AuditLogExport        bool                 `json:"auditLogExport"`
+	DetailedAuditTrail    bool                 `json:"detailedAuditTrail"`
+	DataResidency         string               `json:"dataResidency"`
+	EncryptionAtRest      bool                 `json:"encryptionAtRest"`
+	EncryptionInTransit   bool                 `json:"encryptionInTransit"`
+	RBACRequired          bool                 `json:"rbacRequired"`
+	LeastPrivilege        bool                 `json:"leastPrivilege"`
+	RegularAccessReview   bool                 `json:"regularAccessReview"`
+	ComplianceContact     string               `json:"complianceContact"`
+	DPOContact            string               `json:"dpoContact"`
+	Metadata              map[string]any       `json:"metadata"`
 }
 
 type UpdateProfileRequest struct {
@@ -693,7 +693,7 @@ type AuditEvent struct {
 	Action     string
 	AppID      string
 	ResourceID string
-	Metadata   map[string]interface{}
+	Metadata   map[string]any
 }
 
 type AuditLog struct {

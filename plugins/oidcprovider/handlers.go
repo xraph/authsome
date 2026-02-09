@@ -476,6 +476,7 @@ func (h *Handler) handleDeviceCodeGrant(ctx context.Context, c forge.Context, re
 		authErr := &errs.AuthsomeError{}
 		if errors.As(err, &authErr) {
 			errorCode := "invalid_grant"
+
 			switch authErr.HTTPStatus {
 			case http.StatusForbidden:
 				errorCode = "access_denied"

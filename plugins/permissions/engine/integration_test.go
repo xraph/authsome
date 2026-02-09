@@ -82,6 +82,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -111,6 +112,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -139,6 +141,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -167,6 +170,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -195,6 +199,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -223,6 +228,7 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),

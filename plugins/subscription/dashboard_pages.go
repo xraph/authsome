@@ -3,6 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	"github.com/xraph/authsome/core/app"
@@ -80,16 +81,16 @@ func (e *DashboardExtension) ServeBillingOverviewPage(ctx *router.PageContext) (
 			Class("grid gap-6 md:grid-cols-2 lg:grid-cols-4"),
 			e.statsCard("Monthly Recurring Revenue", formatMoney(mrr, "USD"), lucide.DollarSign(Class("size-5 text-violet-600"))),
 			e.statsCard("Annual Recurring Revenue", formatMoney(arr, "USD"), lucide.TrendingUp(Class("size-5 text-violet-600"))),
-			e.statsCard("Active Subscriptions", fmt.Sprintf("%d", activeCount), lucide.Users(Class("size-5 text-violet-600"))),
-			e.statsCard("Trial Subscriptions", fmt.Sprintf("%d", trialingCount), lucide.Clock(Class("size-5 text-violet-600"))),
+			e.statsCard("Active Subscriptions", strconv.Itoa(activeCount), lucide.Users(Class("size-5 text-violet-600"))),
+			e.statsCard("Trial Subscriptions", strconv.Itoa(trialingCount), lucide.Clock(Class("size-5 text-violet-600"))),
 		),
 
 		// Quick stats row
 		Div(
 			Class("grid gap-6 md:grid-cols-3"),
-			e.statsCard("Total Plans", fmt.Sprintf("%d", planCount), lucide.Package(Class("size-5 text-violet-600"))),
-			e.statsCard("Total Subscriptions", fmt.Sprintf("%d", subCount), lucide.FileText(Class("size-5 text-violet-600"))),
-			e.statsCard("Canceled", fmt.Sprintf("%d", canceledCount), lucide.X(Class("size-5 text-violet-600"))),
+			e.statsCard("Total Plans", strconv.Itoa(planCount), lucide.Package(Class("size-5 text-violet-600"))),
+			e.statsCard("Total Subscriptions", strconv.Itoa(subCount), lucide.FileText(Class("size-5 text-violet-600"))),
+			e.statsCard("Canceled", strconv.Itoa(canceledCount), lucide.X(Class("size-5 text-violet-600"))),
 		),
 
 		// Recent subscriptions
@@ -234,9 +235,9 @@ func (e *DashboardExtension) ServePlansListPage(ctx *router.PageContext) (g.Node
 		// Stats row
 		Div(
 			Class("grid gap-6 md:grid-cols-3"),
-			e.statsCard("Total Plans", fmt.Sprintf("%d", total), lucide.Package(Class("size-5 text-violet-600"))),
-			e.statsCard("Active Plans", fmt.Sprintf("%d", countActivePlans(plans)), lucide.Check(Class("size-5 text-violet-600"))),
-			e.statsCard("Public Plans", fmt.Sprintf("%d", countPublicPlans(plans)), lucide.Globe(Class("size-5 text-violet-600"))),
+			e.statsCard("Total Plans", strconv.Itoa(total), lucide.Package(Class("size-5 text-violet-600"))),
+			e.statsCard("Active Plans", strconv.Itoa(countActivePlans(plans)), lucide.Check(Class("size-5 text-violet-600"))),
+			e.statsCard("Public Plans", strconv.Itoa(countPublicPlans(plans)), lucide.Globe(Class("size-5 text-violet-600"))),
 		),
 
 		// Plans table
@@ -439,9 +440,9 @@ func (e *DashboardExtension) ServeInvoicesListPage(ctx *router.PageContext) (g.N
 		Div(
 			Class("grid gap-6 md:grid-cols-4"),
 			e.statsCard("Total Revenue", formatMoney(totalRevenue, "USD"), lucide.DollarSign(Class("size-5 text-violet-600"))),
-			e.statsCard("Paid Invoices", fmt.Sprintf("%d", statusCounts["paid"]), lucide.CircleCheck(Class("size-5 text-violet-600"))),
-			e.statsCard("Pending", fmt.Sprintf("%d", statusCounts["open"]+statusCounts["draft"]), lucide.Clock(Class("size-5 text-violet-600"))),
-			e.statsCard("Overdue", fmt.Sprintf("%d", statusCounts["past_due"]), lucide.CircleAlert(Class("size-5 text-violet-600"))),
+			e.statsCard("Paid Invoices", strconv.Itoa(statusCounts["paid"]), lucide.CircleCheck(Class("size-5 text-violet-600"))),
+			e.statsCard("Pending", strconv.Itoa(statusCounts["open"]+statusCounts["draft"]), lucide.Clock(Class("size-5 text-violet-600"))),
+			e.statsCard("Overdue", strconv.Itoa(statusCounts["past_due"]), lucide.CircleAlert(Class("size-5 text-violet-600"))),
 		),
 
 		// Status filter tabs
@@ -799,7 +800,7 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext
 					Class("flex items-center justify-between"),
 					Div(
 						P(Class("text-sm font-medium text-slate-500 dark:text-gray-400"), g.Text("Active Customers")),
-						P(Class("text-2xl font-bold text-slate-900 dark:text-white mt-2"), g.Text(fmt.Sprintf("%d", metrics.ActiveSubscriptions))),
+						P(Class("text-2xl font-bold text-slate-900 dark:text-white mt-2"), g.Text(strconv.Itoa(metrics.ActiveSubscriptions))),
 						renderMetricChange(metrics.SubscriptionGrowth),
 					),
 					lucide.Users(Class("size-6 text-violet-600")),
@@ -837,15 +838,13 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext
 									g.Text(formatMoney(breakdown.TotalMRR, "USD"))),
 								g.If(breakdown.NetNewMRR != 0,
 									Span(
-										Class(fmt.Sprintf("text-xs %s",
-											func() string {
-												if breakdown.NetNewMRR > 0 {
-													return "text-green-600 dark:text-green-400"
-												}
+										Class("text-xs "+func() string {
+											if breakdown.NetNewMRR > 0 {
+												return "text-green-600 dark:text-green-400"
+											}
 
-												return "text-red-600 dark:text-red-400"
-											}(),
-										)),
+											return "text-red-600 dark:text-red-400"
+										}()),
 										g.Text(formatMoney(breakdown.NetNewMRR, "USD")),
 									),
 								),
@@ -909,7 +908,7 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext
 			H3(Class("text-lg font-semibold text-slate-900 dark:text-white mb-4"), g.Text("Subscription Health")),
 			Div(
 				Class("grid gap-6 md:grid-cols-3"),
-				e.statsCard("Trialing", fmt.Sprintf("%d", metrics.TrialingSubscriptions), lucide.UserPlus(Class("size-5 text-blue-600"))),
+				e.statsCard("Trialing", strconv.Itoa(metrics.TrialingSubscriptions), lucide.UserPlus(Class("size-5 text-blue-600"))),
 				e.statsCard("New MRR", formatMoney(metrics.NewMRR, "USD"), lucide.TrendingUp(Class("size-5 text-green-600"))),
 				e.statsCard("Churned MRR", formatMoney(metrics.ChurnedMRR, "USD"), lucide.TrendingDown(Class("size-5 text-red-600"))),
 			),
@@ -1009,14 +1008,6 @@ func countPublicPlans(plans []*core.Plan) int {
 	}
 
 	return count
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
 }
 
 // Table rendering helpers
@@ -1197,7 +1188,7 @@ func (e *DashboardExtension) renderSubscriptionsTable(ctx context.Context, subs 
 				Div(Class("font-medium text-slate-900 dark:text-white"), g.Text(sub.ID.String()[:8]+"..."))),
 			Td(Class("px-6 py-4 text-sm text-slate-600 dark:text-gray-400"), g.Text(planName)),
 			Td(Class("px-6 py-4"), e.subscriptionStatusBadge(sub)),
-			Td(Class("px-6 py-4 text-sm text-slate-600 dark:text-gray-400"), g.Text(fmt.Sprintf("%d", sub.Quantity))),
+			Td(Class("px-6 py-4 text-sm text-slate-600 dark:text-gray-400"), g.Text(strconv.Itoa(sub.Quantity))),
 			Td(Class("px-6 py-4 text-sm text-slate-600 dark:text-gray-400"), g.Text(sub.CurrentPeriodEnd.Format("Jan 2, 2006"))),
 			Td(Class("px-6 py-4 text-right"),
 				A(
@@ -1362,6 +1353,7 @@ func (e *DashboardExtension) renderCouponsTable(ctx context.Context, coupons []*
 	rows := make([]g.Node, 0, len(coupons))
 	for _, coupon := range coupons {
 		discountText := ""
+
 		switch coupon.Type {
 		case core.CouponTypePercentage:
 			discountText = fmt.Sprintf("%.0f%% off", coupon.PercentOff)

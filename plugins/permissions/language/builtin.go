@@ -55,7 +55,6 @@ func (b *BuiltinFunctions) HasRole(role string) bool {
 
 // HasAnyRole checks if principal has any of the specified roles.
 func (b *BuiltinFunctions) HasAnyRole(roles []string) bool {
-
 	return slices.ContainsFunc(roles, b.HasRole)
 }
 

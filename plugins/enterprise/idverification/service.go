@@ -3,6 +3,7 @@ package idverification
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -76,7 +77,7 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 	// Check if user exists and is not blocked
 	status, err := s.repo.GetUserVerificationStatus(ctx, req.AppID, req.OrganizationID, req.UserID)
 	if err == nil && status != nil && status.IsBlocked {
-		s.audit(ctx, "verification_session_blocked", req.UserID.String(), req.OrganizationID.String(), map[string]interface{}{
+		s.audit(ctx, "verification_session_blocked", req.UserID.String(), req.OrganizationID.String(), map[string]any{
 			"reason": status.BlockReason,
 			"app_id": req.AppID.String(),
 		})
@@ -151,7 +152,7 @@ func (s *Service) CreateVerificationSession(ctx context.Context, req *CreateSess
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	s.audit(ctx, "verification_session_created", req.UserID.String(), req.OrganizationID.String(), map[string]interface{}{
+	s.audit(ctx, "verification_session_created", req.UserID.String(), req.OrganizationID.String(), map[string]any{
 		"session_id": session.ID,
 		"provider":   req.Provider,
 		"checks":     req.RequiredChecks,
@@ -239,7 +240,7 @@ func (s *Service) CreateVerification(ctx context.Context, req *CreateVerificatio
 		return nil, fmt.Errorf("failed to create verification: %w", err)
 	}
 
-	s.audit(ctx, "verification_created", req.UserID.String(), req.OrganizationID.String(), map[string]interface{}{
+	s.audit(ctx, "verification_created", req.UserID.String(), req.OrganizationID.String(), map[string]any{
 		"verification_id": verification.ID,
 		"type":            req.VerificationType,
 		"provider":        req.Provider,
@@ -332,7 +333,7 @@ func (s *Service) ProcessVerificationResult(ctx context.Context, appID xid.ID, v
 	}
 
 	// Audit log
-	s.audit(ctx, "verification_processed", verification.UserID, verification.OrganizationID, map[string]interface{}{
+	s.audit(ctx, "verification_processed", verification.UserID, verification.OrganizationID, map[string]any{
 		"verification_id": verification.ID,
 		"status":          verification.Status,
 		"is_verified":     verification.IsVerified,
@@ -409,7 +410,7 @@ func (s *Service) RequestReverification(ctx context.Context, appID xid.ID, orgID
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
-	s.audit(ctx, "reverification_requested", userID.String(), orgID.String(), map[string]interface{}{
+	s.audit(ctx, "reverification_requested", userID.String(), orgID.String(), map[string]any{
 		"reason": reason,
 		"app_id": appID.String(),
 	})
@@ -450,7 +451,7 @@ func (s *Service) BlockUser(ctx context.Context, appID xid.ID, orgID xid.ID, use
 		}
 	}
 
-	s.audit(ctx, "user_blocked", userID.String(), orgID.String(), map[string]interface{}{
+	s.audit(ctx, "user_blocked", userID.String(), orgID.String(), map[string]any{
 		"reason": reason,
 		"app_id": appID.String(),
 	})
@@ -478,7 +479,7 @@ func (s *Service) UnblockUser(ctx context.Context, appID xid.ID, orgID xid.ID, u
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
-	s.audit(ctx, "user_unblocked", userID.String(), orgID.String(), map[string]interface{}{
+	s.audit(ctx, "user_unblocked", userID.String(), orgID.String(), map[string]any{
 		"app_id": appID.String(),
 	})
 
@@ -528,15 +529,7 @@ func (s *Service) applyBusinessRules(verification *schema.IdentityVerification) 
 
 	// Check document type
 	if verification.DocumentType != "" {
-		allowed := false
-
-		for _, docType := range s.config.AcceptedDocuments {
-			if docType == verification.DocumentType {
-				allowed = true
-
-				break
-			}
-		}
+		allowed := slices.Contains(s.config.AcceptedDocuments, verification.DocumentType)
 
 		if !allowed {
 			return ErrDocumentNotSupported
@@ -545,15 +538,7 @@ func (s *Service) applyBusinessRules(verification *schema.IdentityVerification) 
 
 	// Check country
 	if len(s.config.AcceptedCountries) > 0 && verification.DocumentCountry != "" {
-		allowed := false
-
-		for _, country := range s.config.AcceptedCountries {
-			if country == verification.DocumentCountry {
-				allowed = true
-
-				break
-			}
-		}
+		allowed := slices.Contains(s.config.AcceptedCountries, verification.DocumentCountry)
 
 		if !allowed {
 			return ErrCountryNotSupported
@@ -645,15 +630,7 @@ func (s *Service) sendWebhook(ctx context.Context, verification *schema.Identity
 
 	// Check if this event type should be sent
 	if len(s.config.WebhookEvents) > 0 {
-		found := false
-
-		for _, event := range s.config.WebhookEvents {
-			if event == eventType {
-				found = true
-
-				break
-			}
-		}
+		found := slices.Contains(s.config.WebhookEvents, eventType)
 
 		if !found {
 			return
@@ -665,7 +642,7 @@ func (s *Service) sendWebhook(ctx context.Context, verification *schema.Identity
 	// For now, this is a placeholder for webhook integration
 }
 
-func (s *Service) audit(ctx context.Context, action, userID, orgID string, metadata map[string]interface{}) {
+func (s *Service) audit(ctx context.Context, action, userID, orgID string, metadata map[string]any) {
 	// TODO: Implement proper audit logging integration
 	// This would require converting the metadata to string and using proper user ID format
 	// For now, this is a placeholder for audit integration

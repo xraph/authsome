@@ -437,6 +437,7 @@ func (p *Provider) GetSubscription(ctx context.Context, subscriptionID string) (
 // CreateCheckoutSession creates a Stripe checkout session.
 func (p *Provider) CreateCheckoutSession(ctx context.Context, req *types.CheckoutRequest) (*types.CheckoutSession, error) {
 	mode := stripe.CheckoutSessionModeSubscription
+
 	switch req.Mode {
 	case types.CheckoutModePayment:
 		mode = stripe.CheckoutSessionModePayment

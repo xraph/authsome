@@ -189,8 +189,10 @@ func scopeItems(scopes []ScopeInfo) []g.Node {
 }
 
 func scopesToString(scopes []ScopeInfo) string {
-	var result string
-	var resultSb191 strings.Builder
+	var (
+		result      string
+		resultSb191 strings.Builder
+	)
 
 	for i, s := range scopes {
 		if i > 0 {
@@ -199,6 +201,7 @@ func scopesToString(scopes []ScopeInfo) string {
 
 		resultSb191.WriteString(s.Scope)
 	}
+
 	result += resultSb191.String()
 
 	return result

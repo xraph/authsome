@@ -252,6 +252,7 @@ func (m *mockRepository) GetAuthEventStats(ctx context.Context, orgID string, si
 	for _, event := range m.authEvents {
 		if event.OrganizationID == orgID && event.CreatedAt.After(since) {
 			stats.TotalAttempts++
+
 			switch event.Status {
 			case "success":
 				stats.SuccessfulAuths++

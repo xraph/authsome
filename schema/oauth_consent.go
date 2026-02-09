@@ -47,6 +47,5 @@ func (oc *OAuthConsent) IsValid() bool {
 
 // HasScope checks if a specific scope was granted.
 func (oc *OAuthConsent) HasScope(scope string) bool {
-
 	return slices.Contains(oc.Scopes, scope)
 }

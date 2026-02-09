@@ -118,10 +118,10 @@ func (e *QueryExecutor) ExecuteCount(ctx context.Context, contentType *schema.Co
 // AggregateResult holds the result of an aggregation.
 type AggregateResult struct {
 	// GroupKey holds the group by values (if any)
-	GroupKey map[string]interface{} `json:"groupKey,omitempty"`
+	GroupKey map[string]any `json:"groupKey,omitempty"`
 
 	// Values holds the aggregated values
-	Values map[string]interface{} `json:"values"`
+	Values map[string]any `json:"values"`
 }
 
 // ExecuteAggregate executes an aggregation query.
@@ -199,7 +199,7 @@ func (e *QueryExecutor) ExecuteAggregate(ctx context.Context, contentType *schem
 	}
 
 	// Execute and scan results
-	var results []map[string]interface{}
+	var results []map[string]any
 
 	rows, err := selectQuery.Rows(ctx)
 	if err != nil {
@@ -213,9 +213,9 @@ func (e *QueryExecutor) ExecuteAggregate(ctx context.Context, contentType *schem
 	}
 
 	for rows.Next() {
-		values := make([]interface{}, len(cols))
+		values := make([]any, len(cols))
 
-		valuePtrs := make([]interface{}, len(cols))
+		valuePtrs := make([]any, len(cols))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
@@ -224,7 +224,7 @@ func (e *QueryExecutor) ExecuteAggregate(ctx context.Context, contentType *schem
 			return nil, err
 		}
 
-		row := make(map[string]interface{})
+		row := make(map[string]any)
 		for i, col := range cols {
 			row[col] = values[i]
 		}
@@ -237,12 +237,12 @@ func (e *QueryExecutor) ExecuteAggregate(ctx context.Context, contentType *schem
 
 	for _, row := range results {
 		aggResult := AggregateResult{
-			Values: make(map[string]interface{}),
+			Values: make(map[string]any),
 		}
 
 		// Separate group keys from values
 		if len(q.GroupBy) > 0 {
-			aggResult.GroupKey = make(map[string]interface{})
+			aggResult.GroupKey = make(map[string]any)
 
 			for _, field := range q.GroupBy {
 				if val, ok := row[field]; ok {
@@ -271,10 +271,12 @@ func joinStrings(parts []string, sep string) string {
 	}
 
 	result := parts[0]
+
 	var resultSb257 strings.Builder
 	for i := 1; i < len(parts); i++ {
 		resultSb257.WriteString(sep + parts[i])
 	}
+
 	result += resultSb257.String()
 
 	return result
@@ -312,7 +314,7 @@ func (e *QueryExecutor) ExecuteExists(ctx context.Context, contentType *schema.C
 }
 
 // ExecuteDistinct returns distinct values for a field.
-func (e *QueryExecutor) ExecuteDistinct(ctx context.Context, contentType *schema.ContentType, field string, q *Query) ([]interface{}, error) {
+func (e *QueryExecutor) ExecuteDistinct(ctx context.Context, contentType *schema.ContentType, field string, q *Query) ([]any, error) {
 	builder := NewQueryBuilder(e.db, contentType.ID, contentType.Fields)
 
 	// Start with filtered query
@@ -327,7 +329,7 @@ func (e *QueryExecutor) ExecuteDistinct(ctx context.Context, contentType *schema
 	}
 
 	// Execute
-	var values []interface{}
+	var values []any
 
 	err := selectQuery.Scan(ctx, &values)
 	if err != nil {

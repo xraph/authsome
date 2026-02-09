@@ -218,25 +218,29 @@ func containsIgnoreCase(s, substr string) bool {
 func indexIgnoreCase(s, substr string) int {
 	sLower := ""
 	substrLower := ""
+
 	var sLowerSb212 strings.Builder
 
 	for _, r := range s {
 		if r >= 'A' && r <= 'Z' {
-			sLowerSb212.WriteString(string(r + 32))
+			sLowerSb212.WriteRune(r + 32)
 		} else {
-			sLowerSb212.WriteString(string(r))
+			sLowerSb212.WriteRune(r)
 		}
 	}
+
 	sLower += sLowerSb212.String()
+
 	var substrLowerSb219 strings.Builder
 
 	for _, r := range substr {
 		if r >= 'A' && r <= 'Z' {
-			substrLowerSb219.WriteString(string(r + 32))
+			substrLowerSb219.WriteRune(r + 32)
 		} else {
-			substrLowerSb219.WriteString(string(r))
+			substrLowerSb219.WriteRune(r)
 		}
 	}
+
 	substrLower += substrLowerSb219.String()
 
 	for i := 0; i <= len(sLower)-len(substrLower); i++ {

@@ -229,7 +229,6 @@ func (c *Config) Validate() error {
 
 // IsFactorAllowed checks if a factor type is allowed.
 func (c *Config) IsFactorAllowed(factorType FactorType) bool {
-
 	return slices.Contains(c.AllowedFactorTypes, factorType)
 }
 

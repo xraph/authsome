@@ -33,6 +33,7 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -55,6 +56,7 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -77,6 +79,7 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID: xid.New(),
@@ -103,6 +106,7 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -131,6 +135,7 @@ func TestCompilerAndEvaluator_EndToEnd(t *testing.T) {
 				AppID: xid.New(),
 				UserOrganizationID: func() *xid.ID {
 					id := xid.New()
+
 					return &id
 				}(),
 				NamespaceID:  xid.New(),
@@ -223,6 +228,7 @@ func TestCompiler_CompileBatch(t *testing.T) {
 			AppID: xid.New(),
 			UserOrganizationID: func() *xid.ID {
 				id := xid.New()
+
 				return &id
 			}(),
 			NamespaceID:  xid.New(),
@@ -235,6 +241,7 @@ func TestCompiler_CompileBatch(t *testing.T) {
 			AppID: xid.New(),
 			UserOrganizationID: func() *xid.ID {
 				id := xid.New()
+
 				return &id
 			}(),
 			NamespaceID:  xid.New(),
@@ -262,6 +269,7 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 			AppID: xid.New(),
 			UserOrganizationID: func() *xid.ID {
 				id := xid.New()
+
 				return &id
 			}(),
 			NamespaceID:  xid.New(),
@@ -275,6 +283,7 @@ func TestEvaluator_MultiplePolicies(t *testing.T) {
 			AppID: xid.New(),
 			UserOrganizationID: func() *xid.ID {
 				id := xid.New()
+
 				return &id
 			}(),
 			NamespaceID: xid.New(),
@@ -320,6 +329,7 @@ func BenchmarkEvaluator_SimplePolicy(b *testing.B) {
 		AppID: xid.New(),
 		UserOrganizationID: func() *xid.ID {
 			id := xid.New()
+
 			return &id
 		}(),
 		NamespaceID:  xid.New(),
@@ -352,6 +362,7 @@ func BenchmarkEvaluator_ComplexPolicy(b *testing.B) {
 		AppID: xid.New(),
 		UserOrganizationID: func() *xid.ID {
 			id := xid.New()
+
 			return &id
 		}(),
 		NamespaceID:  xid.New(),
@@ -395,6 +406,7 @@ func BenchmarkEvaluator_1000Policies(b *testing.B) {
 			AppID: xid.New(),
 			UserOrganizationID: func() *xid.ID {
 				id := xid.New()
+
 				return &id
 			}(),
 			NamespaceID:  xid.New(),

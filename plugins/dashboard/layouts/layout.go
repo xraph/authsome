@@ -1250,6 +1250,7 @@ func getInitials(name string) string {
 
 	// Get first letter of first two words
 	initials := ""
+
 	var initialsSb1252 strings.Builder
 
 	for i := 0; i < len(words) && i < 2; i++ {
@@ -1257,6 +1258,7 @@ func getInitials(name string) string {
 			initialsSb1252.WriteString(strings.ToUpper(string([]rune(words[i])[0])))
 		}
 	}
+
 	initials += initialsSb1252.String()
 
 	if initials == "" {

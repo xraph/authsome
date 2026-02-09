@@ -520,6 +520,7 @@ func joinTags(tags []string) string {
 	}
 
 	result := ""
+
 	var resultSb519 strings.Builder
 
 	for i, tag := range tags {
@@ -529,6 +530,7 @@ func joinTags(tags []string) string {
 
 		resultSb519.WriteString(tag)
 	}
+
 	result += resultSb519.String()
 
 	return result

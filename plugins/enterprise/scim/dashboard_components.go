@@ -193,13 +193,13 @@ func providerCard(provider *SCIMProvider, basePath string, appID xid.ID) g.Node 
 						Div(
 							Class("mt-2"),
 							Span(
-								Class(fmt.Sprintf("text-xs %s", func() string {
+								Class("text-xs "+func() string {
 									if provider.LastSyncStatus == "success" {
 										return "text-green-600 dark:text-green-400"
 									}
 
 									return "text-red-600 dark:text-red-400"
-								}())),
+								}()),
 								g.Text("Last sync: "+provider.LastSyncStatus),
 							),
 						),
@@ -385,8 +385,8 @@ func alertBox(alertType, title, message string) g.Node {
 			Class("flex gap-3"),
 			icon,
 			Div(
-				g.If(title != "", Div(Class(fmt.Sprintf("font-medium %s", textClass)), g.Text(title))),
-				Div(Class(fmt.Sprintf("text-sm %s", textClass)), g.Text(message)),
+				g.If(title != "", Div(Class("font-medium "+textClass), g.Text(title))),
+				Div(Class("text-sm "+textClass), g.Text(message)),
 			),
 		),
 	)

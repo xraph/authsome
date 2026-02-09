@@ -3,6 +3,7 @@ package compliance
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/xraph/authsome/core/audit"
@@ -15,12 +16,12 @@ import (
 
 // CheckResult represents the result of a compliance check.
 type CheckResult struct {
-	CheckType string                 `json:"checkType"`
-	Status    string                 `json:"status"` // "passed", "failed", "warning", "error"
-	Score     float64                `json:"score"`  // 0-100
-	Result    map[string]interface{} `json:"result"`
-	Evidence  []string               `json:"evidence"`
-	Error     error                  `json:"error,omitempty"`
+	CheckType string         `json:"checkType"`
+	Status    string         `json:"status"` // "passed", "failed", "warning", "error"
+	Score     float64        `json:"score"`  // 0-100
+	Result    map[string]any `json:"result"`
+	Evidence  []string       `json:"evidence"`
+	Error     error          `json:"error,omitempty"`
 }
 
 // ComplianceCheckFunc is a function that performs a compliance check
@@ -237,9 +238,7 @@ func (r *CheckRegistry) ListMetadata() map[string]*CheckMetadata {
 
 	// Return copy to prevent external mutation
 	result := make(map[string]*CheckMetadata, len(r.metadata))
-	for k, v := range r.metadata {
-		result[k] = v
-	}
+	maps.Copy(result, r.metadata)
 
 	return result
 }
@@ -394,7 +393,7 @@ func checkMFACoverage(ctx context.Context, scope *audit.Scope, profile *Complian
 		CheckType: "mfa_coverage",
 		Status:    status,
 		Score:     coveragePercent,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"total_users":       totalUsers,
 			"users_with_mfa":    usersWithMFA,
 			"users_without_mfa": len(usersWithoutMFA),
@@ -411,7 +410,7 @@ func checkPasswordPolicy(ctx context.Context, scope *audit.Scope, profile *Compl
 		CheckType: "password_policy",
 		Status:    "passed",
 		Score:     100,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"policy_configured": true,
 			"min_length":        profile.PasswordMinLength,
 		},
@@ -426,7 +425,7 @@ func checkSessionPolicy(ctx context.Context, scope *audit.Scope, profile *Compli
 		CheckType: "session_policy",
 		Status:    "passed",
 		Score:     100,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"max_age":      profile.SessionMaxAge,
 			"idle_timeout": profile.SessionIdleTimeout,
 		},
@@ -441,7 +440,7 @@ func checkAccessReview(ctx context.Context, scope *audit.Scope, profile *Complia
 		CheckType: "access_review",
 		Status:    "passed",
 		Score:     100,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"required": profile.RegularAccessReview,
 		},
 		Evidence: []string{
@@ -455,7 +454,7 @@ func checkInactiveUsers(ctx context.Context, scope *audit.Scope, profile *Compli
 		CheckType: "inactive_users",
 		Status:    "passed",
 		Score:     100,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"inactive_users": 0,
 		},
 		Evidence: []string{
@@ -469,19 +468,11 @@ func checkDataRetention(ctx context.Context, scope *audit.Scope, profile *Compli
 		CheckType: "data_retention",
 		Status:    "passed",
 		Score:     100,
-		Result: map[string]interface{}{
+		Result: map[string]any{
 			"retention_days": profile.RetentionDays,
 		},
 		Evidence: []string{
 			fmt.Sprintf("Retention: %d days", profile.RetentionDays),
 		},
 	}, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
 }

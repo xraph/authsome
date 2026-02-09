@@ -18,7 +18,7 @@ type Service struct {
 
 // NewService creates a new forms service.
 func NewService(forgeConfig any, repo Repository) (*Service, error) {
-	var cfg Config = DefaultConfig()
+	var cfg = DefaultConfig()
 
 	return &Service{
 		repo:   repo,
@@ -254,7 +254,6 @@ func (s *Service) GetDefaultSignupForm() map[string]any {
 // Helper methods
 
 func (s *Service) isValidFormType(formType string) bool {
-
 	return slices.Contains(s.config.AllowedTypes, formType)
 }
 

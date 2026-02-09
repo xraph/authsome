@@ -509,6 +509,7 @@ func PathBreadcrumb(path string, appBase string) g.Node {
 	for i, part := range parts {
 		if i > 0 {
 			items = append(items, lucide.ChevronRight(Class("size-4 text-slate-400")))
+
 			currentPath.WriteString("/")
 		}
 

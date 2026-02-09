@@ -183,10 +183,12 @@ func (a *EmailServiceAdapter) SendCompliance(ctx context.Context, to []string, s
 	toStr := ""
 	if len(to) > 0 {
 		toStr = to[0]
+
 		var toStrSb182 strings.Builder
 		for i := 1; i < len(to); i++ {
 			toStrSb182.WriteString(", " + to[i])
 		}
+
 		toStr += toStrSb182.String()
 	}
 

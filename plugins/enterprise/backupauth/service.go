@@ -1054,11 +1054,9 @@ func convertMethodsToStrings(methods []RecoveryMethod) []string {
 }
 
 func containsMethod(slice []RecoveryMethod, item RecoveryMethod) bool {
-
 	return slices.Contains(slice, item)
 }
 
 func contains(slice []string, item string) bool {
-
 	return slices.Contains(slice, item)
 }

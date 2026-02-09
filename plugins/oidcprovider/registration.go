@@ -303,6 +303,5 @@ func (s *RegistrationService) parseScopes(scope string) []string {
 
 // contains checks if a string slice contains a value.
 func contains(slice []string, value string) bool {
-
 	return slices.Contains(slice, value)
 }
