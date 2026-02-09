@@ -29,7 +29,7 @@ import { Customisation } from '@/components/preview/customisation';
 import { DocsBody, DocsPage } from 'fumadocs-ui/page';
 import { NotFound } from '@/components/not-found';
 import { getSuggestions } from './suggestions';
-import { APIPage } from 'fumadocs-openapi/ui';
+import { APIPage } from '@/components/api-page';
 
 function PreviewRenderer({ preview }: { preview: string }): ReactNode {
   if (preview && preview in Preview) {
