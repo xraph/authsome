@@ -13,17 +13,17 @@ import (
 // Input/Output Types
 // =============================================================================
 
-// GetSettingsInput is the input for getting OIDC settings
+// GetSettingsInput is the input for getting OIDC settings.
 type GetSettingsInput struct {
 	AppID string `json:"appId"`
 }
 
-// GetSettingsOutput is the output for getting OIDC settings
+// GetSettingsOutput is the output for getting OIDC settings.
 type GetSettingsOutput struct {
 	Data SettingsDTO `json:"data"`
 }
 
-// SettingsDTO represents OIDC provider configuration
+// SettingsDTO represents OIDC provider configuration.
 type SettingsDTO struct {
 	Issuer        string           `json:"issuer"`
 	DiscoveryURL  string           `json:"discoveryUrl"`
@@ -33,14 +33,14 @@ type SettingsDTO struct {
 	DeviceFlow    DeviceFlowDTO    `json:"deviceFlow"`
 }
 
-// TokenSettingsDTO represents token lifetime settings
+// TokenSettingsDTO represents token lifetime settings.
 type TokenSettingsDTO struct {
 	AccessTokenExpiry  string `json:"accessTokenExpiry"`  // Duration string (e.g., "1h")
 	IDTokenExpiry      string `json:"idTokenExpiry"`      // Duration string
 	RefreshTokenExpiry string `json:"refreshTokenExpiry"` // Duration string
 }
 
-// KeySettingsDTO represents key management settings
+// KeySettingsDTO represents key management settings.
 type KeySettingsDTO struct {
 	RotationInterval string `json:"rotationInterval"` // Duration string
 	KeyLifetime      string `json:"keyLifetime"`      // Duration string
@@ -48,7 +48,7 @@ type KeySettingsDTO struct {
 	CurrentKeyID     string `json:"currentKeyId"`
 }
 
-// DeviceFlowDTO represents device flow configuration
+// DeviceFlowDTO represents device flow configuration.
 type DeviceFlowDTO struct {
 	Enabled         bool   `json:"enabled"`
 	CodeExpiry      string `json:"codeExpiry"` // Duration string
@@ -60,19 +60,19 @@ type DeviceFlowDTO struct {
 	CleanupInterval string `json:"cleanupInterval"` // Duration string
 }
 
-// UpdateTokenSettingsInput is the input for updating token settings
+// UpdateTokenSettingsInput is the input for updating token settings.
 type UpdateTokenSettingsInput struct {
 	AccessTokenExpiry  string `json:"accessTokenExpiry,omitempty"`
 	IDTokenExpiry      string `json:"idTokenExpiry,omitempty"`
 	RefreshTokenExpiry string `json:"refreshTokenExpiry,omitempty"`
 }
 
-// UpdateTokenSettingsOutput is the output for updating token settings
+// UpdateTokenSettingsOutput is the output for updating token settings.
 type UpdateTokenSettingsOutput struct {
 	Success bool `json:"success"`
 }
 
-// UpdateDeviceFlowSettingsInput is the input for updating device flow settings
+// UpdateDeviceFlowSettingsInput is the input for updating device flow settings.
 type UpdateDeviceFlowSettingsInput struct {
 	Enabled         bool   `json:"enabled,omitempty"`
 	CodeExpiry      string `json:"codeExpiry,omitempty"`
@@ -84,15 +84,15 @@ type UpdateDeviceFlowSettingsInput struct {
 	CleanupInterval string `json:"cleanupInterval,omitempty"`
 }
 
-// UpdateDeviceFlowSettingsOutput is the output for updating device flow settings
+// UpdateDeviceFlowSettingsOutput is the output for updating device flow settings.
 type UpdateDeviceFlowSettingsOutput struct {
 	Success bool `json:"success"`
 }
 
-// RotateKeysInput is the input for rotating JWT keys
+// RotateKeysInput is the input for rotating JWT keys.
 type RotateKeysInput struct{}
 
-// RotateKeysOutput is the output for rotating JWT keys
+// RotateKeysOutput is the output for rotating JWT keys.
 type RotateKeysOutput struct {
 	Success  bool   `json:"success"`
 	NewKeyID string `json:"newKeyId"`
@@ -102,7 +102,7 @@ type RotateKeysOutput struct {
 // Bridge Functions
 // =============================================================================
 
-// GetSettings retrieves current OIDC provider configuration
+// GetSettings retrieves current OIDC provider configuration.
 func (bm *BridgeManager) GetSettings(ctx bridge.Context, input GetSettingsInput) (*GetSettingsOutput, error) {
 	_, _, _, err := bm.buildContextWithAppID(ctx, input.AppID)
 	if err != nil {
@@ -158,7 +158,7 @@ func (bm *BridgeManager) GetSettings(ctx bridge.Context, input GetSettingsInput)
 	}, nil
 }
 
-// UpdateTokenSettings updates token lifetime configuration
+// UpdateTokenSettings updates token lifetime configuration.
 func (bm *BridgeManager) UpdateTokenSettings(ctx bridge.Context, input UpdateTokenSettingsInput) (*UpdateTokenSettingsOutput, error) {
 	_, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -169,9 +169,11 @@ func (bm *BridgeManager) UpdateTokenSettings(ctx bridge.Context, input UpdateTok
 	if err := validateDuration(input.AccessTokenExpiry); err != nil {
 		return nil, errs.BadRequest("invalid accessTokenExpiry: " + err.Error())
 	}
+
 	if err := validateDuration(input.IDTokenExpiry); err != nil {
 		return nil, errs.BadRequest("invalid idTokenExpiry: " + err.Error())
 	}
+
 	if err := validateDuration(input.RefreshTokenExpiry); err != nil {
 		return nil, errs.BadRequest("invalid refreshTokenExpiry: " + err.Error())
 	}
@@ -195,7 +197,7 @@ func (bm *BridgeManager) UpdateTokenSettings(ctx bridge.Context, input UpdateTok
 	}, nil
 }
 
-// UpdateDeviceFlowSettings updates device flow configuration
+// UpdateDeviceFlowSettings updates device flow configuration.
 func (bm *BridgeManager) UpdateDeviceFlowSettings(ctx bridge.Context, input UpdateDeviceFlowSettingsInput) (*UpdateDeviceFlowSettingsOutput, error) {
 	_, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -206,6 +208,7 @@ func (bm *BridgeManager) UpdateDeviceFlowSettings(ctx bridge.Context, input Upda
 	if err := validateDuration(input.CodeExpiry); err != nil {
 		return nil, errs.BadRequest("invalid codeExpiry: " + err.Error())
 	}
+
 	if err := validateDuration(input.CleanupInterval); err != nil {
 		return nil, errs.BadRequest("invalid cleanupInterval: " + err.Error())
 	}
@@ -214,9 +217,11 @@ func (bm *BridgeManager) UpdateDeviceFlowSettings(ctx bridge.Context, input Upda
 	if input.UserCodeLength < 4 || input.UserCodeLength > 20 {
 		return nil, errs.BadRequest("userCodeLength must be between 4 and 20")
 	}
+
 	if input.PollingInterval < 1 || input.PollingInterval > 60 {
 		return nil, errs.BadRequest("pollingInterval must be between 1 and 60 seconds")
 	}
+
 	if input.MaxPollAttempts < 10 || input.MaxPollAttempts > 1000 {
 		return nil, errs.BadRequest("maxPollAttempts must be between 10 and 1000")
 	}
@@ -238,7 +243,7 @@ func (bm *BridgeManager) UpdateDeviceFlowSettings(ctx bridge.Context, input Upda
 	}, nil
 }
 
-// RotateKeys triggers a manual JWT key rotation
+// RotateKeys triggers a manual JWT key rotation.
 func (bm *BridgeManager) RotateKeys(ctx bridge.Context, input RotateKeysInput) (*RotateKeysOutput, error) {
 	_, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -249,6 +254,7 @@ func (bm *BridgeManager) RotateKeys(ctx bridge.Context, input RotateKeysInput) (
 	if err := bm.service.RotateKeys(); err != nil {
 		bm.logger.Error("failed to rotate JWT keys",
 			forge.F("error", err.Error()))
+
 		return nil, errs.InternalServerError("failed to rotate keys", err)
 	}
 
@@ -268,47 +274,50 @@ func (bm *BridgeManager) RotateKeys(ctx bridge.Context, input RotateKeysInput) (
 // Helper Functions
 // =============================================================================
 
-// validateDuration validates a duration string
+// validateDuration validates a duration string.
 func validateDuration(s string) error {
 	_, err := time.ParseDuration(s)
+
 	return err
 }
 
-// Helper functions for safe config value extraction using reflection
-func convertConfigToMap(config interface{}) map[string]interface{} {
+// Helper functions for safe config value extraction using reflection.
+func convertConfigToMap(config any) map[string]any {
 	// Convert to map using JSON marshaling
 	data, err := json.Marshal(config)
 	if err != nil {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
-		return make(map[string]interface{})
+		return make(map[string]any)
 	}
 
 	return result
 }
 
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	if val, ok := m[key]; ok {
 		if str, ok := val.(string); ok {
 			return str
 		}
 	}
+
 	return ""
 }
 
-func getBool(m map[string]interface{}, key string) bool {
+func getBool(m map[string]any, key string) bool {
 	if val, ok := m[key]; ok {
 		if b, ok := val.(bool); ok {
 			return b
 		}
 	}
+
 	return false
 }
 
-func getInt(m map[string]interface{}, key string) int {
+func getInt(m map[string]any, key string) int {
 	if val, ok := m[key]; ok {
 		switch v := val.(type) {
 		case int:
@@ -317,14 +326,16 @@ func getInt(m map[string]interface{}, key string) int {
 			return int(v)
 		}
 	}
+
 	return 0
 }
 
-func getMap(m map[string]interface{}, key string) map[string]interface{} {
+func getMap(m map[string]any, key string) map[string]any {
 	if val, ok := m[key]; ok {
-		if subMap, ok := val.(map[string]interface{}); ok {
+		if subMap, ok := val.(map[string]any); ok {
 			return subMap
 		}
 	}
-	return make(map[string]interface{})
+
+	return make(map[string]any)
 }

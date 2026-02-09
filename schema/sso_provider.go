@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SSOProvider stores SSO provider configuration with multi-tenant scoping
+// SSOProvider stores SSO provider configuration with multi-tenant scoping.
 type SSOProvider struct {
 	bun.BaseModel `bun:"table:sso_providers"`
 

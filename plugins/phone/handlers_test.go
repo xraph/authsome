@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRequestResponseTypes tests request and response type serialization
+// TestRequestResponseTypes tests request and response type serialization.
 func TestRequestResponseTypes(t *testing.T) {
 	t.Run("SendCodeRequest serialization", func(t *testing.T) {
 		req := SendCodeRequest{
@@ -19,6 +19,7 @@ func TestRequestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded SendCodeRequest
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 		assert.Equal(t, req.Phone, decoded.Phone)
@@ -36,6 +37,7 @@ func TestRequestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded VerifyRequest
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 		assert.Equal(t, req.Phone, decoded.Phone)
@@ -54,6 +56,7 @@ func TestRequestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded SendCodeResponse
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 		assert.Equal(t, resp.Status, decoded.Status)

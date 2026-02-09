@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SCIMOverviewPage renders the SCIM overview page with Alpine.js
+// SCIMOverviewPage renders the SCIM overview page with Alpine.js.
 func SCIMOverviewPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -285,7 +285,7 @@ func SCIMOverviewPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// scimOverviewData returns the Alpine.js data for the overview page
+// scimOverviewData returns the Alpine.js data for the overview page.
 func scimOverviewData(appID string) string {
 	return fmt.Sprintf(`{
 		stats: {
@@ -335,7 +335,7 @@ func scimOverviewData(appID string) string {
 	}`, appID)
 }
 
-// statsCard creates a stats card component
+// statsCard creates a stats card component.
 func statsCard(title, value, total, bgColor string, icon g.Node) g.Node {
 	return card.Card(
 		card.Content(

@@ -6,7 +6,7 @@ import (
 )
 
 // extractClientIP extracts the real client IP from the request
-// Handles X-Forwarded-For, X-Real-IP headers
+// Handles X-Forwarded-For, X-Real-IP headers.
 func extractClientIP(remoteAddr string) string {
 	// Remove port if present
 	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
@@ -20,7 +20,7 @@ func extractClientIP(remoteAddr string) string {
 }
 
 // isIPAllowed checks if an IP address is allowed based on whitelist
-// Supports exact IP matching and CIDR notation
+// Supports exact IP matching and CIDR notation.
 func isIPAllowed(clientIP string, allowedIPs []string) bool {
 	if len(allowedIPs) == 0 {
 		return true // No whitelist = allow all
@@ -44,6 +44,7 @@ func isIPAllowed(clientIP string, allowedIPs []string) bool {
 			if err != nil {
 				continue // Invalid CIDR, skip
 			}
+
 			if ipNet.Contains(ip) {
 				return true
 			}
@@ -60,7 +61,7 @@ func isIPAllowed(clientIP string, allowedIPs []string) bool {
 }
 
 // validateIPWhitelist validates IP whitelist entries
-// Returns error if any entry is invalid
+// Returns error if any entry is invalid.
 func validateIPWhitelist(ips []string) error {
 	for _, ipStr := range ips {
 		if strings.Contains(ipStr, "/") {
@@ -76,5 +77,6 @@ func validateIPWhitelist(ips []string) error {
 			}
 		}
 	}
+
 	return nil
 }

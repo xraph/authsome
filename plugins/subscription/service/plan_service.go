@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// PlanService handles plan business logic
+// PlanService handles plan business logic.
 type PlanService struct {
 	repo          repository.PlanRepository
 	provider      providers.PaymentProvider
@@ -22,7 +22,7 @@ type PlanService struct {
 	autoSyncPlans bool
 }
 
-// NewPlanService creates a new plan service
+// NewPlanService creates a new plan service.
 func NewPlanService(
 	repo repository.PlanRepository,
 	provider providers.PaymentProvider,
@@ -36,12 +36,12 @@ func NewPlanService(
 	}
 }
 
-// SetAutoSyncPlans enables or disables automatic plan sync to provider
+// SetAutoSyncPlans enables or disables automatic plan sync to provider.
 func (s *PlanService) SetAutoSyncPlans(enabled bool) {
 	s.autoSyncPlans = enabled
 }
 
-// Create creates a new plan
+// Create creates a new plan.
 func (s *PlanService) Create(ctx context.Context, appID xid.ID, req *core.CreatePlanRequest) (*core.Plan, error) {
 	// Validate billing pattern
 	if !req.BillingPattern.IsValid() {
@@ -83,7 +83,7 @@ func (s *PlanService) Create(ctx context.Context, appID xid.ID, req *core.Create
 	if req.Metadata != nil {
 		plan.Metadata = req.Metadata
 	} else {
-		plan.Metadata = make(map[string]interface{})
+		plan.Metadata = make(map[string]any)
 	}
 
 	if req.Currency == "" {
@@ -102,6 +102,7 @@ func (s *PlanService) Create(ctx context.Context, appID xid.ID, req *core.Create
 	// Create features
 	for _, f := range req.Features {
 		valueJSON, _ := json.Marshal(f.Value)
+
 		feature := &schema.SubscriptionPlanFeature{
 			ID:          xid.New(),
 			PlanID:      plan.ID,
@@ -152,7 +153,7 @@ func (s *PlanService) Create(ctx context.Context, appID xid.ID, req *core.Create
 	return result, nil
 }
 
-// Update updates an existing plan
+// Update updates an existing plan.
 func (s *PlanService) Update(ctx context.Context, id xid.ID, req *core.UpdatePlanRequest) (*core.Plan, error) {
 	plan, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -163,27 +164,35 @@ func (s *PlanService) Update(ctx context.Context, id xid.ID, req *core.UpdatePla
 	if req.Name != nil {
 		plan.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		plan.Description = *req.Description
 	}
+
 	if req.BasePrice != nil {
 		plan.BasePrice = *req.BasePrice
 	}
+
 	if req.TrialDays != nil {
 		plan.TrialDays = *req.TrialDays
 	}
+
 	if req.TierMode != nil {
 		plan.TierMode = string(*req.TierMode)
 	}
+
 	if req.IsActive != nil {
 		plan.IsActive = *req.IsActive
 	}
+
 	if req.IsPublic != nil {
 		plan.IsPublic = *req.IsPublic
 	}
+
 	if req.DisplayOrder != nil {
 		plan.DisplayOrder = *req.DisplayOrder
 	}
+
 	if req.Metadata != nil {
 		plan.Metadata = req.Metadata
 	}
@@ -204,6 +213,7 @@ func (s *PlanService) Update(ctx context.Context, id xid.ID, req *core.UpdatePla
 		// Create new features
 		for _, f := range req.Features {
 			valueJSON, _ := json.Marshal(f.Value)
+
 			feature := &schema.SubscriptionPlanFeature{
 				ID:          xid.New(),
 				PlanID:      plan.ID,
@@ -253,12 +263,11 @@ func (s *PlanService) Update(ctx context.Context, id xid.ID, req *core.UpdatePla
 	return s.schemaToCorePlan(plan), nil
 }
 
-// Delete deletes a plan
+// Delete deletes a plan.
 func (s *PlanService) Delete(ctx context.Context, id xid.ID) error {
 	// Check if plan has active subscriptions
 	// This would require subscription repository check
 	// For now, just delete
-
 	if err := s.repo.DeleteFeatures(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete features: %w", err)
 	}
@@ -274,25 +283,27 @@ func (s *PlanService) Delete(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// GetByID retrieves a plan by ID
+// GetByID retrieves a plan by ID.
 func (s *PlanService) GetByID(ctx context.Context, id xid.ID) (*core.Plan, error) {
 	plan, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, suberrors.ErrPlanNotFound
 	}
+
 	return s.schemaToCorePlan(plan), nil
 }
 
-// GetBySlug retrieves a plan by slug
+// GetBySlug retrieves a plan by slug.
 func (s *PlanService) GetBySlug(ctx context.Context, appID xid.ID, slug string) (*core.Plan, error) {
 	plan, err := s.repo.FindBySlug(ctx, appID, slug)
 	if err != nil {
 		return nil, suberrors.ErrPlanNotFound
 	}
+
 	return s.schemaToCorePlan(plan), nil
 }
 
-// List retrieves plans with filtering
+// List retrieves plans with filtering.
 func (s *PlanService) List(ctx context.Context, appID xid.ID, activeOnly, publicOnly bool, page, pageSize int) ([]*core.Plan, int, error) {
 	filter := &repository.PlanFilter{
 		AppID:    &appID,
@@ -304,6 +315,7 @@ func (s *PlanService) List(ctx context.Context, appID xid.ID, activeOnly, public
 		active := true
 		filter.IsActive = &active
 	}
+
 	if publicOnly {
 		public := true
 		filter.IsPublic = &public
@@ -322,7 +334,7 @@ func (s *PlanService) List(ctx context.Context, appID xid.ID, activeOnly, public
 	return result, count, nil
 }
 
-// SetActive sets the active status of a plan
+// SetActive sets the active status of a plan.
 func (s *PlanService) SetActive(ctx context.Context, id xid.ID, active bool) error {
 	plan, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -335,7 +347,7 @@ func (s *PlanService) SetActive(ctx context.Context, id xid.ID, active bool) err
 	return s.repo.Update(ctx, plan)
 }
 
-// SetPublic sets the public visibility of a plan
+// SetPublic sets the public visibility of a plan.
 func (s *PlanService) SetPublic(ctx context.Context, id xid.ID, public bool) error {
 	plan, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -348,7 +360,7 @@ func (s *PlanService) SetPublic(ctx context.Context, id xid.ID, public bool) err
 	return s.repo.Update(ctx, plan)
 }
 
-// SyncToProvider syncs the plan to the payment provider
+// SyncToProvider syncs the plan to the payment provider.
 func (s *PlanService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	plan, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -455,6 +467,7 @@ func (s *PlanService) SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]
 			// Determine app ID: use metadata if available, otherwise use provided appID
 			productAppIDStr := product.Metadata["app_id"]
 			productAppID := appID
+
 			if productAppIDStr != "" {
 				if parsed, err := xid.FromString(productAppIDStr); err == nil {
 					productAppID = parsed
@@ -480,7 +493,7 @@ func (s *PlanService) SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]
 	return syncedPlans, nil
 }
 
-// updatePlanFromProvider updates an existing plan with data from the provider
+// updatePlanFromProvider updates an existing plan with data from the provider.
 func (s *PlanService) updatePlanFromProvider(ctx context.Context, plan *schema.SubscriptionPlan, product *providers.ProviderProduct, prices []*providers.ProviderPrice) (*core.Plan, error) {
 	// Update plan fields from product
 	plan.Name = product.Name
@@ -510,6 +523,7 @@ func (s *PlanService) updatePlanFromProvider(ctx context.Context, plan *schema.S
 			} else {
 				plan.BillingInterval = string(core.BillingIntervalOneTime)
 			}
+
 			break
 		}
 	}
@@ -526,7 +540,7 @@ func (s *PlanService) updatePlanFromProvider(ctx context.Context, plan *schema.S
 	return s.schemaToCorePlan(plan), nil
 }
 
-// createPlanFromProvider creates a new plan from provider product data
+// createPlanFromProvider creates a new plan from provider product data.
 func (s *PlanService) createPlanFromProvider(ctx context.Context, appID xid.ID, product *providers.ProviderProduct, prices []*providers.ProviderPrice) (*core.Plan, error) {
 	now := time.Now()
 
@@ -544,6 +558,7 @@ func (s *PlanService) createPlanFromProvider(ctx context.Context, appID xid.ID, 
 
 	// Determine plan ID from metadata or generate new
 	var planID xid.ID
+
 	if planIDStr := product.Metadata["plan_id"]; planIDStr != "" {
 		if parsed, err := xid.FromString(planIDStr); err == nil {
 			planID = parsed
@@ -562,8 +577,11 @@ func (s *PlanService) createPlanFromProvider(ctx context.Context, appID xid.ID, 
 
 	// Default values
 	billingInterval := string(core.BillingIntervalMonthly)
+
 	var basePrice int64
+
 	currency := core.DefaultCurrency
+
 	var priceID string
 
 	// Get price info from first active price
@@ -587,6 +605,7 @@ func (s *PlanService) createPlanFromProvider(ctx context.Context, appID xid.ID, 
 			} else {
 				billingInterval = string(core.BillingIntervalOneTime)
 			}
+
 			break
 		}
 	}
@@ -611,11 +630,11 @@ func (s *PlanService) createPlanFromProvider(ctx context.Context, appID xid.ID, 
 		IsPublic:        true,
 		ProviderPlanID:  product.ID,
 		ProviderPriceID: priceID,
-		Metadata:        make(map[string]interface{}),
+		Metadata:        make(map[string]any),
 	}
 	// Set timestamps via embedded AuditableModel
-	plan.AuditableModel.CreatedAt = now
-	plan.AuditableModel.UpdatedAt = now
+	plan.CreatedAt = now
+	plan.UpdatedAt = now
 
 	if err := s.repo.Create(ctx, plan); err != nil {
 		return nil, fmt.Errorf("failed to create plan: %w", err)
@@ -624,9 +643,10 @@ func (s *PlanService) createPlanFromProvider(ctx context.Context, appID xid.ID, 
 	return s.schemaToCorePlan(plan), nil
 }
 
-// generateSlug creates a URL-safe slug from a name
+// generateSlug creates a URL-safe slug from a name.
 func generateSlug(name string) string {
 	slug := ""
+
 	for _, r := range name {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			slug += string(r)
@@ -642,9 +662,11 @@ func generateSlug(name string) string {
 	for len(slug) > 0 && slug[len(slug)-1] == '-' {
 		slug = slug[:len(slug)-1]
 	}
+
 	if slug == "" {
 		slug = "plan"
 	}
+
 	return slug
 }
 
@@ -680,7 +702,7 @@ func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan
 	// Convert legacy features first
 	features := make([]core.PlanFeature, len(plan.Features))
 	for i, f := range plan.Features {
-		var value interface{}
+		var value any
 		json.Unmarshal([]byte(f.Value), &value)
 		features[i] = core.PlanFeature{
 			Key:         f.Key,
@@ -695,9 +717,10 @@ func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan
 	// These take precedence over legacy features with same key
 	if len(plan.FeatureLinks) > 0 {
 		linkFeatureMap := make(map[string]core.PlanFeature)
+
 		for _, link := range plan.FeatureLinks {
 			if link.Feature != nil && !link.IsBlocked {
-				var value interface{}
+				var value any
 				json.Unmarshal([]byte(link.Value), &value)
 				linkFeatureMap[link.Feature.Key] = core.PlanFeature{
 					Key:           link.Feature.Key,
@@ -713,6 +736,7 @@ func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan
 
 		// Merge: new features override legacy features
 		existingKeys := make(map[string]bool)
+
 		for i, f := range features {
 			if newF, ok := linkFeatureMap[f.Key]; ok {
 				features[i] = newF

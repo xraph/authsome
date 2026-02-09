@@ -16,7 +16,7 @@ import (
 // BENCHMARK TESTS
 // =============================================================================
 
-// BenchmarkService_Create benchmarks user creation
+// BenchmarkService_Create benchmarks user creation.
 func BenchmarkService_Create(b *testing.B) {
 	appID := testAppID()
 	mockRepo := new(MockRepository)
@@ -35,15 +35,14 @@ func BenchmarkService_Create(b *testing.B) {
 		Name:     "Benchmark User",
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = svc.Create(context.Background(), req)
 	}
 }
 
-// BenchmarkService_FindByID benchmarks finding a user by ID
+// BenchmarkService_FindByID benchmarks finding a user by ID.
 func BenchmarkService_FindByID(b *testing.B) {
 	appID := testAppID()
 	userID := xid.New()
@@ -55,15 +54,14 @@ func BenchmarkService_FindByID(b *testing.B) {
 
 	svc := NewService(mockRepo, Config{}, nil, nil)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = svc.FindByID(context.Background(), userID)
 	}
 }
 
-// BenchmarkService_FindByAppAndEmail benchmarks finding a user by app and email
+// BenchmarkService_FindByAppAndEmail benchmarks finding a user by app and email.
 func BenchmarkService_FindByAppAndEmail(b *testing.B) {
 	appID := testAppID()
 	existingUser := testSchemaUser(appID)
@@ -74,15 +72,14 @@ func BenchmarkService_FindByAppAndEmail(b *testing.B) {
 
 	svc := NewService(mockRepo, Config{}, nil, nil)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = svc.FindByAppAndEmail(context.Background(), appID, "test@example.com")
 	}
 }
 
-// BenchmarkService_Update benchmarks user updates
+// BenchmarkService_Update benchmarks user updates.
 func BenchmarkService_Update(b *testing.B) {
 	appID := testAppID()
 	userID := xid.New()
@@ -99,20 +96,20 @@ func BenchmarkService_Update(b *testing.B) {
 
 	svc := NewService(mockRepo, Config{}, nil, nil)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		userCopy := *user
 		_, _ = svc.Update(context.Background(), &userCopy, req)
 	}
 }
 
-// BenchmarkService_ListUsers benchmarks listing users with pagination
+// BenchmarkService_ListUsers benchmarks listing users with pagination.
 func BenchmarkService_ListUsers(b *testing.B) {
 	appID := testAppID()
+
 	users := make([]*schema.User, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		users[i] = testSchemaUser(appID)
 	}
 
@@ -139,15 +136,14 @@ func BenchmarkService_ListUsers(b *testing.B) {
 		AppID: appID,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = svc.ListUsers(context.Background(), filter)
 	}
 }
 
-// BenchmarkService_CountUsers benchmarks counting users
+// BenchmarkService_CountUsers benchmarks counting users.
 func BenchmarkService_CountUsers(b *testing.B) {
 	appID := testAppID()
 	mockRepo := new(MockRepository)
@@ -159,15 +155,14 @@ func BenchmarkService_CountUsers(b *testing.B) {
 		AppID: appID,
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = svc.CountUsers(context.Background(), filter)
 	}
 }
 
-// BenchmarkService_Create_Parallel benchmarks concurrent user creation
+// BenchmarkService_Create_Parallel benchmarks concurrent user creation.
 func BenchmarkService_Create_Parallel(b *testing.B) {
 	appID := testAppID()
 	mockRepo := new(MockRepository)
@@ -196,28 +191,26 @@ func BenchmarkService_Create_Parallel(b *testing.B) {
 	})
 }
 
-// BenchmarkFromSchemaUser benchmarks DTO conversion
+// BenchmarkFromSchemaUser benchmarks DTO conversion.
 func BenchmarkFromSchemaUser(b *testing.B) {
 	appID := testAppID()
 	schemaUser := testSchemaUser(appID)
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = FromSchemaUser(schemaUser)
 	}
 }
 
-// BenchmarkToSchema benchmarks schema conversion
+// BenchmarkToSchema benchmarks schema conversion.
 func BenchmarkToSchema(b *testing.B) {
 	appID := testAppID()
 	user := FromSchemaUser(testSchemaUser(appID))
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = user.ToSchema()
 	}
 }

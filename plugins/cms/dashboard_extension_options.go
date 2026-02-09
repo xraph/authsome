@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/forgeui/router"
 )
 
-// parseFieldOptions extracts field options from the form
+// parseFieldOptions extracts field options from the form.
 func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptionsDTO {
 	opts := &core.FieldOptionsDTO{}
 
@@ -19,11 +19,13 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 			opts.MinLength = i
 		}
 	}
+
 	if v := c.FormValue("options.maxLength"); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			opts.MaxLength = i
 		}
 	}
+
 	opts.Pattern = c.FormValue("options.regex")
 	if v := c.FormValue("options.default"); v != "" {
 		// Store default value based on type? For now just string if it's text
@@ -36,11 +38,13 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 			opts.Min = &f
 		}
 	}
+
 	if v := c.FormValue("options.max"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			opts.Max = &f
 		}
 	}
+
 	if v := c.FormValue("options.step"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			opts.Step = &f
@@ -60,6 +64,7 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 		if len(values) == 0 {
 			continue
 		}
+
 		val := values[0]
 
 		// Check for options.enum[index].field
@@ -76,7 +81,9 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 			if len(indexPart) < 6 { // enum[ + ]
 				continue
 			}
+
 			indexStr := indexPart[5 : len(indexPart)-1]
+
 			index, err := strconv.Atoi(indexStr)
 			if err != nil {
 				continue
@@ -85,11 +92,13 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 			field := parts[2] // label or value
 
 			choice := choicesMap[index]
-			if field == "label" {
+			switch field {
+			case "label":
 				choice.Label = val
-			} else if field == "value" {
+			case "value":
 				choice.Value = val
 			}
+
 			choicesMap[index] = choice
 		}
 	}
@@ -110,6 +119,7 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 				if choice.Label == "" && choice.Value != "" {
 					choice.Label = choice.Value
 				}
+
 				if choice.Value != "" { // Only add if value exists
 					opts.Choices = append(opts.Choices, choice)
 				}
@@ -120,7 +130,7 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 	return opts
 }
 
-// parseFieldOptionsFromRequest extracts field options from the router.PageContext
+// parseFieldOptionsFromRequest extracts field options from the router.PageContext.
 func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContext) *core.FieldOptionsDTO {
 	opts := &core.FieldOptionsDTO{}
 
@@ -135,11 +145,13 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 			opts.MinLength = i
 		}
 	}
+
 	if v := ctx.Request.FormValue("options.maxLength"); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			opts.MaxLength = i
 		}
 	}
+
 	opts.Pattern = ctx.Request.FormValue("options.regex")
 
 	// Number options
@@ -148,11 +160,13 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 			opts.Min = &f
 		}
 	}
+
 	if v := ctx.Request.FormValue("options.max"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			opts.Max = &f
 		}
 	}
+
 	if v := ctx.Request.FormValue("options.step"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			opts.Step = &f
@@ -166,6 +180,7 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 		if len(values) == 0 {
 			continue
 		}
+
 		val := values[0]
 
 		// Check for options.enum[index].field
@@ -182,7 +197,9 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 			if len(indexPart) < 6 { // enum[ + ]
 				continue
 			}
+
 			indexStr := indexPart[5 : len(indexPart)-1]
+
 			index, err := strconv.Atoi(indexStr)
 			if err != nil {
 				continue
@@ -191,11 +208,13 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 			field := parts[2] // label or value
 
 			choice := choicesMap[index]
-			if field == "label" {
+			switch field {
+			case "label":
 				choice.Label = val
-			} else if field == "value" {
+			case "value":
 				choice.Value = val
 			}
+
 			choicesMap[index] = choice
 		}
 	}
@@ -216,6 +235,7 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 				if choice.Label == "" && choice.Value != "" {
 					choice.Label = choice.Value
 				}
+
 				if choice.Value != "" { // Only add if value exists
 					opts.Choices = append(opts.Choices, choice)
 				}

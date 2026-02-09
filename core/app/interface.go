@@ -11,7 +11,7 @@ import (
 // Focused ServiceImpl Interfaces (ISP Compliant)
 // =============================================================================
 
-// AppOperations defines app management operations
+// AppOperations defines app management operations.
 type AppOperations interface {
 	// UpdateConfig updates the app service configuration
 	UpdateConfig(cfg Config)
@@ -49,7 +49,7 @@ type AppOperations interface {
 	IsPlatformApp(ctx context.Context, appID xid.ID) (bool, error)
 }
 
-// MemberOperations defines member management operations
+// MemberOperations defines member management operations.
 type MemberOperations interface {
 	// CreateMember creates a new member within the specified context and associates it with the provided member details.
 	CreateMember(ctx context.Context, member *Member) (*Member, error)
@@ -88,7 +88,7 @@ type MemberOperations interface {
 	RequireAdmin(ctx context.Context, appID, userID xid.ID) error
 }
 
-// TeamOperations defines team management operations
+// TeamOperations defines team management operations.
 type TeamOperations interface {
 	// CreateTeam creates a new team within the given context using the provided team details. Returns an error if creation fails.
 	CreateTeam(ctx context.Context, team *Team) error
@@ -130,7 +130,7 @@ type TeamOperations interface {
 	ListMemberTeams(ctx context.Context, filter *ListMemberTeamsFilter) (*pagination.PageResponse[*Team], error)
 }
 
-// InvitationOperations defines invitation management operations
+// InvitationOperations defines invitation management operations.
 type InvitationOperations interface {
 	// CreateInvitation creates an app invitation
 	CreateInvitation(ctx context.Context, inv *Invitation) error

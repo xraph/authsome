@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ContentFieldService handles content field business logic
+// ContentFieldService handles content field business logic.
 type ContentFieldService struct {
 	repo                   repository.ContentFieldRepository
 	contentTypeRepo        repository.ContentTypeRepository
@@ -23,13 +23,13 @@ type ContentFieldService struct {
 	logger                 forge.Logger
 }
 
-// ContentFieldServiceConfig holds configuration for the service
+// ContentFieldServiceConfig holds configuration for the service.
 type ContentFieldServiceConfig struct {
 	MaxFieldsPerType int
 	Logger           forge.Logger
 }
 
-// NewContentFieldService creates a new content field service
+// NewContentFieldService creates a new content field service.
 func NewContentFieldService(
 	repo repository.ContentFieldRepository,
 	contentTypeRepo repository.ContentTypeRepository,
@@ -39,6 +39,7 @@ func NewContentFieldService(
 	if maxFields <= 0 {
 		maxFields = 50 // Default
 	}
+
 	return &ContentFieldService{
 		repo:            repo,
 		contentTypeRepo: contentTypeRepo,
@@ -47,12 +48,12 @@ func NewContentFieldService(
 	}
 }
 
-// SetComponentSchemaService sets the component schema service for resolving component refs
+// SetComponentSchemaService sets the component schema service for resolving component refs.
 func (s *ContentFieldService) SetComponentSchemaService(svc *ComponentSchemaService) {
 	s.componentSchemaService = svc
 }
 
-// SetComponentSchemaRepository sets the component schema repository
+// SetComponentSchemaRepository sets the component schema repository.
 func (s *ContentFieldService) SetComponentSchemaRepository(repo repository.ComponentSchemaRepository) {
 	s.componentSchemaRepo = repo
 }
@@ -61,7 +62,7 @@ func (s *ContentFieldService) SetComponentSchemaRepository(repo repository.Compo
 // Helper Functions
 // =============================================================================
 
-// generateFieldSlug creates a slug from a field name
+// generateFieldSlug creates a slug from a field name.
 func generateFieldSlug(name string) string {
 	// Trim whitespace but preserve casing
 	slug := strings.TrimSpace(name)
@@ -71,17 +72,20 @@ func generateFieldSlug(name string) string {
 
 	// Remove invalid characters (keep letters, numbers, underscores, hyphens)
 	var result strings.Builder
+
 	for _, r := range slug {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			result.WriteRune(r)
 		}
 	}
+
 	slug = result.String()
 
 	// Remove multiple consecutive underscores or hyphens
 	for strings.Contains(slug, "__") {
 		slug = strings.ReplaceAll(slug, "__", "_")
 	}
+
 	for strings.Contains(slug, "--") {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
@@ -106,7 +110,7 @@ func generateFieldSlug(name string) string {
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content field
+// Create creates a new content field.
 func (s *ContentFieldService) Create(ctx context.Context, contentTypeID xid.ID, req *core.CreateFieldRequest) (*core.ContentFieldDTO, error) {
 	// Verify content type exists
 	_, err := s.contentTypeRepo.FindByID(ctx, contentTypeID)
@@ -130,6 +134,7 @@ func (s *ContentFieldService) Create(ctx context.Context, contentTypeID xid.ID, 
 	if err != nil {
 		return nil, err
 	}
+
 	if exists {
 		return nil, core.ErrFieldExists(slug)
 	}
@@ -139,6 +144,7 @@ func (s *ContentFieldService) Create(ctx context.Context, contentTypeID xid.ID, 
 	if err != nil {
 		return nil, err
 	}
+
 	if s.maxFields > 0 && count >= s.maxFields {
 		return nil, core.ErrInvalidRequest("field limit reached for content type")
 	}
@@ -189,25 +195,27 @@ func (s *ContentFieldService) Create(ctx context.Context, contentTypeID xid.ID, 
 	return fieldToDTO(field), nil
 }
 
-// GetByID retrieves a content field by ID
+// GetByID retrieves a content field by ID.
 func (s *ContentFieldService) GetByID(ctx context.Context, id xid.ID) (*core.ContentFieldDTO, error) {
 	field, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return fieldToDTO(field), nil
 }
 
-// GetBySlug retrieves a content field by slug
+// GetBySlug retrieves a content field by slug.
 func (s *ContentFieldService) GetByName(ctx context.Context, contentTypeID xid.ID, name string) (*core.ContentFieldDTO, error) {
 	field, err := s.repo.FindByName(ctx, contentTypeID, name)
 	if err != nil {
 		return nil, err
 	}
+
 	return fieldToDTO(field), nil
 }
 
-// List lists fields for a content type
+// List lists fields for a content type.
 func (s *ContentFieldService) List(ctx context.Context, contentTypeID xid.ID) ([]*core.ContentFieldDTO, error) {
 	fields, err := s.repo.ListByContentType(ctx, contentTypeID)
 	if err != nil {
@@ -218,10 +226,11 @@ func (s *ContentFieldService) List(ctx context.Context, contentTypeID xid.ID) ([
 	for i, field := range fields {
 		dtos[i] = fieldToDTO(field)
 	}
+
 	return dtos, nil
 }
 
-// Update updates a content field
+// Update updates a content field.
 func (s *ContentFieldService) Update(ctx context.Context, id xid.ID, req *core.UpdateFieldRequest) (*core.ContentFieldDTO, error) {
 	field, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -232,27 +241,35 @@ func (s *ContentFieldService) Update(ctx context.Context, id xid.ID, req *core.U
 	if req.Title != "" {
 		field.Title = strings.TrimSpace(req.Title)
 	}
+
 	if req.Description != "" {
 		field.Description = strings.TrimSpace(req.Description)
 	}
+
 	if req.Required != nil {
 		field.Required = *req.Required
 	}
+
 	if req.Unique != nil {
 		field.Unique = *req.Unique
 	}
+
 	if req.Indexed != nil {
 		field.Indexed = *req.Indexed
 	}
+
 	if req.Localized != nil {
 		field.Localized = *req.Localized
 	}
+
 	if req.Order != nil {
 		field.Order = *req.Order
 	}
+
 	if req.Hidden != nil {
 		field.Hidden = *req.Hidden
 	}
+
 	if req.ReadOnly != nil {
 		field.ReadOnly = *req.ReadOnly
 	}
@@ -263,6 +280,7 @@ func (s *ContentFieldService) Update(ctx context.Context, id xid.ID, req *core.U
 		if err := s.validateFieldOptions(fieldType, req.Options); err != nil {
 			return nil, err
 		}
+
 		field.Options = s.buildFieldOptions(req.Options)
 	}
 
@@ -282,7 +300,7 @@ func (s *ContentFieldService) Update(ctx context.Context, id xid.ID, req *core.U
 	return fieldToDTO(field), nil
 }
 
-// Delete deletes a content field
+// Delete deletes a content field.
 func (s *ContentFieldService) Delete(ctx context.Context, id xid.ID) error {
 	// Verify field exists
 	_, err := s.repo.FindByID(ctx, id)
@@ -293,7 +311,7 @@ func (s *ContentFieldService) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// UpdateBySlug updates a content field by its name within a content type
+// UpdateBySlug updates a content field by its name within a content type.
 func (s *ContentFieldService) UpdateByName(ctx context.Context, contentTypeID xid.ID, name string, req *core.UpdateFieldRequest) (*core.ContentFieldDTO, error) {
 	// Find field by name
 	field, err := s.repo.FindByName(ctx, contentTypeID, name)
@@ -304,7 +322,7 @@ func (s *ContentFieldService) UpdateByName(ctx context.Context, contentTypeID xi
 	return s.Update(ctx, field.ID, req)
 }
 
-// DeleteBySlug deletes a content field by its name within a content type
+// DeleteBySlug deletes a content field by its name within a content type.
 func (s *ContentFieldService) DeleteByName(ctx context.Context, contentTypeID xid.ID, name string) error {
 	// Find field by name
 	field, err := s.repo.FindByName(ctx, contentTypeID, name)
@@ -319,7 +337,7 @@ func (s *ContentFieldService) DeleteByName(ctx context.Context, contentTypeID xi
 // Ordering Operations
 // =============================================================================
 
-// Reorder reorders fields in a content type
+// Reorder reorders fields in a content type.
 func (s *ContentFieldService) Reorder(ctx context.Context, contentTypeID xid.ID, req *core.ReorderFieldsRequest) error {
 	// Verify content type exists
 	_, err := s.contentTypeRepo.FindByID(ctx, contentTypeID)
@@ -333,6 +351,7 @@ func (s *ContentFieldService) Reorder(ctx context.Context, contentTypeID xid.ID,
 		if err != nil {
 			return core.ErrInvalidRequest("invalid field ID: " + fo.FieldID)
 		}
+
 		orders[i] = repository.FieldOrder{
 			FieldID: fieldID,
 			Order:   fo.Order,
@@ -346,13 +365,14 @@ func (s *ContentFieldService) Reorder(ctx context.Context, contentTypeID xid.ID,
 // Validation Helpers
 // =============================================================================
 
-// validateFieldOptions validates options for a specific field type
+// validateFieldOptions validates options for a specific field type.
 func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, options *core.FieldOptionsDTO) error {
 	if options == nil {
 		// Check if field type requires options
 		if fieldType.RequiresOptions() {
 			return core.ErrInvalidRequest("field type '" + string(fieldType) + "' requires options")
 		}
+
 		return nil
 	}
 
@@ -364,13 +384,16 @@ func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, opt
 		}
 		// Validate choices have unique values
 		values := make(map[string]bool)
+
 		for _, choice := range options.Choices {
 			if choice.Value == "" {
 				return core.ErrInvalidRequest("choice value cannot be empty")
 			}
+
 			if values[choice.Value] {
 				return core.ErrInvalidRequest("duplicate choice value: " + choice.Value)
 			}
+
 			values[choice.Value] = true
 		}
 
@@ -378,9 +401,11 @@ func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, opt
 		if options.RelatedType == "" {
 			return core.ErrInvalidRequest("relation fields require relatedType")
 		}
+
 		if options.RelationType == "" {
 			return core.ErrInvalidRequest("relation fields require relationType")
 		}
+
 		relType := core.RelationType(options.RelationType)
 		if !relType.IsValid() {
 			return core.ErrInvalidRequest("invalid relation type: " + options.RelationType)
@@ -418,6 +443,7 @@ func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, opt
 		if options.DiscriminatorField == "" {
 			return core.ErrInvalidRequest("oneOf fields require discriminatorField")
 		}
+
 		if len(options.Schemas) == 0 {
 			return core.ErrInvalidRequest("oneOf fields require at least one schema in schemas map")
 		}
@@ -434,7 +460,7 @@ func (s *ContentFieldService) validateFieldOptions(fieldType core.FieldType, opt
 	return nil
 }
 
-// validateConditionalVisibility validates showWhen/hideWhen conditions
+// validateConditionalVisibility validates showWhen/hideWhen conditions.
 func (s *ContentFieldService) validateConditionalVisibility(options *core.FieldOptionsDTO) error {
 	if options == nil {
 		return nil
@@ -462,7 +488,7 @@ func (s *ContentFieldService) validateConditionalVisibility(options *core.FieldO
 	return nil
 }
 
-// validateFieldCondition validates a field condition
+// validateFieldCondition validates a field condition.
 func (s *ContentFieldService) validateFieldCondition(condition *core.FieldConditionDTO) error {
 	if condition.Field == "" {
 		return core.ErrInvalidRequest("condition field is required")
@@ -494,7 +520,7 @@ func (s *ContentFieldService) validateFieldCondition(condition *core.FieldCondit
 	return nil
 }
 
-// buildFieldOptions builds schema.FieldOptions from DTO
+// buildFieldOptions builds schema.FieldOptions from DTO.
 func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schema.FieldOptions {
 	if dto == nil {
 		return schema.FieldOptions{}
@@ -570,6 +596,7 @@ func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schem
 			Value:    dto.ShowWhen.Value,
 		}
 	}
+
 	if dto.HideWhen != nil {
 		options.HideWhen = &schema.FieldCondition{
 			Field:    dto.HideWhen.Field,
@@ -581,7 +608,7 @@ func (s *ContentFieldService) buildFieldOptions(dto *core.FieldOptionsDTO) schem
 	return options
 }
 
-// dtoToSchemaNestedFields converts DTO nested fields to schema nested fields
+// dtoToSchemaNestedFields converts DTO nested fields to schema nested fields.
 func (s *ContentFieldService) dtoToSchemaNestedFields(fields []core.NestedFieldDefDTO) schema.NestedFieldDefs {
 	result := make(schema.NestedFieldDefs, len(fields))
 	for i, f := range fields {
@@ -596,27 +623,31 @@ func (s *ContentFieldService) dtoToSchemaNestedFields(fields []core.NestedFieldD
 			result[i].Options = s.buildFieldOptionsPtr(f.Options)
 		}
 	}
+
 	return result
 }
 
-// buildFieldOptionsPtr builds a pointer to schema.FieldOptions from DTO
+// buildFieldOptionsPtr builds a pointer to schema.FieldOptions from DTO.
 func (s *ContentFieldService) buildFieldOptionsPtr(dto *core.FieldOptionsDTO) *schema.FieldOptions {
 	if dto == nil {
 		return nil
 	}
+
 	opts := s.buildFieldOptions(dto)
+
 	return &opts
 }
 
-// ResolveNestedFields resolves nested fields for a field, handling component refs
+// ResolveNestedFields resolves nested fields for a field, handling component refs.
 func (s *ContentFieldService) ResolveNestedFields(ctx context.Context, field *core.ContentFieldDTO) ([]core.NestedFieldDefDTO, error) {
 	if field.Options.ComponentRef != "" && s.componentSchemaService != nil {
 		return s.componentSchemaService.ResolveComponentSchema(ctx, field.Options.ComponentRef)
 	}
+
 	return field.Options.NestedFields, nil
 }
 
-// GetFieldWithResolvedNested returns a field DTO with resolved nested fields
+// GetFieldWithResolvedNested returns a field DTO with resolved nested fields.
 func (s *ContentFieldService) GetFieldWithResolvedNested(ctx context.Context, id xid.ID) (*core.ContentFieldDTO, error) {
 	field, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -632,6 +663,7 @@ func (s *ContentFieldService) GetFieldWithResolvedNested(ctx context.Context, id
 		if err != nil {
 			return nil, err
 		}
+
 		dto.Options.NestedFields = resolvedFields
 	}
 

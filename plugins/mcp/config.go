@@ -1,28 +1,28 @@
 package mcp
 
-// Mode defines the MCP plugin operation mode
+// Mode defines the MCP plugin operation mode.
 type Mode string
 
 const (
-	// ModeReadOnly only allows read operations and read-only tools
+	// ModeReadOnly only allows read operations and read-only tools.
 	ModeReadOnly Mode = "readonly"
-	// ModeAdmin allows read and administrative write operations
+	// ModeAdmin allows read and administrative write operations.
 	ModeAdmin Mode = "admin"
-	// ModeDevelopment allows all operations including test data creation
+	// ModeDevelopment allows all operations including test data creation.
 	ModeDevelopment Mode = "development"
 )
 
-// Transport defines how MCP communicates
+// Transport defines how MCP communicates.
 type Transport string
 
 const (
-	// TransportStdio uses stdin/stdout (for local CLI)
+	// TransportStdio uses stdin/stdout (for local CLI).
 	TransportStdio Transport = "stdio"
-	// TransportHTTP uses HTTP endpoints (for remote access)
+	// TransportHTTP uses HTTP endpoints (for remote access).
 	TransportHTTP Transport = "http"
 )
 
-// Config defines the MCP plugin configuration
+// Config defines the MCP plugin configuration.
 type Config struct {
 	// Enabled determines if MCP plugin is active
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -46,7 +46,7 @@ type Config struct {
 	RateLimit RateLimitConfig `json:"rate_limit" yaml:"rate_limit"`
 }
 
-// AuthorizationConfig defines authorization requirements
+// AuthorizationConfig defines authorization requirements.
 type AuthorizationConfig struct {
 	// RequireAPIKey enforces API key authentication
 	RequireAPIKey bool `json:"require_api_key" yaml:"require_api_key"`
@@ -58,13 +58,13 @@ type AuthorizationConfig struct {
 	AdminOperations []string `json:"admin_operations" yaml:"admin_operations"`
 }
 
-// RateLimitConfig defines rate limiting
+// RateLimitConfig defines rate limiting.
 type RateLimitConfig struct {
 	// RequestsPerMinute limits MCP requests
 	RequestsPerMinute int `json:"requests_per_minute" yaml:"requests_per_minute"`
 }
 
-// DefaultConfig returns sensible defaults
+// DefaultConfig returns sensible defaults.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:       false, // Opt-in

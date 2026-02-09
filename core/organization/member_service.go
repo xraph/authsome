@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// MemberService handles member aggregate operations
+// MemberService handles member aggregate operations.
 type MemberService struct {
 	repo     MemberRepository
 	orgRepo  OrganizationRepository // For validation (org exists)
@@ -20,18 +20,21 @@ type MemberService struct {
 	roleRepo rbac.RoleRepository // For role validation against RBAC definitions
 }
 
-// NewMemberService creates a new member service
+// NewMemberService creates a new member service.
 func NewMemberService(repo MemberRepository, orgRepo OrganizationRepository, cfg Config, rbacSvc *rbac.Service, roleRepo rbac.RoleRepository) *MemberService {
 	// Apply defaults for any zero-valued config fields
 	if cfg.MaxMembersPerOrganization == 0 {
 		cfg.MaxMembersPerOrganization = DefaultConfig().MaxMembersPerOrganization
 	}
+
 	if cfg.MaxOrganizationsPerUser == 0 {
 		cfg.MaxOrganizationsPerUser = DefaultConfig().MaxOrganizationsPerUser
 	}
+
 	if cfg.MaxTeamsPerOrganization == 0 {
 		cfg.MaxTeamsPerOrganization = DefaultConfig().MaxTeamsPerOrganization
 	}
+
 	if cfg.InvitationExpiryHours == 0 {
 		cfg.InvitationExpiryHours = DefaultConfig().InvitationExpiryHours
 	}
@@ -56,7 +59,7 @@ func NewMemberService(repo MemberRepository, orgRepo OrganizationRepository, cfg
 // Validation rules:
 // - Always allows hardcoded roles (owner, admin, member)
 // - If AllowAppLevelRoles=true: Allows app-level roles (organization_id IS NULL) and org-specific roles
-// - If AllowAppLevelRoles=false: Only allows hardcoded roles
+// - If AllowAppLevelRoles=false: Only allows hardcoded roles.
 func (s *MemberService) validateRoleAgainstRBAC(ctx context.Context, appID xid.ID, roleInput string) error {
 	if s.roleRepo == nil {
 		// Fallback to static validation if no RBAC role repository
@@ -71,8 +74,10 @@ func (s *MemberService) validateRoleAgainstRBAC(ctx context.Context, appID xid.I
 	// Detect if input is a role ID (20 chars alphanumeric) or a role name
 	isRoleID := len(roleInput) == 20 && isAlphanumeric(roleInput)
 
-	var role *schema.Role
-	var err error
+	var (
+		role *schema.Role
+		err  error
+	)
 
 	if isRoleID {
 		// Try to find role by ID
@@ -80,6 +85,7 @@ func (s *MemberService) validateRoleAgainstRBAC(ctx context.Context, appID xid.I
 		if parseErr != nil {
 			return InvalidRole(roleInput)
 		}
+
 		role, err = s.roleRepo.FindByID(ctx, roleID)
 		if err != nil {
 			return InvalidRole(roleInput)
@@ -115,7 +121,7 @@ func (s *MemberService) validateRoleAgainstRBAC(ctx context.Context, appID xid.I
 }
 
 // checkPermissionByRole provides fallback permission checking based on role hierarchy
-// Used when RBAC service is not available
+// Used when RBAC service is not available.
 func (s *MemberService) checkPermissionByRole(role, action, resource string) bool {
 	// Simple hierarchy-based fallback: owner > admin > member
 	switch role {
@@ -127,6 +133,7 @@ func (s *MemberService) checkPermissionByRole(role, action, resource string) boo
 		if action == "delete" && resource == "organization" {
 			return false
 		}
+
 		return true
 	case RoleMember:
 		// Member has limited permissions
@@ -140,7 +147,7 @@ func (s *MemberService) checkPermissionByRole(role, action, resource string) boo
 // Member Operations
 // =============================================================================
 
-// AddMember adds a user as a member of an organization
+// AddMember adds a user as a member of an organization.
 func (s *MemberService) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*Member, error) {
 	// Get organization to access appID for role validation
 	org, err := s.orgRepo.FindByID(ctx, orgID)
@@ -164,6 +171,7 @@ func (s *MemberService) AddMember(ctx context.Context, orgID, userID xid.ID, rol
 	if err != nil {
 		return nil, fmt.Errorf("failed to count members: %w", err)
 	}
+
 	if count >= s.config.MaxMembersPerOrganization {
 		return nil, MaxMembersReached(s.config.MaxMembersPerOrganization)
 	}
@@ -187,25 +195,27 @@ func (s *MemberService) AddMember(ctx context.Context, orgID, userID xid.ID, rol
 	return member, nil
 }
 
-// FindMemberByID retrieves a member by ID
+// FindMemberByID retrieves a member by ID.
 func (s *MemberService) FindMemberByID(ctx context.Context, id xid.ID) (*Member, error) {
 	member, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, MemberNotFound()
 	}
+
 	return member, nil
 }
 
-// FindMember retrieves a member by organization ID and user ID
+// FindMember retrieves a member by organization ID and user ID.
 func (s *MemberService) FindMember(ctx context.Context, orgID, userID xid.ID) (*Member, error) {
 	member, err := s.repo.FindByUserAndOrg(ctx, userID, orgID)
 	if err != nil {
 		return nil, MemberNotFound()
 	}
+
 	return member, nil
 }
 
-// ListMembers lists members in an organization with pagination and filtering
+// ListMembers lists members in an organization with pagination and filtering.
 func (s *MemberService) ListMembers(ctx context.Context, filter *ListMembersFilter) (*pagination.PageResponse[*Member], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -215,7 +225,7 @@ func (s *MemberService) ListMembers(ctx context.Context, filter *ListMembersFilt
 	return s.repo.ListByOrganization(ctx, filter)
 }
 
-// UpdateMember updates a member
+// UpdateMember updates a member.
 func (s *MemberService) UpdateMember(ctx context.Context, id xid.ID, req *UpdateMemberRequest, updaterUserID xid.ID) (*Member, error) {
 	member, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -227,10 +237,12 @@ func (s *MemberService) UpdateMember(ctx context.Context, id xid.ID, req *Update
 		"target_role":    member.Role,
 		"target_user_id": member.UserID.String(),
 	}
+
 	hasPermission, err := s.CheckPermissionWithContext(ctx, member.OrganizationID, updaterUserID, "update", "members", contextVars)
 	if err != nil {
 		return nil, err
 	}
+
 	if !hasPermission {
 		// Fallback to legacy admin check if no RBAC policies configured
 		isAdmin, err := s.IsAdmin(ctx, member.OrganizationID, updaterUserID)
@@ -251,14 +263,18 @@ func (s *MemberService) UpdateMember(ctx context.Context, id xid.ID, req *Update
 		if err := s.validateRoleAgainstRBAC(ctx, org.AppID, *req.Role); err != nil {
 			return nil, err
 		}
+
 		member.Role = *req.Role
 	}
+
 	if req.Status != nil {
 		if err := validateStatus(*req.Status); err != nil {
 			return nil, err
 		}
+
 		member.Status = *req.Status
 	}
+
 	member.UpdatedAt = time.Now().UTC()
 
 	if err := s.repo.Update(ctx, member); err != nil {
@@ -268,7 +284,7 @@ func (s *MemberService) UpdateMember(ctx context.Context, id xid.ID, req *Update
 	return member, nil
 }
 
-// UpdateMemberRole updates only the role of a member
+// UpdateMemberRole updates only the role of a member.
 func (s *MemberService) UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, newRole string, updaterUserID xid.ID) (*Member, error) {
 	member, err := s.repo.FindByID(ctx, memberID)
 	if err != nil {
@@ -287,10 +303,12 @@ func (s *MemberService) UpdateMemberRole(ctx context.Context, orgID, memberID xi
 		"target_user_id": member.UserID.String(),
 		"new_role":       newRole,
 	}
+
 	hasPermission, err := s.CheckPermissionWithContext(ctx, orgID, updaterUserID, "update", "member_role", contextVars)
 	if err != nil {
 		return nil, err
 	}
+
 	if !hasPermission {
 		// Fallback to legacy admin check if no RBAC policies configured
 		isAdmin, err := s.IsAdmin(ctx, orgID, updaterUserID)
@@ -320,7 +338,7 @@ func (s *MemberService) UpdateMemberRole(ctx context.Context, orgID, memberID xi
 	return member, nil
 }
 
-// RemoveMember removes a member from an organization
+// RemoveMember removes a member from an organization.
 func (s *MemberService) RemoveMember(ctx context.Context, id, removerUserID xid.ID) error {
 	member, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -332,10 +350,12 @@ func (s *MemberService) RemoveMember(ctx context.Context, id, removerUserID xid.
 		"target_role":    member.Role,
 		"target_user_id": member.UserID.String(),
 	}
+
 	hasPermission, err := s.CheckPermissionWithContext(ctx, member.OrganizationID, removerUserID, "delete", "members", contextVars)
 	if err != nil {
 		return err
 	}
+
 	if !hasPermission {
 		// Fallback to legacy admin check if no RBAC policies configured
 		isAdmin, err := s.IsAdmin(ctx, member.OrganizationID, removerUserID)
@@ -347,7 +367,7 @@ func (s *MemberService) RemoveMember(ctx context.Context, id, removerUserID xid.
 	return s.repo.Delete(ctx, id)
 }
 
-// GetUserMemberships returns all organizations a user is a member of
+// GetUserMemberships returns all organizations a user is a member of.
 func (s *MemberService) GetUserMemberships(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Member], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -357,7 +377,7 @@ func (s *MemberService) GetUserMemberships(ctx context.Context, userID xid.ID, f
 	return s.repo.ListByUser(ctx, userID, filter)
 }
 
-// RemoveUserFromAllOrganizations removes a user from all organizations they belong to
+// RemoveUserFromAllOrganizations removes a user from all organizations they belong to.
 func (s *MemberService) RemoveUserFromAllOrganizations(ctx context.Context, userID xid.ID) error {
 	// Get all memberships with a large limit
 	memberships, err := s.repo.ListByUser(ctx, userID, &pagination.PaginationParams{
@@ -378,54 +398,61 @@ func (s *MemberService) RemoveUserFromAllOrganizations(ctx context.Context, user
 	return nil
 }
 
-// IsMember checks if a user is a member of an organization
+// IsMember checks if a user is a member of an organization.
 func (s *MemberService) IsMember(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	member, err := s.repo.FindByUserAndOrg(ctx, userID, orgID)
 	if err != nil {
 		return false, nil // User is not a member (or error occurred)
 	}
+
 	return member != nil && member.Status == StatusActive, nil
 }
 
-// IsOwner checks if a user is the owner of an organization
+// IsOwner checks if a user is the owner of an organization.
 func (s *MemberService) IsOwner(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	member, err := s.repo.FindByUserAndOrg(ctx, userID, orgID)
 	if err != nil {
 		return false, nil
 	}
+
 	return member != nil && member.Role == RoleOwner && member.Status == StatusActive, nil
 }
 
-// IsAdmin checks if a user is an admin or owner of an organization
+// IsAdmin checks if a user is an admin or owner of an organization.
 func (s *MemberService) IsAdmin(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	member, err := s.repo.FindByUserAndOrg(ctx, userID, orgID)
 	if err != nil {
 		return false, nil
 	}
+
 	return member != nil && (member.Role == RoleOwner || member.Role == RoleAdmin) && member.Status == StatusActive, nil
 }
 
-// RequireOwner checks if a user is the owner of an organization and returns an error if not
+// RequireOwner checks if a user is the owner of an organization and returns an error if not.
 func (s *MemberService) RequireOwner(ctx context.Context, orgID, userID xid.ID) error {
 	isOwner, err := s.IsOwner(ctx, orgID, userID)
 	if err != nil {
 		return err
 	}
+
 	if !isOwner {
 		return NotOwner()
 	}
+
 	return nil
 }
 
-// RequireAdmin checks if a user is an admin or owner of an organization and returns an error if not
+// RequireAdmin checks if a user is an admin or owner of an organization and returns an error if not.
 func (s *MemberService) RequireAdmin(ctx context.Context, orgID, userID xid.ID) error {
 	isAdmin, err := s.IsAdmin(ctx, orgID, userID)
 	if err != nil {
 		return err
 	}
+
 	if !isAdmin {
 		return NotAdmin()
 	}
+
 	return nil
 }
 
@@ -451,7 +478,7 @@ func (s *MemberService) CheckPermission(ctx context.Context, orgID, userID xid.I
 	// Use RBAC service to check permission with the member's role
 	// The role stored in member table is passed to AllowedWithRoles
 	allowed := s.rbacSvc.AllowedWithRoles(&rbac.Context{
-		Subject:  fmt.Sprintf("user:%s", userID.String()),
+		Subject:  "user:" + userID.String(),
 		Action:   action,
 		Resource: resource,
 	}, []string{member.Role})
@@ -460,7 +487,7 @@ func (s *MemberService) CheckPermission(ctx context.Context, orgID, userID xid.I
 }
 
 // CheckPermissionWithContext checks permission with additional context variables
-// for conditional permission evaluation (e.g., resource ownership)
+// for conditional permission evaluation (e.g., resource ownership).
 func (s *MemberService) CheckPermissionWithContext(ctx context.Context, orgID, userID xid.ID, action, resource string, contextVars map[string]string) (bool, error) {
 	// Get member's role from the member table (single source of truth)
 	member, err := s.repo.FindByUserAndOrg(ctx, userID, orgID)
@@ -475,7 +502,7 @@ func (s *MemberService) CheckPermissionWithContext(ctx context.Context, orgID, u
 
 	// Use RBAC service with context variables
 	allowed := s.rbacSvc.AllowedWithRoles(&rbac.Context{
-		Subject:  fmt.Sprintf("user:%s", userID.String()),
+		Subject:  "user:" + userID.String(),
 		Action:   action,
 		Resource: resource,
 		Vars:     contextVars,
@@ -484,17 +511,19 @@ func (s *MemberService) CheckPermissionWithContext(ctx context.Context, orgID, u
 	return allowed, nil
 }
 
-// RequirePermission checks if a user has permission and returns an error if denied
+// RequirePermission checks if a user has permission and returns an error if denied.
 func (s *MemberService) RequirePermission(ctx context.Context, orgID, userID xid.ID, action, resource string) error {
 	allowed, err := s.CheckPermission(ctx, orgID, userID, action, resource)
 	if err != nil {
 		return err
 	}
+
 	if !allowed {
 		return PermissionDenied(action, resource)
 	}
+
 	return nil
 }
 
-// Type assertion to ensure MemberService implements MemberOperations
+// Type assertion to ensure MemberService implements MemberOperations.
 var _ MemberOperations = (*MemberService)(nil)

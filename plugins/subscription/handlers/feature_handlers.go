@@ -11,13 +11,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// FeatureHandlers handles HTTP requests for feature management
+// FeatureHandlers handles HTTP requests for feature management.
 type FeatureHandlers struct {
 	featureSvc *service.FeatureService
 	usageSvc   *service.FeatureUsageService
 }
 
-// NewFeatureHandlers creates a new feature handlers instance
+// NewFeatureHandlers creates a new feature handlers instance.
 func NewFeatureHandlers(featureSvc *service.FeatureService, usageSvc *service.FeatureUsageService) *FeatureHandlers {
 	return &FeatureHandlers{
 		featureSvc: featureSvc,
@@ -28,10 +28,10 @@ func NewFeatureHandlers(featureSvc *service.FeatureService, usageSvc *service.Fe
 // Request/Response types
 
 type createFeatureRequest struct {
-	Key          string             `json:"key" validate:"required,min=1,max=100"`
-	Name         string             `json:"name" validate:"required,min=1,max=100"`
+	Key          string             `json:"key"          validate:"required,min=1,max=100"`
+	Name         string             `json:"name"         validate:"required,min=1,max=100"`
 	Description  string             `json:"description"`
-	Type         string             `json:"type" validate:"required"`
+	Type         string             `json:"type"         validate:"required"`
 	Unit         string             `json:"unit"`
 	ResetPeriod  string             `json:"resetPeriod"`
 	IsPublic     bool               `json:"isPublic"`
@@ -54,7 +54,7 @@ type updateFeatureRequest struct {
 }
 
 type linkFeatureRequest struct {
-	FeatureID        string         `json:"featureId" validate:"required"`
+	FeatureID        string         `json:"featureId"        validate:"required"`
 	Value            string         `json:"value"`
 	IsBlocked        bool           `json:"isBlocked"`
 	IsHighlighted    bool           `json:"isHighlighted"`
@@ -69,15 +69,15 @@ type updateLinkRequest struct {
 }
 
 type consumeFeatureRequest struct {
-	Quantity       int64          `json:"quantity" validate:"required,min=1"`
+	Quantity       int64          `json:"quantity"       validate:"required,min=1"`
 	IdempotencyKey string         `json:"idempotencyKey"`
 	Reason         string         `json:"reason"`
 	Metadata       map[string]any `json:"metadata"`
 }
 
 type grantFeatureRequest struct {
-	GrantType  string         `json:"grantType" validate:"required"`
-	Value      int64          `json:"value" validate:"required,min=1"`
+	GrantType  string         `json:"grantType"  validate:"required"`
+	Value      int64          `json:"value"      validate:"required,min=1"`
 	ExpiresAt  *int64         `json:"expiresAt"` // Unix timestamp
 	SourceType string         `json:"sourceType"`
 	SourceID   string         `json:"sourceId"`
@@ -92,14 +92,14 @@ type errorResponse struct {
 }
 
 type successResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Message string      `json:"message,omitempty"`
+	Success bool   `json:"success"`
+	Data    any    `json:"data,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // Feature CRUD Handlers
 
-// HandleCreateFeature handles feature creation
+// HandleCreateFeature handles feature creation.
 func (h *FeatureHandlers) HandleCreateFeature(c forge.Context) error {
 	var req createFeatureRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -136,7 +136,7 @@ func (h *FeatureHandlers) HandleCreateFeature(c forge.Context) error {
 	return c.JSON(201, feature)
 }
 
-// HandleListFeatures handles listing features
+// HandleListFeatures handles listing features.
 func (h *FeatureHandlers) HandleListFeatures(c forge.Context) error {
 	appID := getAppID(c)
 	publicOnly := c.Query("public") == "true"
@@ -149,14 +149,14 @@ func (h *FeatureHandlers) HandleListFeatures(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"features": features,
 		"total":    total,
 		"page":     page,
 	})
 }
 
-// HandleGetFeature handles getting a single feature
+// HandleGetFeature handles getting a single feature.
 func (h *FeatureHandlers) HandleGetFeature(c forge.Context) error {
 	id, err := xid.FromString(c.Param("id"))
 	if err != nil {
@@ -171,7 +171,7 @@ func (h *FeatureHandlers) HandleGetFeature(c forge.Context) error {
 	return c.JSON(200, feature)
 }
 
-// HandleUpdateFeature handles updating a feature
+// HandleUpdateFeature handles updating a feature.
 func (h *FeatureHandlers) HandleUpdateFeature(c forge.Context) error {
 	id, err := xid.FromString(c.Param("id"))
 	if err != nil {
@@ -184,6 +184,7 @@ func (h *FeatureHandlers) HandleUpdateFeature(c forge.Context) error {
 	}
 
 	var resetPeriod *core.ResetPeriod
+
 	if req.ResetPeriod != nil {
 		rp := core.ResetPeriod(*req.ResetPeriod)
 		resetPeriod = &rp
@@ -207,7 +208,7 @@ func (h *FeatureHandlers) HandleUpdateFeature(c forge.Context) error {
 	return c.JSON(200, feature)
 }
 
-// HandleDeleteFeature handles deleting a feature
+// HandleDeleteFeature handles deleting a feature.
 func (h *FeatureHandlers) HandleDeleteFeature(c forge.Context) error {
 	id, err := xid.FromString(c.Param("id"))
 	if err != nil {
@@ -223,7 +224,7 @@ func (h *FeatureHandlers) HandleDeleteFeature(c forge.Context) error {
 
 // Plan-Feature Link Handlers
 
-// HandleLinkFeatureToPlan handles linking a feature to a plan
+// HandleLinkFeatureToPlan handles linking a feature to a plan.
 func (h *FeatureHandlers) HandleLinkFeatureToPlan(c forge.Context) error {
 	planID, err := xid.FromString(c.Param("planId"))
 	if err != nil {
@@ -254,7 +255,7 @@ func (h *FeatureHandlers) HandleLinkFeatureToPlan(c forge.Context) error {
 	return c.JSON(201, link)
 }
 
-// HandleGetPlanFeatures handles getting all features for a plan
+// HandleGetPlanFeatures handles getting all features for a plan.
 func (h *FeatureHandlers) HandleGetPlanFeatures(c forge.Context) error {
 	planID, err := xid.FromString(c.Param("planId"))
 	if err != nil {
@@ -266,12 +267,12 @@ func (h *FeatureHandlers) HandleGetPlanFeatures(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"features": links,
 	})
 }
 
-// HandleUpdatePlanFeatureLink handles updating a feature-plan link
+// HandleUpdatePlanFeatureLink handles updating a feature-plan link.
 func (h *FeatureHandlers) HandleUpdatePlanFeatureLink(c forge.Context) error {
 	planID, err := xid.FromString(c.Param("planId"))
 	if err != nil {
@@ -301,7 +302,7 @@ func (h *FeatureHandlers) HandleUpdatePlanFeatureLink(c forge.Context) error {
 	return c.JSON(200, link)
 }
 
-// HandleUnlinkFeatureFromPlan handles removing a feature from a plan
+// HandleUnlinkFeatureFromPlan handles removing a feature from a plan.
 func (h *FeatureHandlers) HandleUnlinkFeatureFromPlan(c forge.Context) error {
 	planID, err := xid.FromString(c.Param("planId"))
 	if err != nil {
@@ -322,7 +323,7 @@ func (h *FeatureHandlers) HandleUnlinkFeatureFromPlan(c forge.Context) error {
 
 // Organization Feature Usage Handlers
 
-// HandleGetOrgFeatures handles getting all feature access for an organization
+// HandleGetOrgFeatures handles getting all feature access for an organization.
 func (h *FeatureHandlers) HandleGetOrgFeatures(c forge.Context) error {
 	orgID, err := xid.FromString(c.Param("orgId"))
 	if err != nil {
@@ -334,12 +335,12 @@ func (h *FeatureHandlers) HandleGetOrgFeatures(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"features": usages,
 	})
 }
 
-// HandleGetFeatureUsage handles getting usage for a specific feature
+// HandleGetFeatureUsage handles getting usage for a specific feature.
 func (h *FeatureHandlers) HandleGetFeatureUsage(c forge.Context) error {
 	orgID, err := xid.FromString(c.Param("orgId"))
 	if err != nil {
@@ -359,7 +360,7 @@ func (h *FeatureHandlers) HandleGetFeatureUsage(c forge.Context) error {
 	return c.JSON(200, usage)
 }
 
-// HandleCheckFeatureAccess handles checking feature access
+// HandleCheckFeatureAccess handles checking feature access.
 func (h *FeatureHandlers) HandleCheckFeatureAccess(c forge.Context) error {
 	orgID, err := xid.FromString(c.Param("orgId"))
 	if err != nil {
@@ -379,7 +380,7 @@ func (h *FeatureHandlers) HandleCheckFeatureAccess(c forge.Context) error {
 	return c.JSON(200, access)
 }
 
-// HandleConsumeFeature handles consuming feature quota
+// HandleConsumeFeature handles consuming feature quota.
 func (h *FeatureHandlers) HandleConsumeFeature(c forge.Context) error {
 	orgID, err := xid.FromString(c.Param("orgId"))
 	if err != nil {
@@ -411,7 +412,7 @@ func (h *FeatureHandlers) HandleConsumeFeature(c forge.Context) error {
 	return c.JSON(200, usage)
 }
 
-// HandleGrantFeature handles granting additional feature quota
+// HandleGrantFeature handles granting additional feature quota.
 func (h *FeatureHandlers) HandleGrantFeature(c forge.Context) error {
 	orgID, err := xid.FromString(c.Param("orgId"))
 	if err != nil {
@@ -429,6 +430,7 @@ func (h *FeatureHandlers) HandleGrantFeature(c forge.Context) error {
 	}
 
 	var sourceID *xid.ID
+
 	if req.SourceID != "" {
 		id, err := xid.FromString(req.SourceID)
 		if err == nil {
@@ -453,7 +455,7 @@ func (h *FeatureHandlers) HandleGrantFeature(c forge.Context) error {
 	return c.JSON(201, grant)
 }
 
-// HandleListGrants handles listing all grants for an organization
+// HandleListGrants handles listing all grants for an organization.
 func (h *FeatureHandlers) HandleListGrants(c forge.Context) error {
 	orgID, err := xid.FromString(c.Param("orgId"))
 	if err != nil {
@@ -465,12 +467,12 @@ func (h *FeatureHandlers) HandleListGrants(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"grants": grants,
 	})
 }
 
-// HandleRevokeGrant handles revoking a feature grant
+// HandleRevokeGrant handles revoking a feature grant.
 func (h *FeatureHandlers) HandleRevokeGrant(c forge.Context) error {
 	grantID, err := xid.FromString(c.Param("grantId"))
 	if err != nil {
@@ -484,7 +486,7 @@ func (h *FeatureHandlers) HandleRevokeGrant(c forge.Context) error {
 	return c.JSON(200, successResponse{Success: true, Message: "grant revoked"})
 }
 
-// HandleSyncFeature manually syncs a feature to the provider
+// HandleSyncFeature manually syncs a feature to the provider.
 func (h *FeatureHandlers) HandleSyncFeature(c forge.Context) error {
 	featureID, err := xid.FromString(c.Param("id"))
 	if err != nil {
@@ -498,7 +500,7 @@ func (h *FeatureHandlers) HandleSyncFeature(c forge.Context) error {
 	return c.JSON(200, successResponse{Success: true, Message: "feature synced to provider"})
 }
 
-// HandleSyncFeatureFromProvider syncs a feature from the provider
+// HandleSyncFeatureFromProvider syncs a feature from the provider.
 func (h *FeatureHandlers) HandleSyncFeatureFromProvider(c forge.Context) error {
 	providerFeatureID := c.Param("providerId")
 	if providerFeatureID == "" {
@@ -513,7 +515,7 @@ func (h *FeatureHandlers) HandleSyncFeatureFromProvider(c forge.Context) error {
 	return c.JSON(200, feature)
 }
 
-// HandleSyncAllFeaturesFromProvider syncs all features from the provider
+// HandleSyncAllFeaturesFromProvider syncs all features from the provider.
 func (h *FeatureHandlers) HandleSyncAllFeaturesFromProvider(c forge.Context) error {
 	productID := c.Query("productId")
 	if productID == "" {
@@ -525,7 +527,7 @@ func (h *FeatureHandlers) HandleSyncAllFeaturesFromProvider(c forge.Context) err
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"features": features,
 		"count":    len(features),
 	})
@@ -537,11 +539,13 @@ func getAppID(c forge.Context) xid.ID {
 	if appID, ok := c.Get("appID").(xid.ID); ok {
 		return appID
 	}
+
 	if appIDStr := c.Header("X-App-ID"); appIDStr != "" {
 		if id, err := xid.FromString(appIDStr); err == nil {
 			return id
 		}
 	}
+
 	return xid.ID{}
 }
 
@@ -550,10 +554,12 @@ func ctxQueryInt(c forge.Context, name string, defaultValue int) int {
 	if str == "" {
 		return defaultValue
 	}
+
 	var val int
 	if _, err := fmt.Sscanf(str, "%d", &val); err != nil {
 		return defaultValue
 	}
+
 	return val
 }
 
@@ -561,15 +567,19 @@ func handleError(c forge.Context, err error) error {
 	if suberrors.IsNotFoundError(err) {
 		return c.JSON(404, errorResponse{Error: "not_found", Message: err.Error()})
 	}
+
 	if suberrors.IsValidationError(err) {
 		return c.JSON(400, errorResponse{Error: "validation_error", Message: err.Error()})
 	}
+
 	if suberrors.IsConflictError(err) {
 		return c.JSON(409, errorResponse{Error: "conflict", Message: err.Error()})
 	}
+
 	if suberrors.IsLimitError(err) {
 		return c.JSON(403, errorResponse{Error: "limit_exceeded", Message: err.Error()})
 	}
+
 	if suberrors.IsPaymentError(err) {
 		return c.JSON(402, errorResponse{Error: "payment_required", Message: err.Error()})
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/card"
 )
 
-// TeamsPage renders the organization teams management page
+// TeamsPage renders the organization teams management page.
 func TeamsPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -116,7 +116,7 @@ func TeamsPage(currentApp *app.App, orgID, basePath string) g.Node {
 	)
 }
 
-// teamsPageData returns the Alpine.js data object
+// teamsPageData returns the Alpine.js data object.
 func teamsPageData(appID, orgID string) string {
 	return fmt.Sprintf(`{
 		teams: [],
@@ -265,7 +265,7 @@ func teamsPageData(appID, orgID string) string {
 	}`, appID, orgID, appID, orgID, appID, orgID, appID, orgID)
 }
 
-// teamsGrid renders teams as a grid of cards
+// teamsGrid renders teams as a grid of cards.
 func teamsGrid() g.Node {
 	return Div(
 		// Empty state
@@ -346,7 +346,7 @@ func teamsGrid() g.Node {
 	)
 }
 
-// createTeamModal renders the create team modal
+// createTeamModal renders the create team modal.
 func createTeamModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showCreateModal"),
@@ -413,7 +413,7 @@ func createTeamModal() g.Node {
 	)
 }
 
-// editTeamModal renders the edit team modal
+// editTeamModal renders the edit team modal.
 func editTeamModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showEditModal"),
@@ -498,7 +498,7 @@ func editTeamModal() g.Node {
 	)
 }
 
-// deleteTeamModal renders the delete team confirmation modal
+// deleteTeamModal renders the delete team confirmation modal.
 func deleteTeamModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showDeleteModal"),

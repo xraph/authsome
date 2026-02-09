@@ -15,7 +15,7 @@ import (
 // Input/Output Types
 // =============================================================================
 
-// GetDeviceCodesInput is the input for listing device codes
+// GetDeviceCodesInput is the input for listing device codes.
 type GetDeviceCodesInput struct {
 	AppID    string `json:"appId"`
 	Status   string `json:"status,omitempty"` // pending, authorized, denied, expired, consumed
@@ -23,13 +23,13 @@ type GetDeviceCodesInput struct {
 	PageSize int    `json:"pageSize,omitempty"`
 }
 
-// GetDeviceCodesOutput is the output for listing device codes
+// GetDeviceCodesOutput is the output for listing device codes.
 type GetDeviceCodesOutput struct {
 	Data       []DeviceCodeDTO `json:"data"`
 	Pagination *PaginationDTO  `json:"pagination"`
 }
 
-// DeviceCodeDTO represents a device code in API responses
+// DeviceCodeDTO represents a device code in API responses.
 type DeviceCodeDTO struct {
 	ID              string     `json:"id"`
 	DeviceCode      string     `json:"deviceCode"` // Masked for security
@@ -47,22 +47,22 @@ type DeviceCodeDTO struct {
 	TimeRemaining   int64      `json:"timeRemaining"` // Seconds until expiration
 }
 
-// RevokeDeviceCodeInput is the input for revoking a device code
+// RevokeDeviceCodeInput is the input for revoking a device code.
 type RevokeDeviceCodeInput struct {
 	UserCode string `json:"userCode"`
 }
 
-// RevokeDeviceCodeOutput is the output for revoking a device code
+// RevokeDeviceCodeOutput is the output for revoking a device code.
 type RevokeDeviceCodeOutput struct {
 	Success bool `json:"success"`
 }
 
-// CleanupExpiredDeviceCodesInput is the input for cleanup
+// CleanupExpiredDeviceCodesInput is the input for cleanup.
 type CleanupExpiredDeviceCodesInput struct {
 	AppID string `json:"appId"`
 }
 
-// CleanupExpiredDeviceCodesOutput is the output for cleanup
+// CleanupExpiredDeviceCodesOutput is the output for cleanup.
 type CleanupExpiredDeviceCodesOutput struct {
 	Data struct {
 		ExpiredCount  int `json:"expiredCount"`
@@ -74,7 +74,7 @@ type CleanupExpiredDeviceCodesOutput struct {
 // Bridge Functions
 // =============================================================================
 
-// GetDeviceCodes lists device authorization codes
+// GetDeviceCodes lists device authorization codes.
 func (bm *BridgeManager) GetDeviceCodes(ctx bridge.Context, input GetDeviceCodesInput) (*GetDeviceCodesOutput, error) {
 	goCtx, _, appID, err := bm.buildContextWithAppID(ctx, input.AppID)
 	if err != nil {
@@ -90,18 +90,18 @@ func (bm *BridgeManager) GetDeviceCodes(ctx bridge.Context, input GetDeviceCodes
 	envID, _ := contexts.GetEnvironmentID(goCtx)
 
 	// Set pagination defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
 
 	// Query device codes
-	var deviceCodes []*schema.DeviceCode
-	var total int64
+	var (
+		deviceCodes []*schema.DeviceCode
+		total       int64
+	)
 
 	if input.Status != "" {
 		// Filter by status
@@ -111,8 +111,10 @@ func (bm *BridgeManager) GetDeviceCodes(ctx bridge.Context, input GetDeviceCodes
 				forge.F("error", err.Error()),
 				forge.F("appId", appID.String()),
 				forge.F("status", input.Status))
+
 			return nil, errs.InternalServerError("failed to list device codes", err)
 		}
+
 		total, _ = bm.deviceCodeRepo.CountByAppEnvAndStatus(goCtx, appID, envID, input.Status)
 	} else {
 		// List all
@@ -121,8 +123,10 @@ func (bm *BridgeManager) GetDeviceCodes(ctx bridge.Context, input GetDeviceCodes
 			bm.logger.Error("failed to list device codes",
 				forge.F("error", err.Error()),
 				forge.F("appId", appID.String()))
+
 			return nil, errs.InternalServerError("failed to list device codes", err)
 		}
+
 		total, _ = bm.deviceCodeRepo.CountByAppAndEnv(goCtx, appID, envID)
 	}
 
@@ -143,7 +147,7 @@ func (bm *BridgeManager) GetDeviceCodes(ctx bridge.Context, input GetDeviceCodes
 	}, nil
 }
 
-// RevokeDeviceCode manually revokes a device code
+// RevokeDeviceCode manually revokes a device code.
 func (bm *BridgeManager) RevokeDeviceCode(ctx bridge.Context, input RevokeDeviceCodeInput) (*RevokeDeviceCodeOutput, error) {
 	goCtx, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -169,6 +173,7 @@ func (bm *BridgeManager) RevokeDeviceCode(ctx bridge.Context, input RevokeDevice
 		bm.logger.Error("failed to revoke device code",
 			forge.F("error", err.Error()),
 			forge.F("userCode", input.UserCode))
+
 		return nil, errs.InternalServerError("failed to revoke device code", err)
 	}
 
@@ -180,7 +185,7 @@ func (bm *BridgeManager) RevokeDeviceCode(ctx bridge.Context, input RevokeDevice
 	}, nil
 }
 
-// CleanupExpiredDeviceCodes triggers cleanup of expired device codes
+// CleanupExpiredDeviceCodes triggers cleanup of expired device codes.
 func (bm *BridgeManager) CleanupExpiredDeviceCodes(ctx bridge.Context, input CleanupExpiredDeviceCodesInput) (*CleanupExpiredDeviceCodesOutput, error) {
 	goCtx, _, _, err := bm.buildContextWithAppID(ctx, input.AppID)
 	if err != nil {
@@ -209,6 +214,7 @@ func (bm *BridgeManager) CleanupExpiredDeviceCodes(ctx bridge.Context, input Cle
 	if err != nil {
 		bm.logger.Error("failed to cleanup expired device codes",
 			forge.F("error", err.Error()))
+
 		return nil, errs.InternalServerError("failed to cleanup expired codes", err)
 	}
 
@@ -240,7 +246,7 @@ func (bm *BridgeManager) CleanupExpiredDeviceCodes(ctx bridge.Context, input Cle
 // Helper Functions
 // =============================================================================
 
-// deviceCodeToDTO converts a schema.DeviceCode to DeviceCodeDTO
+// deviceCodeToDTO converts a schema.DeviceCode to DeviceCodeDTO.
 func deviceCodeToDTO(dc *schema.DeviceCode, bm *BridgeManager) DeviceCodeDTO {
 	dto := DeviceCodeDTO{
 		ID:              dc.ID.String(),
@@ -259,15 +265,14 @@ func deviceCodeToDTO(dc *schema.DeviceCode, bm *BridgeManager) DeviceCodeDTO {
 	if dc.Status == "authorized" || dc.Status == "consumed" {
 		dto.AuthorizedAt = &dc.UpdatedAt
 	}
+
 	if dc.Status == "consumed" {
 		dto.ConsumedAt = &dc.UpdatedAt
 	}
 
 	// Calculate time remaining
-	timeRemaining := int64(time.Until(dc.ExpiresAt).Seconds())
-	if timeRemaining < 0 {
-		timeRemaining = 0
-	}
+	timeRemaining := max(int64(time.Until(dc.ExpiresAt).Seconds()), 0)
+
 	dto.TimeRemaining = timeRemaining
 
 	// Try to get client name
@@ -278,7 +283,7 @@ func deviceCodeToDTO(dc *schema.DeviceCode, bm *BridgeManager) DeviceCodeDTO {
 	return dto
 }
 
-// maskDeviceCode masks the device code for security
+// maskDeviceCode masks the device code for security.
 func maskDeviceCode(deviceCode string) string {
 	if len(deviceCode) <= 8 {
 		return "****"

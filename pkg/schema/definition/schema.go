@@ -6,14 +6,14 @@ import (
 	"os"
 )
 
-// Schema represents the complete database schema
+// Schema represents the complete database schema.
 type Schema struct {
 	Version     string           `json:"version"`
 	Description string           `json:"description,omitempty"`
 	Models      map[string]Model `json:"models"`
 }
 
-// Model represents a database table
+// Model represents a database table.
 type Model struct {
 	Name        string     `json:"name"`
 	Table       string     `json:"table"`
@@ -23,25 +23,25 @@ type Model struct {
 	Relations   []Relation `json:"relations,omitempty"`
 }
 
-// Field represents a table column
+// Field represents a table column.
 type Field struct {
-	Name        string      `json:"name"`
-	Column      string      `json:"column"`
-	Type        FieldType   `json:"type"`
-	Description string      `json:"description,omitempty"`
-	Primary     bool        `json:"primary,omitempty"`
-	Unique      bool        `json:"unique,omitempty"`
-	Required    bool        `json:"required,omitempty"`
-	Nullable    bool        `json:"nullable,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
-	Length      int         `json:"length,omitempty"`
-	Precision   int         `json:"precision,omitempty"`
-	Scale       int         `json:"scale,omitempty"`
-	AutoGen     bool        `json:"autoGen,omitempty"` // Auto-generated (e.g., timestamps)
-	References  *Reference  `json:"references,omitempty"`
+	Name        string     `json:"name"`
+	Column      string     `json:"column"`
+	Type        FieldType  `json:"type"`
+	Description string     `json:"description,omitempty"`
+	Primary     bool       `json:"primary,omitempty"`
+	Unique      bool       `json:"unique,omitempty"`
+	Required    bool       `json:"required,omitempty"`
+	Nullable    bool       `json:"nullable,omitempty"`
+	Default     any        `json:"default,omitempty"`
+	Length      int        `json:"length,omitempty"`
+	Precision   int        `json:"precision,omitempty"`
+	Scale       int        `json:"scale,omitempty"`
+	AutoGen     bool       `json:"autoGen,omitempty"` // Auto-generated (e.g., timestamps)
+	References  *Reference `json:"references,omitempty"`
 }
 
-// FieldType represents supported field types
+// FieldType represents supported field types.
 type FieldType string
 
 const (
@@ -62,7 +62,7 @@ const (
 	FieldTypeEnum      FieldType = "enum"
 )
 
-// Reference represents a foreign key reference
+// Reference represents a foreign key reference.
 type Reference struct {
 	Model    string `json:"model"`
 	Field    string `json:"field"`
@@ -70,7 +70,7 @@ type Reference struct {
 	OnUpdate string `json:"onUpdate,omitempty"`
 }
 
-// Index represents a database index
+// Index represents a database index.
 type Index struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
@@ -78,7 +78,7 @@ type Index struct {
 	Type    string   `json:"type,omitempty"` // btree, hash, gin, etc.
 }
 
-// Relation represents relationships between models
+// Relation represents relationships between models.
 type Relation struct {
 	Name       string       `json:"name"`
 	Type       RelationType `json:"type"`
@@ -88,7 +88,7 @@ type Relation struct {
 	Through    string       `json:"through,omitempty"` // For many-to-many
 }
 
-// RelationType represents relationship types
+// RelationType represents relationship types.
 type RelationType string
 
 const (
@@ -98,7 +98,7 @@ const (
 	RelationManyToMany RelationType = "manyToMany"
 )
 
-// LoadFromFile loads a schema from a JSON file
+// LoadFromFile loads a schema from a JSON file.
 func LoadFromFile(path string) (*Schema, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -113,7 +113,7 @@ func LoadFromFile(path string) (*Schema, error) {
 	return &schema, nil
 }
 
-// SaveToFile saves a schema to a JSON file
+// SaveToFile saves a schema to a JSON file.
 func (s *Schema) SaveToFile(path string) error {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
@@ -127,16 +127,18 @@ func (s *Schema) SaveToFile(path string) error {
 	return nil
 }
 
-// GetModel returns a model by name
+// GetModel returns a model by name.
 func (s *Schema) GetModel(name string) (Model, bool) {
 	model, ok := s.Models[name]
+
 	return model, ok
 }
 
-// AddModel adds a model to the schema
+// AddModel adds a model to the schema.
 func (s *Schema) AddModel(model Model) {
 	if s.Models == nil {
 		s.Models = make(map[string]Model)
 	}
+
 	s.Models[model.Name] = model
 }

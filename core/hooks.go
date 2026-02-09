@@ -4,8 +4,8 @@ import (
 	"context"
 )
 
-// HookFunc is a function that runs before/after an operation
-type HookFunc func(ctx context.Context, data interface{}) error
+// HookFunc is a function that runs before/after an operation.
+type HookFunc func(ctx context.Context, data any) error
 
 // // HookRegistry manages hooks for various operations
 // type HookRegistry struct {

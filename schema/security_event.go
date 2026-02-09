@@ -5,7 +5,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SecurityEvent represents the security_events table
+// SecurityEvent represents the security_events table.
 type SecurityEvent struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:security_events,alias:se"`

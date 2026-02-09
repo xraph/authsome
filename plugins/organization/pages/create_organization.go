@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/input"
 )
 
-// CreateOrganizationPage renders the create organization form page
+// CreateOrganizationPage renders the create organization form page.
 func CreateOrganizationPage(currentApp *app.App, basePath string, errorMsg string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 

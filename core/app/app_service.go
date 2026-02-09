@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/core/session"
 )
 
-// AppService handles app aggregate operations
+// AppService handles app aggregate operations.
 type AppService struct {
 	repo               AppRepository
 	config             Config
@@ -22,7 +22,7 @@ type AppService struct {
 	globalCookieConfig *session.CookieConfig // Global cookie configuration
 }
 
-// NewAppService creates a new app service
+// NewAppService creates a new app service.
 func NewAppService(repo AppRepository, cfg Config, rbacSvc *rbac.Service) *AppService {
 	return &AppService{
 		repo:    repo,
@@ -32,25 +32,26 @@ func NewAppService(repo AppRepository, cfg Config, rbacSvc *rbac.Service) *AppSe
 }
 
 // SetGlobalCookieConfig sets the global cookie configuration
-// This is called during Auth initialization to provide the global default
+// This is called during Auth initialization to provide the global default.
 func (s *AppService) SetGlobalCookieConfig(config *session.CookieConfig) {
 	s.globalCookieConfig = config
 }
 
-// SetHookRegistry sets the hook registry for executing hooks
+// SetHookRegistry sets the hook registry for executing hooks.
 func (s *AppService) SetHookRegistry(hookRegistry *hooks.HookRegistry) {
 	s.hookRegistry = hookRegistry
 }
 
-// UpdateConfig updates the app service configuration
+// UpdateConfig updates the app service configuration.
 func (s *AppService) UpdateConfig(cfg Config) {
 	s.config = cfg
 }
 
-// CreateApp creates a new app
+// CreateApp creates a new app.
 func (s *AppService) CreateApp(ctx context.Context, req *CreateAppRequest) (*App, error) {
 	id := xid.New()
 	now := time.Now().UTC()
+
 	app := &App{
 		ID:        id,
 		Name:      req.Name,
@@ -75,34 +76,37 @@ func (s *AppService) CreateApp(ctx context.Context, req *CreateAppRequest) (*App
 	return app, nil
 }
 
-// GetPlatformApp retrieves the platform-level app entity
+// GetPlatformApp retrieves the platform-level app entity.
 func (s *AppService) GetPlatformApp(ctx context.Context) (*App, error) {
 	schemaApp, err := s.repo.GetPlatformApp(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaApp(schemaApp), nil
 }
 
-// FindAppByID returns an app by ID
+// FindAppByID returns an app by ID.
 func (s *AppService) FindAppByID(ctx context.Context, id xid.ID) (*App, error) {
 	schemaApp, err := s.repo.FindAppByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaApp(schemaApp), nil
 }
 
-// FindAppBySlug returns an app by slug
+// FindAppBySlug returns an app by slug.
 func (s *AppService) FindAppBySlug(ctx context.Context, slug string) (*App, error) {
 	schemaApp, err := s.repo.FindAppBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaApp(schemaApp), nil
 }
 
-// UpdateApp updates an app
+// UpdateApp updates an app.
 func (s *AppService) UpdateApp(ctx context.Context, id xid.ID, req *UpdateAppRequest) (*App, error) {
 	schemaApp, err := s.repo.FindAppByID(ctx, id)
 	if err != nil {
@@ -113,12 +117,15 @@ func (s *AppService) UpdateApp(ctx context.Context, id xid.ID, req *UpdateAppReq
 	if req.Name != nil {
 		schemaApp.Name = *req.Name
 	}
+
 	if req.Logo != nil {
 		schemaApp.Logo = *req.Logo
 	}
+
 	if req.Metadata != nil {
 		schemaApp.Metadata = req.Metadata
 	}
+
 	schemaApp.UpdatedAt = time.Now()
 
 	if err := s.repo.UpdateApp(ctx, schemaApp); err != nil {
@@ -129,7 +136,7 @@ func (s *AppService) UpdateApp(ctx context.Context, id xid.ID, req *UpdateAppReq
 }
 
 // DeleteApp deletes an app by ID
-// Platform app cannot be deleted unless another app is made platform first
+// Platform app cannot be deleted unless another app is made platform first.
 func (s *AppService) DeleteApp(ctx context.Context, id xid.ID) error {
 	// Check if the app exists and is platform app
 	app, err := s.repo.FindAppByID(ctx, id)
@@ -146,7 +153,7 @@ func (s *AppService) DeleteApp(ctx context.Context, id xid.ID) error {
 }
 
 // SetPlatformApp transfers platform status to the specified app
-// Only one app can be platform at a time
+// Only one app can be platform at a time.
 func (s *AppService) SetPlatformApp(ctx context.Context, newPlatformAppID xid.ID) error {
 	// Get the target app
 	newPlatformApp, err := s.repo.FindAppByID(ctx, newPlatformAppID)
@@ -169,6 +176,7 @@ func (s *AppService) SetPlatformApp(ctx context.Context, newPlatformAppID xid.ID
 	// Unset old platform app (if exists)
 	if currentPlatformApp != nil && currentPlatformApp.ID != newPlatformAppID {
 		currentPlatformApp.IsPlatform = false
+
 		currentPlatformApp.UpdatedAt = time.Now()
 		if err := s.repo.UpdateApp(ctx, currentPlatformApp); err != nil {
 			return fmt.Errorf("failed to unset old platform app: %w", err)
@@ -177,6 +185,7 @@ func (s *AppService) SetPlatformApp(ctx context.Context, newPlatformAppID xid.ID
 
 	// Set new platform app
 	newPlatformApp.IsPlatform = true
+
 	newPlatformApp.UpdatedAt = time.Now()
 	if err := s.repo.UpdateApp(ctx, newPlatformApp); err != nil {
 		return fmt.Errorf("failed to set new platform app: %w", err)
@@ -185,16 +194,17 @@ func (s *AppService) SetPlatformApp(ctx context.Context, newPlatformAppID xid.ID
 	return nil
 }
 
-// IsPlatformApp checks if the specified app is the platform app
+// IsPlatformApp checks if the specified app is the platform app.
 func (s *AppService) IsPlatformApp(ctx context.Context, appID xid.ID) (bool, error) {
 	app, err := s.repo.FindAppByID(ctx, appID)
 	if err != nil {
 		return false, err
 	}
+
 	return app.IsPlatform, nil
 }
 
-// ListApps returns a paginated list of apps
+// ListApps returns a paginated list of apps.
 func (s *AppService) ListApps(ctx context.Context, filter *ListAppsFilter) (*pagination.PageResponse[*App], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -208,19 +218,20 @@ func (s *AppService) ListApps(ctx context.Context, filter *ListAppsFilter) (*pag
 
 	// Convert schema apps to DTOs
 	apps := FromSchemaApps(response.Data)
+
 	return &pagination.PageResponse[*App]{
 		Data:       apps,
 		Pagination: response.Pagination,
 	}, nil
 }
 
-// CountApps returns total number of apps
+// CountApps returns total number of apps.
 func (s *AppService) CountApps(ctx context.Context) (int, error) {
 	return s.repo.CountApps(ctx)
 }
 
 // GetCookieConfig retrieves the cookie configuration for a specific app
-// It merges app-specific overrides from metadata with the global configuration
+// It merges app-specific overrides from metadata with the global configuration.
 func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*session.CookieConfig, error) {
 	// Start with global config as base
 	var baseConfig session.CookieConfig
@@ -258,13 +269,14 @@ func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*sessio
 
 	// Handle different possible types in metadata
 	switch v := cookieConfigData.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		// Convert to JSON and unmarshal
 		jsonData, err := json.Marshal(v)
 		if err != nil {
 			// Invalid format, return base config
 			return &baseConfig, nil
 		}
+
 		if err := json.Unmarshal(jsonData, &appCookieConfig); err != nil {
 			// Invalid format, return base config
 			return &baseConfig, nil
@@ -282,8 +294,9 @@ func (s *AppService) GetCookieConfig(ctx context.Context, appID xid.ID) (*sessio
 
 	// Merge app config with base config
 	mergedConfig := baseConfig.Merge(&appCookieConfig)
+
 	return mergedConfig, nil
 }
 
-// Type assertion to ensure AppService implements AppOperations
+// Type assertion to ensure AppService implements AppOperations.
 var _ AppOperations = (*AppService)(nil)

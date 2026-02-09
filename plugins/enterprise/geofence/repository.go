@@ -9,7 +9,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Repository defines the interface for geofence data storage
+// Repository defines the interface for geofence data storage.
 type Repository interface {
 	// Rules
 	CreateRule(ctx context.Context, rule *GeofenceRule) error
@@ -59,69 +59,80 @@ type Repository interface {
 	DeleteExpiredCache(ctx context.Context) (int64, error)
 }
 
-// BunRepository implements Repository using Bun ORM
+// BunRepository implements Repository using Bun ORM.
 type BunRepository struct {
 	db *bun.DB
 }
 
-// NewBunRepository creates a new Bun-based repository
+// NewBunRepository creates a new Bun-based repository.
 func NewBunRepository(db *bun.DB) Repository {
 	return &BunRepository{db: db}
 }
 
-// Rules
+// Rules.
 func (r *BunRepository) CreateRule(ctx context.Context, rule *GeofenceRule) error {
 	if rule.ID.IsNil() {
 		rule.ID = xid.New()
 	}
+
 	rule.CreatedAt = time.Now()
 	rule.UpdatedAt = time.Now()
 	_, err := r.db.NewInsert().Model(rule).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetRule(ctx context.Context, id xid.ID) (*GeofenceRule, error) {
 	rule := new(GeofenceRule)
+
 	err := r.db.NewSelect().Model(rule).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return rule, nil
 }
 
 func (r *BunRepository) GetRulesByApp(ctx context.Context, appID xid.ID) ([]*GeofenceRule, error) {
 	var rules []*GeofenceRule
+
 	err := r.db.NewSelect().
 		Model(&rules).
 		Where("app_id = ?", appID).
 		Order("priority DESC").
 		Scan(ctx)
+
 	return rules, err
 }
 
 func (r *BunRepository) GetRulesByUser(ctx context.Context, userID xid.ID) ([]*GeofenceRule, error) {
 	var rules []*GeofenceRule
+
 	err := r.db.NewSelect().
 		Model(&rules).
 		Where("user_id = ?", userID).
 		Order("priority DESC").
 		Scan(ctx)
+
 	return rules, err
 }
 
 func (r *BunRepository) UpdateRule(ctx context.Context, rule *GeofenceRule) error {
 	rule.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().Model(rule).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) DeleteRule(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*GeofenceRule)(nil)).Where("id = ?", id).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) ListEnabledRules(ctx context.Context, appID xid.ID, userID *xid.ID) ([]*GeofenceRule, error) {
 	var rules []*GeofenceRule
+
 	query := r.db.NewSelect().
 		Model(&rules).
 		Where("app_id = ?", appID).
@@ -136,41 +147,49 @@ func (r *BunRepository) ListEnabledRules(ctx context.Context, appID xid.ID, user
 	}
 
 	err := query.Order("priority DESC").Scan(ctx)
+
 	return rules, err
 }
 
-// Location Events
+// Location Events.
 func (r *BunRepository) CreateLocationEvent(ctx context.Context, event *LocationEvent) error {
 	if event.ID.IsNil() {
 		event.ID = xid.New()
 	}
+
 	event.Timestamp = time.Now()
 	_, err := r.db.NewInsert().Model(event).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetLocationEvent(ctx context.Context, id xid.ID) (*LocationEvent, error) {
 	event := new(LocationEvent)
+
 	err := r.db.NewSelect().Model(event).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return event, nil
 }
 
 func (r *BunRepository) GetUserLocationHistory(ctx context.Context, userID xid.ID, limit int) ([]*LocationEvent, error) {
 	var events []*LocationEvent
+
 	err := r.db.NewSelect().
 		Model(&events).
 		Where("user_id = ?", userID).
 		Order("timestamp DESC").
 		Limit(limit).
 		Scan(ctx)
+
 	return events, err
 }
 
 func (r *BunRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID) (*LocationEvent, error) {
 	event := new(LocationEvent)
+
 	err := r.db.NewSelect().
 		Model(event).
 		Where("user_id = ?", userID).
@@ -180,6 +199,7 @@ func (r *BunRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID)
 	if err != nil {
 		return nil, err
 	}
+
 	return event, nil
 }
 
@@ -191,31 +211,37 @@ func (r *BunRepository) DeleteOldLocationEvents(ctx context.Context, before time
 	if err != nil {
 		return 0, err
 	}
+
 	return result.RowsAffected()
 }
 
-// Travel Alerts
+// Travel Alerts.
 func (r *BunRepository) CreateTravelAlert(ctx context.Context, alert *TravelAlert) error {
 	if alert.ID.IsNil() {
 		alert.ID = xid.New()
 	}
+
 	alert.CreatedAt = time.Now()
 	alert.UpdatedAt = time.Now()
 	_, err := r.db.NewInsert().Model(alert).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetTravelAlert(ctx context.Context, id xid.ID) (*TravelAlert, error) {
 	alert := new(TravelAlert)
+
 	err := r.db.NewSelect().Model(alert).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return alert, nil
 }
 
 func (r *BunRepository) GetUserTravelAlerts(ctx context.Context, userID xid.ID, status string) ([]*TravelAlert, error) {
 	var alerts []*TravelAlert
+
 	query := r.db.NewSelect().
 		Model(&alerts).
 		Where("user_id = ?", userID).
@@ -226,11 +252,13 @@ func (r *BunRepository) GetUserTravelAlerts(ctx context.Context, userID xid.ID, 
 	}
 
 	err := query.Scan(ctx)
+
 	return alerts, err
 }
 
 func (r *BunRepository) GetPendingTravelAlerts(ctx context.Context, appID xid.ID) ([]*TravelAlert, error) {
 	var alerts []*TravelAlert
+
 	err := r.db.NewSelect().
 		Model(&alerts).
 		Where("app_id = ?", appID).
@@ -238,12 +266,14 @@ func (r *BunRepository) GetPendingTravelAlerts(ctx context.Context, appID xid.ID
 		Where("requires_approval = ?", true).
 		Order("created_at DESC").
 		Scan(ctx)
+
 	return alerts, err
 }
 
 func (r *BunRepository) UpdateTravelAlert(ctx context.Context, alert *TravelAlert) error {
 	alert.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().Model(alert).WherePK().Exec(ctx)
+
 	return err
 }
 
@@ -258,6 +288,7 @@ func (r *BunRepository) ApproveTravel(ctx context.Context, alertID xid.ID, appro
 		Set("updated_at = ?", now).
 		Where("id = ?", alertID).
 		Exec(ctx)
+
 	return err
 }
 
@@ -273,60 +304,69 @@ func (r *BunRepository) DenyTravel(ctx context.Context, alertID xid.ID, deniedBy
 		Set("updated_at = ?", now).
 		Where("id = ?", alertID).
 		Exec(ctx)
+
 	return err
 }
 
-// Trusted Locations
+// Trusted Locations.
 func (r *BunRepository) CreateTrustedLocation(ctx context.Context, location *TrustedLocation) error {
 	if location.ID.IsNil() {
 		location.ID = xid.New()
 	}
+
 	location.CreatedAt = time.Now()
 	location.UpdatedAt = time.Now()
 	location.FirstUsedAt = time.Now()
 	_, err := r.db.NewInsert().Model(location).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetTrustedLocation(ctx context.Context, id xid.ID) (*TrustedLocation, error) {
 	location := new(TrustedLocation)
+
 	err := r.db.NewSelect().Model(location).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return location, nil
 }
 
 func (r *BunRepository) GetUserTrustedLocations(ctx context.Context, userID xid.ID) ([]*TrustedLocation, error) {
 	var locations []*TrustedLocation
+
 	err := r.db.NewSelect().
 		Model(&locations).
 		Where("user_id = ?", userID).
 		Where("expires_at IS NULL OR expires_at > ?", time.Now()).
 		Order("name").
 		Scan(ctx)
+
 	return locations, err
 }
 
 func (r *BunRepository) UpdateTrustedLocation(ctx context.Context, location *TrustedLocation) error {
 	location.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().Model(location).WherePK().Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) DeleteTrustedLocation(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().Model((*TrustedLocation)(nil)).Where("id = ?", id).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) IsLocationTrusted(ctx context.Context, userID xid.ID, lat, lon float64) (bool, *TrustedLocation, error) {
 	var locations []*TrustedLocation
+
 	err := r.db.NewSelect().
 		Model(&locations).
 		Where("user_id = ?", userID).
 		Where("expires_at IS NULL OR expires_at > ?", time.Now()).
 		Scan(ctx)
-
 	if err != nil {
 		return false, nil, err
 	}
@@ -339,6 +379,7 @@ func (r *BunRepository) IsLocationTrusted(ctx context.Context, userID xid.ID, la
 			loc.LastUsedAt = &now
 			loc.UsageCount++
 			_ = r.UpdateTrustedLocation(ctx, loc)
+
 			return true, loc, nil
 		}
 	}
@@ -346,56 +387,66 @@ func (r *BunRepository) IsLocationTrusted(ctx context.Context, userID xid.ID, la
 	return false, nil, nil
 }
 
-// Violations
+// Violations.
 func (r *BunRepository) CreateViolation(ctx context.Context, violation *GeofenceViolation) error {
 	if violation.ID.IsNil() {
 		violation.ID = xid.New()
 	}
+
 	violation.CreatedAt = time.Now()
 	violation.UpdatedAt = time.Now()
 	_, err := r.db.NewInsert().Model(violation).Exec(ctx)
+
 	return err
 }
 
 func (r *BunRepository) GetViolation(ctx context.Context, id xid.ID) (*GeofenceViolation, error) {
 	violation := new(GeofenceViolation)
+
 	err := r.db.NewSelect().Model(violation).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	return violation, nil
 }
 
 func (r *BunRepository) GetUserViolations(ctx context.Context, userID xid.ID, limit int) ([]*GeofenceViolation, error) {
 	var violations []*GeofenceViolation
+
 	err := r.db.NewSelect().
 		Model(&violations).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
 		Limit(limit).
 		Scan(ctx)
+
 	return violations, err
 }
 
 func (r *BunRepository) GetAppViolations(ctx context.Context, appID xid.ID, limit int) ([]*GeofenceViolation, error) {
 	var violations []*GeofenceViolation
+
 	err := r.db.NewSelect().
 		Model(&violations).
 		Where("app_id = ?", appID).
 		Order("created_at DESC").
 		Limit(limit).
 		Scan(ctx)
+
 	return violations, err
 }
 
 func (r *BunRepository) GetUnresolvedViolations(ctx context.Context, appID xid.ID) ([]*GeofenceViolation, error) {
 	var violations []*GeofenceViolation
+
 	err := r.db.NewSelect().
 		Model(&violations).
 		Where("app_id = ?", appID).
 		Where("resolved = ?", false).
 		Order("created_at DESC").
 		Scan(ctx)
+
 	return violations, err
 }
 
@@ -410,18 +461,19 @@ func (r *BunRepository) ResolveViolation(ctx context.Context, id xid.ID, resolve
 		Set("updated_at = ?", now).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// Geo Cache
+// Geo Cache.
 func (r *BunRepository) GetCachedGeoData(ctx context.Context, ip string) (*GeoCache, error) {
 	cache := new(GeoCache)
+
 	err := r.db.NewSelect().
 		Model(cache).
 		Where("ip_address = ?", ip).
 		Where("expires_at > ?", time.Now()).
 		Scan(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -477,10 +529,11 @@ func (r *BunRepository) DeleteExpiredCache(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return result.RowsAffected()
 }
 
-// GetLastLocation retrieves the most recent location for a user as GeoData
+// GetLastLocation retrieves the most recent location for a user as GeoData.
 func (r *BunRepository) GetLastLocation(ctx context.Context, userID xid.ID, appID xid.ID) (*GeoData, error) {
 	event, err := r.GetLastLocationEvent(ctx, userID)
 	if err != nil {
@@ -498,7 +551,7 @@ func (r *BunRepository) GetLastLocation(ctx context.Context, userID xid.ID, appI
 	}, nil
 }
 
-// haversineDistance calculates distance between two coordinates in kilometers
+// haversineDistance calculates distance between two coordinates in kilometers.
 func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	const earthRadiusKm = 6371.0
 

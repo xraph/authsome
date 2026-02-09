@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// UserInfo contains basic user information for display purposes
+// UserInfo contains basic user information for display purposes.
 type UserInfo struct {
 	ID              xid.ID `json:"id"`
 	Name            string `json:"name"`
@@ -18,7 +18,7 @@ type UserInfo struct {
 }
 
 // Member represents an organization member entity DTO (Data Transfer Object)
-// This is separate from schema.OrganizationMember to maintain proper separation of concerns
+// This is separate from schema.OrganizationMember to maintain proper separation of concerns.
 type Member struct {
 	ID             xid.ID    `json:"id"`
 	OrganizationID xid.ID    `json:"organizationID"`
@@ -34,7 +34,7 @@ type Member struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the Member DTO to a schema.OrganizationMember model
+// ToSchema converts the Member DTO to a schema.OrganizationMember model.
 func (m *Member) ToSchema() *schema.OrganizationMember {
 	return &schema.OrganizationMember{
 		ID:             m.ID,
@@ -51,11 +51,12 @@ func (m *Member) ToSchema() *schema.OrganizationMember {
 	}
 }
 
-// FromSchemaMember converts a schema.OrganizationMember model to Member DTO
+// FromSchemaMember converts a schema.OrganizationMember model to Member DTO.
 func FromSchemaMember(sm *schema.OrganizationMember) *Member {
 	if sm == nil {
 		return nil
 	}
+
 	return &Member{
 		ID:             sm.ID,
 		OrganizationID: sm.OrganizationID,
@@ -69,23 +70,24 @@ func FromSchemaMember(sm *schema.OrganizationMember) *Member {
 	}
 }
 
-// FromSchemaMembers converts a slice of schema.OrganizationMember to Member DTOs
+// FromSchemaMembers converts a slice of schema.OrganizationMember to Member DTOs.
 func FromSchemaMembers(members []*schema.OrganizationMember) []*Member {
 	result := make([]*Member, len(members))
 	for i, m := range members {
 		result[i] = FromSchemaMember(m)
 	}
+
 	return result
 }
 
-// UpdateMemberRequest represents an update member request
+// UpdateMemberRequest represents an update member request.
 type UpdateMemberRequest struct {
-	Role   *string `json:"role,omitempty" validate:"omitempty,oneof=owner admin member"`
+	Role   *string `json:"role,omitempty"   validate:"omitempty,oneof=owner admin member"`
 	Status *string `json:"status,omitempty" validate:"omitempty,oneof=active suspended pending"`
 }
 
-// InviteMemberRequest represents a request to invite a member to an organization
+// InviteMemberRequest represents a request to invite a member to an organization.
 type InviteMemberRequest struct {
 	Email string `json:"email" validate:"required,email"`
-	Role  string `json:"role" validate:"required,oneof=owner admin member"`
+	Role  string `json:"role"  validate:"required,oneof=owner admin member"`
 }

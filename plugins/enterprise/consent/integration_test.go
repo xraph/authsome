@@ -11,7 +11,7 @@ import (
 	authsometesting "github.com/xraph/authsome/testing"
 )
 
-// TestIntegration_ConsentLifecycle tests the full consent creation, update, and revocation flow
+// TestIntegration_ConsentLifecycle tests the full consent creation, update, and revocation flow.
 func TestIntegration_ConsentLifecycle(t *testing.T) {
 	// Setup mock AuthSome instance
 	mock := authsometesting.NewMock(t)
@@ -73,7 +73,7 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 	// Test: List consents
 	t.Run("ListConsents", func(t *testing.T) {
 		// Create multiple consents with different purposes to avoid uniqueness constraint
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			req := &consent.CreateConsentRequest{
 				ConsentType: "test",
 				Purpose:     fmt.Sprintf("testing_%d", i), // Make each purpose unique
@@ -91,7 +91,7 @@ func TestIntegration_ConsentLifecycle(t *testing.T) {
 	})
 }
 
-// TestIntegration_CookieConsent tests cookie consent banner functionality
+// TestIntegration_CookieConsent tests cookie consent banner functionality.
 func TestIntegration_CookieConsent(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -143,7 +143,7 @@ func TestIntegration_CookieConsent(t *testing.T) {
 	})
 }
 
-// TestIntegration_GDPR_Article20_DataPortability tests data export (GDPR Article 20)
+// TestIntegration_GDPR_Article20_DataPortability tests data export (GDPR Article 20).
 func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -214,7 +214,7 @@ func TestIntegration_GDPR_Article20_DataPortability(t *testing.T) {
 	})
 }
 
-// TestIntegration_GDPR_Article17_RightToBeForgotten tests data deletion (GDPR Article 17)
+// TestIntegration_GDPR_Article17_RightToBeForgotten tests data deletion (GDPR Article 17).
 func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -291,7 +291,7 @@ func TestIntegration_GDPR_Article17_RightToBeForgotten(t *testing.T) {
 	})
 }
 
-// TestIntegration_MultiTenancy tests consent isolation across organizations
+// TestIntegration_MultiTenancy tests consent isolation across organizations.
 func TestIntegration_MultiTenancy(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -339,18 +339,23 @@ func TestIntegration_MultiTenancy(t *testing.T) {
 
 		// Find the marketing consents
 		var found1, found2 bool
+
 		for _, c := range consents1 {
 			if c.ConsentType == "marketing" && c.Purpose == "email" {
 				assert.True(t, c.Granted, "Org1 consent should be granted")
+
 				found1 = true
 			}
 		}
+
 		for _, c := range consents2 {
 			if c.ConsentType == "marketing" && c.Purpose == "email" {
 				assert.False(t, c.Granted, "Org2 consent should not be granted")
+
 				found2 = true
 			}
 		}
+
 		assert.True(t, found1 && found2, "Should find consents in both orgs")
 	})
 
@@ -371,7 +376,7 @@ func TestIntegration_MultiTenancy(t *testing.T) {
 	})
 }
 
-// TestIntegration_ConsentExpiry tests consent expiration logic
+// TestIntegration_ConsentExpiry tests consent expiration logic.
 func TestIntegration_ConsentExpiry(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -421,7 +426,7 @@ func TestIntegration_ConsentExpiry(t *testing.T) {
 	})
 }
 
-// TestIntegration_ConsentPolicies tests consent policy management
+// TestIntegration_ConsentPolicies tests consent policy management.
 func TestIntegration_ConsentPolicies(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -472,7 +477,7 @@ func TestIntegration_ConsentPolicies(t *testing.T) {
 	})
 }
 
-// Helper functions
+// Helper functions.
 func boolPtr(b bool) *bool {
 	return &b
 }

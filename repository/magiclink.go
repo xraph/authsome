@@ -9,14 +9,14 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// MagicLinkRepository provides persistence for Magic Links
+// MagicLinkRepository provides persistence for Magic Links.
 type MagicLinkRepository struct {
 	db *bun.DB
 }
 
 func NewMagicLinkRepository(db *bun.DB) *MagicLinkRepository { return &MagicLinkRepository{db: db} }
 
-// Create stores a new magic link record with app and optional org scoping
+// Create stores a new magic link record with app and optional org scoping.
 func (r *MagicLinkRepository) Create(ctx context.Context, email, token string, appID xid.ID, userOrganizationID *xid.ID, expiresAt time.Time) error {
 	rec := &schema.MagicLink{
 		ID:             xid.New(),
@@ -26,13 +26,14 @@ func (r *MagicLinkRepository) Create(ctx context.Context, email, token string, a
 		OrganizationID: userOrganizationID,
 		ExpiresAt:      expiresAt,
 	}
-	rec.AuditableModel.CreatedBy = rec.ID
-	rec.AuditableModel.UpdatedBy = rec.ID
+	rec.CreatedBy = rec.ID
+	rec.UpdatedBy = rec.ID
 	_, err := r.db.NewInsert().Model(rec).Exec(ctx)
+
 	return err
 }
 
-// FindByToken returns an active magic link by token, scoped to app and optional org
+// FindByToken returns an active magic link by token, scoped to app and optional org.
 func (r *MagicLinkRepository) FindByToken(ctx context.Context, token string, appID xid.ID, userOrganizationID *xid.ID, now time.Time) (*schema.MagicLink, error) {
 	rec := new(schema.MagicLink)
 	q := r.db.NewSelect().Model(rec).
@@ -51,12 +52,14 @@ func (r *MagicLinkRepository) FindByToken(ctx context.Context, token string, app
 	if err != nil {
 		return nil, err
 	}
+
 	return rec, nil
 }
 
-// Consume marks link as expired by setting expiresAt to now
+// Consume marks link as expired by setting expiresAt to now.
 func (r *MagicLinkRepository) Consume(ctx context.Context, rec *schema.MagicLink, now time.Time) error {
 	rec.ExpiresAt = now
 	_, err := r.db.NewUpdate().Model(rec).WherePK().Exec(ctx)
+
 	return err
 }

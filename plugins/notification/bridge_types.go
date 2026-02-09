@@ -4,17 +4,17 @@ package notification
 // Bridge Function Input/Output Types
 // =============================================================================
 
-// GetSettingsInput is the input for bridgeGetSettings
+// GetSettingsInput is the input for bridgeGetSettings.
 type GetSettingsInput struct {
 	// No input needed - appId extracted from context
 }
 
-// GetSettingsResult is the output for bridgeGetSettings
+// GetSettingsResult is the output for bridgeGetSettings.
 type GetSettingsResult struct {
 	Settings NotificationSettingsDTO `json:"settings"`
 }
 
-// UpdateSettingsInput is the input for bridgeUpdateSettings
+// UpdateSettingsInput is the input for bridgeUpdateSettings.
 type UpdateSettingsInput struct {
 	AppName      string                   `json:"appName,omitempty"`
 	Auth         *AuthAutoSendDTO         `json:"auth,omitempty"`
@@ -23,7 +23,7 @@ type UpdateSettingsInput struct {
 	Account      *AccountAutoSendDTO      `json:"account,omitempty"`
 }
 
-// UpdateSettingsResult is the output for bridgeUpdateSettings
+// UpdateSettingsResult is the output for bridgeUpdateSettings.
 type UpdateSettingsResult struct {
 	Success  bool                    `json:"success"`
 	Settings NotificationSettingsDTO `json:"settings"`
@@ -34,7 +34,7 @@ type UpdateSettingsResult struct {
 // DTO Types
 // =============================================================================
 
-// NotificationSettingsDTO represents notification plugin settings
+// NotificationSettingsDTO represents notification plugin settings.
 type NotificationSettingsDTO struct {
 	AppName      string                  `json:"appName"`
 	Auth         AuthAutoSendDTO         `json:"auth"`
@@ -43,7 +43,7 @@ type NotificationSettingsDTO struct {
 	Account      AccountAutoSendDTO      `json:"account"`
 }
 
-// AuthAutoSendDTO represents authentication notification settings
+// AuthAutoSendDTO represents authentication notification settings.
 type AuthAutoSendDTO struct {
 	Welcome           bool `json:"welcome"`
 	VerificationEmail bool `json:"verificationEmail"`
@@ -53,7 +53,7 @@ type AuthAutoSendDTO struct {
 	PasswordReset     bool `json:"passwordReset"`
 }
 
-// OrganizationAutoSendDTO represents organization notification settings
+// OrganizationAutoSendDTO represents organization notification settings.
 type OrganizationAutoSendDTO struct {
 	Invite        bool `json:"invite"`
 	MemberAdded   bool `json:"memberAdded"`
@@ -64,7 +64,7 @@ type OrganizationAutoSendDTO struct {
 	MemberLeft    bool `json:"memberLeft"`
 }
 
-// SessionAutoSendDTO represents session/security notification settings
+// SessionAutoSendDTO represents session/security notification settings.
 type SessionAutoSendDTO struct {
 	NewDevice       bool `json:"newDevice"`
 	NewLocation     bool `json:"newLocation"`
@@ -73,7 +73,7 @@ type SessionAutoSendDTO struct {
 	AllRevoked      bool `json:"allRevoked"`
 }
 
-// AccountAutoSendDTO represents account lifecycle notification settings
+// AccountAutoSendDTO represents account lifecycle notification settings.
 type AccountAutoSendDTO struct {
 	EmailChangeRequest bool `json:"emailChangeRequest"`
 	EmailChanged       bool `json:"emailChanged"`
@@ -88,7 +88,7 @@ type AccountAutoSendDTO struct {
 // Templates Bridge Types
 // =============================================================================
 
-// ListTemplatesInput is the input for listing templates
+// ListTemplatesInput is the input for listing templates.
 type ListTemplatesInput struct {
 	Page     int     `json:"page,omitempty"`
 	Limit    int     `json:"limit,omitempty"`
@@ -97,132 +97,132 @@ type ListTemplatesInput struct {
 	Active   *bool   `json:"active,omitempty"`
 }
 
-// ListTemplatesResult is the output for listing templates
+// ListTemplatesResult is the output for listing templates.
 type ListTemplatesResult struct {
 	Templates  []TemplateDTO `json:"templates"`
 	Pagination PaginationDTO `json:"pagination"`
 }
 
-// GetTemplateInput is the input for getting a single template
+// GetTemplateInput is the input for getting a single template.
 type GetTemplateInput struct {
 	TemplateID string `json:"templateId"`
 }
 
-// GetTemplateResult is the output for getting a single template
+// GetTemplateResult is the output for getting a single template.
 type GetTemplateResult struct {
 	Template TemplateDTO `json:"template"`
 }
 
-// CreateTemplateInput is the input for creating a template
+// CreateTemplateInput is the input for creating a template.
 type CreateTemplateInput struct {
-	TemplateKey string                 `json:"templateKey"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"`
-	Language    string                 `json:"language,omitempty"`
-	Subject     string                 `json:"subject,omitempty"`
-	Body        string                 `json:"body"`
-	Variables   []string               `json:"variables,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	TemplateKey string         `json:"templateKey"`
+	Name        string         `json:"name"`
+	Type        string         `json:"type"`
+	Language    string         `json:"language,omitempty"`
+	Subject     string         `json:"subject,omitempty"`
+	Body        string         `json:"body"`
+	Variables   []string       `json:"variables,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
-// CreateTemplateResult is the output for creating a template
+// CreateTemplateResult is the output for creating a template.
 type CreateTemplateResult struct {
 	Success  bool        `json:"success"`
 	Template TemplateDTO `json:"template"`
 	Message  string      `json:"message,omitempty"`
 }
 
-// UpdateTemplateInput is the input for updating a template
+// UpdateTemplateInput is the input for updating a template.
 type UpdateTemplateInput struct {
-	TemplateID string                 `json:"templateId"`
-	Name       *string                `json:"name,omitempty"`
-	Subject    *string                `json:"subject,omitempty"`
-	Body       *string                `json:"body,omitempty"`
-	Variables  []string               `json:"variables,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	Active     *bool                  `json:"active,omitempty"`
+	TemplateID string         `json:"templateId"`
+	Name       *string        `json:"name,omitempty"`
+	Subject    *string        `json:"subject,omitempty"`
+	Body       *string        `json:"body,omitempty"`
+	Variables  []string       `json:"variables,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+	Active     *bool          `json:"active,omitempty"`
 }
 
-// UpdateTemplateResult is the output for updating a template
+// UpdateTemplateResult is the output for updating a template.
 type UpdateTemplateResult struct {
 	Success  bool        `json:"success"`
 	Template TemplateDTO `json:"template"`
 	Message  string      `json:"message,omitempty"`
 }
 
-// DeleteTemplateInput is the input for deleting a template
+// DeleteTemplateInput is the input for deleting a template.
 type DeleteTemplateInput struct {
 	TemplateID string `json:"templateId"`
 }
 
-// DeleteTemplateResult is the output for deleting a template
+// DeleteTemplateResult is the output for deleting a template.
 type DeleteTemplateResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 }
 
-// PreviewTemplateInput is the input for previewing a template
+// PreviewTemplateInput is the input for previewing a template.
 type PreviewTemplateInput struct {
-	TemplateID string                 `json:"templateId"`
-	Variables  map[string]interface{} `json:"variables,omitempty"`
+	TemplateID string         `json:"templateId"`
+	Variables  map[string]any `json:"variables,omitempty"`
 }
 
-// PreviewTemplateResult is the output for previewing a template
+// PreviewTemplateResult is the output for previewing a template.
 type PreviewTemplateResult struct {
 	Subject    string `json:"subject"`
 	Body       string `json:"body"`
 	RenderedAt string `json:"renderedAt"`
 }
 
-// TestSendTemplateInput is the input for test sending a template
+// TestSendTemplateInput is the input for test sending a template.
 type TestSendTemplateInput struct {
-	TemplateID string                 `json:"templateId"`
-	Recipient  string                 `json:"recipient"`
-	Variables  map[string]interface{} `json:"variables,omitempty"`
+	TemplateID string         `json:"templateId"`
+	Recipient  string         `json:"recipient"`
+	Variables  map[string]any `json:"variables,omitempty"`
 }
 
-// TestSendTemplateResult is the output for test sending a template
+// TestSendTemplateResult is the output for test sending a template.
 type TestSendTemplateResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// TemplateDTO represents a notification template
+// TemplateDTO represents a notification template.
 type TemplateDTO struct {
-	ID          string                 `json:"id"`
-	AppID       string                 `json:"appId"`
-	TemplateKey string                 `json:"templateKey"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"`
-	Language    string                 `json:"language"`
-	Subject     string                 `json:"subject,omitempty"`
-	Body        string                 `json:"body"`
-	Variables   []string               `json:"variables"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Active      bool                   `json:"active"`
-	IsDefault   bool                   `json:"isDefault"`
-	IsModified  bool                   `json:"isModified"`
-	CreatedAt   string                 `json:"createdAt"`
-	UpdatedAt   string                 `json:"updatedAt"`
+	ID          string         `json:"id"`
+	AppID       string         `json:"appId"`
+	TemplateKey string         `json:"templateKey"`
+	Name        string         `json:"name"`
+	Type        string         `json:"type"`
+	Language    string         `json:"language"`
+	Subject     string         `json:"subject,omitempty"`
+	Body        string         `json:"body"`
+	Variables   []string       `json:"variables"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Active      bool           `json:"active"`
+	IsDefault   bool           `json:"isDefault"`
+	IsModified  bool           `json:"isModified"`
+	CreatedAt   string         `json:"createdAt"`
+	UpdatedAt   string         `json:"updatedAt"`
 }
 
 // =============================================================================
 // Overview/Statistics Bridge Types
 // =============================================================================
 
-// GetOverviewStatsInput is the input for getting overview statistics
+// GetOverviewStatsInput is the input for getting overview statistics.
 type GetOverviewStatsInput struct {
 	Days      *int    `json:"days,omitempty"`      // Number of days to fetch stats for
 	StartDate *string `json:"startDate,omitempty"` // ISO date
 	EndDate   *string `json:"endDate,omitempty"`   // ISO date
 }
 
-// GetOverviewStatsResult is the output for getting overview statistics
+// GetOverviewStatsResult is the output for getting overview statistics.
 type GetOverviewStatsResult struct {
 	Stats OverviewStatsDTO `json:"stats"`
 }
 
-// OverviewStatsDTO represents overview statistics
+// OverviewStatsDTO represents overview statistics.
 type OverviewStatsDTO struct {
 	TotalSent      int64   `json:"totalSent"`
 	TotalDelivered int64   `json:"totalDelivered"`
@@ -240,67 +240,67 @@ type OverviewStatsDTO struct {
 // Provider Bridge Types
 // =============================================================================
 
-// GetProvidersInput is the input for getting providers configuration
+// GetProvidersInput is the input for getting providers configuration.
 type GetProvidersInput struct {
 }
 
-// GetProvidersResult is the output for getting providers configuration
+// GetProvidersResult is the output for getting providers configuration.
 type GetProvidersResult struct {
 	Providers ProvidersConfigDTO `json:"providers"`
 }
 
-// UpdateProvidersInput is the input for updating providers configuration
+// UpdateProvidersInput is the input for updating providers configuration.
 type UpdateProvidersInput struct {
 	EmailProvider *EmailProviderDTO `json:"emailProvider,omitempty"`
 	SMSProvider   *SMSProviderDTO   `json:"smsProvider,omitempty"`
 }
 
-// UpdateProvidersResult is the output for updating providers configuration
+// UpdateProvidersResult is the output for updating providers configuration.
 type UpdateProvidersResult struct {
 	Success   bool               `json:"success"`
 	Providers ProvidersConfigDTO `json:"providers"`
 	Message   string             `json:"message,omitempty"`
 }
 
-// TestProviderInput is the input for testing a provider
+// TestProviderInput is the input for testing a provider.
 type TestProviderInput struct {
 	ProviderType string `json:"providerType"` // "email" or "sms"
 	Recipient    string `json:"recipient"`
 }
 
-// TestProviderResult is the output for testing a provider
+// TestProviderResult is the output for testing a provider.
 type TestProviderResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// ProvidersConfigDTO represents providers configuration
+// ProvidersConfigDTO represents providers configuration.
 type ProvidersConfigDTO struct {
 	EmailProvider EmailProviderDTO `json:"emailProvider"`
 	SMSProvider   SMSProviderDTO   `json:"smsProvider"`
 }
 
-// EmailProviderDTO represents email provider configuration
+// EmailProviderDTO represents email provider configuration.
 type EmailProviderDTO struct {
-	Type      string                 `json:"type"` // "smtp", "sendgrid", "postmark", "mailersend", "resend"
-	Enabled   bool                   `json:"enabled"`
-	Config    map[string]interface{} `json:"config,omitempty"`
-	FromName  string                 `json:"fromName"`
-	FromEmail string                 `json:"fromEmail"`
+	Type      string         `json:"type"` // "smtp", "sendgrid", "postmark", "mailersend", "resend"
+	Enabled   bool           `json:"enabled"`
+	Config    map[string]any `json:"config,omitempty"`
+	FromName  string         `json:"fromName"`
+	FromEmail string         `json:"fromEmail"`
 }
 
-// SMSProviderDTO represents SMS provider configuration
+// SMSProviderDTO represents SMS provider configuration.
 type SMSProviderDTO struct {
-	Type    string                 `json:"type"` // "twilio", "vonage", "aws-sns"
-	Enabled bool                   `json:"enabled"`
-	Config  map[string]interface{} `json:"config,omitempty"`
+	Type    string         `json:"type"` // "twilio", "vonage", "aws-sns"
+	Enabled bool           `json:"enabled"`
+	Config  map[string]any `json:"config,omitempty"`
 }
 
 // =============================================================================
 // Analytics Bridge Types
 // =============================================================================
 
-// GetAnalyticsInput is the input for getting analytics data
+// GetAnalyticsInput is the input for getting analytics data.
 type GetAnalyticsInput struct {
 	Days       *int    `json:"days,omitempty"`
 	StartDate  *string `json:"startDate,omitempty"`
@@ -308,12 +308,12 @@ type GetAnalyticsInput struct {
 	TemplateID *string `json:"templateId,omitempty"`
 }
 
-// GetAnalyticsResult is the output for getting analytics data
+// GetAnalyticsResult is the output for getting analytics data.
 type GetAnalyticsResult struct {
 	Analytics AnalyticsDTO `json:"analytics"`
 }
 
-// AnalyticsDTO represents detailed analytics
+// AnalyticsDTO represents detailed analytics.
 type AnalyticsDTO struct {
 	Overview     OverviewStatsDTO         `json:"overview"`
 	ByTemplate   []TemplateAnalyticsDTO   `json:"byTemplate"`
@@ -321,7 +321,7 @@ type AnalyticsDTO struct {
 	TopTemplates []TemplatePerformanceDTO `json:"topTemplates"`
 }
 
-// TemplateAnalyticsDTO represents analytics for a specific template
+// TemplateAnalyticsDTO represents analytics for a specific template.
 type TemplateAnalyticsDTO struct {
 	TemplateID     string  `json:"templateId"`
 	TemplateName   string  `json:"templateName"`
@@ -334,7 +334,7 @@ type TemplateAnalyticsDTO struct {
 	ClickRate      float64 `json:"clickRate"`
 }
 
-// DailyAnalyticsDTO represents analytics for a specific day
+// DailyAnalyticsDTO represents analytics for a specific day.
 type DailyAnalyticsDTO struct {
 	Date           string  `json:"date"`
 	TotalSent      int64   `json:"totalSent"`
@@ -345,7 +345,7 @@ type DailyAnalyticsDTO struct {
 	OpenRate       float64 `json:"openRate"`
 }
 
-// TemplatePerformanceDTO represents template performance ranking
+// TemplatePerformanceDTO represents template performance ranking.
 type TemplatePerformanceDTO struct {
 	TemplateID   string  `json:"templateId"`
 	TemplateName string  `json:"templateName"`
@@ -358,7 +358,7 @@ type TemplatePerformanceDTO struct {
 // Common DTOs
 // =============================================================================
 
-// PaginationDTO represents pagination metadata
+// PaginationDTO represents pagination metadata.
 type PaginationDTO struct {
 	CurrentPage int   `json:"currentPage"`
 	TotalPages  int   `json:"totalPages"`
@@ -372,7 +372,7 @@ type PaginationDTO struct {
 // Email Builder Bridge Types
 // =============================================================================
 
-// SaveBuilderTemplateInput is the input for saving a template from the visual builder
+// SaveBuilderTemplateInput is the input for saving a template from the visual builder.
 type SaveBuilderTemplateInput struct {
 	TemplateID  string `json:"templateId,omitempty"` // Empty for new template
 	Name        string `json:"name"`
@@ -381,14 +381,14 @@ type SaveBuilderTemplateInput struct {
 	BuilderJSON string `json:"builderJson"` // JSON of builder.Document
 }
 
-// SaveBuilderTemplateResult is the output for saving a builder template
+// SaveBuilderTemplateResult is the output for saving a builder template.
 type SaveBuilderTemplateResult struct {
 	Success    bool   `json:"success"`
 	TemplateID string `json:"templateId,omitempty"`
 	Message    string `json:"message"`
 }
 
-// ListNotificationsHistoryInput is the input for listing notification history
+// ListNotificationsHistoryInput is the input for listing notification history.
 type ListNotificationsHistoryInput struct {
 	Page      int     `json:"page,omitempty"`
 	Limit     int     `json:"limit,omitempty"`
@@ -397,37 +397,37 @@ type ListNotificationsHistoryInput struct {
 	Recipient *string `json:"recipient,omitempty"` // Filter by recipient
 }
 
-// NotificationHistoryDTO represents a notification record in the history
+// NotificationHistoryDTO represents a notification record in the history.
 type NotificationHistoryDTO struct {
-	ID          string                 `json:"id"`
-	AppID       string                 `json:"appId"`
-	TemplateID  *string                `json:"templateId,omitempty"`
-	Type        string                 `json:"type"`
-	Recipient   string                 `json:"recipient"`
-	Subject     string                 `json:"subject,omitempty"`
-	Body        string                 `json:"body"`
-	Status      string                 `json:"status"`
-	Error       string                 `json:"error,omitempty"`
-	ProviderID  string                 `json:"providerId,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	SentAt      *string                `json:"sentAt,omitempty"`      // ISO 8601
-	DeliveredAt *string                `json:"deliveredAt,omitempty"` // ISO 8601
-	CreatedAt   string                 `json:"createdAt"`             // ISO 8601
-	UpdatedAt   string                 `json:"updatedAt"`             // ISO 8601
+	ID          string         `json:"id"`
+	AppID       string         `json:"appId"`
+	TemplateID  *string        `json:"templateId,omitempty"`
+	Type        string         `json:"type"`
+	Recipient   string         `json:"recipient"`
+	Subject     string         `json:"subject,omitempty"`
+	Body        string         `json:"body"`
+	Status      string         `json:"status"`
+	Error       string         `json:"error,omitempty"`
+	ProviderID  string         `json:"providerId,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	SentAt      *string        `json:"sentAt,omitempty"`      // ISO 8601
+	DeliveredAt *string        `json:"deliveredAt,omitempty"` // ISO 8601
+	CreatedAt   string         `json:"createdAt"`             // ISO 8601
+	UpdatedAt   string         `json:"updatedAt"`             // ISO 8601
 }
 
-// ListNotificationsHistoryResult is the output for listing notification history
+// ListNotificationsHistoryResult is the output for listing notification history.
 type ListNotificationsHistoryResult struct {
 	Notifications []NotificationHistoryDTO `json:"notifications"`
 	Pagination    PaginationDTO            `json:"pagination"`
 }
 
-// GetNotificationDetailInput is the input for getting a single notification
+// GetNotificationDetailInput is the input for getting a single notification.
 type GetNotificationDetailInput struct {
 	NotificationID string `json:"notificationId"`
 }
 
-// GetNotificationDetailResult is the output for getting a single notification
+// GetNotificationDetailResult is the output for getting a single notification.
 type GetNotificationDetailResult struct {
 	Notification NotificationHistoryDTO `json:"notification"`
 }

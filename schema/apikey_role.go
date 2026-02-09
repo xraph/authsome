@@ -9,7 +9,7 @@ import (
 )
 
 // APIKeyRole represents the many-to-many relationship between API keys and roles
-// This enables API keys to leverage the RBAC system for structured permissions
+// This enables API keys to leverage the RBAC system for structured permissions.
 type APIKeyRole struct {
 	bun.BaseModel `bun:"table:apikey_roles,alias:akr"`
 
@@ -26,14 +26,16 @@ type APIKeyRole struct {
 	Role   *Role   `bun:"rel:belongs-to,join:role_id=id"`
 }
 
-// BeforeAppendModel implements bun.BeforeAppendModelHook
+// BeforeAppendModel implements bun.BeforeAppendModelHook.
 func (ar *APIKeyRole) BeforeAppendModel(ctx context.Context, query bun.Query) error {
 	switch query.(type) {
 	case *bun.InsertQuery:
 		if ar.ID.IsNil() {
 			ar.ID = xid.New()
 		}
+
 		ar.CreatedAt = time.Now()
 	}
+
 	return nil
 }

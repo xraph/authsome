@@ -1,6 +1,6 @@
 package organization
 
-// Config holds the organization service configuration
+// Config holds the organization service configuration.
 type Config struct {
 	MaxOrganizationsPerUser   int  `json:"maxOrganizationsPerUser"`
 	MaxMembersPerOrganization int  `json:"maxMembersPerOrganization"`
@@ -12,7 +12,7 @@ type Config struct {
 	AllowAppLevelRoles        bool `json:"allowAppLevelRoles"` // Allow app-level (global) RBAC roles for org membership
 }
 
-// DefaultConfig returns sensible default configuration values
+// DefaultConfig returns sensible default configuration values.
 func DefaultConfig() Config {
 	return Config{
 		MaxOrganizationsPerUser:   5,

@@ -7,24 +7,24 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Invitation represents an app invitation DTO (Data Transfer Object)
+// Invitation represents an app invitation DTO (Data Transfer Object).
 type Invitation struct {
-	ID        xid.ID                 `json:"id"`
-	AppID     xid.ID                 `json:"appId"`
-	Email     string                 `json:"email"`
-	Role      MemberRole             `json:"role"`
-	Token     string                 `json:"token"`
-	InviterID xid.ID                 `json:"inviterId"`
-	Status    InvitationStatus       `json:"status"`
-	ExpiresAt time.Time              `json:"expiresAt"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	ID        xid.ID           `json:"id"`
+	AppID     xid.ID           `json:"appId"`
+	Email     string           `json:"email"`
+	Role      MemberRole       `json:"role"`
+	Token     string           `json:"token"`
+	InviterID xid.ID           `json:"inviterId"`
+	Status    InvitationStatus `json:"status"`
+	ExpiresAt time.Time        `json:"expiresAt"`
+	Metadata  map[string]any   `json:"metadata,omitempty"`
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the Invitation DTO to a schema.Invitation model
+// ToSchema converts the Invitation DTO to a schema.Invitation model.
 func (inv *Invitation) ToSchema() *schema.Invitation {
 	return &schema.Invitation{
 		ID:        inv.ID,
@@ -44,11 +44,12 @@ func (inv *Invitation) ToSchema() *schema.Invitation {
 	}
 }
 
-// FromSchemaInvitation converts a schema.Invitation model to Invitation DTO
+// FromSchemaInvitation converts a schema.Invitation model to Invitation DTO.
 func FromSchemaInvitation(si *schema.Invitation) *Invitation {
 	if si == nil {
 		return nil
 	}
+
 	return &Invitation{
 		ID:        si.ID,
 		AppID:     si.AppID,
@@ -65,11 +66,12 @@ func FromSchemaInvitation(si *schema.Invitation) *Invitation {
 	}
 }
 
-// FromSchemaInvitations converts a slice of schema.Invitation to Invitation DTOs
+// FromSchemaInvitations converts a slice of schema.Invitation to Invitation DTOs.
 func FromSchemaInvitations(invitations []*schema.Invitation) []*Invitation {
 	result := make([]*Invitation, len(invitations))
 	for i, inv := range invitations {
 		result[i] = FromSchemaInvitation(inv)
 	}
+
 	return result
 }

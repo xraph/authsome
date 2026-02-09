@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SubscriptionTaxRate represents a tax rate in the database
+// SubscriptionTaxRate represents a tax rate in the database.
 type SubscriptionTaxRate struct {
 	bun.BaseModel `bun:"table:subscription_tax_rates,alias:str"`
 
@@ -31,7 +31,7 @@ type SubscriptionTaxRate struct {
 	UpdatedAt         time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionTaxExemption represents a tax exemption in the database
+// SubscriptionTaxExemption represents a tax exemption in the database.
 type SubscriptionTaxExemption struct {
 	bun.BaseModel `bun:"table:subscription_tax_exemptions,alias:ste"`
 
@@ -49,7 +49,7 @@ type SubscriptionTaxExemption struct {
 	UpdatedAt      time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionCustomerTaxID represents a customer's tax ID in the database
+// SubscriptionCustomerTaxID represents a customer's tax ID in the database.
 type SubscriptionCustomerTaxID struct {
 	bun.BaseModel `bun:"table:subscription_customer_tax_ids,alias:sctid"`
 

@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/input"
 )
 
-// CreateTeamPage renders the create team form page
+// CreateTeamPage renders the create team form page.
 func CreateTeamPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -167,7 +167,7 @@ func CreateTeamPage(currentApp *app.App, orgID, basePath string) g.Node {
 	)
 }
 
-// createTeamData returns the Alpine.js data object for create team
+// createTeamData returns the Alpine.js data object for create team.
 func createTeamData(appID, orgID string) string {
 	return fmt.Sprintf(`{
 		form: {

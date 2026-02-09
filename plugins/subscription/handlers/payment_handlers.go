@@ -25,13 +25,13 @@ type customerService interface {
 	GetByOrganizationID(ctx context.Context, orgID xid.ID) (*core.Customer, error)
 }
 
-// PaymentHandlers handles payment method HTTP endpoints
+// PaymentHandlers handles payment method HTTP endpoints.
 type PaymentHandlers struct {
 	paymentSvc  paymentService
 	customerSvc customerService
 }
 
-// NewPaymentHandlers creates a new PaymentHandlers instance
+// NewPaymentHandlers creates a new PaymentHandlers instance.
 func NewPaymentHandlers(paymentSvc paymentService, customerSvc customerService) *PaymentHandlers {
 	return &PaymentHandlers{
 		paymentSvc:  paymentSvc,
@@ -39,24 +39,24 @@ func NewPaymentHandlers(paymentSvc paymentService, customerSvc customerService) 
 	}
 }
 
-// CreateSetupIntentRequest is the request body for creating a setup intent
+// CreateSetupIntentRequest is the request body for creating a setup intent.
 type CreateSetupIntentRequest struct {
 	OrganizationID xid.ID `json:"organizationId" validate:"required"`
 }
 
-// AddPaymentMethodRequest is the request body for adding a payment method
+// AddPaymentMethodRequest is the request body for adding a payment method.
 type AddPaymentMethodRequest struct {
-	OrganizationID  xid.ID `json:"organizationId" validate:"required"`
+	OrganizationID  xid.ID `json:"organizationId"  validate:"required"`
 	PaymentMethodID string `json:"paymentMethodId" validate:"required"`
 	SetAsDefault    bool   `json:"setAsDefault"`
 }
 
-// SetDefaultPaymentMethodRequest is the request body for setting default payment method
+// SetDefaultPaymentMethodRequest is the request body for setting default payment method.
 type SetDefaultPaymentMethodRequest struct {
 	OrganizationID xid.ID `json:"organizationId" validate:"required"`
 }
 
-// HandleCreateSetupIntent creates a setup intent for adding payment method
+// HandleCreateSetupIntent creates a setup intent for adding payment method.
 func (h *PaymentHandlers) HandleCreateSetupIntent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -78,7 +78,7 @@ func (h *PaymentHandlers) HandleCreateSetupIntent(c forge.Context) error {
 		return errs.InternalError(fmt.Errorf("failed to create setup intent: %w", err))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"clientSecret":   result.ClientSecret,
 		"setupIntentId":  result.SetupIntentID,
 		"publishableKey": result.PublishableKey,
@@ -86,7 +86,7 @@ func (h *PaymentHandlers) HandleCreateSetupIntent(c forge.Context) error {
 	})
 }
 
-// HandleAddPaymentMethod attaches a tokenized payment method
+// HandleAddPaymentMethod attaches a tokenized payment method.
 func (h *PaymentHandlers) HandleAddPaymentMethod(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -109,7 +109,7 @@ func (h *PaymentHandlers) HandleAddPaymentMethod(c forge.Context) error {
 	return c.JSON(201, paymentMethod)
 }
 
-// HandleListPaymentMethods lists all payment methods for org
+// HandleListPaymentMethods lists all payment methods for org.
 func (h *PaymentHandlers) HandleListPaymentMethods(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -129,13 +129,13 @@ func (h *PaymentHandlers) HandleListPaymentMethods(c forge.Context) error {
 		return errs.InternalError(fmt.Errorf("failed to list payment methods: %w", err))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"paymentMethods": paymentMethods,
 		"total":          len(paymentMethods),
 	})
 }
 
-// HandleGetPaymentMethod gets a single payment method
+// HandleGetPaymentMethod gets a single payment method.
 func (h *PaymentHandlers) HandleGetPaymentMethod(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -177,7 +177,7 @@ func (h *PaymentHandlers) HandleGetPaymentMethod(c forge.Context) error {
 	return errs.NotFound("payment method not found")
 }
 
-// HandleSetDefaultPaymentMethod sets default payment method
+// HandleSetDefaultPaymentMethod sets default payment method.
 func (h *PaymentHandlers) HandleSetDefaultPaymentMethod(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -202,13 +202,13 @@ func (h *PaymentHandlers) HandleSetDefaultPaymentMethod(c forge.Context) error {
 		return errs.InternalError(fmt.Errorf("failed to set default payment method: %w", err))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"success": true,
 		"message": "Payment method set as default",
 	})
 }
 
-// HandleRemovePaymentMethod removes a payment method
+// HandleRemovePaymentMethod removes a payment method.
 func (h *PaymentHandlers) HandleRemovePaymentMethod(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -228,7 +228,7 @@ func (h *PaymentHandlers) HandleRemovePaymentMethod(c forge.Context) error {
 		return errs.InternalError(fmt.Errorf("failed to remove payment method: %w", err))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"success": true,
 		"message": "Payment method removed",
 	})

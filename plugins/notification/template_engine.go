@@ -8,12 +8,12 @@ import (
 	"text/template"
 )
 
-// TemplateEngine provides template rendering functionality
+// TemplateEngine provides template rendering functionality.
 type TemplateEngine struct {
 	funcMap template.FuncMap
 }
 
-// NewTemplateEngine creates a new template engine
+// NewTemplateEngine creates a new template engine.
 func NewTemplateEngine() *TemplateEngine {
 	return &TemplateEngine{
 		funcMap: template.FuncMap{
@@ -27,8 +27,8 @@ func NewTemplateEngine() *TemplateEngine {
 	}
 }
 
-// Render renders a template with the given variables
-func (e *TemplateEngine) Render(templateStr string, variables map[string]interface{}) (string, error) {
+// Render renders a template with the given variables.
+func (e *TemplateEngine) Render(templateStr string, variables map[string]any) (string, error) {
 	tmpl, err := template.New("notification").Funcs(e.funcMap).Parse(templateStr)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
@@ -42,19 +42,21 @@ func (e *TemplateEngine) Render(templateStr string, variables map[string]interfa
 	return buf.String(), nil
 }
 
-// ValidateTemplate validates a template for syntax errors
+// ValidateTemplate validates a template for syntax errors.
 func (e *TemplateEngine) ValidateTemplate(templateStr string) error {
 	_, err := template.New("validation").Funcs(e.funcMap).Parse(templateStr)
+
 	return err
 }
 
-// ExtractVariables extracts variable names from a template
+// ExtractVariables extracts variable names from a template.
 func (e *TemplateEngine) ExtractVariables(templateStr string) ([]string, error) {
 	// Simple regex to find {{.VarName}} patterns
 	re := regexp.MustCompile(`\{\{\s*\.(\w+)\s*\}\}`)
 	matches := re.FindAllStringSubmatch(templateStr, -1)
 
 	varMap := make(map[string]bool)
+
 	for _, match := range matches {
 		if len(match) > 1 {
 			varMap[match[1]] = true
@@ -85,12 +87,14 @@ func truncate(s string, length int) string {
 	if len(s) <= length {
 		return s
 	}
+
 	return s[:length] + "..."
 }
 
-func defaultValue(defaultVal, val interface{}) interface{} {
+func defaultValue(defaultVal, val any) any {
 	if val == nil || val == "" {
 		return defaultVal
 	}
+
 	return val
 }

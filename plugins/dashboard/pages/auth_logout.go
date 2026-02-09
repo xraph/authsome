@@ -9,7 +9,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// LogoutPage handles user logout
+// LogoutPage handles user logout.
 func (p *PagesManager) LogoutPage(ctx *router.PageContext) (g.Node, error) {
 	// Clear session cookie
 	http.SetCookie(ctx.ResponseWriter, &http.Cookie{

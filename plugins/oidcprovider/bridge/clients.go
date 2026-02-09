@@ -18,7 +18,7 @@ import (
 // Input/Output Types
 // =============================================================================
 
-// GetClientsInput is the input for listing OAuth clients
+// GetClientsInput is the input for listing OAuth clients.
 type GetClientsInput struct {
 	AppID    string `json:"appId"`
 	Page     int    `json:"page,omitempty"`
@@ -26,13 +26,13 @@ type GetClientsInput struct {
 	Search   string `json:"search,omitempty"`
 }
 
-// GetClientsOutput is the output for listing OAuth clients
+// GetClientsOutput is the output for listing OAuth clients.
 type GetClientsOutput struct {
 	Data       []ClientDTO    `json:"data"`
 	Pagination *PaginationDTO `json:"pagination"`
 }
 
-// PaginationDTO represents pagination info
+// PaginationDTO represents pagination info.
 type PaginationDTO struct {
 	Page       int   `json:"page"`
 	PageSize   int   `json:"pageSize"`
@@ -40,7 +40,7 @@ type PaginationDTO struct {
 	TotalPages int64 `json:"totalPages"`
 }
 
-// ClientDTO represents an OAuth client in API responses
+// ClientDTO represents an OAuth client in API responses.
 type ClientDTO struct {
 	ID                string    `json:"id"`
 	ClientID          string    `json:"clientId"`
@@ -61,17 +61,17 @@ type ClientDTO struct {
 	UpdatedAt         time.Time `json:"updatedAt"`
 }
 
-// GetClientInput is the input for getting a single client
+// GetClientInput is the input for getting a single client.
 type GetClientInput struct {
 	ClientID string `json:"clientId"`
 }
 
-// GetClientOutput is the output for getting a single client
+// GetClientOutput is the output for getting a single client.
 type GetClientOutput struct {
 	Data ClientDTO `json:"data"`
 }
 
-// CreateClientInput is the input for creating an OAuth client
+// CreateClientInput is the input for creating an OAuth client.
 type CreateClientInput struct {
 	AppID                   string   `json:"appId"`
 	ClientName              string   `json:"clientName"`
@@ -92,18 +92,19 @@ type CreateClientInput struct {
 	Contacts                []string `json:"contacts,omitempty"`
 }
 
-// CreateClientOutput is the output for creating an OAuth client
+// CreateClientOutput is the output for creating an OAuth client.
 type CreateClientOutput struct {
 	Data ClientWithSecretDTO `json:"data"`
 }
 
-// ClientWithSecretDTO includes the client secret (only returned on creation)
+// ClientWithSecretDTO includes the client secret (only returned on creation).
 type ClientWithSecretDTO struct {
 	ClientDTO
+
 	ClientSecret string `json:"clientSecret,omitempty"`
 }
 
-// UpdateClientInput is the input for updating an OAuth client
+// UpdateClientInput is the input for updating an OAuth client.
 type UpdateClientInput struct {
 	ClientID                string   `json:"clientId"`
 	ClientName              string   `json:"clientName,omitempty"`
@@ -123,44 +124,44 @@ type UpdateClientInput struct {
 	Contacts                []string `json:"contacts,omitempty"`
 }
 
-// UpdateClientOutput is the output for updating an OAuth client
+// UpdateClientOutput is the output for updating an OAuth client.
 type UpdateClientOutput struct {
 	Data ClientDTO `json:"data"`
 }
 
-// DeleteClientInput is the input for deleting an OAuth client
+// DeleteClientInput is the input for deleting an OAuth client.
 type DeleteClientInput struct {
 	ClientID string `json:"clientId"`
 }
 
-// DeleteClientOutput is the output for deleting an OAuth client
+// DeleteClientOutput is the output for deleting an OAuth client.
 type DeleteClientOutput struct {
 	Success bool `json:"success"`
 }
 
-// RegenerateSecretInput is the input for regenerating a client secret
+// RegenerateSecretInput is the input for regenerating a client secret.
 type RegenerateSecretInput struct {
 	ClientID string `json:"clientId"`
 }
 
-// RegenerateSecretOutput is the output for regenerating a client secret
+// RegenerateSecretOutput is the output for regenerating a client secret.
 type RegenerateSecretOutput struct {
 	Data struct {
 		ClientSecret string `json:"clientSecret"`
 	} `json:"data"`
 }
 
-// GetClientStatsInput is the input for getting client statistics
+// GetClientStatsInput is the input for getting client statistics.
 type GetClientStatsInput struct {
 	ClientID string `json:"clientId"`
 }
 
-// GetClientStatsOutput is the output for getting client statistics
+// GetClientStatsOutput is the output for getting client statistics.
 type GetClientStatsOutput struct {
 	Data ClientStatsDTO `json:"data"`
 }
 
-// ClientStatsDTO represents client usage statistics
+// ClientStatsDTO represents client usage statistics.
 type ClientStatsDTO struct {
 	TotalTokens     int64 `json:"totalTokens"`
 	ActiveTokens    int64 `json:"activeTokens"`
@@ -174,7 +175,7 @@ type ClientStatsDTO struct {
 // Bridge Functions
 // =============================================================================
 
-// GetClients lists OAuth clients with pagination and search
+// GetClients lists OAuth clients with pagination and search.
 func (bm *BridgeManager) GetClients(ctx bridge.Context, input GetClientsInput) (*GetClientsOutput, error) {
 	goCtx, _, appID, err := bm.buildContextWithAppID(ctx, input.AppID)
 	if err != nil {
@@ -185,10 +186,8 @@ func (bm *BridgeManager) GetClients(ctx bridge.Context, input GetClientsInput) (
 	envID, _ := contexts.GetEnvironmentID(goCtx)
 
 	// Set pagination defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
@@ -200,6 +199,7 @@ func (bm *BridgeManager) GetClients(ctx bridge.Context, input GetClientsInput) (
 		bm.logger.Error("failed to list OAuth clients",
 			forge.F("error", err.Error()),
 			forge.F("appId", appID.String()))
+
 		return nil, errs.InternalServerError("failed to list clients", err)
 	}
 
@@ -226,7 +226,7 @@ func (bm *BridgeManager) GetClients(ctx bridge.Context, input GetClientsInput) (
 	}, nil
 }
 
-// GetClient retrieves a single OAuth client
+// GetClient retrieves a single OAuth client.
 func (bm *BridgeManager) GetClient(ctx bridge.Context, input GetClientInput) (*GetClientOutput, error) {
 	goCtx, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -243,7 +243,7 @@ func (bm *BridgeManager) GetClient(ctx bridge.Context, input GetClientInput) (*G
 	}, nil
 }
 
-// CreateClient creates a new OAuth client
+// CreateClient creates a new OAuth client.
 func (bm *BridgeManager) CreateClient(ctx bridge.Context, input CreateClientInput) (*CreateClientOutput, error) {
 	goCtx, _, appID, err := bm.buildContextWithAppID(ctx, input.AppID)
 	if err != nil {
@@ -260,6 +260,7 @@ func (bm *BridgeManager) CreateClient(ctx bridge.Context, input CreateClientInpu
 
 	// Generate client ID and secret
 	clientID := "client_" + xid.New().String()
+
 	clientSecret, hashedSecret, err := generateClientSecret()
 	if err != nil {
 		return nil, errs.InternalServerError("failed to generate client secret", err)
@@ -267,11 +268,13 @@ func (bm *BridgeManager) CreateClient(ctx bridge.Context, input CreateClientInpu
 
 	// Parse organization ID if provided
 	var orgID *xid.ID
+
 	if input.OrganizationID != "" {
 		parsedOrgID, err := xid.FromString(input.OrganizationID)
 		if err != nil {
 			return nil, errs.BadRequest("invalid organizationId")
 		}
+
 		orgID = &parsedOrgID
 	}
 
@@ -306,6 +309,7 @@ func (bm *BridgeManager) CreateClient(ctx bridge.Context, input CreateClientInpu
 		bm.logger.Error("failed to create OAuth client",
 			forge.F("error", err.Error()),
 			forge.F("clientName", input.ClientName))
+
 		return nil, errs.InternalServerError("failed to create client", err)
 	}
 
@@ -316,6 +320,7 @@ func (bm *BridgeManager) CreateClient(ctx bridge.Context, input CreateClientInpu
 
 	// Return client with secret (only time secret is returned in plaintext)
 	dto := clientToDTO(client)
+
 	return &CreateClientOutput{
 		Data: ClientWithSecretDTO{
 			ClientDTO:    dto,
@@ -324,7 +329,7 @@ func (bm *BridgeManager) CreateClient(ctx bridge.Context, input CreateClientInpu
 	}, nil
 }
 
-// UpdateClient updates an existing OAuth client
+// UpdateClient updates an existing OAuth client.
 func (bm *BridgeManager) UpdateClient(ctx bridge.Context, input UpdateClientInput) (*UpdateClientOutput, error) {
 	goCtx, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -365,6 +370,7 @@ func (bm *BridgeManager) UpdateClient(ctx bridge.Context, input UpdateClientInpu
 		bm.logger.Error("failed to update OAuth client",
 			forge.F("error", err.Error()),
 			forge.F("clientId", input.ClientID))
+
 		return nil, errs.InternalServerError("failed to update client", err)
 	}
 
@@ -377,7 +383,7 @@ func (bm *BridgeManager) UpdateClient(ctx bridge.Context, input UpdateClientInpu
 	}, nil
 }
 
-// DeleteClient deletes an OAuth client and revokes all associated tokens
+// DeleteClient deletes an OAuth client and revokes all associated tokens.
 func (bm *BridgeManager) DeleteClient(ctx bridge.Context, input DeleteClientInput) (*DeleteClientOutput, error) {
 	goCtx, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -403,6 +409,7 @@ func (bm *BridgeManager) DeleteClient(ctx bridge.Context, input DeleteClientInpu
 		bm.logger.Error("failed to delete OAuth client",
 			forge.F("error", err.Error()),
 			forge.F("clientId", input.ClientID))
+
 		return nil, errs.InternalServerError("failed to delete client", err)
 	}
 
@@ -415,7 +422,7 @@ func (bm *BridgeManager) DeleteClient(ctx bridge.Context, input DeleteClientInpu
 	}, nil
 }
 
-// RegenerateSecret generates a new client secret
+// RegenerateSecret generates a new client secret.
 func (bm *BridgeManager) RegenerateSecret(ctx bridge.Context, input RegenerateSecretInput) (*RegenerateSecretOutput, error) {
 	goCtx, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -447,6 +454,7 @@ func (bm *BridgeManager) RegenerateSecret(ctx bridge.Context, input RegenerateSe
 		bm.logger.Error("failed to update client secret",
 			forge.F("error", err.Error()),
 			forge.F("clientId", input.ClientID))
+
 		return nil, errs.InternalServerError("failed to regenerate secret", err)
 	}
 
@@ -462,7 +470,7 @@ func (bm *BridgeManager) RegenerateSecret(ctx bridge.Context, input RegenerateSe
 	}, nil
 }
 
-// GetClientStats retrieves usage statistics for a client
+// GetClientStats retrieves usage statistics for a client.
 func (bm *BridgeManager) GetClientStats(ctx bridge.Context, input GetClientStatsInput) (*GetClientStatsOutput, error) {
 	goCtx, _, _, err := bm.buildContext(ctx)
 	if err != nil {
@@ -518,7 +526,7 @@ func (bm *BridgeManager) GetClientStats(ctx bridge.Context, input GetClientStats
 // Helper Functions
 // =============================================================================
 
-// clientToDTO converts a schema.OAuthClient to ClientDTO
+// clientToDTO converts a schema.OAuthClient to ClientDTO.
 func clientToDTO(client *schema.OAuthClient) ClientDTO {
 	dto := ClientDTO{
 		ID:                client.ID.String(),
@@ -546,7 +554,7 @@ func clientToDTO(client *schema.OAuthClient) ClientDTO {
 	return dto
 }
 
-// generateClientSecret generates a secure random client secret
+// generateClientSecret generates a secure random client secret.
 func generateClientSecret() (plaintext, hashed string, err error) {
 	// Generate 32 random bytes
 	bytes := make([]byte, 32)
@@ -564,7 +572,7 @@ func generateClientSecret() (plaintext, hashed string, err error) {
 	return plaintext, hashed, nil
 }
 
-// validateCreateClientInput validates the create client input
+// validateCreateClientInput validates the create client input.
 func validateCreateClientInput(input CreateClientInput) error {
 	if input.ClientName == "" {
 		return errs.BadRequest("clientName is required")
@@ -596,7 +604,7 @@ func validateCreateClientInput(input CreateClientInput) error {
 	return nil
 }
 
-// validateUpdateClientInput validates the update client input
+// validateUpdateClientInput validates the update client input.
 func validateUpdateClientInput(input UpdateClientInput) error {
 	if input.ClientName == "" {
 		return errs.BadRequest("clientName is required")

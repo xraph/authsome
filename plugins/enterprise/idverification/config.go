@@ -4,20 +4,20 @@ import (
 	"time"
 )
 
-// Config holds the identity verification plugin configuration
+// Config holds the identity verification plugin configuration.
 type Config struct {
 	// General settings
-	Enabled               bool          `json:"enabled" yaml:"enabled"`
-	DefaultProvider       string        `json:"defaultProvider" yaml:"defaultProvider"` // onfido, jumio, stripe_identity
+	Enabled               bool          `json:"enabled"               yaml:"enabled"`
+	DefaultProvider       string        `json:"defaultProvider"       yaml:"defaultProvider"` // onfido, jumio, stripe_identity
 	SessionExpiryDuration time.Duration `json:"sessionExpiryDuration" yaml:"sessionExpiryDuration"`
-	VerificationExpiry    time.Duration `json:"verificationExpiry" yaml:"verificationExpiry"` // How long verification is valid
+	VerificationExpiry    time.Duration `json:"verificationExpiry"    yaml:"verificationExpiry"` // How long verification is valid
 
 	// Required checks
 	RequireDocumentVerification bool `json:"requireDocumentVerification" yaml:"requireDocumentVerification"`
-	RequireLivenessDetection    bool `json:"requireLivenessDetection" yaml:"requireLivenessDetection"`
-	RequireAgeVerification      bool `json:"requireAgeVerification" yaml:"requireAgeVerification"`
-	RequireAMLScreening         bool `json:"requireAMLScreening" yaml:"requireAMLScreening"`
-	MinimumAge                  int  `json:"minimumAge" yaml:"minimumAge"` // For age verification
+	RequireLivenessDetection    bool `json:"requireLivenessDetection"    yaml:"requireLivenessDetection"`
+	RequireAgeVerification      bool `json:"requireAgeVerification"      yaml:"requireAgeVerification"`
+	RequireAMLScreening         bool `json:"requireAMLScreening"         yaml:"requireAMLScreening"`
+	MinimumAge                  int  `json:"minimumAge"                  yaml:"minimumAge"` // For age verification
 
 	// Accepted document types
 	AcceptedDocuments []string `json:"acceptedDocuments" yaml:"acceptedDocuments"` // passport, drivers_license, national_id
@@ -25,118 +25,118 @@ type Config struct {
 
 	// Risk scoring
 	MaxAllowedRiskScore int  `json:"maxAllowedRiskScore" yaml:"maxAllowedRiskScore"` // 0-100
-	AutoRejectHighRisk  bool `json:"autoRejectHighRisk" yaml:"autoRejectHighRisk"`
-	MinConfidenceScore  int  `json:"minConfidenceScore" yaml:"minConfidenceScore"` // Minimum confidence to pass
+	AutoRejectHighRisk  bool `json:"autoRejectHighRisk"  yaml:"autoRejectHighRisk"`
+	MinConfidenceScore  int  `json:"minConfidenceScore"  yaml:"minConfidenceScore"` // Minimum confidence to pass
 
 	// Document retention
-	RetainDocuments         bool          `json:"retainDocuments" yaml:"retainDocuments"`
+	RetainDocuments         bool          `json:"retainDocuments"         yaml:"retainDocuments"`
 	DocumentRetentionPeriod time.Duration `json:"documentRetentionPeriod" yaml:"documentRetentionPeriod"`
-	AutoDeleteAfterExpiry   bool          `json:"autoDeleteAfterExpiry" yaml:"autoDeleteAfterExpiry"`
+	AutoDeleteAfterExpiry   bool          `json:"autoDeleteAfterExpiry"   yaml:"autoDeleteAfterExpiry"`
 
 	// Webhook configuration
-	WebhooksEnabled   bool     `json:"webhooksEnabled" yaml:"webhooksEnabled"`
-	WebhookURL        string   `json:"webhookUrl" yaml:"webhookUrl"`
-	WebhookEvents     []string `json:"webhookEvents" yaml:"webhookEvents"` // verification.completed, verification.failed, etc.
-	WebhookSecret     string   `json:"webhookSecret" yaml:"webhookSecret"`
+	WebhooksEnabled   bool     `json:"webhooksEnabled"   yaml:"webhooksEnabled"`
+	WebhookURL        string   `json:"webhookUrl"        yaml:"webhookUrl"`
+	WebhookEvents     []string `json:"webhookEvents"     yaml:"webhookEvents"` // verification.completed, verification.failed, etc.
+	WebhookSecret     string   `json:"webhookSecret"     yaml:"webhookSecret"`
 	WebhookRetryCount int      `json:"webhookRetryCount" yaml:"webhookRetryCount"`
 
 	// Callback URLs (defaults)
 	DefaultSuccessURL string `json:"defaultSuccessUrl" yaml:"defaultSuccessUrl"`
-	DefaultCancelURL  string `json:"defaultCancelUrl" yaml:"defaultCancelUrl"`
+	DefaultCancelURL  string `json:"defaultCancelUrl"  yaml:"defaultCancelUrl"`
 
 	// Provider configurations
-	Onfido         OnfidoConfig         `json:"onfido" yaml:"onfido"`
-	Jumio          JumioConfig          `json:"jumio" yaml:"jumio"`
+	Onfido         OnfidoConfig         `json:"onfido"         yaml:"onfido"`
+	Jumio          JumioConfig          `json:"jumio"          yaml:"jumio"`
 	StripeIdentity StripeIdentityConfig `json:"stripeIdentity" yaml:"stripeIdentity"`
 
 	// Features
-	EnableManualReview      bool `json:"enableManualReview" yaml:"enableManualReview"`     // Allow manual review of failed verifications
-	EnableReverification    bool `json:"enableReverification" yaml:"enableReverification"` // Allow re-verification
+	EnableManualReview      bool `json:"enableManualReview"      yaml:"enableManualReview"`   // Allow manual review of failed verifications
+	EnableReverification    bool `json:"enableReverification"    yaml:"enableReverification"` // Allow re-verification
 	MaxVerificationAttempts int  `json:"maxVerificationAttempts" yaml:"maxVerificationAttempts"`
 
 	// Compliance
 	EnableAuditLog bool   `json:"enableAuditLog" yaml:"enableAuditLog"`
 	ComplianceMode string `json:"complianceMode" yaml:"complianceMode"` // standard, strict, custom
-	GDPRCompliant  bool   `json:"gdprCompliant" yaml:"gdprCompliant"`
-	DataResidency  string `json:"dataResidency" yaml:"dataResidency"` // us, eu, uk, global
+	GDPRCompliant  bool   `json:"gdprCompliant"  yaml:"gdprCompliant"`
+	DataResidency  string `json:"dataResidency"  yaml:"dataResidency"` // us, eu, uk, global
 
 	// Rate limiting
-	RateLimitEnabled        bool `json:"rateLimitEnabled" yaml:"rateLimitEnabled"`
+	RateLimitEnabled        bool `json:"rateLimitEnabled"        yaml:"rateLimitEnabled"`
 	MaxVerificationsPerHour int  `json:"maxVerificationsPerHour" yaml:"maxVerificationsPerHour"`
-	MaxVerificationsPerDay  int  `json:"maxVerificationsPerDay" yaml:"maxVerificationsPerDay"`
+	MaxVerificationsPerDay  int  `json:"maxVerificationsPerDay"  yaml:"maxVerificationsPerDay"`
 
 	// Metadata
-	CustomFields map[string]interface{} `json:"customFields" yaml:"customFields"`
+	CustomFields map[string]any `json:"customFields" yaml:"customFields"`
 }
 
-// OnfidoConfig holds Onfido-specific configuration
+// OnfidoConfig holds Onfido-specific configuration.
 type OnfidoConfig struct {
-	Enabled      bool   `json:"enabled" yaml:"enabled"`
-	APIToken     string `json:"apiToken" yaml:"apiToken"`
-	Region       string `json:"region" yaml:"region"` // us, eu, ca
+	Enabled      bool   `json:"enabled"      yaml:"enabled"`
+	APIToken     string `json:"apiToken"     yaml:"apiToken"`
+	Region       string `json:"region"       yaml:"region"` // us, eu, ca
 	WebhookToken string `json:"webhookToken" yaml:"webhookToken"`
 
 	// Check configuration
 	DocumentCheck DocumentCheckConfig `json:"documentCheck" yaml:"documentCheck"`
-	FacialCheck   FacialCheckConfig   `json:"facialCheck" yaml:"facialCheck"`
+	FacialCheck   FacialCheckConfig   `json:"facialCheck"   yaml:"facialCheck"`
 
 	// Workflow
 	WorkflowID string `json:"workflowId" yaml:"workflowId"` // Predefined Onfido workflow
 
 	// Reports
-	IncludeDocumentReport  bool `json:"includeDocumentReport" yaml:"includeDocumentReport"`
-	IncludeFacialReport    bool `json:"includeFacialReport" yaml:"includeFacialReport"`
+	IncludeDocumentReport  bool `json:"includeDocumentReport"  yaml:"includeDocumentReport"`
+	IncludeFacialReport    bool `json:"includeFacialReport"    yaml:"includeFacialReport"`
 	IncludeWatchlistReport bool `json:"includeWatchlistReport" yaml:"includeWatchlistReport"`
 }
 
-// DocumentCheckConfig configures document verification
+// DocumentCheckConfig configures document verification.
 type DocumentCheckConfig struct {
-	Enabled                 bool `json:"enabled" yaml:"enabled"`
-	ValidateExpiry          bool `json:"validateExpiry" yaml:"validateExpiry"`
+	Enabled                 bool `json:"enabled"                 yaml:"enabled"`
+	ValidateExpiry          bool `json:"validateExpiry"          yaml:"validateExpiry"`
 	ValidateDataConsistency bool `json:"validateDataConsistency" yaml:"validateDataConsistency"`
-	ExtractData             bool `json:"extractData" yaml:"extractData"`
+	ExtractData             bool `json:"extractData"             yaml:"extractData"`
 }
 
-// FacialCheckConfig configures facial/liveness verification
+// FacialCheckConfig configures facial/liveness verification.
 type FacialCheckConfig struct {
-	Enabled       bool   `json:"enabled" yaml:"enabled"`
-	Variant       string `json:"variant" yaml:"variant"` // standard, video
+	Enabled       bool   `json:"enabled"       yaml:"enabled"`
+	Variant       string `json:"variant"       yaml:"variant"` // standard, video
 	MotionCapture bool   `json:"motionCapture" yaml:"motionCapture"`
 }
 
-// JumioConfig holds Jumio-specific configuration
+// JumioConfig holds Jumio-specific configuration.
 type JumioConfig struct {
-	Enabled    bool   `json:"enabled" yaml:"enabled"`
-	APIToken   string `json:"apiToken" yaml:"apiToken"`
-	APISecret  string `json:"apiSecret" yaml:"apiSecret"`
+	Enabled    bool   `json:"enabled"    yaml:"enabled"`
+	APIToken   string `json:"apiToken"   yaml:"apiToken"`
+	APISecret  string `json:"apiSecret"  yaml:"apiSecret"`
 	DataCenter string `json:"dataCenter" yaml:"dataCenter"` // us, eu, sg
 
 	// Verification settings
 	VerificationType string `json:"verificationType" yaml:"verificationType"` // identity, document, similarity
-	PresetID         string `json:"presetId" yaml:"presetId"`                 // Jumio preset configuration
+	PresetID         string `json:"presetId"         yaml:"presetId"`         // Jumio preset configuration
 
 	// Document settings
 	EnabledDocumentTypes []string `json:"enabledDocumentTypes" yaml:"enabledDocumentTypes"`
-	EnabledCountries     []string `json:"enabledCountries" yaml:"enabledCountries"`
+	EnabledCountries     []string `json:"enabledCountries"     yaml:"enabledCountries"`
 
 	// Features
-	EnableLiveness     bool `json:"enableLiveness" yaml:"enableLiveness"`
+	EnableLiveness     bool `json:"enableLiveness"     yaml:"enableLiveness"`
 	EnableAMLScreening bool `json:"enableAMLScreening" yaml:"enableAMLScreening"`
-	EnableExtraction   bool `json:"enableExtraction" yaml:"enableExtraction"`
+	EnableExtraction   bool `json:"enableExtraction"   yaml:"enableExtraction"`
 
 	// Callback
 	CallbackURL string `json:"callbackUrl" yaml:"callbackUrl"`
 }
 
-// StripeIdentityConfig holds Stripe Identity-specific configuration
+// StripeIdentityConfig holds Stripe Identity-specific configuration.
 type StripeIdentityConfig struct {
-	Enabled       bool   `json:"enabled" yaml:"enabled"`
-	APIKey        string `json:"apiKey" yaml:"apiKey"`
+	Enabled       bool   `json:"enabled"       yaml:"enabled"`
+	APIKey        string `json:"apiKey"        yaml:"apiKey"`
 	WebhookSecret string `json:"webhookSecret" yaml:"webhookSecret"`
 
 	// Verification options
 	RequireLiveCapture bool     `json:"requireLiveCapture" yaml:"requireLiveCapture"`
-	AllowedTypes       []string `json:"allowedTypes" yaml:"allowedTypes"` // document, id_number
+	AllowedTypes       []string `json:"allowedTypes"       yaml:"allowedTypes"` // document, id_number
 
 	// Document options
 	RequireMatchingSelfie bool `json:"requireMatchingSelfie" yaml:"requireMatchingSelfie"`
@@ -148,7 +148,7 @@ type StripeIdentityConfig struct {
 	UseMock bool `json:"useMock" yaml:"useMock"` // Use mock implementation for testing/development
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:               true,
@@ -228,7 +228,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	if !c.Enabled {
 		return nil
@@ -249,6 +249,7 @@ func (c *Config) Validate() error {
 		if !c.Onfido.Enabled {
 			return ErrProviderNotEnabled
 		}
+
 		if c.Onfido.APIToken == "" {
 			return ErrMissingAPIToken
 		}
@@ -256,6 +257,7 @@ func (c *Config) Validate() error {
 		if !c.Jumio.Enabled {
 			return ErrProviderNotEnabled
 		}
+
 		if c.Jumio.APIToken == "" || c.Jumio.APISecret == "" {
 			return ErrMissingAPICredentials
 		}
@@ -263,6 +265,7 @@ func (c *Config) Validate() error {
 		if !c.StripeIdentity.Enabled {
 			return ErrProviderNotEnabled
 		}
+
 		if c.StripeIdentity.APIKey == "" {
 			return ErrMissingAPIKey
 		}

@@ -7,13 +7,13 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Team represents a team within an app DTO (Data Transfer Object)
+// Team represents a team within an app DTO (Data Transfer Object).
 type Team struct {
-	ID          xid.ID                 `json:"id"`
-	AppID       xid.ID                 `json:"appId"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID          xid.ID         `json:"id"`
+	AppID       xid.ID         `json:"appId"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 	// Provisioning tracking
 	ProvisionedBy *string `json:"provisionedBy,omitempty"` // e.g., "scim"
 	ExternalID    *string `json:"externalID,omitempty"`    // External system ID
@@ -23,7 +23,7 @@ type Team struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the Team DTO to a schema.Team model
+// ToSchema converts the Team DTO to a schema.Team model.
 func (t *Team) ToSchema() *schema.Team {
 	return &schema.Team{
 		ID:            t.ID,
@@ -41,11 +41,12 @@ func (t *Team) ToSchema() *schema.Team {
 	}
 }
 
-// FromSchemaTeam converts a schema.Team model to Team DTO
+// FromSchemaTeam converts a schema.Team model to Team DTO.
 func FromSchemaTeam(st *schema.Team) *Team {
 	if st == nil {
 		return nil
 	}
+
 	return &Team{
 		ID:            st.ID,
 		AppID:         st.AppID,
@@ -60,17 +61,18 @@ func FromSchemaTeam(st *schema.Team) *Team {
 	}
 }
 
-// FromSchemaTeams converts a slice of schema.Team to Team DTOs
+// FromSchemaTeams converts a slice of schema.Team to Team DTOs.
 func FromSchemaTeams(teams []*schema.Team) []*Team {
 	result := make([]*Team, len(teams))
 	for i, t := range teams {
 		result[i] = FromSchemaTeam(t)
 	}
+
 	return result
 }
 
 // TeamMember represents a team member DTO (Data Transfer Object)
-// Note: Role is on the Member entity, not TeamMember
+// Note: Role is on the Member entity, not TeamMember.
 type TeamMember struct {
 	ID       xid.ID `json:"id"`
 	TeamID   xid.ID `json:"teamId"`
@@ -83,7 +85,7 @@ type TeamMember struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the TeamMember DTO to a schema.TeamMember model
+// ToSchema converts the TeamMember DTO to a schema.TeamMember model.
 func (tm *TeamMember) ToSchema() *schema.TeamMember {
 	return &schema.TeamMember{
 		ID:            tm.ID,
@@ -98,11 +100,12 @@ func (tm *TeamMember) ToSchema() *schema.TeamMember {
 	}
 }
 
-// FromSchemaTeamMember converts a schema.TeamMember model to TeamMember DTO
+// FromSchemaTeamMember converts a schema.TeamMember model to TeamMember DTO.
 func FromSchemaTeamMember(stm *schema.TeamMember) *TeamMember {
 	if stm == nil {
 		return nil
 	}
+
 	return &TeamMember{
 		ID:            stm.ID,
 		TeamID:        stm.TeamID,
@@ -114,33 +117,34 @@ func FromSchemaTeamMember(stm *schema.TeamMember) *TeamMember {
 	}
 }
 
-// FromSchemaTeamMembers converts a slice of schema.TeamMember to TeamMember DTOs
+// FromSchemaTeamMembers converts a slice of schema.TeamMember to TeamMember DTOs.
 func FromSchemaTeamMembers(members []*schema.TeamMember) []*TeamMember {
 	result := make([]*TeamMember, len(members))
 	for i, m := range members {
 		result[i] = FromSchemaTeamMember(m)
 	}
+
 	return result
 }
 
-// CreateTeamRequest represents a create team request
+// CreateTeamRequest represents a create team request.
 type CreateTeamRequest struct {
-	AppID         xid.ID                 `json:"appId"`
-	Name          string                 `json:"name"`
-	Description   *string                `json:"description,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	ProvisionedBy string                 `json:"provisionedBy,omitempty"` // e.g., "scim"
-	ExternalID    string                 `json:"externalID,omitempty"`    // External system ID
+	AppID         xid.ID         `json:"appId"`
+	Name          string         `json:"name"`
+	Description   *string        `json:"description,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	ProvisionedBy string         `json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    string         `json:"externalID,omitempty"`    // External system ID
 }
 
-// UpdateTeamRequest represents an update team request
+// UpdateTeamRequest represents an update team request.
 type UpdateTeamRequest struct {
-	Name        *string                `json:"name,omitempty"`
-	Description *string                `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Name        *string        `json:"name,omitempty"`
+	Description *string        `json:"description,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
-// UpdateMemberRequest represents an update member request
+// UpdateMemberRequest represents an update member request.
 type UpdateMemberRequest struct {
 	Role   *string `json:"role,omitempty"`
 	Status *string `json:"status,omitempty"`

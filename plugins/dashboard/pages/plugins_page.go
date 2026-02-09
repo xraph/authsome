@@ -8,7 +8,7 @@ import (
 	"maragu.dev/gomponents/html"
 )
 
-// PluginsPage renders the plugins management page
+// PluginsPage renders the plugins management page.
 func (p *PagesManager) PluginsPage(ctx *router.PageContext) (g.Node, error) {
 	// Get appId from context for bridge calls
 	appIDStr := ctx.Param("appId")

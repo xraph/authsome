@@ -7,12 +7,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// DiscordProvider implements OAuth for Discord
+// DiscordProvider implements OAuth for Discord.
 type DiscordProvider struct {
 	*BaseProvider
 }
 
-// NewDiscordProvider creates a new Discord OAuth provider
+// NewDiscordProvider creates a new Discord OAuth provider.
 func NewDiscordProvider(config ProviderConfig) *DiscordProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -34,11 +34,11 @@ func NewDiscordProvider(config ProviderConfig) *DiscordProvider {
 	return &DiscordProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from Discord API
+// GetUserInfo fetches user information from Discord API.
 func (d *DiscordProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := d.oauth2Config.Client(ctx, token)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, client, d.userInfoURL, &raw); err != nil {
 		return nil, fmt.Errorf("failed to fetch Discord user info: %w", err)
 	}
@@ -50,15 +50,19 @@ func (d *DiscordProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) 
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if email, ok := raw["email"].(string); ok {
 		userInfo.Email = email
 	}
+
 	if verified, ok := raw["verified"].(bool); ok {
 		userInfo.EmailVerified = verified
 	}
+
 	if username, ok := raw["username"].(string); ok {
 		userInfo.Username = username
 	}
+
 	if globalName, ok := raw["global_name"].(string); ok {
 		userInfo.Name = globalName
 	} else {

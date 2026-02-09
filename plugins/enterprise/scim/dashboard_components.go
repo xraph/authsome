@@ -12,9 +12,10 @@ import (
 
 // UI Components for SCIM Dashboard
 
-// statusBadge renders a status badge with appropriate styling
+// statusBadge renders a status badge with appropriate styling.
 func statusBadge(status string) g.Node {
 	var classes string
+
 	switch status {
 	case "active", "success", "healthy", "synced":
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
@@ -25,10 +26,11 @@ func statusBadge(status string) g.Node {
 	default:
 		classes = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
 	}
+
 	return Span(Class(classes), g.Text(status))
 }
 
-// statusIcon returns an appropriate icon for a status
+// statusIcon returns an appropriate icon for a status.
 func statusIcon(status string) g.Node {
 	switch status {
 	case "active", "success", "healthy", "synced":
@@ -44,7 +46,7 @@ func statusIcon(status string) g.Node {
 	}
 }
 
-// statsCard renders a statistics card
+// statsCard renders a statistics card.
 func statsCard(title, value, subtitle string, icon g.Node) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -63,7 +65,7 @@ func statsCard(title, value, subtitle string, icon g.Node) g.Node {
 	)
 }
 
-// tokenCard renders a SCIM token card
+// tokenCard renders a SCIM token card.
 func tokenCard(token *SCIMToken, basePath string, appID xid.ID, onRevoke, onRotate string) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -78,9 +80,11 @@ func tokenCard(token *SCIMToken, basePath string, appID xid.ID, onRevoke, onRota
 						if token.RevokedAt != nil {
 							return "revoked"
 						}
+
 						if token.ExpiresAt != nil && token.ExpiresAt.Before(time.Now()) {
 							return "expired"
 						}
+
 						return "active"
 					}()),
 				),
@@ -138,7 +142,7 @@ func tokenCard(token *SCIMToken, basePath string, appID xid.ID, onRevoke, onRota
 	)
 }
 
-// scopeBadges renders scope badges
+// scopeBadges renders scope badges.
 func scopeBadges(scopes []string) []g.Node {
 	badges := make([]g.Node, len(scopes))
 	for i, scope := range scopes {
@@ -147,10 +151,11 @@ func scopeBadges(scopes []string) []g.Node {
 			g.Text(scope),
 		)
 	}
+
 	return badges
 }
 
-// providerCard renders a SCIM provider card
+// providerCard renders a SCIM provider card.
 func providerCard(provider *SCIMProvider, basePath string, appID xid.ID) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow dark:border-gray-800 dark:bg-gray-900"),
@@ -192,6 +197,7 @@ func providerCard(provider *SCIMProvider, basePath string, appID xid.ID) g.Node 
 									if provider.LastSyncStatus == "success" {
 										return "text-green-600 dark:text-green-400"
 									}
+
 									return "text-red-600 dark:text-red-400"
 								}())),
 								g.Text("Last sync: "+provider.LastSyncStatus),
@@ -207,7 +213,7 @@ func providerCard(provider *SCIMProvider, basePath string, appID xid.ID) g.Node 
 	)
 }
 
-// providerTypeIcon returns an icon for a provider type
+// providerTypeIcon returns an icon for a provider type.
 func providerTypeIcon(providerType string) g.Node {
 	switch providerType {
 	case "okta":
@@ -238,7 +244,7 @@ func providerTypeIcon(providerType string) g.Node {
 	}
 }
 
-// directionIcon returns an icon for sync direction
+// directionIcon returns an icon for sync direction.
 func directionIcon(direction string) g.Node {
 	switch direction {
 	case "inbound":
@@ -252,7 +258,7 @@ func directionIcon(direction string) g.Node {
 	}
 }
 
-// syncEventRow renders a sync event table row
+// syncEventRow renders a sync event table row.
 func syncEventRow(event *SCIMSyncEvent) g.Node {
 	return Tr(
 		Class("border-b border-slate-200 dark:border-gray-800 hover:bg-slate-50 dark:hover:bg-gray-800/50"),
@@ -283,7 +289,7 @@ func syncEventRow(event *SCIMSyncEvent) g.Node {
 	)
 }
 
-// configField renders a configuration field with override support
+// configField renders a configuration field with override support.
 func configField(label, value string, isOverridden bool, canOverride bool, overrideAction string) g.Node {
 	return Div(
 		Class("flex items-center justify-between py-3 border-b border-slate-200 dark:border-gray-800"),
@@ -333,7 +339,7 @@ func configField(label, value string, isOverridden bool, canOverride bool, overr
 	)
 }
 
-// alertBox renders an alert box
+// alertBox renders an alert box.
 func alertBox(alertType, title, message string) g.Node {
 	var bgClass, borderClass, textClass, iconNode string
 
@@ -361,6 +367,7 @@ func alertBox(alertType, title, message string) g.Node {
 	}
 
 	var icon g.Node
+
 	switch iconNode {
 	case "CheckCircle":
 		icon = lucide.Check(Class("size-5 " + textClass))
@@ -385,7 +392,7 @@ func alertBox(alertType, title, message string) g.Node {
 	)
 }
 
-// emptyState renders an empty state message
+// emptyState renders an empty state message.
 func emptyState(icon g.Node, title, description, actionText, actionURL string) g.Node {
 	return Div(
 		Class("flex flex-col items-center justify-center py-12"),
@@ -406,7 +413,7 @@ func emptyState(icon g.Node, title, description, actionText, actionURL string) g
 	)
 }
 
-// formatRelativeTime formats a time as a relative string (e.g., "5 minutes ago")
+// formatRelativeTime formats a time as a relative string (e.g., "5 minutes ago").
 func formatRelativeTime(t time.Time) string {
 	duration := time.Since(t)
 
@@ -417,25 +424,28 @@ func formatRelativeTime(t time.Time) string {
 		if minutes == 1 {
 			return "1 minute ago"
 		}
+
 		return fmt.Sprintf("%d minutes ago", minutes)
 	} else if duration < 24*time.Hour {
 		hours := int(duration.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
+
 		return fmt.Sprintf("%d hours ago", hours)
 	} else if duration < 7*24*time.Hour {
 		days := int(duration.Hours() / 24)
 		if days == 1 {
 			return "1 day ago"
 		}
+
 		return fmt.Sprintf("%d days ago", days)
 	} else {
 		return t.Format("Jan 2, 2006")
 	}
 }
 
-// loadingSpinner renders a loading spinner
+// loadingSpinner renders a loading spinner.
 func loadingSpinner() g.Node {
 	return Div(
 		Class("flex items-center justify-center py-8"),
@@ -445,7 +455,7 @@ func loadingSpinner() g.Node {
 	)
 }
 
-// pagination renders pagination controls
+// pagination renders pagination controls.
 func pagination(currentPage, totalPages int, baseURL string) g.Node {
 	if totalPages <= 1 {
 		return nil

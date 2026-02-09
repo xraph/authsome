@@ -4,7 +4,7 @@ import (
 	suberrors "github.com/xraph/authsome/plugins/subscription/errors"
 )
 
-// Config holds the subscription plugin configuration
+// Config holds the subscription plugin configuration.
 type Config struct {
 	// General settings
 	Enabled             bool `json:"enabled"`
@@ -27,7 +27,7 @@ type Config struct {
 	Provider     string       `json:"provider"` // stripe, paddle, etc.
 	StripeConfig StripeConfig `json:"stripe"`
 	// Future providers:
-	// PaddleConfig   PaddleConfig `json:"paddle"`
+	// PaddleConfig   `json:"paddle"`
 
 	// Webhook settings
 	WebhookTolerance int `json:"webhookTolerance"` // Seconds tolerance for webhook timestamp
@@ -37,7 +37,7 @@ type Config struct {
 	UsageReportInterval  int `json:"usageReportInterval"`  // Seconds between usage reports
 }
 
-// StripeConfig holds Stripe-specific configuration
+// StripeConfig holds Stripe-specific configuration.
 type StripeConfig struct {
 	SecretKey      string `json:"secretKey"`
 	WebhookSecret  string `json:"webhookSecret"`
@@ -46,7 +46,7 @@ type StripeConfig struct {
 	ConnectAccount string `json:"connectAccount"` // Optional: for Stripe Connect
 }
 
-// DefaultConfig returns the default plugin configuration
+// DefaultConfig returns the default plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:              true,
@@ -66,26 +66,29 @@ func DefaultConfig() Config {
 	}
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	if c.DefaultTrialDays < 0 {
 		return suberrors.ErrInvalidBillingInterval
 	}
+
 	if c.GracePeriodDays < 0 {
 		return suberrors.ErrInvalidBillingInterval
 	}
+
 	if c.Provider == "stripe" && c.StripeConfig.SecretKey == "" {
 		// Allow empty for development/testing
 	}
+
 	return nil
 }
 
-// IsStripeConfigured returns true if Stripe is properly configured
+// IsStripeConfigured returns true if Stripe is properly configured.
 func (c *Config) IsStripeConfigured() bool {
 	return c.Provider == "stripe" && c.StripeConfig.SecretKey != ""
 }
 
-// GetWebhookSecret returns the appropriate webhook secret based on provider
+// GetWebhookSecret returns the appropriate webhook secret based on provider.
 func (c *Config) GetWebhookSecret() string {
 	switch c.Provider {
 	case "stripe":

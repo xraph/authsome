@@ -8,32 +8,32 @@ import (
 	"maragu.dev/gomponents/html"
 )
 
-// SelectOption represents an option in a select field
+// SelectOption represents an option in a select field.
 type SelectOption struct {
 	Value string
 	Label string
 }
 
-// Common CSS classes using Pine UI patterns
+// Common CSS classes using Pine UI patterns.
 const (
-	// Cards
+	// Cards.
 	cardClass       = "bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
 	cardHeaderClass = "px-6 py-4 border-b border-gray-200 dark:border-gray-700"
 	cardBodyClass   = "px-6 py-4"
 
-	// Buttons
+	// Buttons.
 	btnPrimaryClass   = "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
 	btnSecondaryClass = "inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
 	btnDangerClass    = "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
 
-	// Badges
+	// Badges.
 	badgeSuccessClass = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
 	badgeWarningClass = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
 	badgeDangerClass  = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
 	badgeInfoClass    = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
 	badgeGrayClass    = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
 
-	// Tables
+	// Tables.
 	tableClass      = "min-w-full divide-y divide-gray-200 dark:divide-gray-700"
 	tableHeadClass  = "bg-gray-50 dark:bg-gray-800"
 	tableBodyClass  = "bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700"
@@ -41,7 +41,7 @@ const (
 	tableHeaderCell = "px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
 )
 
-// Card renders a Pine UI card component
+// Card renders a Pine UI card component.
 func Card(title string, children ...g.Node) g.Node {
 	return html.Div(
 		html.Class(cardClass),
@@ -59,7 +59,7 @@ func Card(title string, children ...g.Node) g.Node {
 	)
 }
 
-// CardWithActions renders a card with header actions
+// CardWithActions renders a card with header actions.
 func CardWithActions(title string, actions g.Node, children ...g.Node) g.Node {
 	return html.Div(
 		html.Class(cardClass),
@@ -78,7 +78,7 @@ func CardWithActions(title string, actions g.Node, children ...g.Node) g.Node {
 	)
 }
 
-// StatCard renders a statistics card
+// StatCard renders a statistics card.
 func StatCard(title, value, change string, positive bool, icon g.Node) g.Node {
 	changeClass := "text-green-600 dark:text-green-400"
 	if !positive {
@@ -115,9 +115,10 @@ func StatCard(title, value, change string, positive bool, icon g.Node) g.Node {
 	)
 }
 
-// Button renders a Pine UI button
+// Button renders a Pine UI button.
 func Button(text string, variant string, attrs ...g.Node) g.Node {
 	class := btnPrimaryClass
+
 	switch variant {
 	case "secondary":
 		class = btnSecondaryClass
@@ -126,12 +127,14 @@ func Button(text string, variant string, attrs ...g.Node) g.Node {
 	}
 
 	allNodes := append([]g.Node{html.Class(class), g.Text(text)}, attrs...)
+
 	return html.Button(allNodes...)
 }
 
-// LinkButton renders a button as a link
+// LinkButton renders a button as a link.
 func LinkButton(text, href, variant string) g.Node {
 	class := btnPrimaryClass
+
 	switch variant {
 	case "secondary":
 		class = btnSecondaryClass
@@ -146,9 +149,10 @@ func LinkButton(text, href, variant string) g.Node {
 	)
 }
 
-// Badge renders a Pine UI badge
+// Badge renders a Pine UI badge.
 func Badge(text, variant string) g.Node {
 	class := badgeGrayClass
+
 	switch variant {
 	case "success":
 		class = badgeSuccessClass
@@ -166,7 +170,7 @@ func Badge(text, variant string) g.Node {
 	)
 }
 
-// StatusBadge renders a status badge based on subscription status
+// StatusBadge renders a status badge based on subscription status.
 func StatusBadge(status string) g.Node {
 	switch status {
 	case "active":
@@ -186,7 +190,7 @@ func StatusBadge(status string) g.Node {
 	}
 }
 
-// Table renders a Pine UI table
+// Table renders a Pine UI table.
 func Table(headers []string, rows ...g.Node) g.Node {
 	headerCells := make([]g.Node, len(headers))
 	for i, h := range headers {
@@ -213,7 +217,7 @@ func Table(headers []string, rows ...g.Node) g.Node {
 	)
 }
 
-// TableRow renders a table row
+// TableRow renders a table row.
 func TableRow(cells ...g.Node) g.Node {
 	return html.Tr(
 		html.Class("hover:bg-gray-50 dark:hover:bg-gray-800"),
@@ -221,7 +225,7 @@ func TableRow(cells ...g.Node) g.Node {
 	)
 }
 
-// TableCell renders a table cell
+// TableCell renders a table cell.
 func TableCell(content g.Node) g.Node {
 	return html.Td(
 		html.Class(tableCellClass+" text-gray-900 dark:text-white"),
@@ -229,7 +233,7 @@ func TableCell(content g.Node) g.Node {
 	)
 }
 
-// TableCellMuted renders a muted table cell
+// TableCellMuted renders a muted table cell.
 func TableCellMuted(content g.Node) g.Node {
 	return html.Td(
 		html.Class(tableCellClass+" text-gray-500 dark:text-gray-400"),
@@ -237,7 +241,7 @@ func TableCellMuted(content g.Node) g.Node {
 	)
 }
 
-// EmptyState renders an empty state component
+// EmptyState renders an empty state component.
 func EmptyState(title, description string, action g.Node) g.Node {
 	return html.Div(
 		html.Class("text-center py-12"),
@@ -261,7 +265,7 @@ func EmptyState(title, description string, action g.Node) g.Node {
 	)
 }
 
-// Pagination renders pagination controls
+// Pagination renders pagination controls.
 func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	if totalPages <= 1 {
 		return nil
@@ -312,9 +316,10 @@ func Pagination(currentPage, totalPages int, baseURL string) g.Node {
 	)
 }
 
-// Alert renders an alert component
+// Alert renders an alert component.
 func Alert(message, variant string) g.Node {
 	baseClass := "rounded-md p-4"
+
 	var bgClass, textClass, iconClass string
 
 	switch variant {
@@ -353,7 +358,7 @@ func Alert(message, variant string) g.Node {
 	)
 }
 
-// FormField renders a form field with label
+// FormField renders a form field with label.
 func FormField(label, name, fieldType, value, placeholder string, required bool) g.Node {
 	return html.Div(
 		html.Class("mb-4"),
@@ -375,7 +380,7 @@ func FormField(label, name, fieldType, value, placeholder string, required bool)
 	)
 }
 
-// SelectField renders a select field
+// SelectField renders a select field.
 func SelectField(label, name string, options []SelectOption, selectedValue string, required bool) g.Node {
 	optionNodes := make([]g.Node, len(options))
 	for i, opt := range options {
@@ -404,7 +409,7 @@ func SelectField(label, name string, options []SelectOption, selectedValue strin
 	)
 }
 
-// Modal renders a modal wrapper (requires JS to show/hide)
+// Modal renders a modal wrapper (requires JS to show/hide).
 func Modal(id, title string, content, footer g.Node) g.Node {
 	return html.Div(
 		html.ID(id),
@@ -445,7 +450,7 @@ func Modal(id, title string, content, footer g.Node) g.Node {
 	)
 }
 
-// DescriptionList renders a description list
+// DescriptionList renders a description list.
 func DescriptionList(items map[string]g.Node) g.Node {
 	nodes := make([]g.Node, 0, len(items)*2)
 	for key, value := range items {
@@ -470,10 +475,11 @@ func DescriptionList(items map[string]g.Node) g.Node {
 	)
 }
 
-// MoneyDisplay formats and displays a money amount
+// MoneyDisplay formats and displays a money amount.
 func MoneyDisplay(amount int64, currency string) g.Node {
 	// Simple formatting - in production would use proper currency formatting
 	formatted := fmt.Sprintf("%s%.2f", currencySymbol(currency), float64(amount)/100)
+
 	return html.Span(
 		html.Class("font-mono"),
 		g.Text(formatted),
@@ -492,5 +498,6 @@ func currencySymbol(code string) string {
 	if s, ok := symbols[code]; ok {
 		return s
 	}
+
 	return code + " "
 }

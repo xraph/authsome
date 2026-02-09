@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -11,20 +12,20 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Permission represents a fine-grained permission check
+// Permission represents a fine-grained permission check.
 type Permission struct {
 	Action   string // e.g., "view", "edit", "delete"
 	Resource string // e.g., "dashboard", "users", "sessions"
 }
 
-// PermissionChecker provides a fast, expressive API for checking permissions
+// PermissionChecker provides a fast, expressive API for checking permissions.
 type PermissionChecker struct {
 	rbacSvc      *rbac.Service
 	userRoleRepo rbac.UserRoleRepository
 	roleCache    *permissionCache
 }
 
-// NewPermissionChecker creates a new permission checker
+// NewPermissionChecker creates a new permission checker.
 func NewPermissionChecker(rbacSvc *rbac.Service, userRoleRepo rbac.UserRoleRepository) *PermissionChecker {
 	return &PermissionChecker{
 		rbacSvc:      rbacSvc,
@@ -33,7 +34,7 @@ func NewPermissionChecker(rbacSvc *rbac.Service, userRoleRepo rbac.UserRoleRepos
 	}
 }
 
-// permissionCache caches user roles to avoid repeated database queries
+// permissionCache caches user roles to avoid repeated database queries.
 type permissionCache struct {
 	mu      sync.RWMutex
 	entries map[string]*cacheEntry
@@ -55,6 +56,7 @@ func newPermissionCache(ttl time.Duration) *permissionCache {
 	go func() {
 		ticker := time.NewTicker(ttl)
 		defer ticker.Stop()
+
 		for range ticker.C {
 			c.cleanup()
 		}
@@ -92,6 +94,7 @@ func (c *permissionCache) set(userID string, roles []string) {
 func (c *permissionCache) invalidate(userID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	delete(c.entries, userID)
 }
 
@@ -107,7 +110,7 @@ func (c *permissionCache) cleanup() {
 	}
 }
 
-// getUserRoles retrieves user roles with caching
+// getUserRoles retrieves user roles with caching.
 func (p *PermissionChecker) getUserRoles(ctx context.Context, userID xid.ID) ([]string, error) {
 	// Check cache first
 	if roles, ok := p.roleCache.get(userID.String()); ok {
@@ -133,7 +136,7 @@ func (p *PermissionChecker) getUserRoles(ctx context.Context, userID xid.ID) ([]
 }
 
 // Can checks if a user has permission to perform an action on a resource
-// This is the main expressive API for permission checking
+// This is the main expressive API for permission checking.
 func (p *PermissionChecker) Can(ctx context.Context, userID xid.ID, action, resource string) bool {
 	// Get user roles (cached)
 	roles, err := p.getUserRoles(ctx, userID)
@@ -152,42 +155,39 @@ func (p *PermissionChecker) Can(ctx context.Context, userID xid.ID, action, reso
 	return p.rbacSvc.AllowedWithRoles(rbacCtx, roles)
 }
 
-// CanAny checks if a user has any of the specified permissions
+// CanAny checks if a user has any of the specified permissions.
 func (p *PermissionChecker) CanAny(ctx context.Context, userID xid.ID, permissions ...Permission) bool {
 	for _, perm := range permissions {
 		if p.Can(ctx, userID, perm.Action, perm.Resource) {
 			return true
 		}
 	}
+
 	return false
 }
 
-// CanAll checks if a user has all of the specified permissions
+// CanAll checks if a user has all of the specified permissions.
 func (p *PermissionChecker) CanAll(ctx context.Context, userID xid.ID, permissions ...Permission) bool {
 	for _, perm := range permissions {
 		if !p.Can(ctx, userID, perm.Action, perm.Resource) {
 			return false
 		}
 	}
+
 	return true
 }
 
-// HasRole checks if a user has a specific role
+// HasRole checks if a user has a specific role.
 func (p *PermissionChecker) HasRole(ctx context.Context, userID xid.ID, roleName string) bool {
 	roles, err := p.getUserRoles(ctx, userID)
 	if err != nil {
 		return false
 	}
 
-	for _, role := range roles {
-		if role == roleName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(roles, roleName)
 }
 
-// HasAnyRole checks if a user has any of the specified roles
+// HasAnyRole checks if a user has any of the specified roles.
 func (p *PermissionChecker) HasAnyRole(ctx context.Context, userID xid.ID, roleNames ...string) bool {
 	roles, err := p.getUserRoles(ctx, userID)
 	if err != nil {
@@ -204,23 +204,24 @@ func (p *PermissionChecker) HasAnyRole(ctx context.Context, userID xid.ID, roleN
 			return true
 		}
 	}
+
 	return false
 }
 
 // InvalidateUserCache clears the cached roles for a user
-// Call this when user roles are modified
+// Call this when user roles are modified.
 func (p *PermissionChecker) InvalidateUserCache(userID xid.ID) {
 	p.roleCache.invalidate(userID.String())
 }
 
-// PermissionBuilder provides a fluent API for building permission checks
+// PermissionBuilder provides a fluent API for building permission checks.
 type PermissionBuilder struct {
 	checker *PermissionChecker
 	userID  xid.ID
 	ctx     context.Context
 }
 
-// For creates a new permission builder for a user
+// For creates a new permission builder for a user.
 func (p *PermissionChecker) For(ctx context.Context, userID xid.ID) *PermissionBuilder {
 	return &PermissionBuilder{
 		checker: p,
@@ -229,95 +230,96 @@ func (p *PermissionChecker) For(ctx context.Context, userID xid.ID) *PermissionB
 	}
 }
 
-// Can checks a single permission
+// Can checks a single permission.
 func (b *PermissionBuilder) Can(action, resource string) bool {
 	return b.checker.Can(b.ctx, b.userID, action, resource)
 }
 
-// CanView is a shorthand for Can("view", resource)
+// CanView is a shorthand for Can("view", resource).
 func (b *PermissionBuilder) CanView(resource string) bool {
 	return b.Can("view", resource)
 }
 
-// CanEdit is a shorthand for Can("edit", resource)
+// CanEdit is a shorthand for Can("edit", resource).
 func (b *PermissionBuilder) CanEdit(resource string) bool {
 	return b.Can("edit", resource)
 }
 
-// CanDelete is a shorthand for Can("delete", resource)
+// CanDelete is a shorthand for Can("delete", resource).
 func (b *PermissionBuilder) CanDelete(resource string) bool {
 	return b.Can("delete", resource)
 }
 
-// CanCreate is a shorthand for Can("create", resource)
+// CanCreate is a shorthand for Can("create", resource).
 func (b *PermissionBuilder) CanCreate(resource string) bool {
 	return b.Can("create", resource)
 }
 
-// HasRole checks if the user has a specific role
+// HasRole checks if the user has a specific role.
 func (b *PermissionBuilder) HasRole(roleName string) bool {
 	return b.checker.HasRole(b.ctx, b.userID, roleName)
 }
 
-// IsAdmin checks if the user has the admin role
+// IsAdmin checks if the user has the admin role.
 func (b *PermissionBuilder) IsAdmin() bool {
 	return b.HasRole("admin")
 }
 
-// IsOwner checks if the user has the owner role
+// IsOwner checks if the user has the owner role.
 func (b *PermissionBuilder) IsOwner() bool {
 	return b.HasRole("owner")
 }
 
-// IsSuperAdmin checks if the user has the superadmin role
+// IsSuperAdmin checks if the user has the superadmin role.
 func (b *PermissionBuilder) IsSuperAdmin() bool {
 	return b.HasRole("superadmin")
 }
 
-// DashboardPermissions provides dashboard-specific permission checks
+// DashboardPermissions provides dashboard-specific permission checks.
 type DashboardPermissions struct {
 	*PermissionBuilder
 }
 
-// Dashboard returns a dashboard-specific permission checker
+// Dashboard returns a dashboard-specific permission checker.
 func (b *PermissionBuilder) Dashboard() *DashboardPermissions {
 	return &DashboardPermissions{PermissionBuilder: b}
 }
 
-// CanAccess checks if user can access the dashboard
+// CanAccess checks if user can access the dashboard.
 func (d *DashboardPermissions) CanAccess() bool {
 	fmt.Println("CanAccess", d.Can("dashboard.view", "dashboard"), d.IsAdmin(), d.IsSuperAdmin())
+
 	return d.Can("dashboard.view", "dashboard") || d.IsAdmin() || d.IsSuperAdmin()
 }
 
-// CanManageUsers checks if user can manage users
+// CanManageUsers checks if user can manage users.
 func (d *DashboardPermissions) CanManageUsers() bool {
 	return d.Can("manage", "users") || d.IsAdmin()
 }
 
-// CanViewUsers checks if user can view users
+// CanViewUsers checks if user can view users.
 func (d *DashboardPermissions) CanViewUsers() bool {
 	return d.Can("view", "users") || d.IsAdmin()
 }
 
-// CanManageSessions checks if user can manage sessions
+// CanManageSessions checks if user can manage sessions.
 func (d *DashboardPermissions) CanManageSessions() bool {
 	return d.Can("manage", "sessions") || d.IsAdmin()
 }
 
-// CanViewSessions checks if user can view sessions
+// CanViewSessions checks if user can view sessions.
 func (d *DashboardPermissions) CanViewSessions() bool {
 	return d.Can("view", "sessions") || d.IsAdmin()
 }
 
-// CanViewAuditLogs checks if user can view audit logs
+// CanViewAuditLogs checks if user can view audit logs.
 func (d *DashboardPermissions) CanViewAuditLogs() bool {
 	return d.Can("view", "audit_logs") || d.IsSuperAdmin()
 }
 
 // RegisterDashboardRoles registers dashboard-specific roles in the RoleRegistry
 // This extends the default platform roles with dashboard-specific permissions
-// Supports override semantics - plugins can modify other plugins' roles
+// Supports override semantics - plugins can modify other plugins' roles.
 func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
 	// Dashboard plugin extends the default roles with dashboard-specific permissions
 	// These will be merged with existing role definitions (override semantics)
@@ -395,7 +397,7 @@ func RegisterDashboardRoles(registry *rbac.RoleRegistry) error {
 // SetupDefaultPolicies creates default RBAC policies for the dashboard
 // Role hierarchy: superadmin > owner > admin > member
 // This is kept for backward compatibility and immediate policy loading
-// The role bootstrap system will persist these roles to the database
+// The role bootstrap system will persist these roles to the database.
 func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
 	policies := []string{
 		// Superadmin role (Platform Owner - First User)
@@ -438,19 +440,22 @@ func SetupDefaultPolicies(rbacSvc *rbac.Service) error {
 }
 
 // EnsureFirstUserIsAdmin assigns admin role to the first user
-// DEPRECATED: Use EnsureFirstUserIsSuperAdmin for first user setup
+// DEPRECATED: Use EnsureFirstUserIsSuperAdmin for first user setup.
 func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo rbac.UserRoleRepository, roleRepo rbac.RoleRepository) error {
 	// Check if admin role exists in the platform organization
 	orgIDStr := orgID.String()
+
 	roles, err := roleRepo.ListByOrg(ctx, &orgIDStr)
 	if err != nil {
 		return fmt.Errorf("failed to list roles: %w", err)
 	}
 
 	var adminRole *schema.Role
+
 	for i := range roles {
 		if roles[i].Name == rbac.RoleAdmin {
 			adminRole = &roles[i]
+
 			break
 		}
 	}
@@ -480,20 +485,22 @@ func EnsureFirstUserIsAdmin(ctx context.Context, userID, orgID xid.ID, userRoleR
 }
 
 // EnsureFirstUserIsSuperAdmin assigns superadmin role to the first user
-// This makes them the platform owner with full system access
+// This makes them the platform owner with full system access.
 func EnsureFirstUserIsSuperAdmin(ctx context.Context, userID, orgID xid.ID, userRoleRepo rbac.UserRoleRepository, roleRepo rbac.RoleRepository) error {
-
 	// Check if superadmin role exists in the platform organization
 	orgIDStr := orgID.String()
+
 	roles, err := roleRepo.ListByOrg(ctx, &orgIDStr)
 	if err != nil {
 		return fmt.Errorf("failed to list roles: %w", err)
 	}
 
 	var superadminRole *schema.Role
+
 	for i := range roles {
 		if roles[i].Name == rbac.RoleSuperAdmin {
 			superadminRole = &roles[i]
+
 			break
 		}
 	}

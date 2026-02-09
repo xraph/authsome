@@ -1,7 +1,7 @@
 package handlers
 
 // Re-export shared response types from core/responses for backward compatibility
-// This allows handlers to use responses without importing core/responses directly
+// This allows handlers to use responses without importing core/responses directly.
 import "github.com/xraph/authsome/core/responses"
 
 type ErrorResponse = responses.ErrorResponse

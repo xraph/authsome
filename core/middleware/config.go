@@ -4,7 +4,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// ContextConfig configures how app and environment context is populated
+// ContextConfig configures how app and environment context is populated.
 type ContextConfig struct {
 	// DefaultAppID is used when no app ID is found in headers or API key
 	// Should be a valid xid string (e.g., "c7ndh411g9k8pdunveeg")
@@ -29,7 +29,7 @@ type ContextConfig struct {
 	AutoDetectFromAPIKey bool
 }
 
-// DefaultContextConfig returns a ContextConfig with sensible defaults
+// DefaultContextConfig returns a ContextConfig with sensible defaults.
 func DefaultContextConfig() ContextConfig {
 	return ContextConfig{
 		AppIDHeader:          "X-App-ID",
@@ -39,7 +39,7 @@ func DefaultContextConfig() ContextConfig {
 	}
 }
 
-// ContextSource indicates where the context value came from
+// ContextSource indicates where the context value came from.
 type ContextSource string
 
 const (
@@ -51,7 +51,7 @@ const (
 	ContextSourceAutoDetect ContextSource = "auto_detect" // From AuthSome config
 )
 
-// ContextResolution tracks how context values were resolved
+// ContextResolution tracks how context values were resolved.
 type ContextResolution struct {
 	AppID               xid.ID
 	AppIDSource         ContextSource

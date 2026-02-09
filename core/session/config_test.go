@@ -11,15 +11,19 @@ func TestDefaultCookieConfig(t *testing.T) {
 	if config.Enabled {
 		t.Error("Expected Enabled to be false by default")
 	}
+
 	if config.Name != "authsome_session" {
 		t.Errorf("Expected Name to be 'authsome_session', got '%s'", config.Name)
 	}
+
 	if config.Path != "/" {
 		t.Errorf("Expected Path to be '/', got '%s'", config.Path)
 	}
+
 	if !config.HttpOnly {
 		t.Error("Expected HttpOnly to be true by default")
 	}
+
 	if config.SameSite != "Lax" {
 		t.Errorf("Expected SameSite to be 'Lax', got '%s'", config.SameSite)
 	}
@@ -48,6 +52,7 @@ func TestCookieConfigMerge(t *testing.T) {
 	if merged.Name != "override_session" {
 		t.Errorf("Expected Name to be 'override_session', got '%s'", merged.Name)
 	}
+
 	if merged.SameSite != "Strict" {
 		t.Errorf("Expected SameSite to be 'Strict', got '%s'", merged.SameSite)
 	}
@@ -63,6 +68,7 @@ func TestCookieConfigMerge(t *testing.T) {
 	if !merged.Enabled {
 		t.Error("Expected Enabled to remain true from base (zero value in override shouldn't disable)")
 	}
+
 	if !merged.HttpOnly {
 		t.Error("Expected HttpOnly to remain true from base (zero value in override shouldn't disable)")
 	}
@@ -82,12 +88,15 @@ func TestCookieConfigMergeWithNil(t *testing.T) {
 	if merged.Enabled != base.Enabled {
 		t.Error("Expected Enabled to match base")
 	}
+
 	if merged.Name != base.Name {
 		t.Error("Expected Name to match base")
 	}
+
 	if merged.Path != base.Path {
 		t.Error("Expected Path to match base")
 	}
+
 	if merged.HttpOnly != base.HttpOnly {
 		t.Error("Expected HttpOnly to match base")
 	}
@@ -117,6 +126,7 @@ func TestCookieConfigMergeWithPointerFields(t *testing.T) {
 	if merged.Secure == nil || *merged.Secure != false {
 		t.Error("Expected Secure to be false from override")
 	}
+
 	if merged.MaxAge == nil || *merged.MaxAge != 7200 {
 		t.Errorf("Expected MaxAge to be 7200 from override, got %v", *merged.MaxAge)
 	}

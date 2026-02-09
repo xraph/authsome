@@ -15,7 +15,7 @@ type MockOrganizationService struct {
 	mock *Mock
 }
 
-// CreateOrganization creates a new organization
+// CreateOrganization creates a new organization.
 func (s *MockOrganizationService) CreateOrganization(ctx context.Context, req *organization.CreateOrganizationRequest, creatorUserID, appID, environmentID xid.ID) (*organization.Organization, error) {
 	s.mock.mu.Lock()
 	defer s.mock.mu.Unlock()
@@ -26,7 +26,7 @@ func (s *MockOrganizationService) CreateOrganization(ctx context.Context, req *o
 		EnvironmentID: environmentID,
 		Name:          req.Name,
 		Slug:          req.Slug,
-		Metadata:      map[string]interface{}{},
+		Metadata:      map[string]any{},
 	}
 
 	s.mock.orgs[org.ID] = org
@@ -44,7 +44,7 @@ func (s *MockOrganizationService) CreateOrganization(ctx context.Context, req *o
 	return organization.FromSchemaOrganization(org), nil
 }
 
-// FindOrganizationByID retrieves an organization by ID
+// FindOrganizationByID retrieves an organization by ID.
 func (s *MockOrganizationService) FindOrganizationByID(ctx context.Context, id xid.ID) (*organization.Organization, error) {
 	s.mock.mu.RLock()
 	defer s.mock.mu.RUnlock()
@@ -53,15 +53,16 @@ func (s *MockOrganizationService) FindOrganizationByID(ctx context.Context, id x
 	if !ok {
 		return nil, fmt.Errorf("organization not found: %s", id)
 	}
+
 	return organization.FromSchemaOrganization(org), nil
 }
 
-// GetByID is an alias for FindOrganizationByID for compatibility
+// GetByID is an alias for FindOrganizationByID for compatibility.
 func (s *MockOrganizationService) GetByID(ctx context.Context, id xid.ID) (*organization.Organization, error) {
 	return s.FindOrganizationByID(ctx, id)
 }
 
-// FindOrganizationBySlug retrieves an organization by slug
+// FindOrganizationBySlug retrieves an organization by slug.
 func (s *MockOrganizationService) FindOrganizationBySlug(ctx context.Context, appID, environmentID xid.ID, slug string) (*organization.Organization, error) {
 	s.mock.mu.RLock()
 	defer s.mock.mu.RUnlock()
@@ -71,16 +72,17 @@ func (s *MockOrganizationService) FindOrganizationBySlug(ctx context.Context, ap
 			return organization.FromSchemaOrganization(org), nil
 		}
 	}
+
 	return nil, fmt.Errorf("organization not found with slug: %s", slug)
 }
 
-// GetBySlug is an alias for FindOrganizationBySlug for compatibility
+// GetBySlug is an alias for FindOrganizationBySlug for compatibility.
 func (s *MockOrganizationService) GetBySlug(ctx context.Context, slug string) (*organization.Organization, error) {
 	// Use default app and env
 	return s.FindOrganizationBySlug(ctx, s.mock.defaultApp.ID, s.mock.defaultEnv.ID, slug)
 }
 
-// ListOrganizations lists organizations with pagination
+// ListOrganizations lists organizations with pagination.
 func (s *MockOrganizationService) ListOrganizations(ctx context.Context, filter *organization.ListOrganizationsFilter) (*pagination.PageResponse[*organization.Organization], error) {
 	s.mock.mu.RLock()
 	defer s.mock.mu.RUnlock()
@@ -90,9 +92,11 @@ func (s *MockOrganizationService) ListOrganizations(ctx context.Context, filter 
 		if !filter.AppID.IsNil() && org.AppID != filter.AppID {
 			continue
 		}
+
 		if !filter.EnvironmentID.IsNil() && org.EnvironmentID != filter.EnvironmentID {
 			continue
 		}
+
 		orgs = append(orgs, organization.FromSchemaOrganization(org))
 	}
 
@@ -110,7 +114,7 @@ func (s *MockOrganizationService) ListOrganizations(ctx context.Context, filter 
 	}, nil
 }
 
-// AddMember adds a user as a member to an organization
+// AddMember adds a user as a member to an organization.
 func (s *MockOrganizationService) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*organization.Member, error) {
 	s.mock.mu.Lock()
 	defer s.mock.mu.Unlock()
@@ -134,10 +138,11 @@ func (s *MockOrganizationService) AddMember(ctx context.Context, orgID, userID x
 	}
 
 	s.mock.members[orgID] = append(s.mock.members[orgID], member)
+
 	return organization.FromSchemaMember(member), nil
 }
 
-// ListMembers lists members of an organization
+// ListMembers lists members of an organization.
 func (s *MockOrganizationService) ListMembers(ctx context.Context, filter *organization.ListMembersFilter) (*pagination.PageResponse[*organization.Member], error) {
 	s.mock.mu.RLock()
 	defer s.mock.mu.RUnlock()
@@ -177,19 +182,20 @@ func (s *MockOrganizationService) ListMembers(ctx context.Context, filter *organ
 	}, nil
 }
 
-// GetMembers is an alias for ListMembers for compatibility
+// GetMembers is an alias for ListMembers for compatibility.
 func (s *MockOrganizationService) GetMembers(ctx context.Context, orgID xid.ID) (*pagination.PageResponse[*organization.Member], error) {
 	return s.ListMembers(ctx, &organization.ListMembersFilter{
 		OrganizationID: orgID,
 	})
 }
 
-// GetUserMemberships retrieves all memberships for a user
+// GetUserMemberships retrieves all memberships for a user.
 func (s *MockOrganizationService) GetUserMemberships(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Member], error) {
 	s.mock.mu.RLock()
 	defer s.mock.mu.RUnlock()
 
 	var result []*organization.Member
+
 	for _, members := range s.mock.members {
 		for _, member := range members {
 			if member.UserID == userID {
@@ -212,12 +218,13 @@ func (s *MockOrganizationService) GetUserMemberships(ctx context.Context, userID
 	}, nil
 }
 
-// GetUserOrganizations retrieves all organizations a user is a member of
+// GetUserOrganizations retrieves all organizations a user is a member of.
 func (s *MockOrganizationService) GetUserOrganizations(ctx context.Context, userID xid.ID) ([]*organization.Organization, error) {
 	s.mock.mu.RLock()
 	defer s.mock.mu.RUnlock()
 
 	var result []*organization.Organization
+
 	orgSet := make(map[xid.ID]bool)
 
 	for orgID, members := range s.mock.members {
@@ -227,6 +234,7 @@ func (s *MockOrganizationService) GetUserOrganizations(ctx context.Context, user
 					result = append(result, organization.FromSchemaOrganization(org))
 					orgSet[orgID] = true
 				}
+
 				break
 			}
 		}

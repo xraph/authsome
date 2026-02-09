@@ -11,14 +11,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// seedCmd represents the seed command
+// seedCmd represents the seed command.
 var seedCmd = &cobra.Command{
 	Use:   "seed",
 	Short: "Seed database with test data",
 	Long:  `Seed database with test data for development and testing purposes.`,
 }
 
-// seedBasicCmd seeds basic test data
+// seedBasicCmd seeds basic test data.
 var seedBasicCmd = &cobra.Command{
 	Use:   "basic",
 	Short: "Seed basic test data",
@@ -34,7 +34,7 @@ var seedBasicCmd = &cobra.Command{
 	},
 }
 
-// seedUsersCmd seeds test users
+// seedUsersCmd seeds test users.
 var seedUsersCmd = &cobra.Command{
 	Use:   "users",
 	Short: "Seed test users",
@@ -53,7 +53,7 @@ var seedUsersCmd = &cobra.Command{
 	},
 }
 
-// seedAppsCmd seeds test apps
+// seedAppsCmd seeds test apps.
 var seedAppsCmd = &cobra.Command{
 	Use:   "apps",
 	Short: "Seed test apps",
@@ -71,7 +71,7 @@ var seedAppsCmd = &cobra.Command{
 	},
 }
 
-// seedClearCmd clears all seeded data
+// seedClearCmd clears all seeded data.
 var seedClearCmd = &cobra.Command{
 	Use:   "clear",
 	Short: "Clear all seeded data",
@@ -80,6 +80,7 @@ var seedClearCmd = &cobra.Command{
 		confirm, _ := cmd.Flags().GetBool("confirm")
 		if !confirm {
 			fmt.Println("This will delete all seeded data. Use --confirm flag to proceed.")
+
 			return nil
 		}
 
@@ -111,12 +112,12 @@ func init() {
 	seedClearCmd.Flags().Bool("confirm", false, "Confirm deletion of all seeded data")
 }
 
-// connectSeedDB connects to the database for seeding (now supports PostgreSQL, MySQL, SQLite)
+// connectSeedDB connects to the database for seeding (now supports PostgreSQL, MySQL, SQLite).
 func connectSeedDB() (*bun.DB, error) {
 	return connectDatabaseMulti()
 }
 
-// seedBasicData seeds basic test data
+// seedBasicData seeds basic test data.
 func seedBasicData(db *bun.DB) error {
 	ctx := context.Background()
 
@@ -133,8 +134,8 @@ func seedBasicData(db *bun.DB) error {
 		IsPlatform: true,
 	}
 	platformApp.AuditableModel.ID = platformAppID
-	platformApp.AuditableModel.CreatedBy = systemID
-	platformApp.AuditableModel.UpdatedBy = systemID
+	platformApp.CreatedBy = systemID
+	platformApp.UpdatedBy = systemID
 
 	_, err := db.NewInsert().Model(platformApp).Exec(ctx)
 	if err != nil {
@@ -149,8 +150,8 @@ func seedBasicData(db *bun.DB) error {
 		Slug: "default",
 	}
 	defaultApp.AuditableModel.ID = defaultAppID
-	defaultApp.AuditableModel.CreatedBy = systemID
-	defaultApp.AuditableModel.UpdatedBy = systemID
+	defaultApp.CreatedBy = systemID
+	defaultApp.UpdatedBy = systemID
 
 	_, err = db.NewInsert().Model(defaultApp).Exec(ctx)
 	if err != nil {
@@ -173,8 +174,8 @@ func seedBasicData(db *bun.DB) error {
 		EmailVerified: true,
 	}
 	adminUser.AuditableModel.ID = adminUserID
-	adminUser.AuditableModel.CreatedBy = systemID
-	adminUser.AuditableModel.UpdatedBy = systemID
+	adminUser.CreatedBy = systemID
+	adminUser.UpdatedBy = systemID
 
 	_, err = db.NewInsert().Model(adminUser).Exec(ctx)
 	if err != nil {
@@ -190,8 +191,8 @@ func seedBasicData(db *bun.DB) error {
 		Role:   schema.MemberRoleAdmin,
 	}
 	adminMember.AuditableModel.ID = adminMemberID
-	adminMember.AuditableModel.CreatedBy = systemID
-	adminMember.AuditableModel.UpdatedBy = systemID
+	adminMember.CreatedBy = systemID
+	adminMember.UpdatedBy = systemID
 
 	_, err = db.NewInsert().Model(adminMember).Exec(ctx)
 	if err != nil {
@@ -226,8 +227,8 @@ func seedBasicData(db *bun.DB) error {
 	for _, role := range roles {
 		// Set audit fields
 		role.AuditableModel.ID = role.ID
-		role.AuditableModel.CreatedBy = systemID
-		role.AuditableModel.UpdatedBy = systemID
+		role.CreatedBy = systemID
+		role.UpdatedBy = systemID
 
 		_, err = db.NewInsert().Model(role).Exec(ctx)
 		if err != nil {
@@ -243,7 +244,7 @@ func seedBasicData(db *bun.DB) error {
 	return nil
 }
 
-// seedUsers seeds test users
+// seedUsers seeds test users.
 func seedUsers(db *bun.DB, count int, appID string) error {
 	ctx := context.Background()
 
@@ -254,19 +255,23 @@ func seedUsers(db *bun.DB, count int, appID string) error {
 
 	// Parse app ID
 	var targetAppID xid.ID
+
 	if appID != "" {
 		parsedID, err := xid.FromString(appID)
 		if err != nil {
 			return fmt.Errorf("invalid app ID: %w", err)
 		}
+
 		targetAppID = parsedID
 	} else {
 		// Use default app
 		var app schema.App
+
 		err := db.NewSelect().Model(&app).Where("slug = ?", "default").Scan(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to find default app: %w", err)
 		}
+
 		targetAppID = app.ID
 	}
 
@@ -302,8 +307,8 @@ func seedUsers(db *bun.DB, count int, appID string) error {
 
 		// Set audit fields
 		member.AuditableModel.ID = memberID
-		member.AuditableModel.CreatedBy = systemID
-		member.AuditableModel.UpdatedBy = systemID
+		member.CreatedBy = systemID
+		member.UpdatedBy = systemID
 
 		_, err = db.NewInsert().Model(member).Exec(ctx)
 		if err != nil {
@@ -314,10 +319,11 @@ func seedUsers(db *bun.DB, count int, appID string) error {
 	}
 
 	fmt.Printf("✓ Successfully seeded %d users\n", count)
+
 	return nil
 }
 
-// seedApps seeds test apps
+// seedApps seeds test apps.
 func seedApps(db *bun.DB, count int) error {
 	ctx := context.Background()
 
@@ -336,8 +342,8 @@ func seedApps(db *bun.DB, count int) error {
 
 		// Set audit fields
 		app.AuditableModel.ID = appID
-		app.AuditableModel.CreatedBy = systemID
-		app.AuditableModel.UpdatedBy = systemID
+		app.CreatedBy = systemID
+		app.UpdatedBy = systemID
 
 		_, err := db.NewInsert().Model(app).Exec(ctx)
 		if err != nil {
@@ -348,10 +354,11 @@ func seedApps(db *bun.DB, count int) error {
 	}
 
 	fmt.Printf("✓ Successfully seeded %d apps\n", count)
+
 	return nil
 }
 
-// clearSeedData clears all seeded data
+// clearSeedData clears all seeded data.
 func clearSeedData(db *bun.DB) error {
 	ctx := context.Background()
 
@@ -371,5 +378,6 @@ func clearSeedData(db *bun.DB) error {
 	}
 
 	fmt.Println("✓ All seeded data cleared successfully")
+
 	return nil
 }

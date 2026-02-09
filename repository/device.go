@@ -10,25 +10,27 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// DeviceRepository implements core device repository using Bun
+// DeviceRepository implements core device repository using Bun.
 type DeviceRepository struct {
 	db *bun.DB
 }
 
-// NewDeviceRepository creates a new device repository
+// NewDeviceRepository creates a new device repository.
 func NewDeviceRepository(db *bun.DB) *DeviceRepository {
 	return &DeviceRepository{db: db}
 }
 
-// CreateDevice creates a new device
+// CreateDevice creates a new device.
 func (r *DeviceRepository) CreateDevice(ctx context.Context, d *schema.Device) error {
 	_, err := r.db.NewInsert().Model(d).Exec(ctx)
+
 	return err
 }
 
-// FindDeviceByID finds a device by ID
+// FindDeviceByID finds a device by ID.
 func (r *DeviceRepository) FindDeviceByID(ctx context.Context, id xid.ID) (*schema.Device, error) {
 	device := &schema.Device{}
+
 	err := r.db.NewSelect().
 		Model(device).
 		Where("id = ?", id).
@@ -37,12 +39,14 @@ func (r *DeviceRepository) FindDeviceByID(ctx context.Context, id xid.ID) (*sche
 	if err != nil {
 		return nil, err
 	}
+
 	return device, nil
 }
 
-// FindDeviceByFingerprint finds a device by user ID and fingerprint
+// FindDeviceByFingerprint finds a device by user ID and fingerprint.
 func (r *DeviceRepository) FindDeviceByFingerprint(ctx context.Context, userID xid.ID, fingerprint string) (*schema.Device, error) {
 	device := &schema.Device{}
+
 	err := r.db.NewSelect().
 		Model(device).
 		Where("user_id = ?", userID).
@@ -52,10 +56,11 @@ func (r *DeviceRepository) FindDeviceByFingerprint(ctx context.Context, userID x
 	if err != nil {
 		return nil, err
 	}
+
 	return device, nil
 }
 
-// ListDevices lists devices with filtering and pagination
+// ListDevices lists devices with filtering and pagination.
 func (r *DeviceRepository) ListDevices(ctx context.Context, filter *device.ListDevicesFilter) (*pagination.PageResponse[*schema.Device], error) {
 	var devices []*schema.Device
 
@@ -83,27 +88,29 @@ func (r *DeviceRepository) ListDevices(ctx context.Context, filter *device.ListD
 	return pagination.NewPageResponse(devices, int64(total), &filter.PaginationParams), nil
 }
 
-// UpdateDevice updates a device
+// UpdateDevice updates a device.
 func (r *DeviceRepository) UpdateDevice(ctx context.Context, d *schema.Device) error {
 	_, err := r.db.NewUpdate().
 		Model(d).
 		Where("id = ?", d.ID).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteDevice soft deletes a device by ID
+// DeleteDevice soft deletes a device by ID.
 func (r *DeviceRepository) DeleteDevice(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.Device)(nil)).
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteDeviceByFingerprint soft deletes a device by user ID and fingerprint
+// DeleteDeviceByFingerprint soft deletes a device by user ID and fingerprint.
 func (r *DeviceRepository) DeleteDeviceByFingerprint(ctx context.Context, userID xid.ID, fingerprint string) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.Device)(nil)).
@@ -111,15 +118,17 @@ func (r *DeviceRepository) DeleteDeviceByFingerprint(ctx context.Context, userID
 		Where("fingerprint = ?", fingerprint).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// CountDevices counts devices for a user
+// CountDevices counts devices for a user.
 func (r *DeviceRepository) CountDevices(ctx context.Context, userID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Device)(nil)).
 		Where("user_id = ?", userID).
 		Where("deleted_at IS NULL").
 		Count(ctx)
+
 	return count, err
 }

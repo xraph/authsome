@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// UsersListPage shows list of users with search, filters, pagination, and bulk actions
+// UsersListPage shows list of users with search, filters, pagination, and bulk actions.
 func (p *PagesManager) UsersListPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -529,7 +529,7 @@ func (p *PagesManager) UsersListPage(ctx *router.PageContext) (g.Node, error) {
 	), nil
 }
 
-// UserDetailPage shows detailed user information
+// UserDetailPage shows detailed user information.
 func (p *PagesManager) UserDetailPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 	userID := ctx.Param("userId")

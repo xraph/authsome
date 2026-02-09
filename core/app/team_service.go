@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/core/rbac"
 )
 
-// TeamService handles team aggregate operations
+// TeamService handles team aggregate operations.
 type TeamService struct {
 	repo       TeamRepository
 	memberRepo MemberRepository // For validation (members exist)
@@ -18,7 +18,7 @@ type TeamService struct {
 	rbacSvc    *rbac.Service
 }
 
-// NewTeamService creates a new team service
+// NewTeamService creates a new team service.
 func NewTeamService(repo TeamRepository, memberRepo MemberRepository, cfg Config, rbacSvc *rbac.Service) *TeamService {
 	return &TeamService{
 		repo:       repo,
@@ -28,32 +28,35 @@ func NewTeamService(repo TeamRepository, memberRepo MemberRepository, cfg Config
 	}
 }
 
-// CreateTeam creates a new team
+// CreateTeam creates a new team.
 func (s *TeamService) CreateTeam(ctx context.Context, team *Team) error {
 	team.CreatedAt = time.Now()
 	team.UpdatedAt = time.Now()
+
 	return s.repo.CreateTeam(ctx, team.ToSchema())
 }
 
-// FindTeamByID finds a team by ID
+// FindTeamByID finds a team by ID.
 func (s *TeamService) FindTeamByID(ctx context.Context, id xid.ID) (*Team, error) {
 	teamSchema, err := s.repo.FindTeamByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaTeam(teamSchema), nil
 }
 
-// FindTeamByName finds a team by name within an app
+// FindTeamByName finds a team by name within an app.
 func (s *TeamService) FindTeamByName(ctx context.Context, appID xid.ID, name string) (*Team, error) {
 	schemaTeam, err := s.repo.FindTeamByName(ctx, appID, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find team by name: %w", err)
 	}
+
 	return FromSchemaTeam(schemaTeam), nil
 }
 
-// ListTeams lists teams in an app with pagination
+// ListTeams lists teams in an app with pagination.
 func (s *TeamService) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*pagination.PageResponse[*Team], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -67,6 +70,7 @@ func (s *TeamService) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*
 
 	// Convert schema teams to DTOs
 	teams := FromSchemaTeams(response.Data)
+
 	return &pagination.PageResponse[*Team]{
 		Data:       teams,
 		Pagination: response.Pagination,
@@ -75,42 +79,44 @@ func (s *TeamService) ListTeams(ctx context.Context, filter *ListTeamsFilter) (*
 
 // UpdateTeam updates a team
 // Returns an error if the update fails
-// Note: Updating SCIM-managed teams should emit a warning at the handler level
+// Note: Updating SCIM-managed teams should emit a warning at the handler level.
 func (s *TeamService) UpdateTeam(ctx context.Context, team *Team) error {
 	team.UpdatedAt = time.Now()
+
 	return s.repo.UpdateTeam(ctx, team.ToSchema())
 }
 
-// IsSCIMManaged checks if a team is managed via SCIM provisioning
+// IsSCIMManaged checks if a team is managed via SCIM provisioning.
 func (s *TeamService) IsSCIMManaged(team *Team) bool {
 	return team.ProvisionedBy != nil && *team.ProvisionedBy == "scim"
 }
 
 // DeleteTeam deletes a team by ID
-// Note: Deleting SCIM-managed teams should emit a warning at the handler level
+// Note: Deleting SCIM-managed teams should emit a warning at the handler level.
 func (s *TeamService) DeleteTeam(ctx context.Context, id xid.ID) error {
 	return s.repo.DeleteTeam(ctx, id)
 }
 
-// CountTeams returns total number of teams in an app
+// CountTeams returns total number of teams in an app.
 func (s *TeamService) CountTeams(ctx context.Context, appID xid.ID) (int, error) {
 	return s.repo.CountTeams(ctx, appID)
 }
 
-// AddTeamMember adds a member to a team
+// AddTeamMember adds a member to a team.
 func (s *TeamService) AddTeamMember(ctx context.Context, tm *TeamMember) (*TeamMember, error) {
 	if err := s.repo.AddTeamMember(ctx, tm.ToSchema()); err != nil {
 		return nil, err
 	}
+
 	return tm, nil
 }
 
-// RemoveTeamMember removes a member from a team
+// RemoveTeamMember removes a member from a team.
 func (s *TeamService) RemoveTeamMember(ctx context.Context, teamID, memberID xid.ID) error {
 	return s.repo.RemoveTeamMember(ctx, teamID, memberID)
 }
 
-// ListTeamMembers lists members of a team with pagination
+// ListTeamMembers lists members of a team with pagination.
 func (s *TeamService) ListTeamMembers(ctx context.Context, filter *ListTeamMembersFilter) (*pagination.PageResponse[*TeamMember], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -124,23 +130,24 @@ func (s *TeamService) ListTeamMembers(ctx context.Context, filter *ListTeamMembe
 
 	// Convert schema team members to DTOs
 	teamMembers := FromSchemaTeamMembers(response.Data)
+
 	return &pagination.PageResponse[*TeamMember]{
 		Data:       teamMembers,
 		Pagination: response.Pagination,
 	}, nil
 }
 
-// CountTeamMembers returns total number of members in a team
+// CountTeamMembers returns total number of members in a team.
 func (s *TeamService) CountTeamMembers(ctx context.Context, teamID xid.ID) (int, error) {
 	return s.repo.CountTeamMembers(ctx, teamID)
 }
 
-// IsTeamMember checks if a member is part of a team
+// IsTeamMember checks if a member is part of a team.
 func (s *TeamService) IsTeamMember(ctx context.Context, teamID, memberID xid.ID) (bool, error) {
 	return s.repo.IsTeamMember(ctx, teamID, memberID)
 }
 
-// ListMemberTeams lists all teams a member belongs to with pagination
+// ListMemberTeams lists all teams a member belongs to with pagination.
 func (s *TeamService) ListMemberTeams(ctx context.Context, filter *ListMemberTeamsFilter) (*pagination.PageResponse[*Team], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -154,16 +161,17 @@ func (s *TeamService) ListMemberTeams(ctx context.Context, filter *ListMemberTea
 
 	// Convert schema teams to DTOs
 	teams := FromSchemaTeams(response.Data)
+
 	return &pagination.PageResponse[*Team]{
 		Data:       teams,
 		Pagination: response.Pagination,
 	}, nil
 }
 
-// IsTeamMemberSCIMManaged checks if a team membership is managed via SCIM provisioning
+// IsTeamMemberSCIMManaged checks if a team membership is managed via SCIM provisioning.
 func (s *TeamService) IsTeamMemberSCIMManaged(teamMember *TeamMember) bool {
 	return teamMember.ProvisionedBy != nil && *teamMember.ProvisionedBy == "scim"
 }
 
-// Type assertion to ensure TeamService implements TeamOperations
+// Type assertion to ensure TeamService implements TeamOperations.
 var _ TeamOperations = (*TeamService)(nil)

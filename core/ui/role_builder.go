@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// RoleFormData contains data for rendering the role form
+// RoleFormData contains data for rendering the role form.
 type RoleFormData struct {
 	Role            *schema.Role
 	Permissions     []*schema.Permission
@@ -22,7 +22,7 @@ type RoleFormData struct {
 	CancelURL       string
 }
 
-// RoleForm renders a form for creating/editing a role
+// RoleForm renders a form for creating/editing a role.
 func RoleForm(data RoleFormData) g.Node {
 	roleID := ""
 	roleName := ""
@@ -147,21 +147,23 @@ func RoleForm(data RoleFormData) g.Node {
 	)
 }
 
-// PermissionSelectorData contains data for the permission selector
+// PermissionSelectorData contains data for the permission selector.
 type PermissionSelectorData struct {
 	Permissions     []*schema.Permission
 	SelectedPermIDs map[xid.ID]bool
 }
 
-// PermissionSelector renders a permission multi-select component
+// PermissionSelector renders a permission multi-select component.
 func PermissionSelector(data PermissionSelectorData) g.Node {
 	// Group permissions by category
 	categories := make(map[string][]*schema.Permission)
+
 	for _, perm := range data.Permissions {
 		category := perm.Category
 		if category == "" {
 			category = "General"
 		}
+
 		categories[category] = append(categories[category], perm)
 	}
 
@@ -233,7 +235,7 @@ func PermissionSelector(data PermissionSelectorData) g.Node {
 	)
 }
 
-// renderPermissionCategories renders grouped permission checkboxes
+// renderPermissionCategories renders grouped permission checkboxes.
 func renderPermissionCategories(categories map[string][]*schema.Permission, selectedIDs map[xid.ID]bool) []g.Node {
 	nodes := make([]g.Node, 0, len(categories))
 
@@ -252,7 +254,7 @@ func renderPermissionCategories(categories map[string][]*schema.Permission, sele
 	return nodes
 }
 
-// renderPermissionCategory renders a single category section
+// renderPermissionCategory renders a single category section.
 func renderPermissionCategory(category string, perms []*schema.Permission, selectedIDs map[xid.ID]bool) g.Node {
 	return Details(
 		Class("permission-category border-b border-gray-200 dark:border-gray-700 last:border-b-0"),
@@ -278,7 +280,7 @@ func renderPermissionCategory(category string, perms []*schema.Permission, selec
 	)
 }
 
-// renderPermissionCheckboxes renders checkboxes for permissions
+// renderPermissionCheckboxes renders checkboxes for permissions.
 func renderPermissionCheckboxes(perms []*schema.Permission, selectedIDs map[xid.ID]bool) []g.Node {
 	nodes := make([]g.Node, 0, len(perms))
 
@@ -293,7 +295,7 @@ func renderPermissionCheckboxes(perms []*schema.Permission, selectedIDs map[xid.
 					Type("checkbox"),
 					Name("permissionIDs[]"),
 					Value(perm.ID.String()),
-					ID(fmt.Sprintf("perm-%s", perm.ID.String())),
+					ID("perm-"+perm.ID.String()),
 					g.If(isSelected, Checked()),
 					Class("h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"),
 				),
@@ -301,7 +303,7 @@ func renderPermissionCheckboxes(perms []*schema.Permission, selectedIDs map[xid.
 			Div(
 				Class("ml-3 text-sm"),
 				Label(
-					g.Attr("for", fmt.Sprintf("perm-%s", perm.ID.String())),
+					g.Attr("for", "perm-"+perm.ID.String()),
 					Class("font-medium text-gray-700 dark:text-gray-300 cursor-pointer"),
 					g.Text(perm.Name),
 				),
@@ -321,7 +323,7 @@ func renderPermissionCheckboxes(perms []*schema.Permission, selectedIDs map[xid.
 	return nodes
 }
 
-// RoleListTableData contains data for the role list table
+// RoleListTableData contains data for the role list table.
 type RoleListTableData struct {
 	Roles       []*schema.Role
 	IsTemplate  bool
@@ -332,7 +334,7 @@ type RoleListTableData struct {
 	ShowActions bool
 }
 
-// RoleListTable renders a table of roles with actions
+// RoleListTable renders a table of roles with actions.
 func RoleListTable(data RoleListTableData) g.Node {
 	return Div(
 		Class("role-list-table overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg"),
@@ -377,7 +379,7 @@ func RoleListTable(data RoleListTableData) g.Node {
 	)
 }
 
-// renderRoleRows renders table rows for roles
+// renderRoleRows renders table rows for roles.
 func renderRoleRows(data RoleListTableData) []g.Node {
 	if len(data.Roles) == 0 {
 		return []g.Node{
@@ -403,7 +405,7 @@ func renderRoleRows(data RoleListTableData) []g.Node {
 	return nodes
 }
 
-// renderRoleRow renders a single role row
+// renderRoleRow renders a single role row.
 func renderRoleRow(role *schema.Role, data RoleListTableData) g.Node {
 	return Tr(
 		Class("hover:bg-gray-50 dark:hover:bg-gray-800"),
@@ -500,7 +502,7 @@ func renderRoleRow(role *schema.Role, data RoleListTableData) g.Node {
 	)
 }
 
-// RoleManagementInterfaceData contains data for the full role management interface
+// RoleManagementInterfaceData contains data for the full role management interface.
 type RoleManagementInterfaceData struct {
 	Title         string
 	Description   string
@@ -513,7 +515,7 @@ type RoleManagementInterfaceData struct {
 	ShowActions   bool
 }
 
-// RoleManagementInterface renders the complete role management UI
+// RoleManagementInterface renders the complete role management UI.
 func RoleManagementInterface(data RoleManagementInterfaceData) g.Node {
 	return Div(
 		Class("role-management-interface space-y-6"),
@@ -551,12 +553,14 @@ func RoleManagementInterface(data RoleManagementInterfaceData) g.Node {
 				if data.OrgID != nil {
 					return fmt.Sprintf("%s/organizations/%s/roles/%s/edit", data.BasePath, data.OrgID.String(), roleID.String())
 				}
+
 				return fmt.Sprintf("%s/settings/roles/%s/edit", data.BasePath, roleID.String())
 			},
 			OnDelete: func(roleID xid.ID) string {
 				if data.OrgID != nil {
 					return fmt.Sprintf("%s/organizations/%s/roles/%s/delete", data.BasePath, data.OrgID.String(), roleID.String())
 				}
+
 				return fmt.Sprintf("%s/settings/roles/%s/delete", data.BasePath, roleID.String())
 			},
 			OnClone: func(roleID xid.ID) string {
@@ -567,7 +571,7 @@ func RoleManagementInterface(data RoleManagementInterfaceData) g.Node {
 	)
 }
 
-// renderAddPermissionModal renders a modal for creating custom permissions
+// renderAddPermissionModal renders a modal for creating custom permissions.
 func renderAddPermissionModal() g.Node {
 	return Div(
 		ID("addPermissionModal"),

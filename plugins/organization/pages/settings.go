@@ -15,7 +15,7 @@ import (
 	"github.com/xraph/forgeui/primitives"
 )
 
-// OrganizationSettingsPage renders the organization settings page with ForgeUI components
+// OrganizationSettingsPage renders the organization settings page with ForgeUI components.
 func OrganizationSettingsPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -108,7 +108,7 @@ func OrganizationSettingsPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// generalSettingsSectionV2 renders the general settings card with Alpine.js bindings
+// generalSettingsSectionV2 renders the general settings card with Alpine.js bindings.
 func generalSettingsSectionV2(appID string) g.Node {
 	return card.Card(
 		card.Header(
@@ -201,7 +201,7 @@ func generalSettingsSectionV2(appID string) g.Node {
 	)
 }
 
-// creationSettingsSection renders the organization creation settings
+// creationSettingsSection renders the organization creation settings.
 func creationSettingsSection(appID string) g.Node {
 	return card.Card(
 		card.Header(
@@ -304,7 +304,7 @@ func creationSettingsSection(appID string) g.Node {
 	)
 }
 
-// membershipSettingsSection renders the membership-related settings
+// membershipSettingsSection renders the membership-related settings.
 func membershipSettingsSection(appID string) g.Node {
 	return card.Card(
 		card.Header(
@@ -403,7 +403,7 @@ func membershipSettingsSection(appID string) g.Node {
 	)
 }
 
-// roleTemplatesSectionV2 renders the role templates section with improved UI
+// roleTemplatesSectionV2 renders the role templates section with improved UI.
 func roleTemplatesSectionV2(currentApp *app.App, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 
@@ -528,7 +528,7 @@ func roleTemplatesSectionV2(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// settingsPageData returns the Alpine.js data object for the settings page
+// settingsPageData returns the Alpine.js data object for the settings page.
 func settingsPageData(appID string) string {
 	return fmt.Sprintf(`{
 		appId: '%s',
@@ -628,10 +628,11 @@ func settingsPageData(appID string) string {
 	}`, appID)
 }
 
-// RoleTemplateFormPage renders the create/edit role template form page
+// RoleTemplateFormPage renders the create/edit role template form page.
 func RoleTemplateFormPage(currentApp *app.App, templateID, basePath string, isEdit bool) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
+
 	title := "Create Role Template"
 	if isEdit {
 		title = "Edit Role Template"
@@ -832,14 +833,14 @@ func RoleTemplateFormPage(currentApp *app.App, templateID, basePath string, isEd
 	)
 }
 
-// settingsPermissionItem represents a single permission checkbox for settings page
+// settingsPermissionItem represents a single permission checkbox for settings page.
 type settingsPermissionItem struct {
 	ID          string
 	Label       string
 	Description string
 }
 
-// permissionGroup renders a group of related permissions
+// permissionGroup renders a group of related permissions.
 func permissionGroup(groupName string, items []settingsPermissionItem) g.Node {
 	checkboxes := make([]g.Node, len(items))
 	for i, item := range items {
@@ -874,7 +875,7 @@ func permissionGroup(groupName string, items []settingsPermissionItem) g.Node {
 	)
 }
 
-// roleTemplateFormData returns the Alpine.js data object for role template form
+// roleTemplateFormData returns the Alpine.js data object for role template form.
 func roleTemplateFormData(appID, templateID string, isEdit bool, appBase string) string {
 	return fmt.Sprintf(`{
 		form: {

@@ -20,7 +20,7 @@ import (
 // Bridge Function Implementations
 // =============================================================================
 
-// bridgeGetSettings handles the getSettings bridge call
+// bridgeGetSettings handles the getSettings bridge call.
 func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSettingsInput) (*GetSettingsResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -79,7 +79,7 @@ func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSett
 	}, nil
 }
 
-// bridgeUpdateSettings handles the updateSettings bridge call
+// bridgeUpdateSettings handles the updateSettings bridge call.
 func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input UpdateSettingsInput) (*UpdateSettingsResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -192,6 +192,7 @@ func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input Upda
 func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context) (context.Context, xid.ID, error) {
 	// Get the already-enriched context from the HTTP request
 	var goCtx context.Context
+
 	req := bridgeCtx.Request()
 
 	if req != nil {
@@ -204,6 +205,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context) (c
 	appID, hasAppID := contexts.GetAppID(goCtx)
 	if !hasAppID || appID == xid.NilID() {
 		e.plugin.logger.Error("[NotificationBridge] No app ID in context")
+
 		return nil, xid.NilID(), errs.BadRequest("invalid app context")
 	}
 
@@ -211,6 +213,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context) (c
 	userID, hasUserID := contexts.GetUserID(goCtx)
 	if !hasUserID || userID == xid.NilID() {
 		e.plugin.logger.Error("[NotificationBridge] Unauthorized - no user ID in context")
+
 		return nil, xid.NilID(), errs.Unauthorized()
 	}
 
@@ -221,7 +224,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context) (c
 // Template Bridge Handlers
 // =============================================================================
 
-// bridgeListTemplates handles the listTemplates bridge call
+// bridgeListTemplates handles the listTemplates bridge call.
 func (e *DashboardExtension) bridgeListTemplates(ctx bridge.Context, input ListTemplatesInput) (*ListTemplatesResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -241,9 +244,11 @@ func (e *DashboardExtension) bridgeListTemplates(ctx bridge.Context, input ListT
 		notifType := notification.NotificationType(*input.Type)
 		filter.Type = &notifType
 	}
+
 	if input.Language != nil {
 		filter.Language = input.Language
 	}
+
 	if input.Active != nil {
 		filter.Active = input.Active
 	}
@@ -252,6 +257,7 @@ func (e *DashboardExtension) bridgeListTemplates(ctx bridge.Context, input ListT
 	response, err := e.plugin.service.ListTemplates(goCtx, filter)
 	if err != nil {
 		e.plugin.logger.Error("failed to list templates", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to list templates", err)
 	}
 
@@ -287,7 +293,7 @@ func (e *DashboardExtension) bridgeListTemplates(ctx bridge.Context, input ListT
 	}, nil
 }
 
-// bridgeGetTemplate handles the getTemplate bridge call
+// bridgeGetTemplate handles the getTemplate bridge call.
 func (e *DashboardExtension) bridgeGetTemplate(ctx bridge.Context, input GetTemplateInput) (*GetTemplateResult, error) {
 	goCtx, _, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -309,7 +315,7 @@ func (e *DashboardExtension) bridgeGetTemplate(ctx bridge.Context, input GetTemp
 	}, nil
 }
 
-// bridgeCreateTemplate handles the createTemplate bridge call
+// bridgeCreateTemplate handles the createTemplate bridge call.
 func (e *DashboardExtension) bridgeCreateTemplate(ctx bridge.Context, input CreateTemplateInput) (*CreateTemplateResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -332,6 +338,7 @@ func (e *DashboardExtension) bridgeCreateTemplate(ctx bridge.Context, input Crea
 	template, err := e.plugin.service.CreateTemplate(goCtx, createReq)
 	if err != nil {
 		e.plugin.logger.Error("failed to create template", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to create template", err)
 	}
 
@@ -342,7 +349,7 @@ func (e *DashboardExtension) bridgeCreateTemplate(ctx bridge.Context, input Crea
 	}, nil
 }
 
-// bridgeUpdateTemplate handles the updateTemplate bridge call
+// bridgeUpdateTemplate handles the updateTemplate bridge call.
 func (e *DashboardExtension) bridgeUpdateTemplate(ctx bridge.Context, input UpdateTemplateInput) (*UpdateTemplateResult, error) {
 	goCtx, _, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -367,6 +374,7 @@ func (e *DashboardExtension) bridgeUpdateTemplate(ctx bridge.Context, input Upda
 	err = e.plugin.service.UpdateTemplate(goCtx, templateID, updateReq)
 	if err != nil {
 		e.plugin.logger.Error("failed to update template", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to update template", err)
 	}
 
@@ -383,7 +391,7 @@ func (e *DashboardExtension) bridgeUpdateTemplate(ctx bridge.Context, input Upda
 	}, nil
 }
 
-// bridgeDeleteTemplate handles the deleteTemplate bridge call
+// bridgeDeleteTemplate handles the deleteTemplate bridge call.
 func (e *DashboardExtension) bridgeDeleteTemplate(ctx bridge.Context, input DeleteTemplateInput) (*DeleteTemplateResult, error) {
 	goCtx, _, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -398,6 +406,7 @@ func (e *DashboardExtension) bridgeDeleteTemplate(ctx bridge.Context, input Dele
 	err = e.plugin.service.DeleteTemplate(goCtx, templateID)
 	if err != nil {
 		e.plugin.logger.Error("failed to delete template", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to delete template", err)
 	}
 
@@ -407,7 +416,7 @@ func (e *DashboardExtension) bridgeDeleteTemplate(ctx bridge.Context, input Dele
 	}, nil
 }
 
-// bridgePreviewTemplate handles the previewTemplate bridge call
+// bridgePreviewTemplate handles the previewTemplate bridge call.
 func (e *DashboardExtension) bridgePreviewTemplate(ctx bridge.Context, input PreviewTemplateInput) (*PreviewTemplateResult, error) {
 	goCtx, _, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -449,7 +458,7 @@ func (e *DashboardExtension) bridgePreviewTemplate(ctx bridge.Context, input Pre
 	}, nil
 }
 
-// bridgeTestSendTemplate handles the testSendTemplate bridge call
+// bridgeTestSendTemplate handles the testSendTemplate bridge call.
 func (e *DashboardExtension) bridgeTestSendTemplate(ctx bridge.Context, input TestSendTemplateInput) (*TestSendTemplateResult, error) {
 	goCtx, _, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -483,6 +492,7 @@ func (e *DashboardExtension) bridgeTestSendTemplate(ctx bridge.Context, input Te
 	if err != nil {
 		return nil, errs.InternalServerError("failed to render template", err)
 	}
+
 	sendReq.Body = renderedBody
 
 	if template.Subject != "" {
@@ -490,6 +500,7 @@ func (e *DashboardExtension) bridgeTestSendTemplate(ctx bridge.Context, input Te
 		if err != nil {
 			return nil, errs.InternalServerError("failed to render subject", err)
 		}
+
 		sendReq.Subject = renderedSubject
 	}
 
@@ -497,6 +508,7 @@ func (e *DashboardExtension) bridgeTestSendTemplate(ctx bridge.Context, input Te
 	_, err = e.plugin.service.Send(goCtx, sendReq)
 	if err != nil {
 		e.plugin.logger.Error("failed to send test notification", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to send test notification", err)
 	}
 
@@ -510,7 +522,7 @@ func (e *DashboardExtension) bridgeTestSendTemplate(ctx bridge.Context, input Te
 // Overview/Statistics Bridge Handlers
 // =============================================================================
 
-// bridgeGetOverviewStats handles the getOverviewStats bridge call
+// bridgeGetOverviewStats handles the getOverviewStats bridge call.
 func (e *DashboardExtension) bridgeGetOverviewStats(ctx bridge.Context, input GetOverviewStatsInput) (*GetOverviewStatsResult, error) {
 	_, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -524,6 +536,7 @@ func (e *DashboardExtension) bridgeGetOverviewStats(ctx bridge.Context, input Ge
 		if err != nil {
 			return nil, errs.BadRequest("invalid startDate format")
 		}
+
 		endDate, err = time.Parse(time.RFC3339, *input.EndDate)
 		if err != nil {
 			return nil, errs.BadRequest("invalid endDate format")
@@ -533,6 +546,7 @@ func (e *DashboardExtension) bridgeGetOverviewStats(ctx bridge.Context, input Ge
 		if input.Days != nil {
 			days = *input.Days
 		}
+
 		endDate = time.Now()
 		startDate = endDate.AddDate(0, 0, -days)
 	}
@@ -566,7 +580,7 @@ func (e *DashboardExtension) bridgeGetOverviewStats(ctx bridge.Context, input Ge
 // Provider Bridge Handlers
 // =============================================================================
 
-// bridgeGetProviders handles the getProviders bridge call
+// bridgeGetProviders handles the getProviders bridge call.
 func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetProvidersInput) (*GetProvidersResult, error) {
 	_, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -587,7 +601,7 @@ func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetPro
 		SMSProvider: SMSProviderDTO{
 			Type:    "",
 			Enabled: false,
-			Config:  map[string]interface{}{},
+			Config:  map[string]any{},
 		},
 	}
 
@@ -608,7 +622,7 @@ func (e *DashboardExtension) bridgeGetProviders(ctx bridge.Context, input GetPro
 	}, nil
 }
 
-// bridgeUpdateProviders handles the updateProviders bridge call
+// bridgeUpdateProviders handles the updateProviders bridge call.
 func (e *DashboardExtension) bridgeUpdateProviders(ctx bridge.Context, input UpdateProvidersInput) (*UpdateProvidersResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -619,6 +633,7 @@ func (e *DashboardExtension) bridgeUpdateProviders(ctx bridge.Context, input Upd
 	if input.EmailProvider != nil {
 		e.plugin.config.Providers.Email.Provider = input.EmailProvider.Type
 		e.plugin.config.Providers.Email.FromName = input.EmailProvider.FromName
+
 		e.plugin.config.Providers.Email.From = input.EmailProvider.FromEmail
 		if input.EmailProvider.Config != nil {
 			e.plugin.config.Providers.Email.Config = input.EmailProvider.Config
@@ -630,6 +645,7 @@ func (e *DashboardExtension) bridgeUpdateProviders(ctx bridge.Context, input Upd
 		if e.plugin.config.Providers.SMS == nil {
 			e.plugin.config.Providers.SMS = &SMSProviderConfig{}
 		}
+
 		e.plugin.config.Providers.SMS.Provider = input.SMSProvider.Type
 		if input.SMSProvider.Config != nil {
 			e.plugin.config.Providers.SMS.Config = input.SMSProvider.Config
@@ -648,7 +664,7 @@ func (e *DashboardExtension) bridgeUpdateProviders(ctx bridge.Context, input Upd
 		SMSProvider: SMSProviderDTO{
 			Type:    "",
 			Enabled: false,
-			Config:  map[string]interface{}{},
+			Config:  map[string]any{},
 		},
 	}
 
@@ -674,7 +690,7 @@ func (e *DashboardExtension) bridgeUpdateProviders(ctx bridge.Context, input Upd
 	}, nil
 }
 
-// bridgeTestProvider handles the testProvider bridge call
+// bridgeTestProvider handles the testProvider bridge call.
 func (e *DashboardExtension) bridgeTestProvider(ctx bridge.Context, input TestProviderInput) (*TestProviderResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -689,11 +705,12 @@ func (e *DashboardExtension) bridgeTestProvider(ctx bridge.Context, input TestPr
 		Body:      "This is a test notification from the notification plugin.",
 	}
 
-	if input.ProviderType == "email" {
+	switch input.ProviderType {
+	case "email":
 		sendReq.Type = notification.NotificationTypeEmail
-	} else if input.ProviderType == "sms" {
+	case "sms":
 		sendReq.Type = notification.NotificationTypeSMS
-	} else {
+	default:
 		return nil, errs.BadRequest("invalid provider type")
 	}
 
@@ -701,6 +718,7 @@ func (e *DashboardExtension) bridgeTestProvider(ctx bridge.Context, input TestPr
 	_, err = e.plugin.service.Send(goCtx, sendReq)
 	if err != nil {
 		e.plugin.logger.Error("provider test failed", forge.F("error", err))
+
 		return &TestProviderResult{
 			Success: false,
 			Message: fmt.Sprintf("Test failed: %v", err),
@@ -717,7 +735,7 @@ func (e *DashboardExtension) bridgeTestProvider(ctx bridge.Context, input TestPr
 // Analytics Bridge Handlers
 // =============================================================================
 
-// bridgeGetAnalytics handles the getAnalytics bridge call
+// bridgeGetAnalytics handles the getAnalytics bridge call.
 func (e *DashboardExtension) bridgeGetAnalytics(ctx bridge.Context, input GetAnalyticsInput) (*GetAnalyticsResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -731,6 +749,7 @@ func (e *DashboardExtension) bridgeGetAnalytics(ctx bridge.Context, input GetAna
 		if err != nil {
 			return nil, errs.BadRequest("invalid startDate format")
 		}
+
 		endDate, err = time.Parse(time.RFC3339, *input.EndDate)
 		if err != nil {
 			return nil, errs.BadRequest("invalid endDate format")
@@ -740,6 +759,7 @@ func (e *DashboardExtension) bridgeGetAnalytics(ctx bridge.Context, input GetAna
 		if input.Days != nil {
 			days = *input.Days
 		}
+
 		endDate = time.Now()
 		startDate = endDate.AddDate(0, 0, -days)
 	}
@@ -802,7 +822,7 @@ func (e *DashboardExtension) bridgeGetAnalytics(ctx bridge.Context, input GetAna
 // Helper Functions
 // =============================================================================
 
-// templateToDTO converts a notification.Template to TemplateDTO
+// templateToDTO converts a notification.Template to TemplateDTO.
 func (e *DashboardExtension) templateToDTO(tmpl *notification.Template) TemplateDTO {
 	return TemplateDTO{
 		ID:          tmpl.ID.String(),
@@ -827,7 +847,7 @@ func (e *DashboardExtension) templateToDTO(tmpl *notification.Template) Template
 // Notification History Bridge Handlers
 // =============================================================================
 
-// bridgeListNotificationsHistory handles the listNotificationsHistory bridge call
+// bridgeListNotificationsHistory handles the listNotificationsHistory bridge call.
 func (e *DashboardExtension) bridgeListNotificationsHistory(ctx bridge.Context, input ListNotificationsHistoryInput) (*ListNotificationsHistoryResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -847,10 +867,12 @@ func (e *DashboardExtension) bridgeListNotificationsHistory(ctx bridge.Context, 
 		notifType := notification.NotificationType(*input.Type)
 		filter.Type = &notifType
 	}
+
 	if input.Status != nil {
 		notifStatus := notification.NotificationStatus(*input.Status)
 		filter.Status = &notifStatus
 	}
+
 	if input.Recipient != nil {
 		filter.Recipient = input.Recipient
 	}
@@ -859,6 +881,7 @@ func (e *DashboardExtension) bridgeListNotificationsHistory(ctx bridge.Context, 
 	response, err := e.plugin.service.ListNotifications(goCtx, filter)
 	if err != nil {
 		e.plugin.logger.Error("failed to list notifications history", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to list notifications", err)
 	}
 
@@ -880,7 +903,7 @@ func (e *DashboardExtension) bridgeListNotificationsHistory(ctx bridge.Context, 
 	}, nil
 }
 
-// bridgeGetNotificationDetail handles the getNotificationDetail bridge call
+// bridgeGetNotificationDetail handles the getNotificationDetail bridge call.
 func (e *DashboardExtension) bridgeGetNotificationDetail(ctx bridge.Context, input GetNotificationDetailInput) (*GetNotificationDetailResult, error) {
 	goCtx, _, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -897,6 +920,7 @@ func (e *DashboardExtension) bridgeGetNotificationDetail(ctx bridge.Context, inp
 	notif, err := e.plugin.service.GetNotification(goCtx, notifID)
 	if err != nil {
 		e.plugin.logger.Error("failed to get notification detail", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to get notification", err)
 	}
 
@@ -905,7 +929,7 @@ func (e *DashboardExtension) bridgeGetNotificationDetail(ctx bridge.Context, inp
 	}, nil
 }
 
-// Helper function to convert notification to DTO
+// Helper function to convert notification to DTO.
 func notificationToDTO(n *notification.Notification) NotificationHistoryDTO {
 	dto := NotificationHistoryDTO{
 		ID:         n.ID.String(),
@@ -926,10 +950,12 @@ func notificationToDTO(n *notification.Notification) NotificationHistoryDTO {
 		tid := n.TemplateID.String()
 		dto.TemplateID = &tid
 	}
+
 	if n.SentAt != nil {
 		sentAt := n.SentAt.Format(time.RFC3339)
 		dto.SentAt = &sentAt
 	}
+
 	if n.DeliveredAt != nil {
 		deliveredAt := n.DeliveredAt.Format(time.RFC3339)
 		dto.DeliveredAt = &deliveredAt
@@ -938,7 +964,7 @@ func notificationToDTO(n *notification.Notification) NotificationHistoryDTO {
 	return dto
 }
 
-// getBridgeFunctions returns the bridge functions for registration
+// getBridgeFunctions returns the bridge functions for registration.
 func (e *DashboardExtension) getBridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		// Settings
@@ -1040,7 +1066,7 @@ func (e *DashboardExtension) getBridgeFunctions() []ui.BridgeFunction {
 // Email Builder Bridge Handlers
 // =============================================================================
 
-// bridgeSaveBuilderTemplate saves a template from the visual builder
+// bridgeSaveBuilderTemplate saves a template from the visual builder.
 func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input SaveBuilderTemplateInput) (*SaveBuilderTemplateResult, error) {
 	goCtx, appID, err := e.buildContextFromBridge(ctx)
 	if err != nil {
@@ -1051,9 +1077,11 @@ func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input
 	if input.Name == "" {
 		return nil, errs.BadRequest("template name is required")
 	}
+
 	if input.TemplateKey == "" {
 		return nil, errs.BadRequest("template key is required")
 	}
+
 	if input.BuilderJSON == "" {
 		return nil, errs.BadRequest("builder document is required")
 	}
@@ -1062,20 +1090,24 @@ func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input
 	doc, err := builder.FromJSON(input.BuilderJSON)
 	if err != nil {
 		e.plugin.logger.Error("invalid builder document", forge.F("error", err))
+
 		return nil, errs.BadRequest("invalid builder document format")
 	}
 
 	// Validate document structure
 	if err := doc.Validate(); err != nil {
 		e.plugin.logger.Error("builder document validation failed", forge.F("error", err))
+
 		return nil, errs.BadRequest("invalid builder document structure")
 	}
 
 	// Render to HTML
 	renderer := builder.NewRenderer(doc)
+
 	html, err := renderer.RenderToHTML()
 	if err != nil {
 		e.plugin.logger.Error("failed to render builder template to HTML", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to render template", err)
 	}
 
@@ -1093,7 +1125,7 @@ func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input
 			Name:    &input.Name,
 			Subject: &input.Subject,
 			Body:    &html,
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"builderType":   "visual",
 				"builderBlocks": input.BuilderJSON,
 			},
@@ -1102,6 +1134,7 @@ func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input
 		err = e.plugin.service.UpdateTemplate(goCtx, templateID, updateReq)
 		if err != nil {
 			e.plugin.logger.Error("failed to update builder template", forge.F("error", err))
+
 			return nil, errs.InternalServerError("failed to update template", err)
 		}
 
@@ -1129,7 +1162,7 @@ func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input
 		Type:        notification.NotificationTypeEmail,
 		Subject:     input.Subject,
 		Body:        html,
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"builderType":   "visual",
 			"builderBlocks": input.BuilderJSON,
 		},
@@ -1138,6 +1171,7 @@ func (e *DashboardExtension) bridgeSaveBuilderTemplate(ctx bridge.Context, input
 	template, err := e.plugin.service.CreateTemplate(goCtx, createReq)
 	if err != nil {
 		e.plugin.logger.Error("failed to create builder template", forge.F("error", err))
+
 		return nil, errs.InternalServerError("failed to create template", err)
 	}
 

@@ -19,7 +19,7 @@ import (
 // Bridge Function Implementations
 // =============================================================================
 
-// bridgeGetSessions handles the getSessions bridge call
+// bridgeGetSessions handles the getSessions bridge call.
 func (e *DashboardExtension) bridgeGetSessions(ctx bridge.Context, input GetSessionsInput) (*GetSessionsResult, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -33,10 +33,8 @@ func (e *DashboardExtension) bridgeGetSessions(ctx bridge.Context, input GetSess
 	}
 
 	// Set defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 25
@@ -57,6 +55,7 @@ func (e *DashboardExtension) bridgeGetSessions(ctx bridge.Context, input GetSess
 		if err != nil {
 			return nil, errs.BadRequest("invalid userId")
 		}
+
 		filter.UserID = &userID
 	}
 
@@ -64,6 +63,7 @@ func (e *DashboardExtension) bridgeGetSessions(ctx bridge.Context, input GetSess
 	sessionsResp, err := e.plugin.service.sessionSvc.ListSessions(goCtx, filter)
 	if err != nil {
 		e.plugin.logger.Error("failed to list sessions", forge.F("error", err.Error()))
+
 		return nil, errs.InternalServerError("failed to fetch sessions", err)
 	}
 
@@ -155,7 +155,7 @@ func (e *DashboardExtension) bridgeGetSessions(ctx bridge.Context, input GetSess
 	}, nil
 }
 
-// matchesFilters checks if a session matches the filter criteria
+// matchesFilters checks if a session matches the filter criteria.
 func (e *DashboardExtension) matchesFilters(sess *session.Session, device *DeviceInfo, statusFilter, deviceFilter, search string, now time.Time, soonThreshold time.Duration) bool {
 	isActive := sess.ExpiresAt.After(now)
 	isExpiring := isActive && sess.ExpiresAt.Sub(now) < soonThreshold
@@ -204,12 +204,15 @@ func (e *DashboardExtension) matchesFilters(sess *session.Session, device *Devic
 		}
 		// Simple contains check
 		found := false
+
 		for i := 0; i <= len(userIDStr)-len(search); i++ {
 			if userIDStr[i:i+len(search)] == search {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			return false
 		}
@@ -218,7 +221,7 @@ func (e *DashboardExtension) matchesFilters(sess *session.Session, device *Devic
 	return true
 }
 
-// bridgeGetSession handles the getSession bridge call
+// bridgeGetSession handles the getSession bridge call.
 func (e *DashboardExtension) bridgeGetSession(ctx bridge.Context, input GetSessionInput) (*GetSessionResult, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -277,9 +280,11 @@ func (e *DashboardExtension) bridgeGetSession(ctx bridge.Context, input GetSessi
 	if sess.OrganizationID != nil {
 		detail.OrganizationID = sess.OrganizationID.String()
 	}
+
 	if sess.EnvironmentID != nil {
 		detail.EnvironmentID = sess.EnvironmentID.String()
 	}
+
 	if sess.LastRefreshedAt != nil {
 		detail.LastRefreshedAt = sess.LastRefreshedAt
 		detail.LastRefreshedFmt = sess.LastRefreshedAt.Format("Jan 2, 2006 at 3:04 PM")
@@ -290,7 +295,7 @@ func (e *DashboardExtension) bridgeGetSession(ctx bridge.Context, input GetSessi
 	}, nil
 }
 
-// bridgeRevokeSession handles the revokeSession bridge call
+// bridgeRevokeSession handles the revokeSession bridge call.
 func (e *DashboardExtension) bridgeRevokeSession(ctx bridge.Context, input RevokeSessionInput) (*RevokeSessionResult, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -308,6 +313,7 @@ func (e *DashboardExtension) bridgeRevokeSession(ctx bridge.Context, input Revok
 		e.plugin.logger.Error("failed to revoke session",
 			forge.F("error", err.Error()),
 			forge.F("sessionId", input.SessionID))
+
 		return nil, errs.InternalServerError("failed to revoke session", err)
 	}
 
@@ -317,7 +323,7 @@ func (e *DashboardExtension) bridgeRevokeSession(ctx bridge.Context, input Revok
 	}, nil
 }
 
-// bridgeRevokeAllUserSessions handles the revokeAllUserSessions bridge call
+// bridgeRevokeAllUserSessions handles the revokeAllUserSessions bridge call.
 func (e *DashboardExtension) bridgeRevokeAllUserSessions(ctx bridge.Context, input RevokeAllUserSessionsInput) (*RevokeAllUserSessionsResult, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -329,6 +335,7 @@ func (e *DashboardExtension) bridgeRevokeAllUserSessions(ctx bridge.Context, inp
 	if err != nil {
 		return nil, errs.BadRequest("invalid appId")
 	}
+
 	userID, err := xid.FromString(input.UserID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid userId")
@@ -348,6 +355,7 @@ func (e *DashboardExtension) bridgeRevokeAllUserSessions(ctx bridge.Context, inp
 
 	// Revoke each session
 	revokedCount := 0
+
 	if sessionsResp != nil {
 		for _, sess := range sessionsResp.Data {
 			if err := e.plugin.service.sessionSvc.RevokeByID(goCtx, sess.ID); err == nil {
@@ -363,7 +371,7 @@ func (e *DashboardExtension) bridgeRevokeAllUserSessions(ctx bridge.Context, inp
 	}, nil
 }
 
-// bridgeGetUserSessions handles the getUserSessions bridge call
+// bridgeGetUserSessions handles the getUserSessions bridge call.
 func (e *DashboardExtension) bridgeGetUserSessions(ctx bridge.Context, input GetUserSessionsInput) (*GetUserSessionsResult, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -375,16 +383,15 @@ func (e *DashboardExtension) bridgeGetUserSessions(ctx bridge.Context, input Get
 	if err != nil {
 		return nil, errs.BadRequest("invalid appId")
 	}
+
 	userID, err := xid.FromString(input.UserID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid userId")
 	}
 
 	// Set defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	pageSize := input.PageSize
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 100
@@ -461,7 +468,7 @@ func (e *DashboardExtension) bridgeGetUserSessions(ctx bridge.Context, input Get
 	}, nil
 }
 
-// bridgeGetSessionStats handles the getSessionStats bridge call
+// bridgeGetSessionStats handles the getSessionStats bridge call.
 func (e *DashboardExtension) bridgeGetSessionStats(ctx bridge.Context, input GetSessionStatsInput) (*GetSessionStatsResult, error) {
 	goCtx, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -528,7 +535,7 @@ func (e *DashboardExtension) bridgeGetSessionStats(ctx bridge.Context, input Get
 	}, nil
 }
 
-// bridgeGetSettings handles the getSettings bridge call
+// bridgeGetSettings handles the getSettings bridge call.
 func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSettingsInput) (*GetSettingsResult, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -545,7 +552,7 @@ func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSett
 	}, nil
 }
 
-// bridgeUpdateSettings handles the updateSettings bridge call
+// bridgeUpdateSettings handles the updateSettings bridge call.
 func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input UpdateSettingsInput) (*UpdateSettingsResult, error) {
 	_, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -556,12 +563,15 @@ func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input Upda
 	if input.MaxSessionsPerUser > 0 && input.MaxSessionsPerUser <= 100 {
 		e.plugin.config.MaxSessionsPerUser = input.MaxSessionsPerUser
 	}
+
 	if input.SessionExpiryHours > 0 && input.SessionExpiryHours <= 8760 {
 		e.plugin.config.SessionExpiryHours = input.SessionExpiryHours
 	}
+
 	if input.EnableDeviceTracking != nil {
 		e.plugin.config.EnableDeviceTracking = *input.EnableDeviceTracking
 	}
+
 	if input.AllowCrossPlatform != nil {
 		e.plugin.config.AllowCrossPlatform = *input.AllowCrossPlatform
 	}
@@ -587,6 +597,7 @@ func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input Upda
 func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, appID string) (context.Context, error) {
 	// Get the already-enriched context from the HTTP request
 	var goCtx context.Context
+
 	req := bridgeCtx.Request()
 
 	if req != nil {
@@ -599,6 +610,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 	requestedAppID, err := xid.FromString(appID)
 	if err != nil {
 		e.plugin.logger.Error("[MultisessionBridge] Invalid app ID", forge.F("appID", appID), forge.F("error", err))
+
 		return nil, errs.BadRequest("invalid appId")
 	}
 
@@ -606,6 +618,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 	userID, hasUserID := contexts.GetUserID(goCtx)
 	if !hasUserID || userID == xid.NilID() {
 		e.plugin.logger.Error("[MultisessionBridge] Unauthorized - no user ID in context")
+
 		return nil, errs.Unauthorized()
 	}
 
@@ -618,7 +631,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 	return goCtx, nil
 }
 
-// getBridgeFunctions returns the bridge functions for registration
+// getBridgeFunctions returns the bridge functions for registration.
 func (e *DashboardExtension) getBridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		{

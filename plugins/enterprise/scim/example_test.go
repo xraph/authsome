@@ -16,7 +16,7 @@ import (
 	"github.com/xraph/authsome/plugins/enterprise/scim"
 )
 
-// Example: Basic SCIM plugin integration
+// Example: Basic SCIM plugin integration.
 func ExamplePlugin_basic() {
 	// Create AuthSome instance
 	auth := authsome.New(
@@ -40,7 +40,7 @@ func ExamplePlugin_basic() {
 	// - /api/auth/scim/v2/Bulk
 }
 
-// Example: Creating a provisioning token
+// Example: Creating a provisioning token.
 func ExampleService_CreateProvisioningToken() {
 	// Get SCIM service
 	// scimService := scimPlugin.Service()
@@ -65,7 +65,7 @@ func ExampleService_CreateProvisioningToken() {
 	// fmt.Printf("Token ID: %s\n", provToken.ID)
 }
 
-// Example: SCIM User creation request
+// Example: SCIM User creation request.
 func ExampleHandler_CreateUser() {
 	// POST /scim/v2/Users
 	// Authorization: Bearer <token>
@@ -87,11 +87,10 @@ func ExampleHandler_CreateUser() {
 	// }
 }
 
-// Test: Complete SCIM provisioning flow
+// Test: Complete SCIM provisioning flow.
 func TestSCIMProvisioningFlow(t *testing.T) {
 	// This is an example test showing the complete flow
 	// In a real test, you would use actual dependencies
-
 	t.Skip("Example test - skipped in CI")
 
 	// Setup
@@ -174,7 +173,7 @@ func TestSCIMProvisioningFlow(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Test: Bearer token authentication
+// Test: Bearer token authentication.
 func TestBearerTokenAuthentication(t *testing.T) {
 	t.Skip("Example test - skipped in CI")
 
@@ -184,6 +183,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 			return
 		}
 
@@ -191,6 +191,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
+
 			return
 		}
 
@@ -199,6 +200,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 		// Validate token (in real code, use service)
 		if token != "valid_token" {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
+
 			return
 		}
 
@@ -213,7 +215,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 	defer ts.Close()
 
 	// Test with valid token
-	req, _ := http.NewRequest("GET", ts.URL+"/scim/v2/Users", nil)
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/scim/v2/Users", nil)
 	req.Header.Set("Authorization", "Bearer valid_token")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -221,7 +223,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Test with invalid token
-	req, _ = http.NewRequest("GET", ts.URL+"/scim/v2/Users", nil)
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/scim/v2/Users", nil)
 	req.Header.Set("Authorization", "Bearer invalid_token")
 
 	resp, err = http.DefaultClient.Do(req)
@@ -229,7 +231,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
-// Test: Bulk operations
+// Test: Bulk operations.
 func TestBulkOperations(t *testing.T) {
 	t.Skip("Example test - skipped in CI")
 
@@ -241,10 +243,10 @@ func TestBulkOperations(t *testing.T) {
 				Method: "POST",
 				Path:   "/Users",
 				BulkID: "bulk1",
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"schemas":  []string{scim.SchemaCore},
 					"userName": "user1@example.com",
-					"emails": []map[string]interface{}{
+					"emails": []map[string]any{
 						{
 							"value": "user1@example.com",
 							"type":  "work",
@@ -256,10 +258,10 @@ func TestBulkOperations(t *testing.T) {
 				Method: "POST",
 				Path:   "/Users",
 				BulkID: "bulk2",
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"schemas":  []string{scim.SchemaCore},
 					"userName": "user2@example.com",
-					"emails": []map[string]interface{}{
+					"emails": []map[string]any{
 						{
 							"value": "user2@example.com",
 							"type":  "work",
@@ -293,7 +295,7 @@ func TestBulkOperations(t *testing.T) {
 	// }
 }
 
-// Test: Group synchronization
+// Test: Group synchronization.
 func TestGroupSynchronization(t *testing.T) {
 	t.Skip("Example test - skipped in CI")
 
@@ -314,6 +316,7 @@ func TestGroupSynchronization(t *testing.T) {
 
 	// Mock service
 	var mockService *scim.Service
+
 	orgID := xid.New()
 
 	// Create group (syncs to team)
@@ -325,7 +328,7 @@ func TestGroupSynchronization(t *testing.T) {
 	// (In real test, check organization service for team)
 }
 
-// Test: Rate limiting
+// Test: Rate limiting.
 func TestRateLimiting(t *testing.T) {
 	t.Skip("Example test - skipped in CI")
 
@@ -339,7 +342,7 @@ func TestRateLimiting(t *testing.T) {
 	successCount := 0
 	rateLimitCount := 0
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		// Send request
 		// resp, err := sendSCIMRequest()
 
@@ -348,16 +351,15 @@ func TestRateLimiting(t *testing.T) {
 		// } else if resp.StatusCode == http.StatusTooManyRequests {
 		// 	rateLimitCount++
 		// }
-
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Verify rate limiting is working
-	assert.Greater(t, rateLimitCount, 0, "Should have rate limited some requests")
-	assert.Greater(t, successCount, 0, "Should have allowed some requests")
+	assert.Positive(t, rateLimitCount, "Should have rate limited some requests")
+	assert.Positive(t, successCount, "Should have allowed some requests")
 }
 
-// Test: Provisioning logs
+// Test: Provisioning logs.
 func TestProvisioningLogs(t *testing.T) {
 	t.Skip("Example test - skipped in CI")
 
@@ -393,17 +395,17 @@ func TestProvisioningLogs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query logs
-	filters := map[string]interface{}{
+	filters := map[string]any{
 		"operation": "CREATE_USER",
 		"success":   true,
 	}
 
 	logs, err := mockRepo.ListProvisioningLogs(ctx, appID, envID, orgID, filters, 50, 0)
 	require.NoError(t, err)
-	assert.Greater(t, len(logs), 0)
+	assert.NotEmpty(t, logs)
 }
 
-// Benchmark: User creation
+// Benchmark: User creation.
 func BenchmarkUserCreation(b *testing.B) {
 	b.Skip("Example benchmark - skipped in CI")
 
@@ -414,9 +416,7 @@ func BenchmarkUserCreation(b *testing.B) {
 	// Mock service
 	var mockService *scim.Service
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		scimUser := &scim.SCIMUser{
 			Schemas:  []string{scim.SchemaCore},
 			UserName: "bench@example.com",
@@ -430,7 +430,7 @@ func BenchmarkUserCreation(b *testing.B) {
 	}
 }
 
-// Benchmark: Token validation
+// Benchmark: Token validation.
 func BenchmarkTokenValidation(b *testing.B) {
 	b.Skip("Example benchmark - skipped in CI")
 
@@ -440,9 +440,7 @@ func BenchmarkTokenValidation(b *testing.B) {
 	// Mock service
 	var mockService *scim.Service
 
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := mockService.ValidateProvisioningToken(ctx, token)
 		if err != nil {
 			// Expected in benchmark

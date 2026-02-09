@@ -88,9 +88,11 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.App)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Environment)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.EnvironmentPromotion)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -104,15 +106,19 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.Organization)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.OrganizationMember)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.OrganizationTeam)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.OrganizationTeamMember)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.OrganizationInvitation)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -121,15 +127,19 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.SecurityEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.TwoFASecret)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.BackupCode)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.TrustedDevice)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.OTPCode)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -138,21 +148,27 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.Member)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Session)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Account)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Verification)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Device)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.AuditEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.UserBan)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -161,15 +177,19 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.Role)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Permission)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.RolePermission)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.UserRole)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Policy)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -178,12 +198,15 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.JWTKey)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.APIKey)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.APIKeyRole)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.SSOProvider)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -192,15 +215,19 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.NotificationTemplate)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Notification)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Webhook)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Event)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.Delivery)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -209,6 +236,7 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.FormSchema)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.UsageEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -217,6 +245,7 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.Team)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.TeamMember)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -225,12 +254,15 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.Passkey)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MagicLink)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.PhoneVerification)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.EmailOTP)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -239,24 +271,31 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.MFAFactor)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFAChallenge)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFASession)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFATrustedDevice)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFAPolicy)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFABypass)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFAAttempt)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.MFARiskAssessment)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -265,12 +304,15 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.OAuthClient)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.AuthorizationCode)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.OAuthToken)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.SocialAccount)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -279,6 +321,7 @@ func init() {
 		if _, err := db.NewCreateTable().Model((*schema.ImpersonationSession)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateTable().Model((*schema.ImpersonationAuditEvent)(nil)).IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -287,9 +330,11 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.User)(nil)).Index("idx_users_email").Column("email").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.Session)(nil)).Index("idx_sessions_token").Column("token").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.Member)(nil)).Index("idx_members_app_user").Column("app_id", "user_id").Unique().IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -301,12 +346,15 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.Event)(nil)).Index("idx_webhook_events_app").Column("app_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_webhook_id").Column("webhook_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_event_id").Column("event_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.Delivery)(nil)).Index("idx_webhook_deliveries_status").Column("status", "next_retry_at").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -315,6 +363,7 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_endpoint_method").Column("endpoint", "method").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_plugin_feature").Column("plugin", "feature").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -323,6 +372,7 @@ func init() {
 		if _, err := db.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_env_app_slug ON environments(app_id, slug)"); err != nil {
 			return err
 		}
+
 		if _, err := db.ExecContext(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_org_app_env_slug ON organizations(app_id, environment_id, slug)"); err != nil {
 			return err
 		}
@@ -331,33 +381,43 @@ func init() {
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_user_id").Column("user_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_organization_id").Column("organization_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_session_id").Column("session_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_api_key_id").Column("api_key_id").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_method").Column("method").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_endpoint").Column("endpoint").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_status_code").Column("status_code").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_auth_method").Column("auth_method").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_country").Column("country").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_plugin").Column("plugin").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().Model((*schema.UsageEvent)(nil)).Index("idx_usage_feature").Column("feature").IfNotExists().Exec(ctx); err != nil {
 			return err
 		}
@@ -372,6 +432,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.JWTKey)(nil)).
 			Index("idx_jwt_keys_platform").
@@ -381,6 +442,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.JWTKey)(nil)).
 			Index("idx_jwt_keys_key_id_app").
@@ -391,6 +453,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.JWTKey)(nil)).
 			Index("idx_jwt_keys_active").
@@ -400,6 +463,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.JWTKey)(nil)).
 			Index("idx_jwt_keys_expires_at").
@@ -420,6 +484,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_environment_id").
@@ -429,6 +494,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_app_env").
@@ -438,6 +504,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_active").
@@ -447,6 +514,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_user_id").
@@ -456,6 +524,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_key_type").
@@ -465,6 +534,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_app_key_type").
@@ -474,6 +544,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKey)(nil)).
 			Index("idx_apikeys_impersonate_user").
@@ -494,6 +565,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKeyRole)(nil)).
 			Index("idx_apikey_roles_role").
@@ -503,6 +575,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.APIKeyRole)(nil)).
 			Index("idx_apikey_roles_org").
@@ -531,6 +604,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Session)(nil)).
 			Index("idx_sessions_app_user").
@@ -540,6 +614,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Session)(nil)).
 			Index("idx_sessions_expires_at").
@@ -549,6 +624,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Session)(nil)).
 			Index("idx_sessions_environment_id").
@@ -558,6 +634,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Session)(nil)).
 			Index("idx_sessions_organization_id").
@@ -578,6 +655,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Webhook)(nil)).
 			Index("idx_webhooks_app_env").
@@ -587,6 +665,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Webhook)(nil)).
 			Index("idx_webhooks_enabled").
@@ -606,6 +685,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Event)(nil)).
 			Index("idx_webhook_events_type").
@@ -614,6 +694,7 @@ func init() {
 			Exec(ctx); err != nil {
 			return err
 		}
+
 		if _, err := db.NewCreateIndex().
 			Model((*schema.Event)(nil)).
 			Index("idx_webhook_events_occurred_at").
@@ -628,10 +709,12 @@ func init() {
 		if err := db.NewSelect().Model((*schema.App)(nil)).ColumnExpr("COUNT(*)").Scan(ctx, &count); err == nil && count == 0 {
 			platformID := xid.New()
 			systemActor := xid.New()
+
 			_, err := db.NewInsert().Model(&schema.App{ID: platformID, Name: "Platform", Slug: "platform", IsPlatform: true, AuditableModel: schema.AuditableModel{CreatedBy: systemActor, UpdatedBy: systemActor}}).Exec(ctx)
 			if err != nil {
 				return err
 			}
+
 			_, err = db.NewInsert().Model(&schema.Environment{
 				ID:             xid.New(),
 				AppID:          platformID,
@@ -640,7 +723,7 @@ func init() {
 				Type:           schema.EnvironmentTypeDevelopment,
 				Status:         schema.EnvironmentStatusActive,
 				IsDefault:      true,
-				Config:         map[string]interface{}{},
+				Config:         map[string]any{},
 				AuditableModel: schema.AuditableModel{CreatedBy: systemActor, UpdatedBy: systemActor},
 			}).Exec(ctx)
 			if err != nil {
@@ -716,6 +799,7 @@ func init() {
 				return err
 			}
 		}
+
 		return nil
 	})
 }

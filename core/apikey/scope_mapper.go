@@ -3,7 +3,7 @@ package apikey
 import "strings"
 
 // ScopeToRBACMapping maps legacy scope strings to RBAC (action, resource) pairs
-// This enables backward compatibility with existing scopes while migrating to RBAC
+// This enables backward compatibility with existing scopes while migrating to RBAC.
 var ScopeToRBACMapping = map[string]RBACPermission{
 	// User operations
 	"users:read":   {Action: "view", Resource: "users"},
@@ -57,14 +57,14 @@ var ScopeToRBACMapping = map[string]RBACPermission{
 	"users:verify": {Action: "verify", Resource: "users"},
 }
 
-// RBACPermission represents a parsed RBAC permission
+// RBACPermission represents a parsed RBAC permission.
 type RBACPermission struct {
 	Action   string // e.g., "view", "edit", "create", "delete", "*"
 	Resource string // e.g., "users", "sessions", "apikeys", "*"
 }
 
 // MapScopeToRBAC converts a legacy scope string to RBAC action and resource
-// Returns ("", "") if no mapping exists
+// Returns ("", "") if no mapping exists.
 func MapScopeToRBAC(scope string) (action, resource string) {
 	// Direct lookup
 	if perm, exists := ScopeToRBACMapping[scope]; exists {
@@ -81,7 +81,7 @@ func MapScopeToRBAC(scope string) (action, resource string) {
 }
 
 // CheckScopeOrRBAC checks if a scope string OR RBAC permission grants access
-// This is the flexible check for backward compatibility
+// This is the flexible check for backward compatibility.
 func CheckScopeOrRBAC(scopes []string, rbacPermissions []string, requiredAction, requiredResource string) bool {
 	// Method 1: Check legacy scopes
 	requiredScope := requiredResource + ":" + requiredAction
@@ -122,7 +122,7 @@ func CheckScopeOrRBAC(scopes []string, rbacPermissions []string, requiredAction,
 	return false
 }
 
-// matchRBACPermission checks if an RBAC permission matches the required action/resource
+// matchRBACPermission checks if an RBAC permission matches the required action/resource.
 func matchRBACPermission(permAction, permResource, requiredAction, requiredResource string) bool {
 	// Full wildcard
 	if permAction == "*" && permResource == "*" {
@@ -148,7 +148,7 @@ func matchRBACPermission(permAction, permResource, requiredAction, requiredResou
 }
 
 // ConvertScopesToRBAC converts an array of scope strings to RBAC permissions
-// Useful for migrating existing API keys from scopes to RBAC roles
+// Useful for migrating existing API keys from scopes to RBAC roles.
 func ConvertScopesToRBAC(scopes []string) []RBACPermission {
 	result := []RBACPermission{}
 	seen := make(map[string]bool)
@@ -159,6 +159,7 @@ func ConvertScopesToRBAC(scopes []string) []RBACPermission {
 			key := action + ":" + resource
 			if !seen[key] {
 				seen[key] = true
+
 				result = append(result, RBACPermission{
 					Action:   action,
 					Resource: resource,
@@ -171,7 +172,7 @@ func ConvertScopesToRBAC(scopes []string) []RBACPermission {
 }
 
 // GenerateSuggestedRole analyzes scopes and suggests appropriate RBAC roles
-// Returns suggested role names based on the scope patterns
+// Returns suggested role names based on the scope patterns.
 func GenerateSuggestedRole(scopes []string) string {
 	hasAdmin := false
 	hasUsers := false
@@ -183,15 +184,19 @@ func GenerateSuggestedRole(scopes []string) string {
 		if scope == "admin:full" || scope == "*:*" {
 			hasAdmin = true
 		}
+
 		if strings.HasPrefix(scope, "users:") {
 			hasUsers = true
 		}
+
 		if strings.HasPrefix(scope, "sessions:") {
 			hasSessions = true
 		}
+
 		if strings.HasPrefix(scope, "apikeys:") {
 			hasAPIKeys = true
 		}
+
 		if strings.HasPrefix(scope, "organizations:") {
 			hasOrgs = true
 		}
@@ -201,15 +206,19 @@ func GenerateSuggestedRole(scopes []string) string {
 	if hasAdmin {
 		return "admin"
 	}
+
 	if hasUsers && hasSessions && hasAPIKeys && hasOrgs {
 		return "platform_manager"
 	}
+
 	if hasUsers && hasSessions {
 		return "user_manager"
 	}
+
 	if hasUsers {
 		return "user_viewer"
 	}
+
 	if hasAPIKeys {
 		return "api_key_manager"
 	}

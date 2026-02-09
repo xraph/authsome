@@ -5,7 +5,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// UserRole maps users to roles within an app
+// UserRole maps users to roles within an app.
 type UserRole struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:user_roles,alias:ur"`

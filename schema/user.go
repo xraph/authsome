@@ -12,7 +12,7 @@ import (
 // - Users are app-scoped (can exist in multiple apps with different IDs)
 // - Same email can exist across different apps
 // - Unique constraint is on (app_id, email) combination
-// - User membership to apps is managed via the Member table in app service
+// - User membership to apps is managed via the Member table in app service.
 type User struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:users,alias:u"`

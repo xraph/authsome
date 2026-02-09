@@ -10,12 +10,13 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ResetPasswordPage renders the reset password page
+// ResetPasswordPage renders the reset password page.
 func (p *PagesManager) ResetPasswordPage(ctx *router.PageContext) (g.Node, error) {
 	token := ctx.Query("token")
 	errorParam := ctx.Query("error")
 
 	var errorMessage string
+
 	switch errorParam {
 	case "invalid_token":
 		errorMessage = "Invalid or expired reset token"

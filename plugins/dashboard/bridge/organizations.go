@@ -13,14 +13,14 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// OrganizationsListInput represents organizations list request
+// OrganizationsListInput represents organizations list request.
 type OrganizationsListInput struct {
-	AppID    string `json:"appId" validate:"required"`
+	AppID    string `json:"appId"    validate:"required"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
 }
 
-// OrganizationsListOutput represents organizations list response
+// OrganizationsListOutput represents organizations list response.
 type OrganizationsListOutput struct {
 	Organizations []OrganizationItem `json:"organizations"`
 	Total         int                `json:"total"`
@@ -29,7 +29,7 @@ type OrganizationsListOutput struct {
 	TotalPages    int                `json:"totalPages"`
 }
 
-// OrganizationItem represents an organization in the list
+// OrganizationItem represents an organization in the list.
 type OrganizationItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -39,12 +39,12 @@ type OrganizationItem struct {
 	Status      string `json:"status"`
 }
 
-// OrganizationDetailInput represents organization detail request
+// OrganizationDetailInput represents organization detail request.
 type OrganizationDetailInput struct {
 	OrgID string `json:"orgId" validate:"required"`
 }
 
-// OrganizationDetailOutput represents organization detail response
+// OrganizationDetailOutput represents organization detail response.
 type OrganizationDetailOutput struct {
 	ID          string       `json:"id"`
 	Name        string       `json:"name"`
@@ -55,7 +55,7 @@ type OrganizationDetailOutput struct {
 	Status      string       `json:"status"`
 }
 
-// MemberItem represents a member in an organization
+// MemberItem represents a member in an organization.
 type MemberItem struct {
 	UserID   string   `json:"userId"`
 	Email    string   `json:"email"`
@@ -64,26 +64,26 @@ type MemberItem struct {
 	JoinedAt string   `json:"joinedAt"`
 }
 
-// CreateOrganizationInput represents organization creation request
+// CreateOrganizationInput represents organization creation request.
 type CreateOrganizationInput struct {
-	AppID       string `json:"appId" validate:"required"`
-	Name        string `json:"name" validate:"required"`
+	AppID       string `json:"appId"                 validate:"required"`
+	Name        string `json:"name"                  validate:"required"`
 	Description string `json:"description,omitempty"`
 }
 
-// UpdateOrganizationInput represents organization update request
+// UpdateOrganizationInput represents organization update request.
 type UpdateOrganizationInput struct {
-	OrgID       string `json:"orgId" validate:"required"`
+	OrgID       string `json:"orgId"                 validate:"required"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
-// DeleteOrganizationInput represents organization delete request
+// DeleteOrganizationInput represents organization delete request.
 type DeleteOrganizationInput struct {
 	OrgID string `json:"orgId" validate:"required"`
 }
 
-// registerOrganizationFunctions registers organization management bridge functions
+// registerOrganizationFunctions registers organization management bridge functions.
 func (bm *BridgeManager) registerOrganizationFunctions() error {
 	// List organizations
 	if err := bm.bridge.Register("getOrganizationsList", bm.getOrganizationsList,
@@ -121,10 +121,11 @@ func (bm *BridgeManager) registerOrganizationFunctions() error {
 	}
 
 	bm.log.Info("organization bridge functions registered")
+
 	return nil
 }
 
-// getOrganizationsList retrieves list of organizations
+// getOrganizationsList retrieves list of organizations.
 func (bm *BridgeManager) getOrganizationsList(ctx bridge.Context, input OrganizationsListInput) (*OrganizationsListOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -145,6 +146,7 @@ func (bm *BridgeManager) getOrganizationsList(ctx bridge.Context, input Organiza
 	if input.Page == 0 {
 		input.Page = 1
 	}
+
 	if input.PageSize == 0 {
 		input.PageSize = 20
 	}
@@ -174,6 +176,7 @@ func (bm *BridgeManager) getOrganizationsList(ctx bridge.Context, input Organiza
 	response, err := bm.orgSvc.ListOrganizations(goCtx, filter)
 	if err != nil {
 		bm.log.Error("failed to list organizations", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch organizations")
 	}
 
@@ -182,6 +185,7 @@ func (bm *BridgeManager) getOrganizationsList(ctx bridge.Context, input Organiza
 	for i, o := range response.Data {
 		// Extract description from metadata if available
 		description := ""
+
 		if o.Metadata != nil {
 			if desc, ok := o.Metadata["description"].(string); ok {
 				description = desc
@@ -212,7 +216,7 @@ func (bm *BridgeManager) getOrganizationsList(ctx bridge.Context, input Organiza
 	}, nil
 }
 
-// getOrganizationDetail retrieves detailed information about an organization
+// getOrganizationDetail retrieves detailed information about an organization.
 func (bm *BridgeManager) getOrganizationDetail(ctx bridge.Context, input OrganizationDetailInput) (*OrganizationDetailOutput, error) {
 	if input.OrgID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "orgId is required")
@@ -235,11 +239,13 @@ func (bm *BridgeManager) getOrganizationDetail(ctx bridge.Context, input Organiz
 	o, err := bm.orgSvc.FindOrganizationByID(goCtx, orgID)
 	if err != nil {
 		bm.log.Error("failed to get organization", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "organization not found")
 	}
 
 	// Extract description from metadata if available
 	description := ""
+
 	if o.Metadata != nil {
 		if desc, ok := o.Metadata["description"].(string); ok {
 			description = desc
@@ -257,7 +263,7 @@ func (bm *BridgeManager) getOrganizationDetail(ctx bridge.Context, input Organiz
 	}, nil
 }
 
-// createOrganization creates a new organization
+// createOrganization creates a new organization.
 func (bm *BridgeManager) createOrganization(ctx bridge.Context, input CreateOrganizationInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" || input.Name == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId and name are required")
@@ -287,7 +293,7 @@ func (bm *BridgeManager) createOrganization(ctx bridge.Context, input CreateOrga
 	slug := generateSlug(input.Name)
 
 	// Store description in metadata
-	metadata := make(map[string]interface{})
+	metadata := make(map[string]any)
 	if input.Description != "" {
 		metadata["description"] = input.Description
 	}
@@ -302,6 +308,7 @@ func (bm *BridgeManager) createOrganization(ctx bridge.Context, input CreateOrga
 	_, err = bm.orgSvc.CreateOrganization(goCtx, createReq, userID, appID, envID)
 	if err != nil {
 		bm.log.Error("failed to create organization", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to create organization")
 	}
 
@@ -311,7 +318,7 @@ func (bm *BridgeManager) createOrganization(ctx bridge.Context, input CreateOrga
 	}, nil
 }
 
-// updateOrganization updates organization information
+// updateOrganization updates organization information.
 func (bm *BridgeManager) updateOrganization(ctx bridge.Context, input UpdateOrganizationInput) (*GenericSuccessOutput, error) {
 	if input.OrgID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "orgId is required")
@@ -339,7 +346,7 @@ func (bm *BridgeManager) updateOrganization(ctx bridge.Context, input UpdateOrga
 
 	// Store description in metadata
 	if input.Description != "" {
-		metadata := make(map[string]interface{})
+		metadata := make(map[string]any)
 		metadata["description"] = input.Description
 		updateReq.Metadata = metadata
 	}
@@ -348,6 +355,7 @@ func (bm *BridgeManager) updateOrganization(ctx bridge.Context, input UpdateOrga
 	_, err = bm.orgSvc.UpdateOrganization(goCtx, orgID, updateReq)
 	if err != nil {
 		bm.log.Error("failed to update organization", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update organization")
 	}
 
@@ -357,7 +365,7 @@ func (bm *BridgeManager) updateOrganization(ctx bridge.Context, input UpdateOrga
 	}, nil
 }
 
-// deleteOrganization deletes an organization
+// deleteOrganization deletes an organization.
 func (bm *BridgeManager) deleteOrganization(ctx bridge.Context, input DeleteOrganizationInput) (*GenericSuccessOutput, error) {
 	if input.OrgID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "orgId is required")
@@ -380,6 +388,7 @@ func (bm *BridgeManager) deleteOrganization(ctx bridge.Context, input DeleteOrga
 	err = bm.orgSvc.ForceDeleteOrganization(goCtx, orgID)
 	if err != nil {
 		bm.log.Error("failed to delete organization", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to delete organization")
 	}
 
@@ -389,17 +398,19 @@ func (bm *BridgeManager) deleteOrganization(ctx bridge.Context, input DeleteOrga
 	}, nil
 }
 
-// generateSlug generates a URL-safe slug from a name
+// generateSlug generates a URL-safe slug from a name.
 func generateSlug(name string) string {
 	// Convert to lowercase and replace spaces with hyphens
 	slug := strings.ToLower(name)
 	slug = strings.ReplaceAll(slug, " ", "-")
 	// Remove special characters (keep alphanumeric and hyphens)
 	var result strings.Builder
+
 	for _, r := range slug {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
 			result.WriteRune(r)
 		}
 	}
+
 	return result.String()
 }

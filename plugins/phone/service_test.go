@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestValidatePhone tests phone number validation
+// TestValidatePhone tests phone number validation.
 func TestValidatePhone(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -87,6 +87,7 @@ func TestValidatePhone(t *testing.T) {
 			err := validatePhone(tt.phone)
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				if tt.errType != nil {
 					assert.ErrorIs(t, err, tt.errType)
 				}
@@ -97,7 +98,7 @@ func TestValidatePhone(t *testing.T) {
 	}
 }
 
-// TestGenerateSecureCode tests secure code generation
+// TestGenerateSecureCode tests secure code generation.
 func TestGenerateSecureCode(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -136,6 +137,7 @@ func TestGenerateSecureCode(t *testing.T) {
 			code, err := generateSecureCode(tt.length)
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				return
 			}
 
@@ -149,21 +151,22 @@ func TestGenerateSecureCode(t *testing.T) {
 
 			// Verify it has leading zeros if needed
 			if tt.length > 0 {
-				assert.Equal(t, tt.length, len(code))
+				assert.Len(t, code, tt.length)
 			}
 		})
 	}
 }
 
-// TestGenerateSecureCodeRandomness tests that codes are sufficiently random
+// TestGenerateSecureCodeRandomness tests that codes are sufficiently random.
 func TestGenerateSecureCodeRandomness(t *testing.T) {
 	codes := make(map[string]bool)
 	iterations := 100
 	length := 6
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		code, err := generateSecureCode(length)
 		require.NoError(t, err)
+
 		codes[code] = true
 	}
 
@@ -172,7 +175,7 @@ func TestGenerateSecureCodeRandomness(t *testing.T) {
 	assert.Greater(t, uniqueCount, 90, "should generate mostly unique codes")
 }
 
-// TestServiceErrors tests error conditions
+// TestServiceErrors tests error conditions.
 func TestServiceErrors(t *testing.T) {
 	t.Run("invalid phone format", func(t *testing.T) {
 		err := validatePhone("invalid-phone")
@@ -185,7 +188,7 @@ func TestServiceErrors(t *testing.T) {
 	})
 }
 
-// TestRateLimitConfig tests rate limit configuration
+// TestRateLimitConfig tests rate limit configuration.
 func TestRateLimitConfig(t *testing.T) {
 	config := DefaultConfig()
 
@@ -197,7 +200,7 @@ func TestRateLimitConfig(t *testing.T) {
 	assert.Equal(t, 20, config.RateLimit.SendCodePerIP.Max)
 }
 
-// TestConfigOptions tests functional configuration options
+// TestConfigOptions tests functional configuration options.
 func TestConfigOptions(t *testing.T) {
 	t.Run("WithCodeLength", func(t *testing.T) {
 		p := NewPlugin(WithCodeLength(8))
@@ -246,7 +249,7 @@ func TestConfigOptions(t *testing.T) {
 	})
 }
 
-// TestPluginID tests plugin identification
+// TestPluginID tests plugin identification.
 func TestPluginID(t *testing.T) {
 	p := NewPlugin()
 	assert.Equal(t, "phone", p.ID())

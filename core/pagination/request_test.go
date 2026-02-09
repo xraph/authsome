@@ -427,7 +427,7 @@ func TestEmptyResponses(t *testing.T) {
 	})
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkPaginationParams_Validate(b *testing.B) {
 	params := PaginationParams{
 		BaseRequestParams: BaseRequestParams{
@@ -439,8 +439,7 @@ func BenchmarkPaginationParams_Validate(b *testing.B) {
 		Page:   1,
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = params.Validate()
 	}
 }
@@ -450,8 +449,7 @@ func BenchmarkEncodeCursor(b *testing.B) {
 	ts := time.Now()
 	value := "test_value"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = EncodeCursor(id, ts, value)
 	}
 }
@@ -462,8 +460,7 @@ func BenchmarkDecodeCursor(b *testing.B) {
 	value := "test_value"
 	encoded, _ := EncodeCursor(id, ts, value)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = DecodeCursor(encoded)
 	}
 }

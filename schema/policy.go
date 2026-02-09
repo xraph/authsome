@@ -5,7 +5,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Policy stores RBAC policy expressions
+// Policy stores RBAC policy expressions.
 type Policy struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:policies,alias:pol"`

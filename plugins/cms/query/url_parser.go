@@ -9,10 +9,10 @@ import (
 	"github.com/xraph/authsome/plugins/cms/core"
 )
 
-// URLParser parses query parameters from URLs into Query objects
+// URLParser parses query parameters from URLs into Query objects.
 type URLParser struct{}
 
-// NewURLParser creates a new URL parser
+// NewURLParser creates a new URL parser.
 func NewURLParser() *URLParser {
 	return &URLParser{}
 }
@@ -38,6 +38,7 @@ func (p *URLParser) Parse(values url.Values) (*Query, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(filters) > 0 {
 		q.Filters = &FilterGroup{
 			Operator:   LogicalAnd,
@@ -57,6 +58,7 @@ func (p *URLParser) Parse(values url.Values) (*Query, error) {
 			q.Page = page
 		}
 	}
+
 	if pageSizeStr := values.Get("pageSize"); pageSizeStr != "" {
 		pageSize, err := strconv.Atoi(pageSizeStr)
 		if err == nil && pageSize > 0 {
@@ -79,6 +81,7 @@ func (p *URLParser) Parse(values url.Values) (*Query, error) {
 			q.Offset = offset
 		}
 	}
+
 	if limitStr := values.Get("limit"); limitStr != "" {
 		limit, err := strconv.Atoi(limitStr)
 		if err == nil && limit > 0 {
@@ -116,6 +119,7 @@ func (p *URLParser) Parse(values url.Values) (*Query, error) {
 	if search := values.Get("search"); search != "" {
 		q.Search = search
 	}
+
 	if search := values.Get("q"); search != "" {
 		q.Search = search
 	}
@@ -128,10 +132,10 @@ func (p *URLParser) Parse(values url.Values) (*Query, error) {
 	return q, nil
 }
 
-// filterPattern matches filter[field]=op.value format
+// filterPattern matches filter[field]=op.value format.
 var filterPattern = regexp.MustCompile(`^filter\[([^\]]+)\]$`)
 
-// parseFilters parses filter parameters from URL values
+// parseFilters parses filter parameters from URL values.
 func (p *URLParser) parseFilters(values url.Values) ([]FilterCondition, error) {
 	var conditions []FilterCondition
 
@@ -161,7 +165,7 @@ func (p *URLParser) parseFilters(values url.Values) ([]FilterCondition, error) {
 	return conditions, nil
 }
 
-// parseFilterValue parses a filter value in the format "op.value" or just "value"
+// parseFilterValue parses a filter value in the format "op.value" or just "value".
 func (p *URLParser) parseFilterValue(field, value string) (FilterCondition, error) {
 	cond := FilterCondition{Field: field}
 
@@ -169,6 +173,7 @@ func (p *URLParser) parseFilterValue(field, value string) (FilterCondition, erro
 	dotIdx := strings.Index(value, ".")
 	if dotIdx > 0 {
 		opStr := value[:dotIdx]
+
 		op, valid := ResolveOperator(opStr)
 		if valid {
 			cond.Operator = op
@@ -187,13 +192,14 @@ func (p *URLParser) parseFilterValue(field, value string) (FilterCondition, erro
 	if err != nil {
 		return cond, core.ErrInvalidFilter(field, err.Error())
 	}
+
 	cond.Value = parsedValue
 
 	return cond, nil
 }
 
-// parseValue parses a filter value string into the appropriate type
-func (p *URLParser) parseValue(value string, op FilterOperator) (interface{}, error) {
+// parseValue parses a filter value string into the appropriate type.
+func (p *URLParser) parseValue(value string, op FilterOperator) (any, error) {
 	// Handle array values for in/nin/all/any operators
 	if op == OpIn || op == OpNotIn || op == OpAll || op == OpAny || op == OpBetween {
 		return p.parseArrayValue(value)
@@ -203,6 +209,7 @@ func (p *URLParser) parseValue(value string, op FilterOperator) (interface{}, er
 	if value == "true" {
 		return true, nil
 	}
+
 	if value == "false" {
 		return false, nil
 	}
@@ -218,6 +225,7 @@ func (p *URLParser) parseValue(value string, op FilterOperator) (interface{}, er
 		if num == float64(int64(num)) {
 			return int64(num), nil
 		}
+
 		return num, nil
 	}
 
@@ -225,8 +233,8 @@ func (p *URLParser) parseValue(value string, op FilterOperator) (interface{}, er
 	return value, nil
 }
 
-// parseArrayValue parses an array value in format "(val1,val2,val3)"
-func (p *URLParser) parseArrayValue(value string) ([]interface{}, error) {
+// parseArrayValue parses an array value in format "(val1,val2,val3)".
+func (p *URLParser) parseArrayValue(value string) ([]any, error) {
 	// Remove parentheses if present
 	value = strings.TrimPrefix(value, "(")
 	value = strings.TrimSuffix(value, ")")
@@ -236,12 +244,12 @@ func (p *URLParser) parseArrayValue(value string) ([]interface{}, error) {
 	value = strings.TrimSuffix(value, "]")
 
 	if value == "" {
-		return []interface{}{}, nil
+		return []any{}, nil
 	}
 
 	// Split by comma
 	parts := strings.Split(value, ",")
-	result := make([]interface{}, len(parts))
+	result := make([]any, len(parts))
 
 	for i, part := range parts {
 		part = strings.TrimSpace(part)
@@ -253,23 +261,23 @@ func (p *URLParser) parseArrayValue(value string) ([]interface{}, error) {
 	return result, nil
 }
 
-// parseSort parses sort parameters (e.g., "-createdAt,title")
+// parseSort parses sort parameters (e.g., "-createdAt,title").
 func (p *URLParser) parseSort(sortStr string) []SortField {
 	var sorts []SortField
 
-	fields := strings.Split(sortStr, ",")
-	for _, field := range fields {
+	fields := strings.SplitSeq(sortStr, ",")
+	for field := range fields {
 		field = strings.TrimSpace(field)
 		if field == "" {
 			continue
 		}
 
 		sort := SortField{}
-		if strings.HasPrefix(field, "-") {
-			sort.Field = strings.TrimPrefix(field, "-")
+		if after, ok := strings.CutPrefix(field, "-"); ok {
+			sort.Field = after
 			sort.Descending = true
-		} else if strings.HasPrefix(field, "+") {
-			sort.Field = strings.TrimPrefix(field, "+")
+		} else if after, ok := strings.CutPrefix(field, "+"); ok {
+			sort.Field = after
 			sort.Descending = false
 		} else {
 			sort.Field = field
@@ -282,12 +290,12 @@ func (p *URLParser) parseSort(sortStr string) []SortField {
 	return sorts
 }
 
-// parsePopulate parses populate parameters (e.g., "author,category.parent")
+// parsePopulate parses populate parameters (e.g., "author,category.parent").
 func (p *URLParser) parsePopulate(populateStr string) []PopulateOption {
 	var populates []PopulateOption
 
-	paths := strings.Split(populateStr, ",")
-	for _, path := range paths {
+	paths := strings.SplitSeq(populateStr, ",")
+	for path := range paths {
 		path = strings.TrimSpace(path)
 		if path == "" {
 			continue
@@ -299,7 +307,7 @@ func (p *URLParser) parsePopulate(populateStr string) []PopulateOption {
 	return populates
 }
 
-// ToURLValues converts a Query back to URL query parameters
+// ToURLValues converts a Query back to URL query parameters.
 func (p *URLParser) ToURLValues(q *Query) url.Values {
 	values := url.Values{}
 
@@ -315,6 +323,7 @@ func (p *URLParser) ToURLValues(q *Query) url.Values {
 	// Add sort
 	if len(q.Sort) > 0 {
 		var sortParts []string
+
 		for _, sort := range q.Sort {
 			if sort.Descending {
 				sortParts = append(sortParts, "-"+sort.Field)
@@ -322,6 +331,7 @@ func (p *URLParser) ToURLValues(q *Query) url.Values {
 				sortParts = append(sortParts, sort.Field)
 			}
 		}
+
 		values.Set("sort", strings.Join(sortParts, ","))
 	}
 
@@ -329,12 +339,15 @@ func (p *URLParser) ToURLValues(q *Query) url.Values {
 	if q.Page > 0 {
 		values.Set("page", strconv.Itoa(q.Page))
 	}
+
 	if q.PageSize > 0 {
 		values.Set("pageSize", strconv.Itoa(q.PageSize))
 	}
+
 	if q.Offset > 0 {
 		values.Set("offset", strconv.Itoa(q.Offset))
 	}
+
 	if q.Limit > 0 {
 		values.Set("limit", strconv.Itoa(q.Limit))
 	}
@@ -350,6 +363,7 @@ func (p *URLParser) ToURLValues(q *Query) url.Values {
 		for _, pop := range q.Populate {
 			paths = append(paths, pop.Path)
 		}
+
 		values.Set("populate", strings.Join(paths, ","))
 	}
 
@@ -366,14 +380,15 @@ func (p *URLParser) ToURLValues(q *Query) url.Values {
 	return values
 }
 
-// formatValue formats a value for URL encoding
-func formatValue(value interface{}) string {
+// formatValue formats a value for URL encoding.
+func formatValue(value any) string {
 	switch v := value.(type) {
-	case []interface{}:
+	case []any:
 		var parts []string
 		for _, item := range v {
 			parts = append(parts, formatValue(item))
 		}
+
 		return "(" + strings.Join(parts, ",") + ")"
 	case []string:
 		return "(" + strings.Join(v, ",") + ")"
@@ -381,6 +396,7 @@ func formatValue(value interface{}) string {
 		if v {
 			return "true"
 		}
+
 		return "false"
 	case nil:
 		return "null"

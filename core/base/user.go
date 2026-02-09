@@ -12,7 +12,7 @@ import (
 // =============================================================================
 
 // User represents a user entity DTO
-// This is separate from schema.User to maintain proper separation of concerns
+// This is separate from schema.User to maintain proper separation of concerns.
 type User struct {
 	ID              xid.ID     `json:"id"`
 	AppID           xid.ID     `json:"appId"`
@@ -30,7 +30,7 @@ type User struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the User DTO to a schema.User model
+// ToSchema converts the User DTO to a schema.User model.
 func (u *User) ToSchema() *schema.User {
 	return &schema.User{
 		ID:              u.ID,

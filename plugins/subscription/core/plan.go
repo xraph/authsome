@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// Plan represents a subscription plan that organizations can subscribe to
+// Plan represents a subscription plan that organizations can subscribe to.
 type Plan struct {
 	ID              xid.ID          `json:"id"`
 	AppID           xid.ID          `json:"appId"`           // Scoped to app
@@ -32,7 +32,7 @@ type Plan struct {
 	UpdatedAt       time.Time       `json:"updatedAt"`
 }
 
-// PlanFeature represents a feature or limit included in a plan
+// PlanFeature represents a feature or limit included in a plan.
 type PlanFeature struct {
 	Key           string      `json:"key"`                     // Feature identifier (e.g., "max_members")
 	Name          string      `json:"name"`                    // Display name
@@ -43,16 +43,17 @@ type PlanFeature struct {
 	IsHighlighted bool        `json:"isHighlighted,omitempty"` // Highlight in pricing comparison
 }
 
-// PriceTier represents a pricing tier for tiered or usage-based billing
+// PriceTier represents a pricing tier for tiered or usage-based billing.
 type PriceTier struct {
 	UpTo       int64 `json:"upTo"`       // Upper bound (-1 for infinite)
 	UnitAmount int64 `json:"unitAmount"` // Price per unit in cents
 	FlatAmount int64 `json:"flatAmount"` // Flat fee for this tier in cents
 }
 
-// NewPlan creates a new Plan with default values
+// NewPlan creates a new Plan with default values.
 func NewPlan(appID xid.ID, name, slug string) *Plan {
 	now := time.Now()
+
 	return &Plan{
 		ID:              xid.New(),
 		AppID:           appID,
@@ -72,22 +73,24 @@ func NewPlan(appID xid.ID, name, slug string) *Plan {
 	}
 }
 
-// GetFeature returns a feature by key, or nil if not found
+// GetFeature returns a feature by key, or nil if not found.
 func (p *Plan) GetFeature(key string) *PlanFeature {
 	for i := range p.Features {
 		if p.Features[i].Key == key {
 			return &p.Features[i]
 		}
 	}
+
 	return nil
 }
 
-// HasFeature checks if a plan has a specific feature enabled
+// HasFeature checks if a plan has a specific feature enabled.
 func (p *Plan) HasFeature(key string) bool {
 	feature := p.GetFeature(key)
 	if feature == nil {
 		return false
 	}
+
 	switch feature.Type {
 	case FeatureTypeBoolean:
 		if val, ok := feature.Value.(bool); ok {
@@ -99,19 +102,22 @@ func (p *Plan) HasFeature(key string) bool {
 		if val, ok := feature.Value.(float64); ok {
 			return val > 0
 		}
+
 		if val, ok := feature.Value.(int); ok {
 			return val > 0
 		}
 	}
+
 	return false
 }
 
-// GetFeatureLimit returns the numeric limit for a feature, or -1 if unlimited
+// GetFeatureLimit returns the numeric limit for a feature, or -1 if unlimited.
 func (p *Plan) GetFeatureLimit(key string) int64 {
 	feature := p.GetFeature(key)
 	if feature == nil {
 		return 0
 	}
+
 	switch feature.Type {
 	case FeatureTypeUnlimited:
 		return -1 // Unlimited
@@ -119,26 +125,31 @@ func (p *Plan) GetFeatureLimit(key string) int64 {
 		if val, ok := feature.Value.(float64); ok {
 			return int64(val)
 		}
+
 		if val, ok := feature.Value.(int); ok {
 			return int64(val)
 		}
+
 		if val, ok := feature.Value.(int64); ok {
 			return val
 		}
 	}
+
 	return 0
 }
 
-// SetFeature adds or updates a feature on the plan
+// SetFeature adds or updates a feature on the plan.
 func (p *Plan) SetFeature(key, name string, featureType FeatureType, value any) {
 	for i := range p.Features {
 		if p.Features[i].Key == key {
 			p.Features[i].Name = name
 			p.Features[i].Type = featureType
 			p.Features[i].Value = value
+
 			return
 		}
 	}
+
 	p.Features = append(p.Features, PlanFeature{
 		Key:   key,
 		Name:  name,
@@ -147,7 +158,7 @@ func (p *Plan) SetFeature(key, name string, featureType FeatureType, value any) 
 	})
 }
 
-// AddPriceTier adds a pricing tier to the plan
+// AddPriceTier adds a pricing tier to the plan.
 func (p *Plan) AddPriceTier(upTo, unitAmount, flatAmount int64) {
 	p.PriceTiers = append(p.PriceTiers, PriceTier{
 		UpTo:       upTo,
@@ -156,13 +167,14 @@ func (p *Plan) AddPriceTier(upTo, unitAmount, flatAmount int64) {
 	})
 }
 
-// CalculateTieredPrice calculates the price for a given quantity using tiered pricing
+// CalculateTieredPrice calculates the price for a given quantity using tiered pricing.
 func (p *Plan) CalculateTieredPrice(quantity int64) int64 {
 	if len(p.PriceTiers) == 0 {
 		return p.BasePrice * quantity
 	}
 
 	var total int64
+
 	remaining := quantity
 
 	if p.TierMode == TierModeVolume {
@@ -176,6 +188,7 @@ func (p *Plan) CalculateTieredPrice(quantity int64) int64 {
 
 	// Graduated pricing: apply each tier's price to units in that tier
 	var previousUpTo int64 = 0
+
 	for _, tier := range p.PriceTiers {
 		if remaining <= 0 {
 			break
@@ -185,6 +198,7 @@ func (p *Plan) CalculateTieredPrice(quantity int64) int64 {
 		if tier.UpTo == -1 {
 			// Unlimited tier
 			total += tier.FlatAmount + (tier.UnitAmount * remaining)
+
 			break
 		}
 
@@ -197,16 +211,16 @@ func (p *Plan) CalculateTieredPrice(quantity int64) int64 {
 	return total
 }
 
-// CreatePlanRequest represents a request to create a new plan
+// CreatePlanRequest represents a request to create a new plan.
 type CreatePlanRequest struct {
-	Name            string          `json:"name" validate:"required,min=1,max=100"`
-	Slug            string          `json:"slug" validate:"required,min=1,max=50,alphanum"`
-	Description     string          `json:"description" validate:"max=1000"`
-	BillingPattern  BillingPattern  `json:"billingPattern" validate:"required"`
+	Name            string          `json:"name"            validate:"required,min=1,max=100"`
+	Slug            string          `json:"slug"            validate:"required,min=1,max=50,alphanum"`
+	Description     string          `json:"description"     validate:"max=1000"`
+	BillingPattern  BillingPattern  `json:"billingPattern"  validate:"required"`
 	BillingInterval BillingInterval `json:"billingInterval" validate:"required"`
-	BasePrice       int64           `json:"basePrice" validate:"min=0"`
-	Currency        string          `json:"currency" validate:"len=3"`
-	TrialDays       int             `json:"trialDays" validate:"min=0,max=365"`
+	BasePrice       int64           `json:"basePrice"       validate:"min=0"`
+	Currency        string          `json:"currency"        validate:"len=3"`
+	TrialDays       int             `json:"trialDays"       validate:"min=0,max=365"`
 	Features        []PlanFeature   `json:"features"`
 	PriceTiers      []PriceTier     `json:"priceTiers"`
 	TierMode        TierMode        `json:"tierMode"`
@@ -216,12 +230,12 @@ type CreatePlanRequest struct {
 	DisplayOrder    int             `json:"displayOrder"`
 }
 
-// UpdatePlanRequest represents a request to update an existing plan
+// UpdatePlanRequest represents a request to update an existing plan.
 type UpdatePlanRequest struct {
-	Name         *string        `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Description  *string        `json:"description,omitempty" validate:"omitempty,max=1000"`
-	BasePrice    *int64         `json:"basePrice,omitempty" validate:"omitempty,min=0"`
-	TrialDays    *int           `json:"trialDays,omitempty" validate:"omitempty,min=0,max=365"`
+	Name         *string        `json:"name,omitempty"         validate:"omitempty,min=1,max=100"`
+	Description  *string        `json:"description,omitempty"  validate:"omitempty,max=1000"`
+	BasePrice    *int64         `json:"basePrice,omitempty"    validate:"omitempty,min=0"`
+	TrialDays    *int           `json:"trialDays,omitempty"    validate:"omitempty,min=0,max=365"`
 	Features     []PlanFeature  `json:"features,omitempty"`
 	PriceTiers   []PriceTier    `json:"priceTiers,omitempty"`
 	TierMode     *TierMode      `json:"tierMode,omitempty"`
@@ -235,5 +249,6 @@ func min(a, b int64) int64 {
 	if a < b {
 		return a
 	}
+
 	return b
 }

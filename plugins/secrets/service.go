@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/secrets/schema"
 )
 
-// Service provides secret management operations
+// Service provides secret management operations.
 type Service struct {
 	repo       Repository
 	encryption *EncryptionService
@@ -24,7 +24,7 @@ type Service struct {
 	logger     forge.Logger
 }
 
-// NewService creates a new secrets service
+// NewService creates a new secrets service.
 func NewService(
 	repo Repository,
 	encryption *EncryptionService,
@@ -47,7 +47,7 @@ func NewService(
 // Secret CRUD Operations
 // =============================================================================
 
-// Create creates a new secret
+// Create creates a new secret.
 func (s *Service) Create(ctx context.Context, req *core.CreateSecretRequest) (*core.SecretDTO, error) {
 	// Extract context values
 	appID, err := contexts.RequireAppID(ctx)
@@ -68,6 +68,7 @@ func (s *Service) Create(ctx context.Context, req *core.CreateSecretRequest) (*c
 	}
 
 	path := core.NormalizePath(req.Path)
+
 	_, key, err := core.ParsePath(path)
 	if err != nil {
 		return nil, err
@@ -80,11 +81,13 @@ func (s *Service) Create(ctx context.Context, req *core.CreateSecretRequest) (*c
 
 	// Determine value type
 	valueType := core.SecretValueTypePlain
+
 	if req.ValueType != "" {
 		vt, ok := core.ParseSecretValueType(req.ValueType)
 		if !ok {
 			return nil, core.ErrInvalidValueType(req.ValueType)
 		}
+
 		valueType = vt
 	} else {
 		// Auto-detect value type
@@ -144,6 +147,7 @@ func (s *Service) Create(ctx context.Context, req *core.CreateSecretRequest) (*c
 		if isUniqueViolation(err) {
 			return nil, core.ErrSecretExists(path)
 		}
+
 		return nil, err
 	}
 
@@ -168,7 +172,7 @@ func (s *Service) Create(ctx context.Context, req *core.CreateSecretRequest) (*c
 	return s.toDTO(secret), nil
 }
 
-// Get retrieves a secret by ID (without value)
+// Get retrieves a secret by ID (without value).
 func (s *Service) Get(ctx context.Context, id xid.ID) (*core.SecretDTO, error) {
 	secret, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -178,7 +182,7 @@ func (s *Service) Get(ctx context.Context, id xid.ID) (*core.SecretDTO, error) {
 	return s.toDTO(secret), nil
 }
 
-// GetByPath retrieves a secret by path
+// GetByPath retrieves a secret by path.
 func (s *Service) GetByPath(ctx context.Context, path string) (*core.SecretDTO, error) {
 	appID, err := contexts.RequireAppID(ctx)
 	if err != nil {
@@ -191,6 +195,7 @@ func (s *Service) GetByPath(ctx context.Context, path string) (*core.SecretDTO, 
 	}
 
 	path = core.NormalizePath(path)
+
 	secret, err := s.repo.FindByPath(ctx, appID, envID, path)
 	if err != nil {
 		return nil, err
@@ -199,17 +204,19 @@ func (s *Service) GetByPath(ctx context.Context, path string) (*core.SecretDTO, 
 	return s.toDTO(secret), nil
 }
 
-// GetValue retrieves and decrypts the secret value
-func (s *Service) GetValue(ctx context.Context, id xid.ID) (interface{}, error) {
+// GetValue retrieves and decrypts the secret value.
+func (s *Service) GetValue(ctx context.Context, id xid.ID) (any, error) {
 	secret, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		s.logAccess(ctx, id, "", "read", false, "secret not found")
+
 		return nil, err
 	}
 
 	// Check expiry
 	if secret.IsExpired() {
 		s.logAccess(ctx, id, secret.Path, "read", false, "secret expired")
+
 		return nil, core.ErrSecretExpired(secret.Path)
 	}
 
@@ -222,6 +229,7 @@ func (s *Service) GetValue(ctx context.Context, id xid.ID) (interface{}, error) 
 	)
 	if err != nil {
 		s.logAccess(ctx, id, secret.Path, "read", false, "decryption failed")
+
 		return nil, err
 	}
 
@@ -239,8 +247,8 @@ func (s *Service) GetValue(ctx context.Context, id xid.ID) (interface{}, error) 
 	return value, nil
 }
 
-// GetValueByPath retrieves and decrypts a secret by path
-func (s *Service) GetValueByPath(ctx context.Context, path string) (interface{}, error) {
+// GetValueByPath retrieves and decrypts a secret by path.
+func (s *Service) GetValueByPath(ctx context.Context, path string) (any, error) {
 	appID, err := contexts.RequireAppID(ctx)
 	if err != nil {
 		return nil, core.ErrAppContextRequired()
@@ -252,6 +260,7 @@ func (s *Service) GetValueByPath(ctx context.Context, path string) (interface{},
 	}
 
 	path = core.NormalizePath(path)
+
 	secret, err := s.repo.FindByPath(ctx, appID, envID, path)
 	if err != nil {
 		return nil, err
@@ -260,7 +269,7 @@ func (s *Service) GetValueByPath(ctx context.Context, path string) (interface{},
 	return s.GetValue(ctx, secret.ID)
 }
 
-// GetWithValue retrieves a secret including its decrypted value
+// GetWithValue retrieves a secret including its decrypted value.
 func (s *Service) GetWithValue(ctx context.Context, id xid.ID) (*core.SecretWithValueDTO, error) {
 	dto, err := s.Get(ctx, id)
 	if err != nil {
@@ -278,7 +287,7 @@ func (s *Service) GetWithValue(ctx context.Context, id xid.ID) (*core.SecretWith
 	}, nil
 }
 
-// Update updates a secret and creates a new version
+// Update updates a secret and creates a new version.
 func (s *Service) Update(ctx context.Context, id xid.ID, req *core.UpdateSecretRequest) (*core.SecretDTO, error) {
 	secret, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -297,14 +306,17 @@ func (s *Service) Update(ctx context.Context, id xid.ID, req *core.UpdateSecretR
 			if !ok {
 				return nil, core.ErrInvalidValueType(req.ValueType)
 			}
+
 			valueType = vt
 		}
 
 		schemaJSON := secret.SchemaJSON
+
 		if req.Schema != "" {
 			if err := s.validator.ValidateSchema(req.Schema); err != nil {
 				return nil, err
 			}
+
 			schemaJSON = req.Schema
 		}
 
@@ -356,15 +368,19 @@ func (s *Service) Update(ctx context.Context, id xid.ID, req *core.UpdateSecretR
 	if req.Description != "" {
 		secret.Description = req.Description
 	}
+
 	if req.Tags != nil {
 		secret.Tags = req.Tags
 	}
+
 	if req.Metadata != nil {
 		secret.Metadata = req.Metadata
 	}
+
 	if req.ExpiresAt != nil {
 		secret.ExpiresAt = req.ExpiresAt
 	}
+
 	if req.ClearExpiry {
 		secret.ExpiresAt = nil
 	}
@@ -381,12 +397,13 @@ func (s *Service) Update(ctx context.Context, id xid.ID, req *core.UpdateSecretR
 	if valueChanged {
 		action = "update_value"
 	}
+
 	s.logAccess(ctx, id, secret.Path, action, true, "")
 
 	return s.toDTO(secret), nil
 }
 
-// Delete soft-deletes a secret
+// Delete soft-deletes a secret.
 func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	secret, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -398,10 +415,11 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	}
 
 	s.logAccess(ctx, id, secret.Path, "delete", true, "")
+
 	return nil
 }
 
-// List lists secrets with filtering and pagination
+// List lists secrets with filtering and pagination.
 func (s *Service) List(ctx context.Context, query *core.ListSecretsQuery) ([]*core.SecretDTO, *pagination.Pagination, error) {
 	appID, err := contexts.RequireAppID(ctx)
 	if err != nil {
@@ -416,9 +434,11 @@ func (s *Service) List(ctx context.Context, query *core.ListSecretsQuery) ([]*co
 	if query == nil {
 		query = &core.ListSecretsQuery{}
 	}
+
 	if query.PageSize == 0 {
 		query.PageSize = 20
 	}
+
 	if query.Page == 0 {
 		query.Page = 1
 	}
@@ -447,7 +467,7 @@ func (s *Service) List(ctx context.Context, query *core.ListSecretsQuery) ([]*co
 // Version Operations
 // =============================================================================
 
-// GetVersions retrieves version history for a secret
+// GetVersions retrieves version history for a secret.
 func (s *Service) GetVersions(ctx context.Context, id xid.ID, page, pageSize int) ([]*core.SecretVersionDTO, *pagination.Pagination, error) {
 	// Verify secret exists
 	_, err := s.repo.FindByID(ctx, id)
@@ -458,6 +478,7 @@ func (s *Service) GetVersions(ctx context.Context, id xid.ID, page, pageSize int
 	if pageSize == 0 {
 		pageSize = 20
 	}
+
 	if page == 0 {
 		page = 1
 	}
@@ -490,7 +511,7 @@ func (s *Service) GetVersions(ctx context.Context, id xid.ID, page, pageSize int
 	return dtos, pag, nil
 }
 
-// Rollback rolls back a secret to a previous version
+// Rollback rolls back a secret to a previous version.
 func (s *Service) Rollback(ctx context.Context, id xid.ID, targetVersion int, reason string) (*core.SecretDTO, error) {
 	secret, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -521,6 +542,7 @@ func (s *Service) Rollback(ctx context.Context, id xid.ID, targetVersion int, re
 	if newVersion.ChangeReason == "" {
 		newVersion.ChangeReason = "Rollback to version " + string(rune(targetVersion+'0'))
 	}
+
 	_ = s.repo.CreateVersion(ctx, newVersion)
 
 	// Update secret
@@ -537,6 +559,7 @@ func (s *Service) Rollback(ctx context.Context, id xid.ID, targetVersion int, re
 	}
 
 	s.logAccess(ctx, id, secret.Path, "rollback", true, "")
+
 	return s.toDTO(secret), nil
 }
 
@@ -544,7 +567,7 @@ func (s *Service) Rollback(ctx context.Context, id xid.ID, targetVersion int, re
 // Stats Operations
 // =============================================================================
 
-// GetStats returns statistics about secrets
+// GetStats returns statistics about secrets.
 func (s *Service) GetStats(ctx context.Context) (*core.StatsDTO, error) {
 	appID, err := contexts.RequireAppID(ctx)
 	if err != nil {
@@ -588,7 +611,7 @@ func (s *Service) GetStats(ctx context.Context) (*core.StatsDTO, error) {
 // Tree Operations
 // =============================================================================
 
-// GetTree builds a tree structure of secrets
+// GetTree builds a tree structure of secrets.
 func (s *Service) GetTree(ctx context.Context, prefix string) ([]*core.SecretTreeNode, error) {
 	appID, err := contexts.RequireAppID(ctx)
 	if err != nil {
@@ -615,7 +638,7 @@ func (s *Service) GetTree(ctx context.Context, prefix string) ([]*core.SecretTre
 	return s.buildTree(secrets), nil
 }
 
-// buildTree builds a tree structure from a list of secrets
+// buildTree builds a tree structure from a list of secrets.
 func (s *Service) buildTree(secrets []*schema.Secret) []*core.SecretTreeNode {
 	// Create a map for quick lookups
 	nodeMap := make(map[string]*core.SecretTreeNode)
@@ -664,7 +687,7 @@ func (s *Service) buildTree(secrets []*schema.Secret) []*core.SecretTreeNode {
 	return rootNodes
 }
 
-// ensureParentNodes creates parent folder nodes
+// ensureParentNodes creates parent folder nodes.
 func (s *Service) ensureParentNodes(path string, nodeMap map[string]*core.SecretTreeNode) {
 	parts := make([]string, 0)
 	current := path
@@ -696,12 +719,13 @@ func (s *Service) ensureParentNodes(path string, nodeMap map[string]*core.Secret
 	}
 }
 
-// extractPaths extracts paths from tree nodes
+// extractPaths extracts paths from tree nodes.
 func extractPaths(nodes []*core.SecretTreeNode) []string {
 	paths := make([]string, len(nodes))
 	for i, n := range nodes {
 		paths[i] = n.Path
 	}
+
 	return paths
 }
 
@@ -709,7 +733,7 @@ func extractPaths(nodes []*core.SecretTreeNode) []string {
 // Helper Methods
 // =============================================================================
 
-// toDTO converts a schema.Secret to core.SecretDTO
+// toDTO converts a schema.Secret to core.SecretDTO.
 func (s *Service) toDTO(secret *schema.Secret) *core.SecretDTO {
 	return &core.SecretDTO{
 		ID:          secret.ID.String(),
@@ -731,7 +755,7 @@ func (s *Service) toDTO(secret *schema.Secret) *core.SecretDTO {
 	}
 }
 
-// logAccess logs an access event
+// logAccess logs an access event.
 func (s *Service) logAccess(ctx context.Context, secretID xid.ID, path, action string, success bool, errorMsg string) {
 	if s.config != nil && !s.config.Audit.EnableAccessLog {
 		return
@@ -758,12 +782,14 @@ func (s *Service) logAccess(ctx context.Context, secretID xid.ID, path, action s
 	_ = s.repo.LogAccess(ctx, log)
 }
 
-// isUniqueViolation checks if an error is a unique constraint violation
+// isUniqueViolation checks if an error is a unique constraint violation.
 func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	errStr := err.Error()
+
 	return contains(errStr, "unique") || contains(errStr, "duplicate") || contains(errStr, "UNIQUE")
 }
 
@@ -777,5 +803,6 @@ func containsAt(s, substr string, start int) bool {
 			return true
 		}
 	}
+
 	return false
 }

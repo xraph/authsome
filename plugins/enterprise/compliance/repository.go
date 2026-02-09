@@ -6,7 +6,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// Repository defines the data access interface for compliance
+// Repository defines the data access interface for compliance.
 type Repository interface {
 	// Compliance Profiles
 	CreateProfile(ctx context.Context, profile *ComplianceProfile) error

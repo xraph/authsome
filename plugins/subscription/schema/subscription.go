@@ -9,348 +9,348 @@ import (
 	mainschema "github.com/xraph/authsome/schema"
 )
 
-// SubscriptionPlan represents a subscription plan in the database
+// SubscriptionPlan represents a subscription plan in the database.
 type SubscriptionPlan struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_plans,alias:sp"`
 
-	ID              xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID           xid.ID                 `json:"appId" bun:"app_id,notnull,type:varchar(20)"`
-	Name            string                 `json:"name" bun:"name,notnull"`
-	Slug            string                 `json:"slug" bun:"slug,notnull"` // Unique within app
-	Description     string                 `json:"description" bun:"description"`
-	BillingPattern  string                 `json:"billingPattern" bun:"billing_pattern,notnull"`
-	BillingInterval string                 `json:"billingInterval" bun:"billing_interval,notnull"`
-	BasePrice       int64                  `json:"basePrice" bun:"base_price,notnull,default:0"`
-	Currency        string                 `json:"currency" bun:"currency,notnull,default:'USD'"`
-	TrialDays       int                    `json:"trialDays" bun:"trial_days,notnull,default:0"`
-	TierMode        string                 `json:"tierMode" bun:"tier_mode,default:'graduated'"`
-	Metadata        map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	IsActive        bool                   `json:"isActive" bun:"is_active,notnull,default:true"`
-	IsPublic        bool                   `json:"isPublic" bun:"is_public,notnull,default:true"`
-	DisplayOrder    int                    `json:"displayOrder" bun:"display_order,notnull,default:0"`
-	ProviderPlanID  string                 `json:"providerPlanId" bun:"provider_plan_id"`
-	ProviderPriceID string                 `json:"providerPriceId" bun:"provider_price_id"`
+	ID              xid.ID         `bun:"id,pk,type:varchar(20)"          json:"id"`
+	AppID           xid.ID         `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	Name            string         `bun:"name,notnull"                    json:"name"`
+	Slug            string         `bun:"slug,notnull"                    json:"slug"` // Unique within app
+	Description     string         `bun:"description"                     json:"description"`
+	BillingPattern  string         `bun:"billing_pattern,notnull"         json:"billingPattern"`
+	BillingInterval string         `bun:"billing_interval,notnull"        json:"billingInterval"`
+	BasePrice       int64          `bun:"base_price,notnull,default:0"    json:"basePrice"`
+	Currency        string         `bun:"currency,notnull,default:'USD'"  json:"currency"`
+	TrialDays       int            `bun:"trial_days,notnull,default:0"    json:"trialDays"`
+	TierMode        string         `bun:"tier_mode,default:'graduated'"   json:"tierMode"`
+	Metadata        map[string]any `bun:"metadata,type:jsonb"             json:"metadata"`
+	IsActive        bool           `bun:"is_active,notnull,default:true"  json:"isActive"`
+	IsPublic        bool           `bun:"is_public,notnull,default:true"  json:"isPublic"`
+	DisplayOrder    int            `bun:"display_order,notnull,default:0" json:"displayOrder"`
+	ProviderPlanID  string         `bun:"provider_plan_id"                json:"providerPlanId"`
+	ProviderPriceID string         `bun:"provider_price_id"               json:"providerPriceId"`
 
 	// Relations
-	App          *mainschema.App           `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
-	Features     []SubscriptionPlanFeature `json:"features,omitempty" bun:"rel:has-many,join:id=plan_id"`
-	Tiers        []SubscriptionPlanTier    `json:"tiers,omitempty" bun:"rel:has-many,join:id=plan_id"`
-	FeatureLinks []PlanFeatureLink         `json:"featureLinks,omitempty" bun:"rel:has-many,join:id=plan_id"`
+	App          *mainschema.App           `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`
+	Features     []SubscriptionPlanFeature `bun:"rel:has-many,join:id=plan_id"  json:"features,omitempty"`
+	Tiers        []SubscriptionPlanTier    `bun:"rel:has-many,join:id=plan_id"  json:"tiers,omitempty"`
+	FeatureLinks []PlanFeatureLink         `bun:"rel:has-many,join:id=plan_id"  json:"featureLinks,omitempty"`
 }
 
-// SubscriptionPlanFeature represents a feature limit on a plan
+// SubscriptionPlanFeature represents a feature limit on a plan.
 type SubscriptionPlanFeature struct {
 	bun.BaseModel `bun:"table:subscription_plan_features,alias:spf"`
 
-	ID          xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	PlanID      xid.ID    `json:"planId" bun:"plan_id,notnull,type:varchar(20)"`
-	Key         string    `json:"key" bun:"key,notnull"`
-	Name        string    `json:"name" bun:"name,notnull"`
-	Description string    `json:"description" bun:"description"`
-	Type        string    `json:"type" bun:"type,notnull"` // boolean, limit, unlimited
-	Value       string    `json:"value" bun:"value"`       // JSON-encoded value
-	CreatedAt   time.Time `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID          xid.ID    `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	PlanID      xid.ID    `bun:"plan_id,notnull,type:varchar(20)"                      json:"planId"`
+	Key         string    `bun:"key,notnull"                                           json:"key"`
+	Name        string    `bun:"name,notnull"                                          json:"name"`
+	Description string    `bun:"description"                                           json:"description"`
+	Type        string    `bun:"type,notnull"                                          json:"type"`  // boolean, limit, unlimited
+	Value       string    `bun:"value"                                                 json:"value"` // JSON-encoded value
+	CreatedAt   time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Plan *SubscriptionPlan `json:"plan,omitempty" bun:"rel:belongs-to,join:plan_id=id"`
+	Plan *SubscriptionPlan `bun:"rel:belongs-to,join:plan_id=id" json:"plan,omitempty"`
 }
 
-// SubscriptionPlanTier represents a pricing tier for a plan
+// SubscriptionPlanTier represents a pricing tier for a plan.
 type SubscriptionPlanTier struct {
 	bun.BaseModel `bun:"table:subscription_plan_tiers,alias:spt"`
 
-	ID         xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	PlanID     xid.ID    `json:"planId" bun:"plan_id,notnull,type:varchar(20)"`
-	TierOrder  int       `json:"tierOrder" bun:"tier_order,notnull"`
-	UpTo       int64     `json:"upTo" bun:"up_to,notnull"` // -1 for infinite
-	UnitAmount int64     `json:"unitAmount" bun:"unit_amount,notnull"`
-	FlatAmount int64     `json:"flatAmount" bun:"flat_amount,notnull,default:0"`
-	CreatedAt  time.Time `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID         xid.ID    `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	PlanID     xid.ID    `bun:"plan_id,notnull,type:varchar(20)"                      json:"planId"`
+	TierOrder  int       `bun:"tier_order,notnull"                                    json:"tierOrder"`
+	UpTo       int64     `bun:"up_to,notnull"                                         json:"upTo"` // -1 for infinite
+	UnitAmount int64     `bun:"unit_amount,notnull"                                   json:"unitAmount"`
+	FlatAmount int64     `bun:"flat_amount,notnull,default:0"                         json:"flatAmount"`
+	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Plan *SubscriptionPlan `json:"plan,omitempty" bun:"rel:belongs-to,join:plan_id=id"`
+	Plan *SubscriptionPlan `bun:"rel:belongs-to,join:plan_id=id" json:"plan,omitempty"`
 }
 
-// Subscription represents an organization's subscription
+// Subscription represents an organization's subscription.
 type Subscription struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscriptions,alias:sub"`
 
-	ID                 xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID     xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	PlanID             xid.ID                 `json:"planId" bun:"plan_id,notnull,type:varchar(20)"`
-	Status             string                 `json:"status" bun:"status,notnull"`
-	Quantity           int                    `json:"quantity" bun:"quantity,notnull,default:1"`
-	CurrentPeriodStart time.Time              `json:"currentPeriodStart" bun:"current_period_start,notnull"`
-	CurrentPeriodEnd   time.Time              `json:"currentPeriodEnd" bun:"current_period_end,notnull"`
-	TrialStart         *time.Time             `json:"trialStart" bun:"trial_start"`
-	TrialEnd           *time.Time             `json:"trialEnd" bun:"trial_end"`
-	CancelAt           *time.Time             `json:"cancelAt" bun:"cancel_at"`
-	CanceledAt         *time.Time             `json:"canceledAt" bun:"canceled_at"`
-	EndedAt            *time.Time             `json:"endedAt" bun:"ended_at"`
-	PausedAt           *time.Time             `json:"pausedAt" bun:"paused_at"`
-	ResumeAt           *time.Time             `json:"resumeAt" bun:"resume_at"`
-	ProviderSubID      string                 `json:"providerSubId" bun:"provider_sub_id"`
-	ProviderCustomerID string                 `json:"providerCustomerId" bun:"provider_customer_id"`
-	Metadata           map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	ID                 xid.ID         `bun:"id,pk,type:varchar(20)"                   json:"id"`
+	OrganizationID     xid.ID         `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	PlanID             xid.ID         `bun:"plan_id,notnull,type:varchar(20)"         json:"planId"`
+	Status             string         `bun:"status,notnull"                           json:"status"`
+	Quantity           int            `bun:"quantity,notnull,default:1"               json:"quantity"`
+	CurrentPeriodStart time.Time      `bun:"current_period_start,notnull"             json:"currentPeriodStart"`
+	CurrentPeriodEnd   time.Time      `bun:"current_period_end,notnull"               json:"currentPeriodEnd"`
+	TrialStart         *time.Time     `bun:"trial_start"                              json:"trialStart"`
+	TrialEnd           *time.Time     `bun:"trial_end"                                json:"trialEnd"`
+	CancelAt           *time.Time     `bun:"cancel_at"                                json:"cancelAt"`
+	CanceledAt         *time.Time     `bun:"canceled_at"                              json:"canceledAt"`
+	EndedAt            *time.Time     `bun:"ended_at"                                 json:"endedAt"`
+	PausedAt           *time.Time     `bun:"paused_at"                                json:"pausedAt"`
+	ResumeAt           *time.Time     `bun:"resume_at"                                json:"resumeAt"`
+	ProviderSubID      string         `bun:"provider_sub_id"                          json:"providerSubId"`
+	ProviderCustomerID string         `bun:"provider_customer_id"                     json:"providerCustomerId"`
+	Metadata           map[string]any `bun:"metadata,type:jsonb"                      json:"metadata"`
 
 	// Relations
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
-	Plan         *SubscriptionPlan        `json:"plan,omitempty" bun:"rel:belongs-to,join:plan_id=id"`
-	AddOns       []SubscriptionAddOnItem  `json:"addOns,omitempty" bun:"rel:has-many,join:id=subscription_id"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
+	Plan         *SubscriptionPlan        `bun:"rel:belongs-to,join:plan_id=id"         json:"plan,omitempty"`
+	AddOns       []SubscriptionAddOnItem  `bun:"rel:has-many,join:id=subscription_id"   json:"addOns,omitempty"`
 }
 
-// SubscriptionAddOn represents an add-on product
+// SubscriptionAddOn represents an add-on product.
 type SubscriptionAddOn struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_addons,alias:sao"`
 
-	ID              xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID           xid.ID                 `json:"appId" bun:"app_id,notnull,type:varchar(20)"`
-	Name            string                 `json:"name" bun:"name,notnull"`
-	Slug            string                 `json:"slug" bun:"slug,notnull"`
-	Description     string                 `json:"description" bun:"description"`
-	BillingPattern  string                 `json:"billingPattern" bun:"billing_pattern,notnull"`
-	BillingInterval string                 `json:"billingInterval" bun:"billing_interval,notnull"`
-	Price           int64                  `json:"price" bun:"price,notnull,default:0"`
-	Currency        string                 `json:"currency" bun:"currency,notnull,default:'USD'"`
-	TierMode        string                 `json:"tierMode" bun:"tier_mode,default:'graduated'"`
-	Metadata        map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	IsActive        bool                   `json:"isActive" bun:"is_active,notnull,default:true"`
-	IsPublic        bool                   `json:"isPublic" bun:"is_public,notnull,default:true"`
-	DisplayOrder    int                    `json:"displayOrder" bun:"display_order,notnull,default:0"`
-	RequiresPlanIDs []string               `json:"requiresPlanIds" bun:"requires_plan_ids,array,type:varchar(20)[]"`
-	ExcludesPlanIDs []string               `json:"excludesPlanIds" bun:"excludes_plan_ids,array,type:varchar(20)[]"`
-	MaxQuantity     int                    `json:"maxQuantity" bun:"max_quantity,notnull,default:0"`
-	ProviderPriceID string                 `json:"providerPriceId" bun:"provider_price_id"`
+	ID              xid.ID         `bun:"id,pk,type:varchar(20)"                     json:"id"`
+	AppID           xid.ID         `bun:"app_id,notnull,type:varchar(20)"            json:"appId"`
+	Name            string         `bun:"name,notnull"                               json:"name"`
+	Slug            string         `bun:"slug,notnull"                               json:"slug"`
+	Description     string         `bun:"description"                                json:"description"`
+	BillingPattern  string         `bun:"billing_pattern,notnull"                    json:"billingPattern"`
+	BillingInterval string         `bun:"billing_interval,notnull"                   json:"billingInterval"`
+	Price           int64          `bun:"price,notnull,default:0"                    json:"price"`
+	Currency        string         `bun:"currency,notnull,default:'USD'"             json:"currency"`
+	TierMode        string         `bun:"tier_mode,default:'graduated'"              json:"tierMode"`
+	Metadata        map[string]any `bun:"metadata,type:jsonb"                        json:"metadata"`
+	IsActive        bool           `bun:"is_active,notnull,default:true"             json:"isActive"`
+	IsPublic        bool           `bun:"is_public,notnull,default:true"             json:"isPublic"`
+	DisplayOrder    int            `bun:"display_order,notnull,default:0"            json:"displayOrder"`
+	RequiresPlanIDs []string       `bun:"requires_plan_ids,array,type:varchar(20)[]" json:"requiresPlanIds"`
+	ExcludesPlanIDs []string       `bun:"excludes_plan_ids,array,type:varchar(20)[]" json:"excludesPlanIds"`
+	MaxQuantity     int            `bun:"max_quantity,notnull,default:0"             json:"maxQuantity"`
+	ProviderPriceID string         `bun:"provider_price_id"                          json:"providerPriceId"`
 
 	// Relations
-	App      *mainschema.App            `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
-	Features []SubscriptionAddOnFeature `json:"features,omitempty" bun:"rel:has-many,join:id=addon_id"`
-	Tiers    []SubscriptionAddOnTier    `json:"tiers,omitempty" bun:"rel:has-many,join:id=addon_id"`
+	App      *mainschema.App            `bun:"rel:belongs-to,join:app_id=id" json:"app,omitempty"`
+	Features []SubscriptionAddOnFeature `bun:"rel:has-many,join:id=addon_id" json:"features,omitempty"`
+	Tiers    []SubscriptionAddOnTier    `bun:"rel:has-many,join:id=addon_id" json:"tiers,omitempty"`
 }
 
-// SubscriptionAddOnFeature represents a feature on an add-on
+// SubscriptionAddOnFeature represents a feature on an add-on.
 type SubscriptionAddOnFeature struct {
 	bun.BaseModel `bun:"table:subscription_addon_features,alias:saf"`
 
-	ID          xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	AddOnID     xid.ID    `json:"addOnId" bun:"addon_id,notnull,type:varchar(20)"`
-	Key         string    `json:"key" bun:"key,notnull"`
-	Name        string    `json:"name" bun:"name,notnull"`
-	Description string    `json:"description" bun:"description"`
-	Type        string    `json:"type" bun:"type,notnull"`
-	Value       string    `json:"value" bun:"value"`
-	CreatedAt   time.Time `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID          xid.ID    `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	AddOnID     xid.ID    `bun:"addon_id,notnull,type:varchar(20)"                     json:"addOnId"`
+	Key         string    `bun:"key,notnull"                                           json:"key"`
+	Name        string    `bun:"name,notnull"                                          json:"name"`
+	Description string    `bun:"description"                                           json:"description"`
+	Type        string    `bun:"type,notnull"                                          json:"type"`
+	Value       string    `bun:"value"                                                 json:"value"`
+	CreatedAt   time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	AddOn *SubscriptionAddOn `json:"addOn,omitempty" bun:"rel:belongs-to,join:addon_id=id"`
+	AddOn *SubscriptionAddOn `bun:"rel:belongs-to,join:addon_id=id" json:"addOn,omitempty"`
 }
 
-// SubscriptionAddOnTier represents a pricing tier for an add-on
+// SubscriptionAddOnTier represents a pricing tier for an add-on.
 type SubscriptionAddOnTier struct {
 	bun.BaseModel `bun:"table:subscription_addon_tiers,alias:sat"`
 
-	ID         xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	AddOnID    xid.ID    `json:"addOnId" bun:"addon_id,notnull,type:varchar(20)"`
-	TierOrder  int       `json:"tierOrder" bun:"tier_order,notnull"`
-	UpTo       int64     `json:"upTo" bun:"up_to,notnull"`
-	UnitAmount int64     `json:"unitAmount" bun:"unit_amount,notnull"`
-	FlatAmount int64     `json:"flatAmount" bun:"flat_amount,notnull,default:0"`
-	CreatedAt  time.Time `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID         xid.ID    `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	AddOnID    xid.ID    `bun:"addon_id,notnull,type:varchar(20)"                     json:"addOnId"`
+	TierOrder  int       `bun:"tier_order,notnull"                                    json:"tierOrder"`
+	UpTo       int64     `bun:"up_to,notnull"                                         json:"upTo"`
+	UnitAmount int64     `bun:"unit_amount,notnull"                                   json:"unitAmount"`
+	FlatAmount int64     `bun:"flat_amount,notnull,default:0"                         json:"flatAmount"`
+	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	AddOn *SubscriptionAddOn `json:"addOn,omitempty" bun:"rel:belongs-to,join:addon_id=id"`
+	AddOn *SubscriptionAddOn `bun:"rel:belongs-to,join:addon_id=id" json:"addOn,omitempty"`
 }
 
-// SubscriptionAddOnItem represents an add-on attached to a subscription
+// SubscriptionAddOnItem represents an add-on attached to a subscription.
 type SubscriptionAddOnItem struct {
 	bun.BaseModel `bun:"table:subscription_addon_items,alias:sai"`
 
-	ID                xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	SubscriptionID    xid.ID    `json:"subscriptionId" bun:"subscription_id,notnull,type:varchar(20)"`
-	AddOnID           xid.ID    `json:"addOnId" bun:"addon_id,notnull,type:varchar(20)"`
-	Quantity          int       `json:"quantity" bun:"quantity,notnull,default:1"`
-	ProviderSubItemID string    `json:"providerSubItemId" bun:"provider_sub_item_id"`
-	CreatedAt         time.Time `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID                xid.ID    `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	SubscriptionID    xid.ID    `bun:"subscription_id,notnull,type:varchar(20)"              json:"subscriptionId"`
+	AddOnID           xid.ID    `bun:"addon_id,notnull,type:varchar(20)"                     json:"addOnId"`
+	Quantity          int       `bun:"quantity,notnull,default:1"                            json:"quantity"`
+	ProviderSubItemID string    `bun:"provider_sub_item_id"                                  json:"providerSubItemId"`
+	CreatedAt         time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Subscription *Subscription      `json:"subscription,omitempty" bun:"rel:belongs-to,join:subscription_id=id"`
-	AddOn        *SubscriptionAddOn `json:"addOn,omitempty" bun:"rel:belongs-to,join:addon_id=id"`
+	Subscription *Subscription      `bun:"rel:belongs-to,join:subscription_id=id" json:"subscription,omitempty"`
+	AddOn        *SubscriptionAddOn `bun:"rel:belongs-to,join:addon_id=id"        json:"addOn,omitempty"`
 }
 
-// SubscriptionInvoice represents a billing invoice
+// SubscriptionInvoice represents a billing invoice.
 type SubscriptionInvoice struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_invoices,alias:si"`
 
-	ID                xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	SubscriptionID    xid.ID                 `json:"subscriptionId" bun:"subscription_id,notnull,type:varchar(20)"`
-	OrganizationID    xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	Number            string                 `json:"number" bun:"number,notnull,unique"`
-	Status            string                 `json:"status" bun:"status,notnull"`
-	Currency          string                 `json:"currency" bun:"currency,notnull,default:'USD'"`
-	Subtotal          int64                  `json:"subtotal" bun:"subtotal,notnull,default:0"`
-	Tax               int64                  `json:"tax" bun:"tax,notnull,default:0"`
-	Total             int64                  `json:"total" bun:"total,notnull,default:0"`
-	AmountPaid        int64                  `json:"amountPaid" bun:"amount_paid,notnull,default:0"`
-	AmountDue         int64                  `json:"amountDue" bun:"amount_due,notnull,default:0"`
-	Description       string                 `json:"description" bun:"description"`
-	PeriodStart       time.Time              `json:"periodStart" bun:"period_start,notnull"`
-	PeriodEnd         time.Time              `json:"periodEnd" bun:"period_end,notnull"`
-	DueDate           time.Time              `json:"dueDate" bun:"due_date,notnull"`
-	PaidAt            *time.Time             `json:"paidAt" bun:"paid_at"`
-	VoidedAt          *time.Time             `json:"voidedAt" bun:"voided_at"`
-	ProviderInvoiceID string                 `json:"providerInvoiceId" bun:"provider_invoice_id"`
-	ProviderPDFURL    string                 `json:"providerPdfUrl" bun:"provider_pdf_url"`
-	HostedInvoiceURL  string                 `json:"hostedInvoiceUrl" bun:"hosted_invoice_url"`
-	Metadata          map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	ID                xid.ID         `bun:"id,pk,type:varchar(20)"                   json:"id"`
+	SubscriptionID    xid.ID         `bun:"subscription_id,notnull,type:varchar(20)" json:"subscriptionId"`
+	OrganizationID    xid.ID         `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	Number            string         `bun:"number,notnull,unique"                    json:"number"`
+	Status            string         `bun:"status,notnull"                           json:"status"`
+	Currency          string         `bun:"currency,notnull,default:'USD'"           json:"currency"`
+	Subtotal          int64          `bun:"subtotal,notnull,default:0"               json:"subtotal"`
+	Tax               int64          `bun:"tax,notnull,default:0"                    json:"tax"`
+	Total             int64          `bun:"total,notnull,default:0"                  json:"total"`
+	AmountPaid        int64          `bun:"amount_paid,notnull,default:0"            json:"amountPaid"`
+	AmountDue         int64          `bun:"amount_due,notnull,default:0"             json:"amountDue"`
+	Description       string         `bun:"description"                              json:"description"`
+	PeriodStart       time.Time      `bun:"period_start,notnull"                     json:"periodStart"`
+	PeriodEnd         time.Time      `bun:"period_end,notnull"                       json:"periodEnd"`
+	DueDate           time.Time      `bun:"due_date,notnull"                         json:"dueDate"`
+	PaidAt            *time.Time     `bun:"paid_at"                                  json:"paidAt"`
+	VoidedAt          *time.Time     `bun:"voided_at"                                json:"voidedAt"`
+	ProviderInvoiceID string         `bun:"provider_invoice_id"                      json:"providerInvoiceId"`
+	ProviderPDFURL    string         `bun:"provider_pdf_url"                         json:"providerPdfUrl"`
+	HostedInvoiceURL  string         `bun:"hosted_invoice_url"                       json:"hostedInvoiceUrl"`
+	Metadata          map[string]any `bun:"metadata,type:jsonb"                      json:"metadata"`
 
 	// Relations
-	Subscription *Subscription             `json:"subscription,omitempty" bun:"rel:belongs-to,join:subscription_id=id"`
-	Organization *mainschema.Organization  `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
-	Items        []SubscriptionInvoiceItem `json:"items,omitempty" bun:"rel:has-many,join:id=invoice_id"`
+	Subscription *Subscription             `bun:"rel:belongs-to,join:subscription_id=id" json:"subscription,omitempty"`
+	Organization *mainschema.Organization  `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
+	Items        []SubscriptionInvoiceItem `bun:"rel:has-many,join:id=invoice_id"        json:"items,omitempty"`
 }
 
-// SubscriptionInvoiceItem represents a line item on an invoice
+// SubscriptionInvoiceItem represents a line item on an invoice.
 type SubscriptionInvoiceItem struct {
 	bun.BaseModel `bun:"table:subscription_invoice_items,alias:sii"`
 
-	ID             xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	InvoiceID      xid.ID                 `json:"invoiceId" bun:"invoice_id,notnull,type:varchar(20)"`
-	Description    string                 `json:"description" bun:"description,notnull"`
-	Quantity       int64                  `json:"quantity" bun:"quantity,notnull,default:1"`
-	UnitAmount     int64                  `json:"unitAmount" bun:"unit_amount,notnull"`
-	Amount         int64                  `json:"amount" bun:"amount,notnull"`
-	PlanID         *xid.ID                `json:"planId" bun:"plan_id,type:varchar(20)"`
-	AddOnID        *xid.ID                `json:"addOnId" bun:"addon_id,type:varchar(20)"`
-	PeriodStart    time.Time              `json:"periodStart" bun:"period_start,notnull"`
-	PeriodEnd      time.Time              `json:"periodEnd" bun:"period_end,notnull"`
-	Proration      bool                   `json:"proration" bun:"proration,notnull,default:false"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	ProviderItemID string                 `json:"providerItemId" bun:"provider_item_id"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID             xid.ID         `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	InvoiceID      xid.ID         `bun:"invoice_id,notnull,type:varchar(20)"                   json:"invoiceId"`
+	Description    string         `bun:"description,notnull"                                   json:"description"`
+	Quantity       int64          `bun:"quantity,notnull,default:1"                            json:"quantity"`
+	UnitAmount     int64          `bun:"unit_amount,notnull"                                   json:"unitAmount"`
+	Amount         int64          `bun:"amount,notnull"                                        json:"amount"`
+	PlanID         *xid.ID        `bun:"plan_id,type:varchar(20)"                              json:"planId"`
+	AddOnID        *xid.ID        `bun:"addon_id,type:varchar(20)"                             json:"addOnId"`
+	PeriodStart    time.Time      `bun:"period_start,notnull"                                  json:"periodStart"`
+	PeriodEnd      time.Time      `bun:"period_end,notnull"                                    json:"periodEnd"`
+	Proration      bool           `bun:"proration,notnull,default:false"                       json:"proration"`
+	Metadata       map[string]any `bun:"metadata,type:jsonb"                                   json:"metadata"`
+	ProviderItemID string         `bun:"provider_item_id"                                      json:"providerItemId"`
+	CreatedAt      time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Invoice *SubscriptionInvoice `json:"invoice,omitempty" bun:"rel:belongs-to,join:invoice_id=id"`
-	Plan    *SubscriptionPlan    `json:"plan,omitempty" bun:"rel:belongs-to,join:plan_id=id"`
-	AddOn   *SubscriptionAddOn   `json:"addOn,omitempty" bun:"rel:belongs-to,join:addon_id=id"`
+	Invoice *SubscriptionInvoice `bun:"rel:belongs-to,join:invoice_id=id" json:"invoice,omitempty"`
+	Plan    *SubscriptionPlan    `bun:"rel:belongs-to,join:plan_id=id"    json:"plan,omitempty"`
+	AddOn   *SubscriptionAddOn   `bun:"rel:belongs-to,join:addon_id=id"   json:"addOn,omitempty"`
 }
 
-// SubscriptionUsageRecord represents a usage record for metered billing
+// SubscriptionUsageRecord represents a usage record for metered billing.
 type SubscriptionUsageRecord struct {
 	bun.BaseModel `bun:"table:subscription_usage_records,alias:sur"`
 
-	ID               xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	SubscriptionID   xid.ID                 `json:"subscriptionId" bun:"subscription_id,notnull,type:varchar(20)"`
-	OrganizationID   xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	MetricKey        string                 `json:"metricKey" bun:"metric_key,notnull"`
-	Quantity         int64                  `json:"quantity" bun:"quantity,notnull"`
-	Action           string                 `json:"action" bun:"action,notnull"` // set, increment, decrement
-	Timestamp        time.Time              `json:"timestamp" bun:"timestamp,notnull"`
-	IdempotencyKey   string                 `json:"idempotencyKey" bun:"idempotency_key"`
-	Metadata         map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	ProviderRecordID string                 `json:"providerRecordId" bun:"provider_record_id"`
-	Reported         bool                   `json:"reported" bun:"reported,notnull,default:false"`
-	ReportedAt       *time.Time             `json:"reportedAt" bun:"reported_at"`
-	CreatedAt        time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID               xid.ID         `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	SubscriptionID   xid.ID         `bun:"subscription_id,notnull,type:varchar(20)"              json:"subscriptionId"`
+	OrganizationID   xid.ID         `bun:"organization_id,notnull,type:varchar(20)"              json:"organizationId"`
+	MetricKey        string         `bun:"metric_key,notnull"                                    json:"metricKey"`
+	Quantity         int64          `bun:"quantity,notnull"                                      json:"quantity"`
+	Action           string         `bun:"action,notnull"                                        json:"action"` // set, increment, decrement
+	Timestamp        time.Time      `bun:"timestamp,notnull"                                     json:"timestamp"`
+	IdempotencyKey   string         `bun:"idempotency_key"                                       json:"idempotencyKey"`
+	Metadata         map[string]any `bun:"metadata,type:jsonb"                                   json:"metadata"`
+	ProviderRecordID string         `bun:"provider_record_id"                                    json:"providerRecordId"`
+	Reported         bool           `bun:"reported,notnull,default:false"                        json:"reported"`
+	ReportedAt       *time.Time     `bun:"reported_at"                                           json:"reportedAt"`
+	CreatedAt        time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Subscription *Subscription            `json:"subscription,omitempty" bun:"rel:belongs-to,join:subscription_id=id"`
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
+	Subscription *Subscription            `bun:"rel:belongs-to,join:subscription_id=id" json:"subscription,omitempty"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 }
 
-// SubscriptionPaymentMethod represents a stored payment method
+// SubscriptionPaymentMethod represents a stored payment method.
 type SubscriptionPaymentMethod struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_payment_methods,alias:spm"`
 
-	ID                 xid.ID `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID     xid.ID `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	Type               string `json:"type" bun:"type,notnull"` // card, bank_account, sepa_debit
-	IsDefault          bool   `json:"isDefault" bun:"is_default,notnull,default:false"`
-	ProviderMethodID   string `json:"providerMethodId" bun:"provider_method_id,notnull"`
-	ProviderCustomerID string `json:"providerCustomerId" bun:"provider_customer_id,notnull"`
+	ID                 xid.ID `bun:"id,pk,type:varchar(20)"                   json:"id"`
+	OrganizationID     xid.ID `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	Type               string `bun:"type,notnull"                             json:"type"` // card, bank_account, sepa_debit
+	IsDefault          bool   `bun:"is_default,notnull,default:false"         json:"isDefault"`
+	ProviderMethodID   string `bun:"provider_method_id,notnull"               json:"providerMethodId"`
+	ProviderCustomerID string `bun:"provider_customer_id,notnull"             json:"providerCustomerId"`
 
 	// Card fields
-	CardBrand    string `json:"cardBrand" bun:"card_brand"`
-	CardLast4    string `json:"cardLast4" bun:"card_last4"`
-	CardExpMonth int    `json:"cardExpMonth" bun:"card_exp_month"`
-	CardExpYear  int    `json:"cardExpYear" bun:"card_exp_year"`
-	CardFunding  string `json:"cardFunding" bun:"card_funding"`
+	CardBrand    string `bun:"card_brand"     json:"cardBrand"`
+	CardLast4    string `bun:"card_last4"     json:"cardLast4"`
+	CardExpMonth int    `bun:"card_exp_month" json:"cardExpMonth"`
+	CardExpYear  int    `bun:"card_exp_year"  json:"cardExpYear"`
+	CardFunding  string `bun:"card_funding"   json:"cardFunding"`
 
 	// Bank fields
-	BankName          string `json:"bankName" bun:"bank_name"`
-	BankLast4         string `json:"bankLast4" bun:"bank_last4"`
-	BankRoutingNumber string `json:"bankRoutingNumber" bun:"bank_routing_number"`
-	BankAccountType   string `json:"bankAccountType" bun:"bank_account_type"`
+	BankName          string `bun:"bank_name"           json:"bankName"`
+	BankLast4         string `bun:"bank_last4"          json:"bankLast4"`
+	BankRoutingNumber string `bun:"bank_routing_number" json:"bankRoutingNumber"`
+	BankAccountType   string `bun:"bank_account_type"   json:"bankAccountType"`
 
 	// Billing details
-	BillingName         string `json:"billingName" bun:"billing_name"`
-	BillingEmail        string `json:"billingEmail" bun:"billing_email"`
-	BillingPhone        string `json:"billingPhone" bun:"billing_phone"`
-	BillingAddressLine1 string `json:"billingAddressLine1" bun:"billing_address_line1"`
-	BillingAddressLine2 string `json:"billingAddressLine2" bun:"billing_address_line2"`
-	BillingCity         string `json:"billingCity" bun:"billing_city"`
-	BillingState        string `json:"billingState" bun:"billing_state"`
-	BillingPostalCode   string `json:"billingPostalCode" bun:"billing_postal_code"`
-	BillingCountry      string `json:"billingCountry" bun:"billing_country"`
+	BillingName         string `bun:"billing_name"          json:"billingName"`
+	BillingEmail        string `bun:"billing_email"         json:"billingEmail"`
+	BillingPhone        string `bun:"billing_phone"         json:"billingPhone"`
+	BillingAddressLine1 string `bun:"billing_address_line1" json:"billingAddressLine1"`
+	BillingAddressLine2 string `bun:"billing_address_line2" json:"billingAddressLine2"`
+	BillingCity         string `bun:"billing_city"          json:"billingCity"`
+	BillingState        string `bun:"billing_state"         json:"billingState"`
+	BillingPostalCode   string `bun:"billing_postal_code"   json:"billingPostalCode"`
+	BillingCountry      string `bun:"billing_country"       json:"billingCountry"`
 
-	Metadata map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	Metadata map[string]any `bun:"metadata,type:jsonb" json:"metadata"`
 
 	// Relations
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 }
 
-// SubscriptionCustomer represents the billing customer for an organization
+// SubscriptionCustomer represents the billing customer for an organization.
 type SubscriptionCustomer struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_customers,alias:sc"`
 
-	ID                 xid.ID  `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID     xid.ID  `json:"organizationId" bun:"organization_id,notnull,unique,type:varchar(20)"`
-	ProviderCustomerID string  `json:"providerCustomerId" bun:"provider_customer_id,notnull,unique"`
-	Email              string  `json:"email" bun:"email,notnull"`
-	Name               string  `json:"name" bun:"name"`
-	Phone              string  `json:"phone" bun:"phone"`
-	TaxID              string  `json:"taxId" bun:"tax_id"`
-	TaxExempt          bool    `json:"taxExempt" bun:"tax_exempt,notnull,default:false"`
-	Currency           string  `json:"currency" bun:"currency,notnull,default:'USD'"`
-	Balance            int64   `json:"balance" bun:"balance,notnull,default:0"`
-	DefaultPaymentID   *xid.ID `json:"defaultPaymentId" bun:"default_payment_id,type:varchar(20)"`
+	ID                 xid.ID  `bun:"id,pk,type:varchar(20)"                          json:"id"`
+	OrganizationID     xid.ID  `bun:"organization_id,notnull,unique,type:varchar(20)" json:"organizationId"`
+	ProviderCustomerID string  `bun:"provider_customer_id,notnull,unique"             json:"providerCustomerId"`
+	Email              string  `bun:"email,notnull"                                   json:"email"`
+	Name               string  `bun:"name"                                            json:"name"`
+	Phone              string  `bun:"phone"                                           json:"phone"`
+	TaxID              string  `bun:"tax_id"                                          json:"taxId"`
+	TaxExempt          bool    `bun:"tax_exempt,notnull,default:false"                json:"taxExempt"`
+	Currency           string  `bun:"currency,notnull,default:'USD'"                  json:"currency"`
+	Balance            int64   `bun:"balance,notnull,default:0"                       json:"balance"`
+	DefaultPaymentID   *xid.ID `bun:"default_payment_id,type:varchar(20)"             json:"defaultPaymentId"`
 
 	// Billing address
-	BillingAddressLine1 string `json:"billingAddressLine1" bun:"billing_address_line1"`
-	BillingAddressLine2 string `json:"billingAddressLine2" bun:"billing_address_line2"`
-	BillingCity         string `json:"billingCity" bun:"billing_city"`
-	BillingState        string `json:"billingState" bun:"billing_state"`
-	BillingPostalCode   string `json:"billingPostalCode" bun:"billing_postal_code"`
-	BillingCountry      string `json:"billingCountry" bun:"billing_country"`
+	BillingAddressLine1 string `bun:"billing_address_line1" json:"billingAddressLine1"`
+	BillingAddressLine2 string `bun:"billing_address_line2" json:"billingAddressLine2"`
+	BillingCity         string `bun:"billing_city"          json:"billingCity"`
+	BillingState        string `bun:"billing_state"         json:"billingState"`
+	BillingPostalCode   string `bun:"billing_postal_code"   json:"billingPostalCode"`
+	BillingCountry      string `bun:"billing_country"       json:"billingCountry"`
 
-	Metadata map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	Metadata map[string]any `bun:"metadata,type:jsonb" json:"metadata"`
 
 	// Relations
-	Organization   *mainschema.Organization   `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
-	DefaultPayment *SubscriptionPaymentMethod `json:"defaultPayment,omitempty" bun:"rel:belongs-to,join:default_payment_id=id"`
+	Organization   *mainschema.Organization   `bun:"rel:belongs-to,join:organization_id=id"    json:"organization,omitempty"`
+	DefaultPayment *SubscriptionPaymentMethod `bun:"rel:belongs-to,join:default_payment_id=id" json:"defaultPayment,omitempty"`
 }
 
-// SubscriptionEvent represents an audit event for subscription changes
+// SubscriptionEvent represents an audit event for subscription changes.
 type SubscriptionEvent struct {
 	bun.BaseModel `bun:"table:subscription_events,alias:se"`
 
-	ID              xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	SubscriptionID  *xid.ID                `json:"subscriptionId" bun:"subscription_id,type:varchar(20)"`
-	OrganizationID  xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	EventType       string                 `json:"eventType" bun:"event_type,notnull"`
-	EventData       map[string]interface{} `json:"eventData" bun:"event_data,type:jsonb"`
-	ProviderEventID string                 `json:"providerEventId" bun:"provider_event_id"`
-	IPAddress       string                 `json:"ipAddress" bun:"ip_address"`
-	UserAgent       string                 `json:"userAgent" bun:"user_agent"`
-	ActorID         *xid.ID                `json:"actorId" bun:"actor_id,type:varchar(20)"`
-	CreatedAt       time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID              xid.ID         `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	SubscriptionID  *xid.ID        `bun:"subscription_id,type:varchar(20)"                      json:"subscriptionId"`
+	OrganizationID  xid.ID         `bun:"organization_id,notnull,type:varchar(20)"              json:"organizationId"`
+	EventType       string         `bun:"event_type,notnull"                                    json:"eventType"`
+	EventData       map[string]any `bun:"event_data,type:jsonb"                                 json:"eventData"`
+	ProviderEventID string         `bun:"provider_event_id"                                     json:"providerEventId"`
+	IPAddress       string         `bun:"ip_address"                                            json:"ipAddress"`
+	UserAgent       string         `bun:"user_agent"                                            json:"userAgent"`
+	ActorID         *xid.ID        `bun:"actor_id,type:varchar(20)"                             json:"actorId"`
+	CreatedAt       time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Subscription *Subscription            `json:"subscription,omitempty" bun:"rel:belongs-to,join:subscription_id=id"`
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
+	Subscription *Subscription            `bun:"rel:belongs-to,join:subscription_id=id" json:"subscription,omitempty"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
 }

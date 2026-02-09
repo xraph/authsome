@@ -10,15 +10,15 @@ import (
 	"github.com/xraph/forge"
 )
 
-// ContextKey is the type for context keys
+// ContextKey is the type for context keys.
 type ContextKey string
 
 const (
-	// ImpersonationContextKey is the context key for impersonation data
+	// ImpersonationContextKey is the context key for impersonation data.
 	ImpersonationContextKey ContextKey = "impersonation"
 )
 
-// ImpersonationContext holds impersonation data in the request context
+// ImpersonationContext holds impersonation data in the request context.
 type ImpersonationContext struct {
 	IsImpersonating bool    `json:"is_impersonating"`
 	ImpersonationID *xid.ID `json:"impersonation_id,omitempty"`
@@ -27,13 +27,13 @@ type ImpersonationContext struct {
 	IndicatorMsg    string  `json:"indicator_message,omitempty"`
 }
 
-// ImpersonationMiddleware adds impersonation context to requests
+// ImpersonationMiddleware adds impersonation context to requests.
 type ImpersonationMiddleware struct {
 	service *impersonation.Service
 	config  Config
 }
 
-// NewMiddleware creates a new impersonation middleware
+// NewMiddleware creates a new impersonation middleware.
 func NewMiddleware(service *impersonation.Service, config Config) *ImpersonationMiddleware {
 	return &ImpersonationMiddleware{
 		service: service,
@@ -41,7 +41,7 @@ func NewMiddleware(service *impersonation.Service, config Config) *Impersonation
 	}
 }
 
-// Handle checks if the current session is an impersonation session and adds context
+// Handle checks if the current session is an impersonation session and adds context.
 func (m *ImpersonationMiddleware) Handle() func(forge.Context) error {
 	return func(c forge.Context) error {
 		// Try to get session ID from context or cookie
@@ -90,7 +90,7 @@ func (m *ImpersonationMiddleware) Handle() func(forge.Context) error {
 }
 
 // RequireNoImpersonation ensures the request is NOT from an impersonation session
-// Useful for sensitive operations that should not be allowed during impersonation
+// Useful for sensitive operations that should not be allowed during impersonation.
 func (m *ImpersonationMiddleware) RequireNoImpersonation() func(forge.Context) error {
 	return func(c forge.Context) error {
 		impCtx := GetImpersonationContext(c)
@@ -99,12 +99,13 @@ func (m *ImpersonationMiddleware) RequireNoImpersonation() func(forge.Context) e
 				"This action is not allowed during impersonation",
 				403))
 		}
+
 		return nil
 	}
 }
 
 // RequireImpersonation ensures the request IS from an impersonation session
-// Useful for impersonation-specific endpoints
+// Useful for impersonation-specific endpoints.
 func (m *ImpersonationMiddleware) RequireImpersonation() func(forge.Context) error {
 	return func(c forge.Context) error {
 		impCtx := GetImpersonationContext(c)
@@ -113,11 +114,12 @@ func (m *ImpersonationMiddleware) RequireImpersonation() func(forge.Context) err
 				"This action requires an active impersonation session",
 				403))
 		}
+
 		return nil
 	}
 }
 
-// AuditImpersonationAction logs all actions during impersonation if enabled
+// AuditImpersonationAction logs all actions during impersonation if enabled.
 func (m *ImpersonationMiddleware) AuditImpersonationAction() func(forge.Context) error {
 	return func(c forge.Context) error {
 		if !m.config.AuditAllActions {
@@ -144,7 +146,7 @@ func (m *ImpersonationMiddleware) AuditImpersonationAction() func(forge.Context)
 
 // Helper functions
 
-// getSessionID extracts session ID from the request
+// getSessionID extracts session ID from the request.
 func (m *ImpersonationMiddleware) getSessionID(c forge.Context) *xid.ID {
 	// Try to get from Authorization header (Bearer token)
 	authHeader := c.Request().Header.Get("Authorization")
@@ -172,7 +174,7 @@ func (m *ImpersonationMiddleware) getSessionID(c forge.Context) *xid.ID {
 	return &sessionID
 }
 
-// GetImpersonationContext retrieves impersonation context from request context
+// GetImpersonationContext retrieves impersonation context from request context.
 func GetImpersonationContext(c forge.Context) *ImpersonationContext {
 	val := c.Request().Context().Value(ImpersonationContextKey)
 	if val == nil {
@@ -187,26 +189,29 @@ func GetImpersonationContext(c forge.Context) *ImpersonationContext {
 	return impCtx
 }
 
-// IsImpersonating checks if the current request is from an impersonation session
+// IsImpersonating checks if the current request is from an impersonation session.
 func IsImpersonating(c forge.Context) bool {
 	impCtx := GetImpersonationContext(c)
+
 	return impCtx != nil && impCtx.IsImpersonating
 }
 
-// GetImpersonatorID returns the impersonator's user ID if impersonating
+// GetImpersonatorID returns the impersonator's user ID if impersonating.
 func GetImpersonatorID(c forge.Context) *xid.ID {
 	impCtx := GetImpersonationContext(c)
 	if impCtx == nil || !impCtx.IsImpersonating {
 		return nil
 	}
+
 	return impCtx.ImpersonatorID
 }
 
-// GetTargetUserID returns the target user's ID if impersonating
+// GetTargetUserID returns the target user's ID if impersonating.
 func GetTargetUserID(c forge.Context) *xid.ID {
 	impCtx := GetImpersonationContext(c)
 	if impCtx == nil || !impCtx.IsImpersonating {
 		return nil
 	}
+
 	return impCtx.TargetUserID
 }

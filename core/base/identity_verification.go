@@ -10,7 +10,7 @@ import (
 // IDENTITY VERIFICATION DTOs (Data Transfer Objects)
 // =============================================================================
 
-// IdentityVerificationSession represents a verification session DTO
+// IdentityVerificationSession represents a verification session DTO.
 type IdentityVerificationSession struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -28,8 +28,8 @@ type IdentityVerificationSession struct {
 	SessionToken string `json:"sessionToken,omitempty"` // Excluded in most responses
 
 	// Configuration
-	RequiredChecks []string               `json:"requiredChecks"`
-	Config         map[string]interface{} `json:"config,omitempty"`
+	RequiredChecks []string       `json:"requiredChecks"`
+	Config         map[string]any `json:"config,omitempty"`
 
 	// Status tracking
 	Status      string     `json:"status"`
@@ -45,7 +45,7 @@ type IdentityVerificationSession struct {
 	UserAgent string `json:"userAgent,omitempty"`
 }
 
-// IdentityVerification represents a verification attempt DTO
+// IdentityVerification represents a verification attempt DTO.
 type IdentityVerification struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -98,10 +98,10 @@ type IdentityVerification struct {
 	FailureReason    string   `json:"failureReason,omitempty"`
 
 	// Metadata
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	ProviderData map[string]interface{} `json:"providerData,omitempty"`
-	IPAddress    string                 `json:"ipAddress,omitempty"`
-	UserAgent    string                 `json:"userAgent,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+	ProviderData map[string]any `json:"providerData,omitempty"`
+	IPAddress    string         `json:"ipAddress,omitempty"`
+	UserAgent    string         `json:"userAgent,omitempty"`
 
 	// Expiry and validity
 	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
@@ -112,7 +112,7 @@ type IdentityVerification struct {
 	WebhookDeliveredAt    *time.Time `json:"webhookDeliveredAt,omitempty"`
 }
 
-// UserVerificationStatus tracks the overall verification status DTO
+// UserVerificationStatus tracks the overall verification status DTO.
 type UserVerificationStatus struct {
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -153,14 +153,14 @@ type UserVerificationStatus struct {
 	BlockedAt   *time.Time `json:"blockedAt,omitempty"`
 
 	// Metadata
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // =============================================================================
 // CONVERSION FUNCTIONS
 // =============================================================================
 
-// FromSchemaIdentityVerificationSession converts schema to DTO
+// FromSchemaIdentityVerificationSession converts schema to DTO.
 func FromSchemaIdentityVerificationSession(s *schema.IdentityVerificationSession) *IdentityVerificationSession {
 	if s == nil {
 		return nil
@@ -189,7 +189,7 @@ func FromSchemaIdentityVerificationSession(s *schema.IdentityVerificationSession
 	}
 }
 
-// FromSchemaIdentityVerification converts schema to DTO
+// FromSchemaIdentityVerification converts schema to DTO.
 func FromSchemaIdentityVerification(v *schema.IdentityVerification) *IdentityVerification {
 	if v == nil {
 		return nil
@@ -238,7 +238,7 @@ func FromSchemaIdentityVerification(v *schema.IdentityVerification) *IdentityVer
 	}
 }
 
-// FromSchemaIdentityVerifications converts slice of schema to DTOs
+// FromSchemaIdentityVerifications converts slice of schema to DTOs.
 func FromSchemaIdentityVerifications(verifications []*schema.IdentityVerification) []*IdentityVerification {
 	if verifications == nil {
 		return nil
@@ -248,10 +248,11 @@ func FromSchemaIdentityVerifications(verifications []*schema.IdentityVerificatio
 	for i, v := range verifications {
 		result[i] = FromSchemaIdentityVerification(v)
 	}
+
 	return result
 }
 
-// FromSchemaUserVerificationStatus converts schema to DTO
+// FromSchemaUserVerificationStatus converts schema to DTO.
 func FromSchemaUserVerificationStatus(s *schema.UserVerificationStatus) *UserVerificationStatus {
 	if s == nil {
 		return nil

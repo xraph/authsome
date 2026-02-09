@@ -13,14 +13,14 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// CustomerService handles billing customer management
+// CustomerService handles billing customer management.
 type CustomerService struct {
 	repo      repository.CustomerRepository
 	provider  providers.PaymentProvider
 	eventRepo repository.EventRepository
 }
 
-// NewCustomerService creates a new customer service
+// NewCustomerService creates a new customer service.
 func NewCustomerService(
 	repo repository.CustomerRepository,
 	provider providers.PaymentProvider,
@@ -33,7 +33,7 @@ func NewCustomerService(
 	}
 }
 
-// Create creates a new billing customer
+// Create creates a new billing customer.
 func (s *CustomerService) Create(ctx context.Context, req *core.CreateCustomerRequest) (*core.Customer, error) {
 	// Check for existing
 	existing, _ := s.repo.FindByOrganizationID(ctx, req.OrganizationID)
@@ -75,7 +75,7 @@ func (s *CustomerService) Create(ctx context.Context, req *core.CreateCustomerRe
 	}
 
 	if req.Metadata == nil {
-		customer.Metadata = make(map[string]interface{})
+		customer.Metadata = make(map[string]any)
 	}
 
 	if err := s.repo.Create(ctx, customer); err != nil {
@@ -85,7 +85,7 @@ func (s *CustomerService) Create(ctx context.Context, req *core.CreateCustomerRe
 	return s.schemaToCoreCustomer(customer), nil
 }
 
-// Update updates a customer
+// Update updates a customer.
 func (s *CustomerService) Update(ctx context.Context, id xid.ID, req *core.UpdateCustomerRequest) (*core.Customer, error) {
 	customer, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -95,18 +95,23 @@ func (s *CustomerService) Update(ctx context.Context, id xid.ID, req *core.Updat
 	if req.Email != nil {
 		customer.Email = *req.Email
 	}
+
 	if req.Name != nil {
 		customer.Name = *req.Name
 	}
+
 	if req.Phone != nil {
 		customer.Phone = *req.Phone
 	}
+
 	if req.TaxID != nil {
 		customer.TaxID = *req.TaxID
 	}
+
 	if req.TaxExempt != nil {
 		customer.TaxExempt = *req.TaxExempt
 	}
+
 	if req.BillingAddress != nil {
 		customer.BillingAddressLine1 = req.BillingAddress.Line1
 		customer.BillingAddressLine2 = req.BillingAddress.Line2
@@ -115,6 +120,7 @@ func (s *CustomerService) Update(ctx context.Context, id xid.ID, req *core.Updat
 		customer.BillingPostalCode = req.BillingAddress.PostalCode
 		customer.BillingCountry = req.BillingAddress.Country
 	}
+
 	if req.Metadata != nil {
 		customer.Metadata = req.Metadata
 	}
@@ -131,16 +137,17 @@ func (s *CustomerService) Update(ctx context.Context, id xid.ID, req *core.Updat
 	return s.schemaToCoreCustomer(customer), nil
 }
 
-// GetByOrganizationID retrieves a customer by organization ID
+// GetByOrganizationID retrieves a customer by organization ID.
 func (s *CustomerService) GetByOrganizationID(ctx context.Context, orgID xid.ID) (*core.Customer, error) {
 	customer, err := s.repo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
 		return nil, suberrors.ErrCustomerNotFound
 	}
+
 	return s.schemaToCoreCustomer(customer), nil
 }
 
-// GetOrCreate gets an existing customer or creates a new one
+// GetOrCreate gets an existing customer or creates a new one.
 func (s *CustomerService) GetOrCreate(ctx context.Context, orgID xid.ID, email, name string) (*core.Customer, error) {
 	customer, err := s.repo.FindByOrganizationID(ctx, orgID)
 	if err == nil {
@@ -155,7 +162,7 @@ func (s *CustomerService) GetOrCreate(ctx context.Context, orgID xid.ID, email, 
 	})
 }
 
-// SyncToProvider syncs customer data to the provider
+// SyncToProvider syncs customer data to the provider.
 func (s *CustomerService) SyncToProvider(ctx context.Context, id xid.ID) error {
 	customer, err := s.repo.FindByID(ctx, id)
 	if err != nil {

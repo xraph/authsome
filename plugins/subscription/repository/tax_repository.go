@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// TaxRepository defines the interface for tax operations
+// TaxRepository defines the interface for tax operations.
 type TaxRepository interface {
 	// Tax rate operations
 	CreateTaxRate(ctx context.Context, rate *core.TaxRate) error
@@ -38,26 +38,28 @@ type TaxRepository interface {
 	DeleteCustomerTaxID(ctx context.Context, id xid.ID) error
 }
 
-// taxRepository implements TaxRepository using Bun
+// taxRepository implements TaxRepository using Bun.
 type taxRepository struct {
 	db *bun.DB
 }
 
-// NewTaxRepository creates a new tax repository
+// NewTaxRepository creates a new tax repository.
 func NewTaxRepository(db *bun.DB) TaxRepository {
 	return &taxRepository{db: db}
 }
 
-// CreateTaxRate creates a new tax rate
+// CreateTaxRate creates a new tax rate.
 func (r *taxRepository) CreateTaxRate(ctx context.Context, rate *core.TaxRate) error {
 	model := taxRateToSchema(rate)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetTaxRate returns a tax rate by ID
+// GetTaxRate returns a tax rate by ID.
 func (r *taxRepository) GetTaxRate(ctx context.Context, id xid.ID) (*core.TaxRate, error) {
 	var rate schema.SubscriptionTaxRate
+
 	err := r.db.NewSelect().
 		Model(&rate).
 		Where("id = ?", id).
@@ -66,14 +68,17 @@ func (r *taxRepository) GetTaxRate(ctx context.Context, id xid.ID) (*core.TaxRat
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToTaxRate(&rate), nil
 }
 
-// GetTaxRateByLocation returns the tax rate for a location
+// GetTaxRateByLocation returns the tax rate for a location.
 func (r *taxRepository) GetTaxRateByLocation(ctx context.Context, appID xid.ID, country, state string) (*core.TaxRate, error) {
 	var rate schema.SubscriptionTaxRate
+
 	query := r.db.NewSelect().
 		Model(&rate).
 		Where("app_id = ?", appID).
@@ -91,14 +96,17 @@ func (r *taxRepository) GetTaxRateByLocation(ctx context.Context, appID xid.ID, 
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToTaxRate(&rate), nil
 }
 
-// ListTaxRates returns all tax rates for an app
+// ListTaxRates returns all tax rates for an app.
 func (r *taxRepository) ListTaxRates(ctx context.Context, appID xid.ID, activeOnly bool) ([]*core.TaxRate, error) {
 	var rates []schema.SubscriptionTaxRate
+
 	query := r.db.NewSelect().
 		Model(&rates).
 		Where("app_id = ?", appID)
@@ -116,10 +124,11 @@ func (r *taxRepository) ListTaxRates(ctx context.Context, appID xid.ID, activeOn
 	for i, r := range rates {
 		result[i] = schemaToTaxRate(&r)
 	}
+
 	return result, nil
 }
 
-// UpdateTaxRate updates a tax rate
+// UpdateTaxRate updates a tax rate.
 func (r *taxRepository) UpdateTaxRate(ctx context.Context, rate *core.TaxRate) error {
 	model := taxRateToSchema(rate)
 	model.UpdatedAt = time.Now()
@@ -127,28 +136,32 @@ func (r *taxRepository) UpdateTaxRate(ctx context.Context, rate *core.TaxRate) e
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteTaxRate deletes a tax rate
+// DeleteTaxRate deletes a tax rate.
 func (r *taxRepository) DeleteTaxRate(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionTaxRate)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// CreateTaxExemption creates a new tax exemption
+// CreateTaxExemption creates a new tax exemption.
 func (r *taxRepository) CreateTaxExemption(ctx context.Context, exemption *core.TaxExemption) error {
 	model := taxExemptionToSchema(exemption)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetTaxExemption returns a tax exemption by ID
+// GetTaxExemption returns a tax exemption by ID.
 func (r *taxRepository) GetTaxExemption(ctx context.Context, id xid.ID) (*core.TaxExemption, error) {
 	var exemption schema.SubscriptionTaxExemption
+
 	err := r.db.NewSelect().
 		Model(&exemption).
 		Where("id = ?", id).
@@ -157,14 +170,17 @@ func (r *taxRepository) GetTaxExemption(ctx context.Context, id xid.ID) (*core.T
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToTaxExemption(&exemption), nil
 }
 
-// GetTaxExemptionByOrg returns the tax exemption for an organization
+// GetTaxExemptionByOrg returns the tax exemption for an organization.
 func (r *taxRepository) GetTaxExemptionByOrg(ctx context.Context, orgID xid.ID, country string) (*core.TaxExemption, error) {
 	var exemption schema.SubscriptionTaxExemption
+
 	err := r.db.NewSelect().
 		Model(&exemption).
 		Where("organization_id = ?", orgID).
@@ -177,14 +193,17 @@ func (r *taxRepository) GetTaxExemptionByOrg(ctx context.Context, orgID xid.ID, 
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToTaxExemption(&exemption), nil
 }
 
-// ListTaxExemptions returns all tax exemptions for an organization
+// ListTaxExemptions returns all tax exemptions for an organization.
 func (r *taxRepository) ListTaxExemptions(ctx context.Context, orgID xid.ID) ([]*core.TaxExemption, error) {
 	var exemptions []schema.SubscriptionTaxExemption
+
 	err := r.db.NewSelect().
 		Model(&exemptions).
 		Where("organization_id = ?", orgID).
@@ -198,10 +217,11 @@ func (r *taxRepository) ListTaxExemptions(ctx context.Context, orgID xid.ID) ([]
 	for i, e := range exemptions {
 		result[i] = schemaToTaxExemption(&e)
 	}
+
 	return result, nil
 }
 
-// UpdateTaxExemption updates a tax exemption
+// UpdateTaxExemption updates a tax exemption.
 func (r *taxRepository) UpdateTaxExemption(ctx context.Context, exemption *core.TaxExemption) error {
 	model := taxExemptionToSchema(exemption)
 	model.UpdatedAt = time.Now()
@@ -209,28 +229,32 @@ func (r *taxRepository) UpdateTaxExemption(ctx context.Context, exemption *core.
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteTaxExemption deletes a tax exemption
+// DeleteTaxExemption deletes a tax exemption.
 func (r *taxRepository) DeleteTaxExemption(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionTaxExemption)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// CreateCustomerTaxID creates a new customer tax ID
+// CreateCustomerTaxID creates a new customer tax ID.
 func (r *taxRepository) CreateCustomerTaxID(ctx context.Context, taxID *core.CustomerTaxID) error {
 	model := customerTaxIDToSchema(taxID)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetCustomerTaxID returns a customer tax ID by ID
+// GetCustomerTaxID returns a customer tax ID by ID.
 func (r *taxRepository) GetCustomerTaxID(ctx context.Context, id xid.ID) (*core.CustomerTaxID, error) {
 	var taxID schema.SubscriptionCustomerTaxID
+
 	err := r.db.NewSelect().
 		Model(&taxID).
 		Where("id = ?", id).
@@ -239,14 +263,17 @@ func (r *taxRepository) GetCustomerTaxID(ctx context.Context, id xid.ID) (*core.
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToCustomerTaxID(&taxID), nil
 }
 
-// ListCustomerTaxIDs returns all tax IDs for an organization
+// ListCustomerTaxIDs returns all tax IDs for an organization.
 func (r *taxRepository) ListCustomerTaxIDs(ctx context.Context, orgID xid.ID) ([]*core.CustomerTaxID, error) {
 	var taxIDs []schema.SubscriptionCustomerTaxID
+
 	err := r.db.NewSelect().
 		Model(&taxIDs).
 		Where("organization_id = ?", orgID).
@@ -260,10 +287,11 @@ func (r *taxRepository) ListCustomerTaxIDs(ctx context.Context, orgID xid.ID) ([
 	for i, t := range taxIDs {
 		result[i] = schemaToCustomerTaxID(&t)
 	}
+
 	return result, nil
 }
 
-// UpdateCustomerTaxID updates a customer tax ID
+// UpdateCustomerTaxID updates a customer tax ID.
 func (r *taxRepository) UpdateCustomerTaxID(ctx context.Context, taxID *core.CustomerTaxID) error {
 	model := customerTaxIDToSchema(taxID)
 	model.UpdatedAt = time.Now()
@@ -271,15 +299,17 @@ func (r *taxRepository) UpdateCustomerTaxID(ctx context.Context, taxID *core.Cus
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteCustomerTaxID deletes a customer tax ID
+// DeleteCustomerTaxID deletes a customer tax ID.
 func (r *taxRepository) DeleteCustomerTaxID(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionCustomerTaxID)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 

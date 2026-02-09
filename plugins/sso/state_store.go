@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// OIDCState represents OIDC flow state data
+// OIDCState represents OIDC flow state data.
 type OIDCState struct {
 	State        string
 	Nonce        string
@@ -18,13 +18,13 @@ type OIDCState struct {
 }
 
 // StateStore provides temporary storage for OIDC flow state
-// In production, this should be backed by Redis or similar distributed cache
+// In production, this should be backed by Redis or similar distributed cache.
 type StateStore struct {
 	mu     sync.RWMutex
 	states map[string]*OIDCState // keyed by state parameter
 }
 
-// NewStateStore creates a new state store
+// NewStateStore creates a new state store.
 func NewStateStore() *StateStore {
 	store := &StateStore{
 		states: make(map[string]*OIDCState),
@@ -36,7 +36,7 @@ func NewStateStore() *StateStore {
 	return store
 }
 
-// Store saves OIDC state data
+// Store saves OIDC state data.
 func (s *StateStore) Store(ctx context.Context, state *OIDCState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -47,10 +47,11 @@ func (s *StateStore) Store(ctx context.Context, state *OIDCState) error {
 	}
 
 	s.states[state.State] = state
+
 	return nil
 }
 
-// Get retrieves OIDC state data by state parameter
+// Get retrieves OIDC state data by state parameter.
 func (s *StateStore) Get(ctx context.Context, state string) (*OIDCState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -68,28 +69,31 @@ func (s *StateStore) Get(ctx context.Context, state string) (*OIDCState, error) 
 	return oidcState, nil
 }
 
-// Delete removes OIDC state data (should be called after successful callback)
+// Delete removes OIDC state data (should be called after successful callback).
 func (s *StateStore) Delete(ctx context.Context, state string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	delete(s.states, state)
+
 	return nil
 }
 
-// cleanup periodically removes expired state entries
+// cleanup periodically removes expired state entries.
 func (s *StateStore) cleanup() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		s.mu.Lock()
+
 		now := time.Now()
 		for key, state := range s.states {
 			if now.After(state.ExpiresAt) {
 				delete(s.states, key)
 			}
 		}
+
 		s.mu.Unlock()
 	}
 }
@@ -99,7 +103,7 @@ func (s *StateStore) cleanup() {
 // =============================================================================
 
 // RedisStateStore is a production-ready state store backed by Redis
-// This is a placeholder interface for future implementation
+// This is a placeholder interface for future implementation.
 type RedisStateStore struct {
 	// redis client would go here
 }

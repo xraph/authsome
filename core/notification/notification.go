@@ -13,7 +13,7 @@ import (
 // NOTIFICATION TYPE ENUMS
 // =============================================================================
 
-// NotificationType represents the type of notification
+// NotificationType represents the type of notification.
 type NotificationType string
 
 const (
@@ -22,7 +22,7 @@ const (
 	NotificationTypePush  NotificationType = "push"
 )
 
-// NotificationStatus represents the status of a notification
+// NotificationStatus represents the status of a notification.
 type NotificationStatus string
 
 const (
@@ -33,17 +33,17 @@ const (
 	NotificationStatusBounced   NotificationStatus = "bounced"
 )
 
-// NotificationPriority represents the priority/criticality of a notification
+// NotificationPriority represents the priority/criticality of a notification.
 type NotificationPriority string
 
 const (
-	// PriorityCritical - MFA codes, password reset - must succeed, blocks auth if fails
+	// PriorityCritical - MFA codes, password reset - must succeed, blocks auth if fails.
 	PriorityCritical NotificationPriority = "critical"
-	// PriorityHigh - Email verification - important but can retry async
+	// PriorityHigh - Email verification - important but can retry async.
 	PriorityHigh NotificationPriority = "high"
-	// PriorityNormal - Welcome emails - best effort with limited retries
+	// PriorityNormal - Welcome emails - best effort with limited retries.
 	PriorityNormal NotificationPriority = "normal"
-	// PriorityLow - New device alerts - fire and forget, no retries
+	// PriorityLow - New device alerts - fire and forget, no retries.
 	PriorityLow NotificationPriority = "low"
 )
 
@@ -52,29 +52,29 @@ const (
 // =============================================================================
 
 // Template represents a notification template DTO
-// This is separate from schema.NotificationTemplate to maintain proper separation of concerns
+// This is separate from schema.NotificationTemplate to maintain proper separation of concerns.
 type Template struct {
-	ID          xid.ID                 `json:"id"`
-	AppID       xid.ID                 `json:"appId"`
-	TemplateKey string                 `json:"templateKey"` // e.g., "auth.welcome", "auth.mfa_code"
-	Name        string                 `json:"name"`
-	Type        NotificationType       `json:"type"`
-	Language    string                 `json:"language"` // e.g., "en", "es", "fr"
-	Subject     string                 `json:"subject,omitempty"`
-	Body        string                 `json:"body"`
-	Variables   []string               `json:"variables"` // Available template variables
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Active      bool                   `json:"active"`
-	IsDefault   bool                   `json:"isDefault"`   // Is this a default template
-	IsModified  bool                   `json:"isModified"`  // Has it been modified from default
-	DefaultHash string                 `json:"defaultHash"` // Hash of default content for comparison
+	ID          xid.ID           `json:"id"`
+	AppID       xid.ID           `json:"appId"`
+	TemplateKey string           `json:"templateKey"` // e.g., "auth.welcome", "auth.mfa_code"
+	Name        string           `json:"name"`
+	Type        NotificationType `json:"type"`
+	Language    string           `json:"language"` // e.g., "en", "es", "fr"
+	Subject     string           `json:"subject,omitempty"`
+	Body        string           `json:"body"`
+	Variables   []string         `json:"variables"` // Available template variables
+	Metadata    map[string]any   `json:"metadata,omitempty"`
+	Active      bool             `json:"active"`
+	IsDefault   bool             `json:"isDefault"`   // Is this a default template
+	IsModified  bool             `json:"isModified"`  // Has it been modified from default
+	DefaultHash string           `json:"defaultHash"` // Hash of default content for comparison
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the Template DTO to a schema.NotificationTemplate model
+// ToSchema converts the Template DTO to a schema.NotificationTemplate model.
 func (t *Template) ToSchema() *schema.NotificationTemplate {
 	return &schema.NotificationTemplate{
 		ID:          t.ID,
@@ -97,11 +97,12 @@ func (t *Template) ToSchema() *schema.NotificationTemplate {
 	}
 }
 
-// FromSchemaTemplate converts a schema.NotificationTemplate model to Template DTO
+// FromSchemaTemplate converts a schema.NotificationTemplate model to Template DTO.
 func FromSchemaTemplate(st *schema.NotificationTemplate) *Template {
 	if st == nil {
 		return nil
 	}
+
 	return &Template{
 		ID:          st.ID,
 		AppID:       st.AppID,
@@ -123,12 +124,13 @@ func FromSchemaTemplate(st *schema.NotificationTemplate) *Template {
 	}
 }
 
-// FromSchemaTemplates converts a slice of schema.NotificationTemplate to Template DTOs
+// FromSchemaTemplates converts a slice of schema.NotificationTemplate to Template DTOs.
 func FromSchemaTemplates(templates []*schema.NotificationTemplate) []*Template {
 	result := make([]*Template, len(templates))
 	for i, t := range templates {
 		result[i] = FromSchemaTemplate(t)
 	}
+
 	return result
 }
 
@@ -137,27 +139,27 @@ func FromSchemaTemplates(templates []*schema.NotificationTemplate) []*Template {
 // =============================================================================
 
 // Notification represents a notification instance DTO
-// This is separate from schema.Notification to maintain proper separation of concerns
+// This is separate from schema.Notification to maintain proper separation of concerns.
 type Notification struct {
-	ID          xid.ID                 `json:"id"`
-	AppID       xid.ID                 `json:"appId"`
-	TemplateID  *xid.ID                `json:"templateId,omitempty"`
-	Type        NotificationType       `json:"type"`
-	Recipient   string                 `json:"recipient"` // Email address or phone number
-	Subject     string                 `json:"subject,omitempty"`
-	Body        string                 `json:"body"`
-	Status      NotificationStatus     `json:"status"`
-	Error       string                 `json:"error,omitempty"`
-	ProviderID  string                 `json:"providerId,omitempty"` // External provider message ID
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	SentAt      *time.Time             `json:"sentAt,omitempty"`
-	DeliveredAt *time.Time             `json:"deliveredAt,omitempty"`
+	ID          xid.ID             `json:"id"`
+	AppID       xid.ID             `json:"appId"`
+	TemplateID  *xid.ID            `json:"templateId,omitempty"`
+	Type        NotificationType   `json:"type"`
+	Recipient   string             `json:"recipient"` // Email address or phone number
+	Subject     string             `json:"subject,omitempty"`
+	Body        string             `json:"body"`
+	Status      NotificationStatus `json:"status"`
+	Error       string             `json:"error,omitempty"`
+	ProviderID  string             `json:"providerId,omitempty"` // External provider message ID
+	Metadata    map[string]any     `json:"metadata,omitempty"`
+	SentAt      *time.Time         `json:"sentAt,omitempty"`
+	DeliveredAt *time.Time         `json:"deliveredAt,omitempty"`
 	// Audit fields
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// ToSchema converts the Notification DTO to a schema.Notification model
+// ToSchema converts the Notification DTO to a schema.Notification model.
 func (n *Notification) ToSchema() *schema.Notification {
 	return &schema.Notification{
 		ID:          n.ID,
@@ -178,11 +180,12 @@ func (n *Notification) ToSchema() *schema.Notification {
 	}
 }
 
-// FromSchemaNotification converts a schema.Notification model to Notification DTO
+// FromSchemaNotification converts a schema.Notification model to Notification DTO.
 func FromSchemaNotification(sn *schema.Notification) *Notification {
 	if sn == nil {
 		return nil
 	}
+
 	return &Notification{
 		ID:          sn.ID,
 		AppID:       sn.AppID,
@@ -202,12 +205,13 @@ func FromSchemaNotification(sn *schema.Notification) *Notification {
 	}
 }
 
-// FromSchemaNotifications converts a slice of schema.Notification to Notification DTOs
+// FromSchemaNotifications converts a slice of schema.Notification to Notification DTOs.
 func FromSchemaNotifications(notifications []*schema.Notification) []*Notification {
 	result := make([]*Notification, len(notifications))
 	for i, n := range notifications {
 		result[i] = FromSchemaNotification(n)
 	}
+
 	return result
 }
 
@@ -215,52 +219,52 @@ func FromSchemaNotifications(notifications []*schema.Notification) []*Notificati
 // REQUEST/RESPONSE TYPES
 // =============================================================================
 
-// CreateTemplateRequest represents a request to create a template
+// CreateTemplateRequest represents a request to create a template.
 type CreateTemplateRequest struct {
-	AppID       xid.ID                 `json:"appId" validate:"required"`
-	TemplateKey string                 `json:"templateKey" validate:"required"`
-	Name        string                 `json:"name" validate:"required"`
-	Type        NotificationType       `json:"type" validate:"required"`
-	Language    string                 `json:"language,omitempty"`
-	Subject     string                 `json:"subject,omitempty"`
-	Body        string                 `json:"body" validate:"required"`
-	Variables   []string               `json:"variables,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	AppID       xid.ID           `json:"appId"               validate:"required"`
+	TemplateKey string           `json:"templateKey"         validate:"required"`
+	Name        string           `json:"name"                validate:"required"`
+	Type        NotificationType `json:"type"                validate:"required"`
+	Language    string           `json:"language,omitempty"`
+	Subject     string           `json:"subject,omitempty"`
+	Body        string           `json:"body"                validate:"required"`
+	Variables   []string         `json:"variables,omitempty"`
+	Metadata    map[string]any   `json:"metadata,omitempty"`
 }
 
-// UpdateTemplateRequest represents a request to update a template
+// UpdateTemplateRequest represents a request to update a template.
 type UpdateTemplateRequest struct {
-	Name      *string                `json:"name,omitempty"`
-	Subject   *string                `json:"subject,omitempty"`
-	Body      *string                `json:"body,omitempty"`
-	Variables []string               `json:"variables,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	Active    *bool                  `json:"active,omitempty"`
+	Name      *string        `json:"name,omitempty"`
+	Subject   *string        `json:"subject,omitempty"`
+	Body      *string        `json:"body,omitempty"`
+	Variables []string       `json:"variables,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+	Active    *bool          `json:"active,omitempty"`
 }
 
-// SendRequest represents a request to send a notification
+// SendRequest represents a request to send a notification.
 type SendRequest struct {
-	AppID        xid.ID                 `json:"appId" validate:"required"`
-	TemplateName string                 `json:"templateName,omitempty"` // Use template
-	Type         NotificationType       `json:"type" validate:"required"`
-	Recipient    string                 `json:"recipient" validate:"required"`
-	Subject      string                 `json:"subject,omitempty"`   // For email (overrides template)
-	Body         string                 `json:"body,omitempty"`      // Direct body (overrides template)
-	Variables    map[string]interface{} `json:"variables,omitempty"` // Template variables
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	AppID        xid.ID           `json:"appId"                  validate:"required"`
+	TemplateName string           `json:"templateName,omitempty"` // Use template
+	Type         NotificationType `json:"type"                   validate:"required"`
+	Recipient    string           `json:"recipient"              validate:"required"`
+	Subject      string           `json:"subject,omitempty"`   // For email (overrides template)
+	Body         string           `json:"body,omitempty"`      // Direct body (overrides template)
+	Variables    map[string]any   `json:"variables,omitempty"` // Template variables
+	Metadata     map[string]any   `json:"metadata,omitempty"`
 }
 
-// ListTemplatesResponse represents a paginated response for templates
+// ListTemplatesResponse represents a paginated response for templates.
 type ListTemplatesResponse = pagination.PageResponse[*Template]
 
-// ListNotificationsResponse represents a paginated response for notifications
+// ListNotificationsResponse represents a paginated response for notifications.
 type ListNotificationsResponse = pagination.PageResponse[*Notification]
 
 // =============================================================================
 // ANALYTICS REPORT TYPES
 // =============================================================================
 
-// TemplateAnalyticsReport represents analytics data for a specific template
+// TemplateAnalyticsReport represents analytics data for a specific template.
 type TemplateAnalyticsReport struct {
 	TemplateID      xid.ID    `json:"templateId"`
 	TemplateName    string    `json:"templateName"`
@@ -282,7 +286,7 @@ type TemplateAnalyticsReport struct {
 	EndDate         time.Time `json:"endDate"`
 }
 
-// AppAnalyticsReport represents aggregate analytics data for an app
+// AppAnalyticsReport represents aggregate analytics data for an app.
 type AppAnalyticsReport struct {
 	AppID           xid.ID    `json:"appId"`
 	TotalSent       int64     `json:"totalSent"`
@@ -303,7 +307,7 @@ type AppAnalyticsReport struct {
 	EndDate         time.Time `json:"endDate"`
 }
 
-// OrgAnalyticsReport represents aggregate analytics data for an organization
+// OrgAnalyticsReport represents aggregate analytics data for an organization.
 type OrgAnalyticsReport struct {
 	OrganizationID  xid.ID    `json:"organizationId"`
 	TotalSent       int64     `json:"totalSent"`
@@ -328,7 +332,7 @@ type OrgAnalyticsReport struct {
 // PROVIDER INTERFACE
 // =============================================================================
 
-// Provider represents a notification provider interface
+// Provider represents a notification provider interface.
 type Provider interface {
 	// ID returns the provider identifier
 	ID() string
@@ -350,7 +354,7 @@ type Provider interface {
 // REPOSITORY INTERFACE
 // =============================================================================
 
-// Repository defines the notification repository interface
+// Repository defines the notification repository interface.
 type Repository interface {
 	// Template operations
 	CreateTemplate(ctx context.Context, template *schema.NotificationTemplate) error
@@ -382,7 +386,7 @@ type Repository interface {
 	FindProviderByID(ctx context.Context, id xid.ID) (*schema.NotificationProvider, error)
 	FindProviderByTypeOrgScoped(ctx context.Context, appID xid.ID, orgID *xid.ID, providerType string) (*schema.NotificationProvider, error)
 	ListProviders(ctx context.Context, appID xid.ID, orgID *xid.ID) ([]*schema.NotificationProvider, error)
-	UpdateProvider(ctx context.Context, id xid.ID, config map[string]interface{}, isActive, isDefault bool) error
+	UpdateProvider(ctx context.Context, id xid.ID, config map[string]any, isActive, isDefault bool) error
 	DeleteProvider(ctx context.Context, id xid.ID) error
 
 	// Analytics operations
@@ -396,7 +400,7 @@ type Repository interface {
 	CreateTest(ctx context.Context, test *schema.NotificationTest) error
 	FindTestByID(ctx context.Context, id xid.ID) (*schema.NotificationTest, error)
 	ListTests(ctx context.Context, templateID xid.ID) ([]*schema.NotificationTest, error)
-	UpdateTestStatus(ctx context.Context, id xid.ID, status string, results map[string]interface{}, successCount, failureCount int) error
+	UpdateTestStatus(ctx context.Context, id xid.ID, status string, results map[string]any, successCount, failureCount int) error
 
 	// Cleanup operations
 	CleanupOldNotifications(ctx context.Context, olderThan time.Time) error
@@ -408,10 +412,10 @@ type Repository interface {
 // TEMPLATE ENGINE INTERFACE
 // =============================================================================
 
-// TemplateEngine defines the template rendering interface
+// TemplateEngine defines the template rendering interface.
 type TemplateEngine interface {
 	// Render renders a template with variables
-	Render(template string, variables map[string]interface{}) (string, error)
+	Render(template string, variables map[string]any) (string, error)
 
 	// ValidateTemplate validates template syntax
 	ValidateTemplate(template string) error

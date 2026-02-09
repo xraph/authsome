@@ -1,6 +1,7 @@
 package base
 
 import (
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -9,7 +10,7 @@ import (
 )
 
 // APIKey represents an API key with its metadata (DTO)
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type APIKey struct {
 	ID             xid.ID            `json:"id"`
 	AppID          xid.ID            `json:"appID"`                    // Platform tenant
@@ -44,7 +45,7 @@ type APIKey struct {
 	Key string `json:"key,omitempty"`
 }
 
-// ToSchema converts the APIKey DTO to schema.APIKey
+// ToSchema converts the APIKey DTO to schema.APIKey.
 func (a *APIKey) ToSchema() *schema.APIKey {
 	return &schema.APIKey{
 		AppID:                   a.AppID,
@@ -79,7 +80,7 @@ func (a *APIKey) ToSchema() *schema.APIKey {
 	}
 }
 
-// FromSchemaAPIKey converts a schema.APIKey to APIKey DTO
+// FromSchemaAPIKey converts a schema.APIKey to APIKey DTO.
 func FromSchemaAPIKey(s *schema.APIKey) *APIKey {
 	return &APIKey{
 		ID:                      s.ID,
@@ -110,28 +111,29 @@ func FromSchemaAPIKey(s *schema.APIKey) *APIKey {
 	}
 }
 
-// FromSchemaAPIKeys converts multiple schema.APIKey to APIKey DTOs
+// FromSchemaAPIKeys converts multiple schema.APIKey to APIKey DTOs.
 func FromSchemaAPIKeys(keys []*schema.APIKey) []*APIKey {
 	result := make([]*APIKey, len(keys))
 	for i, key := range keys {
 		result[i] = FromSchemaAPIKey(key)
 	}
+
 	return result
 }
 
 // CreateAPIKeyRequest represents a request to create an API key
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type CreateAPIKeyRequest struct {
-	AppID         xid.ID            `json:"appID" validate:"required"`         // Platform tenant
-	EnvironmentID xid.ID            `json:"environmentID" validate:"required"` // Required: environment-scoped
-	OrgID         *xid.ID           `json:"orgID,omitempty"`                   // Optional: org-scoped
-	UserID        xid.ID            `json:"userID" validate:"required"`        // User creating the key
-	Name          string            `json:"name" validate:"required,min=1,max=100"`
+	AppID         xid.ID            `json:"appID"                 validate:"required"` // Platform tenant
+	EnvironmentID xid.ID            `json:"environmentID"         validate:"required"` // Required: environment-scoped
+	OrgID         *xid.ID           `json:"orgID,omitempty"`                           // Optional: org-scoped
+	UserID        xid.ID            `json:"userID"                validate:"required"` // User creating the key
+	Name          string            `json:"name"                  validate:"required,min=1,max=100"`
 	Description   string            `json:"description,omitempty" validate:"max=500"`
-	KeyType       KeyType           `json:"keyType" validate:"required"` // pk/sk/rk
-	Scopes        []string          `json:"scopes" validate:"required,min=1"`
+	KeyType       KeyType           `json:"keyType"               validate:"required"` // pk/sk/rk
+	Scopes        []string          `json:"scopes"                validate:"required,min=1"`
 	Permissions   map[string]string `json:"permissions,omitempty"`
-	RateLimit     int               `json:"rate_limit,omitempty" validate:"min=0,max=10000"`
+	RateLimit     int               `json:"rate_limit,omitempty"  validate:"min=0,max=10000"`
 	AllowedIPs    []string          `json:"allowed_ips,omitempty"` // IP whitelist (CIDR notation supported)
 	ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty"`
@@ -142,69 +144,67 @@ type CreateAPIKeyRequest struct {
 	RoleIDs                 []xid.ID `json:"roleIDs,omitempty"`                 // Assign roles on creation
 }
 
-// UpdateAPIKeyRequest represents a request to update an API key
+// UpdateAPIKeyRequest represents a request to update an API key.
 type UpdateAPIKeyRequest struct {
-	Name        *string           `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Name        *string           `json:"name,omitempty"        validate:"omitempty,min=1,max=100"`
 	Description *string           `json:"description,omitempty" validate:"omitempty,max=500"`
-	Scopes      []string          `json:"scopes,omitempty" validate:"omitempty,min=1"`
+	Scopes      []string          `json:"scopes,omitempty"      validate:"omitempty,min=1"`
 	Permissions map[string]string `json:"permissions,omitempty"`
-	RateLimit   *int              `json:"rate_limit,omitempty" validate:"omitempty,min=0,max=10000"`
+	RateLimit   *int              `json:"rate_limit,omitempty"  validate:"omitempty,min=0,max=10000"`
 	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
 	Active      *bool             `json:"active,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
-// ListAPIKeysResponse is a type alias for the paginated response
+// ListAPIKeysResponse is a type alias for the paginated response.
 type ListAPIKeysResponse = pagination.PageResponse[*APIKey]
 
 // RotateAPIKeyRequest represents a request to rotate an API key
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type RotateAPIKeyRequest struct {
-	ID             xid.ID     `json:"id" validate:"required"`
-	AppID          xid.ID     `json:"appID" validate:"required"`
-	EnvironmentID  xid.ID     `json:"environmentID" validate:"required"`
+	ID             xid.ID     `json:"id"                       validate:"required"`
+	AppID          xid.ID     `json:"appID"                    validate:"required"`
+	EnvironmentID  xid.ID     `json:"environmentID"            validate:"required"`
 	OrganizationID *xid.ID    `json:"organizationID,omitempty"`
-	UserID         xid.ID     `json:"userID" validate:"required"`
+	UserID         xid.ID     `json:"userID"                   validate:"required"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 }
 
-// VerifyAPIKeyRequest represents a request to verify an API key
+// VerifyAPIKeyRequest represents a request to verify an API key.
 type VerifyAPIKeyRequest struct {
-	Key                string `json:"key" validate:"required"`
+	Key                string `json:"key"                           validate:"required"`
 	RequiredScope      string `json:"required_scope,omitempty"`
 	RequiredPermission string `json:"required_permission,omitempty"`
 	IP                 string `json:"ip,omitempty"`
 	UserAgent          string `json:"user_agent,omitempty"`
 }
 
-// VerifyAPIKeyResponse represents a response from API key verification
+// VerifyAPIKeyResponse represents a response from API key verification.
 type VerifyAPIKeyResponse struct {
 	Valid  bool    `json:"valid"`
 	APIKey *APIKey `json:"api_key,omitempty"`
 	Error  string  `json:"error,omitempty"`
 }
 
-// IsExpired checks if the API key has expired
+// IsExpired checks if the API key has expired.
 func (a *APIKey) IsExpired() bool {
 	return a.ExpiresAt != nil && time.Now().After(*a.ExpiresAt)
 }
 
-// HasScope checks if the API key has a specific scope
+// HasScope checks if the API key has a specific scope.
 func (a *APIKey) HasScope(scope string) bool {
-	for _, s := range a.Scopes {
-		if s == scope {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(a.Scopes, scope)
 }
 
-// HasPermission checks if the API key has a specific permission
+// HasPermission checks if the API key has a specific permission.
 func (a *APIKey) HasPermission(permission string) bool {
 	if a.Permissions == nil {
 		return false
 	}
+
 	_, exists := a.Permissions[permission]
+
 	return exists
 }
 
@@ -223,30 +223,31 @@ func (a *APIKey) HasScopeWildcard(scope string) bool {
 			}
 		}
 	}
+
 	return false
 }
 
-// IsPublishable returns true if this is a publishable (frontend-safe) key
+// IsPublishable returns true if this is a publishable (frontend-safe) key.
 func (a *APIKey) IsPublishable() bool {
 	return a.KeyType == KeyTypePublishable
 }
 
-// IsSecret returns true if this is a secret (backend-only, admin) key
+// IsSecret returns true if this is a secret (backend-only, admin) key.
 func (a *APIKey) IsSecret() bool {
 	return a.KeyType == KeyTypeSecret
 }
 
-// IsRestricted returns true if this is a restricted (backend-only, scoped) key
+// IsRestricted returns true if this is a restricted (backend-only, scoped) key.
 func (a *APIKey) IsRestricted() bool {
 	return a.KeyType == KeyTypeRestricted
 }
 
-// CanPerformAdminOperation returns true if the key has admin privileges
+// CanPerformAdminOperation returns true if the key has admin privileges.
 func (a *APIKey) CanPerformAdminOperation() bool {
 	return a.HasScope("admin:full")
 }
 
-// GetAllScopes returns all scopes including default key type scopes
+// GetAllScopes returns all scopes including default key type scopes.
 func (a *APIKey) GetAllScopes() []string {
 	allScopes := make(map[string]bool)
 
@@ -265,5 +266,6 @@ func (a *APIKey) GetAllScopes() []string {
 	for s := range allScopes {
 		result = append(result, s)
 	}
+
 	return result
 }

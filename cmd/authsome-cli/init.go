@@ -15,7 +15,7 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator/sql"
 )
 
-// initCmd initializes a new AuthSome project
+// initCmd initializes a new AuthSome project.
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new AuthSome project",

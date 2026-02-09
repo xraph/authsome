@@ -9,7 +9,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ProvidersPage renders the providers configuration page
+// ProvidersPage renders the providers configuration page.
 func ProvidersPage(currentApp *app.App, basePath string) g.Node {
 	return primitives.Container(
 		Div(

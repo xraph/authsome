@@ -9,7 +9,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// BuilderButton returns a button component to launch the builder
+// BuilderButton returns a button component to launch the builder.
 func BuilderButton(basePath string, appID string) g.Node {
 	return A(
 		Href(fmt.Sprintf("%s/dashboard/app/%s/notifications/templates/builder", basePath, appID)),
@@ -19,7 +19,7 @@ func BuilderButton(basePath string, appID string) g.Node {
 	)
 }
 
-// TemplatePreviewCard renders a preview card for a template
+// TemplatePreviewCard renders a preview card for a template.
 func TemplatePreviewCard(template *Document, name, description, category string) g.Node {
 	// Render a small preview
 	renderer := NewRenderer(template)
@@ -65,7 +65,7 @@ func TemplatePreviewCard(template *Document, name, description, category string)
 	)
 }
 
-// getCategoryColor returns a color for a category
+// getCategoryColor returns a color for a category.
 func getCategoryColor(category string) string {
 	colors := map[string]string{
 		"Onboarding":     "#4F46E5", // Indigo
@@ -78,10 +78,11 @@ func getCategoryColor(category string) string {
 	if color, ok := colors[category]; ok {
 		return color
 	}
+
 	return "#6B7280" // Gray default
 }
 
-// SampleTemplatesGallery renders a gallery of sample templates
+// SampleTemplatesGallery renders a gallery of sample templates.
 func SampleTemplatesGallery(basePath string, currentApp *app.App) g.Node {
 	templates := GetAllTemplateInfo()
 
@@ -120,7 +121,7 @@ func SampleTemplatesGallery(basePath string, currentApp *app.App) g.Node {
 	)
 }
 
-// SampleTemplatesCompact renders a compact version for sidebars/modals
+// SampleTemplatesCompact renders a compact version for sidebars/modals.
 func SampleTemplatesCompact(basePath string, currentApp *app.App) g.Node {
 	templates := GetAllTemplateInfo()
 
@@ -155,7 +156,7 @@ func SampleTemplatesCompact(basePath string, currentApp *app.App) g.Node {
 	)
 }
 
-// getTemplateIcon returns an icon for a template type
+// getTemplateIcon returns an icon for a template type.
 func getTemplateIcon(name, color string) g.Node {
 	iconClass := "size-5"
 	style := fmt.Sprintf("color: %s;", color)
@@ -182,7 +183,7 @@ func getTemplateIcon(name, color string) g.Node {
 	}
 }
 
-// BuilderIntegrationCard renders an info card about the builder
+// BuilderIntegrationCard renders an info card about the builder.
 func BuilderIntegrationCard() g.Node {
 	return Div(
 		Class("bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-6 dark:from-violet-900/20 dark:to-indigo-900/20 dark:border-violet-800"),
@@ -220,7 +221,7 @@ func BuilderIntegrationCard() g.Node {
 	)
 }
 
-// featureListItem renders a feature list item with check icon
+// featureListItem renders a feature list item with check icon.
 func featureListItem(text string) g.Node {
 	return Li(
 		Class("flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"),
@@ -229,7 +230,7 @@ func featureListItem(text string) g.Node {
 	)
 }
 
-// TemplateSelector renders a template selection component for the create modal
+// TemplateSelector renders a template selection component for the create modal.
 func TemplateSelector(basePath string, currentApp *app.App) g.Node {
 	templates := GetAllTemplateInfo()
 
@@ -242,13 +243,15 @@ func TemplateSelector(basePath string, currentApp *app.App) g.Node {
 	categoryOrder := []string{"Onboarding", "Authentication", "Collaboration", "Security", "Transactional", "Marketing"}
 
 	var categoryNodes []g.Node
+
 	for _, category := range categoryOrder {
 		if tmps, ok := categories[category]; ok {
 			categoryColor := getCategoryColor(category)
 
 			var templateNodes []g.Node
+
 			for _, t := range tmps {
-				t := t // Capture
+				// Capture
 				templateNodes = append(templateNodes, Div(
 					Class("template-option cursor-pointer p-3 rounded-lg border-2 border-transparent hover:border-violet-400 hover:bg-violet-50 transition-all dark:hover:bg-violet-900/20"),
 					g.Attr("@click", fmt.Sprintf("selectTemplate('%s')", t.Name)),

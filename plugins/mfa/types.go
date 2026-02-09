@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// FactorType represents different authentication factor types
+// FactorType represents different authentication factor types.
 type FactorType string
 
 const (
@@ -20,7 +20,7 @@ const (
 	FactorTypeBiometric FactorType = "biometric" // Biometric authentication
 )
 
-// FactorStatus represents the state of an authentication factor
+// FactorStatus represents the state of an authentication factor.
 type FactorStatus string
 
 const (
@@ -30,7 +30,7 @@ const (
 	FactorStatusRevoked  FactorStatus = "revoked"  // Permanently revoked
 )
 
-// FactorPriority defines the priority of a factor
+// FactorPriority defines the priority of a factor.
 type FactorPriority string
 
 const (
@@ -39,7 +39,7 @@ const (
 	FactorPriorityOptional FactorPriority = "optional" // Optional additional security
 )
 
-// RiskLevel represents authentication risk assessment
+// RiskLevel represents authentication risk assessment.
 type RiskLevel string
 
 const (
@@ -49,7 +49,7 @@ const (
 	RiskLevelCritical RiskLevel = "critical"
 )
 
-// ChallengeStatus represents the state of an MFA challenge
+// ChallengeStatus represents the state of an MFA challenge.
 type ChallengeStatus string
 
 const (
@@ -60,7 +60,7 @@ const (
 	ChallengeStatusCancelled ChallengeStatus = "cancelled"
 )
 
-// Factor represents an enrolled authentication factor
+// Factor represents an enrolled authentication factor.
 type Factor struct {
 	ID         xid.ID         `json:"id"`
 	UserID     xid.ID         `json:"userId"`
@@ -77,7 +77,7 @@ type Factor struct {
 	ExpiresAt  *time.Time     `json:"expiresAt,omitempty"`
 }
 
-// Challenge represents an active MFA challenge
+// Challenge represents an active MFA challenge.
 type Challenge struct {
 	ID          xid.ID          `json:"id"`
 	UserID      xid.ID          `json:"userId"`
@@ -95,7 +95,7 @@ type Challenge struct {
 	VerifiedAt  *time.Time      `json:"verifiedAt,omitempty"`
 }
 
-// TrustedDevice represents a device that can skip MFA
+// TrustedDevice represents a device that can skip MFA.
 type TrustedDevice struct {
 	ID         xid.ID         `json:"id"`
 	UserID     xid.ID         `json:"userId"`
@@ -109,7 +109,7 @@ type TrustedDevice struct {
 	ExpiresAt  time.Time      `json:"expiresAt"`
 }
 
-// MFASession represents an MFA verification session
+// MFASession represents an MFA verification session.
 type MFASession struct {
 	ID              xid.ID         `json:"id"`
 	UserID          xid.ID         `json:"userId"`
@@ -126,7 +126,7 @@ type MFASession struct {
 	CompletedAt     *time.Time     `json:"completedAt,omitempty"`
 }
 
-// MFAPolicy defines organization-level MFA requirements
+// MFAPolicy defines organization-level MFA requirements.
 type MFAPolicy struct {
 	ID                     xid.ID       `json:"id"`
 	OrganizationID         xid.ID       `json:"organizationId"`
@@ -143,7 +143,7 @@ type MFAPolicy struct {
 	UpdatedAt              time.Time    `json:"updatedAt"`
 }
 
-// FactorEnrollmentRequest represents a request to enroll a new factor
+// FactorEnrollmentRequest represents a request to enroll a new factor.
 type FactorEnrollmentRequest struct {
 	Type     FactorType     `json:"type"`
 	Priority FactorPriority `json:"priority,omitempty"`
@@ -151,7 +151,7 @@ type FactorEnrollmentRequest struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// FactorEnrollmentResponse contains data needed to complete enrollment
+// FactorEnrollmentResponse contains data needed to complete enrollment.
 type FactorEnrollmentResponse struct {
 	FactorID         xid.ID         `json:"factorId"`
 	Type             FactorType     `json:"type"`
@@ -162,14 +162,14 @@ type FactorEnrollmentResponse struct {
 	// For SMS/Email: { "masked_destination": "+1***-***-1234" }
 }
 
-// FactorVerificationRequest verifies an enrolled factor
+// FactorVerificationRequest verifies an enrolled factor.
 type FactorVerificationRequest struct {
 	FactorID xid.ID         `json:"factorId"`
 	Code     string         `json:"code,omitempty"` // For OTP-based factors
 	Data     map[string]any `json:"data,omitempty"` // For complex factors (WebAuthn, etc.)
 }
 
-// ChallengeRequest initiates an MFA challenge
+// ChallengeRequest initiates an MFA challenge.
 type ChallengeRequest struct {
 	UserID      xid.ID         `json:"userId"`
 	FactorTypes []FactorType   `json:"factorTypes,omitempty"` // Specific factor types to use
@@ -177,7 +177,7 @@ type ChallengeRequest struct {
 	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
-// ChallengeResponse contains challenge details
+// ChallengeResponse contains challenge details.
 type ChallengeResponse struct {
 	ChallengeID      xid.ID       `json:"challengeId"`
 	SessionID        xid.ID       `json:"sessionId"`
@@ -186,7 +186,7 @@ type ChallengeResponse struct {
 	ExpiresAt        time.Time    `json:"expiresAt"`
 }
 
-// FactorInfo provides minimal factor information for challenge selection
+// FactorInfo provides minimal factor information for challenge selection.
 type FactorInfo struct {
 	FactorID xid.ID         `json:"factorId"`
 	Type     FactorType     `json:"type"`
@@ -194,7 +194,7 @@ type FactorInfo struct {
 	Metadata map[string]any `json:"metadata,omitempty"` // Masked phone, email, etc.
 }
 
-// VerificationRequest verifies a challenge
+// VerificationRequest verifies a challenge.
 type VerificationRequest struct {
 	ChallengeID    xid.ID         `json:"challengeId"`
 	FactorID       xid.ID         `json:"factorId"`
@@ -204,14 +204,14 @@ type VerificationRequest struct {
 	DeviceInfo     *DeviceInfo    `json:"deviceInfo,omitempty"`
 }
 
-// DeviceInfo contains device identification data
+// DeviceInfo contains device identification data.
 type DeviceInfo struct {
 	DeviceID string         `json:"deviceId"`
 	Name     string         `json:"name,omitempty"`
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// VerificationResponse indicates verification result
+// VerificationResponse indicates verification result.
 type VerificationResponse struct {
 	Success          bool       `json:"success"`
 	SessionComplete  bool       `json:"sessionComplete"`
@@ -220,7 +220,7 @@ type VerificationResponse struct {
 	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
 }
 
-// ChallengeStatusResponse contains the current status of an MFA challenge
+// ChallengeStatusResponse contains the current status of an MFA challenge.
 type ChallengeStatusResponse struct {
 	SessionID        xid.ID     `json:"sessionId"`
 	Status           string     `json:"status"` // pending, completed, expired
@@ -231,7 +231,7 @@ type ChallengeStatusResponse struct {
 	CompletedAt      *time.Time `json:"completedAt,omitempty"`
 }
 
-// MFAPolicyResponse contains MFA policy details
+// MFAPolicyResponse contains MFA policy details.
 type MFAPolicyResponse struct {
 	ID                  xid.ID   `json:"id"`
 	AppID               xid.ID   `json:"appId"`
@@ -242,7 +242,7 @@ type MFAPolicyResponse struct {
 	GracePeriodDays     int      `json:"gracePeriodDays"`
 }
 
-// MFABypassResponse contains MFA bypass details
+// MFABypassResponse contains MFA bypass details.
 type MFABypassResponse struct {
 	ID        xid.ID    `json:"id"`
 	UserID    xid.ID    `json:"userId"`
@@ -250,7 +250,7 @@ type MFABypassResponse struct {
 	Reason    string    `json:"reason"`
 }
 
-// MFAStatus represents overall MFA status for a user
+// MFAStatus represents overall MFA status for a user.
 type MFAStatus struct {
 	Enabled         bool         `json:"enabled"`
 	EnrolledFactors []FactorInfo `json:"enrolledFactors"`
@@ -260,7 +260,7 @@ type MFAStatus struct {
 	TrustedDevice   bool         `json:"trustedDevice"`
 }
 
-// RiskAssessment represents authentication risk evaluation
+// RiskAssessment represents authentication risk evaluation.
 type RiskAssessment struct {
 	Level       RiskLevel      `json:"level"`
 	Score       float64        `json:"score"`       // 0-100

@@ -15,7 +15,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ClientCreatePage shows the create client wizard
+// ClientCreatePage shows the create client wizard.
 func (p *PagesManager) ClientCreatePage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

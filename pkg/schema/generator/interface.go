@@ -2,7 +2,7 @@ package generator
 
 import "github.com/xraph/authsome/pkg/schema/definition"
 
-// Generator is the interface that all schema generators must implement
+// Generator is the interface that all schema generators must implement.
 type Generator interface {
 	// Generate generates files from the schema
 	Generate(schema *definition.Schema, opts Options) error
@@ -14,7 +14,7 @@ type Generator interface {
 	Description() string
 }
 
-// Options contains common options for all generators
+// Options contains common options for all generators.
 type Options struct {
 	// OutputDir is the directory where generated files will be written
 	OutputDir string
@@ -32,17 +32,17 @@ type Options struct {
 	Verbose bool
 
 	// Custom contains generator-specific options
-	Custom map[string]interface{}
+	Custom map[string]any
 }
 
-// MigrationFile represents a generated migration file
+// MigrationFile represents a generated migration file.
 type MigrationFile struct {
 	Name    string
 	Path    string
 	Content string
 }
 
-// Result represents the result of a generation operation
+// Result represents the result of a generation operation.
 type Result struct {
 	Files   []MigrationFile
 	Message string

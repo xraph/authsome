@@ -10,7 +10,7 @@ import (
 	authsometesting "github.com/xraph/authsome/testing"
 )
 
-// Example: Basic user creation and authentication
+// Example: Basic user creation and authentication.
 func TestExample_BasicAuth(t *testing.T) {
 	// Create a new mock instance
 	mock := authsometesting.NewMock(t)
@@ -43,7 +43,7 @@ func TestExample_BasicAuth(t *testing.T) {
 	assert.Equal(t, user.ID, retrievedUser.ID)
 }
 
-// Example: Using NewTestContext convenience method
+// Example: Using NewTestContext convenience method.
 func TestExample_QuickAuth(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -67,7 +67,7 @@ func TestExample_QuickAuth(t *testing.T) {
 	assert.NotNil(t, session)
 }
 
-// Example: Testing with multiple organizations
+// Example: Testing with multiple organizations.
 func TestExample_MultiOrg(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -104,7 +104,7 @@ func TestExample_MultiOrg(t *testing.T) {
 	assert.Equal(t, org2.ID, orgID2)
 }
 
-// Example: Testing authorization with roles
+// Example: Testing authorization with roles.
 func TestExample_RoleBasedAuth(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -130,7 +130,7 @@ func TestExample_RoleBasedAuth(t *testing.T) {
 	assert.Equal(t, authsometesting.ErrInsufficientPermissions, err)
 }
 
-// Example: Testing session expiration
+// Example: Testing session expiration.
 func TestExample_SessionExpiration(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -146,7 +146,7 @@ func TestExample_SessionExpiration(t *testing.T) {
 	assert.Contains(t, err.Error(), "expired")
 }
 
-// Example: Using common scenarios
+// Example: Using common scenarios.
 func TestExample_CommonScenarios(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -200,7 +200,7 @@ func TestExample_CommonScenarios(t *testing.T) {
 	})
 }
 
-// Example: Testing service methods
+// Example: Testing service methods.
 func TestExample_ServiceMethods(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
@@ -286,13 +286,13 @@ func TestExample_ServiceMethods(t *testing.T) {
 	})
 }
 
-// Example: Real-world scenario - testing a handler that requires auth
+// Example: Real-world scenario - testing a handler that requires auth.
 func TestExample_HandlerWithAuth(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	// Your application handler
-	getUserProfile := func(ctx context.Context, mock *authsometesting.Mock) (map[string]interface{}, error) {
+	getUserProfile := func(ctx context.Context, mock *authsometesting.Mock) (map[string]any, error) {
 		userID, ok := authsometesting.GetUserID(ctx)
 		if !ok || userID.IsNil() {
 			return nil, authsometesting.ErrNotAuthenticated
@@ -308,7 +308,7 @@ func TestExample_HandlerWithAuth(t *testing.T) {
 			return nil, authsometesting.ErrOrgNotFound
 		}
 
-		return map[string]interface{}{
+		return map[string]any{
 			"user_id":   user.ID.String(),
 			"user_name": user.Name,
 			"org_id":    org.ID.String(),
@@ -339,14 +339,14 @@ func TestExample_HandlerWithAuth(t *testing.T) {
 	})
 }
 
-// Example: Testing with custom metadata
+// Example: Testing with custom metadata.
 func TestExample_Metadata(t *testing.T) {
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	// Create organization with metadata
 	org := mock.CreateOrganization("Test Org", "test-org-meta")
-	org.Metadata = map[string]interface{}{
+	org.Metadata = map[string]any{
 		"industry": "Technology",
 		"size":     "Enterprise",
 		"region":   "US-West",
@@ -362,37 +362,37 @@ func TestExample_Metadata(t *testing.T) {
 
 func BenchmarkMock_CreateUser(b *testing.B) {
 	t := &testing.T{}
+
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		mock.CreateUser(fmt.Sprintf("user%d@example.com", i), "Test User")
 	}
 }
 
 func BenchmarkMock_GetUserID(b *testing.B) {
 	t := &testing.T{}
+
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		authsometesting.GetUserID(ctx)
 	}
 }
 
 func BenchmarkMock_RequireAuth(b *testing.B) {
 	t := &testing.T{}
+
 	mock := authsometesting.NewMock(t)
 	defer mock.Reset()
 
 	ctx := mock.NewTestContext()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mock.RequireAuth(ctx)
 	}
 }

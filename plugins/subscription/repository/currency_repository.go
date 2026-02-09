@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// CurrencyRepository defines the interface for currency operations
+// CurrencyRepository defines the interface for currency operations.
 type CurrencyRepository interface {
 	// Currency operations
 	ListCurrencies(ctx context.Context) ([]*core.SupportedCurrency, error)
@@ -29,19 +29,20 @@ type CurrencyRepository interface {
 	DeleteExchangeRate(ctx context.Context, id xid.ID) error
 }
 
-// currencyRepository implements CurrencyRepository using Bun
+// currencyRepository implements CurrencyRepository using Bun.
 type currencyRepository struct {
 	db *bun.DB
 }
 
-// NewCurrencyRepository creates a new currency repository
+// NewCurrencyRepository creates a new currency repository.
 func NewCurrencyRepository(db *bun.DB) CurrencyRepository {
 	return &currencyRepository{db: db}
 }
 
-// ListCurrencies returns all supported currencies
+// ListCurrencies returns all supported currencies.
 func (r *currencyRepository) ListCurrencies(ctx context.Context) ([]*core.SupportedCurrency, error) {
 	var currencies []schema.SubscriptionCurrency
+
 	err := r.db.NewSelect().
 		Model(&currencies).
 		Where("is_active = ?", true).
@@ -55,12 +56,14 @@ func (r *currencyRepository) ListCurrencies(ctx context.Context) ([]*core.Suppor
 	for i, c := range currencies {
 		result[i] = schemaToCurrency(&c)
 	}
+
 	return result, nil
 }
 
-// GetCurrency returns a currency by code
+// GetCurrency returns a currency by code.
 func (r *currencyRepository) GetCurrency(ctx context.Context, code string) (*core.SupportedCurrency, error) {
 	var currency schema.SubscriptionCurrency
+
 	err := r.db.NewSelect().
 		Model(&currency).
 		Where("code = ?", code).
@@ -69,19 +72,22 @@ func (r *currencyRepository) GetCurrency(ctx context.Context, code string) (*cor
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToCurrency(&currency), nil
 }
 
-// CreateCurrency creates a new currency
+// CreateCurrency creates a new currency.
 func (r *currencyRepository) CreateCurrency(ctx context.Context, currency *core.SupportedCurrency) error {
 	model := currencyToSchema(currency)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// UpdateCurrency updates a currency
+// UpdateCurrency updates a currency.
 func (r *currencyRepository) UpdateCurrency(ctx context.Context, currency *core.SupportedCurrency) error {
 	model := currencyToSchema(currency)
 	model.UpdatedAt = time.Now()
@@ -89,19 +95,22 @@ func (r *currencyRepository) UpdateCurrency(ctx context.Context, currency *core.
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// CreateExchangeRate creates a new exchange rate
+// CreateExchangeRate creates a new exchange rate.
 func (r *currencyRepository) CreateExchangeRate(ctx context.Context, rate *core.ExchangeRate) error {
 	model := exchangeRateToSchema(rate)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetExchangeRate returns the current exchange rate
+// GetExchangeRate returns the current exchange rate.
 func (r *currencyRepository) GetExchangeRate(ctx context.Context, fromCurrency, toCurrency string) (*core.ExchangeRate, error) {
 	var rate schema.SubscriptionExchangeRate
+
 	err := r.db.NewSelect().
 		Model(&rate).
 		Where("from_currency = ?", fromCurrency).
@@ -115,14 +124,17 @@ func (r *currencyRepository) GetExchangeRate(ctx context.Context, fromCurrency, 
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToExchangeRate(&rate), nil
 }
 
-// GetExchangeRateAt returns the exchange rate at a specific time
+// GetExchangeRateAt returns the exchange rate at a specific time.
 func (r *currencyRepository) GetExchangeRateAt(ctx context.Context, fromCurrency, toCurrency string, at time.Time) (*core.ExchangeRate, error) {
 	var rate schema.SubscriptionExchangeRate
+
 	err := r.db.NewSelect().
 		Model(&rate).
 		Where("from_currency = ?", fromCurrency).
@@ -136,14 +148,17 @@ func (r *currencyRepository) GetExchangeRateAt(ctx context.Context, fromCurrency
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToExchangeRate(&rate), nil
 }
 
-// ListExchangeRates returns all exchange rates for an app
+// ListExchangeRates returns all exchange rates for an app.
 func (r *currencyRepository) ListExchangeRates(ctx context.Context, appID xid.ID) ([]*core.ExchangeRate, error) {
 	var rates []schema.SubscriptionExchangeRate
+
 	err := r.db.NewSelect().
 		Model(&rates).
 		Where("app_id = ?", appID).
@@ -158,10 +173,11 @@ func (r *currencyRepository) ListExchangeRates(ctx context.Context, appID xid.ID
 	for i, r := range rates {
 		result[i] = schemaToExchangeRate(&r)
 	}
+
 	return result, nil
 }
 
-// UpdateExchangeRate updates an exchange rate
+// UpdateExchangeRate updates an exchange rate.
 func (r *currencyRepository) UpdateExchangeRate(ctx context.Context, rate *core.ExchangeRate) error {
 	model := exchangeRateToSchema(rate)
 	model.UpdatedAt = time.Now()
@@ -169,15 +185,17 @@ func (r *currencyRepository) UpdateExchangeRate(ctx context.Context, rate *core.
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteExchangeRate deletes an exchange rate
+// DeleteExchangeRate deletes an exchange rate.
 func (r *currencyRepository) DeleteExchangeRate(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionExchangeRate)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 

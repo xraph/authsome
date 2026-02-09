@@ -16,6 +16,7 @@ func TestNew(t *testing.T) {
 
 func TestWithBasePath(t *testing.T) {
 	basePath := "/auth/v2"
+
 	auth := New(WithBasePath(basePath))
 	if auth.config.BasePath != basePath {
 		t.Errorf("expected base path %s, got %s", basePath, auth.config.BasePath)

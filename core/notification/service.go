@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/authsome/core/audit"
 )
 
-// Config holds the notification service configuration
+// Config holds the notification service configuration.
 type Config struct {
 	DefaultProvider map[NotificationType]string `json:"defaultProvider"`
 	RetryAttempts   int                         `json:"retryAttempts"`
@@ -28,7 +28,7 @@ type Config struct {
 	PersistFailures bool     `json:"persistFailures"` // Persist permanently failed notifications to DB
 }
 
-// Service provides notification functionality
+// Service provides notification functionality.
 type Service struct {
 	repo      Repository
 	engine    TemplateEngine
@@ -37,7 +37,7 @@ type Service struct {
 	config    Config
 }
 
-// NewService creates a new notification service
+// NewService creates a new notification service.
 func NewService(
 	repo Repository,
 	engine TemplateEngine,
@@ -48,9 +48,11 @@ func NewService(
 	if cfg.RetryAttempts == 0 {
 		cfg.RetryAttempts = 3
 	}
+
 	if cfg.RetryDelay == 0 {
 		cfg.RetryDelay = 5 * time.Minute
 	}
+
 	if cfg.CleanupAfter == 0 {
 		cfg.CleanupAfter = 30 * 24 * time.Hour // 30 days
 	}
@@ -59,6 +61,7 @@ func NewService(
 	if cfg.WorkerPoolSize == 0 {
 		cfg.WorkerPoolSize = 5
 	}
+
 	if cfg.QueueSize == 0 {
 		cfg.QueueSize = 1000
 	}
@@ -67,6 +70,7 @@ func NewService(
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = 3
 	}
+
 	if len(cfg.RetryBackoff) == 0 {
 		cfg.RetryBackoff = []string{"1m", "5m", "15m"}
 	}
@@ -80,7 +84,7 @@ func NewService(
 	}
 }
 
-// GetDispatcherConfig returns the dispatcher configuration from service config
+// GetDispatcherConfig returns the dispatcher configuration from service config.
 func (s *Service) GetDispatcherConfig() DispatcherConfig {
 	return DispatcherConfig{
 		AsyncEnabled:   s.config.AsyncEnabled,
@@ -89,7 +93,7 @@ func (s *Service) GetDispatcherConfig() DispatcherConfig {
 	}
 }
 
-// GetRetryConfig returns the retry configuration from service config
+// GetRetryConfig returns the retry configuration from service config.
 func (s *Service) GetRetryConfig() RetryConfig {
 	backoffDurations := make([]time.Duration, 0, len(s.config.RetryBackoff))
 	for _, d := range s.config.RetryBackoff {
@@ -97,6 +101,7 @@ func (s *Service) GetRetryConfig() RetryConfig {
 			backoffDurations = append(backoffDurations, duration)
 		}
 	}
+
 	if len(backoffDurations) == 0 {
 		backoffDurations = DefaultRetryConfig().BackoffDurations
 	}
@@ -109,13 +114,14 @@ func (s *Service) GetRetryConfig() RetryConfig {
 	}
 }
 
-// RegisterProvider registers a notification provider
+// RegisterProvider registers a notification provider.
 func (s *Service) RegisterProvider(provider Provider) error {
 	if err := provider.ValidateConfig(); err != nil {
 		return ProviderValidationFailed(err)
 	}
 
 	s.providers[provider.ID()] = provider
+
 	return nil
 }
 
@@ -123,7 +129,7 @@ func (s *Service) RegisterProvider(provider Provider) error {
 // TEMPLATE OPERATIONS
 // =============================================================================
 
-// CreateTemplate creates a new notification template
+// CreateTemplate creates a new notification template.
 func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest) (*Template, error) {
 	// Validate template syntax
 	if err := s.engine.ValidateTemplate(req.Body); err != nil {
@@ -142,6 +148,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 		if err != nil {
 			return nil, TemplateRenderFailed(err)
 		}
+
 		req.Variables = vars
 
 		if req.Subject != "" {
@@ -154,6 +161,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 			for _, v := range req.Variables {
 				varMap[v] = true
 			}
+
 			for _, v := range subjectVars {
 				if !varMap[v] {
 					req.Variables = append(req.Variables, v)
@@ -198,19 +206,21 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 	return template, nil
 }
 
-// GetTemplate gets a template by ID
+// GetTemplate gets a template by ID.
 func (s *Service) GetTemplate(ctx context.Context, id xid.ID) (*Template, error) {
 	schemaTemplate, err := s.repo.FindTemplateByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	if schemaTemplate == nil {
 		return nil, TemplateNotFound()
 	}
+
 	return FromSchemaTemplate(schemaTemplate), nil
 }
 
-// UpdateTemplate updates a template
+// UpdateTemplate updates a template.
 func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemplateRequest) error {
 	// Validate template syntax if body is being updated
 	if req.Body != nil {
@@ -238,7 +248,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemp
 	return nil
 }
 
-// DeleteTemplate deletes a template
+// DeleteTemplate deletes a template.
 func (s *Service) DeleteTemplate(ctx context.Context, id xid.ID) error {
 	if err := s.repo.DeleteTemplate(ctx, id); err != nil {
 		return err
@@ -253,7 +263,7 @@ func (s *Service) DeleteTemplate(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// ListTemplates lists templates with pagination
+// ListTemplates lists templates with pagination.
 func (s *Service) ListTemplates(ctx context.Context, filter *ListTemplatesFilter) (*ListTemplatesResponse, error) {
 	// Get paginated results from repository
 	pageResp, err := s.repo.ListTemplates(ctx, filter)
@@ -276,7 +286,7 @@ func (s *Service) ListTemplates(ctx context.Context, filter *ListTemplatesFilter
 // NOTIFICATION OPERATIONS
 // =============================================================================
 
-// Send sends a notification
+// Send sends a notification.
 func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, error) {
 	now := time.Now().UTC()
 	notification := &Notification{
@@ -296,9 +306,11 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 		if err != nil {
 			return nil, err
 		}
+
 		if schemaTemplate == nil {
 			return nil, TemplateNotFound()
 		}
+
 		if !schemaTemplate.Active {
 			return nil, TemplateInactive(req.TemplateName)
 		}
@@ -310,6 +322,7 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 		if err != nil {
 			return nil, TemplateRenderFailed(err)
 		}
+
 		notification.Body = body
 
 		if schemaTemplate.Subject != "" {
@@ -317,6 +330,7 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 			if err != nil {
 				return nil, TemplateRenderFailed(err)
 			}
+
 			notification.Subject = subject
 		}
 	} else {
@@ -329,6 +343,7 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 	if req.Subject != "" {
 		notification.Subject = req.Subject
 	}
+
 	if req.Body != "" {
 		notification.Body = req.Body
 	}
@@ -342,25 +357,28 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 	if err := s.sendNotification(ctx, notification); err != nil {
 		// Update status to failed
 		s.repo.UpdateNotificationStatus(ctx, notification.ID, NotificationStatusFailed, err.Error(), "")
+
 		return notification, NotificationSendFailed(err)
 	}
 
 	return notification, nil
 }
 
-// GetNotification gets a notification by ID
+// GetNotification gets a notification by ID.
 func (s *Service) GetNotification(ctx context.Context, id xid.ID) (*Notification, error) {
 	schemaNotification, err := s.repo.FindNotificationByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	if schemaNotification == nil {
 		return nil, NotificationNotFound()
 	}
+
 	return FromSchemaNotification(schemaNotification), nil
 }
 
-// ListNotifications lists notifications with pagination
+// ListNotifications lists notifications with pagination.
 func (s *Service) ListNotifications(ctx context.Context, filter *ListNotificationsFilter) (*ListNotificationsResponse, error) {
 	// Get paginated results from repository
 	pageResp, err := s.repo.ListNotifications(ctx, filter)
@@ -379,7 +397,7 @@ func (s *Service) ListNotifications(ctx context.Context, filter *ListNotificatio
 	}, nil
 }
 
-// sendNotification sends a notification using the appropriate provider
+// sendNotification sends a notification using the appropriate provider.
 func (s *Service) sendNotification(ctx context.Context, notification *Notification) error {
 	// Find provider
 	var provider Provider
@@ -396,6 +414,7 @@ func (s *Service) sendNotification(ctx context.Context, notification *Notificati
 		for _, p := range s.providers {
 			if p.Type() == notification.Type {
 				provider = p
+
 				break
 			}
 		}
@@ -419,12 +438,13 @@ func (s *Service) sendNotification(ctx context.Context, notification *Notificati
 	return s.repo.UpdateNotificationStatus(ctx, notification.ID, NotificationStatusSent, "", "")
 }
 
-// UpdateDeliveryStatus updates the delivery status of a notification
+// UpdateDeliveryStatus updates the delivery status of a notification.
 func (s *Service) UpdateDeliveryStatus(ctx context.Context, id xid.ID, status NotificationStatus) error {
 	schemaNotification, err := s.repo.FindNotificationByID(ctx, id)
 	if err != nil {
 		return err
 	}
+
 	if schemaNotification == nil {
 		return NotificationNotFound()
 	}
@@ -436,18 +456,19 @@ func (s *Service) UpdateDeliveryStatus(ctx context.Context, id xid.ID, status No
 	return s.repo.UpdateNotificationStatus(ctx, id, status, "", "")
 }
 
-// CleanupOldNotifications removes old notifications
+// CleanupOldNotifications removes old notifications.
 func (s *Service) CleanupOldNotifications(ctx context.Context) error {
 	cutoff := time.Now().Add(-s.config.CleanupAfter)
+
 	return s.repo.CleanupOldNotifications(ctx, cutoff)
 }
 
-// GetRepository returns the repository for use by sub-services
+// GetRepository returns the repository for use by sub-services.
 func (s *Service) GetRepository() Repository {
 	return s.repo
 }
 
-// GetTemplateEngine returns the template engine for external rendering
+// GetTemplateEngine returns the template engine for external rendering.
 func (s *Service) GetTemplateEngine() TemplateEngine {
 	return s.engine
 }

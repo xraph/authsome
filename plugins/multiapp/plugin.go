@@ -22,7 +22,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the multi-tenancy plugin
+// Plugin implements the multi-tenancy plugin.
 type Plugin struct {
 	authInstance core.Authsome
 	// Core services
@@ -46,7 +46,7 @@ type Plugin struct {
 	logger forge.Logger
 }
 
-// Config holds the multi-tenancy plugin configuration
+// Config holds the multi-tenancy plugin configuration.
 type Config struct {
 	// PlatformAppID is the ID of the platform app
 	PlatformAppID xid.ID `json:"platformAppId"`
@@ -76,66 +76,66 @@ type Config struct {
 	DefaultEnvironmentName string `json:"defaultEnvironmentName"`
 }
 
-// PluginOption is a functional option for configuring the plugin
+// PluginOption is a functional option for configuring the plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithPlatformAppID sets the platform app ID
+// WithPlatformAppID sets the platform app ID.
 func WithPlatformAppID(id xid.ID) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.PlatformAppID = id
 	}
 }
 
-// WithDefaultAppName sets the default app name
+// WithDefaultAppName sets the default app name.
 func WithDefaultAppName(name string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.DefaultAppName = name
 	}
 }
 
-// WithEnableAppCreation sets whether app creation is enabled
+// WithEnableAppCreation sets whether app creation is enabled.
 func WithEnableAppCreation(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.EnableAppCreation = enabled
 	}
 }
 
-// WithMaxMembersPerApp sets the maximum members per app
+// WithMaxMembersPerApp sets the maximum members per app.
 func WithMaxMembersPerApp(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxMembersPerApp = max
 	}
 }
 
-// WithMaxTeamsPerApp sets the maximum teams per app
+// WithMaxTeamsPerApp sets the maximum teams per app.
 func WithMaxTeamsPerApp(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxTeamsPerApp = max
 	}
 }
 
-// WithRequireInvitation sets whether invitation is required
+// WithRequireInvitation sets whether invitation is required.
 func WithRequireInvitation(required bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireInvitation = required
 	}
 }
 
-// WithInvitationExpiryHours sets the invitation expiry hours
+// WithInvitationExpiryHours sets the invitation expiry hours.
 func WithInvitationExpiryHours(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.InvitationExpiryHours = hours
 	}
 }
 
-// NewPlugin creates a new multi-tenancy plugin instance with optional configuration
+// NewPlugin creates a new multi-tenancy plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -157,12 +157,12 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 	return p
 }
 
-// ID returns the plugin identifier
+// ID returns the plugin identifier.
 func (p *Plugin) ID() string {
 	return "multiapp"
 }
 
-// Init initializes the plugin with dependencies
+// Init initializes the plugin with dependencies.
 func (p *Plugin) Init(authInstance core.Authsome) error {
 	if authInstance == nil {
 		return errs.InternalServerError("invalid auth instance", nil)
@@ -198,15 +198,19 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	if p.config.DefaultAppName == "" {
 		p.config.DefaultAppName = "Default App"
 	}
+
 	if p.config.DefaultEnvironmentName == "" {
 		p.config.DefaultEnvironmentName = "Development"
 	}
+
 	if p.config.MaxMembersPerApp == 0 {
 		p.config.MaxMembersPerApp = 100
 	}
+
 	if p.config.MaxTeamsPerApp == 0 {
 		p.config.MaxTeamsPerApp = 10
 	}
+
 	if p.config.InvitationExpiryHours == 0 {
 		p.config.InvitationExpiryHours = 72 // 3 days
 	}
@@ -291,6 +295,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		if err != nil {
 			p.logger.Error("failed to bootstrap default app",
 				forge.F("error", err.Error()))
+
 			return fmt.Errorf("bootstrap failed: %w", err)
 		}
 
@@ -314,7 +319,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	gopts := p.authInstance.GetGlobalGroupRoutesOptions()
 
@@ -526,26 +531,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 // DTOs for multitenancy routes
 
-// MultitenancyErrorResponse represents an error response
+// MultitenancyErrorResponse represents an error response.
 type MultitenancyErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
-// MultitenancyStatusResponse represents a status response
+// MultitenancyStatusResponse represents a status response.
 type MultitenancyStatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
-// AppsListResponse represents a list of apps
+// AppsListResponse represents a list of apps.
 type AppsListResponse []app.App
 
-// MembersListResponse represents a list of members
+// MembersListResponse represents a list of members.
 type MembersListResponse []app.Member
 
-// TeamsListResponse represents a list of teams
+// TeamsListResponse represents a list of teams.
 type TeamsListResponse []app.Team
 
-// RegisterHooks registers the plugin's hooks
+// RegisterHooks registers the plugin's hooks.
 func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	// Register app-related hooks
 	hooks.RegisterAfterUserCreate(p.handleUserCreated)
@@ -555,7 +560,7 @@ func (p *Plugin) RegisterHooks(hooks *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators replaces core services with multi-tenant aware versions
+// RegisterServiceDecorators replaces core services with multi-tenant aware versions.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// Decorate user service with multi-tenancy support
 	if userService := services.UserService(); userService != nil {
@@ -581,7 +586,7 @@ func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) e
 	return nil
 }
 
-// Migrate runs the plugin's database migrations
+// Migrate runs the plugin's database migrations.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
@@ -631,7 +636,7 @@ func (p *Plugin) Migrate() error {
 // Hook handlers
 
 // handleUserCreated is called when a user is created
-// This ensures app membership in both standalone and SaaS modes
+// This ensures app membership in both standalone and SaaS modes.
 func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 	// Check if this is the first user (no apps exist yet)
 	response, err := p.appService.ListApps(ctx, &app.ListAppsFilter{
@@ -675,6 +680,7 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 		p.logger.Info("first user is now platform owner",
 			forge.F("email", u.Email),
 			forge.F("role", "owner"))
+
 		return nil
 	}
 
@@ -703,6 +709,7 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 		if err.Error() != "user is already a member of this app" {
 			return fmt.Errorf("failed to add user to platform app: %w", err)
 		}
+
 		p.logger.Info("user already member of platform app", forge.F("email", u.Email))
 	} else {
 		p.logger.Info("user added to platform app as member", forge.F("email", u.Email))
@@ -711,24 +718,25 @@ func (p *Plugin) handleUserCreated(ctx context.Context, u *user.User) error {
 	return nil
 }
 
-// handleUserDeleted is called when a user is deleted
+// handleUserDeleted is called when a user is deleted.
 func (p *Plugin) handleUserDeleted(ctx context.Context, userID xid.ID) error {
 	// Note: Member cleanup should be handled at the repository level with cascade delete
 	// or we need to add a DeleteMembersByUserID method to the AppService interface
 	// For now, we rely on database constraints
 	p.logger.Info("user deleted - member cleanup handled by database constraints",
 		forge.F("user_id", userID.String()))
+
 	return nil
 }
 
-// handleSessionCreated is called when a session is created
+// handleSessionCreated is called when a session is created.
 func (p *Plugin) handleSessionCreated(ctx context.Context, s *session.Session) error {
 	// App context is handled by the session service decorator
 	// This hook is mainly for logging/auditing purposes
 	return nil
 }
 
-// appRepositoryAdapter adapts app.AppRepository to environment.AppRepository
+// appRepositoryAdapter adapts app.AppRepository to environment.AppRepository.
 type appRepositoryAdapter struct {
 	repo app.AppRepository
 }

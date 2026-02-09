@@ -8,19 +8,19 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// RateLimiter provides rate limiting for OAuth endpoints
+// RateLimiter provides rate limiting for OAuth endpoints.
 type RateLimiter struct {
 	redis  *redis.Client
 	limits map[string]RateLimit
 }
 
-// RateLimit defines rate limiting parameters
+// RateLimit defines rate limiting parameters.
 type RateLimit struct {
 	Requests int
 	Window   time.Duration
 }
 
-// NewRateLimiter creates a new rate limiter
+// NewRateLimiter creates a new rate limiter.
 func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
 	return &RateLimiter{
 		redis: redisClient,
@@ -33,7 +33,7 @@ func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
 	}
 }
 
-// Allow checks if a request is allowed under rate limits
+// Allow checks if a request is allowed under rate limits.
 func (r *RateLimiter) Allow(ctx context.Context, action, key string) error {
 	if r.redis == nil {
 		// No rate limiting if Redis is not available
@@ -66,7 +66,7 @@ func (r *RateLimiter) Allow(ctx context.Context, action, key string) error {
 	return nil
 }
 
-// SetLimit allows customizing rate limits
+// SetLimit allows customizing rate limits.
 func (r *RateLimiter) SetLimit(action string, requests int, window time.Duration) {
 	r.limits[action] = RateLimit{
 		Requests: requests,

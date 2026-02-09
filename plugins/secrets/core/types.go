@@ -5,26 +5,26 @@ import (
 	"time"
 )
 
-// SecretValueType defines the type of secret value
+// SecretValueType defines the type of secret value.
 type SecretValueType string
 
 const (
-	// SecretValueTypePlain is a plain string value
+	// SecretValueTypePlain is a plain string value.
 	SecretValueTypePlain SecretValueType = "plain"
-	// SecretValueTypeJSON is a JSON object/array value
+	// SecretValueTypeJSON is a JSON object/array value.
 	SecretValueTypeJSON SecretValueType = "json"
-	// SecretValueTypeYAML is a YAML document value
+	// SecretValueTypeYAML is a YAML document value.
 	SecretValueTypeYAML SecretValueType = "yaml"
-	// SecretValueTypeBinary is a base64-encoded binary value
+	// SecretValueTypeBinary is a base64-encoded binary value.
 	SecretValueTypeBinary SecretValueType = "binary"
 )
 
-// String returns the string representation of the value type
+// String returns the string representation of the value type.
 func (t SecretValueType) String() string {
 	return string(t)
 }
 
-// IsValid checks if the value type is valid
+// IsValid checks if the value type is valid.
 func (t SecretValueType) IsValid() bool {
 	switch t {
 	case SecretValueTypePlain, SecretValueTypeJSON, SecretValueTypeYAML, SecretValueTypeBinary:
@@ -34,12 +34,13 @@ func (t SecretValueType) IsValid() bool {
 	}
 }
 
-// ParseSecretValueType parses a string into a SecretValueType
+// ParseSecretValueType parses a string into a SecretValueType.
 func ParseSecretValueType(s string) (SecretValueType, bool) {
 	t := SecretValueType(s)
 	if t.IsValid() {
 		return t, true
 	}
+
 	return SecretValueTypePlain, false
 }
 
@@ -47,33 +48,34 @@ func ParseSecretValueType(s string) (SecretValueType, bool) {
 // DTOs - Data Transfer Objects
 // =============================================================================
 
-// SecretDTO is the API response for a secret (value excluded for security)
+// SecretDTO is the API response for a secret (value excluded for security).
 type SecretDTO struct {
-	ID          string                 `json:"id"`
-	Path        string                 `json:"path"`
-	Key         string                 `json:"key"`
-	ValueType   string                 `json:"valueType"`
-	Description string                 `json:"description,omitempty"`
-	Tags        []string               `json:"tags,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Version     int                    `json:"version"`
-	IsActive    bool                   `json:"isActive"`
-	HasSchema   bool                   `json:"hasSchema"`
-	HasExpiry   bool                   `json:"hasExpiry"`
-	ExpiresAt   *time.Time             `json:"expiresAt,omitempty"`
-	CreatedBy   string                 `json:"createdBy,omitempty"`
-	UpdatedBy   string                 `json:"updatedBy,omitempty"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
+	ID          string         `json:"id"`
+	Path        string         `json:"path"`
+	Key         string         `json:"key"`
+	ValueType   string         `json:"valueType"`
+	Description string         `json:"description,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Version     int            `json:"version"`
+	IsActive    bool           `json:"isActive"`
+	HasSchema   bool           `json:"hasSchema"`
+	HasExpiry   bool           `json:"hasExpiry"`
+	ExpiresAt   *time.Time     `json:"expiresAt,omitempty"`
+	CreatedBy   string         `json:"createdBy,omitempty"`
+	UpdatedBy   string         `json:"updatedBy,omitempty"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 }
 
-// SecretWithValueDTO includes the decrypted value (for authorized access)
+// SecretWithValueDTO includes the decrypted value (for authorized access).
 type SecretWithValueDTO struct {
 	SecretDTO
-	Value interface{} `json:"value"` // string, map, or slice depending on type
+
+	Value any `json:"value"` // string, map, or slice depending on type
 }
 
-// SecretVersionDTO represents a historical version of a secret
+// SecretVersionDTO represents a historical version of a secret.
 type SecretVersionDTO struct {
 	ID           string    `json:"id"`
 	Version      int       `json:"version"`
@@ -84,7 +86,7 @@ type SecretVersionDTO struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
-// SecretAccessLogDTO represents an access log entry
+// SecretAccessLogDTO represents an access log entry.
 type SecretAccessLogDTO struct {
 	ID           string    `json:"id"`
 	SecretID     string    `json:"secretId"`
@@ -102,34 +104,34 @@ type SecretAccessLogDTO struct {
 // Request DTOs
 // =============================================================================
 
-// CreateSecretRequest is the request to create a new secret
+// CreateSecretRequest is the request to create a new secret.
 type CreateSecretRequest struct {
-	Path        string                 `json:"path" validate:"required"`
-	Value       interface{}            `json:"value" validate:"required"`
-	ValueType   string                 `json:"valueType,omitempty"` // Defaults to "plain" if not specified
-	Schema      string                 `json:"schema,omitempty"`    // Optional JSON Schema for validation
-	Description string                 `json:"description,omitempty"`
-	Tags        []string               `json:"tags,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	ExpiresAt   *time.Time             `json:"expiresAt,omitempty"`
+	Path        string         `json:"path"                  validate:"required"`
+	Value       any            `json:"value"                 validate:"required"`
+	ValueType   string         `json:"valueType,omitempty"` // Defaults to "plain" if not specified
+	Schema      string         `json:"schema,omitempty"`    // Optional JSON Schema for validation
+	Description string         `json:"description,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	ExpiresAt   *time.Time     `json:"expiresAt,omitempty"`
 }
 
-// UpdateSecretRequest is the request to update an existing secret
+// UpdateSecretRequest is the request to update an existing secret.
 type UpdateSecretRequest struct {
-	Value        interface{}            `json:"value,omitempty"`
-	ValueType    string                 `json:"valueType,omitempty"`
-	Schema       string                 `json:"schema,omitempty"`
-	Description  string                 `json:"description,omitempty"`
-	Tags         []string               `json:"tags,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	ExpiresAt    *time.Time             `json:"expiresAt,omitempty"`
-	ClearExpiry  bool                   `json:"clearExpiry,omitempty"` // Set to true to remove expiry
-	ChangeReason string                 `json:"changeReason,omitempty"`
+	Value        any            `json:"value,omitempty"`
+	ValueType    string         `json:"valueType,omitempty"`
+	Schema       string         `json:"schema,omitempty"`
+	Description  string         `json:"description,omitempty"`
+	Tags         []string       `json:"tags,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
+	ExpiresAt    *time.Time     `json:"expiresAt,omitempty"`
+	ClearExpiry  bool           `json:"clearExpiry,omitempty"` // Set to true to remove expiry
+	ChangeReason string         `json:"changeReason,omitempty"`
 }
 
-// RollbackSecretRequest is the request to rollback a secret to a previous version
+// RollbackSecretRequest is the request to rollback a secret to a previous version.
 type RollbackSecretRequest struct {
-	TargetVersion int    `json:"targetVersion" validate:"required,min=1"`
+	TargetVersion int    `json:"targetVersion"    validate:"required,min=1"`
 	Reason        string `json:"reason,omitempty"`
 }
 
@@ -137,7 +139,7 @@ type RollbackSecretRequest struct {
 // Query DTOs
 // =============================================================================
 
-// ListSecretsQuery defines query parameters for listing secrets
+// ListSecretsQuery defines query parameters for listing secrets.
 type ListSecretsQuery struct {
 	Prefix    string   `json:"prefix,omitempty"`    // Path prefix filter (e.g., "database/")
 	Tags      []string `json:"tags,omitempty"`      // Tags filter (AND condition)
@@ -150,13 +152,13 @@ type ListSecretsQuery struct {
 	SortOrder string   `json:"sortOrder,omitempty"` // Sort order: asc, desc
 }
 
-// GetVersionsQuery defines query parameters for listing secret versions
+// GetVersionsQuery defines query parameters for listing secret versions.
 type GetVersionsQuery struct {
 	Page     int `json:"page,omitempty"`
 	PageSize int `json:"pageSize,omitempty"`
 }
 
-// GetAccessLogsQuery defines query parameters for listing access logs
+// GetAccessLogsQuery defines query parameters for listing access logs.
 type GetAccessLogsQuery struct {
 	Action   string     `json:"action,omitempty"`   // Filter by action type
 	FromDate *time.Time `json:"fromDate,omitempty"` // Filter from date
@@ -169,7 +171,7 @@ type GetAccessLogsQuery struct {
 // Response DTOs
 // =============================================================================
 
-// ListSecretsResponse is the response for listing secrets
+// ListSecretsResponse is the response for listing secrets.
 type ListSecretsResponse struct {
 	Secrets    []*SecretDTO `json:"secrets"`
 	Page       int          `json:"page"`
@@ -178,7 +180,7 @@ type ListSecretsResponse struct {
 	TotalPages int          `json:"totalPages"`
 }
 
-// ListVersionsResponse is the response for listing secret versions
+// ListVersionsResponse is the response for listing secret versions.
 type ListVersionsResponse struct {
 	Versions   []*SecretVersionDTO `json:"versions"`
 	Page       int                 `json:"page"`
@@ -187,7 +189,7 @@ type ListVersionsResponse struct {
 	TotalPages int                 `json:"totalPages"`
 }
 
-// ListAccessLogsResponse is the response for listing access logs
+// ListAccessLogsResponse is the response for listing access logs.
 type ListAccessLogsResponse struct {
 	Logs       []*SecretAccessLogDTO `json:"logs"`
 	Page       int                   `json:"page"`
@@ -196,17 +198,17 @@ type ListAccessLogsResponse struct {
 	TotalPages int                   `json:"totalPages"`
 }
 
-// RevealValueResponse is the response for revealing a secret value
+// RevealValueResponse is the response for revealing a secret value.
 type RevealValueResponse struct {
-	Value     interface{} `json:"value"`
-	ValueType string      `json:"valueType"`
+	Value     any    `json:"value"`
+	ValueType string `json:"valueType"`
 }
 
 // =============================================================================
 // Tree Structure DTOs (for dashboard tree view)
 // =============================================================================
 
-// SecretTreeNode represents a node in the secrets tree view
+// SecretTreeNode represents a node in the secrets tree view.
 type SecretTreeNode struct {
 	Name     string            `json:"name"`               // Node name (folder name or secret key)
 	Path     string            `json:"path"`               // Full path to this node
@@ -215,7 +217,7 @@ type SecretTreeNode struct {
 	Children []*SecretTreeNode `json:"children,omitempty"` // Child nodes if folder
 }
 
-// StatsDTO contains statistics about secrets
+// StatsDTO contains statistics about secrets.
 type StatsDTO struct {
 	TotalSecrets    int            `json:"totalSecrets"`
 	TotalVersions   int            `json:"totalVersions"`

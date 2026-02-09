@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// TwoFASecret stores per-user 2FA secret data
+// TwoFASecret stores per-user 2FA secret data.
 type TwoFASecret struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:twofa_secrets,alias:tfs"`
@@ -23,7 +23,7 @@ type TwoFASecret struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// BackupCode stores recovery codes for 2FA
+// BackupCode stores recovery codes for 2FA.
 type BackupCode struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:twofa_backup_codes,alias:tbc"`
@@ -38,7 +38,7 @@ type BackupCode struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// TrustedDevice allows skipping 2FA for a period
+// TrustedDevice allows skipping 2FA for a period.
 type TrustedDevice struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:trusted_devices,alias:td"`
@@ -53,7 +53,7 @@ type TrustedDevice struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// OTPCode stores one-time codes for OTP-based 2FA
+// OTPCode stores one-time codes for OTP-based 2FA.
 type OTPCode struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:twofa_otpcodes,alias:toc"`

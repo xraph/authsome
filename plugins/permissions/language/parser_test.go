@@ -288,8 +288,7 @@ func BenchmarkParser_Parse(b *testing.B) {
 
 	expression := `resource.owner == principal.id || has_role("admin")`
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := parser.Parse(expression)
 		if err != nil {
 			b.Fatal(err)
@@ -305,8 +304,7 @@ func BenchmarkParser_Program(b *testing.B) {
 	ast, err := parser.Parse(expression)
 	require.NoError(b, err)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := parser.Program(ast)
 		if err != nil {
 			b.Fatal(err)

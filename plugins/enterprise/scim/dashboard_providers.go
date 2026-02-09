@@ -17,7 +17,7 @@ import (
 
 // Provider Management Handlers
 
-// ServeProvidersListPage renders the SCIM providers list page
+// ServeProvidersListPage renders the SCIM providers list page.
 func (e *DashboardExtension) ServeProvidersListPage(ctx *router.PageContext) (g.Node, error) {
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
@@ -35,15 +35,17 @@ func (e *DashboardExtension) ServeProvidersListPage(ctx *router.PageContext) (g.
 	content := e.renderProvidersListContent(currentApp, orgID)
 
 	return content, nil
-	return content, nil // was: handler.RenderSettingsPage(ctx, "scim-providers", content)
+
+	// was: handler.RenderSettingsPage(ctx, "scim-providers", content)
 }
 
-// renderProvidersListContent renders the providers list page content
-func (e *DashboardExtension) renderProvidersListContent(currentApp interface{}, orgID *xid.ID) g.Node {
+// renderProvidersListContent renders the providers list page content.
+func (e *DashboardExtension) renderProvidersListContent(currentApp any, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 
 	// Extract app ID from currentApp
 	var appID xid.ID
+
 	switch v := currentApp.(type) {
 	case *xid.ID:
 		appID = *v
@@ -103,20 +105,22 @@ func (e *DashboardExtension) renderProvidersListContent(currentApp interface{}, 
 	)
 }
 
-// renderProviderCards renders provider cards
+// renderProviderCards renders provider cards.
 func (e *DashboardExtension) renderProviderCards(providers []*SCIMProvider, basePath string, appID *xid.ID) []g.Node {
 	cards := make([]g.Node, len(providers))
 	for i, provider := range providers {
 		cards[i] = providerCard(provider, basePath, (*appID))
 	}
+
 	return cards
 }
 
-// ServeProviderAddPage renders the add provider page
+// ServeProviderAddPage renders the add provider page.
 func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.Node, error) {
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -153,10 +157,11 @@ func (e *DashboardExtension) ServeProviderAddPage(ctx *router.PageContext) (g.No
 	)
 
 	return content, nil
-	return content, nil // was: handler.RenderSettingsPage(ctx, "scim-providers", content)
+
+	// was: handler.RenderSettingsPage(ctx, "scim-providers", content)
 }
 
-// renderAddProviderForm renders the add provider form
+// renderAddProviderForm renders the add provider form.
 func (e *DashboardExtension) renderAddProviderForm(basePath string, appID *xid.ID) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -350,7 +355,7 @@ func (e *DashboardExtension) renderAddProviderForm(basePath string, appID *xid.I
 	)
 }
 
-// ServeProviderDetailPage renders the provider detail page
+// ServeProviderDetailPage renders the provider detail page.
 func (e *DashboardExtension) ServeProviderDetailPage(ctx *router.PageContext) (g.Node, error) {
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
@@ -363,6 +368,7 @@ func (e *DashboardExtension) ServeProviderDetailPage(ctx *router.PageContext) (g
 	}
 
 	providerIDStr := ctx.Param("id")
+
 	providerID, err := xid.FromString(providerIDStr)
 	if err != nil {
 		return nil, errs.InternalServerError("Invalid provider ID", nil)
@@ -373,6 +379,7 @@ func (e *DashboardExtension) ServeProviderDetailPage(ctx *router.PageContext) (g
 
 	reqCtx := ctx.Request.Context()
 	_ = reqCtx // May be unused in some handlers
+
 	provider, err := e.plugin.service.GetProvider(reqCtx, providerID)
 	if err != nil {
 		return nil, errs.InternalServerError("Provider not found", nil)
@@ -381,11 +388,12 @@ func (e *DashboardExtension) ServeProviderDetailPage(ctx *router.PageContext) (g
 	content := e.renderProviderDetailContent(currentApp, provider, orgID)
 
 	return content, nil
-	return content, nil // was: handler.RenderSettingsPage(ctx, "scim-providers", content)
+
+	// was: handler.RenderSettingsPage(ctx, "scim-providers", content)
 }
 
-// renderProviderDetailContent renders the provider detail page content
-func (e *DashboardExtension) renderProviderDetailContent(currentApp interface{}, provider *SCIMProvider, orgID *xid.ID) g.Node {
+// renderProviderDetailContent renders the provider detail page content.
+func (e *DashboardExtension) renderProviderDetailContent(currentApp any, provider *SCIMProvider, orgID *xid.ID) g.Node {
 	_ = e.getBasePath()
 	_ = currentApp
 
@@ -470,7 +478,7 @@ func (e *DashboardExtension) renderProviderDetailContent(currentApp interface{},
 	)
 }
 
-// renderInfoField renders an info field
+// renderInfoField renders an info field.
 func (e *DashboardExtension) renderInfoField(label, value string) g.Node {
 	return Div(
 		Dt(Class("text-sm font-medium text-slate-500 dark:text-gray-400"), g.Text(label)),
@@ -481,7 +489,7 @@ func (e *DashboardExtension) renderInfoField(label, value string) g.Node {
 // renderProviderSyncHistory renders the sync history for a provider
 // NOTE: This helper function doesn't have access to context for service calls
 // In a production implementation, this would need to be refactored to accept context
-// or fetch data at a higher level and pass it down
+// or fetch data at a higher level and pass it down.
 func (e *DashboardExtension) renderProviderSyncHistory(provider *SCIMProvider) g.Node {
 	// Placeholder: In production, fetch events via:
 	// events, err := e.plugin.service.GetProviderSyncHistory(ctx, provider.ID, 10)
@@ -530,7 +538,7 @@ func (e *DashboardExtension) renderProviderSyncHistory(provider *SCIMProvider) g
 	)
 }
 
-// HandleAddProvider handles adding a new provider
+// HandleAddProvider handles adding a new provider.
 func (e *DashboardExtension) HandleAddProvider(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	_ = reqCtx // May be unused in some handlers
@@ -576,10 +584,11 @@ func (e *DashboardExtension) HandleAddProvider(ctx *router.PageContext) (g.Node,
 	// Redirect to provider detail page
 	basePath := e.getBasePath()
 	http.Redirect(ctx.ResponseWriter, ctx.Request, fmt.Sprintf("%s/app/%s/settings/scim-providers/%s", basePath, currentApp.ID.String(), provider.ID.String()), http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateProvider handles provider updates
+// HandleUpdateProvider handles provider updates.
 func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	_ = reqCtx // May be unused in some handlers
@@ -597,7 +606,7 @@ func (e *DashboardExtension) HandleUpdateProvider(ctx *router.PageContext) (g.No
 	return nil, nil
 }
 
-// HandleManualSync handles manual sync trigger
+// HandleManualSync handles manual sync trigger.
 func (e *DashboardExtension) HandleManualSync(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	_ = reqCtx // May be unused in some handlers
@@ -623,7 +632,7 @@ func (e *DashboardExtension) HandleManualSync(ctx *router.PageContext) (g.Node, 
 	return nil, nil
 }
 
-// HandleTestProvider handles provider connection testing
+// HandleTestProvider handles provider connection testing.
 func (e *DashboardExtension) HandleTestProvider(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	_ = reqCtx // May be unused in some handlers
@@ -644,7 +653,7 @@ func (e *DashboardExtension) HandleTestProvider(ctx *router.PageContext) (g.Node
 	return nil, nil
 }
 
-// HandleDeleteProvider handles provider removal/deletion
+// HandleDeleteProvider handles provider removal/deletion.
 func (e *DashboardExtension) HandleDeleteProvider(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 
@@ -672,5 +681,6 @@ func (e *DashboardExtension) HandleDeleteProvider(ctx *router.PageContext) (g.No
 
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-providers", e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }

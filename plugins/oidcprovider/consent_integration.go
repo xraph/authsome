@@ -10,14 +10,14 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// ConsentManager handles OAuth consent with optional integration to enterprise consent plugin
+// ConsentManager handles OAuth consent with optional integration to enterprise consent plugin.
 type ConsentManager struct {
 	consentSvc        *ConsentService          // Internal OIDC consent
 	enterpriseConsent EnterpriseConsentService // Optional enterprise plugin
 }
 
 // EnterpriseConsentService interface for enterprise consent plugin
-// This allows optional integration without hard dependency
+// This allows optional integration without hard dependency.
 type EnterpriseConsentService interface {
 	// CreateConsent records user consent
 	CreateConsent(ctx context.Context, orgID, userID string, req interface{}) (interface{}, error)
@@ -29,7 +29,7 @@ type EnterpriseConsentService interface {
 	RevokeConsent(ctx context.Context, id string) error
 }
 
-// NewConsentManager creates a consent manager with optional enterprise integration
+// NewConsentManager creates a consent manager with optional enterprise integration.
 func NewConsentManager(consentSvc *ConsentService, enterpriseConsent EnterpriseConsentService) *ConsentManager {
 	return &ConsentManager{
 		consentSvc:        consentSvc,
@@ -37,7 +37,7 @@ func NewConsentManager(consentSvc *ConsentService, enterpriseConsent EnterpriseC
 	}
 }
 
-// CheckConsent checks if user has granted consent for the client and scopes
+// CheckConsent checks if user has granted consent for the client and scopes.
 func (cm *ConsentManager) CheckConsent(ctx context.Context, userID xid.ID, clientID, scope string, appID, envID xid.ID, orgID *xid.ID) (bool, error) {
 	// Parse scopes
 	scopes := cm.consentSvc.ParseScopes(scope)
@@ -51,7 +51,7 @@ func (cm *ConsentManager) CheckConsent(ctx context.Context, userID xid.ID, clien
 	return hasConsent, nil
 }
 
-// RecordConsent records user's consent decision
+// RecordConsent records user's consent decision.
 func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clientID, scope string, granted bool, appID, envID xid.ID, orgID *xid.ID, expiresAt *time.Time) error {
 	if !granted {
 		// User denied consent - nothing to record
@@ -63,6 +63,7 @@ func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clie
 
 	// Calculate expiration duration
 	var expiresIn *time.Duration
+
 	if expiresAt != nil {
 		duration := time.Until(*expiresAt)
 		expiresIn = &duration
@@ -83,7 +84,7 @@ func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clie
 		consentReq := map[string]interface{}{
 			"userId":      userID.String(),
 			"consentType": "oauth_authorization",
-			"purpose":     fmt.Sprintf("OAuth client: %s", clientID),
+			"purpose":     "OAuth client: " + clientID,
 			"granted":     granted,
 			"version":     "1.0",
 			"metadata": map[string]interface{}{
@@ -108,7 +109,7 @@ func (cm *ConsentManager) RecordConsent(ctx context.Context, userID xid.ID, clie
 	return nil
 }
 
-// RevokeConsent revokes user's consent for a client
+// RevokeConsent revokes user's consent for a client.
 func (cm *ConsentManager) RevokeConsent(ctx context.Context, userID xid.ID, clientID string) error {
 	// Revoke internal OIDC consent
 	err := cm.consentSvc.RevokeConsent(ctx, userID, clientID)
@@ -125,7 +126,7 @@ func (cm *ConsentManager) RevokeConsent(ctx context.Context, userID xid.ID, clie
 	return nil
 }
 
-// GenerateConsentHTML generates HTML for the OAuth consent screen
+// GenerateConsentHTML generates HTML for the OAuth consent screen.
 func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope string, redirectURL string) string {
 	// Parse scopes
 	scopes := strings.Split(scope, " ")
@@ -141,13 +142,17 @@ func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope s
 	}
 
 	scopeHTML := ""
+	var scopeHTMLSb144 strings.Builder
+
 	for _, s := range scopes {
 		description := scopeDescriptions[s]
 		if description == "" {
 			description = s // Fallback to scope name
 		}
-		scopeHTML += fmt.Sprintf(`<li class="scope-item"><span class="scope-icon">✓</span> %s</li>`, description)
+
+		scopeHTMLSb144.WriteString(fmt.Sprintf(`<li class="scope-item"><span class="scope-icon">✓</span> %s</li>`, description))
 	}
+	scopeHTML += scopeHTMLSb144.String()
 
 	// If no logo, use placeholder
 	logoHTML := ""
@@ -345,7 +350,7 @@ func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope s
 	return html
 }
 
-// GetConsentPageData returns data for rendering custom consent templates
+// GetConsentPageData returns data for rendering custom consent templates.
 func (cm *ConsentManager) GetConsentPageData(clientName, clientLogoURI, clientDescription, scope string) map[string]interface{} {
 	scopes := strings.Split(scope, " ")
 	scopeDescriptions := []map[string]string{}
@@ -364,6 +369,7 @@ func (cm *ConsentManager) GetConsentPageData(clientName, clientLogoURI, clientDe
 		if description == "" {
 			description = s
 		}
+
 		scopeDescriptions = append(scopeDescriptions, map[string]string{
 			"scope":       s,
 			"description": description,
@@ -378,10 +384,11 @@ func (cm *ConsentManager) GetConsentPageData(clientName, clientLogoURI, clientDe
 	}
 }
 
-// ValidateConsentRequest validates the consent decision from user
+// ValidateConsentRequest validates the consent decision from user.
 func (cm *ConsentManager) ValidateConsentRequest(consentDecision string) error {
 	if consentDecision != "allow" && consentDecision != "deny" {
 		return errs.BadRequest("invalid consent decision")
 	}
+
 	return nil
 }

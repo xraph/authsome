@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// Test model
+// Test model.
 type TestUser struct {
 	bun.BaseModel `bun:"table:test_users"`
 
@@ -72,6 +72,7 @@ func TestApplyToQuery(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 
 	qb := pagination.NewQueryBuilder(params)
@@ -101,6 +102,7 @@ func TestApplyLimit(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 
 	qb := pagination.NewQueryBuilder(params)
@@ -130,6 +132,7 @@ func TestApplyOffset(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 
 	qb := pagination.NewQueryBuilder(params)
@@ -184,6 +187,7 @@ func TestApplyOrder(t *testing.T) {
 			}
 
 			var users []TestUser
+
 			query := db.NewSelect().Model(&users)
 
 			qb := pagination.NewQueryBuilder(params)
@@ -216,6 +220,7 @@ func TestApplySearch(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 
 	qb := pagination.NewQueryBuilder(params)
@@ -246,6 +251,7 @@ func TestApplyFilters(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 
 	qb := pagination.NewQueryBuilder(params)
@@ -339,6 +345,7 @@ func TestApplyHelperFunction(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 	query = pagination.Apply(query, params)
 
@@ -364,6 +371,7 @@ func TestApplyWithSearchHelperFunction(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 	query = pagination.ApplyWithSearch(query, params, "name", "email")
 
@@ -393,6 +401,7 @@ func TestApplyFields(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 
 	qb := pagination.NewQueryBuilder(params)
@@ -414,9 +423,11 @@ func TestApplyFields(t *testing.T) {
 		if user.ID == "" {
 			t.Error("ID should be populated")
 		}
+
 		if user.Name == "" {
 			t.Error("Name should be populated")
 		}
+
 		if user.Email != "" {
 			t.Error("Email should not be populated (not in fields list)")
 		}
@@ -466,6 +477,7 @@ func TestGetFields(t *testing.T) {
 
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d fields, got %d", len(tt.expected), len(result))
+
 				return
 			}
 
@@ -493,6 +505,7 @@ func TestApplyAllHelperFunction(t *testing.T) {
 	}
 
 	var users []TestUser
+
 	query := db.NewSelect().Model(&users)
 	query = pagination.ApplyAll(query, params, "status")
 
@@ -506,6 +519,7 @@ func TestApplyAllHelperFunction(t *testing.T) {
 	// Filter role:user excludes Alice (admin) and David (moderator)
 	if len(users) != 2 {
 		t.Errorf("Expected 2 users (Bob and Charlie), got %d", len(users))
+
 		for _, u := range users {
 			t.Logf("User: %s, Status: %s, Role: %s", u.Name, u.Status, u.Role)
 		}
@@ -516,6 +530,7 @@ func TestApplyAllHelperFunction(t *testing.T) {
 		if users[0].Name != "Bob" && users[1].Name != "Bob" {
 			t.Error("Expected to find Bob")
 		}
+
 		if users[0].Name != "Charlie" && users[1].Name != "Charlie" {
 			t.Error("Expected to find Charlie")
 		}

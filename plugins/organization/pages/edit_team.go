@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/input"
 )
 
-// EditTeamPage renders the edit team form page
+// EditTeamPage renders the edit team form page.
 func EditTeamPage(currentApp *app.App, orgID, teamID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -175,7 +175,7 @@ func EditTeamPage(currentApp *app.App, orgID, teamID, basePath string) g.Node {
 	)
 }
 
-// editTeamData returns the Alpine.js data object for edit team
+// editTeamData returns the Alpine.js data object for edit team.
 func editTeamData(appID, orgID, teamID string) string {
 	return fmt.Sprintf(`{
 		team: null,

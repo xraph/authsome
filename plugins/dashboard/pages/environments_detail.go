@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// EnvironmentDetailPage shows detailed information about an environment
+// EnvironmentDetailPage shows detailed information about an environment.
 func (p *PagesManager) EnvironmentDetailPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 	envID := ctx.Param("envId")

@@ -74,21 +74,25 @@ func test() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fset := token.NewFileSet()
+
 			node, err := parser.ParseFile(fset, "test.go", tt.code, 0)
 			if err != nil {
 				t.Fatalf("failed to parse code: %v", err)
 			}
 
 			i := &Introspector{fset: fset}
+
 			var result *RouterGroup
 
 			ast.Inspect(node, func(n ast.Node) bool {
 				if stmt, ok := n.(*ast.AssignStmt); ok {
 					if group := i.extractGroupDeclaration(stmt); group != nil {
 						result = group
+
 						return false
 					}
 				}
+
 				return true
 			})
 
@@ -96,6 +100,7 @@ func test() {
 				if result != nil {
 					t.Errorf("expected nil, got %+v", result)
 				}
+
 				return
 			}
 
@@ -106,9 +111,11 @@ func test() {
 			if result.VarName != tt.expected.VarName {
 				t.Errorf("VarName: expected %q, got %q", tt.expected.VarName, result.VarName)
 			}
+
 			if result.Path != tt.expected.Path {
 				t.Errorf("Path: expected %q, got %q", tt.expected.Path, result.Path)
 			}
+
 			if result.ParentVar != tt.expected.ParentVar {
 				t.Errorf("ParentVar: expected %q, got %q", tt.expected.ParentVar, result.ParentVar)
 			}
@@ -292,6 +299,7 @@ func RegisterRoutes(router forge.Router) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Write code to temp file
 			fset := token.NewFileSet()
+
 			node, err := parser.ParseFile(fset, "test.go", tt.code, parser.ParseComments)
 			if err != nil {
 				t.Fatalf("failed to parse code: %v", err)
@@ -301,12 +309,14 @@ func RegisterRoutes(router forge.Router) {
 
 			// First pass: collect groups
 			groupMap := make(map[string]*RouterGroup)
+
 			ast.Inspect(node, func(n ast.Node) bool {
 				if stmt, ok := n.(*ast.AssignStmt); ok {
 					if group := i.extractGroupDeclaration(stmt); group != nil {
 						groupMap[group.VarName] = group
 					}
 				}
+
 				return true
 			})
 
@@ -318,12 +328,14 @@ func RegisterRoutes(router forge.Router) {
 
 			// Second pass: extract routes
 			var registrations []RouteRegistration
+
 			ast.Inspect(node, func(n ast.Node) bool {
 				if call, ok := n.(*ast.CallExpr); ok {
 					if reg := i.extractRouteRegistrationWithGroups(call, groupMap); reg != nil {
 						registrations = append(registrations, *reg)
 					}
 				}
+
 				return true
 			})
 
@@ -336,9 +348,11 @@ func RegisterRoutes(router forge.Router) {
 				if got.Method != exp.Method {
 					t.Errorf("route %d: expected method %q, got %q", idx, exp.Method, got.Method)
 				}
+
 				if got.Path != exp.Path {
 					t.Errorf("route %d: expected path %q, got %q", idx, exp.Path, got.Path)
 				}
+
 				if got.HandlerName != exp.HandlerName {
 					t.Errorf("route %d: expected handler %q, got %q", idx, exp.HandlerName, got.HandlerName)
 				}
@@ -374,21 +388,25 @@ func test() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fset := token.NewFileSet()
+
 			node, err := parser.ParseFile(fset, "test.go", tt.code, 0)
 			if err != nil {
 				t.Fatalf("failed to parse code: %v", err)
 			}
 
 			i := &Introspector{fset: fset}
+
 			var result string
 
 			ast.Inspect(node, func(n ast.Node) bool {
 				if call, ok := n.(*ast.CallExpr); ok {
 					if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
 						result = i.getReceiverName(sel)
+
 						return false
 					}
 				}
+
 				return true
 			})
 

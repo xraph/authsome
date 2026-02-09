@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Repository defines the interface for environment data access
-// This follows the Interface Segregation Principle from core/app and core/jwt architecture
+// This follows the Interface Segregation Principle from core/app and core/jwt architecture.
 type Repository interface {
 	// Environment CRUD
 	Create(ctx context.Context, env *schema.Environment) error

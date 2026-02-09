@@ -1,6 +1,6 @@
 package compliance
 
-// ComplianceTemplates provides predefined compliance templates
+// ComplianceTemplates provides predefined compliance templates.
 var ComplianceTemplates = map[ComplianceStandard]ComplianceTemplate{
 	StandardSOC2: {
 		Standard:    StandardSOC2,
@@ -219,22 +219,24 @@ var ComplianceTemplates = map[ComplianceStandard]ComplianceTemplate{
 	},
 }
 
-// GetTemplate returns a compliance template for a standard
+// GetTemplate returns a compliance template for a standard.
 func GetTemplate(standard ComplianceStandard) (ComplianceTemplate, bool) {
 	template, ok := ComplianceTemplates[standard]
+
 	return template, ok
 }
 
-// GetTemplateNames returns all available template names
+// GetTemplateNames returns all available template names.
 func GetTemplateNames() []string {
 	names := make([]string, 0, len(ComplianceTemplates))
 	for standard := range ComplianceTemplates {
 		names = append(names, string(standard))
 	}
+
 	return names
 }
 
-// CreateProfileFromTemplate creates a compliance profile from a template
+// CreateProfileFromTemplate creates a compliance profile from a template.
 func CreateProfileFromTemplate(appID string, standard ComplianceStandard) (*ComplianceProfile, error) {
 	template, ok := GetTemplate(standard)
 	if !ok {
@@ -276,7 +278,7 @@ func CreateProfileFromTemplate(appID string, standard ComplianceStandard) (*Comp
 		LeastPrivilege:      true,
 		RegularAccessReview: true,
 
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"created_from_template": string(standard),
 			"template_version":      "1.0",
 			"required_policies":     template.RequiredPolicies,

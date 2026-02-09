@@ -69,7 +69,7 @@
 //	ctx := mock.NewTestContext()
 //
 //	// With specific user
-//	user := mock.CreateUser("user@example.com", "Test User")
+//	:= mock.CreateUser("user@example.com", "Test User")
 //	ctx := mock.NewTestContextWithUser(user)
 //
 //	// Manual setup with full control
@@ -167,7 +167,7 @@
 //	forgeCtx := mock.QuickAuthenticatedForgeContext("GET", "/api/profile")
 //
 //	// With specific user
-//	user := mock.CreateUser("user@example.com", "Test User")
+//	:= mock.CreateUser("user@example.com", "Test User")
 //	forgeCtx := mock.QuickAuthenticatedForgeContextWithUser("POST", "/api/data", user)
 //
 //	// Full control

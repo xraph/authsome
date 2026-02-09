@@ -8,13 +8,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Middleware provides geofence checking middleware
+// Middleware provides geofence checking middleware.
 type Middleware struct {
 	service *Service
 	config  *Config
 }
 
-// NewMiddleware creates a new geofence middleware
+// NewMiddleware creates a new geofence middleware.
 func NewMiddleware(service *Service, config *Config) *Middleware {
 	return &Middleware{
 		service: service,
@@ -22,7 +22,7 @@ func NewMiddleware(service *Service, config *Config) *Middleware {
 	}
 }
 
-// CheckGeofence middleware checks geofence rules for each request
+// CheckGeofence middleware checks geofence rules for each request.
 func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		// Skip if not enabled or validation not required
@@ -48,10 +48,11 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 		if ip == "" {
 			// Cannot determine IP, allow by default if not in strict mode
 			if m.config.Restrictions.StrictMode {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error": "cannot determine client IP address",
 				})
 			}
+
 			return next(c)
 		}
 
@@ -75,10 +76,11 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 		if err != nil {
 			// Log error but don't block request unless in strict mode
 			if m.config.Restrictions.StrictMode {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+				return c.JSON(http.StatusInternalServerError, map[string]any{
 					"error": "geofence check failed",
 				})
 			}
+
 			return next(c)
 		}
 
@@ -88,7 +90,7 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 				// TODO: Invalidate session
 			}
 
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error":      "access denied by geofence policy",
 				"reason":     result.Reason,
 				"rule":       result.RuleName,
@@ -108,7 +110,7 @@ func (m *Middleware) CheckGeofence(next func(forge.Context) error) func(forge.Co
 	}
 }
 
-// getClientIP extracts the client IP address from the request
+// getClientIP extracts the client IP address from the request.
 func (m *Middleware) getClientIP(c forge.Context) string {
 	req := c.Request()
 
@@ -127,12 +129,12 @@ func (m *Middleware) getClientIP(c forge.Context) string {
 	}
 
 	// CF-Connecting-IP (Cloudflare)
-	if cfip := req.Header.Get("CF-Connecting-IP"); cfip != "" {
+	if cfip := req.Header.Get("Cf-Connecting-Ip"); cfip != "" {
 		return strings.TrimSpace(cfip)
 	}
 
 	// True-Client-IP (Cloudflare/Akamai)
-	if tcip := req.Header.Get("True-Client-IP"); tcip != "" {
+	if tcip := req.Header.Get("True-Client-Ip"); tcip != "" {
 		return strings.TrimSpace(tcip)
 	}
 
@@ -146,12 +148,13 @@ func (m *Middleware) getClientIP(c forge.Context) string {
 }
 
 // RequireLocation middleware requires geofence check to pass
-// This is a stronger enforcement than CheckGeofence
+// This is a stronger enforcement than CheckGeofence.
 func (m *Middleware) RequireLocation(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		// Temporarily set strict mode for this check
 		originalStrictMode := m.config.Restrictions.StrictMode
 		m.config.Restrictions.StrictMode = true
+
 		defer func() {
 			m.config.Restrictions.StrictMode = originalStrictMode
 		}()
@@ -160,34 +163,36 @@ func (m *Middleware) RequireLocation(next func(forge.Context) error) func(forge.
 	}
 }
 
-// RequireCountry middleware requires the request to come from specific countries
+// RequireCountry middleware requires the request to come from specific countries.
 func (m *Middleware) RequireCountry(countries ...string) func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
 			ip := m.getClientIP(c)
 			if ip == "" {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error": "cannot determine client IP address",
 				})
 			}
 
 			geoData, err := m.service.GetGeolocation(c.Context(), ip)
 			if err != nil {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error": "geolocation lookup failed",
 				})
 			}
 
 			allowed := false
+
 			for _, country := range countries {
 				if strings.EqualFold(geoData.CountryCode, country) {
 					allowed = true
+
 					break
 				}
 			}
 
 			if !allowed {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":   "access denied - country not allowed",
 					"country": geoData.CountryCode,
 				})
@@ -198,7 +203,7 @@ func (m *Middleware) RequireCountry(countries ...string) func(next func(forge.Co
 	}
 }
 
-// BlockVPN middleware blocks requests from VPNs
+// BlockVPN middleware blocks requests from VPNs.
 func (m *Middleware) BlockVPN(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		ip := m.getClientIP(c)
@@ -212,7 +217,7 @@ func (m *Middleware) BlockVPN(next func(forge.Context) error) func(forge.Context
 		}
 
 		if detection != nil && detection.IsVPN {
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error":    "access denied - VPN detected",
 				"provider": detection.VPNProvider,
 			})
@@ -222,7 +227,7 @@ func (m *Middleware) BlockVPN(next func(forge.Context) error) func(forge.Context
 	}
 }
 
-// BlockProxy middleware blocks requests from proxies
+// BlockProxy middleware blocks requests from proxies.
 func (m *Middleware) BlockProxy(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		ip := m.getClientIP(c)
@@ -236,7 +241,7 @@ func (m *Middleware) BlockProxy(next func(forge.Context) error) func(forge.Conte
 		}
 
 		if detection != nil && detection.IsProxy {
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error": "access denied - proxy detected",
 			})
 		}
@@ -245,7 +250,7 @@ func (m *Middleware) BlockProxy(next func(forge.Context) error) func(forge.Conte
 	}
 }
 
-// BlockTor middleware blocks requests from Tor exit nodes
+// BlockTor middleware blocks requests from Tor exit nodes.
 func (m *Middleware) BlockTor(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		ip := m.getClientIP(c)
@@ -259,7 +264,7 @@ func (m *Middleware) BlockTor(next func(forge.Context) error) func(forge.Context
 		}
 
 		if detection != nil && detection.IsTor {
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error": "access denied - Tor detected",
 			})
 		}

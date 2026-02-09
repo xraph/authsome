@@ -7,12 +7,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// RedditProvider implements OAuth for Reddit
+// RedditProvider implements OAuth for Reddit.
 type RedditProvider struct {
 	*BaseProvider
 }
 
-// NewRedditProvider creates a new Reddit OAuth provider
+// NewRedditProvider creates a new Reddit OAuth provider.
 func NewRedditProvider(config ProviderConfig) *RedditProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -34,11 +34,11 @@ func NewRedditProvider(config ProviderConfig) *RedditProvider {
 	return &RedditProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from Reddit API
+// GetUserInfo fetches user information from Reddit API.
 func (r *RedditProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := r.oauth2Config.Client(ctx, token)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, client, r.userInfoURL, &raw); err != nil {
 		return nil, fmt.Errorf("failed to fetch Reddit user info: %w", err)
 	}
@@ -50,6 +50,7 @@ func (r *RedditProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if name, ok := raw["name"].(string); ok {
 		userInfo.Username = name
 		userInfo.Name = name

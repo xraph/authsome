@@ -40,6 +40,7 @@ func (e *Evaluator) Evaluate(policy *Policy, ctx *Context) bool {
 	if strings.TrimSpace(policy.Condition) != "" {
 		return e.EvaluateCondition(policy.Condition, ctx)
 	}
+
 	return true
 }
 
@@ -49,6 +50,7 @@ func contains(list []string, v string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -57,13 +59,17 @@ func equal(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), st
 func resourceMatches(pattern, value string) bool {
 	p := strings.TrimSpace(pattern)
 	v := strings.TrimSpace(value)
+
 	if p == "*" {
 		return true
 	}
-	if strings.HasSuffix(p, ":*") {
-		prefix := strings.TrimSuffix(p, ":*")
+
+	if before, ok := strings.CutSuffix(p, ":*"); ok {
+		prefix := before
+
 		return strings.HasPrefix(v, prefix+":")
 	}
+
 	return equal(p, v)
 }
 
@@ -74,14 +80,18 @@ func defaultConditionEvaluator(condition string, ctx *Context) bool {
 		// unsupported condition syntax -> deny
 		return false
 	}
+
 	key := strings.TrimSpace(parts[0])
 	val := strings.TrimSpace(parts[1])
+
 	if ctx == nil || ctx.Vars == nil {
 		return false
 	}
+
 	ctxVal, ok := ctx.Vars[key]
 	if !ok {
 		return false
 	}
+
 	return equal(ctxVal, val)
 }

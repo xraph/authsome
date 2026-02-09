@@ -7,14 +7,14 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/core"
 )
 
-// PaymentProvider defines the interface for payment provider implementations
+// PaymentProvider defines the interface for payment provider implementations.
 type PaymentProvider interface {
 	// Provider info
 	Name() string
 
 	// Customer management
-	CreateCustomer(ctx context.Context, email, name string, metadata map[string]interface{}) (customerID string, err error)
-	UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]interface{}) error
+	CreateCustomer(ctx context.Context, email, name string, metadata map[string]any) (customerID string, err error)
+	UpdateCustomer(ctx context.Context, customerID, email, name string, metadata map[string]any) error
 	DeleteCustomer(ctx context.Context, customerID string) error
 
 	// Product/Price sync (push to provider)
@@ -27,7 +27,7 @@ type PaymentProvider interface {
 	ListPrices(ctx context.Context, productID string) ([]*ProviderPrice, error)
 
 	// Subscription management
-	CreateSubscription(ctx context.Context, customerID string, priceID string, quantity int, trialDays int, metadata map[string]interface{}) (subscriptionID string, err error)
+	CreateSubscription(ctx context.Context, customerID string, priceID string, quantity int, trialDays int, metadata map[string]any) (subscriptionID string, err error)
 	UpdateSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) error
 	CancelSubscription(ctx context.Context, subscriptionID string, immediate bool) error
 	PauseSubscription(ctx context.Context, subscriptionID string) error
@@ -70,7 +70,7 @@ type PaymentProvider interface {
 	HandleWebhook(ctx context.Context, payload []byte, signature string) (*WebhookEvent, error)
 }
 
-// ProviderSubscription represents subscription data from the provider
+// ProviderSubscription represents subscription data from the provider.
 type ProviderSubscription struct {
 	ID                 string
 	CustomerID         string
@@ -84,10 +84,10 @@ type ProviderSubscription struct {
 	EndedAt            *int64
 	PriceID            string
 	Quantity           int
-	Metadata           map[string]interface{}
+	Metadata           map[string]any
 }
 
-// ProviderProduct represents a product from the payment provider
+// ProviderProduct represents a product from the payment provider.
 type ProviderProduct struct {
 	ID          string
 	Name        string
@@ -96,7 +96,7 @@ type ProviderProduct struct {
 	Metadata    map[string]string
 }
 
-// ProviderPrice represents a price from the payment provider
+// ProviderPrice represents a price from the payment provider.
 type ProviderPrice struct {
 	ID         string
 	ProductID  string
@@ -107,13 +107,13 @@ type ProviderPrice struct {
 	Metadata   map[string]string
 }
 
-// PriceRecurring represents recurring billing details for a price
+// PriceRecurring represents recurring billing details for a price.
 type PriceRecurring struct {
 	Interval      string // month, year, week, day
 	IntervalCount int
 }
 
-// ProviderInvoice represents invoice data from the provider
+// ProviderInvoice represents invoice data from the provider.
 type ProviderInvoice struct {
 	ID             string
 	CustomerID     string
@@ -131,16 +131,16 @@ type ProviderInvoice struct {
 	HostedURL      string
 }
 
-// ProviderFeature represents a feature from the payment provider
+// ProviderFeature represents a feature from the payment provider.
 type ProviderFeature struct {
 	ID        string
 	Name      string
 	LookupKey string // Maps to our Feature.Key
 	Active    bool
-	Metadata  map[string]interface{}
+	Metadata  map[string]any
 }
 
-// CheckoutRequest represents a checkout session request
+// CheckoutRequest represents a checkout session request.
 type CheckoutRequest struct {
 	CustomerID      string
 	PriceID         string
@@ -150,10 +150,10 @@ type CheckoutRequest struct {
 	Mode            CheckoutMode
 	AllowPromoCodes bool
 	TrialDays       int
-	Metadata        map[string]interface{}
+	Metadata        map[string]any
 }
 
-// CheckoutMode defines the checkout mode
+// CheckoutMode defines the checkout mode.
 type CheckoutMode string
 
 const (
@@ -162,7 +162,7 @@ const (
 	CheckoutModeSetup        CheckoutMode = "setup"
 )
 
-// CheckoutSession represents a checkout session response
+// CheckoutSession represents a checkout session response.
 type CheckoutSession struct {
 	ID            string
 	URL           string
@@ -170,16 +170,16 @@ type CheckoutSession struct {
 	PaymentStatus string
 }
 
-// WebhookEvent represents a parsed webhook event
+// WebhookEvent represents a parsed webhook event.
 type WebhookEvent struct {
 	ID        string
 	Type      string
-	Data      map[string]interface{}
-	Object    interface{}
+	Data      map[string]any
+	Object    any
 	Timestamp int64
 }
 
-// Common webhook event types
+// Common webhook event types.
 const (
 	EventCustomerCreated          = "customer.created"
 	EventCustomerUpdated          = "customer.updated"

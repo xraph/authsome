@@ -12,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// LogsPage renders the SCIM event logs page
+// LogsPage renders the SCIM event logs page.
 func LogsPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 
@@ -283,7 +283,7 @@ func LogsPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// logDetailsModal renders the log details modal
+// logDetailsModal renders the log details modal.
 func logDetailsModal() g.Node {
 	return g.El("template",
 		g.Attr("x-if", "selectedLog"),
@@ -354,7 +354,7 @@ func logDetailsModal() g.Node {
 	)
 }
 
-// logsPageData returns the Alpine.js data for the logs page
+// logsPageData returns the Alpine.js data for the logs page.
 func logsPageData(appID string) string {
 	return fmt.Sprintf(`{
 		logs: [],

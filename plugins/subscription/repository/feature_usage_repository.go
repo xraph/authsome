@@ -11,30 +11,33 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// featureUsageRepository implements FeatureUsageRepository using Bun
+// featureUsageRepository implements FeatureUsageRepository using Bun.
 type featureUsageRepository struct {
 	db *bun.DB
 }
 
-// NewFeatureUsageRepository creates a new feature usage repository
+// NewFeatureUsageRepository creates a new feature usage repository.
 func NewFeatureUsageRepository(db *bun.DB) FeatureUsageRepository {
 	return &featureUsageRepository{db: db}
 }
 
-// CreateUsage creates feature usage for an organization
+// CreateUsage creates feature usage for an organization.
 func (r *featureUsageRepository) CreateUsage(ctx context.Context, usage *schema.OrganizationFeatureUsage) error {
 	usage.CreatedAt = time.Now()
 	usage.UpdatedAt = time.Now()
+
 	_, err := r.db.NewInsert().Model(usage).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create feature usage: %w", err)
 	}
+
 	return nil
 }
 
-// UpdateUsage updates feature usage
+// UpdateUsage updates feature usage.
 func (r *featureUsageRepository) UpdateUsage(ctx context.Context, usage *schema.OrganizationFeatureUsage) error {
 	usage.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(usage).
 		WherePK().
@@ -42,12 +45,14 @@ func (r *featureUsageRepository) UpdateUsage(ctx context.Context, usage *schema.
 	if err != nil {
 		return fmt.Errorf("failed to update feature usage: %w", err)
 	}
+
 	return nil
 }
 
-// FindUsage retrieves feature usage for an organization and feature
+// FindUsage retrieves feature usage for an organization and feature.
 func (r *featureUsageRepository) FindUsage(ctx context.Context, orgID, featureID xid.ID) (*schema.OrganizationFeatureUsage, error) {
 	usage := new(schema.OrganizationFeatureUsage)
+
 	err := r.db.NewSelect().
 		Model(usage).
 		Where("organization_id = ?", orgID).
@@ -56,12 +61,14 @@ func (r *featureUsageRepository) FindUsage(ctx context.Context, orgID, featureID
 	if err != nil {
 		return nil, fmt.Errorf("failed to find feature usage: %w", err)
 	}
+
 	return usage, nil
 }
 
-// FindUsageByKey retrieves feature usage by feature key
+// FindUsageByKey retrieves feature usage by feature key.
 func (r *featureUsageRepository) FindUsageByKey(ctx context.Context, orgID, appID xid.ID, featureKey string) (*schema.OrganizationFeatureUsage, error) {
 	usage := new(schema.OrganizationFeatureUsage)
+
 	err := r.db.NewSelect().
 		Model(usage).
 		Join("JOIN subscription_features sf ON sf.id = sofu.feature_id").
@@ -72,12 +79,14 @@ func (r *featureUsageRepository) FindUsageByKey(ctx context.Context, orgID, appI
 	if err != nil {
 		return nil, fmt.Errorf("failed to find feature usage by key: %w", err)
 	}
+
 	return usage, nil
 }
 
-// ListUsage retrieves all feature usage for an organization
+// ListUsage retrieves all feature usage for an organization.
 func (r *featureUsageRepository) ListUsage(ctx context.Context, orgID xid.ID) ([]*schema.OrganizationFeatureUsage, error) {
 	var usages []*schema.OrganizationFeatureUsage
+
 	err := r.db.NewSelect().
 		Model(&usages).
 		Relation("Feature").
@@ -86,12 +95,14 @@ func (r *featureUsageRepository) ListUsage(ctx context.Context, orgID xid.ID) ([
 	if err != nil {
 		return nil, fmt.Errorf("failed to list feature usage: %w", err)
 	}
+
 	return usages, nil
 }
 
-// IncrementUsage atomically increments usage by a quantity
+// IncrementUsage atomically increments usage by a quantity.
 func (r *featureUsageRepository) IncrementUsage(ctx context.Context, orgID, featureID xid.ID, quantity int64) (*schema.OrganizationFeatureUsage, error) {
 	usage := new(schema.OrganizationFeatureUsage)
+
 	_, err := r.db.NewUpdate().
 		Model(usage).
 		Set("current_usage = current_usage + ?", quantity).
@@ -103,12 +114,14 @@ func (r *featureUsageRepository) IncrementUsage(ctx context.Context, orgID, feat
 	if err != nil {
 		return nil, fmt.Errorf("failed to increment usage: %w", err)
 	}
+
 	return usage, nil
 }
 
-// DecrementUsage atomically decrements usage by a quantity
+// DecrementUsage atomically decrements usage by a quantity.
 func (r *featureUsageRepository) DecrementUsage(ctx context.Context, orgID, featureID xid.ID, quantity int64) (*schema.OrganizationFeatureUsage, error) {
 	usage := new(schema.OrganizationFeatureUsage)
+
 	_, err := r.db.NewUpdate().
 		Model(usage).
 		Set("current_usage = CASE WHEN current_usage >= ? THEN current_usage - ? ELSE 0 END", quantity, quantity).
@@ -120,12 +133,14 @@ func (r *featureUsageRepository) DecrementUsage(ctx context.Context, orgID, feat
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrement usage: %w", err)
 	}
+
 	return usage, nil
 }
 
-// ResetUsage resets usage to zero
+// ResetUsage resets usage to zero.
 func (r *featureUsageRepository) ResetUsage(ctx context.Context, orgID, featureID xid.ID) error {
 	now := time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model((*schema.OrganizationFeatureUsage)(nil)).
 		Set("current_usage = 0").
@@ -137,20 +152,23 @@ func (r *featureUsageRepository) ResetUsage(ctx context.Context, orgID, featureI
 	if err != nil {
 		return fmt.Errorf("failed to reset usage: %w", err)
 	}
+
 	return nil
 }
 
-// CreateLog creates a usage log entry
+// CreateLog creates a usage log entry.
 func (r *featureUsageRepository) CreateLog(ctx context.Context, log *schema.FeatureUsageLog) error {
 	log.CreatedAt = time.Now()
+
 	_, err := r.db.NewInsert().Model(log).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create usage log: %w", err)
 	}
+
 	return nil
 }
 
-// ListLogs retrieves usage logs with filters
+// ListLogs retrieves usage logs with filters.
 func (r *featureUsageRepository) ListLogs(ctx context.Context, filter *FeatureUsageLogFilter) ([]*schema.FeatureUsageLog, int, error) {
 	var logs []*schema.FeatureUsageLog
 
@@ -162,9 +180,11 @@ func (r *featureUsageRepository) ListLogs(ctx context.Context, filter *FeatureUs
 		if filter.OrganizationID != nil {
 			query = query.Where("sful.organization_id = ?", *filter.OrganizationID)
 		}
+
 		if filter.FeatureID != nil {
 			query = query.Where("sful.feature_id = ?", *filter.FeatureID)
 		}
+
 		if filter.Action != "" {
 			query = query.Where("sful.action = ?", filter.Action)
 		}
@@ -174,10 +194,12 @@ func (r *featureUsageRepository) ListLogs(ctx context.Context, filter *FeatureUs
 		if pageSize <= 0 {
 			pageSize = 20
 		}
+
 		page := filter.Page
 		if page <= 0 {
 			page = 1
 		}
+
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
@@ -190,9 +212,10 @@ func (r *featureUsageRepository) ListLogs(ctx context.Context, filter *FeatureUs
 	return logs, count, nil
 }
 
-// FindLogByIdempotencyKey finds a log by idempotency key
+// FindLogByIdempotencyKey finds a log by idempotency key.
 func (r *featureUsageRepository) FindLogByIdempotencyKey(ctx context.Context, key string) (*schema.FeatureUsageLog, error) {
 	log := new(schema.FeatureUsageLog)
+
 	err := r.db.NewSelect().
 		Model(log).
 		Where("idempotency_key = ?", key).
@@ -200,23 +223,27 @@ func (r *featureUsageRepository) FindLogByIdempotencyKey(ctx context.Context, ke
 	if err != nil {
 		return nil, fmt.Errorf("failed to find log by idempotency key: %w", err)
 	}
+
 	return log, nil
 }
 
-// CreateGrant creates a feature grant
+// CreateGrant creates a feature grant.
 func (r *featureUsageRepository) CreateGrant(ctx context.Context, grant *schema.FeatureGrant) error {
 	grant.CreatedAt = time.Now()
 	grant.UpdatedAt = time.Now()
+
 	_, err := r.db.NewInsert().Model(grant).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create feature grant: %w", err)
 	}
+
 	return nil
 }
 
-// UpdateGrant updates a feature grant
+// UpdateGrant updates a feature grant.
 func (r *featureUsageRepository) UpdateGrant(ctx context.Context, grant *schema.FeatureGrant) error {
 	grant.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(grant).
 		WherePK().
@@ -224,10 +251,11 @@ func (r *featureUsageRepository) UpdateGrant(ctx context.Context, grant *schema.
 	if err != nil {
 		return fmt.Errorf("failed to update feature grant: %w", err)
 	}
+
 	return nil
 }
 
-// DeleteGrant deletes a feature grant
+// DeleteGrant deletes a feature grant.
 func (r *featureUsageRepository) DeleteGrant(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.FeatureGrant)(nil)).
@@ -236,12 +264,14 @@ func (r *featureUsageRepository) DeleteGrant(ctx context.Context, id xid.ID) err
 	if err != nil {
 		return fmt.Errorf("failed to delete feature grant: %w", err)
 	}
+
 	return nil
 }
 
-// FindGrantByID retrieves a grant by ID
+// FindGrantByID retrieves a grant by ID.
 func (r *featureUsageRepository) FindGrantByID(ctx context.Context, id xid.ID) (*schema.FeatureGrant, error) {
 	grant := new(schema.FeatureGrant)
+
 	err := r.db.NewSelect().
 		Model(grant).
 		Where("sfg.id = ?", id).
@@ -249,12 +279,14 @@ func (r *featureUsageRepository) FindGrantByID(ctx context.Context, id xid.ID) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to find feature grant: %w", err)
 	}
+
 	return grant, nil
 }
 
-// ListGrants retrieves all active grants for an organization and feature
+// ListGrants retrieves all active grants for an organization and feature.
 func (r *featureUsageRepository) ListGrants(ctx context.Context, orgID, featureID xid.ID) ([]*schema.FeatureGrant, error) {
 	var grants []*schema.FeatureGrant
+
 	err := r.db.NewSelect().
 		Model(&grants).
 		Where("organization_id = ?", orgID).
@@ -265,12 +297,14 @@ func (r *featureUsageRepository) ListGrants(ctx context.Context, orgID, featureI
 	if err != nil {
 		return nil, fmt.Errorf("failed to list feature grants: %w", err)
 	}
+
 	return grants, nil
 }
 
-// ListAllOrgGrants retrieves all active grants for an organization
+// ListAllOrgGrants retrieves all active grants for an organization.
 func (r *featureUsageRepository) ListAllOrgGrants(ctx context.Context, orgID xid.ID) ([]*schema.FeatureGrant, error) {
 	var grants []*schema.FeatureGrant
+
 	err := r.db.NewSelect().
 		Model(&grants).
 		Relation("Feature").
@@ -281,12 +315,14 @@ func (r *featureUsageRepository) ListAllOrgGrants(ctx context.Context, orgID xid
 	if err != nil {
 		return nil, fmt.Errorf("failed to list organization grants: %w", err)
 	}
+
 	return grants, nil
 }
 
-// GetTotalGrantedValue calculates total granted quota for an organization and feature
+// GetTotalGrantedValue calculates total granted quota for an organization and feature.
 func (r *featureUsageRepository) GetTotalGrantedValue(ctx context.Context, orgID, featureID xid.ID) (int64, error) {
 	var total int64
+
 	err := r.db.NewSelect().
 		Model((*schema.FeatureGrant)(nil)).
 		ColumnExpr("COALESCE(SUM(value), 0)").
@@ -298,10 +334,11 @@ func (r *featureUsageRepository) GetTotalGrantedValue(ctx context.Context, orgID
 	if err != nil {
 		return 0, fmt.Errorf("failed to get total granted value: %w", err)
 	}
+
 	return total, nil
 }
 
-// ExpireGrants marks expired grants as inactive
+// ExpireGrants marks expired grants as inactive.
 func (r *featureUsageRepository) ExpireGrants(ctx context.Context) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.FeatureGrant)(nil)).
@@ -314,12 +351,14 @@ func (r *featureUsageRepository) ExpireGrants(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to expire grants: %w", err)
 	}
+
 	return nil
 }
 
-// GetUsageNeedingReset retrieves usage records that need to be reset
+// GetUsageNeedingReset retrieves usage records that need to be reset.
 func (r *featureUsageRepository) GetUsageNeedingReset(ctx context.Context, resetPeriod string) ([]*schema.OrganizationFeatureUsage, error) {
 	var usages []*schema.OrganizationFeatureUsage
+
 	err := r.db.NewSelect().
 		Model(&usages).
 		Join("JOIN subscription_features sf ON sf.id = sofu.feature_id").
@@ -329,10 +368,11 @@ func (r *featureUsageRepository) GetUsageNeedingReset(ctx context.Context, reset
 	if err != nil {
 		return nil, fmt.Errorf("failed to get usage needing reset: %w", err)
 	}
+
 	return usages, nil
 }
 
-// GetCurrentUsageSnapshot retrieves all current usage across all organizations for an app
+// GetCurrentUsageSnapshot retrieves all current usage across all organizations for an app.
 func (r *featureUsageRepository) GetCurrentUsageSnapshot(ctx context.Context, appID xid.ID) ([]*core.CurrentUsage, error) {
 	type result struct {
 		OrganizationID   xid.ID `bun:"organization_id"`
@@ -346,6 +386,7 @@ func (r *featureUsageRepository) GetCurrentUsageSnapshot(ctx context.Context, ap
 	}
 
 	var results []result
+
 	err := r.db.NewSelect().
 		Model((*schema.OrganizationFeatureUsage)(nil)).
 		ColumnExpr("sofu.organization_id").
@@ -363,7 +404,6 @@ func (r *featureUsageRepository) GetCurrentUsageSnapshot(ctx context.Context, ap
 		Where("sf.app_id = ?", appID).
 		Where("sofu.current_usage > 0 OR spfl.limit_value IS NOT NULL").
 		Scan(ctx, &results)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current usage snapshot: %w", err)
 	}
@@ -392,7 +432,7 @@ func (r *featureUsageRepository) GetCurrentUsageSnapshot(ctx context.Context, ap
 	return usage, nil
 }
 
-// GetUsageByOrg retrieves usage statistics by organization
+// GetUsageByOrg retrieves usage statistics by organization.
 func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID, startDate, endDate time.Time) ([]*core.OrgUsageStats, error) {
 	type result struct {
 		OrgID       xid.ID `bun:"organization_id"`
@@ -406,6 +446,7 @@ func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID
 	}
 
 	var results []result
+
 	err := r.db.NewSelect().
 		Model((*schema.FeatureUsageLog)(nil)).
 		ColumnExpr("sful.organization_id").
@@ -426,7 +467,6 @@ func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID
 		Group("sful.organization_id, o.name, sful.feature_id, sf.name, sf.type, sf.unit, spfl.limit_value").
 		Order("total_usage DESC").
 		Scan(ctx, &results)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get usage by org: %w", err)
 	}
@@ -455,7 +495,7 @@ func (r *featureUsageRepository) GetUsageByOrg(ctx context.Context, appID xid.ID
 	return stats, nil
 }
 
-// GetUsageTrends retrieves usage trends over time for a feature
+// GetUsageTrends retrieves usage trends over time for a feature.
 func (r *featureUsageRepository) GetUsageTrends(ctx context.Context, appID xid.ID, featureID *xid.ID, startDate, endDate time.Time) ([]*core.UsageTrend, error) {
 	type result struct {
 		Date   time.Time `bun:"date"`
@@ -464,6 +504,7 @@ func (r *featureUsageRepository) GetUsageTrends(ctx context.Context, appID xid.I
 	}
 
 	var results []result
+
 	query := r.db.NewSelect().
 		Model((*schema.FeatureUsageLog)(nil)).
 		ColumnExpr("DATE(sful.created_at) AS date").
@@ -498,7 +539,7 @@ func (r *featureUsageRepository) GetUsageTrends(ctx context.Context, appID xid.I
 	return trends, nil
 }
 
-// GetTopConsumers retrieves top consuming organizations
+// GetTopConsumers retrieves top consuming organizations.
 func (r *featureUsageRepository) GetTopConsumers(ctx context.Context, appID xid.ID, featureID *xid.ID, startDate, endDate time.Time, limit int) ([]*core.OrgUsageStats, error) {
 	stats, err := r.GetUsageByOrg(ctx, appID, startDate, endDate)
 	if err != nil {
@@ -508,11 +549,13 @@ func (r *featureUsageRepository) GetTopConsumers(ctx context.Context, appID xid.
 	// Filter by feature if specified
 	if featureID != nil {
 		filtered := make([]*core.OrgUsageStats, 0)
+
 		for _, s := range stats {
 			if s.FeatureID == *featureID {
 				filtered = append(filtered, s)
 			}
 		}
+
 		stats = filtered
 	}
 
@@ -524,7 +567,7 @@ func (r *featureUsageRepository) GetTopConsumers(ctx context.Context, appID xid.
 	return stats, nil
 }
 
-// GetUsageByFeatureType retrieves usage aggregated by feature type
+// GetUsageByFeatureType retrieves usage aggregated by feature type.
 func (r *featureUsageRepository) GetUsageByFeatureType(ctx context.Context, appID xid.ID, startDate, endDate time.Time) (map[core.FeatureType]*core.UsageStats, error) {
 	type result struct {
 		FeatureType string `bun:"feature_type"`
@@ -533,6 +576,7 @@ func (r *featureUsageRepository) GetUsageByFeatureType(ctx context.Context, appI
 	}
 
 	var results []result
+
 	err := r.db.NewSelect().
 		Model((*schema.FeatureUsageLog)(nil)).
 		ColumnExpr("sf.type AS feature_type").
@@ -544,13 +588,13 @@ func (r *featureUsageRepository) GetUsageByFeatureType(ctx context.Context, appI
 		Where("sful.created_at <= ?", endDate).
 		Group("sf.type").
 		Scan(ctx, &results)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get usage by feature type: %w", err)
 	}
 
 	// Convert to map
 	statsMap := make(map[core.FeatureType]*core.UsageStats)
+
 	for _, r := range results {
 		avgUsage := 0.0
 		if r.TotalOrgs > 0 {

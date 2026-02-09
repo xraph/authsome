@@ -4,7 +4,7 @@ import (
 	"unicode"
 )
 
-// PasswordRequirements defines password requirements
+// PasswordRequirements defines password requirements.
 type PasswordRequirements struct {
 	MinLength      int
 	RequireUpper   bool
@@ -13,7 +13,7 @@ type PasswordRequirements struct {
 	RequireSpecial bool
 }
 
-// DefaultPasswordRequirements returns default password requirements
+// DefaultPasswordRequirements returns default password requirements.
 func DefaultPasswordRequirements() PasswordRequirements {
 	return PasswordRequirements{
 		MinLength:      8,
@@ -24,7 +24,7 @@ func DefaultPasswordRequirements() PasswordRequirements {
 	}
 }
 
-// ValidatePassword validates a password against requirements
+// ValidatePassword validates a password against requirements.
 func ValidatePassword(password string, reqs PasswordRequirements) (bool, string) {
 	if len(password) < reqs.MinLength {
 		return false, "password too short"
@@ -55,6 +55,7 @@ func hasUpper(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -64,6 +65,7 @@ func hasLower(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -73,6 +75,7 @@ func hasNumber(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -82,5 +85,6 @@ func hasSpecial(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }

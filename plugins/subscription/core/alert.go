@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// AlertType represents the type of usage alert
+// AlertType represents the type of usage alert.
 type AlertType string
 
 const (
@@ -19,7 +19,7 @@ const (
 	AlertTypeSeatLimitApproaching AlertType = "seat_limit_approaching" // Seat limit approaching
 )
 
-// AlertSeverity represents the severity level of an alert
+// AlertSeverity represents the severity level of an alert.
 type AlertSeverity string
 
 const (
@@ -28,7 +28,7 @@ const (
 	AlertSeverityCritical AlertSeverity = "critical"
 )
 
-// AlertStatus represents the status of an alert
+// AlertStatus represents the status of an alert.
 type AlertStatus string
 
 const (
@@ -39,7 +39,7 @@ const (
 	AlertStatusSnoozed      AlertStatus = "snoozed"      // Alert snoozed
 )
 
-// AlertChannel represents how an alert is delivered
+// AlertChannel represents how an alert is delivered.
 type AlertChannel string
 
 const (
@@ -50,7 +50,7 @@ const (
 	AlertChannelSlack   AlertChannel = "slack"
 )
 
-// AlertConfig represents alert configuration for an organization
+// AlertConfig represents alert configuration for an organization.
 type AlertConfig struct {
 	ID             xid.ID `json:"id"`
 	AppID          xid.ID `json:"appId"`
@@ -84,7 +84,7 @@ type AlertConfig struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// Alert represents an individual alert instance
+// Alert represents an individual alert instance.
 type Alert struct {
 	ID             xid.ID  `json:"id"`
 	AppID          xid.ID  `json:"appId"`
@@ -122,12 +122,12 @@ type Alert struct {
 	Resolution string     `json:"resolution"`
 
 	// Metadata
-	Metadata  map[string]interface{} `json:"metadata"`
-	CreatedAt time.Time              `json:"createdAt"`
-	UpdatedAt time.Time              `json:"updatedAt"`
+	Metadata  map[string]any `json:"metadata"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
-// AlertTemplate represents an alert message template
+// AlertTemplate represents an alert message template.
 type AlertTemplate struct {
 	ID        xid.ID       `json:"id"`
 	AppID     xid.ID       `json:"appId"`
@@ -148,7 +148,7 @@ type AlertTemplate struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// UsageSnapshot represents a point-in-time usage snapshot
+// UsageSnapshot represents a point-in-time usage snapshot.
 type UsageSnapshot struct {
 	MetricKey    string    `json:"metricKey"`
 	CurrentValue int64     `json:"currentValue"`
@@ -157,14 +157,14 @@ type UsageSnapshot struct {
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-// CreateAlertConfigRequest is used to create an alert configuration
+// CreateAlertConfigRequest is used to create an alert configuration.
 type CreateAlertConfigRequest struct {
-	OrganizationID   xid.ID         `json:"organizationId" validate:"required"`
-	AlertType        AlertType      `json:"alertType" validate:"required"`
+	OrganizationID   xid.ID         `json:"organizationId"   validate:"required"`
+	AlertType        AlertType      `json:"alertType"        validate:"required"`
 	ThresholdPercent float64        `json:"thresholdPercent"`
 	MetricKey        string         `json:"metricKey"`
 	DaysBeforeEnd    int            `json:"daysBeforeEnd"`
-	Channels         []AlertChannel `json:"channels" validate:"required,min=1"`
+	Channels         []AlertChannel `json:"channels"         validate:"required,min=1"`
 	Recipients       []string       `json:"recipients"`
 	WebhookURL       string         `json:"webhookUrl"`
 	SlackChannel     string         `json:"slackChannel"`
@@ -172,7 +172,7 @@ type CreateAlertConfigRequest struct {
 	MaxAlertsPerDay  int            `json:"maxAlertsPerDay"`
 }
 
-// UpdateAlertConfigRequest is used to update an alert configuration
+// UpdateAlertConfigRequest is used to update an alert configuration.
 type UpdateAlertConfigRequest struct {
 	IsEnabled        *bool          `json:"isEnabled"`
 	ThresholdPercent *float64       `json:"thresholdPercent"`
@@ -185,35 +185,35 @@ type UpdateAlertConfigRequest struct {
 	MaxAlertsPerDay  *int           `json:"maxAlertsPerDay"`
 }
 
-// TriggerAlertRequest is used to manually trigger an alert
+// TriggerAlertRequest is used to manually trigger an alert.
 type TriggerAlertRequest struct {
-	OrganizationID xid.ID                 `json:"organizationId" validate:"required"`
-	Type           AlertType              `json:"type" validate:"required"`
-	Severity       AlertSeverity          `json:"severity"`
-	Title          string                 `json:"title" validate:"required"`
-	Message        string                 `json:"message" validate:"required"`
-	Metadata       map[string]interface{} `json:"metadata"`
+	OrganizationID xid.ID         `json:"organizationId" validate:"required"`
+	Type           AlertType      `json:"type"           validate:"required"`
+	Severity       AlertSeverity  `json:"severity"`
+	Title          string         `json:"title"          validate:"required"`
+	Message        string         `json:"message"        validate:"required"`
+	Metadata       map[string]any `json:"metadata"`
 }
 
-// AcknowledgeAlertRequest is used to acknowledge an alert
+// AcknowledgeAlertRequest is used to acknowledge an alert.
 type AcknowledgeAlertRequest struct {
-	AlertID        xid.ID `json:"alertId" validate:"required"`
+	AlertID        xid.ID `json:"alertId"        validate:"required"`
 	AcknowledgedBy string `json:"acknowledgedBy"`
 }
 
-// SnoozeAlertRequest is used to snooze an alert
+// SnoozeAlertRequest is used to snooze an alert.
 type SnoozeAlertRequest struct {
-	AlertID     xid.ID    `json:"alertId" validate:"required"`
+	AlertID     xid.ID    `json:"alertId"     validate:"required"`
 	SnoozeUntil time.Time `json:"snoozeUntil" validate:"required"`
 }
 
-// ResolveAlertRequest is used to resolve an alert
+// ResolveAlertRequest is used to resolve an alert.
 type ResolveAlertRequest struct {
-	AlertID    xid.ID `json:"alertId" validate:"required"`
+	AlertID    xid.ID `json:"alertId"    validate:"required"`
 	Resolution string `json:"resolution"`
 }
 
-// AlertSummary provides a summary of alerts for an organization
+// AlertSummary provides a summary of alerts for an organization.
 type AlertSummary struct {
 	TotalAlerts        int                   `json:"totalAlerts"`
 	PendingAlerts      int                   `json:"pendingAlerts"`
@@ -224,7 +224,7 @@ type AlertSummary struct {
 	RecentAlerts       []Alert               `json:"recentAlerts"`
 }
 
-// DefaultAlertConfigs returns default alert configurations for a new organization
+// DefaultAlertConfigs returns default alert configurations for a new organization.
 func DefaultAlertConfigs(appID, orgID xid.ID) []AlertConfig {
 	return []AlertConfig{
 		{
@@ -271,7 +271,7 @@ func DefaultAlertConfigs(appID, orgID xid.ID) []AlertConfig {
 	}
 }
 
-// DefaultAlertTemplates returns default alert templates
+// DefaultAlertTemplates returns default alert templates.
 func DefaultAlertTemplates(appID xid.ID) []AlertTemplate {
 	return []AlertTemplate{
 		{

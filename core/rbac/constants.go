@@ -1,7 +1,7 @@
 package rbac
 
 // Role name constants
-// These define the standard role names used across the platform
+// These define the standard role names used across the platform.
 const (
 	RoleSuperAdmin = "superadmin"
 	RoleOwner      = "owner"
@@ -10,7 +10,7 @@ const (
 )
 
 // Role priority constants
-// Higher priority roles override lower priority roles in the hierarchy
+// Higher priority roles override lower priority roles in the hierarchy.
 const (
 	RolePrioritySuperAdmin = 100
 	RolePriorityOwner      = 80
@@ -18,7 +18,7 @@ const (
 	RolePriorityMember     = 40
 )
 
-// Role description constants
+// Role description constants.
 const (
 	RoleDescSuperAdmin = "System Superadministrator (Platform Owner)"
 	RoleDescOwner      = "Organization Owner"
@@ -27,7 +27,7 @@ const (
 )
 
 // Role platform flag constants
-// Platform roles can only be assigned in the platform app
+// Platform roles can only be assigned in the platform app.
 const (
 	RoleIsPlatformSuperAdmin = true
 	RoleIsPlatformOwner      = false

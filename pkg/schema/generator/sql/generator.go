@@ -10,22 +10,22 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator"
 )
 
-// Generator generates SQL migration files
+// Generator generates SQL migration files.
 type Generator struct {
 	dialect Dialect
 }
 
-// Dialect represents a SQL dialect
+// Dialect represents a SQL dialect.
 type Dialect interface {
 	Name() string
 	MapType(fieldType definition.FieldType, length int, precision int, scale int) string
 	QuoteIdentifier(name string) string
 	AutoIncrement() string
 	BooleanType() string
-	DefaultValue(value interface{}, fieldType definition.FieldType) string
+	DefaultValue(value any, fieldType definition.FieldType) string
 }
 
-// NewGenerator creates a new SQL generator
+// NewGenerator creates a new SQL generator.
 func NewGenerator(dialectName string) (*Generator, error) {
 	var dialect Dialect
 
@@ -43,17 +43,17 @@ func NewGenerator(dialectName string) (*Generator, error) {
 	return &Generator{dialect: dialect}, nil
 }
 
-// Name returns the generator name
+// Name returns the generator name.
 func (g *Generator) Name() string {
 	return "sql"
 }
 
-// Description returns the generator description
+// Description returns the generator description.
 func (g *Generator) Description() string {
 	return fmt.Sprintf("SQL migration generator (%s dialect)", g.dialect.Name())
 }
 
-// Generate generates SQL migration files
+// Generate generates SQL migration files.
 func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) error {
 	// Create output directory
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
@@ -62,6 +62,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 
 	// Generate up migration
 	upSQL := g.generateUp(schema)
+
 	upPath := filepath.Join(opts.OutputDir, "001_initial_up.sql")
 	if err := os.WriteFile(upPath, []byte(upSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write up migration: %w", err)
@@ -69,6 +70,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 
 	// Generate down migration
 	downSQL := g.generateDown(schema)
+
 	downPath := filepath.Join(opts.OutputDir, "001_initial_down.sql")
 	if err := os.WriteFile(downPath, []byte(downSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write down migration: %w", err)
@@ -81,7 +83,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	return nil
 }
 
-// generateUp generates the up migration SQL
+// generateUp generates the up migration SQL.
 func (g *Generator) generateUp(schema *definition.Schema) string {
 	var b strings.Builder
 
@@ -105,7 +107,7 @@ func (g *Generator) generateUp(schema *definition.Schema) string {
 	return b.String()
 }
 
-// generateDown generates the down migration SQL
+// generateDown generates the down migration SQL.
 func (g *Generator) generateDown(schema *definition.Schema) string {
 	var b strings.Builder
 
@@ -126,7 +128,7 @@ func (g *Generator) generateDown(schema *definition.Schema) string {
 	return b.String()
 }
 
-// generateCreateTable generates a CREATE TABLE statement
+// generateCreateTable generates a CREATE TABLE statement.
 func (g *Generator) generateCreateTable(model definition.Model) string {
 	var b strings.Builder
 
@@ -140,6 +142,7 @@ func (g *Generator) generateCreateTable(model definition.Model) string {
 
 	// Add primary key constraint if composite
 	primaryKeys := []string{}
+
 	for _, field := range model.Fields {
 		if field.Primary {
 			primaryKeys = append(primaryKeys, g.dialect.QuoteIdentifier(field.Column))
@@ -158,10 +161,11 @@ func (g *Generator) generateCreateTable(model definition.Model) string {
 				g.dialect.QuoteIdentifier(toColumnName(refField)))
 
 			if field.References.OnDelete != "" {
-				fkConstraint += fmt.Sprintf(" ON DELETE %s", field.References.OnDelete)
+				fkConstraint += " ON DELETE " + field.References.OnDelete
 			}
+
 			if field.References.OnUpdate != "" {
-				fkConstraint += fmt.Sprintf(" ON UPDATE %s", field.References.OnUpdate)
+				fkConstraint += " ON UPDATE " + field.References.OnUpdate
 			}
 
 			columns = append(columns, fkConstraint)
@@ -174,7 +178,7 @@ func (g *Generator) generateCreateTable(model definition.Model) string {
 	return b.String()
 }
 
-// generateColumn generates a column definition
+// generateColumn generates a column definition.
 func (g *Generator) generateColumn(field definition.Field) string {
 	parts := []string{
 		g.dialect.QuoteIdentifier(field.Column),
@@ -202,14 +206,14 @@ func (g *Generator) generateColumn(field definition.Field) string {
 	if field.Default != nil {
 		defaultVal := g.dialect.DefaultValue(field.Default, field.Type)
 		if defaultVal != "" {
-			parts = append(parts, fmt.Sprintf("DEFAULT %s", defaultVal))
+			parts = append(parts, "DEFAULT "+defaultVal)
 		}
 	}
 
 	return strings.Join(parts, " ")
 }
 
-// generateCreateIndex generates a CREATE INDEX statement
+// generateCreateIndex generates a CREATE INDEX statement.
 func (g *Generator) generateCreateIndex(model definition.Model, index definition.Index) string {
 	uniqueStr := ""
 	if index.Unique {
@@ -236,6 +240,7 @@ func toTableName(modelName string) string {
 	if !strings.HasSuffix(snake, "s") {
 		snake += "s"
 	}
+
 	return snake
 }
 
@@ -245,15 +250,18 @@ func toColumnName(fieldName string) string {
 
 func toSnakeCase(s string) string {
 	var result strings.Builder
+
 	for i, c := range s {
 		if c >= 'A' && c <= 'Z' {
 			if i > 0 {
 				result.WriteRune('_')
 			}
+
 			result.WriteRune(c + 32)
 		} else {
 			result.WriteRune(c)
 		}
 	}
+
 	return result.String()
 }

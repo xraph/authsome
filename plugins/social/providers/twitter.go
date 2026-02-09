@@ -7,12 +7,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// TwitterProvider implements OAuth 2.0 for Twitter (X)
+// TwitterProvider implements OAuth 2.0 for Twitter (X).
 type TwitterProvider struct {
 	*BaseProvider
 }
 
-// NewTwitterProvider creates a new Twitter OAuth provider
+// NewTwitterProvider creates a new Twitter OAuth provider.
 func NewTwitterProvider(config ProviderConfig) *TwitterProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -34,12 +34,12 @@ func NewTwitterProvider(config ProviderConfig) *TwitterProvider {
 	return &TwitterProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from Twitter API v2
+// GetUserInfo fetches user information from Twitter API v2.
 func (t *TwitterProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := t.oauth2Config.Client(ctx, token)
 
 	var response struct {
-		Data map[string]interface{} `json:"data"`
+		Data map[string]any `json:"data"`
 	}
 
 	if err := FetchJSON(ctx, client, t.userInfoURL, &response); err != nil {
@@ -54,12 +54,15 @@ func (t *TwitterProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) 
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if name, ok := raw["name"].(string); ok {
 		userInfo.Name = name
 	}
+
 	if username, ok := raw["username"].(string); ok {
 		userInfo.Username = username
 	}
+
 	if avatar, ok := raw["profile_image_url"].(string); ok {
 		userInfo.Avatar = avatar
 	}

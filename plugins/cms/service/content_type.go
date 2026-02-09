@@ -17,10 +17,10 @@ import (
 )
 
 // slugPattern defines valid slug format: letters, numbers, underscores, and hyphens
-// Must start with a letter (case-insensitive)
+// Must start with a letter (case-insensitive).
 var slugPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
-// generateSlug creates an identifier from a name, preserving casing
+// generateSlug creates an identifier from a name, preserving casing.
 func generateSlug(name string) string {
 	// Trim whitespace but preserve casing
 	slug := strings.TrimSpace(name)
@@ -30,17 +30,20 @@ func generateSlug(name string) string {
 
 	// Remove invalid characters (keep letters, numbers, underscores, hyphens)
 	var result strings.Builder
+
 	for _, r := range slug {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
 			result.WriteRune(r)
 		}
 	}
+
 	slug = result.String()
 
 	// Remove multiple consecutive hyphens or underscores
 	for strings.Contains(slug, "--") {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
+
 	for strings.Contains(slug, "__") {
 		slug = strings.ReplaceAll(slug, "__", "_")
 	}
@@ -61,7 +64,7 @@ func generateSlug(name string) string {
 	return slug
 }
 
-// ContentTypeService handles content type business logic
+// ContentTypeService handles content type business logic.
 type ContentTypeService struct {
 	repo      repository.ContentTypeRepository
 	fieldRepo repository.ContentFieldRepository
@@ -69,13 +72,13 @@ type ContentTypeService struct {
 	logger    forge.Logger
 }
 
-// ContentTypeServiceConfig holds configuration for the service
+// ContentTypeServiceConfig holds configuration for the service.
 type ContentTypeServiceConfig struct {
 	MaxContentTypes int
 	Logger          forge.Logger
 }
 
-// NewContentTypeService creates a new content type service
+// NewContentTypeService creates a new content type service.
 func NewContentTypeService(
 	repo repository.ContentTypeRepository,
 	fieldRepo repository.ContentFieldRepository,
@@ -85,6 +88,7 @@ func NewContentTypeService(
 	if maxTypes <= 0 {
 		maxTypes = 100 // Default
 	}
+
 	return &ContentTypeService{
 		repo:      repo,
 		fieldRepo: fieldRepo,
@@ -97,13 +101,14 @@ func NewContentTypeService(
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content type
+// Create creates a new content type.
 func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContentTypeRequest) (*core.ContentTypeDTO, error) {
 	// Get app/env context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -125,6 +130,7 @@ func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContent
 	if err != nil {
 		return nil, err
 	}
+
 	if exists {
 		return nil, core.ErrContentTypeExists(slug)
 	}
@@ -134,6 +140,7 @@ func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContent
 	if err != nil {
 		return nil, err
 	}
+
 	if s.maxTypes > 0 && count >= s.maxTypes {
 		return nil, core.ErrInvalidRequest("content type limit reached")
 	}
@@ -176,21 +183,23 @@ func (s *ContentTypeService) Create(ctx context.Context, req *core.CreateContent
 	return s.toDTO(contentType), nil
 }
 
-// GetByID retrieves a content type by ID
+// GetByID retrieves a content type by ID.
 func (s *ContentTypeService) GetByID(ctx context.Context, id xid.ID) (*core.ContentTypeDTO, error) {
 	contentType, err := s.repo.FindWithFields(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return s.toDTO(contentType), nil
 }
 
-// GetBySlug retrieves a content type by slug
+// GetBySlug retrieves a content type by slug.
 func (s *ContentTypeService) GetByName(ctx context.Context, name string) (*core.ContentTypeDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -200,15 +209,17 @@ func (s *ContentTypeService) GetByName(ctx context.Context, name string) (*core.
 	if err != nil {
 		return nil, err
 	}
+
 	return s.toDTO(contentType), nil
 }
 
-// List lists content types with filtering and pagination
+// List lists content types with filtering and pagination.
 func (s *ContentTypeService) List(ctx context.Context, query *core.ListContentTypesQuery) (*core.ListContentTypesResponse, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -243,6 +254,7 @@ func (s *ContentTypeService) List(ctx context.Context, query *core.ListContentTy
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+
 	page := query.Page
 	if page <= 0 {
 		page = 1
@@ -259,7 +271,7 @@ func (s *ContentTypeService) List(ctx context.Context, query *core.ListContentTy
 	}, nil
 }
 
-// Update updates a content type
+// Update updates a content type.
 func (s *ContentTypeService) Update(ctx context.Context, id xid.ID, req *core.UpdateContentTypeRequest) (*core.ContentTypeDTO, error) {
 	contentType, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -272,9 +284,11 @@ func (s *ContentTypeService) Update(ctx context.Context, id xid.ID, req *core.Up
 	if req.Title != "" {
 		contentType.Title = strings.TrimSpace(req.Title)
 	}
+
 	if req.Description != "" {
 		contentType.Description = strings.TrimSpace(req.Description)
 	}
+
 	if req.Icon != "" {
 		contentType.Icon = req.Icon
 	}
@@ -284,17 +298,21 @@ func (s *ContentTypeService) Update(ctx context.Context, id xid.ID, req *core.Up
 		if req.Settings.TitleField != "" {
 			contentType.Settings.TitleField = req.Settings.TitleField
 		}
+
 		if req.Settings.DescriptionField != "" {
 			contentType.Settings.DescriptionField = req.Settings.DescriptionField
 		}
+
 		contentType.Settings.EnableRevisions = req.Settings.EnableRevisions
 		contentType.Settings.EnableDrafts = req.Settings.EnableDrafts
 		contentType.Settings.EnableSoftDelete = req.Settings.EnableSoftDelete
 		contentType.Settings.EnableSearch = req.Settings.EnableSearch
+
 		contentType.Settings.EnableScheduling = req.Settings.EnableScheduling
 		if len(req.Settings.DefaultPermissions) > 0 {
 			contentType.Settings.DefaultPermissions = req.Settings.DefaultPermissions
 		}
+
 		if req.Settings.MaxEntries > 0 {
 			contentType.Settings.MaxEntries = req.Settings.MaxEntries
 		}
@@ -311,7 +329,7 @@ func (s *ContentTypeService) Update(ctx context.Context, id xid.ID, req *core.Up
 	return s.GetByID(ctx, id)
 }
 
-// Delete deletes a content type
+// Delete deletes a content type.
 func (s *ContentTypeService) Delete(ctx context.Context, id xid.ID) error {
 	// Check if content type exists
 	contentType, err := s.repo.FindByID(ctx, id)
@@ -324,6 +342,7 @@ func (s *ContentTypeService) Delete(ctx context.Context, id xid.ID) error {
 	if err != nil {
 		return err
 	}
+
 	if entryCount > 0 {
 		return core.ErrContentTypeHasEntries(contentType.Name, entryCount)
 	}
@@ -332,7 +351,7 @@ func (s *ContentTypeService) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// HardDelete permanently deletes a content type and all its data
+// HardDelete permanently deletes a content type and all its data.
 func (s *ContentTypeService) HardDelete(ctx context.Context, id xid.ID) error {
 	// First delete all fields
 	if s.fieldRepo != nil {
@@ -349,7 +368,7 @@ func (s *ContentTypeService) HardDelete(ctx context.Context, id xid.ID) error {
 // Helper Methods
 // =============================================================================
 
-// toDTO converts a content type to its DTO representation
+// toDTO converts a content type to its DTO representation.
 func (s *ContentTypeService) toDTO(ct *schema.ContentType) *core.ContentTypeDTO {
 	if ct == nil {
 		return nil
@@ -381,6 +400,7 @@ func (s *ContentTypeService) toDTO(ct *schema.ContentType) *core.ContentTypeDTO 
 	if !ct.CreatedBy.IsNil() {
 		dto.CreatedBy = ct.CreatedBy.String()
 	}
+
 	if !ct.UpdatedBy.IsNil() {
 		dto.UpdatedBy = ct.UpdatedBy.String()
 	}
@@ -396,7 +416,7 @@ func (s *ContentTypeService) toDTO(ct *schema.ContentType) *core.ContentTypeDTO 
 	return dto
 }
 
-// fieldToDTO converts a content field to its DTO representation
+// fieldToDTO converts a content field to its DTO representation.
 func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 	if field == nil {
 		return nil
@@ -488,6 +508,7 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 	if field.Options.ShowWhen != nil {
 		dto.Options.ShowWhen = schemaConditionToDTO(field.Options.ShowWhen)
 	}
+
 	if field.Options.HideWhen != nil {
 		dto.Options.HideWhen = schemaConditionToDTO(field.Options.HideWhen)
 	}
@@ -495,7 +516,7 @@ func fieldToDTO(field *schema.ContentField) *core.ContentFieldDTO {
 	return dto
 }
 
-// schemaToNestedFieldDTOs converts schema nested fields to DTOs
+// schemaToNestedFieldDTOs converts schema nested fields to DTOs.
 func schemaToNestedFieldDTOs(fields schema.NestedFieldDefs) []core.NestedFieldDefDTO {
 	if fields == nil {
 		return nil
@@ -514,10 +535,11 @@ func schemaToNestedFieldDTOs(fields schema.NestedFieldDefs) []core.NestedFieldDe
 			dtos[i].Options = schemaOptionsToDTO(f.Options)
 		}
 	}
+
 	return dtos
 }
 
-// schemaOptionsToDTO converts schema field options to DTO
+// schemaOptionsToDTO converts schema field options to DTO.
 func schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
 	if opts == nil {
 		return nil
@@ -585,6 +607,7 @@ func schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
 	if opts.ShowWhen != nil {
 		dto.ShowWhen = schemaConditionToDTO(opts.ShowWhen)
 	}
+
 	if opts.HideWhen != nil {
 		dto.HideWhen = schemaConditionToDTO(opts.HideWhen)
 	}
@@ -592,7 +615,7 @@ func schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
 	return dto
 }
 
-// schemaOneOfOptionToDTO converts a schema OneOfSchemaOption to DTO
+// schemaOneOfOptionToDTO converts a schema OneOfSchemaOption to DTO.
 func schemaOneOfOptionToDTO(opt schema.OneOfSchemaOption) core.OneOfSchemaOptionDTO {
 	dto := core.OneOfSchemaOptionDTO{
 		ComponentRef: opt.ComponentRef,
@@ -601,14 +624,16 @@ func schemaOneOfOptionToDTO(opt schema.OneOfSchemaOption) core.OneOfSchemaOption
 	if len(opt.NestedFields) > 0 {
 		dto.NestedFields = schemaToNestedFieldDTOs(opt.NestedFields)
 	}
+
 	return dto
 }
 
-// schemaConditionToDTO converts a schema FieldCondition to DTO
+// schemaConditionToDTO converts a schema FieldCondition to DTO.
 func schemaConditionToDTO(cond *schema.FieldCondition) *core.FieldConditionDTO {
 	if cond == nil {
 		return nil
 	}
+
 	return &core.FieldConditionDTO{
 		Field:    cond.Field,
 		Operator: cond.Operator,
@@ -616,11 +641,12 @@ func schemaConditionToDTO(cond *schema.FieldCondition) *core.FieldConditionDTO {
 	}
 }
 
-// isValidSlug validates a slug format
+// isValidSlug validates a slug format.
 func isValidSlug(slug string) bool {
 	if len(slug) < 1 || len(slug) > 63 {
 		return false
 	}
+
 	return slugPattern.MatchString(slug)
 }
 
@@ -628,12 +654,13 @@ func isValidSlug(slug string) bool {
 // Stats Operations
 // =============================================================================
 
-// GetStats returns statistics for content types
+// GetStats returns statistics for content types.
 func (s *ContentTypeService) GetStats(ctx context.Context) (*core.CMSStatsDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()

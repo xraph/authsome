@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// AlertRepository defines the interface for alert operations
+// AlertRepository defines the interface for alert operations.
 type AlertRepository interface {
 	// Alert config operations
 	CreateAlertConfig(ctx context.Context, config *core.AlertConfig) error
@@ -41,26 +41,28 @@ type AlertRepository interface {
 	DeleteAlertTemplate(ctx context.Context, id xid.ID) error
 }
 
-// alertRepository implements AlertRepository using Bun
+// alertRepository implements AlertRepository using Bun.
 type alertRepository struct {
 	db *bun.DB
 }
 
-// NewAlertRepository creates a new alert repository
+// NewAlertRepository creates a new alert repository.
 func NewAlertRepository(db *bun.DB) AlertRepository {
 	return &alertRepository{db: db}
 }
 
-// CreateAlertConfig creates a new alert config
+// CreateAlertConfig creates a new alert config.
 func (r *alertRepository) CreateAlertConfig(ctx context.Context, config *core.AlertConfig) error {
 	model := alertConfigToSchema(config)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetAlertConfig returns an alert config by ID
+// GetAlertConfig returns an alert config by ID.
 func (r *alertRepository) GetAlertConfig(ctx context.Context, id xid.ID) (*core.AlertConfig, error) {
 	var config schema.SubscriptionAlertConfig
+
 	err := r.db.NewSelect().
 		Model(&config).
 		Where("id = ?", id).
@@ -69,14 +71,17 @@ func (r *alertRepository) GetAlertConfig(ctx context.Context, id xid.ID) (*core.
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToAlertConfig(&config), nil
 }
 
-// GetAlertConfigByType returns an alert config by type
+// GetAlertConfigByType returns an alert config by type.
 func (r *alertRepository) GetAlertConfigByType(ctx context.Context, orgID xid.ID, alertType core.AlertType) (*core.AlertConfig, error) {
 	var config schema.SubscriptionAlertConfig
+
 	err := r.db.NewSelect().
 		Model(&config).
 		Where("organization_id = ?", orgID).
@@ -86,14 +91,17 @@ func (r *alertRepository) GetAlertConfigByType(ctx context.Context, orgID xid.ID
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToAlertConfig(&config), nil
 }
 
-// ListAlertConfigs returns all alert configs for an organization
+// ListAlertConfigs returns all alert configs for an organization.
 func (r *alertRepository) ListAlertConfigs(ctx context.Context, orgID xid.ID) ([]*core.AlertConfig, error) {
 	var configs []schema.SubscriptionAlertConfig
+
 	err := r.db.NewSelect().
 		Model(&configs).
 		Where("organization_id = ?", orgID).
@@ -107,10 +115,11 @@ func (r *alertRepository) ListAlertConfigs(ctx context.Context, orgID xid.ID) ([
 	for i, c := range configs {
 		result[i] = schemaToAlertConfig(&c)
 	}
+
 	return result, nil
 }
 
-// UpdateAlertConfig updates an alert config
+// UpdateAlertConfig updates an alert config.
 func (r *alertRepository) UpdateAlertConfig(ctx context.Context, config *core.AlertConfig) error {
 	model := alertConfigToSchema(config)
 	model.UpdatedAt = time.Now()
@@ -118,28 +127,32 @@ func (r *alertRepository) UpdateAlertConfig(ctx context.Context, config *core.Al
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteAlertConfig deletes an alert config
+// DeleteAlertConfig deletes an alert config.
 func (r *alertRepository) DeleteAlertConfig(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionAlertConfig)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// CreateAlert creates a new alert
+// CreateAlert creates a new alert.
 func (r *alertRepository) CreateAlert(ctx context.Context, alert *core.Alert) error {
 	model := alertToSchema(alert)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetAlert returns an alert by ID
+// GetAlert returns an alert by ID.
 func (r *alertRepository) GetAlert(ctx context.Context, id xid.ID) (*core.Alert, error) {
 	var alert schema.SubscriptionAlert
+
 	err := r.db.NewSelect().
 		Model(&alert).
 		Where("id = ?", id).
@@ -148,14 +161,17 @@ func (r *alertRepository) GetAlert(ctx context.Context, id xid.ID) (*core.Alert,
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToAlert(&alert), nil
 }
 
-// ListAlerts returns alerts for an organization
+// ListAlerts returns alerts for an organization.
 func (r *alertRepository) ListAlerts(ctx context.Context, orgID xid.ID, status *core.AlertStatus, page, pageSize int) ([]*core.Alert, int, error) {
 	var alerts []schema.SubscriptionAlert
+
 	query := r.db.NewSelect().
 		Model(&alerts).
 		Where("organization_id = ?", orgID)
@@ -182,12 +198,14 @@ func (r *alertRepository) ListAlerts(ctx context.Context, orgID xid.ID, status *
 	for i, a := range alerts {
 		result[i] = schemaToAlert(&a)
 	}
+
 	return result, count, nil
 }
 
-// ListPendingAlerts returns all pending alerts
+// ListPendingAlerts returns all pending alerts.
 func (r *alertRepository) ListPendingAlerts(ctx context.Context) ([]*core.Alert, error) {
 	var alerts []schema.SubscriptionAlert
+
 	err := r.db.NewSelect().
 		Model(&alerts).
 		Where("status = ?", string(core.AlertStatusPending)).
@@ -201,10 +219,11 @@ func (r *alertRepository) ListPendingAlerts(ctx context.Context) ([]*core.Alert,
 	for i, a := range alerts {
 		result[i] = schemaToAlert(&a)
 	}
+
 	return result, nil
 }
 
-// UpdateAlert updates an alert
+// UpdateAlert updates an alert.
 func (r *alertRepository) UpdateAlert(ctx context.Context, alert *core.Alert) error {
 	model := alertToSchema(alert)
 	model.UpdatedAt = time.Now()
@@ -212,19 +231,21 @@ func (r *alertRepository) UpdateAlert(ctx context.Context, alert *core.Alert) er
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteAlert deletes an alert
+// DeleteAlert deletes an alert.
 func (r *alertRepository) DeleteAlert(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionAlert)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// CountAlertsByConfigToday counts alerts sent today for a config
+// CountAlertsByConfigToday counts alerts sent today for a config.
 func (r *alertRepository) CountAlertsByConfigToday(ctx context.Context, configID xid.ID) (int, error) {
 	startOfDay := time.Now().Truncate(24 * time.Hour)
 	count, err := r.db.NewSelect().
@@ -232,12 +253,14 @@ func (r *alertRepository) CountAlertsByConfigToday(ctx context.Context, configID
 		Where("config_id = ?", configID).
 		Where("created_at >= ?", startOfDay).
 		Count(ctx)
+
 	return count, err
 }
 
-// GetLastAlertByConfig returns the last alert for a config
+// GetLastAlertByConfig returns the last alert for a config.
 func (r *alertRepository) GetLastAlertByConfig(ctx context.Context, configID xid.ID) (*core.Alert, error) {
 	var alert schema.SubscriptionAlert
+
 	err := r.db.NewSelect().
 		Model(&alert).
 		Where("config_id = ?", configID).
@@ -248,21 +271,25 @@ func (r *alertRepository) GetLastAlertByConfig(ctx context.Context, configID xid
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToAlert(&alert), nil
 }
 
-// CreateAlertTemplate creates a new alert template
+// CreateAlertTemplate creates a new alert template.
 func (r *alertRepository) CreateAlertTemplate(ctx context.Context, template *core.AlertTemplate) error {
 	model := alertTemplateToSchema(template)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetAlertTemplate returns an alert template
+// GetAlertTemplate returns an alert template.
 func (r *alertRepository) GetAlertTemplate(ctx context.Context, appID xid.ID, alertType core.AlertType, channel core.AlertChannel) (*core.AlertTemplate, error) {
 	var template schema.SubscriptionAlertTemplate
+
 	err := r.db.NewSelect().
 		Model(&template).
 		Where("app_id = ?", appID).
@@ -273,14 +300,17 @@ func (r *alertRepository) GetAlertTemplate(ctx context.Context, appID xid.ID, al
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToAlertTemplate(&template), nil
 }
 
-// ListAlertTemplates returns all alert templates for an app
+// ListAlertTemplates returns all alert templates for an app.
 func (r *alertRepository) ListAlertTemplates(ctx context.Context, appID xid.ID) ([]*core.AlertTemplate, error) {
 	var templates []schema.SubscriptionAlertTemplate
+
 	err := r.db.NewSelect().
 		Model(&templates).
 		Where("app_id = ?", appID).
@@ -294,10 +324,11 @@ func (r *alertRepository) ListAlertTemplates(ctx context.Context, appID xid.ID) 
 	for i, t := range templates {
 		result[i] = schemaToAlertTemplate(&t)
 	}
+
 	return result, nil
 }
 
-// UpdateAlertTemplate updates an alert template
+// UpdateAlertTemplate updates an alert template.
 func (r *alertRepository) UpdateAlertTemplate(ctx context.Context, template *core.AlertTemplate) error {
 	model := alertTemplateToSchema(template)
 	model.UpdatedAt = time.Now()
@@ -305,15 +336,17 @@ func (r *alertRepository) UpdateAlertTemplate(ctx context.Context, template *cor
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteAlertTemplate deletes an alert template
+// DeleteAlertTemplate deletes an alert template.
 func (r *alertRepository) DeleteAlertTemplate(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionAlertTemplate)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -384,7 +417,7 @@ func schemaToAlert(s *schema.SubscriptionAlert) *core.Alert {
 		_ = json.Unmarshal([]byte(s.DeliveryStatus), &deliveryStatus)
 	}
 
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if s.Metadata != "" {
 		_ = json.Unmarshal([]byte(s.Metadata), &metadata)
 	}
@@ -425,12 +458,14 @@ func alertToSchema(a *core.Alert) *schema.SubscriptionAlert {
 	}
 
 	deliveryStatus := ""
+
 	if a.DeliveryStatus != nil {
 		deliveryStatusBytes, _ := json.Marshal(a.DeliveryStatus)
 		deliveryStatus = string(deliveryStatusBytes)
 	}
 
 	metadata := ""
+
 	if a.Metadata != nil {
 		metadataBytes, _ := json.Marshal(a.Metadata)
 		metadata = string(metadataBytes)

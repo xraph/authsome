@@ -18,13 +18,14 @@ import (
 // MOCK REPOSITORY
 // =============================================================================
 
-// MockRepository is a mock implementation of the Repository interface
+// MockRepository is a mock implementation of the Repository interface.
 type MockRepository struct {
 	mock.Mock
 }
 
 func (m *MockRepository) Create(ctx context.Context, user *schema.User) error {
 	args := m.Called(ctx, user)
+
 	return args.Error(0)
 }
 
@@ -33,6 +34,7 @@ func (m *MockRepository) FindByID(ctx context.Context, id xid.ID) (*schema.User,
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
@@ -41,6 +43,7 @@ func (m *MockRepository) FindByEmail(ctx context.Context, email string) (*schema
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
@@ -49,6 +52,7 @@ func (m *MockRepository) FindByAppAndEmail(ctx context.Context, appID xid.ID, em
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
@@ -57,16 +61,19 @@ func (m *MockRepository) FindByUsername(ctx context.Context, username string) (*
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
 func (m *MockRepository) Update(ctx context.Context, user *schema.User) error {
 	args := m.Called(ctx, user)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) Delete(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
@@ -75,11 +82,13 @@ func (m *MockRepository) ListUsers(ctx context.Context, filter *ListUsersFilter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*pagination.PageResponse[*schema.User]), args.Error(1)
 }
 
 func (m *MockRepository) CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error) {
 	args := m.Called(ctx, filter)
+
 	return args.Int(0), args.Error(1)
 }
 
@@ -87,7 +96,7 @@ func (m *MockRepository) CountUsers(ctx context.Context, filter *CountUsersFilte
 // HELPER FUNCTIONS
 // =============================================================================
 
-// Helper function to create a test service
+// Helper function to create a test service.
 func newTestService(repo Repository) *Service {
 	return NewService(repo, Config{
 		PasswordRequirements: validator.DefaultPasswordRequirements(),
@@ -101,6 +110,7 @@ func testAppID() xid.ID {
 func testSchemaUser(appID xid.ID) *schema.User {
 	id := xid.New()
 	now := time.Now().UTC()
+
 	return &schema.User{
 		ID:              id,
 		AppID:           &appID,
@@ -197,9 +207,11 @@ func TestService_Create(t *testing.T) {
 
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				if tt.errType != nil {
 					assert.ErrorIs(t, err, tt.errType)
 				}
+
 				assert.Nil(t, user)
 			} else {
 				assert.NoError(t, err)

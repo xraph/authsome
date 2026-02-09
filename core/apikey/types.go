@@ -2,28 +2,28 @@ package apikey
 
 import "github.com/xraph/authsome/core/base"
 
-// KeyType represents the type of API key
+// KeyType represents the type of API key.
 type KeyType = base.KeyType
 
 const (
 	// KeyTypePublishable - Frontend-safe, identifies app, limited operations
 	// Can be safely exposed in client-side code (browser, mobile apps)
-	// Limited to read-only and session creation operations
+	// Limited to read-only and session creation operations.
 	KeyTypePublishable = base.KeyTypePublishable
 
 	// KeyTypeSecret - Backend-only, full administrative privileges
 	// Must be kept secret on server-side only
-	// Has unrestricted access to all operations
+	// Has unrestricted access to all operations.
 	KeyTypeSecret = base.KeyTypeSecret
 
 	// KeyTypeRestricted - Backend-only, scoped to specific operations
 	// Must be kept secret on server-side
-	// Access limited to explicitly granted scopes
+	// Access limited to explicitly granted scopes.
 	KeyTypeRestricted = base.KeyTypeRestricted
 )
 
 // KeyTypeScopes defines default scopes for each key type
-// These are automatically granted based on key type
+// These are automatically granted based on key type.
 var KeyTypeScopes = map[KeyType][]string{
 	KeyTypePublishable: {
 		"app:identify",    // Can identify which app is making request
@@ -40,7 +40,7 @@ var KeyTypeScopes = map[KeyType][]string{
 }
 
 // SafePublicScopes defines scopes that are safe for publishable keys
-// Only these scopes can be granted to pk_ keys
+// Only these scopes can be granted to pk_ keys.
 var SafePublicScopes = map[string]bool{
 	"app:identify":    true,
 	"sessions:create": true,
@@ -51,7 +51,7 @@ var SafePublicScopes = map[string]bool{
 	"webhooks:verify": true, // Can verify webhook signatures
 }
 
-// IsSafeForPublicKey checks if a scope is safe for publishable keys
+// IsSafeForPublicKey checks if a scope is safe for publishable keys.
 func IsSafeForPublicKey(scope string) bool {
 	return SafePublicScopes[scope]
 }

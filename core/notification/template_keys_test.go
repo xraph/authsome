@@ -6,12 +6,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestGetDefaultTemplateMetadata verifies all 39 templates are available
+// TestGetDefaultTemplateMetadata verifies all 39 templates are available.
 func TestGetDefaultTemplateMetadata(t *testing.T) {
 	templates := GetDefaultTemplateMetadata()
 
 	// Should have 39 total templates (8 original + 31 new)
-	assert.Equal(t, 39, len(templates), "Should have 39 total templates")
+	assert.Len(t, templates, 39, "Should have 39 total templates")
 
 	// Verify templates have required fields
 	for _, template := range templates {
@@ -25,17 +25,17 @@ func TestGetDefaultTemplateMetadata(t *testing.T) {
 		if template.Type == NotificationTypeEmail {
 			assert.NotEmpty(t, template.DefaultSubject, "Email template %s should have subject", template.Key)
 			assert.NotEmpty(t, template.DefaultBodyHTML, "Email template %s should have HTML body", template.Key)
-			assert.True(t, len(template.DefaultBodyHTML) > 500, "Email template %s HTML should be substantial", template.Key)
+			assert.Greater(t, len(template.DefaultBodyHTML), 500, "Email template %s HTML should be substantial", template.Key)
 		}
 
 		// SMS templates may not have subject or HTML
 		if template.Type == NotificationTypeSMS {
-			assert.True(t, len(template.DefaultBody) > 10, "SMS template %s should have body text", template.Key)
+			assert.Greater(t, len(template.DefaultBody), 10, "SMS template %s should have body text", template.Key)
 		}
 	}
 }
 
-// TestTemplateKeyConstants verifies all constants are unique and properly formatted
+// TestTemplateKeyConstants verifies all constants are unique and properly formatted.
 func TestTemplateKeyConstants(t *testing.T) {
 	keys := []string{
 		// Auth templates
@@ -61,7 +61,7 @@ func TestTemplateKeyConstants(t *testing.T) {
 		TemplateKeyPrivacyUpdate, TemplateKeyMaintenanceScheduled, TemplateKeySecurityBreach,
 	}
 
-	assert.Equal(t, 39, len(keys), "Should have 39 template keys")
+	assert.Len(t, keys, 39, "Should have 39 template keys")
 
 	// Verify all keys are unique
 	keyMap := make(map[string]bool)
@@ -76,7 +76,7 @@ func TestTemplateKeyConstants(t *testing.T) {
 	}
 }
 
-// TestGetDefaultTemplate verifies individual template retrieval
+// TestGetDefaultTemplate verifies individual template retrieval.
 func TestGetDefaultTemplate(t *testing.T) {
 	testCases := []struct {
 		key         string
@@ -105,7 +105,7 @@ func TestGetDefaultTemplate(t *testing.T) {
 	}
 }
 
-// TestValidateTemplateKey verifies template key validation
+// TestValidateTemplateKey verifies template key validation.
 func TestValidateTemplateKey(t *testing.T) {
 	validKeys := []string{
 		TemplateKeyOrgInvite,
@@ -128,15 +128,15 @@ func TestValidateTemplateKey(t *testing.T) {
 	}
 }
 
-// TestGetTemplateKeysByType verifies filtering by notification type
+// TestGetTemplateKeysByType verifies filtering by notification type.
 func TestGetTemplateKeysByType(t *testing.T) {
 	emailKeys := GetTemplateKeysByType(NotificationTypeEmail)
 	smsKeys := GetTemplateKeysByType(NotificationTypeSMS)
 
 	// Most templates should be email
-	assert.True(t, len(emailKeys) > 35, "Should have many email templates")
+	assert.Greater(t, len(emailKeys), 35, "Should have many email templates")
 
 	// Only phone OTP is SMS
-	assert.Equal(t, 1, len(smsKeys), "Should have 1 SMS template")
+	assert.Len(t, smsKeys, 1, "Should have 1 SMS template")
 	assert.Contains(t, smsKeys, TemplateKeyPhoneOTP, "SMS templates should include phone OTP")
 }

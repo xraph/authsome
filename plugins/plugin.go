@@ -16,7 +16,7 @@ import (
 // - DI Container: auth.GetForgeApp().Container()
 //
 // Plugins can resolve services from the DI container using the helper functions
-// in the authsome package (e.g., authsome.ResolveUserService, authsome.ResolveAuditService)
+// in the authsome package (e.g., authsome.ResolveUserService, authsome.ResolveAuditService).
 type Plugin = core.Plugin
 
 // Optional Plugin Interfaces
@@ -48,47 +48,51 @@ type PluginWithRoles = core.PluginWithRoles
 //	}
 type PluginWithDependencies = core.PluginWithDependencies
 
-// Registry manages registered plugins
+// Registry manages registered plugins.
 type Registry struct {
 	plugins map[string]Plugin
 }
 
 type PluginRegistry = core.PluginRegistry
 
-// NewRegistry creates a new plugin registry
+// NewRegistry creates a new plugin registry.
 func NewRegistry() PluginRegistry {
 	return &Registry{
 		plugins: make(map[string]Plugin),
 	}
 }
 
-// Register registers a plugin
+// Register registers a plugin.
 func (r *Registry) Register(p Plugin) error {
 	if _, exists := r.plugins[p.ID()]; exists {
 		return fmt.Errorf("plugin %s already registered", p.ID())
 	}
+
 	r.plugins[p.ID()] = p
+
 	return nil
 }
 
-// Get retrieves a plugin by ID
+// Get retrieves a plugin by ID.
 func (r *Registry) Get(id string) (Plugin, bool) {
 	p, exists := r.plugins[id]
+
 	return p, exists
 }
 
-// List returns all registered plugins in registration order
+// List returns all registered plugins in registration order.
 func (r *Registry) List() []Plugin {
 	plugins := make([]Plugin, 0, len(r.plugins))
 	for _, p := range r.plugins {
 		plugins = append(plugins, p)
 	}
+
 	return plugins
 }
 
 // ListSorted returns all registered plugins sorted by dependencies using topological sort
 // Plugins with dependencies will be placed after their dependencies
-// Returns an error if circular dependencies are detected or if a dependency is missing
+// Returns an error if circular dependencies are detected or if a dependency is missing.
 func (r *Registry) ListSorted() ([]Plugin, error) {
 	// Build dependency graph
 	graph := make(map[string][]string) // plugin ID -> list of plugins that depend on it
@@ -101,6 +105,7 @@ func (r *Registry) ListSorted() ([]Plugin, error) {
 		if _, exists := inDegree[id]; !exists {
 			inDegree[id] = 0
 		}
+
 		if _, exists := graph[id]; !exists {
 			graph[id] = []string{}
 		}
@@ -141,6 +146,7 @@ func (r *Registry) ListSorted() ([]Plugin, error) {
 		// Dequeue
 		current := queue[0]
 		queue = queue[1:]
+
 		result = append(result, pluginMap[current])
 
 		// Reduce in-degree for all dependent plugins
@@ -156,11 +162,13 @@ func (r *Registry) ListSorted() ([]Plugin, error) {
 	if len(result) != len(r.plugins) {
 		// Find plugins involved in cycle
 		cyclePlugins := make([]string, 0)
+
 		for id, degree := range inDegree {
 			if degree > 0 {
 				cyclePlugins = append(cyclePlugins, id)
 			}
 		}
+
 		return nil, fmt.Errorf("circular dependency detected among plugins: %s", strings.Join(cyclePlugins, ", "))
 	}
 
@@ -168,7 +176,7 @@ func (r *Registry) ListSorted() ([]Plugin, error) {
 }
 
 // ValidateDependencies checks if all plugin dependencies are satisfied
-// Returns an error describing any issues found
+// Returns an error describing any issues found.
 func (r *Registry) ValidateDependencies() error {
 	for id, plugin := range r.plugins {
 		// Check if plugin implements PluginWithDependencies

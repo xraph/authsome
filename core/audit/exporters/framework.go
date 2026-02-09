@@ -3,17 +3,19 @@ package exporters
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // SIEM EXPORTER FRAMEWORK - Extensible framework for exporting to SIEM systems
 // =============================================================================
 
-// Exporter defines the interface for SIEM exporters
+// Exporter defines the interface for SIEM exporters.
 type Exporter interface {
 	// Name returns the exporter name (e.g., "splunk", "datadog")
 	Name() string
@@ -28,7 +30,7 @@ type Exporter interface {
 	Close() error
 }
 
-// ExporterConfig contains common configuration for all exporters
+// ExporterConfig contains common configuration for all exporters.
 type ExporterConfig struct {
 	Name           string        `json:"name"`
 	Enabled        bool          `json:"enabled"`
@@ -40,7 +42,7 @@ type ExporterConfig struct {
 	ErrorThreshold int           `json:"errorThreshold"` // Consecutive errors before circuit breaker
 }
 
-// DefaultExporterConfig returns default exporter configuration
+// DefaultExporterConfig returns default exporter configuration.
 func DefaultExporterConfig(name string) *ExporterConfig {
 	return &ExporterConfig{
 		Name:           name,
@@ -58,7 +60,7 @@ func DefaultExporterConfig(name string) *ExporterConfig {
 // EXPORT MANAGER - Manages multiple SIEM exporters
 // =============================================================================
 
-// ExportManager manages multiple SIEM exporters
+// ExportManager manages multiple SIEM exporters.
 type ExportManager struct {
 	exporters   map[string]*ManagedExporter
 	eventBuffer chan *audit.Event
@@ -68,7 +70,7 @@ type ExportManager struct {
 	mu          sync.RWMutex
 }
 
-// ManagedExporter wraps an exporter with buffering, retries, and circuit breaker
+// ManagedExporter wraps an exporter with buffering, retries, and circuit breaker.
 type ManagedExporter struct {
 	exporter          Exporter
 	config            *ExporterConfig
@@ -80,7 +82,7 @@ type ManagedExporter struct {
 	stats             *ExporterStats
 }
 
-// ExporterStats tracks exporter statistics
+// ExporterStats tracks exporter statistics.
 type ExporterStats struct {
 	EventsExported  int64     `json:"eventsExported"`
 	EventsFailed    int64     `json:"eventsFailed"`
@@ -92,7 +94,7 @@ type ExporterStats struct {
 	CircuitOpen     bool      `json:"circuitOpen"`
 }
 
-// NewExportManager creates a new export manager
+// NewExportManager creates a new export manager.
 func NewExportManager() *ExportManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -104,7 +106,7 @@ func NewExportManager() *ExportManager {
 	}
 }
 
-// RegisterExporter registers a new SIEM exporter
+// RegisterExporter registers a new SIEM exporter.
 func (em *ExportManager) RegisterExporter(exporter Exporter, config *ExporterConfig) error {
 	if config == nil {
 		config = DefaultExporterConfig(exporter.Name())
@@ -129,26 +131,27 @@ func (em *ExportManager) RegisterExporter(exporter Exporter, config *ExporterCon
 	// Start exporter worker
 	if config.Enabled {
 		em.wg.Add(1)
+
 		go em.exporterWorker(managed)
 	}
 
 	return nil
 }
 
-// Export queues an event for export to all registered exporters
+// Export queues an event for export to all registered exporters.
 func (em *ExportManager) Export(event *audit.Event) error {
 	select {
 	case em.eventBuffer <- event:
 		return nil
 	case <-em.ctx.Done():
-		return fmt.Errorf("export manager shutting down")
+		return errs.New(errs.CodeInternalError, "export manager shutting down", http.StatusInternalServerError)
 	default:
 		// Buffer full - would log warning in production
-		return fmt.Errorf("export buffer full, event dropped")
+		return errs.New(errs.CodeInternalError, "export buffer full, event dropped", http.StatusInternalServerError)
 	}
 }
 
-// exporterWorker processes events for a single exporter
+// exporterWorker processes events for a single exporter.
 func (em *ExportManager) exporterWorker(managed *ManagedExporter) {
 	defer em.wg.Done()
 
@@ -160,6 +163,7 @@ func (em *ExportManager) exporterWorker(managed *ManagedExporter) {
 		case <-em.ctx.Done():
 			// Final flush on shutdown
 			managed.flush(em.ctx)
+
 			return
 
 		case event := <-em.eventBuffer:
@@ -183,7 +187,7 @@ func (em *ExportManager) exporterWorker(managed *ManagedExporter) {
 	}
 }
 
-// addToBuffer adds an event to the exporter's buffer
+// addToBuffer adds an event to the exporter's buffer.
 func (me *ManagedExporter) addToBuffer(event *audit.Event) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
@@ -191,17 +195,20 @@ func (me *ManagedExporter) addToBuffer(event *audit.Event) {
 	// Check if circuit is open
 	if me.circuitOpen {
 		me.stats.EventsFailed++
+
 		return
 	}
 
 	me.buffer = append(me.buffer, event)
 }
 
-// flush exports buffered events
+// flush exports buffered events.
 func (me *ManagedExporter) flush(ctx context.Context) {
 	me.mu.Lock()
+
 	if len(me.buffer) == 0 {
 		me.mu.Unlock()
+
 		return
 	}
 
@@ -220,9 +227,10 @@ func (me *ManagedExporter) flush(ctx context.Context) {
 	}
 }
 
-// exportWithRetry exports events with exponential backoff retry
+// exportWithRetry exports events with exponential backoff retry.
 func (me *ManagedExporter) exportWithRetry(ctx context.Context, events []*audit.Event) error {
 	var lastErr error
+
 	backoff := me.config.RetryBackoff
 
 	for attempt := 0; attempt <= me.config.RetryAttempts; attempt++ {
@@ -233,6 +241,7 @@ func (me *ManagedExporter) exportWithRetry(ctx context.Context, events []*audit.
 			case <-ctx.Done():
 				return ctx.Err()
 			}
+
 			backoff *= 2
 		}
 
@@ -253,7 +262,7 @@ func (me *ManagedExporter) exportWithRetry(ctx context.Context, events []*audit.
 	return fmt.Errorf("export failed after %d attempts: %w", me.config.RetryAttempts, lastErr)
 }
 
-// handleExportSuccess updates stats after successful export
+// handleExportSuccess updates stats after successful export.
 func (me *ManagedExporter) handleExportSuccess(count int) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
@@ -264,7 +273,7 @@ func (me *ManagedExporter) handleExportSuccess(count int) {
 	me.consecutiveErrors = 0
 }
 
-// handleExportError updates stats after failed export
+// handleExportError updates stats after failed export.
 func (me *ManagedExporter) handleExportError(err error, count int) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
@@ -283,7 +292,7 @@ func (me *ManagedExporter) handleExportError(err error, count int) {
 	}
 }
 
-// checkCircuitBreaker checks if circuit breaker should be reset
+// checkCircuitBreaker checks if circuit breaker should be reset.
 func (me *ManagedExporter) checkCircuitBreaker() {
 	me.mu.Lock()
 	defer me.mu.Unlock()
@@ -300,28 +309,31 @@ func (me *ManagedExporter) checkCircuitBreaker() {
 	}
 }
 
-// GetStats returns statistics for all exporters
+// GetStats returns statistics for all exporters.
 func (em *ExportManager) GetStats() map[string]*ExporterStats {
 	em.mu.RLock()
 	defer em.mu.RUnlock()
 
 	stats := make(map[string]*ExporterStats)
+
 	for name, managed := range em.exporters {
 		managed.mu.Lock()
 		statsCopy := *managed.stats
 		managed.mu.Unlock()
+
 		stats[name] = &statsCopy
 	}
 
 	return stats
 }
 
-// HealthCheck checks health of all exporters
+// HealthCheck checks health of all exporters.
 func (em *ExportManager) HealthCheck(ctx context.Context) map[string]error {
 	em.mu.RLock()
 	defer em.mu.RUnlock()
 
 	results := make(map[string]error)
+
 	for name, managed := range em.exporters {
 		err := managed.exporter.HealthCheck(ctx)
 		results[name] = err
@@ -330,12 +342,13 @@ func (em *ExportManager) HealthCheck(ctx context.Context) map[string]error {
 	return results
 }
 
-// Shutdown gracefully shuts down the export manager
+// Shutdown gracefully shuts down the export manager.
 func (em *ExportManager) Shutdown(timeout time.Duration) error {
 	em.cancel()
 
 	// Wait for workers to finish with timeout
 	done := make(chan struct{})
+
 	go func() {
 		em.wg.Wait()
 		close(done)
@@ -345,7 +358,7 @@ func (em *ExportManager) Shutdown(timeout time.Duration) error {
 	case <-done:
 		// Clean shutdown
 	case <-time.After(timeout):
-		return fmt.Errorf("shutdown timeout exceeded")
+		return errs.New(errs.CodeInternalError, "shutdown timeout exceeded", http.StatusInternalServerError)
 	}
 
 	// Close all exporters
@@ -366,7 +379,7 @@ func (em *ExportManager) Shutdown(timeout time.Duration) error {
 // HELPER FUNCTIONS
 // =============================================================================
 
-// isRetryable checks if an error is retryable
+// isRetryable checks if an error is retryable.
 func isRetryable(err error) bool {
 	// Check for common retryable errors
 	// - Network timeouts
@@ -382,25 +395,25 @@ func isRetryable(err error) bool {
 // EVENT FORMATTER - Formats events for different SIEM systems
 // =============================================================================
 
-// EventFormatter formats audit events for different SIEM systems
+// EventFormatter formats audit events for different SIEM systems.
 type EventFormatter interface {
 	Format(event *audit.Event) ([]byte, error)
 }
 
-// JSONFormatter formats events as JSON
+// JSONFormatter formats events as JSON.
 type JSONFormatter struct{}
 
-// Format formats an event as JSON
+// Format formats an event as JSON.
 func (f *JSONFormatter) Format(event *audit.Event) ([]byte, error) {
 	// Would use json.Marshal in production
 	// Simplified version
-	return []byte(fmt.Sprintf(`{"action":"%s","resource":"%s"}`, event.Action, event.Resource)), nil
+	return fmt.Appendf(nil, `{"action":"%s","resource":"%s"}`, event.Action, event.Resource), nil
 }
 
-// CEFFormatter formats events as Common Event Format (used by ArcSight, QRadar)
+// CEFFormatter formats events as Common Event Format (used by ArcSight, QRadar).
 type CEFFormatter struct{}
 
-// Format formats an event as CEF
+// Format formats an event as CEF.
 func (f *CEFFormatter) Format(event *audit.Event) ([]byte, error) {
 	// CEF format: CEF:Version|Device Vendor|Device Product|Device Version|Signature ID|Name|Severity|Extension
 	cef := fmt.Sprintf(
@@ -410,13 +423,14 @@ func (f *CEFFormatter) Format(event *audit.Event) ([]byte, error) {
 		event.IPAddress,
 		event.Action,
 	)
+
 	return []byte(cef), nil
 }
 
-// LEEFFormatter formats events as Log Event Extended Format (used by QRadar)
+// LEEFFormatter formats events as Log Event Extended Format (used by QRadar).
 type LEEFFormatter struct{}
 
-// Format formats an event as LEEF
+// Format formats an event as LEEF.
 func (f *LEEFFormatter) Format(event *audit.Event) ([]byte, error) {
 	// LEEF format: LEEF:Version|Vendor|Product|Version|EventID|
 	leef := fmt.Sprintf(
@@ -425,5 +439,6 @@ func (f *LEEFFormatter) Format(event *audit.Event) ([]byte, error) {
 		event.IPAddress,
 		event.Action,
 	)
+
 	return []byte(leef), nil
 }

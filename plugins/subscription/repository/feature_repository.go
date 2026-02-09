@@ -10,30 +10,33 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// featureRepository implements FeatureRepository using Bun
+// featureRepository implements FeatureRepository using Bun.
 type featureRepository struct {
 	db *bun.DB
 }
 
-// NewFeatureRepository creates a new feature repository
+// NewFeatureRepository creates a new feature repository.
 func NewFeatureRepository(db *bun.DB) FeatureRepository {
 	return &featureRepository{db: db}
 }
 
-// Create creates a new feature
+// Create creates a new feature.
 func (r *featureRepository) Create(ctx context.Context, feature *schema.Feature) error {
 	feature.CreatedAt = time.Now()
 	feature.UpdatedAt = time.Now()
+
 	_, err := r.db.NewInsert().Model(feature).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create feature: %w", err)
 	}
+
 	return nil
 }
 
-// Update updates an existing feature
+// Update updates an existing feature.
 func (r *featureRepository) Update(ctx context.Context, feature *schema.Feature) error {
 	feature.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(feature).
 		WherePK().
@@ -41,10 +44,11 @@ func (r *featureRepository) Update(ctx context.Context, feature *schema.Feature)
 	if err != nil {
 		return fmt.Errorf("failed to update feature: %w", err)
 	}
+
 	return nil
 }
 
-// Delete deletes a feature
+// Delete deletes a feature.
 func (r *featureRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.Feature)(nil)).
@@ -53,12 +57,14 @@ func (r *featureRepository) Delete(ctx context.Context, id xid.ID) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete feature: %w", err)
 	}
+
 	return nil
 }
 
-// FindByID retrieves a feature by ID
+// FindByID retrieves a feature by ID.
 func (r *featureRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Feature, error) {
 	feature := new(schema.Feature)
+
 	err := r.db.NewSelect().
 		Model(feature).
 		Relation("Tiers", func(q *bun.SelectQuery) *bun.SelectQuery {
@@ -69,12 +75,14 @@ func (r *featureRepository) FindByID(ctx context.Context, id xid.ID) (*schema.Fe
 	if err != nil {
 		return nil, fmt.Errorf("failed to find feature: %w", err)
 	}
+
 	return feature, nil
 }
 
-// FindByKey retrieves a feature by key within an app
+// FindByKey retrieves a feature by key within an app.
 func (r *featureRepository) FindByKey(ctx context.Context, appID xid.ID, key string) (*schema.Feature, error) {
 	feature := new(schema.Feature)
+
 	err := r.db.NewSelect().
 		Model(feature).
 		Relation("Tiers", func(q *bun.SelectQuery) *bun.SelectQuery {
@@ -86,10 +94,11 @@ func (r *featureRepository) FindByKey(ctx context.Context, appID xid.ID, key str
 	if err != nil {
 		return nil, fmt.Errorf("failed to find feature by key: %w", err)
 	}
+
 	return feature, nil
 }
 
-// List retrieves features with optional filters
+// List retrieves features with optional filters.
 func (r *featureRepository) List(ctx context.Context, filter *FeatureFilter) ([]*schema.Feature, int, error) {
 	var features []*schema.Feature
 
@@ -104,9 +113,11 @@ func (r *featureRepository) List(ctx context.Context, filter *FeatureFilter) ([]
 		if filter.AppID != nil {
 			query = query.Where("sf.app_id = ?", *filter.AppID)
 		}
+
 		if filter.Type != "" {
 			query = query.Where("sf.type = ?", filter.Type)
 		}
+
 		if filter.IsPublic != nil {
 			query = query.Where("sf.is_public = ?", *filter.IsPublic)
 		}
@@ -116,10 +127,12 @@ func (r *featureRepository) List(ctx context.Context, filter *FeatureFilter) ([]
 		if pageSize <= 0 {
 			pageSize = 20
 		}
+
 		page := filter.Page
 		if page <= 0 {
 			page = 1
 		}
+
 		offset := (page - 1) * pageSize
 		query = query.Limit(pageSize).Offset(offset)
 	}
@@ -132,17 +145,19 @@ func (r *featureRepository) List(ctx context.Context, filter *FeatureFilter) ([]
 	return features, count, nil
 }
 
-// CreateTier creates a feature tier
+// CreateTier creates a feature tier.
 func (r *featureRepository) CreateTier(ctx context.Context, tier *schema.FeatureTier) error {
 	tier.CreatedAt = time.Now()
+
 	_, err := r.db.NewInsert().Model(tier).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create feature tier: %w", err)
 	}
+
 	return nil
 }
 
-// DeleteTiers deletes all tiers for a feature
+// DeleteTiers deletes all tiers for a feature.
 func (r *featureRepository) DeleteTiers(ctx context.Context, featureID xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.FeatureTier)(nil)).
@@ -151,12 +166,14 @@ func (r *featureRepository) DeleteTiers(ctx context.Context, featureID xid.ID) e
 	if err != nil {
 		return fmt.Errorf("failed to delete feature tiers: %w", err)
 	}
+
 	return nil
 }
 
-// GetTiers retrieves all tiers for a feature
+// GetTiers retrieves all tiers for a feature.
 func (r *featureRepository) GetTiers(ctx context.Context, featureID xid.ID) ([]*schema.FeatureTier, error) {
 	var tiers []*schema.FeatureTier
+
 	err := r.db.NewSelect().
 		Model(&tiers).
 		Where("feature_id = ?", featureID).
@@ -165,23 +182,27 @@ func (r *featureRepository) GetTiers(ctx context.Context, featureID xid.ID) ([]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feature tiers: %w", err)
 	}
+
 	return tiers, nil
 }
 
-// LinkToPlan links a feature to a plan
+// LinkToPlan links a feature to a plan.
 func (r *featureRepository) LinkToPlan(ctx context.Context, link *schema.PlanFeatureLink) error {
 	link.CreatedAt = time.Now()
 	link.UpdatedAt = time.Now()
+
 	_, err := r.db.NewInsert().Model(link).Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to link feature to plan: %w", err)
 	}
+
 	return nil
 }
 
-// UpdatePlanLink updates a feature-plan link
+// UpdatePlanLink updates a feature-plan link.
 func (r *featureRepository) UpdatePlanLink(ctx context.Context, link *schema.PlanFeatureLink) error {
 	link.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(link).
 		WherePK().
@@ -189,10 +210,11 @@ func (r *featureRepository) UpdatePlanLink(ctx context.Context, link *schema.Pla
 	if err != nil {
 		return fmt.Errorf("failed to update plan feature link: %w", err)
 	}
+
 	return nil
 }
 
-// UnlinkFromPlan removes a feature from a plan
+// UnlinkFromPlan removes a feature from a plan.
 func (r *featureRepository) UnlinkFromPlan(ctx context.Context, planID, featureID xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.PlanFeatureLink)(nil)).
@@ -202,12 +224,14 @@ func (r *featureRepository) UnlinkFromPlan(ctx context.Context, planID, featureI
 	if err != nil {
 		return fmt.Errorf("failed to unlink feature from plan: %w", err)
 	}
+
 	return nil
 }
 
-// GetPlanLinks retrieves all feature links for a plan
+// GetPlanLinks retrieves all feature links for a plan.
 func (r *featureRepository) GetPlanLinks(ctx context.Context, planID xid.ID) ([]*schema.PlanFeatureLink, error) {
 	var links []*schema.PlanFeatureLink
+
 	err := r.db.NewSelect().
 		Model(&links).
 		Relation("Feature").
@@ -219,12 +243,14 @@ func (r *featureRepository) GetPlanLinks(ctx context.Context, planID xid.ID) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to get plan feature links: %w", err)
 	}
+
 	return links, nil
 }
 
-// GetPlanLink retrieves a specific feature link
+// GetPlanLink retrieves a specific feature link.
 func (r *featureRepository) GetPlanLink(ctx context.Context, planID, featureID xid.ID) (*schema.PlanFeatureLink, error) {
 	link := new(schema.PlanFeatureLink)
+
 	err := r.db.NewSelect().
 		Model(link).
 		Relation("Feature").
@@ -237,12 +263,14 @@ func (r *featureRepository) GetPlanLink(ctx context.Context, planID, featureID x
 	if err != nil {
 		return nil, fmt.Errorf("failed to get plan feature link: %w", err)
 	}
+
 	return link, nil
 }
 
-// GetFeaturePlans retrieves all plans that have a feature
+// GetFeaturePlans retrieves all plans that have a feature.
 func (r *featureRepository) GetFeaturePlans(ctx context.Context, featureID xid.ID) ([]*schema.PlanFeatureLink, error) {
 	var links []*schema.PlanFeatureLink
+
 	err := r.db.NewSelect().
 		Model(&links).
 		Relation("Plan").
@@ -251,5 +279,6 @@ func (r *featureRepository) GetFeaturePlans(ctx context.Context, featureID xid.I
 	if err != nil {
 		return nil, fmt.Errorf("failed to get feature plans: %w", err)
 	}
+
 	return links, nil
 }

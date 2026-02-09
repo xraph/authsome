@@ -10,7 +10,7 @@ import (
 // =============================================================================
 
 // UserProvider provides access to user data from any source (authsome, LDAP, custom DB)
-// This breaks the tight coupling to authsome's internal user service
+// This breaks the tight coupling to authsome's internal user service.
 type UserProvider interface {
 	// GetUser retrieves a single user by ID
 	GetUser(ctx context.Context, scope *Scope, userID string) (*GenericUser, error)
@@ -22,7 +22,7 @@ type UserProvider interface {
 	QueryUserMetrics(ctx context.Context, scope *Scope, query *MetricsQuery) (*UserMetrics, error)
 }
 
-// OrganizationProvider provides access to organization/tenant data
+// OrganizationProvider provides access to organization/tenant data.
 type OrganizationProvider interface {
 	// GetOrganization retrieves organization details
 	GetOrganization(ctx context.Context, orgID string) (*GenericOrganization, error)
@@ -45,7 +45,7 @@ type AuditProvider interface {
 // SCOPE - Hierarchical scoping for compliance profiles
 // =============================================================================
 
-// ScopeType defines the level of compliance scope
+// ScopeType defines the level of compliance scope.
 type ScopeType string
 
 const (
@@ -57,7 +57,7 @@ const (
 	ScopeTypeUser   ScopeType = "user"   // Individual user overrides
 )
 
-// Scope represents a hierarchical compliance scope
+// Scope represents a hierarchical compliance scope.
 type Scope struct {
 	Type     ScopeType `json:"type"`
 	ID       string    `json:"id"`
@@ -68,27 +68,27 @@ type Scope struct {
 // GENERIC USER - Provider-agnostic user representation
 // =============================================================================
 
-// GenericUser represents a user from any system
+// GenericUser represents a user from any system.
 type GenericUser struct {
-	ID               string                 `json:"id"`
-	Email            string                 `json:"email"`
-	Username         string                 `json:"username,omitempty"`
-	DisplayName      string                 `json:"displayName,omitempty"`
-	MFAEnabled       bool                   `json:"mfaEnabled"`
-	MFAMethods       []string               `json:"mfaMethods"` // ["totp", "sms", "webauthn"]
-	PasswordChanged  time.Time              `json:"passwordChanged"`
-	LastLogin        time.Time              `json:"lastLogin"`
-	LoginCount       int                    `json:"loginCount"`
-	FailedLoginCount int                    `json:"failedLoginCount"`
-	Status           string                 `json:"status"` // "active", "suspended", "deleted", "locked"
-	Roles            []string               `json:"roles"`
-	Groups           []string               `json:"groups,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"` // Extensible
-	CreatedAt        time.Time              `json:"createdAt"`
-	UpdatedAt        time.Time              `json:"updatedAt"`
+	ID               string         `json:"id"`
+	Email            string         `json:"email"`
+	Username         string         `json:"username,omitempty"`
+	DisplayName      string         `json:"displayName,omitempty"`
+	MFAEnabled       bool           `json:"mfaEnabled"`
+	MFAMethods       []string       `json:"mfaMethods"` // ["totp", "sms", "webauthn"]
+	PasswordChanged  time.Time      `json:"passwordChanged"`
+	LastLogin        time.Time      `json:"lastLogin"`
+	LoginCount       int            `json:"loginCount"`
+	FailedLoginCount int            `json:"failedLoginCount"`
+	Status           string         `json:"status"` // "active", "suspended", "deleted", "locked"
+	Roles            []string       `json:"roles"`
+	Groups           []string       `json:"groups,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"` // Extensible
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 }
 
-// UserFilter defines criteria for filtering users
+// UserFilter defines criteria for filtering users.
 type UserFilter struct {
 	IDs               []string   `json:"ids,omitempty"`
 	Emails            []string   `json:"emails,omitempty"`
@@ -105,7 +105,7 @@ type UserFilter struct {
 	Offset            int        `json:"offset"`
 }
 
-// MetricsQuery defines aggregated metrics to retrieve
+// MetricsQuery defines aggregated metrics to retrieve.
 type MetricsQuery struct {
 	Metrics     []string   `json:"metrics"` // ["total_users", "mfa_adoption", "inactive_users"]
 	GroupBy     []string   `json:"groupBy,omitempty"`
@@ -114,40 +114,40 @@ type MetricsQuery struct {
 	Granularity string     `json:"granularity,omitempty"` // "day", "week", "month"
 }
 
-// UserMetrics contains aggregated user metrics
+// UserMetrics contains aggregated user metrics.
 type UserMetrics struct {
-	TotalUsers        int                    `json:"totalUsers"`
-	ActiveUsers       int                    `json:"activeUsers"`
-	InactiveUsers     int                    `json:"inactiveUsers"`
-	MFAAdoptionRate   float64                `json:"mfaAdoptionRate"` // 0-100
-	UsersWithMFA      int                    `json:"usersWithMFA"`
-	UsersWithoutMFA   int                    `json:"usersWithoutMFA"`
-	ExpiredPasswords  int                    `json:"expiredPasswords"`
-	LockedAccounts    int                    `json:"lockedAccounts"`
-	SuspendedAccounts int                    `json:"suspendedAccounts"`
-	ByRole            map[string]int         `json:"byRole,omitempty"`
-	ByStatus          map[string]int         `json:"byStatus,omitempty"`
-	CustomMetrics     map[string]interface{} `json:"customMetrics,omitempty"`
+	TotalUsers        int            `json:"totalUsers"`
+	ActiveUsers       int            `json:"activeUsers"`
+	InactiveUsers     int            `json:"inactiveUsers"`
+	MFAAdoptionRate   float64        `json:"mfaAdoptionRate"` // 0-100
+	UsersWithMFA      int            `json:"usersWithMFA"`
+	UsersWithoutMFA   int            `json:"usersWithoutMFA"`
+	ExpiredPasswords  int            `json:"expiredPasswords"`
+	LockedAccounts    int            `json:"lockedAccounts"`
+	SuspendedAccounts int            `json:"suspendedAccounts"`
+	ByRole            map[string]int `json:"byRole,omitempty"`
+	ByStatus          map[string]int `json:"byStatus,omitempty"`
+	CustomMetrics     map[string]any `json:"customMetrics,omitempty"`
 }
 
 // =============================================================================
 // GENERIC ORGANIZATION
 // =============================================================================
 
-// GenericOrganization represents an organization/tenant from any system
+// GenericOrganization represents an organization/tenant from any system.
 type GenericOrganization struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	DisplayName string                 `json:"displayName,omitempty"`
-	Status      string                 `json:"status"` // "active", "suspended", "deleted"
-	ParentID    *string                `json:"parentId,omitempty"`
-	Members     int                    `json:"members"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	DisplayName string         `json:"displayName,omitempty"`
+	Status      string         `json:"status"` // "active", "suspended", "deleted"
+	ParentID    *string        `json:"parentId,omitempty"`
+	Members     int            `json:"members"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 }
 
-// OrgFilter defines criteria for filtering organizations
+// OrgFilter defines criteria for filtering organizations.
 type OrgFilter struct {
 	IDs      []string `json:"ids,omitempty"`
 	Status   *string  `json:"status,omitempty"`
@@ -160,51 +160,51 @@ type OrgFilter struct {
 // PROVIDER REGISTRY - Manages provider instances
 // =============================================================================
 
-// ProviderRegistry manages all provider instances
+// ProviderRegistry manages all provider instances.
 type ProviderRegistry struct {
 	userProvider   UserProvider
 	orgProvider    OrganizationProvider
 	auditProviders []AuditProvider
 }
 
-// NewProviderRegistry creates a new provider registry
+// NewProviderRegistry creates a new provider registry.
 func NewProviderRegistry() *ProviderRegistry {
 	return &ProviderRegistry{
 		auditProviders: make([]AuditProvider, 0),
 	}
 }
 
-// SetUserProvider registers a user provider
+// SetUserProvider registers a user provider.
 func (r *ProviderRegistry) SetUserProvider(provider UserProvider) {
 	r.userProvider = provider
 }
 
-// GetUserProvider returns the registered user provider
+// GetUserProvider returns the registered user provider.
 func (r *ProviderRegistry) GetUserProvider() UserProvider {
 	return r.userProvider
 }
 
-// SetOrgProvider registers an organization provider
+// SetOrgProvider registers an organization provider.
 func (r *ProviderRegistry) SetOrgProvider(provider OrganizationProvider) {
 	r.orgProvider = provider
 }
 
-// GetOrgProvider returns the registered organization provider
+// GetOrgProvider returns the registered organization provider.
 func (r *ProviderRegistry) GetOrgProvider() OrganizationProvider {
 	return r.orgProvider
 }
 
-// AddAuditProvider registers an audit event consumer
+// AddAuditProvider registers an audit event consumer.
 func (r *ProviderRegistry) AddAuditProvider(provider AuditProvider) {
 	r.auditProviders = append(r.auditProviders, provider)
 }
 
-// GetAuditProviders returns all registered audit providers
+// GetAuditProviders returns all registered audit providers.
 func (r *ProviderRegistry) GetAuditProviders() []AuditProvider {
 	return r.auditProviders
 }
 
-// NotifyAuditEvent sends event to all audit providers (non-blocking)
+// NotifyAuditEvent sends event to all audit providers (non-blocking).
 func (r *ProviderRegistry) NotifyAuditEvent(ctx context.Context, event *Event) {
 	for _, provider := range r.auditProviders {
 		go func(p AuditProvider) {
@@ -222,47 +222,50 @@ func (r *ProviderRegistry) NotifyAuditEvent(ctx context.Context, event *Event) {
 // PROVIDER OPTIONS - Functional options pattern for service configuration
 // =============================================================================
 
-// ServiceOption is a functional option for configuring the audit service
+// ServiceOption is a functional option for configuring the audit service.
 type ServiceOption func(*ServiceConfig)
 
-// ServiceConfig holds configuration for the audit service
+// ServiceConfig holds configuration for the audit service.
 type ServiceConfig struct {
 	Providers *ProviderRegistry
 }
 
-// WithProviders configures the service to use custom providers
+// WithProviders configures the service to use custom providers.
 func WithProviders(providers *ProviderRegistry) ServiceOption {
 	return func(cfg *ServiceConfig) {
 		cfg.Providers = providers
 	}
 }
 
-// WithUserProvider configures a user provider
+// WithUserProvider configures a user provider.
 func WithUserProvider(provider UserProvider) ServiceOption {
 	return func(cfg *ServiceConfig) {
 		if cfg.Providers == nil {
 			cfg.Providers = NewProviderRegistry()
 		}
+
 		cfg.Providers.SetUserProvider(provider)
 	}
 }
 
-// WithOrgProvider configures an organization provider
+// WithOrgProvider configures an organization provider.
 func WithOrgProvider(provider OrganizationProvider) ServiceOption {
 	return func(cfg *ServiceConfig) {
 		if cfg.Providers == nil {
 			cfg.Providers = NewProviderRegistry()
 		}
+
 		cfg.Providers.SetOrgProvider(provider)
 	}
 }
 
-// WithAuditProvider adds an audit event consumer
+// WithAuditProvider adds an audit event consumer.
 func WithAuditProvider(provider AuditProvider) ServiceOption {
 	return func(cfg *ServiceConfig) {
 		if cfg.Providers == nil {
 			cfg.Providers = NewProviderRegistry()
 		}
+
 		cfg.Providers.AddAuditProvider(provider)
 	}
 }

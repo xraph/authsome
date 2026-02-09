@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SettingsGeneralPage shows general settings
+// SettingsGeneralPage shows general settings.
 func (p *PagesManager) SettingsGeneralPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -231,7 +231,7 @@ func (p *PagesManager) SettingsGeneralPage(ctx *router.PageContext) (g.Node, err
 	), nil
 }
 
-// SettingsSecurityPage shows security settings
+// SettingsSecurityPage shows security settings.
 func (p *PagesManager) SettingsSecurityPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -396,7 +396,7 @@ func (p *PagesManager) SettingsSecurityPage(ctx *router.PageContext) (g.Node, er
 	), nil
 }
 
-// SettingsSessionPage shows session settings
+// SettingsSessionPage shows session settings.
 func (p *PagesManager) SettingsSessionPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -608,7 +608,7 @@ func (p *PagesManager) SettingsSessionPage(ctx *router.PageContext) (g.Node, err
 	), nil
 }
 
-// SettingsAPIKeysPage shows API keys management
+// SettingsAPIKeysPage shows API keys management.
 func (p *PagesManager) SettingsAPIKeysPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -720,7 +720,7 @@ func (p *PagesManager) SettingsAPIKeysPage(ctx *router.PageContext) (g.Node, err
 	), nil
 }
 
-// toggleField creates a toggle/switch field component
+// toggleField creates a toggle/switch field component.
 func toggleField(modelPath, label, description string) g.Node {
 	return Div(
 		Class("flex items-start space-x-3 py-2"),

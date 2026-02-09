@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// RequireMFA ensures the user has completed MFA verification
+// RequireMFA ensures the user has completed MFA verification.
 func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -25,7 +25,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 
 			if len(factors) == 0 {
 				// No factors enrolled - require enrollment
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "mfa_required",
 					"message": "Multi-factor authentication enrollment required",
 					"action":  "enroll",
@@ -33,7 +33,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 			}
 
 			// Check for valid MFA session token
-			mfaToken := c.Request().Header.Get("X-MFA-Token")
+			mfaToken := c.Request().Header.Get("X-Mfa-Token")
 			if mfaToken == "" {
 				// Check cookie
 				cookie, err := c.Request().Cookie("mfa_token")
@@ -44,7 +44,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 
 			if mfaToken == "" {
 				// No MFA token - require verification
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "mfa_verification_required",
 					"message": "Multi-factor authentication verification required",
 					"action":  "verify",
@@ -54,7 +54,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 			// Validate MFA token
 			session, err := service.repo.GetSessionByToken(c.Request().Context(), mfaToken)
 			if err != nil || session == nil {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "invalid_mfa_token",
 					"message": "Invalid or expired MFA token",
 					"action":  "verify",
@@ -63,7 +63,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 
 			// Check if session is completed
 			if session.CompletedAt == nil {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "mfa_incomplete",
 					"message": "MFA verification incomplete",
 					"action":  "verify",
@@ -72,7 +72,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 
 			// Check if session expired
 			if time.Now().After(session.ExpiresAt) {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "mfa_expired",
 					"message": "MFA session expired",
 					"action":  "verify",
@@ -87,7 +87,7 @@ func RequireMFA(service *Service) func(func(forge.Context) error) func(forge.Con
 	}
 }
 
-// RequireFactorType ensures the user has a specific factor type enrolled
+// RequireFactorType ensures the user has a specific factor type enrolled.
 func RequireFactorType(service *Service, factorType FactorType) func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -103,15 +103,17 @@ func RequireFactorType(service *Service, factorType FactorType) func(func(forge.
 
 			// Check if user has the required factor type
 			hasFactorType := false
+
 			for _, factor := range factors {
 				if factor.Type == factorType {
 					hasFactorType = true
+
 					break
 				}
 			}
 
 			if !hasFactorType {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":         "factor_required",
 					"message":       fmt.Sprintf("%s factor required", factorType),
 					"required_type": factorType,
@@ -124,7 +126,7 @@ func RequireFactorType(service *Service, factorType FactorType) func(func(forge.
 	}
 }
 
-// StepUpAuth requires recent MFA verification for sensitive operations
+// StepUpAuth requires recent MFA verification for sensitive operations.
 func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -134,7 +136,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 			}
 
 			// Get MFA token
-			mfaToken := c.Request().Header.Get("X-MFA-Token")
+			mfaToken := c.Request().Header.Get("X-Mfa-Token")
 			if mfaToken == "" {
 				cookie, err := c.Request().Cookie("mfa_token")
 				if err == nil {
@@ -143,7 +145,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 			}
 
 			if mfaToken == "" {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "step_up_required",
 					"message": "Step-up authentication required for this operation",
 					"action":  "step_up",
@@ -153,7 +155,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 			// Get session
 			session, err := service.repo.GetSessionByToken(c.Request().Context(), mfaToken)
 			if err != nil || session == nil || session.CompletedAt == nil {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "step_up_required",
 					"message": "Step-up authentication required",
 					"action":  "step_up",
@@ -163,7 +165,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 			// Check if verification is recent enough
 			age := time.Since(*session.CompletedAt)
 			if age > maxAge {
-				return c.JSON(403, map[string]interface{}{
+				return c.JSON(403, map[string]any{
 					"error":   "step_up_expired",
 					"message": fmt.Sprintf("Step-up authentication expired (max age: %v)", maxAge),
 					"action":  "step_up",
@@ -185,7 +187,7 @@ func StepUpAuth(service *Service, maxAge time.Duration) func(func(forge.Context)
 	}
 }
 
-// AdaptiveMFA applies risk-based MFA requirements
+// AdaptiveMFA applies risk-based MFA requirements.
 func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -203,7 +205,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 				UserID:    userID,
 				IPAddress: c.Request().RemoteAddr,
 				UserAgent: c.Request().UserAgent(),
-				DeviceID:  c.Request().Header.Get("X-Device-ID"),
+				DeviceID:  c.Request().Header.Get("X-Device-Id"),
 				Timestamp: time.Now(),
 			}
 
@@ -220,7 +222,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 			// If risk is high, require MFA
 			if assessment.Level == RiskLevelHigh || assessment.Level == RiskLevelCritical {
 				// Check for valid MFA session
-				mfaToken := c.Request().Header.Get("X-MFA-Token")
+				mfaToken := c.Request().Header.Get("X-Mfa-Token")
 				if mfaToken == "" {
 					cookie, err := c.Request().Cookie("mfa_token")
 					if err == nil {
@@ -229,7 +231,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 				}
 
 				if mfaToken == "" {
-					return c.JSON(403, map[string]interface{}{
+					return c.JSON(403, map[string]any{
 						"error":        "high_risk_mfa_required",
 						"message":      "Multi-factor authentication required due to high risk",
 						"risk_level":   assessment.Level,
@@ -242,7 +244,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 				// Validate session
 				session, err := service.repo.GetSessionByToken(c.Request().Context(), mfaToken)
 				if err != nil || session == nil || session.CompletedAt == nil {
-					return c.JSON(403, map[string]interface{}{
+					return c.JSON(403, map[string]any{
 						"error":      "high_risk_mfa_required",
 						"message":    "Valid MFA session required due to high risk",
 						"risk_level": assessment.Level,
@@ -254,7 +256,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 				if assessment.Level == RiskLevelCritical {
 					// Check if session is recent (within last 5 minutes)
 					if session.CompletedAt == nil || time.Since(*session.CompletedAt) > 5*time.Minute {
-						return c.JSON(403, map[string]interface{}{
+						return c.JSON(403, map[string]any{
 							"error":      "critical_risk_step_up_required",
 							"message":    "Recent MFA verification required due to critical risk",
 							"risk_level": assessment.Level,
@@ -269,7 +271,7 @@ func AdaptiveMFA(service *Service) func(func(forge.Context) error) func(forge.Co
 	}
 }
 
-// OptionalMFA suggests MFA but doesn't require it
+// OptionalMFA suggests MFA but doesn't require it.
 func OptionalMFA(service *Service) func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {

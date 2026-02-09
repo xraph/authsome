@@ -4,7 +4,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/internal/hooks"
 )
 
-// Re-export hook types for convenience
+// Re-export hook types for convenience.
 type (
 	BeforeSubscriptionCreateHook = hooks.BeforeSubscriptionCreateHook
 	AfterSubscriptionCreateHook  = hooks.AfterSubscriptionCreateHook
@@ -37,5 +37,5 @@ type (
 	SubscriptionHookRegistry = hooks.SubscriptionHookRegistry
 )
 
-// NewSubscriptionHookRegistry creates a new hook registry
+// NewSubscriptionHookRegistry creates a new hook registry.
 var NewSubscriptionHookRegistry = hooks.NewSubscriptionHookRegistry

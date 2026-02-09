@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// BackupCodes generates cryptographically secure recovery codes for 2FA
+// BackupCodes generates cryptographically secure recovery codes for 2FA.
 func (s *Service) BackupCodes(ctx context.Context, userID string, count int) ([]string, error) {
 	if count <= 0 || count > 20 {
 		count = 10 // Default to 10 codes
@@ -41,6 +41,7 @@ func (s *Service) BackupCodes(ctx context.Context, userID string, count int) ([]
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate backup code: %w", err)
 		}
+
 		codes[i] = code
 
 		// Hash and store the code
@@ -51,8 +52,8 @@ func (s *Service) BackupCodes(ctx context.Context, userID string, count int) ([]
 			CodeHash: codeHash,
 			UsedAt:   nil,
 		}
-		backupCode.AuditableModel.CreatedBy = uid
-		backupCode.AuditableModel.UpdatedBy = uid
+		backupCode.CreatedBy = uid
+		backupCode.UpdatedBy = uid
 
 		_, err = s.repo.DB().NewInsert().Model(backupCode).Exec(ctx)
 		if err != nil {
@@ -63,7 +64,7 @@ func (s *Service) BackupCodes(ctx context.Context, userID string, count int) ([]
 	return codes, nil
 }
 
-// VerifyBackupCode validates a backup code and marks it as used
+// VerifyBackupCode validates a backup code and marks it as used.
 func (s *Service) VerifyBackupCode(ctx context.Context, userID, code string) (bool, error) {
 	uid, err := xid.FromString(userID)
 	if err != nil {
@@ -76,11 +77,11 @@ func (s *Service) VerifyBackupCode(ctx context.Context, userID, code string) (bo
 
 	// Find unused backup code
 	var backupCode schema.BackupCode
+
 	err = s.repo.DB().NewSelect().
 		Model(&backupCode).
 		Where("user_id = ? AND code_hash = ? AND used_at IS NULL", uid, codeHash).
 		Scan(ctx)
-
 	if err != nil {
 		return false, nil // Code not found or already used
 	}
@@ -88,12 +89,12 @@ func (s *Service) VerifyBackupCode(ctx context.Context, userID, code string) (bo
 	// Mark code as used
 	now := time.Now()
 	backupCode.UsedAt = &now
+
 	_, err = s.repo.DB().NewUpdate().
 		Model(&backupCode).
 		Column("used_at").
 		Where("id = ?", backupCode.ID).
 		Exec(ctx)
-
 	if err != nil {
 		return false, fmt.Errorf("failed to mark backup code as used: %w", err)
 	}
@@ -101,9 +102,10 @@ func (s *Service) VerifyBackupCode(ctx context.Context, userID, code string) (bo
 	return true, nil
 }
 
-// generateBackupCode creates a cryptographically secure 8-character code
+// generateBackupCode creates a cryptographically secure 8-character code.
 func generateBackupCode() (string, error) {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // Excludes ambiguous chars (0, O, I, 1)
+
 	const codeLength = 8
 
 	bytes := make([]byte, codeLength)
@@ -112,7 +114,7 @@ func generateBackupCode() (string, error) {
 	}
 
 	code := make([]byte, codeLength)
-	for i := 0; i < codeLength; i++ {
+	for i := range codeLength {
 		code[i] = charset[int(bytes[i])%len(charset)]
 	}
 
@@ -120,16 +122,18 @@ func generateBackupCode() (string, error) {
 	return string(code[:4]) + "-" + string(code[4:]), nil
 }
 
-// hashBackupCode creates a SHA-256 hash of the backup code
+// hashBackupCode creates a SHA-256 hash of the backup code.
 func hashBackupCode(code string) string {
 	hash := sha256.Sum256([]byte(code))
+
 	return hex.EncodeToString(hash[:])
 }
 
-// normalizeBackupCode removes spaces, dashes, and converts to uppercase
+// normalizeBackupCode removes spaces, dashes, and converts to uppercase.
 func normalizeBackupCode(code string) string {
 	code = strings.ToUpper(code)
 	code = strings.ReplaceAll(code, " ", "")
 	code = strings.ReplaceAll(code, "-", "")
+
 	return code
 }

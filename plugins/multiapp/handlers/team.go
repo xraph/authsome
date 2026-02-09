@@ -13,19 +13,19 @@ import (
 	"github.com/xraph/forge"
 )
 
-// TeamHandler handles team-related HTTP requests
+// TeamHandler handles team-related HTTP requests.
 type TeamHandler struct {
 	appService *app.ServiceImpl
 }
 
-// NewTeamHandler creates a new team handler
+// NewTeamHandler creates a new team handler.
 func NewTeamHandler(appService *app.ServiceImpl) *TeamHandler {
 	return &TeamHandler{
 		appService: appService,
 	}
 }
 
-// CreateTeam handles team creation requests
+// CreateTeam handles team creation requests.
 func (h *TeamHandler) CreateTeam(c forge.Context) error {
 	appIDStr := c.Param("orgId")
 	if appIDStr == "" {
@@ -47,6 +47,7 @@ func (h *TeamHandler) CreateTeam(c forge.Context) error {
 	if req.Description != nil {
 		description = *req.Description
 	}
+
 	team := &app.Team{
 		ID:          xid.New(),
 		AppID:       appID,
@@ -63,7 +64,7 @@ func (h *TeamHandler) CreateTeam(c forge.Context) error {
 	return c.JSON(http.StatusCreated, team)
 }
 
-// GetTeam handles team retrieval requests
+// GetTeam handles team retrieval requests.
 func (h *TeamHandler) GetTeam(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -83,7 +84,7 @@ func (h *TeamHandler) GetTeam(c forge.Context) error {
 	return c.JSON(http.StatusOK, team)
 }
 
-// UpdateTeam handles team update requests
+// UpdateTeam handles team update requests.
 func (h *TeamHandler) UpdateTeam(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -110,9 +111,11 @@ func (h *TeamHandler) UpdateTeam(c forge.Context) error {
 	if req.Name != nil {
 		team.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		team.Description = *req.Description
 	}
+
 	team.UpdatedAt = time.Now()
 
 	// Save changes
@@ -123,7 +126,7 @@ func (h *TeamHandler) UpdateTeam(c forge.Context) error {
 	return c.JSON(http.StatusOK, team)
 }
 
-// DeleteTeam handles team deletion requests
+// DeleteTeam handles team deletion requests.
 func (h *TeamHandler) DeleteTeam(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -143,7 +146,7 @@ func (h *TeamHandler) DeleteTeam(c forge.Context) error {
 	return c.JSON(http.StatusNoContent, nil)
 }
 
-// ListTeams handles team listing requests
+// ListTeams handles team listing requests.
 func (h *TeamHandler) ListTeams(c forge.Context) error {
 	appIDStr := c.Param("orgId")
 	if appIDStr == "" {
@@ -155,6 +158,7 @@ func (h *TeamHandler) ListTeams(c forge.Context) error {
 	offsetStr := c.Request().URL.Query().Get("offset")
 
 	limit := 10 // default
+
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
@@ -162,6 +166,7 @@ func (h *TeamHandler) ListTeams(c forge.Context) error {
 	}
 
 	offset := 0 // default
+
 	if offsetStr != "" {
 		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
 			offset = o
@@ -186,13 +191,13 @@ func (h *TeamHandler) ListTeams(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"data":       response.Data,
 		"pagination": response.Pagination,
 	})
 }
 
-// AddTeamMember handles adding a member to a team
+// AddTeamMember handles adding a member to a team.
 func (h *TeamHandler) AddTeamMember(c forge.Context) error {
 	teamIDStr := c.Param("teamId")
 	if teamIDStr == "" {
@@ -229,7 +234,7 @@ func (h *TeamHandler) AddTeamMember(c forge.Context) error {
 	return c.JSON(http.StatusCreated, addedMember)
 }
 
-// RemoveTeamMember handles removing a member from a team
+// RemoveTeamMember handles removing a member from a team.
 func (h *TeamHandler) RemoveTeamMember(c forge.Context) error {
 	teamIDStr := c.Param("teamId")
 	if teamIDStr == "" {
@@ -254,6 +259,7 @@ func (h *TeamHandler) RemoveTeamMember(c forge.Context) error {
 	if teamID.IsNil() {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_TEAM_ID", "Team ID parameter is required", http.StatusBadRequest))
 	}
+
 	if memberID.IsNil() {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_MEMBER_ID", "Member ID parameter is required", http.StatusBadRequest))
 	}

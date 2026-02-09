@@ -28,7 +28,7 @@ func NewHandlerWithLogger(svc *Service, logger forge.Logger) *Handler {
 	}
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -45,7 +45,7 @@ func NewHandler(svc *Service) *Handler {
 // PROVIDER MANAGEMENT
 // =============================================================================
 
-// RegisterProvider registers a new SSO provider (SAML or OIDC)
+// RegisterProvider registers a new SSO provider (SAML or OIDC).
 func (h *Handler) RegisterProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -54,10 +54,12 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 	if !ok {
 		return c.JSON(http.StatusBadRequest, errs.RequiredField("app_id"))
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return c.JSON(http.StatusBadRequest, errs.RequiredField("environment_id"))
 	}
+
 	orgID, _ := contexts.GetOrganizationID(ctx) // Optional
 
 	// Parse request
@@ -103,6 +105,7 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 				forge.F("type", req.Type),
 				forge.F("error", err.Error()))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
@@ -128,13 +131,14 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 // SAML ENDPOINTS
 // =============================================================================
 
-// SAMLSPMetadata returns Service Provider metadata
+// SAMLSPMetadata returns Service Provider metadata.
 func (h *Handler) SAMLSPMetadata(c forge.Context) error {
 	md := h.svc.SPMetadata()
+
 	return c.JSON(http.StatusOK, MetadataResponse{Metadata: md})
 }
 
-// SAMLLogin initiates SAML authentication by generating AuthnRequest
+// SAMLLogin initiates SAML authentication by generating AuthnRequest.
 func (h *Handler) SAMLLogin(c forge.Context) error {
 	ctx := c.Request().Context()
 	pid := c.Param("providerId")
@@ -159,6 +163,7 @@ func (h *Handler) SAMLLogin(c forge.Context) error {
 
 	// Parse optional request body
 	var req SAMLLoginRequest
+
 	_ = c.BindJSON(&req) // Optional, ignore error
 
 	// Generate RelayState for CSRF protection
@@ -181,7 +186,7 @@ func (h *Handler) SAMLLogin(c forge.Context) error {
 	})
 }
 
-// SAMLCallback handles SAML response callback and provisions user
+// SAMLCallback handles SAML response callback and provisions user.
 func (h *Handler) SAMLCallback(c forge.Context) error {
 	ctx := c.Request().Context()
 	pid := c.Param("providerId")
@@ -205,6 +210,7 @@ func (h *Handler) SAMLCallback(c forge.Context) error {
 	if samlResponse == "" {
 		return c.JSON(http.StatusBadRequest, errs.RequiredField("SAMLResponse"))
 	}
+
 	relayState := c.Request().FormValue("RelayState")
 
 	// Validate SAML response with full security checks
@@ -242,6 +248,7 @@ func (h *Handler) SAMLCallback(c forge.Context) error {
 				forge.F("email", email),
 				forge.F("error", err.Error()))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
@@ -267,7 +274,7 @@ func (h *Handler) SAMLCallback(c forge.Context) error {
 // OIDC ENDPOINTS
 // =============================================================================
 
-// OIDCLogin initiates OIDC authentication flow with PKCE
+// OIDCLogin initiates OIDC authentication flow with PKCE.
 func (h *Handler) OIDCLogin(c forge.Context) error {
 	ctx := c.Request().Context()
 	pid := c.Param("providerId")
@@ -288,6 +295,7 @@ func (h *Handler) OIDCLogin(c forge.Context) error {
 
 	// Parse optional request body
 	var req OIDCLoginRequest
+
 	_ = c.BindJSON(&req) // Optional, ignore error
 
 	// Generate state and nonce if not provided
@@ -295,6 +303,7 @@ func (h *Handler) OIDCLogin(c forge.Context) error {
 	if state == "" {
 		state = generateRandomString(32)
 	}
+
 	nonce := req.Nonce
 	if nonce == "" {
 		nonce = generateRandomString(32)
@@ -310,6 +319,7 @@ func (h *Handler) OIDCLogin(c forge.Context) error {
 			if c.Request().TLS == nil {
 				scheme = "http"
 			}
+
 			redirectURI = fmt.Sprintf("%s://%s/api/auth/sso/oidc/callback/%s", scheme, c.Request().Host, pid)
 		}
 	}
@@ -337,6 +347,7 @@ func (h *Handler) OIDCLogin(c forge.Context) error {
 				forge.F("state", state),
 				forge.F("error", err.Error()))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
@@ -348,7 +359,7 @@ func (h *Handler) OIDCLogin(c forge.Context) error {
 	})
 }
 
-// OIDCCallback handles OIDC callback and provisions user
+// OIDCCallback handles OIDC callback and provisions user.
 func (h *Handler) OIDCCallback(c forge.Context) error {
 	ctx := c.Request().Context()
 	pid := c.Param("providerId")
@@ -375,6 +386,7 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 	if code == "" {
 		return c.JSON(http.StatusBadRequest, errs.RequiredField("code"))
 	}
+
 	if state == "" {
 		return c.JSON(http.StatusBadRequest, errs.RequiredField("state"))
 	}
@@ -387,6 +399,7 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 				forge.F("state", state),
 				forge.F("provider_id", pid))
 		}
+
 		return c.JSON(http.StatusBadRequest, errs.OIDCError("invalid or expired state parameter"))
 	}
 
@@ -397,6 +410,7 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 				forge.F("expected", pid),
 				forge.F("got", oidcState.ProviderID))
 		}
+
 		return c.JSON(http.StatusBadRequest, errs.OIDCError("state provider mismatch"))
 	}
 
@@ -413,6 +427,7 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 		if c.Request().TLS == nil {
 			scheme = "http"
 		}
+
 		redirectURI = fmt.Sprintf("%s://%s/api/auth/sso/oidc/callback/%s", scheme, c.Request().Host, pid)
 	}
 
@@ -423,8 +438,10 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 	}
 
 	// Validate and extract user info
-	var email string
-	var attributes map[string][]string
+	var (
+		email      string
+		attributes map[string][]string
+	)
 
 	if tokenResp.IDToken != "" {
 		// Validate ID token
@@ -482,6 +499,7 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 				forge.F("email", email),
 				forge.F("error", err.Error()))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 	}
 
@@ -506,12 +524,13 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 // HELPER FUNCTIONS
 // =============================================================================
 
-// generateRandomString generates a cryptographically secure random string
+// generateRandomString generates a cryptographically secure random string.
 func generateRandomString(length int) string {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
 		// Fallback to xid if random fails
 		return xid.New().String()
 	}
+
 	return strings.TrimRight(base64.URLEncoding.EncodeToString(bytes), "=")[:length]
 }

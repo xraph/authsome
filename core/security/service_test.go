@@ -25,6 +25,7 @@ func TestShouldTrustForwardedHeaders_AllTrusted(t *testing.T) {
 
 func TestShouldTrustForwardedHeaders_WithTrustedProxies(t *testing.T) {
 	s := NewService(noopRepo{}, Config{TrustProxyHeaders: true, TrustedProxies: []string{"10.0.0.0/8", "203.0.113.42"}})
+
 	cases := []struct {
 		ip   string
 		want bool

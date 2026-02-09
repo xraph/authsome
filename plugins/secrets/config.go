@@ -2,7 +2,7 @@ package secrets
 
 import "time"
 
-// Config holds the secrets plugin configuration
+// Config holds the secrets plugin configuration.
 type Config struct {
 	// Encryption settings
 	Encryption EncryptionConfig `json:"encryption" yaml:"encryption"`
@@ -23,7 +23,7 @@ type Config struct {
 	Dashboard DashboardConfig `json:"dashboard" yaml:"dashboard"`
 }
 
-// EncryptionConfig holds encryption settings
+// EncryptionConfig holds encryption settings.
 type EncryptionConfig struct {
 	// MasterKey is the base64-encoded 32-byte master key for encryption
 	// This should be set via AUTHSOME_SECRETS_MASTER_KEY environment variable
@@ -38,7 +38,7 @@ type EncryptionConfig struct {
 	TestOnStartup bool `json:"testOnStartup" yaml:"testOnStartup"`
 }
 
-// ConfigSourceConfig holds Forge ConfigSource integration settings
+// ConfigSourceConfig holds Forge ConfigSource integration settings.
 type ConfigSourceConfig struct {
 	// Enabled enables the Forge ConfigSource integration
 	// When enabled, secrets can be accessed via Forge's ConfigManager
@@ -63,7 +63,7 @@ type ConfigSourceConfig struct {
 	Priority int `json:"priority" yaml:"priority"`
 }
 
-// AccessConfig holds access control settings
+// AccessConfig holds access control settings.
 type AccessConfig struct {
 	// RequireAuthentication requires authentication for all secret access
 	// Default: true
@@ -87,7 +87,7 @@ type AccessConfig struct {
 	RateLimitPerMinute int `json:"rateLimitPerMinute" yaml:"rateLimitPerMinute"`
 }
 
-// VersioningConfig holds versioning settings
+// VersioningConfig holds versioning settings.
 type VersioningConfig struct {
 	// MaxVersions is the maximum number of versions to keep per secret
 	// When exceeded, old versions are automatically deleted
@@ -108,7 +108,7 @@ type VersioningConfig struct {
 	CleanupInterval time.Duration `json:"cleanupInterval" yaml:"cleanupInterval"`
 }
 
-// AuditConfig holds audit settings
+// AuditConfig holds audit settings.
 type AuditConfig struct {
 	// EnableAccessLog enables access logging for secrets
 	// Default: true
@@ -131,7 +131,7 @@ type AuditConfig struct {
 	AutoCleanup bool `json:"autoCleanup" yaml:"autoCleanup"`
 }
 
-// DashboardConfig holds dashboard-specific settings
+// DashboardConfig holds dashboard-specific settings.
 type DashboardConfig struct {
 	// EnableTreeView enables the tree view in the dashboard
 	// Default: true
@@ -154,7 +154,7 @@ type DashboardConfig struct {
 	EnableImport bool `json:"enableImport" yaml:"enableImport"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Encryption: EncryptionConfig{
@@ -198,11 +198,10 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	// Master key validation is done during encryption service initialization
 	// Additional validation can be added here as needed
-
 	if c.Versioning.MaxVersions < 1 {
 		c.Versioning.MaxVersions = 1
 	}
@@ -222,7 +221,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Merge merges another config into this one (non-zero values override)
+// Merge merges another config into this one (non-zero values override).
 func (c *Config) Merge(other *Config) {
 	if other == nil {
 		return
@@ -232,6 +231,7 @@ func (c *Config) Merge(other *Config) {
 	if other.Encryption.MasterKey != "" {
 		c.Encryption.MasterKey = other.Encryption.MasterKey
 	}
+
 	if other.Encryption.RotateKeyAfter > 0 {
 		c.Encryption.RotateKeyAfter = other.Encryption.RotateKeyAfter
 	}
@@ -240,12 +240,15 @@ func (c *Config) Merge(other *Config) {
 	if other.ConfigSource.Enabled {
 		c.ConfigSource.Enabled = other.ConfigSource.Enabled
 	}
+
 	if other.ConfigSource.Prefix != "" {
 		c.ConfigSource.Prefix = other.ConfigSource.Prefix
 	}
+
 	if other.ConfigSource.RefreshInterval > 0 {
 		c.ConfigSource.RefreshInterval = other.ConfigSource.RefreshInterval
 	}
+
 	if other.ConfigSource.Priority > 0 {
 		c.ConfigSource.Priority = other.ConfigSource.Priority
 	}
@@ -254,6 +257,7 @@ func (c *Config) Merge(other *Config) {
 	c.Access.RequireAuthentication = other.Access.RequireAuthentication
 	c.Access.RequireRBAC = other.Access.RequireRBAC
 	c.Access.AllowAPIAccess = other.Access.AllowAPIAccess
+
 	c.Access.AllowDashboardAccess = other.Access.AllowDashboardAccess
 	if other.Access.RateLimitPerMinute > 0 {
 		c.Access.RateLimitPerMinute = other.Access.RateLimitPerMinute
@@ -263,9 +267,11 @@ func (c *Config) Merge(other *Config) {
 	if other.Versioning.MaxVersions > 0 {
 		c.Versioning.MaxVersions = other.Versioning.MaxVersions
 	}
+
 	if other.Versioning.RetentionDays > 0 {
 		c.Versioning.RetentionDays = other.Versioning.RetentionDays
 	}
+
 	c.Versioning.AutoCleanup = other.Versioning.AutoCleanup
 	if other.Versioning.CleanupInterval > 0 {
 		c.Versioning.CleanupInterval = other.Versioning.CleanupInterval
@@ -274,18 +280,22 @@ func (c *Config) Merge(other *Config) {
 	// Audit
 	c.Audit.EnableAccessLog = other.Audit.EnableAccessLog
 	c.Audit.LogReads = other.Audit.LogReads
+
 	c.Audit.LogWrites = other.Audit.LogWrites
 	if other.Audit.RetentionDays > 0 {
 		c.Audit.RetentionDays = other.Audit.RetentionDays
 	}
+
 	c.Audit.AutoCleanup = other.Audit.AutoCleanup
 
 	// Dashboard
 	c.Dashboard.EnableTreeView = other.Dashboard.EnableTreeView
+
 	c.Dashboard.EnableReveal = other.Dashboard.EnableReveal
 	if other.Dashboard.RevealTimeout > 0 {
 		c.Dashboard.RevealTimeout = other.Dashboard.RevealTimeout
 	}
+
 	c.Dashboard.EnableExport = other.Dashboard.EnableExport
 	c.Dashboard.EnableImport = other.Dashboard.EnableImport
 }

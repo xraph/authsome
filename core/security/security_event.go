@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// SecurityEvent represents a logged security event
+// SecurityEvent represents a logged security event.
 type SecurityEvent struct {
 	ID        xid.ID    `json:"id"`
 	AppID     xid.ID    `json:"appId"`

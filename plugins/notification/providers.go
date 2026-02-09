@@ -7,14 +7,14 @@ import (
 	"github.com/xraph/authsome/plugins/notification/providers"
 )
 
-// Re-export provider config types
+// Re-export provider config types.
 type (
 	ResendConfig     = providers.ResendConfig
 	MailerSendConfig = providers.MailerSendConfig
 	PostmarkConfig   = providers.PostmarkConfig
 )
 
-// Re-export provider constructors
+// Re-export provider constructors.
 var (
 	NewResendProvider     = providers.NewResendProvider
 	NewMailerSendProvider = providers.NewMailerSendProvider

@@ -6,7 +6,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// UserAdapter adapts AuthSome User to WebAuthn User interface
+// UserAdapter adapts AuthSome User to WebAuthn User interface.
 type UserAdapter struct {
 	userID      xid.ID
 	userName    string
@@ -14,7 +14,7 @@ type UserAdapter struct {
 	credentials []webauthn.Credential
 }
 
-// NewUserAdapter creates a new user adapter for WebAuthn
+// NewUserAdapter creates a new user adapter for WebAuthn.
 func NewUserAdapter(userID xid.ID, userName, displayName string, passkeys []schema.Passkey) *UserAdapter {
 	adapter := &UserAdapter{
 		userID:      userID,
@@ -39,44 +39,46 @@ func NewUserAdapter(userID xid.ID, userName, displayName string, passkeys []sche
 	return adapter
 }
 
-// WebAuthnID returns the user's ID as bytes
+// WebAuthnID returns the user's ID as bytes.
 func (u *UserAdapter) WebAuthnID() []byte {
 	return []byte(u.userID.String())
 }
 
-// WebAuthnName returns the user's username
+// WebAuthnName returns the user's username.
 func (u *UserAdapter) WebAuthnName() string {
 	return u.userName
 }
 
-// WebAuthnDisplayName returns the user's display name
+// WebAuthnDisplayName returns the user's display name.
 func (u *UserAdapter) WebAuthnDisplayName() string {
 	if u.displayName != "" {
 		return u.displayName
 	}
+
 	return u.userName
 }
 
-// WebAuthnCredentials returns the user's credentials
+// WebAuthnCredentials returns the user's credentials.
 func (u *UserAdapter) WebAuthnCredentials() []webauthn.Credential {
 	return u.credentials
 }
 
-// WebAuthnIcon returns the user's icon URL (optional)
+// WebAuthnIcon returns the user's icon URL (optional).
 func (u *UserAdapter) WebAuthnIcon() string {
 	return ""
 }
 
-// AddCredential adds a new credential to the user adapter
+// AddCredential adds a new credential to the user adapter.
 func (u *UserAdapter) AddCredential(cred webauthn.Credential) {
 	u.credentials = append(u.credentials, cred)
 }
 
-// UpdateCredential updates an existing credential's sign count
+// UpdateCredential updates an existing credential's sign count.
 func (u *UserAdapter) UpdateCredential(credentialID []byte, signCount uint32) {
 	for i, cred := range u.credentials {
 		if string(cred.ID) == string(credentialID) {
 			u.credentials[i].Authenticator.SignCount = signCount
+
 			break
 		}
 	}

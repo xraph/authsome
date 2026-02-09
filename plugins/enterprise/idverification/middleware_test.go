@@ -47,6 +47,7 @@ func TestVerificationLevelHierarchy(t *testing.T) {
 		for j, requiredLevel := range levels {
 			t.Run(currentLevel+"_vs_"+requiredLevel, func(t *testing.T) {
 				result := meetsVerificationLevel(currentLevel, requiredLevel)
+
 				expected := i >= j
 				if result != expected {
 					t.Errorf("Expected %v for %s (level %d) vs %s (level %d), got %v",

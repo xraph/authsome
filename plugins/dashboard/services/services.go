@@ -117,6 +117,7 @@ func (s *Services) AuthMiddleware(next router.PageHandler) router.PageHandler {
 			// Invalid session - redirect to login
 			ctx.SetHeader("Location", s.basePath+"/auth/login")
 			ctx.ResponseWriter.WriteHeader(http.StatusFound)
+
 			return nil, nil
 		}
 
@@ -130,9 +131,11 @@ func (s *Services) AuthMiddleware(next router.PageHandler) router.PageHandler {
 		if user != nil && !user.ID.IsNil() {
 			goCtx = contexts.SetUserID(goCtx, user.ID)
 		}
+
 		if sess != nil && !sess.AppID.IsNil() {
 			goCtx = contexts.SetAppID(goCtx, sess.AppID)
 		}
+
 		ctx.Request = ctx.Request.WithContext(goCtx)
 
 		// Continue to next handler
@@ -141,7 +144,7 @@ func (s *Services) AuthMiddleware(next router.PageHandler) router.PageHandler {
 }
 
 // AppContextMiddleware injects app context into ForgeUI page context
-// AND enriches the Go context with app ID and environment ID for service layer access
+// AND enriches the Go context with app ID and environment ID for service layer access.
 func (s *Services) AppContextMiddleware(next router.PageHandler) router.PageHandler {
 	return func(ctx *router.PageContext) (g.Node, error) {
 		goCtx := ctx.Request.Context()
@@ -166,6 +169,7 @@ func (s *Services) AppContextMiddleware(next router.PageHandler) router.PageHand
 
 				// Try to get environment ID from cookie
 				envSet := false
+
 				if envCookie, err := ctx.Request.Cookie("authsome_environment"); err == nil && envCookie != nil && envCookie.Value != "" {
 					if envID, err := xid.FromString(envCookie.Value); err == nil && !envID.IsNil() {
 						goCtx = contexts.SetEnvironmentID(goCtx, envID)
@@ -198,6 +202,7 @@ func (s *Services) AuthlessMiddleware(next router.PageHandler) router.PageHandle
 		fmt.Println("sess", sess)
 		fmt.Println("err", err)
 		fmt.Println("-------------------------------- 1 --------------------------------", s.basePath)
+
 		if err == nil && user != nil && sess != nil {
 			fmt.Println("-------------------------------- 2 --------------------------------", s.basePath)
 			fmt.Println("user", user)
@@ -207,6 +212,7 @@ func (s *Services) AuthlessMiddleware(next router.PageHandler) router.PageHandle
 			// Invalid session - redirect to login
 			ctx.SetHeader("Location", s.basePath)
 			ctx.ResponseWriter.WriteHeader(http.StatusFound)
+
 			return nil, nil
 		}
 

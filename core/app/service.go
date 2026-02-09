@@ -9,7 +9,7 @@ import (
 )
 
 // ServiceImpl provides access to all app-related services
-// Internally delegates to focused services for better separation of concerns
+// Internally delegates to focused services for better separation of concerns.
 type ServiceImpl struct {
 	App        *AppService
 	Member     *MemberService
@@ -17,7 +17,7 @@ type ServiceImpl struct {
 	Invitation *InvitationService
 }
 
-// NewService creates a new service with all focused services
+// NewService creates a new service with all focused services.
 func NewService(
 	appRepo AppRepository,
 	memberRepo MemberRepository,
@@ -245,7 +245,7 @@ func (s *ServiceImpl) CleanupExpiredInvitations(ctx context.Context) (int, error
 // =============================================================================
 
 // CheckPermission checks if a user has permission to perform an action on a resource.
-// This would typically be implemented in a shared RBAC helper or in the MemberService
+// This would typically be implemented in a shared RBAC helper or in the MemberService.
 func (s *ServiceImpl) CheckPermission(ctx context.Context, userID, appID xid.ID, action, resourceType, resourceID string) (bool, error) {
 	// TODO: Implement RBAC check - likely needs to be in a shared location
 	// For now, delegate to member service if it has RBAC methods
@@ -270,5 +270,5 @@ func (s *ServiceImpl) RequirePermissionWithContext(ctx context.Context, userID, 
 	return nil
 }
 
-// Type assertion to ensure ServiceImpl implements Service
+// Type assertion to ensure ServiceImpl implements Service.
 var _ Service = (*ServiceImpl)(nil)

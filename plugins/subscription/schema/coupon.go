@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SubscriptionCoupon represents a coupon in the database
+// SubscriptionCoupon represents a coupon in the database.
 type SubscriptionCoupon struct {
 	bun.BaseModel `bun:"table:subscription_coupons,alias:scp"`
 
@@ -40,7 +40,7 @@ type SubscriptionCoupon struct {
 	UpdatedAt            time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionCouponRedemption represents a coupon redemption in the database
+// SubscriptionCouponRedemption represents a coupon redemption in the database.
 type SubscriptionCouponRedemption struct {
 	bun.BaseModel `bun:"table:subscription_coupon_redemptions,alias:scr"`
 
@@ -59,7 +59,7 @@ type SubscriptionCouponRedemption struct {
 	Coupon *SubscriptionCoupon `bun:"rel:belongs-to,join:coupon_id=id"`
 }
 
-// SubscriptionPromotionCode represents a promotion code in the database
+// SubscriptionPromotionCode represents a promotion code in the database.
 type SubscriptionPromotionCode struct {
 	bun.BaseModel `bun:"table:subscription_promotion_codes,alias:spc"`
 

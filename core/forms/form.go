@@ -8,75 +8,75 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Form represents a form configuration
+// Form represents a form configuration.
 type Form struct {
-	ID          xid.ID                 `json:"id"`
-	AppID       xid.ID                 `json:"appId"`
-	Type        string                 `json:"type"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Schema      map[string]interface{} `json:"schema"`
-	IsActive    bool                   `json:"isActive"`
-	Version     int                    `json:"version"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
+	ID          xid.ID         `json:"id"`
+	AppID       xid.ID         `json:"appId"`
+	Type        string         `json:"type"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Schema      map[string]any `json:"schema"`
+	IsActive    bool           `json:"isActive"`
+	Version     int            `json:"version"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 }
 
-// FormField represents a form field configuration
+// FormField represents a form field configuration.
 type FormField struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Label       string                 `json:"label"`
-	Placeholder string                 `json:"placeholder"`
-	Required    bool                   `json:"required"`
-	Validation  map[string]interface{} `json:"validation"`
-	Options     []string               `json:"options,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID          string         `json:"id"`
+	Type        string         `json:"type"`
+	Label       string         `json:"label"`
+	Placeholder string         `json:"placeholder"`
+	Required    bool           `json:"required"`
+	Validation  map[string]any `json:"validation"`
+	Options     []string       `json:"options,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
-// FormSubmission represents a form submission
+// FormSubmission represents a form submission.
 type FormSubmission struct {
-	ID           xid.ID                 `json:"id"`
-	FormSchemaID xid.ID                 `json:"formSchemaId"`
-	UserID       *xid.ID                `json:"userId"`
-	SessionID    *xid.ID                `json:"sessionId"`
-	Data         map[string]interface{} `json:"data"`
-	IPAddress    string                 `json:"ipAddress"`
-	UserAgent    string                 `json:"userAgent"`
-	Status       string                 `json:"status"`
-	CreatedAt    time.Time              `json:"createdAt"`
-	UpdatedAt    time.Time              `json:"updatedAt"`
+	ID           xid.ID         `json:"id"`
+	FormSchemaID xid.ID         `json:"formSchemaId"`
+	UserID       *xid.ID        `json:"userId"`
+	SessionID    *xid.ID        `json:"sessionId"`
+	Data         map[string]any `json:"data"`
+	IPAddress    string         `json:"ipAddress"`
+	UserAgent    string         `json:"userAgent"`
+	Status       string         `json:"status"`
+	CreatedAt    time.Time      `json:"createdAt"`
+	UpdatedAt    time.Time      `json:"updatedAt"`
 }
 
-// CreateFormRequest represents a request to create a new form
+// CreateFormRequest represents a request to create a new form.
 type CreateFormRequest struct {
-	AppID       xid.ID                 `json:"appId"`
-	Type        string                 `json:"type"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Schema      map[string]interface{} `json:"schema"`
+	AppID       xid.ID         `json:"appId"`
+	Type        string         `json:"type"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Schema      map[string]any `json:"schema"`
 }
 
-// UpdateFormRequest represents a request to update a form
+// UpdateFormRequest represents a request to update a form.
 type UpdateFormRequest struct {
-	ID          xid.ID                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Schema      map[string]interface{} `json:"schema"`
-	IsActive    bool                   `json:"isActive"`
+	ID          xid.ID         `json:"id"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Schema      map[string]any `json:"schema"`
+	IsActive    bool           `json:"isActive"`
 }
 
-// SubmitFormRequest represents a request to submit a form
+// SubmitFormRequest represents a request to submit a form.
 type SubmitFormRequest struct {
-	FormSchemaID xid.ID                 `json:"formSchemaId"`
-	UserID       *xid.ID                `json:"userId"`
-	SessionID    *xid.ID                `json:"sessionId"`
-	Data         map[string]interface{} `json:"data"`
-	IPAddress    string                 `json:"ipAddress"`
-	UserAgent    string                 `json:"userAgent"`
+	FormSchemaID xid.ID         `json:"formSchemaId"`
+	UserID       *xid.ID        `json:"userId"`
+	SessionID    *xid.ID        `json:"sessionId"`
+	Data         map[string]any `json:"data"`
+	IPAddress    string         `json:"ipAddress"`
+	UserAgent    string         `json:"userAgent"`
 }
 
-// ListFormsRequest represents a request to list forms
+// ListFormsRequest represents a request to list forms.
 type ListFormsRequest struct {
 	OrganizationID xid.ID `json:"organizationId"`
 	Type           string `json:"type,omitempty"`
@@ -84,7 +84,7 @@ type ListFormsRequest struct {
 	PageSize       int    `json:"pageSize"`
 }
 
-// ListFormsResponse represents a response with forms list
+// ListFormsResponse represents a response with forms list.
 type ListFormsResponse struct {
 	Forms      []*Form `json:"forms"`
 	Total      int     `json:"total"`
@@ -93,7 +93,7 @@ type ListFormsResponse struct {
 	TotalPages int     `json:"totalPages"`
 }
 
-// Repository defines the interface for form data access
+// Repository defines the interface for form data access.
 type Repository interface {
 	// Form management
 	Create(ctx context.Context, form *schema.FormSchema) error
@@ -110,31 +110,31 @@ type Repository interface {
 	GetSubmissionsByUser(ctx context.Context, userID xid.ID, page, pageSize int) ([]*schema.FormSubmission, int, error)
 }
 
-// Config represents the forms configuration
+// Config represents the forms configuration.
 type Config struct {
-	DefaultFormType string                 `json:"defaultFormType"`
-	MaxFieldCount   int                    `json:"maxFieldCount"`
-	MaxFileSize     int64                  `json:"maxFileSize"`
-	AllowedTypes    []string               `json:"allowedTypes"`
-	ValidationRules map[string]interface{} `json:"validationRules"`
+	DefaultFormType string         `json:"defaultFormType"`
+	MaxFieldCount   int            `json:"maxFieldCount"`
+	MaxFileSize     int64          `json:"maxFileSize"`
+	AllowedTypes    []string       `json:"allowedTypes"`
+	ValidationRules map[string]any `json:"validationRules"`
 }
 
-// DefaultConfig returns the default forms configuration
+// DefaultConfig returns the default forms configuration.
 func DefaultConfig() Config {
 	return Config{
 		DefaultFormType: "signup",
 		MaxFieldCount:   50,
 		MaxFileSize:     10 * 1024 * 1024, // 10MB
 		AllowedTypes:    []string{"signup", "signin", "profile", "contact", "survey"},
-		ValidationRules: map[string]interface{}{
-			"email": map[string]interface{}{
+		ValidationRules: map[string]any{
+			"email": map[string]any{
 				"pattern": `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`,
 			},
-			"password": map[string]interface{}{
+			"password": map[string]any{
 				"minLength": 8,
 				"maxLength": 128,
 			},
-			"phone": map[string]interface{}{
+			"phone": map[string]any{
 				"pattern": `^\+?[1-9]\d{1,14}$`,
 			},
 		},

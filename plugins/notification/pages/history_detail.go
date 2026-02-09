@@ -6,7 +6,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// notificationDetailModal renders a modal for viewing notification details
+// notificationDetailModal renders a modal for viewing notification details.
 func notificationDetailModal(basePath string, appID string) g.Node {
 	return Div(
 		g.Attr("x-show", "showDetailModal"),

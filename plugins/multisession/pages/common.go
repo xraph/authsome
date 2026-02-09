@@ -19,7 +19,7 @@ import (
 // Common Components
 // =============================================================================
 
-// PageHeader renders a standard page header with title, description, and optional actions
+// PageHeader renders a standard page header with title, description, and optional actions.
 func PageHeader(title, description string, actions ...g.Node) g.Node {
 	titleSection := primitives.VStack("gap-1",
 		H1(Class("text-2xl font-bold"), g.Text(title)),
@@ -35,10 +35,11 @@ func PageHeader(title, description string, actions ...g.Node) g.Node {
 			primitives.HStack("gap-2", actions...),
 		)
 	}
+
 	return Div(Class("mb-6"), titleSection)
 }
 
-// PageHeaderWithBack renders a page header with back navigation
+// PageHeaderWithBack renders a page header with back navigation.
 func PageHeaderWithBack(backHref, backText, title, description string, actions ...g.Node) g.Node {
 	return Div(
 		Class("space-y-4 mb-6"),
@@ -47,7 +48,7 @@ func PageHeaderWithBack(backHref, backText, title, description string, actions .
 	)
 }
 
-// BackLink renders a back navigation link
+// BackLink renders a back navigation link.
 func BackLink(href, text string) g.Node {
 	return A(
 		Href(href),
@@ -57,12 +58,13 @@ func BackLink(href, text string) g.Node {
 	)
 }
 
-// PrimaryButton creates a primary action button using ForgeUI
+// PrimaryButton creates a primary action button using ForgeUI.
 func PrimaryButton(href, text string, icon g.Node) g.Node {
 	content := Div(g.Text(text))
 	if icon != nil {
 		content = Div(Class("flex items-center gap-2"), icon, g.Text(text))
 	}
+
 	return button.Button(
 		content,
 		button.WithVariant("default"),
@@ -72,12 +74,13 @@ func PrimaryButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// SecondaryButton creates a secondary action button
+// SecondaryButton creates a secondary action button.
 func SecondaryButton(href, text string, icon g.Node) g.Node {
 	content := Div(g.Text(text))
 	if icon != nil {
 		content = Div(Class("flex items-center gap-2"), icon, g.Text(text))
 	}
+
 	return button.Button(
 		content,
 		button.WithVariant("outline"),
@@ -87,12 +90,13 @@ func SecondaryButton(href, text string, icon g.Node) g.Node {
 	)
 }
 
-// DangerButton creates a danger/destructive action button
+// DangerButton creates a danger/destructive action button.
 func DangerButton(onclick, text string, icon g.Node) g.Node {
 	content := Div(g.Text(text))
 	if icon != nil {
 		content = Div(Class("flex items-center gap-2"), icon, g.Text(text))
 	}
+
 	return button.Button(
 		content,
 		button.WithVariant("destructive"),
@@ -103,7 +107,7 @@ func DangerButton(onclick, text string, icon g.Node) g.Node {
 	)
 }
 
-// RefreshButton creates a refresh button with loading state
+// RefreshButton creates a refresh button with loading state.
 func RefreshButton(loadFn string) g.Node {
 	return button.Button(
 		Div(
@@ -124,10 +128,11 @@ func RefreshButton(loadFn string) g.Node {
 // Card Components
 // =============================================================================
 
-// StatsCard renders a statistics card with dynamic value
+// StatsCard renders a statistics card with dynamic value.
 func StatsCard(label, xDataValue, colorClass string, icon g.Node) g.Node {
 	iconBgClass := "bg-primary/10"
 	iconTextClass := "text-primary"
+
 	switch colorClass {
 	case "blue":
 		iconBgClass = "bg-blue-100 dark:bg-blue-900/30"
@@ -166,7 +171,7 @@ func StatsCard(label, xDataValue, colorClass string, icon g.Node) g.Node {
 	)
 }
 
-// DetailCard renders a card with a header icon and content
+// DetailCard renders a card with a header icon and content.
 func DetailCard(title string, icon g.Node, content ...g.Node) g.Node {
 	return card.Card(
 		card.Header(
@@ -187,9 +192,10 @@ func DetailCard(title string, icon g.Node, content ...g.Node) g.Node {
 // Badge Components
 // =============================================================================
 
-// StatusBadge renders a session status badge (active, expiring, expired)
+// StatusBadge renders a session status badge (active, expiring, expired).
 func StatusBadge(xShowCondition, status string) g.Node {
 	var badgeClass, displayText string
+
 	switch status {
 	case "active":
 		badgeClass = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-transparent"
@@ -212,7 +218,7 @@ func StatusBadge(xShowCondition, status string) g.Node {
 	)
 }
 
-// DynamicStatusBadge renders a status badge that changes based on Alpine.js data
+// DynamicStatusBadge renders a status badge that changes based on Alpine.js data.
 func DynamicStatusBadge() g.Node {
 	return Span(
 		g.Attr("x-text", "session.status === 'active' ? 'Active' : (session.status === 'expiring' ? 'Expiring Soon' : 'Expired')"),
@@ -225,10 +231,13 @@ func DynamicStatusBadge() g.Node {
 	)
 }
 
-// DeviceBadge renders a device type badge
+// DeviceBadge renders a device type badge.
 func DeviceBadge(deviceType string) g.Node {
-	var badgeClass, displayText string
-	var icon g.Node
+	var (
+		badgeClass, displayText string
+		icon                    g.Node
+	)
+
 	switch deviceType {
 	case "mobile":
 		badgeClass = "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
@@ -260,7 +269,7 @@ func DeviceBadge(deviceType string) g.Node {
 // Form Components
 // =============================================================================
 
-// SearchInput renders a search input with Alpine.js binding
+// SearchInput renders a search input with Alpine.js binding.
 func SearchInput(placeholder, xModel, debounceAction string) g.Node {
 	return Div(
 		Class("relative flex-1 max-w-sm"),
@@ -280,7 +289,7 @@ func SearchInput(placeholder, xModel, debounceAction string) g.Node {
 	)
 }
 
-// FilterSelect renders a select dropdown for filtering
+// FilterSelect renders a select dropdown for filtering.
 func FilterSelect(label, xModel, onChange string, options []FilterOption) g.Node {
 	optionNodes := make([]g.Node, len(options))
 	for i, opt := range options {
@@ -302,13 +311,13 @@ func FilterSelect(label, xModel, onChange string, options []FilterOption) g.Node
 	)
 }
 
-// FilterOption represents an option for a filter select
+// FilterOption represents an option for a filter select.
 type FilterOption struct {
 	Value string
 	Label string
 }
 
-// ViewToggle renders a grid/list view toggle
+// ViewToggle renders a grid/list view toggle.
 func ViewToggle(xModel string) g.Node {
 	return Div(
 		Class("flex items-center rounded-lg border border-input bg-background p-1"),
@@ -333,7 +342,7 @@ func ViewToggle(xModel string) g.Node {
 // State Components
 // =============================================================================
 
-// LoadingSpinner renders a loading spinner
+// LoadingSpinner renders a loading spinner.
 func LoadingSpinner() g.Node {
 	return Div(
 		Class("flex items-center justify-center py-12"),
@@ -343,7 +352,7 @@ func LoadingSpinner() g.Node {
 	)
 }
 
-// ErrorMessage renders an error message
+// ErrorMessage renders an error message.
 func ErrorMessage(xShowCondition string) g.Node {
 	return Div(
 		g.Attr("x-show", xShowCondition),
@@ -357,7 +366,7 @@ func ErrorMessage(xShowCondition string) g.Node {
 	)
 }
 
-// EmptyState renders an empty state message
+// EmptyState renders an empty state message.
 func EmptyState(icon g.Node, title, description string) g.Node {
 	return emptystate.EmptyState(
 		emptystate.WithIcon(icon),
@@ -370,7 +379,7 @@ func EmptyState(icon g.Node, title, description string) g.Node {
 // Pagination Component
 // =============================================================================
 
-// Pagination renders pagination controls with Alpine.js
+// Pagination renders pagination controls with Alpine.js.
 func Pagination(goToPageFn string) g.Node {
 	return Div(
 		g.Attr("x-show", "pagination.totalPages > 1"),
@@ -438,7 +447,7 @@ func Pagination(goToPageFn string) g.Node {
 // Detail Row Component
 // =============================================================================
 
-// DetailRow renders a label-value pair with an icon
+// DetailRow renders a label-value pair with an icon.
 func DetailRow(label, xTextValue string, icon g.Node) g.Node {
 	return Div(
 		Class("flex items-start gap-3"),
@@ -454,7 +463,7 @@ func DetailRow(label, xTextValue string, icon g.Node) g.Node {
 	)
 }
 
-// StaticDetailRow renders a static label-value pair with an icon
+// StaticDetailRow renders a static label-value pair with an icon.
 func StaticDetailRow(label, value string, icon g.Node) g.Node {
 	return Div(
 		Class("flex items-start gap-3"),
@@ -470,7 +479,7 @@ func StaticDetailRow(label, value string, icon g.Node) g.Node {
 // Device Icon Component
 // =============================================================================
 
-// DeviceIcon returns an icon based on device type
+// DeviceIcon returns an icon based on device type.
 func DeviceIcon(xDeviceType string) g.Node {
 	return Div(
 		// Mobile
@@ -492,7 +501,7 @@ func DeviceIcon(xDeviceType string) g.Node {
 // Confirmation Dialog
 // =============================================================================
 
-// ConfirmDialog renders a confirmation dialog with Alpine.js
+// ConfirmDialog renders a confirmation dialog with Alpine.js.
 func ConfirmDialog(xShowVar, title, message, confirmText, onConfirm string) g.Node {
 	return Div(
 		g.Attr("x-show", xShowVar),

@@ -2,6 +2,7 @@ package environment
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -9,13 +10,13 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Service handles environment-related business logic
+// Service handles environment-related business logic.
 type Service struct {
 	repo   Repository
 	config Config
 }
 
-// Config holds the environment service configuration
+// Config holds the environment service configuration.
 type Config struct {
 	AutoCreateDev                  bool     `json:"autoCreateDev"`
 	DefaultDevName                 string   `json:"defaultDevName"`
@@ -25,15 +26,17 @@ type Config struct {
 	AllowedTypes                   []string `json:"allowedTypes"`
 }
 
-// NewService creates a new environment service
+// NewService creates a new environment service.
 func NewService(repo Repository, config Config) *Service {
 	// Set defaults
 	if config.DefaultDevName == "" {
 		config.DefaultDevName = "Development"
 	}
+
 	if config.MaxEnvironmentsPerApp == 0 {
 		config.MaxEnvironmentsPerApp = 10
 	}
+
 	if len(config.AllowedTypes) == 0 {
 		config.AllowedTypes = []string{
 			schema.EnvironmentTypeDevelopment,
@@ -50,7 +53,7 @@ func NewService(repo Repository, config Config) *Service {
 	}
 }
 
-// CreateEnvironment creates a new environment
+// CreateEnvironment creates a new environment.
 func (s *Service) CreateEnvironment(ctx context.Context, req *CreateEnvironmentRequest) (*Environment, error) {
 	// Validate environment type
 	if !s.isAllowedType(req.Type) {
@@ -62,6 +65,7 @@ func (s *Service) CreateEnvironment(ctx context.Context, req *CreateEnvironmentR
 	if err != nil {
 		return nil, err
 	}
+
 	if count >= s.config.MaxEnvironmentsPerApp {
 		return nil, EnvironmentLimitReached(s.config.MaxEnvironmentsPerApp)
 	}
@@ -95,7 +99,7 @@ func (s *Service) CreateEnvironment(ctx context.Context, req *CreateEnvironmentR
 	return env, nil
 }
 
-// CreateDefaultEnvironment creates the default dev environment for an app
+// CreateDefaultEnvironment creates the default dev environment for an app.
 func (s *Service) CreateDefaultEnvironment(ctx context.Context, appID xid.ID) (*Environment, error) {
 	// Check if default environment already exists
 	existing, err := s.repo.FindDefaultByApp(ctx, appID)
@@ -111,7 +115,7 @@ func (s *Service) CreateDefaultEnvironment(ctx context.Context, appID xid.ID) (*
 		Slug:      "dev",
 		Type:      schema.EnvironmentTypeDevelopment,
 		Status:    schema.EnvironmentStatusActive,
-		Config:    make(map[string]interface{}),
+		Config:    make(map[string]any),
 		IsDefault: true,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -124,34 +128,37 @@ func (s *Service) CreateDefaultEnvironment(ctx context.Context, appID xid.ID) (*
 	return env, nil
 }
 
-// GetEnvironment retrieves an environment by ID
+// GetEnvironment retrieves an environment by ID.
 func (s *Service) GetEnvironment(ctx context.Context, id xid.ID) (*Environment, error) {
 	schemaEnv, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, EnvironmentNotFound(id.String())
 	}
+
 	return FromSchemaEnvironment(schemaEnv), nil
 }
 
-// GetEnvironmentBySlug retrieves an environment by app and slug
+// GetEnvironmentBySlug retrieves an environment by app and slug.
 func (s *Service) GetEnvironmentBySlug(ctx context.Context, appID xid.ID, slug string) (*Environment, error) {
 	schemaEnv, err := s.repo.FindByAppAndSlug(ctx, appID, slug)
 	if err != nil {
 		return nil, EnvironmentNotFound(slug)
 	}
+
 	return FromSchemaEnvironment(schemaEnv), nil
 }
 
-// GetDefaultEnvironment retrieves the default environment for an app
+// GetDefaultEnvironment retrieves the default environment for an app.
 func (s *Service) GetDefaultEnvironment(ctx context.Context, appID xid.ID) (*Environment, error) {
 	schemaEnv, err := s.repo.FindDefaultByApp(ctx, appID)
 	if err != nil {
 		return nil, DefaultEnvironmentNotFound(appID.String())
 	}
+
 	return FromSchemaEnvironment(schemaEnv), nil
 }
 
-// ListEnvironments lists environments for an app with pagination
+// ListEnvironments lists environments for an app with pagination.
 func (s *Service) ListEnvironments(ctx context.Context, filter *ListEnvironmentsFilter) (*ListEnvironmentsResponse, error) {
 	// Get paginated results from repository
 	pageResp, err := s.repo.ListEnvironments(ctx, filter)
@@ -170,7 +177,7 @@ func (s *Service) ListEnvironments(ctx context.Context, filter *ListEnvironments
 	}, nil
 }
 
-// UpdateEnvironment updates an environment
+// UpdateEnvironment updates an environment.
 func (s *Service) UpdateEnvironment(ctx context.Context, id xid.ID, req *UpdateEnvironmentRequest) (*Environment, error) {
 	schemaEnv, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -186,12 +193,15 @@ func (s *Service) UpdateEnvironment(ctx context.Context, id xid.ID, req *UpdateE
 	if req.Name != nil {
 		schemaEnv.Name = *req.Name
 	}
+
 	if req.Status != nil {
 		schemaEnv.Status = *req.Status
 	}
+
 	if req.Config != nil {
 		schemaEnv.Config = req.Config
 	}
+
 	schemaEnv.UpdatedAt = time.Now().UTC()
 
 	if err := s.repo.Update(ctx, schemaEnv); err != nil {
@@ -201,7 +211,7 @@ func (s *Service) UpdateEnvironment(ctx context.Context, id xid.ID, req *UpdateE
 	return FromSchemaEnvironment(schemaEnv), nil
 }
 
-// DeleteEnvironment deletes an environment
+// DeleteEnvironment deletes an environment.
 func (s *Service) DeleteEnvironment(ctx context.Context, id xid.ID) error {
 	schemaEnv, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -221,7 +231,7 @@ func (s *Service) DeleteEnvironment(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// PromoteEnvironment promotes/clones one environment to another
+// PromoteEnvironment promotes/clones one environment to another.
 func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmentRequest) (*Promotion, error) {
 	if !s.config.AllowPromotion {
 		return nil, PromotionNotAllowed()
@@ -254,7 +264,7 @@ func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmen
 			Slug:      req.TargetSlug,
 			Type:      req.TargetType,
 			Status:    schema.EnvironmentStatusActive,
-			Config:    make(map[string]interface{}),
+			Config:    make(map[string]any),
 			IsDefault: false,
 			AuditableModel: schema.AuditableModel{
 				CreatedAt: now,
@@ -290,6 +300,7 @@ func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmen
 		promotion.Status = schema.PromotionStatusFailed
 		promotion.ErrorMessage = err.Error()
 		s.repo.UpdatePromotion(ctx, promotion.ToSchema())
+
 		return nil, PromotionFailed(err.Error())
 	}
 
@@ -302,7 +313,7 @@ func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmen
 	return promotion, nil
 }
 
-// executePromotion performs the actual promotion/cloning
+// executePromotion performs the actual promotion/cloning.
 func (s *Service) executePromotion(ctx context.Context, promotion *schema.EnvironmentPromotion, source, target *schema.Environment) error {
 	// Update status to in progress
 	promotion.Status = schema.PromotionStatusInProgress
@@ -334,16 +345,17 @@ func (s *Service) executePromotion(ctx context.Context, promotion *schema.Enviro
 	return nil
 }
 
-// GetPromotion retrieves a promotion by ID
+// GetPromotion retrieves a promotion by ID.
 func (s *Service) GetPromotion(ctx context.Context, id xid.ID) (*Promotion, error) {
 	schemaPromotion, err := s.repo.FindPromotionByID(ctx, id)
 	if err != nil {
 		return nil, PromotionNotFound(id.String())
 	}
+
 	return FromSchemaPromotion(schemaPromotion), nil
 }
 
-// ListPromotions lists promotions for an app with pagination
+// ListPromotions lists promotions for an app with pagination.
 func (s *Service) ListPromotions(ctx context.Context, filter *ListPromotionsFilter) (*ListPromotionsResponse, error) {
 	// Get paginated results from repository
 	pageResp, err := s.repo.ListPromotions(ctx, filter)
@@ -369,10 +381,6 @@ func (s *Service) ListPromotions(ctx context.Context, filter *ListPromotionsFilt
 // =============================================================================
 
 func (s *Service) isAllowedType(envType string) bool {
-	for _, allowed := range s.config.AllowedTypes {
-		if envType == allowed {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(s.config.AllowedTypes, envType)
 }

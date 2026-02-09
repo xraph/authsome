@@ -25,7 +25,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// TestHandler_BeginRegister tests the BeginRegister handler
+// TestHandler_BeginRegister tests the BeginRegister handler.
 func TestHandler_BeginRegister(t *testing.T) {
 	db, service := setupTestService(t)
 	defer db.Close()
@@ -59,7 +59,7 @@ func TestHandler_BeginRegister(t *testing.T) {
 	assert.Greater(t, resp.Timeout, time.Duration(0))
 }
 
-// TestService_RegistrationFlow tests complete registration flow
+// TestService_RegistrationFlow tests complete registration flow.
 func TestService_RegistrationFlow(t *testing.T) {
 	db, service := setupTestService(t)
 	defer db.Close()
@@ -85,7 +85,7 @@ func TestService_RegistrationFlow(t *testing.T) {
 	assert.NotEmpty(t, beginResp.Challenge)
 }
 
-// TestService_List tests listing passkeys
+// TestService_List tests listing passkeys.
 func TestService_List(t *testing.T) {
 	db, service := setupTestService(t)
 	defer db.Close()
@@ -106,8 +106,8 @@ func TestService_List(t *testing.T) {
 		SignCount:         0,
 		AppID:             appID,
 	}
-	passkey1.AuditableModel.CreatedBy = passkey1.ID
-	passkey1.AuditableModel.UpdatedBy = passkey1.ID
+	passkey1.CreatedBy = passkey1.ID
+	passkey1.UpdatedBy = passkey1.ID
 
 	passkey2 := &schema.Passkey{
 		ID:                xid.New(),
@@ -119,8 +119,8 @@ func TestService_List(t *testing.T) {
 		SignCount:         5,
 		AppID:             appID,
 	}
-	passkey2.AuditableModel.CreatedBy = passkey2.ID
-	passkey2.AuditableModel.UpdatedBy = passkey2.ID
+	passkey2.CreatedBy = passkey2.ID
+	passkey2.UpdatedBy = passkey2.ID
 
 	_, err := db.NewInsert().Model(passkey1).Exec(ctx)
 	require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestService_List(t *testing.T) {
 	}
 }
 
-// TestService_Update tests updating passkey metadata
+// TestService_Update tests updating passkey metadata.
 func TestService_Update(t *testing.T) {
 	db, service := setupTestService(t)
 	defer db.Close()
@@ -161,8 +161,8 @@ func TestService_Update(t *testing.T) {
 		AuthenticatorType: "platform",
 		AppID:             appID,
 	}
-	passkey.AuditableModel.CreatedBy = passkey.ID
-	passkey.AuditableModel.UpdatedBy = passkey.ID
+	passkey.CreatedBy = passkey.ID
+	passkey.UpdatedBy = passkey.ID
 
 	_, err := db.NewInsert().Model(passkey).Exec(ctx)
 	require.NoError(t, err)
@@ -176,12 +176,13 @@ func TestService_Update(t *testing.T) {
 
 	// Verify database was updated
 	var updated schema.Passkey
+
 	err = db.NewSelect().Model(&updated).Where("id = ?", passkey.ID).Scan(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, newName, updated.Name)
 }
 
-// TestService_Delete tests deleting a passkey
+// TestService_Delete tests deleting a passkey.
 func TestService_Delete(t *testing.T) {
 	db, service := setupTestService(t)
 	defer db.Close()
@@ -201,8 +202,8 @@ func TestService_Delete(t *testing.T) {
 		AuthenticatorType: "platform",
 		AppID:             appID,
 	}
-	passkey.AuditableModel.CreatedBy = passkey.ID
-	passkey.AuditableModel.UpdatedBy = passkey.ID
+	passkey.CreatedBy = passkey.ID
+	passkey.UpdatedBy = passkey.ID
 
 	_, err := db.NewInsert().Model(passkey).Exec(ctx)
 	require.NoError(t, err)
@@ -217,7 +218,7 @@ func TestService_Delete(t *testing.T) {
 	assert.False(t, exists)
 }
 
-// TestService_AppOrgScoping tests that passkeys are properly scoped to app and org
+// TestService_AppOrgScoping tests that passkeys are properly scoped to app and org.
 func TestService_AppOrgScoping(t *testing.T) {
 	db, service := setupTestService(t)
 	defer db.Close()
@@ -237,8 +238,8 @@ func TestService_AppOrgScoping(t *testing.T) {
 		AppID:              app1,
 		UserOrganizationID: nil,
 	}
-	passkey1.AuditableModel.CreatedBy = passkey1.ID
-	passkey1.AuditableModel.UpdatedBy = passkey1.ID
+	passkey1.CreatedBy = passkey1.ID
+	passkey1.UpdatedBy = passkey1.ID
 
 	passkey2 := &schema.Passkey{
 		ID:                 xid.New(),
@@ -248,8 +249,8 @@ func TestService_AppOrgScoping(t *testing.T) {
 		AppID:              app1,
 		UserOrganizationID: &org1,
 	}
-	passkey2.AuditableModel.CreatedBy = passkey2.ID
-	passkey2.AuditableModel.UpdatedBy = passkey2.ID
+	passkey2.CreatedBy = passkey2.ID
+	passkey2.UpdatedBy = passkey2.ID
 
 	passkey3 := &schema.Passkey{
 		ID:                 xid.New(),
@@ -259,8 +260,8 @@ func TestService_AppOrgScoping(t *testing.T) {
 		AppID:              app2,
 		UserOrganizationID: nil,
 	}
-	passkey3.AuditableModel.CreatedBy = passkey3.ID
-	passkey3.AuditableModel.UpdatedBy = passkey3.ID
+	passkey3.CreatedBy = passkey3.ID
+	passkey3.UpdatedBy = passkey3.ID
 
 	ctx := context.Background()
 	_, err := db.NewInsert().Model(passkey1).Exec(ctx)
@@ -289,7 +290,7 @@ func TestService_AppOrgScoping(t *testing.T) {
 	assert.Equal(t, 1, resp3.Count)
 }
 
-// TestChallengeStore tests challenge session storage and expiration
+// TestChallengeStore tests challenge session storage and expiration.
 func TestChallengeStore(t *testing.T) {
 	store := NewMemoryChallengeStore(100 * time.Millisecond) // 100ms timeout for testing
 	ctx := context.Background()
@@ -319,7 +320,7 @@ func TestChallengeStore(t *testing.T) {
 	assert.Contains(t, err.Error(), "expired")
 }
 
-// TestUserAdapter tests the WebAuthn user adapter
+// TestUserAdapter tests the WebAuthn user adapter.
 func TestUserAdapter(t *testing.T) {
 	userID := xid.New()
 	userName := "test@example.com"
@@ -402,8 +403,8 @@ func createTestUser(t *testing.T, db *bun.DB) *schema.User {
 		Email: "test@example.com",
 		Name:  "Test User",
 	}
-	user.AuditableModel.CreatedBy = user.ID
-	user.AuditableModel.UpdatedBy = user.ID
+	user.CreatedBy = user.ID
+	user.UpdatedBy = user.ID
 
 	_, err := db.NewInsert().Model(user).Exec(context.Background())
 	require.NoError(t, err)

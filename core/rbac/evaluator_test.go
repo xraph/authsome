@@ -5,6 +5,7 @@ import "testing"
 func TestEvaluator_Evaluate(t *testing.T) {
 	p := &Policy{Subject: "user", Actions: []string{"read", "write"}, Resource: "project:*"}
 	e := NewEvaluator()
+
 	ok := e.Evaluate(p, &Context{Subject: "user", Action: "read", Resource: "project:123"})
 	if !ok {
 		t.Fatalf("expected allowed for matching action and resource")
@@ -22,10 +23,12 @@ func TestEvaluator_Evaluate(t *testing.T) {
 
 	// condition check
 	p.Condition = "role = admin"
+
 	ok = e.Evaluate(p, &Context{Subject: "user", Action: "read", Resource: "project:123", Vars: map[string]string{"role": "admin"}})
 	if !ok {
 		t.Fatalf("expected allowed when condition matches")
 	}
+
 	ok = e.Evaluate(p, &Context{Subject: "user", Action: "read", Resource: "project:123", Vars: map[string]string{"role": "user"}})
 	if ok {
 		t.Fatalf("expected deny when condition fails")

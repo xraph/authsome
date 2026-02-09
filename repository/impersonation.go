@@ -12,27 +12,29 @@ import (
 )
 
 // ImpersonationRepository implements the impersonation repository using Bun
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type ImpersonationRepository struct {
 	db *bun.DB
 }
 
-// NewImpersonationRepository creates a new impersonation repository
+// NewImpersonationRepository creates a new impersonation repository.
 func NewImpersonationRepository(db *bun.DB) *ImpersonationRepository {
 	return &ImpersonationRepository{db: db}
 }
 
-// Create creates a new impersonation session
+// Create creates a new impersonation session.
 func (r *ImpersonationRepository) Create(ctx context.Context, session *schema.ImpersonationSession) error {
 	_, err := r.db.NewInsert().
 		Model(session).
 		Exec(ctx)
+
 	return err
 }
 
-// Get retrieves an impersonation session by ID and app (column organization_id contains appID)
+// Get retrieves an impersonation session by ID and app (column organization_id contains appID).
 func (r *ImpersonationRepository) Get(ctx context.Context, id xid.ID, appID xid.ID) (*schema.ImpersonationSession, error) {
 	session := new(schema.ImpersonationSession)
+
 	err := r.db.NewSelect().
 		Model(session).
 		Where("id = ? AND organization_id = ?", id, appID).
@@ -42,12 +44,14 @@ func (r *ImpersonationRepository) Get(ctx context.Context, id xid.ID, appID xid.
 	if err != nil {
 		return nil, err
 	}
+
 	return session, nil
 }
 
-// GetBySessionID retrieves an impersonation session by the session ID
+// GetBySessionID retrieves an impersonation session by the session ID.
 func (r *ImpersonationRepository) GetBySessionID(ctx context.Context, sessionID xid.ID) (*schema.ImpersonationSession, error) {
 	session := new(schema.ImpersonationSession)
+
 	err := r.db.NewSelect().
 		Model(session).
 		Where("new_session_id = ?", sessionID).
@@ -58,21 +62,23 @@ func (r *ImpersonationRepository) GetBySessionID(ctx context.Context, sessionID 
 	if err != nil {
 		return nil, err
 	}
+
 	return session, nil
 }
 
-// Update updates an impersonation session
+// Update updates an impersonation session.
 func (r *ImpersonationRepository) Update(ctx context.Context, session *schema.ImpersonationSession) error {
 	session.UpdatedAt = time.Now().UTC()
 	_, err := r.db.NewUpdate().
 		Model(session).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
 // ListSessions retrieves impersonation sessions with pagination and filtering
-// Note: filter.AppID maps to column organization_id (V2 architecture)
+// Note: filter.AppID maps to column organization_id (V2 architecture).
 func (r *ImpersonationRepository) ListSessions(ctx context.Context, filter *impersonation.ListSessionsFilter) (*pagination.PageResponse[*schema.ImpersonationSession], error) {
 	var sessions []*schema.ImpersonationSession
 
@@ -156,9 +162,10 @@ func (r *ImpersonationRepository) ListSessions(ctx context.Context, filter *impe
 }
 
 // GetActive retrieves the active impersonation session for an impersonator
-// Note: appID maps to column organization_id (V2 architecture)
+// Note: appID maps to column organization_id (V2 architecture).
 func (r *ImpersonationRepository) GetActive(ctx context.Context, impersonatorID xid.ID, appID xid.ID) (*schema.ImpersonationSession, error) {
 	session := new(schema.ImpersonationSession)
+
 	err := r.db.NewSelect().
 		Model(session).
 		Where("impersonator_id = ? AND organization_id = ?", impersonatorID, appID).
@@ -173,12 +180,14 @@ func (r *ImpersonationRepository) GetActive(ctx context.Context, impersonatorID 
 	if err != nil {
 		return nil, err
 	}
+
 	return session, nil
 }
 
-// ExpireOldSessions expires sessions that have passed their expiry time
+// ExpireOldSessions expires sessions that have passed their expiry time.
 func (r *ImpersonationRepository) ExpireOldSessions(ctx context.Context) (int, error) {
 	now := time.Now().UTC()
+
 	result, err := r.db.NewUpdate().
 		Model((*schema.ImpersonationSession)(nil)).
 		Set("active = ?", false).
@@ -194,19 +203,21 @@ func (r *ImpersonationRepository) ExpireOldSessions(ctx context.Context) (int, e
 	}
 
 	rows, _ := result.RowsAffected()
+
 	return int(rows), nil
 }
 
-// CreateAuditEvent creates an audit event
+// CreateAuditEvent creates an audit event.
 func (r *ImpersonationRepository) CreateAuditEvent(ctx context.Context, event *schema.ImpersonationAuditEvent) error {
 	_, err := r.db.NewInsert().
 		Model(event).
 		Exec(ctx)
+
 	return err
 }
 
 // ListAuditEvents retrieves audit events with pagination and filtering
-// Note: filter.AppID maps to column organization_id (V2 architecture)
+// Note: filter.AppID maps to column organization_id (V2 architecture).
 func (r *ImpersonationRepository) ListAuditEvents(ctx context.Context, filter *impersonation.ListAuditEventsFilter) (*pagination.PageResponse[*schema.ImpersonationAuditEvent], error) {
 	var events []*schema.ImpersonationAuditEvent
 

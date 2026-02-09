@@ -11,7 +11,7 @@ import (
 )
 
 // SessionStrategy implements authentication via session cookies
-// This is the traditional cookie-based session authentication
+// This is the traditional cookie-based session authentication.
 type SessionStrategy struct {
 	sessionSvc   session.ServiceInterface
 	userSvc      user.ServiceInterface
@@ -19,7 +19,7 @@ type SessionStrategy struct {
 	allowInQuery bool
 }
 
-// NewSessionStrategy creates a new session cookie authentication strategy
+// NewSessionStrategy creates a new session cookie authentication strategy.
 func NewSessionStrategy(
 	sessionSvc session.ServiceInterface,
 	userSvc user.ServiceInterface,
@@ -29,6 +29,7 @@ func NewSessionStrategy(
 	if cookieName == "" {
 		cookieName = "authsome_session"
 	}
+
 	return &SessionStrategy{
 		sessionSvc:   sessionSvc,
 		userSvc:      userSvc,
@@ -37,18 +38,18 @@ func NewSessionStrategy(
 	}
 }
 
-// ID returns the strategy identifier
+// ID returns the strategy identifier.
 func (s *SessionStrategy) ID() string {
 	return "session-cookie"
 }
 
-// Priority returns the strategy priority (30 = medium priority for cookies)
+// Priority returns the strategy priority (30 = medium priority for cookies).
 func (s *SessionStrategy) Priority() int {
 	return 30
 }
 
-// Extract attempts to extract a session token from cookies
-func (s *SessionStrategy) Extract(c forge.Context) (interface{}, bool) {
+// Extract attempts to extract a session token from cookies.
+func (s *SessionStrategy) Extract(c forge.Context) (any, bool) {
 	// Method 1: Cookie (primary method)
 	cookie, err := c.Request().Cookie(s.cookieName)
 	if err == nil && cookie != nil && cookie.Value != "" {
@@ -65,8 +66,8 @@ func (s *SessionStrategy) Extract(c forge.Context) (interface{}, bool) {
 	return nil, false
 }
 
-// Authenticate validates the session and builds auth context
-func (s *SessionStrategy) Authenticate(ctx context.Context, credentials interface{}) (*contexts.AuthContext, error) {
+// Authenticate validates the session and builds auth context.
+func (s *SessionStrategy) Authenticate(ctx context.Context, credentials any) (*contexts.AuthContext, error) {
 	sessionToken, ok := credentials.(string)
 	if !ok {
 		return nil, &AuthStrategyError{

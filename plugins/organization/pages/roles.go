@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/forgeui/components/card"
 )
 
-// RolesPage renders the organization roles management page
+// RolesPage renders the organization roles management page.
 func RolesPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -154,10 +154,12 @@ func RolesPage(currentApp *app.App, orgID, basePath string) g.Node {
 	)
 }
 
-// permissionItem renders a single permission item with checkmark or x
+// permissionItem renders a single permission item with checkmark or x.
 func permissionItem(text string, granted bool) g.Node {
-	var icon g.Node
-	var textClass string
+	var (
+		icon      g.Node
+		textClass string
+	)
 
 	if granted {
 		icon = lucide.Check(Class("size-4 text-emerald-600 dark:text-emerald-400"))

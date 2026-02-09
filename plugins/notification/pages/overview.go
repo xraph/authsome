@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// OverviewPage renders the main notifications overview/dashboard
+// OverviewPage renders the main notifications overview/dashboard.
 func OverviewPage(currentApp *app.App, basePath string) g.Node {
 	return primitives.Container(
 		Div(
@@ -231,7 +231,7 @@ func OverviewPage(currentApp *app.App, basePath string) g.Node {
 }
 
 func overviewData(appID string) string {
-	return fmt.Sprintf(`{
+	return `{
 		stats: {
 			totalSent: 0,
 			totalDelivered: 0,
@@ -266,5 +266,5 @@ func overviewData(appID string) string {
 				this.loading = false;
 			}
 		}
-	}`)
+	}`
 }

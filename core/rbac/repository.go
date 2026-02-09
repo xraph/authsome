@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// PolicyRepository provides access to stored policy expressions
+// PolicyRepository provides access to stored policy expressions.
 type PolicyRepository interface {
 	// ListAll returns all stored policy expressions
 	ListAll(ctx context.Context) ([]string, error)
@@ -15,7 +15,7 @@ type PolicyRepository interface {
 	Create(ctx context.Context, expression string) error
 }
 
-// RoleRepository handles role operations for RBAC
+// RoleRepository handles role operations for RBAC.
 type RoleRepository interface {
 	Create(ctx context.Context, role *schema.Role) error
 	Update(ctx context.Context, role *schema.Role) error
@@ -40,7 +40,7 @@ type RoleRepository interface {
 	FindDuplicateRoles(ctx context.Context) ([]schema.Role, error)
 }
 
-// PermissionRepository handles permission operations for RBAC
+// PermissionRepository handles permission operations for RBAC.
 type PermissionRepository interface {
 	Create(ctx context.Context, permission *schema.Permission) error
 	Update(ctx context.Context, permission *schema.Permission) error
@@ -55,7 +55,7 @@ type PermissionRepository interface {
 	CreateCustomPermission(ctx context.Context, name, description, category string, orgID xid.ID) (*schema.Permission, error)
 }
 
-// RolePermissionRepository handles role-permission relationships
+// RolePermissionRepository handles role-permission relationships.
 type RolePermissionRepository interface {
 	AssignPermission(ctx context.Context, roleID, permissionID xid.ID) error
 	UnassignPermission(ctx context.Context, roleID, permissionID xid.ID) error
@@ -64,7 +64,7 @@ type RolePermissionRepository interface {
 	ReplaceRolePermissions(ctx context.Context, roleID xid.ID, permissionIDs []xid.ID) error
 }
 
-// UserRoleRepository handles user-role assignments for RBAC
+// UserRoleRepository handles user-role assignments for RBAC.
 type UserRoleRepository interface {
 	// Single assignment (legacy)
 	Assign(ctx context.Context, userID, roleID, orgID xid.ID) error

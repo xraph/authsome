@@ -15,7 +15,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin wires the SSO service and registers routes
+// Plugin wires the SSO service and registers routes.
 type Plugin struct {
 	db            *bun.DB
 	service       *Service
@@ -24,7 +24,7 @@ type Plugin struct {
 	defaultConfig Config
 }
 
-// Config holds the SSO plugin configuration
+// Config holds the SSO plugin configuration.
 type Config struct {
 	// Protocol enablement
 	AllowSAML bool `json:"allowSAML"`
@@ -48,7 +48,7 @@ type Config struct {
 	OIDCRedirectURL string `json:"oidcRedirectURL"`
 }
 
-// DefaultConfig returns the default SSO plugin configuration
+// DefaultConfig returns the default SSO plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		AllowSAML:         true,
@@ -64,66 +64,66 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the SSO plugin
+// PluginOption is a functional option for configuring the SSO plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithAllowSAML sets whether SAML is enabled
+// WithAllowSAML sets whether SAML is enabled.
 func WithAllowSAML(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowSAML = allow
 	}
 }
 
-// WithAllowOIDC sets whether OIDC is enabled
+// WithAllowOIDC sets whether OIDC is enabled.
 func WithAllowOIDC(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowOIDC = allow
 	}
 }
 
-// WithSAMLMetadataURL sets the SAML metadata URL
+// WithSAMLMetadataURL sets the SAML metadata URL.
 func WithSAMLMetadataURL(url string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SAMLMetadataURL = url
 	}
 }
 
-// WithSAMLACS sets the SAML assertion consumer service URL
+// WithSAMLACS sets the SAML assertion consumer service URL.
 func WithSAMLACS(acs string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.SAMLACS = acs
 	}
 }
 
-// WithOIDCRedirectURL sets the OIDC redirect URL
+// WithOIDCRedirectURL sets the OIDC redirect URL.
 func WithOIDCRedirectURL(url string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.OIDCRedirectURL = url
 	}
 }
 
-// WithRequireEncryption sets whether encrypted assertions are required
+// WithRequireEncryption sets whether encrypted assertions are required.
 func WithRequireEncryption(require bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RequireEncryption = require
 	}
 }
 
-// WithAutoProvision sets whether auto-provisioning is enabled
+// WithAutoProvision sets whether auto-provisioning is enabled.
 func WithAutoProvision(enable bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoProvision = enable
 	}
 }
 
-// NewPlugin creates a new SSO plugin instance with optional configuration
+// NewPlugin creates a new SSO plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -140,21 +140,21 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 
 func (p *Plugin) ID() string { return "sso" }
 
-// Init accepts auth instance with GetDB method
+// Init accepts auth instance with GetDB method.
 func (p *Plugin) Init(authInst core.Authsome) error {
 	if authInst == nil {
-		return fmt.Errorf("sso plugin requires auth instance")
+		return errors.New("sso plugin requires auth instance")
 	}
 
 	// Get dependencies
 	p.db = authInst.GetDB()
 	if p.db == nil {
-		return fmt.Errorf("database not available for sso plugin")
+		return errors.New("database not available for sso plugin")
 	}
 
 	forgeApp := authInst.GetForgeApp()
 	if forgeApp == nil {
-		return fmt.Errorf("forge app not available for sso plugin")
+		return errors.New("forge app not available for sso plugin")
 	}
 
 	// Initialize logger
@@ -175,7 +175,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Get user and session services from DI container for JIT provisioning
 	container := forgeApp.Container()
 	if container == nil {
-		return fmt.Errorf("DI container not available for sso plugin")
+		return errors.New("DI container not available for sso plugin")
 	}
 
 	// Resolve user service from container
@@ -183,9 +183,10 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve user service: %w", err)
 	}
+
 	userSvc, ok := userSvcRaw.(user.ServiceInterface)
 	if !ok {
-		return fmt.Errorf("user service has invalid type")
+		return errors.New("user service has invalid type")
 	}
 
 	// Resolve session service from container
@@ -193,9 +194,10 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve session service: %w", err)
 	}
+
 	sessionSvc, ok := sessionSvcRaw.(session.ServiceInterface)
 	if !ok {
-		return fmt.Errorf("session service has invalid type")
+		return errors.New("session service has invalid type")
 	}
 
 	// Initialize SSO service with all dependencies
@@ -215,7 +217,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes mounts SSO endpoints under /api/auth/sso
+// RegisterRoutes mounts SSO endpoints under /api/auth/sso.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service == nil {
 		return nil
@@ -314,11 +316,12 @@ func (p *Plugin) RegisterHooks(_ *hooks.HookRegistry) error { return nil }
 
 func (p *Plugin) RegisterServiceDecorators(_ *registry.ServiceRegistry) error { return nil }
 
-// Migrate creates required tables and indexes for SSO providers
+// Migrate creates required tables and indexes for SSO providers.
 func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 
 	// Create SSO providers table
@@ -365,5 +368,6 @@ func (p *Plugin) Migrate() error {
 	}
 
 	p.logger.Info("SSO plugin migrations completed successfully")
+
 	return nil
 }

@@ -9,13 +9,13 @@ import (
 	"github.com/xraph/authsome/plugins/cms/service"
 )
 
-// ContentEntryHandler handles content entry HTTP requests
+// ContentEntryHandler handles content entry HTTP requests.
 type ContentEntryHandler struct {
 	entryService       *service.ContentEntryService
 	contentTypeService *service.ContentTypeService
 }
 
-// NewContentEntryHandler creates a new content entry handler
+// NewContentEntryHandler creates a new content entry handler.
 func NewContentEntryHandler(
 	entrySvc *service.ContentEntryService,
 	ctSvc *service.ContentTypeService,
@@ -31,12 +31,12 @@ func NewContentEntryHandler(
 // =============================================================================
 
 // ListEntries lists entries for a content type
-// GET /cms/:type
+// GET /cms/:type.
 func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 	var req ListEntriesRequest
 
 	if err := c.BindRequest(&req); err != nil {
-		return c.JSON(400, map[string]interface{}{"error": "invalid request", "details": err.Error()})
+		return c.JSON(400, map[string]any{"error": "invalid request", "details": err.Error()})
 	}
 
 	typeSlug := req.TypeSlug
@@ -57,6 +57,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 
 	// Parse URL query parameters
 	urlParser := query.NewURLParser()
+
 	q, err := urlParser.Parse(c.Request().URL.Query())
 	if err != nil {
 		return handleError(c, err)
@@ -86,6 +87,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 		case "scheduledAt":
 			sortField = "scheduled_at"
 		}
+
 		listQuery.SortBy = sortField
 		if q.Sort[0].Descending {
 			listQuery.SortOrder = "desc"
@@ -103,6 +105,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 				if val, ok := cond.Value.(string); ok {
 					listQuery.Status = val
 				}
+
 				continue
 			}
 			// Skip other system fields from JSONB filters
@@ -130,7 +133,7 @@ func (h *ContentEntryHandler) ListEntries(c forge.Context) error {
 }
 
 // CreateEntry creates a new content entry
-// POST /cms/:type
+// POST /cms/:type.
 func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 	var pathReq CreateEntryRequest
 	if err := c.BindRequest(&pathReq); err != nil {
@@ -168,7 +171,7 @@ func (h *ContentEntryHandler) CreateEntry(c forge.Context) error {
 }
 
 // GetEntry retrieves a content entry by ID
-// GET /cms/:type/:id
+// GET /cms/:type/:id.
 func (h *ContentEntryHandler) GetEntry(c forge.Context) error {
 	var req GetEntryRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -176,6 +179,7 @@ func (h *ContentEntryHandler) GetEntry(c forge.Context) error {
 	}
 
 	typeSlug := req.TypeSlug
+
 	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
@@ -198,7 +202,7 @@ func (h *ContentEntryHandler) GetEntry(c forge.Context) error {
 }
 
 // UpdateEntry updates a content entry
-// PUT /cms/:type/:id
+// PUT /cms/:type/:id.
 func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 	var req UpdateEntryRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -206,6 +210,7 @@ func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 	}
 
 	typeSlug := req.TypeSlug
+
 	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
@@ -234,7 +239,7 @@ func (h *ContentEntryHandler) UpdateEntry(c forge.Context) error {
 }
 
 // DeleteEntry deletes a content entry
-// DELETE /cms/:type/:id
+// DELETE /cms/:type/:id.
 func (h *ContentEntryHandler) DeleteEntry(c forge.Context) error {
 	var req DeleteEntryRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -242,6 +247,7 @@ func (h *ContentEntryHandler) DeleteEntry(c forge.Context) error {
 	}
 
 	typeSlug := req.TypeSlug
+
 	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
@@ -267,7 +273,7 @@ func (h *ContentEntryHandler) DeleteEntry(c forge.Context) error {
 // =============================================================================
 
 // PublishEntry publishes a content entry
-// POST /cms/:type/:id/publish
+// POST /cms/:type/:id/publish.
 func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 	var req PublishEntryRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -275,6 +281,7 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 	}
 
 	typeSlug := req.TypeSlug
+
 	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
@@ -290,6 +297,7 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 
 	// Parse optional request body
 	var bodyReq core.PublishEntryRequest
+
 	_ = c.BindJSON(&bodyReq) // Ignore error, body is optional
 
 	result, err := h.entryService.Publish(ctx, id, &bodyReq)
@@ -301,7 +309,7 @@ func (h *ContentEntryHandler) PublishEntry(c forge.Context) error {
 }
 
 // UnpublishEntry unpublishes a content entry
-// POST /cms/:type/:id/unpublish
+// POST /cms/:type/:id/unpublish.
 func (h *ContentEntryHandler) UnpublishEntry(c forge.Context) error {
 	var req UnpublishEntryRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -309,6 +317,7 @@ func (h *ContentEntryHandler) UnpublishEntry(c forge.Context) error {
 	}
 
 	typeSlug := req.TypeSlug
+
 	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
@@ -331,7 +340,7 @@ func (h *ContentEntryHandler) UnpublishEntry(c forge.Context) error {
 }
 
 // ArchiveEntry archives a content entry
-// POST /cms/:type/:id/archive
+// POST /cms/:type/:id/archive.
 func (h *ContentEntryHandler) ArchiveEntry(c forge.Context) error {
 	var req ArchiveEntryRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -339,6 +348,7 @@ func (h *ContentEntryHandler) ArchiveEntry(c forge.Context) error {
 	}
 
 	typeSlug := req.TypeSlug
+
 	entryID := req.EntryID
 	if typeSlug == "" || entryID == "" {
 		return c.JSON(400, map[string]string{"error": "type and id are required"})
@@ -365,7 +375,7 @@ func (h *ContentEntryHandler) ArchiveEntry(c forge.Context) error {
 // =============================================================================
 
 // QueryEntries performs an advanced query on entries
-// POST /cms/:type/query
+// POST /cms/:type/query.
 func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 	var pathReq QueryEntriesRequest
 	if err := c.BindRequest(&pathReq); err != nil {
@@ -390,6 +400,7 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 
 	// Parse JSON body
 	jsonParser := query.NewJSONParser()
+
 	body, err := readBody(c)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "failed to read request body"})
@@ -423,6 +434,7 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 		case "scheduledAt":
 			sortField = "scheduled_at"
 		}
+
 		listQuery.SortBy = sortField
 		if q.Sort[0].Descending {
 			listQuery.SortOrder = "desc"
@@ -440,6 +452,7 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 				if val, ok := cond.Value.(string); ok {
 					listQuery.Status = val
 				}
+
 				continue
 			}
 			// Skip other system fields from JSONB filters
@@ -465,6 +478,7 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 					if listQuery.Filters == nil {
 						listQuery.Filters = make(map[string]any)
 					}
+
 					listQuery.Filters[cond.Field] = map[string]any{
 						"operator": string(cond.Operator),
 						"value":    cond.Value,
@@ -490,13 +504,13 @@ func (h *ContentEntryHandler) QueryEntries(c forge.Context) error {
 // Bulk Operations
 // =============================================================================
 
-// BulkRequest represents a bulk operation request
+// BulkRequest represents a bulk operation request.
 type BulkRequest struct {
 	IDs []string `json:"ids"`
 }
 
 // BulkPublish publishes multiple entries
-// POST /cms/:type/bulk/publish
+// POST /cms/:type/bulk/publish.
 func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
 	var req BulkPublishRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -511,6 +525,7 @@ func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
 		if err != nil {
 			return c.JSON(400, map[string]string{"error": "invalid entry ID: " + idStr})
 		}
+
 		ids[i] = id
 	}
 
@@ -518,14 +533,14 @@ func (h *ContentEntryHandler) BulkPublish(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"message": "entries published",
 		"count":   len(ids),
 	})
 }
 
 // BulkUnpublish unpublishes multiple entries
-// POST /cms/:type/bulk/unpublish
+// POST /cms/:type/bulk/unpublish.
 func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
 	var req BulkUnpublishRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -540,6 +555,7 @@ func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
 		if err != nil {
 			return c.JSON(400, map[string]string{"error": "invalid entry ID: " + idStr})
 		}
+
 		ids[i] = id
 	}
 
@@ -547,14 +563,14 @@ func (h *ContentEntryHandler) BulkUnpublish(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"message": "entries unpublished",
 		"count":   len(ids),
 	})
 }
 
 // BulkDelete deletes multiple entries
-// POST /cms/:type/bulk/delete
+// POST /cms/:type/bulk/delete.
 func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 	var req BulkDeleteRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -569,6 +585,7 @@ func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 		if err != nil {
 			return c.JSON(400, map[string]string{"error": "invalid entry ID: " + idStr})
 		}
+
 		ids[i] = id
 	}
 
@@ -576,7 +593,7 @@ func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"message": "entries deleted",
 		"count":   len(ids),
 	})
@@ -587,7 +604,7 @@ func (h *ContentEntryHandler) BulkDelete(c forge.Context) error {
 // =============================================================================
 
 // GetEntryStats returns statistics for entries
-// GET /cms/:type/stats
+// GET /cms/:type/stats.
 func (h *ContentEntryHandler) GetEntryStats(c forge.Context) error {
 	var req GetEntryStatsRequest
 	if err := c.BindRequest(&req); err != nil {

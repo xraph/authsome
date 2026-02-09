@@ -9,7 +9,7 @@ import (
 
 // Dashboard-specific types
 
-// SCIMToken represents a SCIM bearer token for authentication
+// SCIMToken represents a SCIM bearer token for authentication.
 type SCIMToken struct {
 	ID             xid.ID     `json:"id"`
 	AppID          xid.ID     `json:"app_id"`
@@ -27,8 +27,8 @@ type SCIMToken struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
-// SCIMProvider represents a SCIM identity provider (imported from schema)
+// SCIMProvider represents a SCIM identity provider (imported from schema).
 type SCIMProvider = schema.SCIMProvider
 
-// SCIMSyncEvent represents a sync event (imported from schema)
+// SCIMSyncEvent represents a sync event (imported from schema).
 type SCIMSyncEvent = schema.SCIMSyncEvent

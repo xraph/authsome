@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/spf13/cobra"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/pkg/schema/definition"
 	"github.com/xraph/authsome/pkg/schema/generator"
 	"github.com/xraph/authsome/pkg/schema/generator/bun"
@@ -13,7 +15,7 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator/sql"
 )
 
-// generateMigrationsCmd generates migrations for different ORMs
+// generateMigrationsCmd generates migrations for different ORMs.
 var generateMigrationsCmd = &cobra.Command{
 	Use:   "migrations",
 	Short: "Generate database migrations",
@@ -70,7 +72,7 @@ Examples:
 		switch orm {
 		case "sql":
 			if dialect == "" {
-				return fmt.Errorf("--dialect is required for SQL generator (postgres, mysql, sqlite)")
+				return errs.New(errs.CodeInvalidInput, "--dialect is required for SQL generator (postgres, mysql, sqlite)", http.StatusBadRequest)
 			}
 			gen, err = sql.NewGenerator(dialect)
 			if err != nil {

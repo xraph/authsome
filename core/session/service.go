@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/internal/crypto"
 )
 
-// Service provides session-related operations
+// Service provides session-related operations.
 type Service struct {
 	repo         Repository
 	config       Config
@@ -19,7 +19,7 @@ type Service struct {
 	hookExecutor HookExecutor
 }
 
-// Config represents session service configuration
+// Config represents session service configuration.
 type Config struct {
 	// Basic TTL settings
 	DefaultTTL      time.Duration
@@ -37,12 +37,13 @@ type Config struct {
 	AccessTokenTTL      time.Duration // Short-lived access token (default: 15 min)
 }
 
-// NewService creates a new session service
+// NewService creates a new session service.
 func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookExecutor HookExecutor) *Service {
 	// default sensible values
 	if cfg.DefaultTTL == 0 {
 		cfg.DefaultTTL = 24 * time.Hour
 	}
+
 	if cfg.RememberTTL == 0 {
 		cfg.RememberTTL = 7 * 24 * time.Hour
 	}
@@ -57,6 +58,7 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookEx
 		if cfg.RefreshTokenTTL == 0 {
 			cfg.RefreshTokenTTL = 30 * 24 * time.Hour // 30 days
 		}
+
 		if cfg.AccessTokenTTL == 0 {
 			cfg.AccessTokenTTL = 15 * time.Minute // 15 minutes
 		}
@@ -70,7 +72,7 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookEx
 	}
 }
 
-// Create creates a new session for a user
+// Create creates a new session for a user.
 func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Session, error) {
 	// Execute before session create hooks
 	if s.hookExecutor != nil {
@@ -148,7 +150,8 @@ func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Sessi
 		if sess.EnvironmentID != nil {
 			envID = *sess.EnvironmentID
 		}
-		data := map[string]interface{}{
+
+		data := map[string]any{
 			"session_id": sess.ID.String(),
 			"user_id":    sess.UserID.String(),
 			"app_id":     sess.AppID.String(),
@@ -161,13 +164,14 @@ func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Sessi
 	return sess, nil
 }
 
-// FindByToken retrieves a session by token
+// FindByToken retrieves a session by token.
 func (s *Service) FindByToken(ctx context.Context, token string) (*Session, error) {
 	schemaSession, err := s.repo.FindSessionByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, SessionNotFound()
 		}
+
 		return nil, err
 	}
 
@@ -180,7 +184,7 @@ func (s *Service) FindByToken(ctx context.Context, token string) (*Session, erro
 }
 
 // TouchSession extends the session expiry time if sliding window is enabled
-// Returns the updated session and whether it was actually updated
+// Returns the updated session and whether it was actually updated.
 func (s *Service) TouchSession(ctx context.Context, sess *Session) (*Session, bool, error) {
 	if !s.config.EnableSlidingWindow {
 		return sess, false, nil // Sliding window disabled
@@ -217,20 +221,21 @@ func (s *Service) TouchSession(ctx context.Context, sess *Session) (*Session, bo
 	return sess, true, nil
 }
 
-// FindByID retrieves a session by ID
+// FindByID retrieves a session by ID.
 func (s *Service) FindByID(ctx context.Context, id xid.ID) (*Session, error) {
 	schemaSession, err := s.repo.FindSessionByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, SessionNotFound()
 		}
+
 		return nil, err
 	}
 
 	return FromSchemaSession(schemaSession), nil
 }
 
-// ListSessions retrieves sessions with filtering and pagination
+// ListSessions retrieves sessions with filtering and pagination.
 func (s *Service) ListSessions(ctx context.Context, filter *ListSessionsFilter) (*ListSessionsResponse, error) {
 	pageResp, err := s.repo.ListSessions(ctx, filter)
 	if err != nil {
@@ -246,7 +251,7 @@ func (s *Service) ListSessions(ctx context.Context, filter *ListSessionsFilter) 
 	}, nil
 }
 
-// RevokeByID revokes a session by ID
+// RevokeByID revokes a session by ID.
 func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 	// Get session before revocation for webhook event and hooks
 	schemaSession, err := s.repo.FindSessionByID(ctx, id)
@@ -254,6 +259,7 @@ func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SessionNotFound()
 		}
+
 		return err
 	}
 
@@ -281,7 +287,8 @@ func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 		if schemaSession.EnvironmentID != nil {
 			envID = *schemaSession.EnvironmentID
 		}
-		data := map[string]interface{}{
+
+		data := map[string]any{
 			"session_id": schemaSession.ID.String(),
 			"user_id":    schemaSession.UserID.String(),
 			"app_id":     schemaSession.AppID.String(),
@@ -294,7 +301,7 @@ func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// Revoke revokes a session by token
+// Revoke revokes a session by token.
 func (s *Service) Revoke(ctx context.Context, token string) error {
 	// Get session before revocation for webhook event and hooks
 	schemaSession, err := s.repo.FindSessionByToken(ctx, token)
@@ -302,6 +309,7 @@ func (s *Service) Revoke(ctx context.Context, token string) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SessionNotFound()
 		}
+
 		return err
 	}
 
@@ -329,7 +337,8 @@ func (s *Service) Revoke(ctx context.Context, token string) error {
 		if schemaSession.EnvironmentID != nil {
 			envID = *schemaSession.EnvironmentID
 		}
-		data := map[string]interface{}{
+
+		data := map[string]any{
 			"session_id": schemaSession.ID.String(),
 			"user_id":    schemaSession.UserID.String(),
 			"app_id":     schemaSession.AppID.String(),
@@ -343,7 +352,7 @@ func (s *Service) Revoke(ctx context.Context, token string) error {
 }
 
 // RefreshSession refreshes an access token using a refresh token (Option 3)
-// This implements the refresh token pattern for long-lived sessions
+// This implements the refresh token pattern for long-lived sessions.
 func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*RefreshResponse, error) {
 	if !s.config.EnableRefreshTokens {
 		return nil, errors.New("refresh tokens are not enabled")
@@ -355,6 +364,7 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*Ref
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("invalid refresh token")
 		}
+
 		return nil, err
 	}
 
@@ -374,8 +384,10 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*Ref
 	accessTokenExpiresAt := now.Add(s.config.AccessTokenTTL)
 
 	// Optional: Rotate refresh token for enhanced security
-	var newRefreshToken string
-	var refreshTokenExpiresAt time.Time
+	var (
+		newRefreshToken       string
+		refreshTokenExpiresAt time.Time
+	)
 
 	if s.config.RefreshTokenTTL > 0 {
 		// Keep the same refresh token but extend its expiry (safer option)
@@ -387,6 +399,7 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*Ref
 		if err != nil {
 			return nil, err
 		}
+
 		refreshTokenExpiresAt = now.Add(s.config.RefreshTokenTTL)
 	}
 

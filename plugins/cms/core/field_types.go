@@ -1,75 +1,75 @@
 package core
 
-// FieldType defines the type of data a field holds
+// FieldType defines the type of data a field holds.
 type FieldType string
 
 const (
-	// FieldTypeText is a short text field (varchar)
+	// FieldTypeText is a short text field (varchar).
 	FieldTypeText FieldType = "text"
-	// FieldTypeRichText is a long formatted text field
+	// FieldTypeRichText is a long formatted text field.
 	FieldTypeRichText FieldType = "richText"
-	// FieldTypeNumber is a numeric field (integer or float)
+	// FieldTypeNumber is a numeric field (integer or float).
 	FieldTypeNumber FieldType = "number"
-	// FieldTypeBoolean is a true/false field
+	// FieldTypeBoolean is a true/false field.
 	FieldTypeBoolean FieldType = "boolean"
-	// FieldTypeDate is a date-only field
+	// FieldTypeDate is a date-only field.
 	FieldTypeDate FieldType = "date"
-	// FieldTypeDateTime is a date and time field
+	// FieldTypeDateTime is a date and time field.
 	FieldTypeDateTime FieldType = "datetime"
-	// FieldTypeTime is a time-only field
+	// FieldTypeTime is a time-only field.
 	FieldTypeTime FieldType = "time"
-	// FieldTypeEmail is an email field with validation
+	// FieldTypeEmail is an email field with validation.
 	FieldTypeEmail FieldType = "email"
-	// FieldTypeURL is a URL field with validation
+	// FieldTypeURL is a URL field with validation.
 	FieldTypeURL FieldType = "url"
-	// FieldTypeJSON is an arbitrary JSON object/array field
+	// FieldTypeJSON is an arbitrary JSON object/array field.
 	FieldTypeJSON FieldType = "json"
-	// FieldTypeSelect is a single select from options
+	// FieldTypeSelect is a single select from options.
 	FieldTypeSelect FieldType = "select"
-	// FieldTypeMultiSelect is a multi-select from options
+	// FieldTypeMultiSelect is a multi-select from options.
 	FieldTypeMultiSelect FieldType = "multiSelect"
-	// FieldTypeRelation is a reference to another content type
+	// FieldTypeRelation is a reference to another content type.
 	FieldTypeRelation FieldType = "relation"
-	// FieldTypeMedia is a file/image reference
+	// FieldTypeMedia is a file/image reference.
 	FieldTypeMedia FieldType = "media"
-	// FieldTypeSlug is a URL-friendly slug (auto-generated)
+	// FieldTypeSlug is a URL-friendly slug (auto-generated).
 	FieldTypeSlug FieldType = "slug"
-	// FieldTypeUUID is a UUID field
+	// FieldTypeUUID is a UUID field.
 	FieldTypeUUID FieldType = "uuid"
-	// FieldTypeColor is a color picker field
+	// FieldTypeColor is a color picker field.
 	FieldTypeColor FieldType = "color"
-	// FieldTypePassword is a password field (hashed)
+	// FieldTypePassword is a password field (hashed).
 	FieldTypePassword FieldType = "password"
-	// FieldTypePhone is a phone number field
+	// FieldTypePhone is a phone number field.
 	FieldTypePhone FieldType = "phone"
-	// FieldTypeTextarea is a multiline text field
+	// FieldTypeTextarea is a multiline text field.
 	FieldTypeTextarea FieldType = "textarea"
-	// FieldTypeMarkdown is a markdown text field
+	// FieldTypeMarkdown is a markdown text field.
 	FieldTypeMarkdown FieldType = "markdown"
-	// FieldTypeEnumeration is an enumeration field
+	// FieldTypeEnumeration is an enumeration field.
 	FieldTypeEnumeration FieldType = "enumeration"
-	// FieldTypeInteger is an integer-only number field
+	// FieldTypeInteger is an integer-only number field.
 	FieldTypeInteger FieldType = "integer"
-	// FieldTypeFloat is a float/decimal number field
+	// FieldTypeFloat is a float/decimal number field.
 	FieldTypeFloat FieldType = "float"
-	// FieldTypeBigInteger is a big integer field
+	// FieldTypeBigInteger is a big integer field.
 	FieldTypeBigInteger FieldType = "bigInteger"
-	// FieldTypeDecimal is a decimal field with precision
+	// FieldTypeDecimal is a decimal field with precision.
 	FieldTypeDecimal FieldType = "decimal"
-	// FieldTypeObject is a nested object with sub-fields
+	// FieldTypeObject is a nested object with sub-fields.
 	FieldTypeObject FieldType = "object"
-	// FieldTypeArray is an array of objects with sub-fields
+	// FieldTypeArray is an array of objects with sub-fields.
 	FieldTypeArray FieldType = "array"
-	// FieldTypeOneOf is a discriminated union - schema determined by another field's value
+	// FieldTypeOneOf is a discriminated union - schema determined by another field's value.
 	FieldTypeOneOf FieldType = "oneOf"
 )
 
-// String returns the string representation of the field type
+// String returns the string representation of the field type.
 func (t FieldType) String() string {
 	return string(t)
 }
 
-// IsValid checks if the field type is valid
+// IsValid checks if the field type is valid.
 func (t FieldType) IsValid() bool {
 	switch t {
 	case FieldTypeText, FieldTypeRichText, FieldTypeNumber, FieldTypeBoolean,
@@ -86,16 +86,17 @@ func (t FieldType) IsValid() bool {
 	}
 }
 
-// ParseFieldType parses a string into a FieldType
+// ParseFieldType parses a string into a FieldType.
 func ParseFieldType(s string) (FieldType, bool) {
 	t := FieldType(s)
 	if t.IsValid() {
 		return t, true
 	}
+
 	return FieldTypeText, false
 }
 
-// IsNumeric returns true if the field type is numeric
+// IsNumeric returns true if the field type is numeric.
 func (t FieldType) IsNumeric() bool {
 	switch t {
 	case FieldTypeNumber, FieldTypeInteger, FieldTypeFloat, FieldTypeBigInteger, FieldTypeDecimal:
@@ -105,7 +106,7 @@ func (t FieldType) IsNumeric() bool {
 	}
 }
 
-// IsText returns true if the field type is text-based
+// IsText returns true if the field type is text-based.
 func (t FieldType) IsText() bool {
 	switch t {
 	case FieldTypeText, FieldTypeRichText, FieldTypeTextarea, FieldTypeMarkdown,
@@ -116,7 +117,7 @@ func (t FieldType) IsText() bool {
 	}
 }
 
-// IsDate returns true if the field type is date-related
+// IsDate returns true if the field type is date-related.
 func (t FieldType) IsDate() bool {
 	switch t {
 	case FieldTypeDate, FieldTypeDateTime, FieldTypeTime:
@@ -126,7 +127,7 @@ func (t FieldType) IsDate() bool {
 	}
 }
 
-// IsSelectable returns true if the field type has selectable options
+// IsSelectable returns true if the field type has selectable options.
 func (t FieldType) IsSelectable() bool {
 	switch t {
 	case FieldTypeSelect, FieldTypeMultiSelect, FieldTypeEnumeration:
@@ -136,7 +137,7 @@ func (t FieldType) IsSelectable() bool {
 	}
 }
 
-// RequiresOptions returns true if the field type requires options configuration
+// RequiresOptions returns true if the field type requires options configuration.
 func (t FieldType) RequiresOptions() bool {
 	switch t {
 	case FieldTypeSelect, FieldTypeMultiSelect, FieldTypeEnumeration, FieldTypeRelation,
@@ -147,7 +148,7 @@ func (t FieldType) RequiresOptions() bool {
 	}
 }
 
-// IsNested returns true if the field type supports nested sub-fields
+// IsNested returns true if the field type supports nested sub-fields.
 func (t FieldType) IsNested() bool {
 	switch t {
 	case FieldTypeObject, FieldTypeArray, FieldTypeOneOf:
@@ -157,22 +158,22 @@ func (t FieldType) IsNested() bool {
 	}
 }
 
-// IsOneOf returns true if the field type is a discriminated union
+// IsOneOf returns true if the field type is a discriminated union.
 func (t FieldType) IsOneOf() bool {
 	return t == FieldTypeOneOf
 }
 
-// IsObject returns true if the field type is an object
+// IsObject returns true if the field type is an object.
 func (t FieldType) IsObject() bool {
 	return t == FieldTypeObject
 }
 
-// IsArray returns true if the field type is an array
+// IsArray returns true if the field type is an array.
 func (t FieldType) IsArray() bool {
 	return t == FieldTypeArray
 }
 
-// SupportsUnique returns true if the field type supports unique constraint
+// SupportsUnique returns true if the field type supports unique constraint.
 func (t FieldType) SupportsUnique() bool {
 	switch t {
 	case FieldTypeText, FieldTypeEmail, FieldTypeURL, FieldTypeSlug, FieldTypeUUID,
@@ -184,7 +185,7 @@ func (t FieldType) SupportsUnique() bool {
 	}
 }
 
-// SupportsIndex returns true if the field type supports indexing
+// SupportsIndex returns true if the field type supports indexing.
 func (t FieldType) SupportsIndex() bool {
 	switch t {
 	case FieldTypeText, FieldTypeEmail, FieldTypeURL, FieldTypeSlug, FieldTypeUUID,
@@ -197,7 +198,7 @@ func (t FieldType) SupportsIndex() bool {
 	}
 }
 
-// SupportsSearch returns true if the field type supports full-text search
+// SupportsSearch returns true if the field type supports full-text search.
 func (t FieldType) SupportsSearch() bool {
 	switch t {
 	case FieldTypeText, FieldTypeRichText, FieldTypeTextarea, FieldTypeMarkdown:
@@ -207,7 +208,7 @@ func (t FieldType) SupportsSearch() bool {
 	}
 }
 
-// FieldTypeInfo provides metadata about a field type
+// FieldTypeInfo provides metadata about a field type.
 type FieldTypeInfo struct {
 	Type            FieldType `json:"type"`
 	Name            string    `json:"name"`
@@ -220,7 +221,7 @@ type FieldTypeInfo struct {
 	RequiresOptions bool      `json:"requiresOptions"`
 }
 
-// GetAllFieldTypes returns information about all available field types
+// GetAllFieldTypes returns information about all available field types.
 func GetAllFieldTypes() []FieldTypeInfo {
 	return []FieldTypeInfo{
 		{Type: FieldTypeText, Name: "Text", Description: "Short text field", Category: "text", Icon: "Type", SupportsUnique: true, SupportsIndex: true, SupportsSearch: true},
@@ -255,21 +256,23 @@ func GetAllFieldTypes() []FieldTypeInfo {
 	}
 }
 
-// GetFieldTypeInfo returns information about a specific field type
+// GetFieldTypeInfo returns information about a specific field type.
 func GetFieldTypeInfo(t FieldType) *FieldTypeInfo {
 	for _, info := range GetAllFieldTypes() {
 		if info.Type == t {
 			return &info
 		}
 	}
+
 	return nil
 }
 
-// GetFieldTypesByCategory returns field types grouped by category
+// GetFieldTypesByCategory returns field types grouped by category.
 func GetFieldTypesByCategory() map[string][]FieldTypeInfo {
 	result := make(map[string][]FieldTypeInfo)
 	for _, info := range GetAllFieldTypes() {
 		result[info.Category] = append(result[info.Category], info)
 	}
+
 	return result
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Service implements email verification logic
+// Service implements email verification logic.
 type Service struct {
 	repo         *VerificationRepository
 	users        user.ServiceInterface
@@ -24,7 +24,7 @@ type Service struct {
 	logger       forge.Logger
 }
 
-// NewService creates a new email verification service
+// NewService creates a new email verification service.
 func NewService(
 	repo *VerificationRepository,
 	userSvc user.ServiceInterface,
@@ -37,9 +37,11 @@ func NewService(
 	if cfg.TokenLength == 0 {
 		cfg.TokenLength = 32
 	}
+
 	if cfg.ExpiryHours == 0 {
 		cfg.ExpiryHours = 24
 	}
+
 	if cfg.MaxResendPerHour == 0 {
 		cfg.MaxResendPerHour = 3
 	}
@@ -54,10 +56,11 @@ func NewService(
 	}
 }
 
-// SendVerification generates a verification token and sends verification email
+// SendVerification generates a verification token and sends verification email.
 func (s *Service) SendVerification(ctx context.Context, appID, userID xid.ID, email string) (string, error) {
 	// Check rate limits
 	since := time.Now().Add(-1 * time.Hour)
+
 	count, err := s.repo.CountRecentByUser(ctx, userID, since)
 	if err != nil {
 		return "", fmt.Errorf("failed to check rate limit: %w", err)
@@ -109,7 +112,7 @@ func (s *Service) SendVerification(ctx context.Context, appID, userID xid.ID, em
 	return "", nil
 }
 
-// VerifyToken validates and consumes a verification token
+// VerifyToken validates and consumes a verification token.
 func (s *Service) VerifyToken(ctx context.Context, appID xid.ID, token string, autoLogin bool, ip, ua string) (*VerifyResponse, error) {
 	// Find verification by token
 	verification, err := s.repo.FindByToken(ctx, token)
@@ -202,7 +205,7 @@ func (s *Service) VerifyToken(ctx context.Context, appID xid.ID, token string, a
 	return response, nil
 }
 
-// ResendVerification sends a new verification email
+// ResendVerification sends a new verification email.
 func (s *Service) ResendVerification(ctx context.Context, appID xid.ID, email string) error {
 	// Find user by email
 	u, err := s.users.FindByEmail(ctx, email)
@@ -217,6 +220,7 @@ func (s *Service) ResendVerification(ctx context.Context, appID xid.ID, email st
 
 	// Check rate limits
 	since := time.Now().Add(-1 * time.Hour)
+
 	count, err := s.repo.CountRecentByUser(ctx, u.ID, since)
 	if err != nil {
 		return fmt.Errorf("failed to check rate limit: %w", err)
@@ -235,10 +239,11 @@ func (s *Service) ResendVerification(ctx context.Context, appID xid.ID, email st
 
 	// Send new verification
 	_, err = s.SendVerification(ctx, appID, u.ID, email)
+
 	return err
 }
 
-// GetStatus returns the email verification status for a user
+// GetStatus returns the email verification status for a user.
 func (s *Service) GetStatus(ctx context.Context, userID xid.ID) (*StatusResponse, error) {
 	u, err := s.users.FindByID(ctx, userID)
 	if err != nil {
@@ -251,18 +256,19 @@ func (s *Service) GetStatus(ctx context.Context, userID xid.ID) (*StatusResponse
 	}, nil
 }
 
-// CleanupExpiredTokens removes expired verification tokens (for scheduled cleanup)
+// CleanupExpiredTokens removes expired verification tokens (for scheduled cleanup).
 func (s *Service) CleanupExpiredTokens(ctx context.Context) (int64, error) {
 	before := time.Now()
+
 	return s.repo.DeleteExpired(ctx, before)
 }
 
-// buildVerificationURL constructs the verification URL
+// buildVerificationURL constructs the verification URL.
 func (s *Service) buildVerificationURL(token string) string {
 	if s.config.VerificationURL != "" {
 		// Use custom URL template
 		return fmt.Sprintf("%s?token=%s", s.config.VerificationURL, token)
 	}
 	// Default URL format
-	return fmt.Sprintf("/verify?token=%s", token)
+	return "/verify?token=" + token
 }

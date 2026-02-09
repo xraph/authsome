@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Context keys for API key authentication
+// Context keys for API key authentication.
 type contextKey string
 
 const (
@@ -22,7 +22,7 @@ const (
 	APIKeyPermissionsKey   contextKey = "api_key_permissions"
 )
 
-// Middleware handles API key authentication
+// Middleware handles API key authentication.
 type Middleware struct {
 	service     *apikey.Service
 	userSvc     *user.Service
@@ -30,7 +30,7 @@ type Middleware struct {
 	config      Config
 }
 
-// NewMiddleware creates a new API key middleware
+// NewMiddleware creates a new API key middleware.
 func NewMiddleware(
 	service *apikey.Service,
 	userSvc *user.Service,
@@ -47,7 +47,7 @@ func NewMiddleware(
 
 // Authenticate attempts to authenticate using an API key from the request
 // This middleware is non-blocking - it will set context values if a valid API key is found,
-// but will not reject requests without API keys (use RequireAPIKey for that)
+// but will not reject requests without API keys (use RequireAPIKey for that).
 func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Context) error {
 	return func(c forge.Context) error {
 		// Extract API key from request
@@ -90,7 +90,8 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 
 		// Check rate limit if enabled
 		if m.rateLimiter != nil && m.config.RateLimiting.Enabled {
-			rateLimitKey := fmt.Sprintf("apikey:%s", apiKey.ID.String())
+			rateLimitKey := "apikey:" + apiKey.ID.String()
+
 			allowed, err := m.rateLimiter.CheckLimit(c.Request().Context(), rateLimitKey, ratelimit.Rule{
 				Window: m.config.RateLimiting.Window,
 				Max:    apiKey.RateLimit,
@@ -100,6 +101,7 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 					"error": "rate limit check failed",
 				})
 			}
+
 			if !allowed {
 				return c.JSON(429, map[string]string{
 					"error":   "rate limit exceeded",
@@ -130,9 +132,11 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 		if !apiKey.EnvironmentID.IsNil() {
 			ctx = contexts.SetEnvironmentID(ctx, apiKey.EnvironmentID)
 		}
+
 		if apiKey.OrganizationID != nil {
 			ctx = contexts.SetOrganizationID(ctx, *apiKey.OrganizationID)
 		}
+
 		ctx = contexts.SetUserID(ctx, apiKey.UserID)
 
 		if usr != nil {
@@ -147,7 +151,7 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 	}
 }
 
-// RequireAPIKey enforces API key authentication
+// RequireAPIKey enforces API key authentication.
 func (m *Middleware) RequireAPIKey(scopes ...string) func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -174,7 +178,7 @@ func (m *Middleware) RequireAPIKey(scopes ...string) func(next func(forge.Contex
 				for _, requiredScope := range scopes {
 					if !apiKey.HasScopeWildcard(requiredScope) {
 						return c.JSON(403, map[string]string{
-							"error": fmt.Sprintf("Missing required scope: %s", requiredScope),
+							"error": "Missing required scope: " + requiredScope,
 							"code":  "INSUFFICIENT_SCOPE",
 						})
 					}
@@ -186,7 +190,7 @@ func (m *Middleware) RequireAPIKey(scopes ...string) func(next func(forge.Contex
 	}
 }
 
-// RequirePermission enforces specific permissions
+// RequirePermission enforces specific permissions.
 func (m *Middleware) RequirePermission(permissions ...string) func(next func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -212,7 +216,7 @@ func (m *Middleware) RequirePermission(permissions ...string) func(next func(for
 			for _, perm := range permissions {
 				if !apiKey.HasPermission(perm) {
 					return c.JSON(403, map[string]string{
-						"error": fmt.Sprintf("Missing required permission: %s", perm),
+						"error": "Missing required permission: " + perm,
 						"code":  "INSUFFICIENT_PERMISSION",
 					})
 				}
@@ -228,19 +232,19 @@ func (m *Middleware) RequirePermission(permissions ...string) func(next func(for
 // 1. Authorization: ApiKey <key>
 // 2. Authorization: Bearer <key> (if it starts with ak_)
 // 3. X-API-Key: <key>
-// 4. Query parameter: api_key=<key> (optional, can be disabled in config)
+// 4. Query parameter: api_key=<key> (optional, can be disabled in config).
 func (m *Middleware) extractAPIKey(c forge.Context) string {
 	// Method 1: Authorization header with ApiKey scheme
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader != "" {
 		// Check for "ApiKey <key>" format
-		if strings.HasPrefix(authHeader, "ApiKey ") {
-			return strings.TrimPrefix(authHeader, "ApiKey ")
+		if after, ok := strings.CutPrefix(authHeader, "ApiKey "); ok {
+			return after
 		}
 
 		// Check for "Bearer <key>" format where key starts with "ak_"
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token := after
 			if strings.HasPrefix(token, "ak_") {
 				return token
 			}
@@ -262,47 +266,51 @@ func (m *Middleware) extractAPIKey(c forge.Context) string {
 	return ""
 }
 
-// GetAPIKey extracts the API key from the request context
+// GetAPIKey extracts the API key from the request context.
 func GetAPIKey(c forge.Context) *apikey.APIKey {
 	if key := c.Request().Context().Value(APIKeyContextKey); key != nil {
 		if apiKey, ok := key.(*apikey.APIKey); ok {
 			return apiKey
 		}
 	}
+
 	return nil
 }
 
-// GetUser extracts the user associated with the API key from context
+// GetUser extracts the user associated with the API key from context.
 func GetUser(c forge.Context) *user.User {
 	if u := c.Request().Context().Value(APIKeyUserContextKey); u != nil {
 		if usr, ok := u.(*user.User); ok {
 			return usr
 		}
 	}
+
 	return nil
 }
 
 // GetOrgID extracts the organization ID from context (V2 architecture)
-// Returns the xid.ID, check with IsNil() before use
+// Returns the xid.ID, check with IsNil() before use.
 func GetOrgID(c forge.Context) string {
 	orgID, _ := contexts.GetOrganizationID(c.Request().Context())
 	if orgID.IsNil() {
 		return ""
 	}
+
 	return orgID.String()
 }
 
-// IsAuthenticated checks if the request is authenticated via API key
+// IsAuthenticated checks if the request is authenticated via API key.
 func IsAuthenticated(c forge.Context) bool {
 	return c.Request().Context().Value(APIKeyAuthenticatedKey) == true
 }
 
-// GetScopes returns the scopes associated with the authenticated API key
+// GetScopes returns the scopes associated with the authenticated API key.
 func GetScopes(c forge.Context) []string {
 	if scopes := c.Request().Context().Value(APIKeyPermissionsKey); scopes != nil {
 		if s, ok := scopes.([]string); ok {
 			return s
 		}
 	}
+
 	return []string{}
 }

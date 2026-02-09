@@ -17,11 +17,12 @@ import (
 
 // Configuration Management Handlers
 
-// ServeConfigPage renders the SCIM configuration page
+// ServeConfigPage renders the SCIM configuration page.
 func (e *DashboardExtension) ServeConfigPage(ctx *router.PageContext) (g.Node, error) {
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -39,8 +40,8 @@ func (e *DashboardExtension) ServeConfigPage(ctx *router.PageContext) (g.Node, e
 	return content, nil
 }
 
-// renderConfigPageContent renders the configuration page content
-func (e *DashboardExtension) renderConfigPageContent(currentApp interface{}, orgID *xid.ID) g.Node {
+// renderConfigPageContent renders the configuration page content.
+func (e *DashboardExtension) renderConfigPageContent(currentApp any, orgID *xid.ID) g.Node {
 	mode := e.detectMode()
 	config := e.plugin.config
 
@@ -394,7 +395,7 @@ func (e *DashboardExtension) renderConfigPageContent(currentApp interface{}, org
 	)
 }
 
-// renderAttributeMappingSection renders the attribute mapping configuration section
+// renderAttributeMappingSection renders the attribute mapping configuration section.
 func (e *DashboardExtension) renderAttributeMappingSection(basePath string, appID *xid.ID, config *Config) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -457,7 +458,7 @@ func (e *DashboardExtension) renderAttributeMappingSection(basePath string, appI
 	)
 }
 
-// renderMappingField renders a single mapping field
+// renderMappingField renders a single mapping field.
 func (e *DashboardExtension) renderMappingField(label, name, value string) g.Node {
 	return Div(
 		Label(
@@ -475,7 +476,7 @@ func (e *DashboardExtension) renderMappingField(label, name, value string) g.Nod
 	)
 }
 
-// renderSecuritySection renders the security and rate limiting section
+// renderSecuritySection renders the security and rate limiting section.
 func (e *DashboardExtension) renderSecuritySection(basePath string, appID *xid.ID, config *Config) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -653,7 +654,7 @@ func (e *DashboardExtension) renderSecuritySection(basePath string, appID *xid.I
 	)
 }
 
-// HandleUpdateUserProvisioning handles user provisioning settings update
+// HandleUpdateUserProvisioning handles user provisioning settings update.
 func (e *DashboardExtension) HandleUpdateUserProvisioning(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	if err := ctx.Request.ParseForm(); err != nil {
@@ -683,10 +684,11 @@ func (e *DashboardExtension) HandleUpdateUserProvisioning(ctx *router.PageContex
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=user_provisioning",
 		e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateGroupSync handles group sync settings update
+// HandleUpdateGroupSync handles group sync settings update.
 func (e *DashboardExtension) HandleUpdateGroupSync(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	if err := ctx.Request.ParseForm(); err != nil {
@@ -716,10 +718,11 @@ func (e *DashboardExtension) HandleUpdateGroupSync(ctx *router.PageContext) (g.N
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=group_sync",
 		e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateAttributeMapping handles attribute mapping update
+// HandleUpdateAttributeMapping handles attribute mapping update.
 func (e *DashboardExtension) HandleUpdateAttributeMapping(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	if err := ctx.Request.ParseForm(); err != nil {
@@ -746,10 +749,11 @@ func (e *DashboardExtension) HandleUpdateAttributeMapping(ctx *router.PageContex
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=attribute_mapping",
 		e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateSecurity handles security settings update
+// HandleUpdateSecurity handles security settings update.
 func (e *DashboardExtension) HandleUpdateSecurity(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	if err := ctx.Request.ParseForm(); err != nil {
@@ -768,9 +772,11 @@ func (e *DashboardExtension) HandleUpdateSecurity(ctx *router.PageContext) (g.No
 	if requestsPerMin > 0 {
 		e.plugin.config.RateLimit.RequestsPerMin = requestsPerMin
 	}
+
 	if burstSize > 0 {
 		e.plugin.config.RateLimit.BurstSize = burstSize
 	}
+
 	e.plugin.config.Security.RequireHTTPS = requireHTTPS
 	e.plugin.config.Security.AuditAllOperations = auditAll
 	e.plugin.config.Security.MaskSensitiveData = maskSensitive
@@ -785,10 +791,11 @@ func (e *DashboardExtension) HandleUpdateSecurity(ctx *router.PageContext) (g.No
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=security",
 		e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleUpdateWebhooks handles webhook configuration update
+// HandleUpdateWebhooks handles webhook configuration update.
 func (e *DashboardExtension) HandleUpdateWebhooks(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	if err := ctx.Request.ParseForm(); err != nil {
@@ -824,5 +831,6 @@ func (e *DashboardExtension) HandleUpdateWebhooks(ctx *router.PageContext) (g.No
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-config?success=webhooks",
 		e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }

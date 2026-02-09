@@ -10,13 +10,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles email verification HTTP endpoints
+// Handler handles email verification HTTP endpoints.
 type Handler struct {
 	svc      *Service
 	authInst core.Authsome
 }
 
-// NewHandler creates a new email verification handler
+// NewHandler creates a new email verification handler.
 func NewHandler(svc *Service, authInst core.Authsome) *Handler {
 	return &Handler{
 		svc:      svc,
@@ -24,16 +24,17 @@ func NewHandler(svc *Service, authInst core.Authsome) *Handler {
 	}
 }
 
-// handleError returns structured error response
+// handleError returns structured error response.
 func handleError(c forge.Context, err error, code string, message string, defaultStatus int) error {
 	if authErr, ok := err.(*errs.AuthsomeError); ok {
 		return c.JSON(authErr.HTTPStatus, authErr)
 	}
+
 	return c.JSON(defaultStatus, errs.New(code, message, defaultStatus).WithError(err))
 }
 
 // Send handles manual verification email sending
-// POST /email-verification/send
+// POST /email-verification/send.
 func (h *Handler) Send(c forge.Context) error {
 	var req SendRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -73,7 +74,7 @@ func (h *Handler) Send(c forge.Context) error {
 }
 
 // Verify handles email verification via token
-// GET /email-verification/verify?token=xyz
+// GET /email-verification/verify?token=xyz.
 func (h *Handler) Verify(c forge.Context) error {
 	var req VerifyRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -94,13 +95,15 @@ func (h *Handler) Verify(c forge.Context) error {
 	// Verify token
 	response, err := h.svc.VerifyToken(c.Request().Context(), appID, req.Token, true, ip, ua)
 	if err != nil {
-		if err == ErrTokenNotFound {
+		switch err {
+		case ErrTokenNotFound:
 			return c.JSON(http.StatusNotFound, err)
-		} else if err == ErrTokenExpired || err == ErrTokenAlreadyUsed {
+		case ErrTokenExpired, ErrTokenAlreadyUsed:
 			return c.JSON(http.StatusGone, err)
-		} else if err == ErrAlreadyVerified {
+		case ErrAlreadyVerified:
 			return c.JSON(http.StatusBadRequest, err)
 		}
+
 		return handleError(c, err, "VERIFY_FAILED", "Failed to verify email", http.StatusInternalServerError)
 	}
 
@@ -115,7 +118,7 @@ func (h *Handler) Verify(c forge.Context) error {
 }
 
 // Resend handles resending verification email
-// POST /email-verification/resend
+// POST /email-verification/resend.
 func (h *Handler) Resend(c forge.Context) error {
 	var req ResendRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -132,13 +135,15 @@ func (h *Handler) Resend(c forge.Context) error {
 	// Resend verification
 	err := h.svc.ResendVerification(c.Request().Context(), appID, req.Email)
 	if err != nil {
-		if err == ErrUserNotFound {
+		switch err {
+		case ErrUserNotFound:
 			return c.JSON(http.StatusNotFound, err)
-		} else if err == ErrAlreadyVerified {
+		case ErrAlreadyVerified:
 			return c.JSON(http.StatusBadRequest, err)
-		} else if err == ErrRateLimitExceeded {
+		case ErrRateLimitExceeded:
 			return c.JSON(http.StatusTooManyRequests, err)
 		}
+
 		return handleError(c, err, "RESEND_FAILED", "Failed to resend verification email", http.StatusInternalServerError)
 	}
 
@@ -146,7 +151,7 @@ func (h *Handler) Resend(c forge.Context) error {
 }
 
 // Status handles checking verification status for current user
-// GET /email-verification/status (requires authentication)
+// GET /email-verification/status (requires authentication).
 func (h *Handler) Status(c forge.Context) error {
 	// Extract user ID from context (set by auth middleware)
 	userID := c.Get("userID")

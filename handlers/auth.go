@@ -45,7 +45,7 @@ type AuthHandler struct {
 	baseURL           string // Base URL for verification links (e.g., "https://myapp.com")
 }
 
-// Use shared response types
+// Use shared response types.
 type TwoFARequiredResponse = responses.TwoFARequiredResponse
 type SessionResponse = responses.SessionResponse
 
@@ -79,6 +79,7 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
@@ -89,28 +90,35 @@ func (h *AuthHandler) SignUp(c forge.Context) error {
 	if h.sec != nil {
 		if allowed := h.sec.CheckIPAllowed(c.Request().Context(), ip); !allowed {
 			_ = h.sec.LogEvent(c.Request().Context(), "ip_blocked_signup", nil, ip, c.Request().UserAgent(), "")
+
 			return c.JSON(http.StatusForbidden, errs.New("IP_NOT_ALLOWED", "IP address not allowed", http.StatusForbidden))
 		}
 		// Geo-based restrictions if configured
 		if ok := h.sec.CheckCountryAllowed(c.Request().Context(), ip); !ok {
 			_ = h.sec.LogEvent(c.Request().Context(), "country_blocked_signup", nil, ip, c.Request().UserAgent(), "")
+
 			return c.JSON(http.StatusForbidden, errs.New("GEO_RESTRICTED", "Geographic restriction", http.StatusForbidden))
 		}
 	}
+
 	var req auth.SignUpRequest
 	if err := c.BindRequest(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
+
 	req.IPAddress = ip
 	req.UserAgent = c.Request().UserAgent()
+
 	res, err := h.auth.SignUp(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
+
 	if h.sec != nil && res.User != nil {
 		uid := res.User.ID
 		_ = h.sec.LogEvent(c.Request().Context(), "signup_success", &uid, ip, req.UserAgent, "")
 	}
+
 	if h.aud != nil && res.User != nil {
 		uid := res.User.ID
 		if err := h.aud.Log(c.Request().Context(), &uid, string(audit.ActionAuthSignup), "user:"+uid.String(), ip, req.UserAgent, ""); err != nil {
@@ -140,22 +148,28 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
+
 	ip := clientIPFromRequest(c.Request(), h.sec)
 	if h.sec != nil {
 		if allowed := h.sec.CheckIPAllowed(c.Request().Context(), ip); !allowed {
 			_ = h.sec.LogEvent(c.Request().Context(), "ip_blocked_signin", nil, ip, c.Request().UserAgent(), "")
+
 			return c.JSON(http.StatusForbidden, errs.New("IP_NOT_ALLOWED", "IP address not allowed", http.StatusForbidden))
 		}
+
 		if ok := h.sec.CheckCountryAllowed(c.Request().Context(), ip); !ok {
 			_ = h.sec.LogEvent(c.Request().Context(), "country_blocked_signin", nil, ip, c.Request().UserAgent(), "")
+
 			return c.JSON(http.StatusForbidden, errs.New("GEO_RESTRICTED", "Geographic restriction", http.StatusForbidden))
 		}
 	}
+
 	var req auth.SignInRequest
 	if err := c.BindRequest(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
@@ -166,30 +180,37 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		if lockKey == "" {
 			lockKey = ip
 		}
+
 		if h.sec.IsLockedOut(c.Request().Context(), lockKey) {
 			_ = h.sec.LogEvent(c.Request().Context(), "lockout_active", nil, ip, c.Request().UserAgent(), "")
+
 			lockedUntil := h.sec.GetLockoutTime(c.Request().Context(), lockKey)
 			if !lockedUntil.IsZero() {
 				return c.JSON(423, errs.AccountLockedWithTime("too many failed attempts", lockedUntil))
 			}
+
 			return c.JSON(423, errs.AccountLocked("too many failed attempts"))
 		}
 	}
+
 	req.IPAddress = ip
 	req.UserAgent = c.Request().UserAgent()
 	// Separate credentials check from session creation to allow 2FA gating
 	u, err := h.auth.CheckCredentials(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
 		var attemptsRemaining int
+
 		if h.sec != nil {
 			lockKey := req.Email
 			if lockKey == "" {
 				lockKey = ip
 			}
+
 			h.sec.RecordFailedAttempt(c.Request().Context(), lockKey)
 			attemptsRemaining = h.sec.GetAttemptsRemaining(c.Request().Context(), lockKey)
 			_ = h.sec.LogEvent(c.Request().Context(), "signin_failed", nil, ip, req.UserAgent, "")
 		}
+
 		if h.aud != nil {
 			_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionAuthSigninFailed), "auth:signin", ip, req.UserAgent, "")
 		}
@@ -211,6 +232,7 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 	fp := req.UserAgent + "|" + req.IPAddress
 	// If 2FA is enabled and device is not trusted, return challenge requirement
 	require2FA := false
+
 	if h.twofaRepo != nil && u != nil {
 		if sec, _ := h.twofaRepo.GetSecret(c.Request().Context(), u.ID); sec != nil && sec.Enabled {
 			trusted, _ := h.twofaRepo.IsTrustedDevice(c.Request().Context(), u.ID, fp, time.Now())
@@ -219,25 +241,31 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 			}
 		}
 	}
+
 	if require2FA {
 		// Track device even when requiring 2FA
 		if h.dev != nil {
 			appID, _ := contexts.GetAppID(c.Request().Context())
 			_, _ = h.dev.TrackDevice(c.Request().Context(), appID, u.ID, fp, req.UserAgent, req.IPAddress)
 		}
+
 		if h.sec != nil {
 			lockKey := req.Email
 			if lockKey == "" {
 				lockKey = ip
 			}
+
 			h.sec.ResetFailedAttempts(c.Request().Context(), lockKey)
+
 			uid := u.ID
 			_ = h.sec.LogEvent(c.Request().Context(), "signin_twofa_required", &uid, ip, req.UserAgent, "")
 		}
+
 		if h.aud != nil {
 			uid := u.ID
 			_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionAuthSigninTwoFARequired), "user:"+uid.String(), ip, req.UserAgent, "")
 		}
+
 		return c.JSON(http.StatusOK, &TwoFARequiredResponse{User: u, RequireTwoFA: true, DeviceID: fp})
 	}
 	// Otherwise, create session and return normal auth response
@@ -250,16 +278,20 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 		appID, _ := contexts.GetAppID(c.Request().Context())
 		_, _ = h.dev.TrackDevice(c.Request().Context(), appID, res.User.ID, fp, req.UserAgent, req.IPAddress)
 	}
+
 	if h.sec != nil && res.User != nil {
 		// Reset failed attempts on success
 		lockKey := req.Email
 		if lockKey == "" {
 			lockKey = ip
 		}
+
 		h.sec.ResetFailedAttempts(c.Request().Context(), lockKey)
+
 		uid := res.User.ID
 		_ = h.sec.LogEvent(c.Request().Context(), "signin_success", &uid, ip, req.UserAgent, "")
 	}
+
 	if h.aud != nil && res.User != nil {
 		uid := res.User.ID
 		if err := h.aud.Log(c.Request().Context(), &uid, string(audit.ActionAuthSignin), "user:"+uid.String(), ip, req.UserAgent, ""); err != nil {
@@ -281,10 +313,11 @@ func (h *AuthHandler) SignIn(c forge.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-// UpdateUser updates the authenticated user's profile (name, image, username)
+// UpdateUser updates the authenticated user's profile (name, image, username).
 func (h *AuthHandler) UpdateUser(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
@@ -295,7 +328,9 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 	if err != nil || cookie == nil {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
+
 	token := cookie.Value
+
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
 		return c.JSON(http.StatusUnauthorized, errs.SessionInvalid())
@@ -326,6 +361,7 @@ func (h *AuthHandler) UpdateUser(c forge.Context) error {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionUserUpdated), "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
+
 	return c.JSON(http.StatusOK, updated)
 }
 
@@ -336,10 +372,12 @@ func clientIPFromRequest(r *http.Request, ssvc *sec.Service) string {
 	if host, _, err := net.SplitHostPort(remote); err == nil {
 		remote = host
 	}
+
 	trust := false
 	if ssvc != nil {
 		trust = ssvc.ShouldTrustForwardedHeaders(remote)
 	}
+
 	if trust {
 		// X-Forwarded-For: may be a comma-separated list of IPs
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
@@ -350,6 +388,7 @@ func clientIPFromRequest(r *http.Request, ssvc *sec.Service) string {
 					if host, _, err := net.SplitHostPort(ip); err == nil {
 						return host
 					}
+
 					return ip
 				}
 			}
@@ -359,6 +398,7 @@ func clientIPFromRequest(r *http.Request, ssvc *sec.Service) string {
 			if host, _, err := net.SplitHostPort(xr); err == nil {
 				return host
 			}
+
 			return xr
 		}
 		// Forwarded: e.g., for=192.0.2.60;proto=http;by=203.0.113.43
@@ -372,21 +412,25 @@ func clientIPFromRequest(r *http.Request, ssvc *sec.Service) string {
 				if cut := strings.IndexAny(rest, ";, "); cut > 0 {
 					rest = rest[:cut]
 				}
+
 				if rest != "" {
 					if host, _, err := net.SplitHostPort(rest); err == nil {
 						return host
 					}
+
 					return rest
 				}
 			}
 		}
 	}
+
 	return remote
 }
 
 func (h *AuthHandler) SignOut(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
@@ -397,8 +441,10 @@ func (h *AuthHandler) SignOut(c forge.Context) error {
 	// 1. Session from context (set by auth middleware)
 	// 2. Token from request body
 	// 3. Token from cookie
-	var token string
-	var userID *xid.ID
+	var (
+		token  string
+		userID *xid.ID
+	)
 
 	// Try to get session from auth context (middleware-based auth)
 	authCtx, ok := contexts.GetAuthContext(c.Request().Context())
@@ -462,10 +508,11 @@ func (h *AuthHandler) SignOut(c forge.Context) error {
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "signed_out"})
 }
 
-// RefreshSession refreshes an access token using a refresh token
+// RefreshSession refreshes an access token using a refresh token.
 func (h *AuthHandler) RefreshSession(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
@@ -499,7 +546,7 @@ func (h *AuthHandler) RefreshSession(c forge.Context) error {
 	}
 
 	// Return response with new tokens
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"session":          refreshResp.Session,
 		"accessToken":      refreshResp.AccessToken,
 		"refreshToken":     refreshResp.RefreshToken,
@@ -511,16 +558,20 @@ func (h *AuthHandler) RefreshSession(c forge.Context) error {
 func (h *AuthHandler) GetSession(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
+
 	cookie, err := c.Request().Cookie(h.sessionCookieName)
 	if err != nil || cookie == nil {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
+
 	token := cookie.Value
+
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, errs.Wrap(err, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized))
@@ -543,30 +594,36 @@ func (h *AuthHandler) GetSession(c forge.Context) error {
 		uid := res.User.ID
 		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionSessionChecked), "session:"+res.Session.ID.String(), ip, c.Request().UserAgent(), "")
 	}
+
 	return c.JSON(http.StatusOK, &SessionResponse{
 		User:    res.User,
 		Session: res.Session,
 	})
 }
 
-// ListDevices lists devices for the authenticated user
+// ListDevices lists devices for the authenticated user.
 func (h *AuthHandler) ListDevices(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
+
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
+
 	token := cookie.Value
+
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
 		return c.JSON(http.StatusUnauthorized, errs.SessionInvalid())
 	}
+
 	list, err := h.dev.ListDevices(c.Request().Context(), &device.ListDevicesFilter{
 		UserID: res.User.ID,
 		PaginationParams: pagination.PaginationParams{
@@ -577,50 +634,60 @@ func (h *AuthHandler) ListDevices(c forge.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
+
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
 		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionDevicesListed), "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
+
 	return c.JSON(http.StatusOK, list)
 }
 
-// RevokeDevice deletes a device by fingerprint for the authenticated user
+// RevokeDevice deletes a device by fingerprint for the authenticated user.
 func (h *AuthHandler) RevokeDevice(c forge.Context) error {
 	if h.rl != nil {
 		key := c.Request().RemoteAddr + ":" + c.Request().URL.Path
+
 		ok, err := h.rl.CheckLimitForPath(c.Request().Context(), key, c.Request().URL.Path)
 		if err != nil || !ok {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Rate limit exceeded", http.StatusTooManyRequests))
 		}
 	}
+
 	cookie, err := c.Request().Cookie("session_token")
 	if err != nil || cookie == nil {
 		return c.JSON(http.StatusUnauthorized, errs.Unauthorized())
 	}
+
 	token := cookie.Value
+
 	res, err := h.auth.GetSession(c.Request().Context(), token)
 	if err != nil || res.User == nil {
 		return c.JSON(http.StatusUnauthorized, errs.SessionInvalid())
 	}
+
 	var body struct {
 		Fingerprint string `json:"fingerprint"`
 	}
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil || body.Fingerprint == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid request body", http.StatusBadRequest))
 	}
+
 	if err := h.dev.RevokeDevice(c.Request().Context(), res.User.ID, body.Fingerprint); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.Wrap(err, "BAD_REQUEST", "Bad request", http.StatusBadRequest))
 	}
+
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		uid := res.User.ID
 		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionDeviceRevoked), "user:"+uid.String(), ip, c.Request().UserAgent(), "fingerprint="+body.Fingerprint)
 	}
+
 	return c.JSON(http.StatusOK, &StatusResponse{Status: "device_revoked"})
 }
 
-// RequestPasswordReset handles password reset requests
+// RequestPasswordReset handles password reset requests.
 func (h *AuthHandler) RequestPasswordReset(c forge.Context) error {
 	var req struct {
 		Email string `json:"email" validate:"required,email"`
@@ -640,6 +707,7 @@ func (h *AuthHandler) RequestPasswordReset(c forge.Context) error {
 	if h.rl != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
 		key := "password_reset:" + ip
+
 		allowed, err := h.rl.CheckLimit(c.Request().Context(), key, rl.Rule{Max: 3, Window: time.Hour})
 		if err != nil || !allowed {
 			return c.JSON(http.StatusTooManyRequests, errs.New("RATE_LIMIT_EXCEEDED", "Too many password reset requests", http.StatusTooManyRequests))
@@ -696,13 +764,13 @@ func (h *AuthHandler) RequestPasswordReset(c forge.Context) error {
 	}
 
 	// Always return success to prevent email enumeration
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"message": "If the email exists, a password reset link has been sent",
 	})
 }
 
 // ResetPassword handles password reset confirmation
-// Supports both token (URL link) and code (6-digit mobile entry)
+// Supports both token (URL link) and code (6-digit mobile entry).
 func (h *AuthHandler) ResetPassword(c forge.Context) error {
 	var req struct {
 		Token       string `json:"token"` // URL token for link-based reset
@@ -732,31 +800,36 @@ func (h *AuthHandler) ResetPassword(c forge.Context) error {
 		if errors.Is(err, auth.ErrInvalidResetToken) {
 			return c.JSON(http.StatusBadRequest, errs.New("INVALID_TOKEN", "Invalid or expired reset token/code", http.StatusBadRequest))
 		}
+
 		if errors.Is(err, auth.ErrResetTokenExpired) {
 			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_EXPIRED", "Reset token/code has expired", http.StatusBadRequest))
 		}
+
 		if errors.Is(err, auth.ErrResetTokenAlreadyUsed) {
 			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_USED", "Reset token/code has already been used", http.StatusBadRequest))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "RESET_FAILED", "Failed to reset password", http.StatusInternalServerError))
 	}
 
 	// Audit log
 	if h.aud != nil {
 		ip := clientIPFromRequest(c.Request(), h.sec)
+
 		method := "token"
 		if req.Code != "" {
 			method = "code"
 		}
+
 		_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionPasswordResetCompleted), method, ip, c.Request().UserAgent(), "")
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"message": "Password has been reset successfully",
 	})
 }
 
-// ValidateResetToken validates a password reset token
+// ValidateResetToken validates a password reset token.
 func (h *AuthHandler) ValidateResetToken(c forge.Context) error {
 	token := c.Request().URL.Query().Get("token")
 	if token == "" {
@@ -768,12 +841,12 @@ func (h *AuthHandler) ValidateResetToken(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "VALIDATION_FAILED", "Failed to validate token", http.StatusInternalServerError))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"valid": valid,
 	})
 }
 
-// ChangePassword handles password change requests
+// ChangePassword handles password change requests.
 func (h *AuthHandler) ChangePassword(c forge.Context) error {
 	res, err := h.getAuthenticatedUser(c)
 	if err != nil || res == nil || res.User == nil {
@@ -795,6 +868,7 @@ func (h *AuthHandler) ChangePassword(c forge.Context) error {
 		if errors.Is(err, types.ErrInvalidCredentials) {
 			return c.JSON(http.StatusUnauthorized, errs.New("INVALID_OLD_PASSWORD", "Current password is incorrect", http.StatusUnauthorized))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "PASSWORD_CHANGE_FAILED", "Failed to change password", http.StatusInternalServerError))
 	}
 
@@ -805,12 +879,12 @@ func (h *AuthHandler) ChangePassword(c forge.Context) error {
 		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionPasswordChanged), "user:"+uid.String(), ip, c.Request().UserAgent(), "")
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"message": "Password changed successfully",
 	})
 }
 
-// RequestEmailChange handles email change requests
+// RequestEmailChange handles email change requests.
 func (h *AuthHandler) RequestEmailChange(c forge.Context) error {
 	res, err := h.getAuthenticatedUser(c)
 	if err != nil || res == nil || res.User == nil {
@@ -874,12 +948,12 @@ func (h *AuthHandler) RequestEmailChange(c forge.Context) error {
 		_ = h.aud.Log(c.Request().Context(), &uid, string(audit.ActionEmailChangeRequested), "user:"+uid.String(), ip, c.Request().UserAgent(), "new_email="+req.NewEmail)
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"message": "Email change confirmation sent to your current email address",
 	})
 }
 
-// ConfirmEmailChange handles email change confirmation
+// ConfirmEmailChange handles email change confirmation.
 func (h *AuthHandler) ConfirmEmailChange(c forge.Context) error {
 	var req struct {
 		Token string `json:"token" validate:"required"`
@@ -895,12 +969,15 @@ func (h *AuthHandler) ConfirmEmailChange(c forge.Context) error {
 		if errors.Is(err, auth.ErrInvalidChangeToken) {
 			return c.JSON(http.StatusBadRequest, errs.New("INVALID_TOKEN", "Invalid or expired email change token", http.StatusBadRequest))
 		}
+
 		if errors.Is(err, auth.ErrChangeTokenExpired) {
 			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_EXPIRED", "Email change token has expired", http.StatusBadRequest))
 		}
+
 		if errors.Is(err, auth.ErrChangeTokenAlreadyUsed) {
 			return c.JSON(http.StatusBadRequest, errs.New("TOKEN_USED", "Email change token has already been used", http.StatusBadRequest))
 		}
+
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "EMAIL_CHANGE_FAILED", "Failed to change email", http.StatusInternalServerError))
 	}
 
@@ -910,12 +987,12 @@ func (h *AuthHandler) ConfirmEmailChange(c forge.Context) error {
 		_ = h.aud.Log(c.Request().Context(), nil, string(audit.ActionEmailChangeConfirmed), "token", ip, c.Request().UserAgent(), "")
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"message": "Email address has been changed successfully",
 	})
 }
 
-// getAuthenticatedUser retrieves the authenticated user from the session cookie
+// getAuthenticatedUser retrieves the authenticated user from the session cookie.
 func (h *AuthHandler) getAuthenticatedUser(c forge.Context) (*responses.AuthResponse, error) {
 	// Get session token from cookie
 	cookie, err := c.Request().Cookie(h.sessionCookieName)

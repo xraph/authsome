@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SubscriptionAlertConfig represents an alert configuration in the database
+// SubscriptionAlertConfig represents an alert configuration in the database.
 type SubscriptionAlertConfig struct {
 	bun.BaseModel `bun:"table:subscription_alert_configs,alias:sac"`
 
@@ -30,7 +30,7 @@ type SubscriptionAlertConfig struct {
 	UpdatedAt        time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionAlert represents an alert in the database
+// SubscriptionAlert represents an alert in the database.
 type SubscriptionAlert struct {
 	bun.BaseModel `bun:"table:subscription_alerts,alias:sa"`
 
@@ -61,7 +61,7 @@ type SubscriptionAlert struct {
 	UpdatedAt      time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionAlertTemplate represents an alert template in the database
+// SubscriptionAlertTemplate represents an alert template in the database.
 type SubscriptionAlertTemplate struct {
 	bun.BaseModel `bun:"table:subscription_alert_templates,alias:sat"`
 

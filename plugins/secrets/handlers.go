@@ -10,13 +10,13 @@ import (
 	"github.com/xraph/authsome/plugins/secrets/core"
 )
 
-// Handler handles HTTP requests for the secrets API
+// Handler handles HTTP requests for the secrets API.
 type Handler struct {
 	service *Service
 	logger  forge.Logger
 }
 
-// NewHandler creates a new secrets handler
+// NewHandler creates a new secrets handler.
 func NewHandler(service *Service, logger forge.Logger) *Handler {
 	return &Handler{
 		service: service,
@@ -28,7 +28,7 @@ func NewHandler(service *Service, logger forge.Logger) *Handler {
 // Request/Response DTOs
 // =============================================================================
 
-// Request types
+// Request types.
 type ListSecretsRequest struct {
 	Prefix    string   `query:"prefix"`
 	ValueType string   `query:"valueType"`
@@ -42,12 +42,12 @@ type ListSecretsRequest struct {
 }
 
 type CreateSecretRequest struct {
-	Path        string                 `json:"path" validate:"required"`
-	Value       interface{}            `json:"value" validate:"required"`
-	ValueType   string                 `json:"valueType" validate:"required"`
-	Description string                 `json:"description"`
-	Tags        []string               `json:"tags"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	Path        string         `json:"path"        validate:"required"`
+	Value       any            `json:"value"       validate:"required"`
+	ValueType   string         `json:"valueType"   validate:"required"`
+	Description string         `json:"description"`
+	Tags        []string       `json:"tags"`
+	Metadata    map[string]any `json:"metadata"`
 }
 
 type GetSecretRequest struct {
@@ -55,11 +55,11 @@ type GetSecretRequest struct {
 }
 
 type UpdateSecretRequest struct {
-	ID          string                 `path:"id" validate:"required"`
-	Value       interface{}            `json:"value"`
-	Description string                 `json:"description"`
-	Tags        []string               `json:"tags"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	ID          string         `path:"id"          validate:"required"`
+	Value       any            `json:"value"`
+	Description string         `json:"description"`
+	Tags        []string       `json:"tags"`
+	Metadata    map[string]any `json:"metadata"`
 }
 
 type DeleteSecretRequest struct {
@@ -75,13 +75,13 @@ type GetByPathRequest struct {
 }
 
 type GetVersionsRequest struct {
-	ID       string `path:"id" validate:"required"`
+	ID       string `path:"id"        validate:"required"`
 	Page     int    `query:"page"`
 	PageSize int    `query:"pageSize"`
 }
 
 type RollbackRequest struct {
-	ID      string `path:"id" validate:"required"`
+	ID      string `path:"id"      validate:"required"`
 	Version string `path:"version" validate:"required"`
 	Reason  string `json:"reason"`
 }
@@ -90,25 +90,25 @@ type GetTreeRequest struct {
 	Prefix string `query:"prefix"`
 }
 
-// ErrorResponse is the standard error response
+// ErrorResponse is the standard error response.
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
 	Code    string `json:"code,omitempty"`
 }
 
-// SuccessResponse is a generic success response
+// SuccessResponse is a generic success response.
 type SuccessResponse struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Data    any    `json:"data,omitempty"`
 }
 
 // =============================================================================
 // Secret CRUD Handlers
 // =============================================================================
 
-// List handles GET /secrets
+// List handles GET /secrets.
 func (h *Handler) List(c forge.Context) error {
 	var req ListSecretsRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -122,6 +122,7 @@ func (h *Handler) List(c forge.Context) error {
 	if req.SortBy == "" {
 		req.SortBy = "path"
 	}
+
 	if req.SortOrder == "" {
 		req.SortOrder = "asc"
 	}
@@ -152,7 +153,7 @@ func (h *Handler) List(c forge.Context) error {
 	})
 }
 
-// Create handles POST /secrets
+// Create handles POST /secrets.
 func (h *Handler) Create(c forge.Context) error {
 	var req CreateSecretRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -179,7 +180,7 @@ func (h *Handler) Create(c forge.Context) error {
 	return c.JSON(http.StatusCreated, secret)
 }
 
-// Get handles GET /secrets/:id
+// Get handles GET /secrets/:id.
 func (h *Handler) Get(c forge.Context) error {
 	var req GetSecretRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -205,7 +206,7 @@ func (h *Handler) Get(c forge.Context) error {
 	return c.JSON(http.StatusOK, secret)
 }
 
-// GetValue handles GET /secrets/:id/value
+// GetValue handles GET /secrets/:id/value.
 func (h *Handler) GetValue(c forge.Context) error {
 	var req GetValueRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -237,7 +238,7 @@ func (h *Handler) GetValue(c forge.Context) error {
 	})
 }
 
-// Update handles PUT /secrets/:id
+// Update handles PUT /secrets/:id.
 func (h *Handler) Update(c forge.Context) error {
 	var req UpdateSecretRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -270,7 +271,7 @@ func (h *Handler) Update(c forge.Context) error {
 	return c.JSON(http.StatusOK, secret)
 }
 
-// Delete handles DELETE /secrets/:id
+// Delete handles DELETE /secrets/:id.
 func (h *Handler) Delete(c forge.Context) error {
 	var req DeleteSecretRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -302,7 +303,7 @@ func (h *Handler) Delete(c forge.Context) error {
 // Path-based Handlers
 // =============================================================================
 
-// GetByPath handles GET /secrets/path/*path
+// GetByPath handles GET /secrets/path/*path.
 func (h *Handler) GetByPath(c forge.Context) error {
 	path := c.Param("path")
 	if path == "" {
@@ -320,7 +321,7 @@ func (h *Handler) GetByPath(c forge.Context) error {
 	return c.JSON(http.StatusOK, secret)
 }
 
-// GetValueByPath handles GET /secrets/path/*path/value
+// GetValueByPath handles GET /secrets/path/*path/value.
 func (h *Handler) GetValueByPath(c forge.Context) error {
 	path := c.Param("path")
 	if path == "" {
@@ -348,7 +349,7 @@ func (h *Handler) GetValueByPath(c forge.Context) error {
 // Version Handlers
 // =============================================================================
 
-// GetVersions handles GET /secrets/:id/versions
+// GetVersions handles GET /secrets/:id/versions.
 func (h *Handler) GetVersions(c forge.Context) error {
 	var req GetVersionsRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -369,9 +370,11 @@ func (h *Handler) GetVersions(c forge.Context) error {
 	// Set defaults
 	page := req.Page
 	pageSize := req.PageSize
+
 	if page == 0 {
 		page = 1
 	}
+
 	if pageSize == 0 {
 		pageSize = 20
 	}
@@ -390,7 +393,7 @@ func (h *Handler) GetVersions(c forge.Context) error {
 	})
 }
 
-// Rollback handles POST /secrets/:id/rollback/:version
+// Rollback handles POST /secrets/:id/rollback/:version.
 func (h *Handler) Rollback(c forge.Context) error {
 	var req RollbackRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -428,7 +431,7 @@ func (h *Handler) Rollback(c forge.Context) error {
 // Stats and Tree Handlers
 // =============================================================================
 
-// GetStats handles GET /secrets/stats
+// GetStats handles GET /secrets/stats.
 func (h *Handler) GetStats(c forge.Context) error {
 	stats, err := h.service.GetStats(c.Request().Context())
 	if err != nil {
@@ -438,7 +441,7 @@ func (h *Handler) GetStats(c forge.Context) error {
 	return c.JSON(http.StatusOK, stats)
 }
 
-// GetTree handles GET /secrets/tree
+// GetTree handles GET /secrets/tree.
 func (h *Handler) GetTree(c forge.Context) error {
 	var req GetTreeRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -460,13 +463,14 @@ func (h *Handler) GetTree(c forge.Context) error {
 // Helper Methods
 // =============================================================================
 
-// parseID parses an xid from a URL parameter
+// parseID parses an xid from a URL parameter.
 func (h *Handler) parseID(c forge.Context, param string) (xid.ID, error) {
 	idStr := c.Param(param)
+
 	return xid.FromString(idStr)
 }
 
-// handleError converts service errors to HTTP responses
+// handleError converts service errors to HTTP responses.
 func (h *Handler) handleError(c forge.Context, err error) error {
 	if err == nil {
 		return nil
@@ -519,7 +523,7 @@ func (h *Handler) handleError(c forge.Context, err error) error {
 	}
 }
 
-// splitTags splits a comma-separated tags string into a slice
+// splitTags splits a comma-separated tags string into a slice.
 func splitTags(tags string) []string {
 	if tags == "" {
 		return nil
@@ -527,6 +531,7 @@ func splitTags(tags string) []string {
 
 	result := make([]string, 0)
 	current := ""
+
 	for _, c := range tags {
 		if c == ',' {
 			if current != "" {
@@ -537,8 +542,10 @@ func splitTags(tags string) []string {
 			current += string(c)
 		}
 	}
+
 	if current != "" {
 		result = append(result, current)
 	}
+
 	return result
 }

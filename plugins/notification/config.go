@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// Config holds the notification plugin configuration
+// Config holds the notification plugin configuration.
 type Config struct {
 	// AddDefaultTemplates automatically adds default templates on startup
 	AddDefaultTemplates bool `json:"add_default_templates" yaml:"add_default_templates"`
@@ -51,7 +51,7 @@ type Config struct {
 	Async AsyncConfig `json:"async" yaml:"async"`
 }
 
-// AsyncConfig controls asynchronous notification processing
+// AsyncConfig controls asynchronous notification processing.
 type AsyncConfig struct {
 	// Enabled enables async processing for non-critical notifications
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -69,84 +69,84 @@ type AsyncConfig struct {
 	PersistFailures bool `json:"persist_failures" yaml:"persist_failures"`
 }
 
-// AutoSendConfig controls automatic notification sending for lifecycle events
+// AutoSendConfig controls automatic notification sending for lifecycle events.
 type AutoSendConfig struct {
-	Auth         AuthAutoSendConfig         `json:"auth" yaml:"auth"`
+	Auth         AuthAutoSendConfig         `json:"auth"         yaml:"auth"`
 	Organization OrganizationAutoSendConfig `json:"organization" yaml:"organization"`
-	Session      SessionAutoSendConfig      `json:"session" yaml:"session"`
-	Account      AccountAutoSendConfig      `json:"account" yaml:"account"`
+	Session      SessionAutoSendConfig      `json:"session"      yaml:"session"`
+	Account      AccountAutoSendConfig      `json:"account"      yaml:"account"`
 }
 
-// AuthAutoSendConfig controls authentication-related notifications
+// AuthAutoSendConfig controls authentication-related notifications.
 type AuthAutoSendConfig struct {
-	Welcome           bool `json:"welcome" yaml:"welcome"`
+	Welcome           bool `json:"welcome"            yaml:"welcome"`
 	VerificationEmail bool `json:"verification_email" yaml:"verification_email"`
-	MagicLink         bool `json:"magic_link" yaml:"magic_link"`
-	EmailOTP          bool `json:"email_otp" yaml:"email_otp"`
-	MFACode           bool `json:"mfa_code" yaml:"mfa_code"`
-	PasswordReset     bool `json:"password_reset" yaml:"password_reset"`
+	MagicLink         bool `json:"magic_link"         yaml:"magic_link"`
+	EmailOTP          bool `json:"email_otp"          yaml:"email_otp"`
+	MFACode           bool `json:"mfa_code"           yaml:"mfa_code"`
+	PasswordReset     bool `json:"password_reset"     yaml:"password_reset"`
 }
 
-// OrganizationAutoSendConfig controls organization-related notifications
+// OrganizationAutoSendConfig controls organization-related notifications.
 type OrganizationAutoSendConfig struct {
-	Invite        bool `json:"invite" yaml:"invite"`
-	MemberAdded   bool `json:"member_added" yaml:"member_added"`
+	Invite        bool `json:"invite"         yaml:"invite"`
+	MemberAdded   bool `json:"member_added"   yaml:"member_added"`
 	MemberRemoved bool `json:"member_removed" yaml:"member_removed"`
-	RoleChanged   bool `json:"role_changed" yaml:"role_changed"`
-	Transfer      bool `json:"transfer" yaml:"transfer"`
-	Deleted       bool `json:"deleted" yaml:"deleted"`
-	MemberLeft    bool `json:"member_left" yaml:"member_left"`
+	RoleChanged   bool `json:"role_changed"   yaml:"role_changed"`
+	Transfer      bool `json:"transfer"       yaml:"transfer"`
+	Deleted       bool `json:"deleted"        yaml:"deleted"`
+	MemberLeft    bool `json:"member_left"    yaml:"member_left"`
 }
 
-// SessionAutoSendConfig controls session/device security notifications
+// SessionAutoSendConfig controls session/device security notifications.
 type SessionAutoSendConfig struct {
-	NewDevice       bool `json:"new_device" yaml:"new_device"`
-	NewLocation     bool `json:"new_location" yaml:"new_location"`
+	NewDevice       bool `json:"new_device"       yaml:"new_device"`
+	NewLocation     bool `json:"new_location"     yaml:"new_location"`
 	SuspiciousLogin bool `json:"suspicious_login" yaml:"suspicious_login"`
-	DeviceRemoved   bool `json:"device_removed" yaml:"device_removed"`
-	AllRevoked      bool `json:"all_revoked" yaml:"all_revoked"`
+	DeviceRemoved   bool `json:"device_removed"   yaml:"device_removed"`
+	AllRevoked      bool `json:"all_revoked"      yaml:"all_revoked"`
 }
 
-// AccountAutoSendConfig controls account lifecycle notifications
+// AccountAutoSendConfig controls account lifecycle notifications.
 type AccountAutoSendConfig struct {
 	EmailChangeRequest bool `json:"email_change_request" yaml:"email_change_request"`
-	EmailChanged       bool `json:"email_changed" yaml:"email_changed"`
-	PasswordChanged    bool `json:"password_changed" yaml:"password_changed"`
-	UsernameChanged    bool `json:"username_changed" yaml:"username_changed"`
-	Deleted            bool `json:"deleted" yaml:"deleted"`
-	Suspended          bool `json:"suspended" yaml:"suspended"`
-	Reactivated        bool `json:"reactivated" yaml:"reactivated"`
+	EmailChanged       bool `json:"email_changed"        yaml:"email_changed"`
+	PasswordChanged    bool `json:"password_changed"     yaml:"password_changed"`
+	UsernameChanged    bool `json:"username_changed"     yaml:"username_changed"`
+	Deleted            bool `json:"deleted"              yaml:"deleted"`
+	Suspended          bool `json:"suspended"            yaml:"suspended"`
+	Reactivated        bool `json:"reactivated"          yaml:"reactivated"`
 }
 
-// RateLimit defines rate limiting configuration
+// RateLimit defines rate limiting configuration.
 type RateLimit struct {
 	MaxRequests int           `json:"max_requests" yaml:"max_requests"`
-	Window      time.Duration `json:"window" yaml:"window"`
+	Window      time.Duration `json:"window"       yaml:"window"`
 }
 
-// ProvidersConfig holds provider configurations
+// ProvidersConfig holds provider configurations.
 type ProvidersConfig struct {
-	Email EmailProviderConfig `json:"email" yaml:"email"`
+	Email EmailProviderConfig `json:"email"         yaml:"email"`
 	SMS   *SMSProviderConfig  `json:"sms,omitempty" yaml:"sms,omitempty"` // Optional SMS provider
 }
 
-// EmailProviderConfig holds email provider configuration
+// EmailProviderConfig holds email provider configuration.
 type EmailProviderConfig struct {
-	Provider string                 `json:"provider" yaml:"provider"` // smtp, sendgrid, ses, etc.
-	From     string                 `json:"from" yaml:"from"`
-	FromName string                 `json:"from_name" yaml:"from_name"`
-	ReplyTo  string                 `json:"reply_to" yaml:"reply_to"`
-	Config   map[string]interface{} `json:"config" yaml:"config"`
+	Provider string         `json:"provider"  yaml:"provider"` // smtp, sendgrid, ses, etc.
+	From     string         `json:"from"      yaml:"from"`
+	FromName string         `json:"from_name" yaml:"from_name"`
+	ReplyTo  string         `json:"reply_to"  yaml:"reply_to"`
+	Config   map[string]any `json:"config"    yaml:"config"`
 }
 
-// SMSProviderConfig holds SMS provider configuration
+// SMSProviderConfig holds SMS provider configuration.
 type SMSProviderConfig struct {
-	Provider string                 `json:"provider" yaml:"provider"` // twilio, vonage, aws-sns, etc.
-	From     string                 `json:"from" yaml:"from"`
-	Config   map[string]interface{} `json:"config" yaml:"config"`
+	Provider string         `json:"provider" yaml:"provider"` // twilio, vonage, aws-sns, etc.
+	From     string         `json:"from"     yaml:"from"`
+	Config   map[string]any `json:"config"   yaml:"config"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() Config {
 	return Config{
 		AddDefaultTemplates:   true,
@@ -225,19 +225,23 @@ func DefaultConfig() Config {
 	}
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	if c.RetryAttempts < 0 {
 		c.RetryAttempts = 3
 	}
+
 	if c.RetryDelay == 0 {
 		c.RetryDelay = 5 * time.Minute
 	}
+
 	if c.CleanupAfter == 0 {
 		c.CleanupAfter = 30 * 24 * time.Hour
 	}
+
 	if c.DefaultLanguage == "" {
 		c.DefaultLanguage = "en"
 	}
+
 	return nil
 }

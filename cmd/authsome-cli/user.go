@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"text/tabwriter"
 	"time"
@@ -10,29 +11,31 @@ import (
 	"github.com/rs/xid"
 	"github.com/spf13/cobra"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// userCmd represents the user command
+// userCmd represents the user command.
 var userCmd = &cobra.Command{
 	Use:   "user",
 	Short: "Manage users",
 	Long:  `Commands for managing users in the AuthSome system.`,
 }
 
-// User list command
+// User list command.
 var userListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List users",
 	Long:  `List all users or users in a specific organization.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		appID, _ := cmd.Flags().GetString("app")
+
 		return listUsers(appID)
 	},
 }
 
-// User create command
+// User create command.
 var userCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new user",
@@ -47,7 +50,7 @@ var userCreateCmd = &cobra.Command{
 		verified, _ := cmd.Flags().GetBool("verified")
 
 		if email == "" || password == "" || appID == "" {
-			return fmt.Errorf("email, password, and app are required")
+			return errs.New(errs.CodeInvalidInput, "email, password, and app are required", http.StatusBadRequest)
 		}
 
 		user, err := createUser(email, password, firstName, lastName, appID, role, verified)
@@ -66,7 +69,7 @@ var userCreateCmd = &cobra.Command{
 	},
 }
 
-// User show command
+// User show command.
 var userShowCmd = &cobra.Command{
 	Use:   "show [user-id]",
 	Short: "Show user details",
@@ -74,11 +77,12 @@ var userShowCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userID := args[0]
+
 		return showUser(userID)
 	},
 }
 
-// User delete command
+// User delete command.
 var userDeleteCmd = &cobra.Command{
 	Use:   "delete [user-id]",
 	Short: "Delete a user",
@@ -94,6 +98,7 @@ var userDeleteCmd = &cobra.Command{
 			fmt.Scanln(&confirm)
 			if confirm != "y" && confirm != "Y" {
 				fmt.Println("Cancelled")
+
 				return nil
 			}
 		}
@@ -102,7 +107,7 @@ var userDeleteCmd = &cobra.Command{
 	},
 }
 
-// User password command
+// User password command.
 var userPasswordCmd = &cobra.Command{
 	Use:   "password [user-id]",
 	Short: "Update user password",
@@ -113,14 +118,14 @@ var userPasswordCmd = &cobra.Command{
 		password, _ := cmd.Flags().GetString("password")
 
 		if password == "" {
-			return fmt.Errorf("password is required")
+			return errs.New(errs.CodeInvalidInput, "password is required", http.StatusBadRequest)
 		}
 
 		return updateUserPassword(userID, password)
 	},
 }
 
-// User verify command
+// User verify command.
 var userVerifyCmd = &cobra.Command{
 	Use:   "verify [user-id]",
 	Short: "Verify user email",
@@ -128,6 +133,7 @@ var userVerifyCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		userID := args[0]
+
 		return verifyUser(userID)
 	},
 }
@@ -160,12 +166,12 @@ func init() {
 	userPasswordCmd.Flags().StringP("password", "p", "", "New password (required)")
 }
 
-// connectUserDB connects to the database (now supports PostgreSQL, MySQL, SQLite)
+// connectUserDB connects to the database (now supports PostgreSQL, MySQL, SQLite).
 func connectUserDB() (*bun.DB, error) {
 	return connectDatabaseMulti()
 }
 
-// listUsers lists all users with their app memberships
+// listUsers lists all users with their app memberships.
 func listUsers(appID string) error {
 	db, err := connectUserDB()
 	if err != nil {
@@ -174,6 +180,7 @@ func listUsers(appID string) error {
 	defer db.Close()
 
 	ctx := context.Background()
+
 	var users []schema.User
 
 	query := db.NewSelect().Model(&users)
@@ -191,6 +198,7 @@ func listUsers(appID string) error {
 
 	if len(users) == 0 {
 		fmt.Println("No users found")
+
 		return nil
 	}
 
@@ -222,10 +230,11 @@ func listUsers(appID string) error {
 	}
 
 	w.Flush()
+
 	return nil
 }
 
-// createUser creates a new user
+// createUser creates a new user.
 func createUser(email, password, firstName, lastName, appID, role string, verified bool) (*schema.User, error) {
 	db, err := connectUserDB()
 	if err != nil {
@@ -237,6 +246,7 @@ func createUser(email, password, firstName, lastName, appID, role string, verifi
 
 	// Check if app exists
 	var app schema.App
+
 	err = db.NewSelect().Model(&app).Where("id = ?", appID).Scan(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("app not found: %w", err)
@@ -244,6 +254,7 @@ func createUser(email, password, firstName, lastName, appID, role string, verifi
 
 	// Check if user already exists
 	var existingUser schema.User
+
 	err = db.NewSelect().Model(&existingUser).Where("email = ?", email).Scan(ctx)
 	if err == nil {
 		return nil, fmt.Errorf("user with email %s already exists", email)
@@ -270,8 +281,8 @@ func createUser(email, password, firstName, lastName, appID, role string, verifi
 
 	// Set audit fields manually for CLI operations
 	user.AuditableModel.ID = userID
-	user.AuditableModel.CreatedBy = systemID
-	user.AuditableModel.UpdatedBy = systemID
+	user.CreatedBy = systemID
+	user.UpdatedBy = systemID
 
 	_, err = db.NewInsert().Model(user).Exec(ctx)
 	if err != nil {
@@ -296,8 +307,8 @@ func createUser(email, password, firstName, lastName, appID, role string, verifi
 
 	// Set audit fields manually for CLI operations
 	member.AuditableModel.ID = memberID
-	member.AuditableModel.CreatedBy = systemID
-	member.AuditableModel.UpdatedBy = systemID
+	member.CreatedBy = systemID
+	member.UpdatedBy = systemID
 
 	_, err = db.NewInsert().Model(member).Exec(ctx)
 	if err != nil {
@@ -307,7 +318,7 @@ func createUser(email, password, firstName, lastName, appID, role string, verifi
 	return user, nil
 }
 
-// showUser shows detailed information about a user
+// showUser shows detailed information about a user.
 func showUser(userID string) error {
 	db, err := connectUserDB()
 	if err != nil {
@@ -319,6 +330,7 @@ func showUser(userID string) error {
 
 	// Get user
 	var user schema.User
+
 	err = db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
@@ -326,6 +338,7 @@ func showUser(userID string) error {
 
 	// Get memberships
 	var memberships []schema.Member
+
 	err = db.NewSelect().Model(&memberships).
 		Relation("App").
 		Where("user_id = ?", userID).
@@ -345,11 +358,13 @@ func showUser(userID string) error {
 
 	if len(memberships) > 0 {
 		fmt.Printf("\nApp Memberships:\n")
+
 		for _, membership := range memberships {
 			appName := "Unknown"
 			if membership.App != nil {
 				appName = membership.App.Name
 			}
+
 			fmt.Printf("  - %s (%s) - Role: %s\n", appName, membership.AppID, membership.Role)
 		}
 	}
@@ -357,7 +372,7 @@ func showUser(userID string) error {
 	return nil
 }
 
-// deleteUser deletes a user
+// deleteUser deletes a user.
 func deleteUser(userID string) error {
 	db, err := connectUserDB()
 	if err != nil {
@@ -369,6 +384,7 @@ func deleteUser(userID string) error {
 
 	// Check if user exists
 	var user schema.User
+
 	err = db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
@@ -387,10 +403,11 @@ func deleteUser(userID string) error {
 	}
 
 	fmt.Printf("User %s deleted successfully\n", userID)
+
 	return nil
 }
 
-// updateUserPassword updates a user's password
+// updateUserPassword updates a user's password.
 func updateUserPassword(userID, password string) error {
 	db, err := connectUserDB()
 	if err != nil {
@@ -402,6 +419,7 @@ func updateUserPassword(userID, password string) error {
 
 	// Check if user exists
 	var user schema.User
+
 	err = db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
@@ -423,10 +441,11 @@ func updateUserPassword(userID, password string) error {
 	}
 
 	fmt.Printf("Password updated successfully for user %s\n", userID)
+
 	return nil
 }
 
-// verifyUser marks a user's email as verified
+// verifyUser marks a user's email as verified.
 func verifyUser(userID string) error {
 	db, err := connectUserDB()
 	if err != nil {
@@ -438,6 +457,7 @@ func verifyUser(userID string) error {
 
 	// Check if user exists
 	var user schema.User
+
 	err = db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
@@ -445,6 +465,7 @@ func verifyUser(userID string) error {
 
 	// Update verification status
 	now := time.Now()
+
 	_, err = db.NewUpdate().Model(&user).
 		Set("email_verified = ?", true).
 		Set("email_verified_at = ?", now).
@@ -455,5 +476,6 @@ func verifyUser(userID string) error {
 	}
 
 	fmt.Printf("User %s email verified successfully\n", userID)
+
 	return nil
 }

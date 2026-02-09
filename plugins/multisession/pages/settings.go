@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/forgeui/components/input"
 )
 
-// SettingsPage renders the multisession settings page
+// SettingsPage renders the multisession settings page.
 func SettingsPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 
@@ -182,7 +182,7 @@ func SettingsPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// settingsData returns the Alpine.js data object for settings
+// settingsData returns the Alpine.js data object for settings.
 func settingsData(appID string) string {
 	return fmt.Sprintf(`{
 		settings: {
@@ -245,7 +245,7 @@ func settingsData(appID string) string {
 	}`, appID, appID)
 }
 
-// toggleSetting renders a toggle setting row
+// toggleSetting renders a toggle setting row.
 func toggleSetting(name, label, description string, icon g.Node) g.Node {
 	return Div(
 		Class("flex items-center justify-between rounded-lg border bg-muted/50 p-4"),

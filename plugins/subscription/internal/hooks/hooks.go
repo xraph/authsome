@@ -11,82 +11,82 @@ import (
 // Hook type definitions for subscription events
 // These hooks can be used by other plugins or the host application to react to subscription events
 
-// BeforeSubscriptionCreateHook is called before creating a subscription
+// BeforeSubscriptionCreateHook is called before creating a subscription.
 type BeforeSubscriptionCreateHook func(ctx context.Context, orgID, planID xid.ID) error
 
-// AfterSubscriptionCreateHook is called after creating a subscription
+// AfterSubscriptionCreateHook is called after creating a subscription.
 type AfterSubscriptionCreateHook func(ctx context.Context, subscription *core.Subscription) error
 
-// BeforeSubscriptionUpdateHook is called before updating a subscription
+// BeforeSubscriptionUpdateHook is called before updating a subscription.
 type BeforeSubscriptionUpdateHook func(ctx context.Context, subID xid.ID, req *core.UpdateSubscriptionRequest) error
 
-// AfterSubscriptionUpdateHook is called after updating a subscription
+// AfterSubscriptionUpdateHook is called after updating a subscription.
 type AfterSubscriptionUpdateHook func(ctx context.Context, subscription *core.Subscription) error
 
-// BeforeSubscriptionCancelHook is called before canceling a subscription
+// BeforeSubscriptionCancelHook is called before canceling a subscription.
 type BeforeSubscriptionCancelHook func(ctx context.Context, subID xid.ID, immediate bool) error
 
-// AfterSubscriptionCancelHook is called after canceling a subscription
+// AfterSubscriptionCancelHook is called after canceling a subscription.
 type AfterSubscriptionCancelHook func(ctx context.Context, subID xid.ID) error
 
-// BeforeSubscriptionPauseHook is called before pausing a subscription
+// BeforeSubscriptionPauseHook is called before pausing a subscription.
 type BeforeSubscriptionPauseHook func(ctx context.Context, subID xid.ID) error
 
-// AfterSubscriptionPauseHook is called after pausing a subscription
+// AfterSubscriptionPauseHook is called after pausing a subscription.
 type AfterSubscriptionPauseHook func(ctx context.Context, subID xid.ID) error
 
-// BeforeSubscriptionResumeHook is called before resuming a subscription
+// BeforeSubscriptionResumeHook is called before resuming a subscription.
 type BeforeSubscriptionResumeHook func(ctx context.Context, subID xid.ID) error
 
-// AfterSubscriptionResumeHook is called after resuming a subscription
+// AfterSubscriptionResumeHook is called after resuming a subscription.
 type AfterSubscriptionResumeHook func(ctx context.Context, subID xid.ID) error
 
-// OnSubscriptionStatusChangeHook is called when a subscription status changes
+// OnSubscriptionStatusChangeHook is called when a subscription status changes.
 type OnSubscriptionStatusChangeHook func(ctx context.Context, subID xid.ID, oldStatus, newStatus core.SubscriptionStatus) error
 
-// OnTrialEndingHook is called when a trial is about to end (typically 3 days before)
+// OnTrialEndingHook is called when a trial is about to end (typically 3 days before).
 type OnTrialEndingHook func(ctx context.Context, subID xid.ID, daysRemaining int) error
 
-// OnTrialEndedHook is called when a trial has ended
+// OnTrialEndedHook is called when a trial has ended.
 type OnTrialEndedHook func(ctx context.Context, subID xid.ID) error
 
-// OnPaymentSuccessHook is called when a payment succeeds
+// OnPaymentSuccessHook is called when a payment succeeds.
 type OnPaymentSuccessHook func(ctx context.Context, subID, invoiceID xid.ID, amount int64, currency string) error
 
-// OnPaymentFailedHook is called when a payment fails
+// OnPaymentFailedHook is called when a payment fails.
 type OnPaymentFailedHook func(ctx context.Context, subID, invoiceID xid.ID, amount int64, currency string, failureReason string) error
 
-// OnInvoiceCreatedHook is called when an invoice is created
+// OnInvoiceCreatedHook is called when an invoice is created.
 type OnInvoiceCreatedHook func(ctx context.Context, invoiceID xid.ID) error
 
-// OnInvoicePaidHook is called when an invoice is paid
+// OnInvoicePaidHook is called when an invoice is paid.
 type OnInvoicePaidHook func(ctx context.Context, invoiceID xid.ID) error
 
-// OnUsageLimitApproachingHook is called when usage is approaching a limit
+// OnUsageLimitApproachingHook is called when usage is approaching a limit.
 type OnUsageLimitApproachingHook func(ctx context.Context, orgID xid.ID, metricKey string, percentUsed float64) error
 
-// OnUsageLimitExceededHook is called when usage exceeds a limit
+// OnUsageLimitExceededHook is called when usage exceeds a limit.
 type OnUsageLimitExceededHook func(ctx context.Context, orgID xid.ID, metricKey string, currentUsage, limit int64) error
 
-// BeforePlanChangeHook is called before changing plans
+// BeforePlanChangeHook is called before changing plans.
 type BeforePlanChangeHook func(ctx context.Context, subID, oldPlanID, newPlanID xid.ID) error
 
-// AfterPlanChangeHook is called after changing plans
+// AfterPlanChangeHook is called after changing plans.
 type AfterPlanChangeHook func(ctx context.Context, subID xid.ID, oldPlanID, newPlanID xid.ID) error
 
-// BeforeAddOnAttachHook is called before attaching an add-on
+// BeforeAddOnAttachHook is called before attaching an add-on.
 type BeforeAddOnAttachHook func(ctx context.Context, subID, addOnID xid.ID, quantity int) error
 
-// AfterAddOnAttachHook is called after attaching an add-on
+// AfterAddOnAttachHook is called after attaching an add-on.
 type AfterAddOnAttachHook func(ctx context.Context, subID, addOnID xid.ID) error
 
-// BeforeAddOnDetachHook is called before detaching an add-on
+// BeforeAddOnDetachHook is called before detaching an add-on.
 type BeforeAddOnDetachHook func(ctx context.Context, subID, addOnID xid.ID) error
 
-// AfterAddOnDetachHook is called after detaching an add-on
+// AfterAddOnDetachHook is called after detaching an add-on.
 type AfterAddOnDetachHook func(ctx context.Context, subID, addOnID xid.ID) error
 
-// SubscriptionHookRegistry manages subscription-specific hooks
+// SubscriptionHookRegistry manages subscription-specific hooks.
 type SubscriptionHookRegistry struct {
 	beforeSubscriptionCreate []BeforeSubscriptionCreateHook
 	afterSubscriptionCreate  []AfterSubscriptionCreateHook
@@ -115,7 +115,7 @@ type SubscriptionHookRegistry struct {
 	afterAddOnDetach         []AfterAddOnDetachHook
 }
 
-// NewSubscriptionHookRegistry creates a new hook registry
+// NewSubscriptionHookRegistry creates a new hook registry.
 func NewSubscriptionHookRegistry() *SubscriptionHookRegistry {
 	return &SubscriptionHookRegistry{}
 }
@@ -190,6 +190,7 @@ func (r *SubscriptionHookRegistry) ExecuteBeforeSubscriptionCreate(ctx context.C
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -199,6 +200,7 @@ func (r *SubscriptionHookRegistry) ExecuteAfterSubscriptionCreate(ctx context.Co
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -208,6 +210,7 @@ func (r *SubscriptionHookRegistry) ExecuteBeforeSubscriptionUpdate(ctx context.C
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -217,6 +220,7 @@ func (r *SubscriptionHookRegistry) ExecuteAfterSubscriptionUpdate(ctx context.Co
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -226,6 +230,7 @@ func (r *SubscriptionHookRegistry) ExecuteBeforeSubscriptionCancel(ctx context.C
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -235,6 +240,7 @@ func (r *SubscriptionHookRegistry) ExecuteAfterSubscriptionCancel(ctx context.Co
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -244,6 +250,7 @@ func (r *SubscriptionHookRegistry) ExecuteOnStatusChange(ctx context.Context, su
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -253,6 +260,7 @@ func (r *SubscriptionHookRegistry) ExecuteOnTrialEnding(ctx context.Context, sub
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -262,6 +270,7 @@ func (r *SubscriptionHookRegistry) ExecuteOnPaymentSuccess(ctx context.Context, 
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -271,6 +280,7 @@ func (r *SubscriptionHookRegistry) ExecuteOnPaymentFailed(ctx context.Context, s
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -280,6 +290,7 @@ func (r *SubscriptionHookRegistry) ExecuteOnUsageLimitApproaching(ctx context.Co
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -289,6 +300,7 @@ func (r *SubscriptionHookRegistry) ExecuteOnUsageLimitExceeded(ctx context.Conte
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -298,6 +310,7 @@ func (r *SubscriptionHookRegistry) ExecuteBeforePlanChange(ctx context.Context, 
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -307,5 +320,6 @@ func (r *SubscriptionHookRegistry) ExecuteAfterPlanChange(ctx context.Context, s
 			return err
 		}
 	}
+
 	return nil
 }

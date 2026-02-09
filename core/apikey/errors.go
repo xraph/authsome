@@ -37,7 +37,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// API Key lookup errors
+// API Key lookup errors.
 func APIKeyNotFound() *errs.AuthsomeError {
 	return errs.New(CodeAPIKeyNotFound, "API key not found", http.StatusNotFound)
 }
@@ -55,7 +55,7 @@ func APIKeyAlreadyExists(prefix string) *errs.AuthsomeError {
 		WithContext("prefix", prefix)
 }
 
-// Permission and scope errors
+// Permission and scope errors.
 func InsufficientScope(required string) *errs.AuthsomeError {
 	return errs.New(CodeInsufficientScope, "API key lacks required scope", http.StatusForbidden).
 		WithContext("required_scope", required)
@@ -66,7 +66,7 @@ func InsufficientPermission(required string) *errs.AuthsomeError {
 		WithContext("required_permission", required)
 }
 
-// Security errors
+// Security errors.
 func IPNotAllowed(ip string) *errs.AuthsomeError {
 	return errs.New(CodeIPNotAllowed, "IP address not allowed", http.StatusForbidden).
 		WithContext("ip", ip)
@@ -80,7 +80,7 @@ func InvalidAPIKeyHash() *errs.AuthsomeError {
 	return errs.New(CodeInvalidAPIKeyHash, "Invalid API key", http.StatusUnauthorized)
 }
 
-// Limit errors
+// Limit errors.
 func MaxKeysReached(limit int) *errs.AuthsomeError {
 	return errs.New(CodeMaxKeysReached, fmt.Sprintf("Maximum number of API keys reached (%d)", limit), http.StatusForbidden).
 		WithContext("max_keys", limit)
@@ -92,7 +92,7 @@ func InvalidRateLimit(rateLimit, maxRateLimit int) *errs.AuthsomeError {
 		WithContext("max_rate_limit", maxRateLimit)
 }
 
-// CRUD operation errors
+// CRUD operation errors.
 func APIKeyCreationFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeAPIKeyCreationFailed, "Failed to create API key", http.StatusInternalServerError)
 }
@@ -114,7 +114,7 @@ func APIKeyVerificationFailed(reason string) *errs.AuthsomeError {
 		WithContext("reason", reason)
 }
 
-// Context errors
+// Context errors.
 func MissingAppContext() *errs.AuthsomeError {
 	return errs.New(CodeMissingAppContext, "App context is required", http.StatusBadRequest)
 }
@@ -123,7 +123,7 @@ func MissingEnvContext() *errs.AuthsomeError {
 	return errs.New(CodeMissingEnvContext, "Environment context is required", http.StatusBadRequest)
 }
 
-// Access control errors
+// Access control errors.
 func AccessDenied(reason string) *errs.AuthsomeError {
 	return errs.New(CodeAccessDenied, "Access denied", http.StatusForbidden).
 		WithContext("reason", reason)

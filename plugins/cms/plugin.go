@@ -23,17 +23,17 @@ import (
 )
 
 const (
-	// PluginID is the unique identifier for the CMS plugin
+	// PluginID is the unique identifier for the CMS plugin.
 	PluginID = "cms"
-	// PluginName is the human-readable name
+	// PluginName is the human-readable name.
 	PluginName = "Content Management System"
-	// PluginVersion is the current version
+	// PluginVersion is the current version.
 	PluginVersion = "1.0.0"
-	// PluginDescription describes the plugin
+	// PluginDescription describes the plugin.
 	PluginDescription = "Headless CMS with custom content types, dynamic forms, and full query language support"
 )
 
-// Plugin implements the CMS plugin for AuthSome
+// Plugin implements the CMS plugin for AuthSome.
 type Plugin struct {
 	config        *Config
 	defaultConfig *Config
@@ -53,107 +53,116 @@ type Plugin struct {
 	dashboardExtOnce sync.Once
 }
 
-// PluginOption is a functional option for configuring the plugin
+// PluginOption is a functional option for configuring the plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration
+// WithDefaultConfig sets the default configuration.
 func WithDefaultConfig(cfg *Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithEnableRevisions enables/disables revision tracking
+// WithEnableRevisions enables/disables revision tracking.
 func WithEnableRevisions(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Features.EnableRevisions = enabled
 	}
 }
 
-// WithEnableDrafts enables/disables draft workflow
+// WithEnableDrafts enables/disables draft workflow.
 func WithEnableDrafts(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Features.EnableDrafts = enabled
 	}
 }
 
-// WithEnableScheduling enables/disables scheduled publishing
+// WithEnableScheduling enables/disables scheduled publishing.
 func WithEnableScheduling(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Features.EnableScheduling = enabled
 	}
 }
 
-// WithEnableSearch enables/disables full-text search
+// WithEnableSearch enables/disables full-text search.
 func WithEnableSearch(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Features.EnableSearch = enabled
 	}
 }
 
-// WithEnableRelations enables/disables content relations
+// WithEnableRelations enables/disables content relations.
 func WithEnableRelations(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Features.EnableRelations = enabled
 	}
 }
 
-// WithMaxContentTypes sets the maximum number of content types
+// WithMaxContentTypes sets the maximum number of content types.
 func WithMaxContentTypes(max int) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Limits.MaxContentTypes = max
 	}
 }
 
-// WithMaxFieldsPerType sets the maximum fields per content type
+// WithMaxFieldsPerType sets the maximum fields per content type.
 func WithMaxFieldsPerType(max int) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Limits.MaxFieldsPerType = max
 	}
 }
 
-// WithMaxRevisionsPerEntry sets the maximum revisions per entry
+// WithMaxRevisionsPerEntry sets the maximum revisions per entry.
 func WithMaxRevisionsPerEntry(max int) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.Revisions.MaxRevisionsPerEntry = max
 	}
 }
 
-// WithPublicAPI enables/disables public API access
+// WithPublicAPI enables/disables public API access.
 func WithPublicAPI(enabled bool) PluginOption {
 	return func(p *Plugin) {
 		if p.defaultConfig == nil {
 			p.defaultConfig = DefaultConfig()
 		}
+
 		p.defaultConfig.API.EnablePublicAPI = enabled
 	}
 }
 
-// NewPlugin creates a new CMS plugin instance
+// NewPlugin creates a new CMS plugin instance.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		defaultConfig: DefaultConfig(),
@@ -171,37 +180,37 @@ func NewPlugin(opts ...PluginOption) *Plugin {
 // Plugin Interface Implementation
 // =============================================================================
 
-// ID returns the unique plugin identifier
+// ID returns the unique plugin identifier.
 func (p *Plugin) ID() string {
 	return PluginID
 }
 
-// Name returns the human-readable plugin name
+// Name returns the human-readable plugin name.
 func (p *Plugin) Name() string {
 	return PluginName
 }
 
-// Version returns the plugin version
+// Version returns the plugin version.
 func (p *Plugin) Version() string {
 	return PluginVersion
 }
 
-// Description returns the plugin description
+// Description returns the plugin description.
 func (p *Plugin) Description() string {
 	return PluginDescription
 }
 
-// Priority returns the plugin initialization priority
+// Priority returns the plugin initialization priority.
 func (p *Plugin) Priority() int {
 	return 0 // Normal priority
 }
 
-// Dependencies returns the plugin dependencies
+// Dependencies returns the plugin dependencies.
 func (p *Plugin) Dependencies() []string {
 	return []string{"multiapp"} // Requires multiapp for app/environment context
 }
 
-// Init initializes the plugin with dependencies from the Auth instance
+// Init initializes the plugin with dependencies from the Auth instance.
 func (p *Plugin) Init(auth core.Authsome) error {
 	p.authInst = auth
 	p.db = auth.GetDB()
@@ -212,6 +221,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 
 	// Load configuration
 	configManager := forgeApp.Config()
+
 	p.config = p.defaultConfig
 	if p.config == nil {
 		p.config = DefaultConfig()
@@ -294,7 +304,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 	return nil
 }
 
-// RegisterRoutes registers the plugin's HTTP routes
+// RegisterRoutes registers the plugin's HTTP routes.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	p.logger.Debug("registering CMS routes")
 
@@ -566,10 +576,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	p.logger.Debug("registered CMS routes")
+
 	return nil
 }
 
-// RegisterHooks registers the plugin's hooks
+// RegisterHooks registers the plugin's hooks.
 func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	// CMS hooks will be implemented in later phases
 	// - Before/after entry create
@@ -580,13 +591,13 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 	return nil
 }
 
-// RegisterServiceDecorators allows the plugin to decorate core services
+// RegisterServiceDecorators allows the plugin to decorate core services.
 func (p *Plugin) RegisterServiceDecorators(services *registry.ServiceRegistry) error {
 	// No service decorators needed for CMS plugin
 	return nil
 }
 
-// RegisterRoles registers RBAC roles for the plugin
+// RegisterRoles registers RBAC roles for the plugin.
 func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	p.logger.Debug("registering CMS RBAC roles")
 
@@ -662,19 +673,21 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 	}
 
 	p.logger.Debug("registered CMS RBAC roles")
+
 	return nil
 }
 
 // DashboardExtension returns the dashboard extension for the plugin
-// Uses lazy initialization to ensure plugin is fully initialized before creating extension
+// Uses lazy initialization to ensure plugin is fully initialized before creating extension.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtOnce.Do(func() {
 		p.dashboardExt = NewDashboardExtension(p)
 	})
+
 	return p.dashboardExt
 }
 
-// Migrate runs database migrations for the plugin
+// Migrate runs database migrations for the plugin.
 func (p *Plugin) Migrate() error {
 	ctx := context.Background()
 
@@ -798,6 +811,7 @@ func (p *Plugin) Migrate() error {
 	}
 
 	p.logger.Info("CMS migrations completed")
+
 	return nil
 }
 
@@ -805,17 +819,17 @@ func (p *Plugin) Migrate() error {
 // Public Accessors
 // =============================================================================
 
-// Config returns the plugin configuration
+// Config returns the plugin configuration.
 func (p *Plugin) Config() *Config {
 	return p.config
 }
 
-// Logger returns the plugin logger
+// Logger returns the plugin logger.
 func (p *Plugin) Logger() forge.Logger {
 	return p.logger
 }
 
-// DB returns the database connection
+// DB returns the database connection.
 func (p *Plugin) DB() *bun.DB {
 	return p.db
 }

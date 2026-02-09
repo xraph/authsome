@@ -152,9 +152,11 @@ func TestRoleRegistry_RoleInheritance(t *testing.T) {
 
 	// Find the resolved admin role
 	var adminRole *RoleDefinition
+
 	for _, r := range resolved {
 		if r.Name == RoleAdmin {
 			adminRole = r
+
 			break
 		}
 	}
@@ -207,7 +209,7 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 		Name:       "Platform App",
 		Slug:       "platform",
 		IsPlatform: true,
-		Metadata:   map[string]interface{}{},
+		Metadata:   map[string]any{},
 	}
 	platformApp.CreatedAt = time.Now()
 	platformApp.UpdatedAt = time.Now()
@@ -265,6 +267,7 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 
 	// Verify roles were created in database
 	var roles []schema.Role
+
 	err = db.NewSelect().
 		Model(&roles).
 		Where("app_id = ?", platformApp.ID).
@@ -278,24 +281,27 @@ func TestRoleRegistry_Bootstrap(t *testing.T) {
 	for _, role := range roles {
 		roleNames[role.Name] = true
 	}
+
 	assert.True(t, roleNames[RoleAdmin])
 	assert.True(t, roleNames[RoleMember])
 
 	// Verify permissions were created in database
 	var permissions []schema.Permission
+
 	err = db.NewSelect().
 		Model(&permissions).
 		Where("app_id = ?", platformApp.ID).
 		Scan(ctx)
 	require.NoError(t, err)
 
-	assert.Greater(t, len(permissions), 0, "Permissions should have been created")
+	assert.NotEmpty(t, permissions, "Permissions should have been created")
 
 	// Verify at least one permission exists
 	permNames := make(map[string]bool)
 	for _, perm := range permissions {
 		permNames[perm.Name] = true
 	}
+
 	assert.True(t, permNames["view on users"] || permNames["edit on users"] || permNames["view on profile"])
 }
 
@@ -311,7 +317,7 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 		Name:       "Platform App",
 		Slug:       "platform",
 		IsPlatform: true,
-		Metadata:   map[string]interface{}{},
+		Metadata:   map[string]any{},
 	}
 	platformApp.CreatedAt = time.Now()
 	platformApp.UpdatedAt = time.Now()
@@ -389,6 +395,7 @@ func TestRoleRegistry_BootstrapIdempotency(t *testing.T) {
 
 	// Verify role was updated
 	var role schema.Role
+
 	err = db.NewSelect().
 		Model(&role).
 		Where("name = ? AND app_id = ?", RoleAdmin, platformApp.ID).

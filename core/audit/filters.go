@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// ListEventsFilter defines filters for listing audit events with pagination
+// ListEventsFilter defines filters for listing audit events with pagination.
 type ListEventsFilter struct {
 	pagination.PaginationParams
 
@@ -130,22 +130,22 @@ type ListEventsFilter struct {
 	ExcludeEnvironmentID *xid.ID `json:"excludeEnvironmentId,omitempty" query:"exclude_environment_id"`
 
 	// ========== Sort Order ==========
-	SortBy    *string `json:"sortBy,omitempty" query:"sort_by"`       // created_at, action, resource, rank (for search)
+	SortBy    *string `json:"sortBy,omitempty"    query:"sort_by"`    // created_at, action, resource, rank (for search)
 	SortOrder *string `json:"sortOrder,omitempty" query:"sort_order"` // asc, desc
 }
 
-// MetadataFilter defines a filter for metadata field
+// MetadataFilter defines a filter for metadata field.
 type MetadataFilter struct {
-	Key      string      `json:"key"`      // Metadata key to filter on
-	Value    interface{} `json:"value"`    // Value to match
-	Operator string      `json:"operator"` // equals, contains, exists, not_exists
+	Key      string `json:"key"`      // Metadata key to filter on
+	Value    any    `json:"value"`    // Value to match
+	Operator string `json:"operator"` // equals, contains, exists, not_exists
 }
 
 // =============================================================================
 // STATISTICS FILTERS AND TYPES
 // =============================================================================
 
-// StatisticsFilter defines filters for aggregation statistics queries
+// StatisticsFilter defines filters for aggregation statistics queries.
 type StatisticsFilter struct {
 	// Filter by app
 	AppID *xid.ID `json:"appId,omitempty"`
@@ -207,7 +207,7 @@ type StatisticsFilter struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-// ActionStatistic represents aggregated statistics for an action
+// ActionStatistic represents aggregated statistics for an action.
 type ActionStatistic struct {
 	Action        string    `json:"action"`
 	Count         int64     `json:"count"`
@@ -215,7 +215,7 @@ type ActionStatistic struct {
 	LastOccurred  time.Time `json:"lastOccurred"`
 }
 
-// ResourceStatistic represents aggregated statistics for a resource
+// ResourceStatistic represents aggregated statistics for a resource.
 type ResourceStatistic struct {
 	Resource      string    `json:"resource"`
 	Count         int64     `json:"count"`
@@ -223,7 +223,7 @@ type ResourceStatistic struct {
 	LastOccurred  time.Time `json:"lastOccurred"`
 }
 
-// UserStatistic represents aggregated statistics for a user
+// UserStatistic represents aggregated statistics for a user.
 type UserStatistic struct {
 	UserID        *xid.ID   `json:"userId"`
 	Count         int64     `json:"count"`
@@ -231,7 +231,7 @@ type UserStatistic struct {
 	LastOccurred  time.Time `json:"lastOccurred"`
 }
 
-// DeleteFilter defines filters for delete operations (subset of ListEventsFilter)
+// DeleteFilter defines filters for delete operations (subset of ListEventsFilter).
 type DeleteFilter struct {
 	// Filter by app
 	AppID *xid.ID `json:"appId,omitempty"`
@@ -275,21 +275,21 @@ type DeleteFilter struct {
 // TIME-BASED AGGREGATION TYPES
 // =============================================================================
 
-// TimeSeriesInterval defines the grouping interval for time series data
+// TimeSeriesInterval defines the grouping interval for time series data.
 type TimeSeriesInterval string
 
 const (
-	// IntervalHourly groups data by hour
+	// IntervalHourly groups data by hour.
 	IntervalHourly TimeSeriesInterval = "hourly"
-	// IntervalDaily groups data by day
+	// IntervalDaily groups data by day.
 	IntervalDaily TimeSeriesInterval = "daily"
-	// IntervalWeekly groups data by week
+	// IntervalWeekly groups data by week.
 	IntervalWeekly TimeSeriesInterval = "weekly"
-	// IntervalMonthly groups data by month
+	// IntervalMonthly groups data by month.
 	IntervalMonthly TimeSeriesInterval = "monthly"
 )
 
-// TimeSeriesFilter extends StatisticsFilter with interval configuration
+// TimeSeriesFilter extends StatisticsFilter with interval configuration.
 type TimeSeriesFilter struct {
 	StatisticsFilter
 
@@ -297,26 +297,26 @@ type TimeSeriesFilter struct {
 	Interval TimeSeriesInterval `json:"interval"`
 }
 
-// TimeSeriesPoint represents a single data point in a time series
+// TimeSeriesPoint represents a single data point in a time series.
 type TimeSeriesPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	Count     int64     `json:"count"`
 }
 
-// HourStatistic represents event count for a specific hour of day
+// HourStatistic represents event count for a specific hour of day.
 type HourStatistic struct {
 	Hour  int   `json:"hour"` // 0-23
 	Count int64 `json:"count"`
 }
 
-// DayStatistic represents event count for a specific day of week
+// DayStatistic represents event count for a specific day of week.
 type DayStatistic struct {
 	Day      string `json:"day"`      // Monday, Tuesday, etc.
 	DayIndex int    `json:"dayIndex"` // 0=Sunday, 1=Monday, etc.
 	Count    int64  `json:"count"`
 }
 
-// DateStatistic represents event count for a specific date
+// DateStatistic represents event count for a specific date.
 type DateStatistic struct {
 	Date  string `json:"date"` // YYYY-MM-DD format
 	Count int64  `json:"count"`
@@ -326,7 +326,7 @@ type DateStatistic struct {
 // IP/NETWORK AGGREGATION TYPES
 // =============================================================================
 
-// IPStatistic represents aggregated statistics for an IP address
+// IPStatistic represents aggregated statistics for an IP address.
 type IPStatistic struct {
 	IPAddress     string    `json:"ipAddress"`
 	Count         int64     `json:"count"`
@@ -338,21 +338,21 @@ type IPStatistic struct {
 // MULTI-DIMENSIONAL AGGREGATION TYPES
 // =============================================================================
 
-// ActionUserStatistic represents statistics for action-user combinations
+// ActionUserStatistic represents statistics for action-user combinations.
 type ActionUserStatistic struct {
 	Action string  `json:"action"`
 	UserID *xid.ID `json:"userId"`
 	Count  int64   `json:"count"`
 }
 
-// ResourceActionStatistic represents statistics for resource-action combinations
+// ResourceActionStatistic represents statistics for resource-action combinations.
 type ResourceActionStatistic struct {
 	Resource string `json:"resource"`
 	Action   string `json:"action"`
 	Count    int64  `json:"count"`
 }
 
-// ActivitySummary provides a comprehensive dashboard summary
+// ActivitySummary provides a comprehensive dashboard summary.
 type ActivitySummary struct {
 	// Total counts
 	TotalEvents int64 `json:"totalEvents"`
@@ -377,7 +377,7 @@ type ActivitySummary struct {
 // TREND ANALYSIS TYPES
 // =============================================================================
 
-// TrendData represents comparison between current and previous periods
+// TrendData represents comparison between current and previous periods.
 type TrendData struct {
 	CurrentPeriod   int64   `json:"currentPeriod"`
 	PreviousPeriod  int64   `json:"previousPeriod"`
@@ -386,7 +386,7 @@ type TrendData struct {
 	ChangeDirection string  `json:"changeDirection"` // "up", "down", "stable"
 }
 
-// TrendFilter extends StatisticsFilter with period configuration
+// TrendFilter extends StatisticsFilter with period configuration.
 type TrendFilter struct {
 	StatisticsFilter
 
@@ -396,7 +396,7 @@ type TrendFilter struct {
 	PeriodDuration time.Duration `json:"periodDuration,omitempty"`
 }
 
-// GrowthMetrics provides growth rate analysis over multiple time windows
+// GrowthMetrics provides growth rate analysis over multiple time windows.
 type GrowthMetrics struct {
 	// Growth rates as percentage change
 	DailyGrowth   float64 `json:"dailyGrowth"`   // vs yesterday
@@ -416,50 +416,50 @@ type GrowthMetrics struct {
 // RESPONSE TYPES FOR AGGREGATION METHODS
 // =============================================================================
 
-// GetTimeSeriesResponse wraps time series results
+// GetTimeSeriesResponse wraps time series results.
 type GetTimeSeriesResponse struct {
 	Points   []*TimeSeriesPoint `json:"points"`
 	Interval TimeSeriesInterval `json:"interval"`
 	Total    int64              `json:"total"`
 }
 
-// GetStatisticsByHourResponse wraps hour statistics
+// GetStatisticsByHourResponse wraps hour statistics.
 type GetStatisticsByHourResponse struct {
 	Statistics []*HourStatistic `json:"statistics"`
 	Total      int64            `json:"total"`
 }
 
-// GetStatisticsByDayResponse wraps day statistics
+// GetStatisticsByDayResponse wraps day statistics.
 type GetStatisticsByDayResponse struct {
 	Statistics []*DayStatistic `json:"statistics"`
 	Total      int64           `json:"total"`
 }
 
-// GetStatisticsByDateResponse wraps date statistics
+// GetStatisticsByDateResponse wraps date statistics.
 type GetStatisticsByDateResponse struct {
 	Statistics []*DateStatistic `json:"statistics"`
 	Total      int64            `json:"total"`
 }
 
-// GetStatisticsByIPAddressResponse wraps IP statistics
+// GetStatisticsByIPAddressResponse wraps IP statistics.
 type GetStatisticsByIPAddressResponse struct {
 	Statistics []*IPStatistic `json:"statistics"`
 	Total      int64          `json:"total"`
 }
 
-// GetStatisticsByActionAndUserResponse wraps action-user statistics
+// GetStatisticsByActionAndUserResponse wraps action-user statistics.
 type GetStatisticsByActionAndUserResponse struct {
 	Statistics []*ActionUserStatistic `json:"statistics"`
 	Total      int64                  `json:"total"`
 }
 
-// GetStatisticsByResourceAndActionResponse wraps resource-action statistics
+// GetStatisticsByResourceAndActionResponse wraps resource-action statistics.
 type GetStatisticsByResourceAndActionResponse struct {
 	Statistics []*ResourceActionStatistic `json:"statistics"`
 	Total      int64                      `json:"total"`
 }
 
-// GetTrendsResponse wraps trend analysis results
+// GetTrendsResponse wraps trend analysis results.
 type GetTrendsResponse struct {
 	Events    *TrendData `json:"events"`
 	Users     *TrendData `json:"users,omitempty"`
@@ -467,7 +467,7 @@ type GetTrendsResponse struct {
 	Resources *TrendData `json:"resources,omitempty"`
 }
 
-// GetGrowthRateResponse wraps growth metrics
+// GetGrowthRateResponse wraps growth metrics.
 type GetGrowthRateResponse struct {
 	Metrics *GrowthMetrics    `json:"metrics"`
 	Filter  *StatisticsFilter `json:"filter,omitempty"`
@@ -478,7 +478,7 @@ type GetGrowthRateResponse struct {
 // =============================================================================
 
 // ValidateExclusionFilters validates that exclusion filters don't conflict
-// For now, we allow both include and exclude for same field
+// For now, we allow both include and exclude for same field.
 func (f *ListEventsFilter) ValidateExclusionFilters() error {
 	// Optional: Add validation logic if needed
 	// Current behavior: Both include and exclude filters can be used together
@@ -486,7 +486,7 @@ func (f *ListEventsFilter) ValidateExclusionFilters() error {
 	return nil
 }
 
-// HasExclusionFilters returns true if any exclusion filters are set
+// HasExclusionFilters returns true if any exclusion filters are set.
 func (f *ListEventsFilter) HasExclusionFilters() bool {
 	return f.ExcludeSource != nil ||
 		len(f.ExcludeSources) > 0 ||
@@ -505,12 +505,12 @@ func (f *ListEventsFilter) HasExclusionFilters() bool {
 		f.ExcludeEnvironmentID != nil
 }
 
-// ValidateExclusionFilters validates that exclusion filters don't conflict for StatisticsFilter
+// ValidateExclusionFilters validates that exclusion filters don't conflict for StatisticsFilter.
 func (f *StatisticsFilter) ValidateExclusionFilters() error {
 	return nil
 }
 
-// HasExclusionFilters returns true if any exclusion filters are set for StatisticsFilter
+// HasExclusionFilters returns true if any exclusion filters are set for StatisticsFilter.
 func (f *StatisticsFilter) HasExclusionFilters() bool {
 	return f.ExcludeSource != nil ||
 		len(f.ExcludeSources) > 0 ||
@@ -522,12 +522,12 @@ func (f *StatisticsFilter) HasExclusionFilters() bool {
 		len(f.ExcludeUserIDs) > 0
 }
 
-// ValidateExclusionFilters validates that exclusion filters don't conflict for DeleteFilter
+// ValidateExclusionFilters validates that exclusion filters don't conflict for DeleteFilter.
 func (f *DeleteFilter) ValidateExclusionFilters() error {
 	return nil
 }
 
-// HasExclusionFilters returns true if any exclusion filters are set for DeleteFilter
+// HasExclusionFilters returns true if any exclusion filters are set for DeleteFilter.
 func (f *DeleteFilter) HasExclusionFilters() bool {
 	return f.ExcludeAction != nil ||
 		len(f.ExcludeActions) > 0 ||

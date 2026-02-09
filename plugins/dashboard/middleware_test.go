@@ -14,7 +14,7 @@ func TestRateLimiter(t *testing.T) {
 		clientIP := "192.168.1.1"
 
 		// Should allow first 10 requests
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			allowed := rl.allow(clientIP)
 			assert.True(t, allowed, "request %d should be allowed", i+1)
 		}
@@ -24,7 +24,7 @@ func TestRateLimiter(t *testing.T) {
 		clientIP := "192.168.1.2"
 
 		// Use up all tokens
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			rl.allow(clientIP)
 		}
 
@@ -38,7 +38,7 @@ func TestRateLimiter(t *testing.T) {
 		clientIP2 := "192.168.1.4"
 
 		// Use up tokens for IP1
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			rl.allow(clientIP1)
 		}
 

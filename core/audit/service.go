@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Repository defines persistence for audit events
+// Repository defines persistence for audit events.
 type Repository interface {
 	// Core CRUD operations
 	Create(ctx context.Context, e *schema.AuditEvent) error
@@ -55,13 +55,13 @@ type Repository interface {
 	GetDistinctOrganizations(ctx context.Context, filter *AggregationFilter) ([]DistinctValue, error)
 }
 
-// Service handles audit logging
+// Service handles audit logging.
 type Service struct {
 	repo      Repository
 	providers *ProviderRegistry
 }
 
-// NewService creates a new audit service with optional providers
+// NewService creates a new audit service with optional providers.
 func NewService(repo Repository, opts ...ServiceOption) *Service {
 	cfg := &ServiceConfig{}
 	for _, opt := range opts {
@@ -81,12 +81,12 @@ func NewService(repo Repository, opts ...ServiceOption) *Service {
 	return svc
 }
 
-// GetProviders returns the provider registry (for external use)
+// GetProviders returns the provider registry (for external use).
 func (s *Service) GetProviders() *ProviderRegistry {
 	return s.providers
 }
 
-// Log creates an audit event with timestamps
+// Log creates an audit event with timestamps.
 func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip, ua, metadata string) error {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -136,7 +136,7 @@ func (s *Service) Log(ctx context.Context, userID *xid.ID, action, resource, ip,
 	return nil
 }
 
-// Create creates a new audit event from a request
+// Create creates a new audit event from a request.
 func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, error) {
 	// Extract AppID from context or use from request
 	appID := req.AppID
@@ -146,6 +146,7 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 		if !ok || ctxAppID.IsNil() {
 			return nil, InvalidFilter("appId", "appId is required in request or context")
 		}
+
 		appID = ctxAppID
 	}
 
@@ -165,17 +166,20 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 	if req.Action == "" {
 		return nil, InvalidFilter("action", "action is required")
 	}
+
 	if req.Resource == "" {
 		return nil, InvalidFilter("resource", "resource is required")
 	}
 
 	// Determine source - default to application if not provided
 	source := SourceApplication
+
 	if req.Source != nil {
 		// Validate the provided source
 		if !req.Source.IsValid() {
 			return nil, InvalidFilter("source", "invalid source value")
 		}
+
 		source = *req.Source
 	}
 
@@ -209,7 +213,7 @@ func (s *Service) Create(ctx context.Context, req *CreateEventRequest) (*Event, 
 	return event, nil
 }
 
-// Get retrieves an audit event by ID
+// Get retrieves an audit event by ID.
 func (s *Service) Get(ctx context.Context, req *GetEventRequest) (*Event, error) {
 	schemaEvent, err := s.repo.Get(ctx, req.ID)
 	if err != nil {
@@ -223,12 +227,13 @@ func (s *Service) Get(ctx context.Context, req *GetEventRequest) (*Event, error)
 	return FromSchemaEvent(schemaEvent), nil
 }
 
-// List returns paginated audit events with optional filters
+// List returns paginated audit events with optional filters.
 func (s *Service) List(ctx context.Context, filter *ListEventsFilter) (*ListEventsResponse, error) {
 	// Validate pagination
 	if filter.Limit < 0 {
 		return nil, InvalidPagination("limit cannot be negative")
 	}
+
 	if filter.Offset < 0 {
 		return nil, InvalidPagination("offset cannot be negative")
 	}
@@ -269,7 +274,7 @@ func (s *Service) List(ctx context.Context, filter *ListEventsFilter) (*ListEven
 // COUNT OPERATIONS
 // =============================================================================
 
-// Count returns the count of audit events matching the filter
+// Count returns the count of audit events matching the filter.
 func (s *Service) Count(ctx context.Context, filter *ListEventsFilter) (int64, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -290,7 +295,7 @@ func (s *Service) Count(ctx context.Context, filter *ListEventsFilter) (int64, e
 	return count, nil
 }
 
-// CountEvents is an alias for Count for better readability
+// CountEvents is an alias for Count for better readability.
 func (s *Service) CountEvents(ctx context.Context, filter *ListEventsFilter) (int64, error) {
 	return s.Count(ctx, filter)
 }
@@ -300,7 +305,7 @@ func (s *Service) CountEvents(ctx context.Context, filter *ListEventsFilter) (in
 // =============================================================================
 
 // DeleteOlderThan deletes audit events older than the specified time
-// Returns the number of deleted events
+// Returns the number of deleted events.
 func (s *Service) DeleteOlderThan(ctx context.Context, filter *DeleteFilter, before time.Time) (int64, error) {
 	// Validate before time is not in the future
 	if before.After(time.Now()) {
@@ -330,7 +335,7 @@ func (s *Service) DeleteOlderThan(ctx context.Context, filter *DeleteFilter, bef
 // STATISTICS/AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetStatisticsByAction returns aggregated statistics grouped by action
+// GetStatisticsByAction returns aggregated statistics grouped by action.
 func (s *Service) GetStatisticsByAction(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByActionResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -365,7 +370,7 @@ func (s *Service) GetStatisticsByAction(ctx context.Context, filter *StatisticsF
 	}, nil
 }
 
-// GetStatisticsByResource returns aggregated statistics grouped by resource
+// GetStatisticsByResource returns aggregated statistics grouped by resource.
 func (s *Service) GetStatisticsByResource(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByResourceResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -400,7 +405,7 @@ func (s *Service) GetStatisticsByResource(ctx context.Context, filter *Statistic
 	}, nil
 }
 
-// GetStatisticsByUser returns aggregated statistics grouped by user
+// GetStatisticsByUser returns aggregated statistics grouped by user.
 func (s *Service) GetStatisticsByUser(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByUserResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -439,7 +444,7 @@ func (s *Service) GetStatisticsByUser(ctx context.Context, filter *StatisticsFil
 // TIME-BASED AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetTimeSeries returns event counts over time with configurable intervals
+// GetTimeSeries returns event counts over time with configurable intervals.
 func (s *Service) GetTimeSeries(ctx context.Context, filter *TimeSeriesFilter) (*GetTimeSeriesResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -485,7 +490,7 @@ func (s *Service) GetTimeSeries(ctx context.Context, filter *TimeSeriesFilter) (
 	}, nil
 }
 
-// GetStatisticsByHour returns event distribution by hour of day (0-23)
+// GetStatisticsByHour returns event distribution by hour of day (0-23).
 func (s *Service) GetStatisticsByHour(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByHourResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -515,7 +520,7 @@ func (s *Service) GetStatisticsByHour(ctx context.Context, filter *StatisticsFil
 	}, nil
 }
 
-// GetStatisticsByDay returns event distribution by day of week
+// GetStatisticsByDay returns event distribution by day of week.
 func (s *Service) GetStatisticsByDay(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByDayResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -545,7 +550,7 @@ func (s *Service) GetStatisticsByDay(ctx context.Context, filter *StatisticsFilt
 	}, nil
 }
 
-// GetStatisticsByDate returns daily event counts for a date range
+// GetStatisticsByDate returns daily event counts for a date range.
 func (s *Service) GetStatisticsByDate(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByDateResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -579,7 +584,7 @@ func (s *Service) GetStatisticsByDate(ctx context.Context, filter *StatisticsFil
 // IP/NETWORK AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetStatisticsByIPAddress returns event counts grouped by IP address
+// GetStatisticsByIPAddress returns event counts grouped by IP address.
 func (s *Service) GetStatisticsByIPAddress(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByIPAddressResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -614,7 +619,7 @@ func (s *Service) GetStatisticsByIPAddress(ctx context.Context, filter *Statisti
 	}, nil
 }
 
-// GetUniqueIPCount returns the count of unique IP addresses
+// GetUniqueIPCount returns the count of unique IP addresses.
 func (s *Service) GetUniqueIPCount(ctx context.Context, filter *StatisticsFilter) (int64, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -639,7 +644,7 @@ func (s *Service) GetUniqueIPCount(ctx context.Context, filter *StatisticsFilter
 // MULTI-DIMENSIONAL AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetStatisticsByActionAndUser returns event counts grouped by action and user
+// GetStatisticsByActionAndUser returns event counts grouped by action and user.
 func (s *Service) GetStatisticsByActionAndUser(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByActionAndUserResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -674,7 +679,7 @@ func (s *Service) GetStatisticsByActionAndUser(ctx context.Context, filter *Stat
 	}, nil
 }
 
-// GetStatisticsByResourceAndAction returns event counts grouped by resource and action
+// GetStatisticsByResourceAndAction returns event counts grouped by resource and action.
 func (s *Service) GetStatisticsByResourceAndAction(ctx context.Context, filter *StatisticsFilter) (*GetStatisticsByResourceAndActionResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -709,7 +714,7 @@ func (s *Service) GetStatisticsByResourceAndAction(ctx context.Context, filter *
 	}, nil
 }
 
-// GetActivitySummary returns a comprehensive activity summary dashboard
+// GetActivitySummary returns a comprehensive activity summary dashboard.
 func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilter) (*ActivitySummary, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -740,10 +745,12 @@ func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilt
 		Since:          filter.Since,
 		Until:          filter.Until,
 	}
+
 	totalCount, err := s.Count(ctx, listFilter)
 	if err != nil {
 		return nil, err
 	}
+
 	summary.TotalEvents = totalCount
 
 	// Get unique users count (from user statistics)
@@ -754,6 +761,7 @@ func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilt
 		if len(userStats) > filter.Limit {
 			userStats = userStats[:filter.Limit]
 		}
+
 		summary.TopUsers = userStats
 	}
 
@@ -769,6 +777,7 @@ func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilt
 		if len(actionStats) > filter.Limit {
 			actionStats = actionStats[:filter.Limit]
 		}
+
 		summary.TopActions = actionStats
 	}
 
@@ -778,6 +787,7 @@ func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilt
 		if len(resourceStats) > filter.Limit {
 			resourceStats = resourceStats[:filter.Limit]
 		}
+
 		summary.TopResources = resourceStats
 	}
 
@@ -787,6 +797,7 @@ func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilt
 		if len(ipStats) > filter.Limit {
 			ipStats = ipStats[:filter.Limit]
 		}
+
 		summary.TopIPs = ipStats
 	}
 
@@ -809,7 +820,7 @@ func (s *Service) GetActivitySummary(ctx context.Context, filter *StatisticsFilt
 // TREND ANALYSIS OPERATIONS
 // =============================================================================
 
-// GetTrends compares event counts between current and previous periods
+// GetTrends compares event counts between current and previous periods.
 func (s *Service) GetTrends(ctx context.Context, filter *TrendFilter) (*GetTrendsResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -818,6 +829,7 @@ func (s *Service) GetTrends(ctx context.Context, filter *TrendFilter) (*GetTrend
 
 	// Calculate periods
 	now := time.Now().UTC()
+
 	var currentEnd, currentStart, previousEnd, previousStart time.Time
 
 	if filter.Until != nil {
@@ -851,6 +863,7 @@ func (s *Service) GetTrends(ctx context.Context, filter *TrendFilter) (*GetTrend
 		Since:          &currentStart,
 		Until:          &currentEnd,
 	}
+
 	currentCount, err := s.Count(ctx, currentFilter)
 	if err != nil {
 		return nil, err
@@ -865,6 +878,7 @@ func (s *Service) GetTrends(ctx context.Context, filter *TrendFilter) (*GetTrend
 		Since:          &previousStart,
 		Until:          &previousEnd,
 	}
+
 	previousCount, err := s.Count(ctx, previousFilter)
 	if err != nil {
 		return nil, err
@@ -878,7 +892,7 @@ func (s *Service) GetTrends(ctx context.Context, filter *TrendFilter) (*GetTrend
 	}, nil
 }
 
-// GetGrowthRate returns growth metrics across different time windows
+// GetGrowthRate returns growth metrics across different time windows.
 func (s *Service) GetGrowthRate(ctx context.Context, filter *StatisticsFilter) (*GetGrowthRateResponse, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -939,7 +953,7 @@ func (s *Service) GetGrowthRate(ctx context.Context, filter *StatisticsFilter) (
 	}, nil
 }
 
-// calculateTrend calculates trend data between two counts
+// calculateTrend calculates trend data between two counts.
 func (s *Service) calculateTrend(current, previous int64) *TrendData {
 	trend := &TrendData{
 		CurrentPeriod:  current,
@@ -969,14 +983,16 @@ func (s *Service) calculateTrend(current, previous int64) *TrendData {
 	return trend
 }
 
-// calculateGrowthPercent calculates percentage growth
+// calculateGrowthPercent calculates percentage growth.
 func (s *Service) calculateGrowthPercent(current, previous int64) float64 {
 	if previous == 0 {
 		if current > 0 {
 			return 100.0
 		}
+
 		return 0
 	}
+
 	return float64(current-previous) / float64(previous) * 100
 }
 
@@ -984,7 +1000,7 @@ func (s *Service) calculateGrowthPercent(current, previous int64) float64 {
 // UTILITY OPERATIONS
 // =============================================================================
 
-// GetOldestEvent retrieves the oldest audit event matching the filter
+// GetOldestEvent retrieves the oldest audit event matching the filter.
 func (s *Service) GetOldestEvent(ctx context.Context, filter *ListEventsFilter) (*Event, error) {
 	// Ensure filter is not nil
 	if filter == nil {
@@ -1013,7 +1029,7 @@ func (s *Service) GetOldestEvent(ctx context.Context, filter *ListEventsFilter) 
 // AGGREGATION OPERATIONS
 // =============================================================================
 
-// GetDistinctActions returns distinct action values with counts
+// GetDistinctActions returns distinct action values with counts.
 func (s *Service) GetDistinctActions(ctx context.Context, filter *AggregationFilter) (*ActionAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1031,7 +1047,7 @@ func (s *Service) GetDistinctActions(ctx context.Context, filter *AggregationFil
 	}, nil
 }
 
-// GetDistinctSources returns distinct source values with counts
+// GetDistinctSources returns distinct source values with counts.
 func (s *Service) GetDistinctSources(ctx context.Context, filter *AggregationFilter) (*SourceAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1049,7 +1065,7 @@ func (s *Service) GetDistinctSources(ctx context.Context, filter *AggregationFil
 	}, nil
 }
 
-// GetDistinctResources returns distinct resource values with counts
+// GetDistinctResources returns distinct resource values with counts.
 func (s *Service) GetDistinctResources(ctx context.Context, filter *AggregationFilter) (*ResourceAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1067,7 +1083,7 @@ func (s *Service) GetDistinctResources(ctx context.Context, filter *AggregationF
 	}, nil
 }
 
-// GetDistinctUsers returns distinct user values with counts
+// GetDistinctUsers returns distinct user values with counts.
 func (s *Service) GetDistinctUsers(ctx context.Context, filter *AggregationFilter) (*UserAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1085,7 +1101,7 @@ func (s *Service) GetDistinctUsers(ctx context.Context, filter *AggregationFilte
 	}, nil
 }
 
-// GetDistinctIPs returns distinct IP address values with counts
+// GetDistinctIPs returns distinct IP address values with counts.
 func (s *Service) GetDistinctIPs(ctx context.Context, filter *AggregationFilter) (*IPAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1103,7 +1119,7 @@ func (s *Service) GetDistinctIPs(ctx context.Context, filter *AggregationFilter)
 	}, nil
 }
 
-// GetDistinctApps returns distinct app values with counts
+// GetDistinctApps returns distinct app values with counts.
 func (s *Service) GetDistinctApps(ctx context.Context, filter *AggregationFilter) (*AppAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1121,7 +1137,7 @@ func (s *Service) GetDistinctApps(ctx context.Context, filter *AggregationFilter
 	}, nil
 }
 
-// GetDistinctOrganizations returns distinct organization values with counts
+// GetDistinctOrganizations returns distinct organization values with counts.
 func (s *Service) GetDistinctOrganizations(ctx context.Context, filter *AggregationFilter) (*OrgAggregation, error) {
 	// Set default limit
 	if filter.Limit == 0 {
@@ -1139,7 +1155,7 @@ func (s *Service) GetDistinctOrganizations(ctx context.Context, filter *Aggregat
 	}, nil
 }
 
-// GetAllAggregations returns all aggregations in one call
+// GetAllAggregations returns all aggregations in one call.
 func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFilter) (*AllAggregations, error) {
 	// Set default limit for each field
 	if filter.Limit == 0 {
@@ -1157,8 +1173,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		orgs      []DistinctValue
 	}
 
-	var res result
-	var firstErr error
+	var (
+		res      result
+		firstErr error
+	)
 
 	// Use channels to collect results
 	actionsCh := make(chan []DistinctValue, 1)
@@ -1175,8 +1193,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctActions(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		actionsCh <- vals
 	}()
 
@@ -1184,8 +1204,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctSources(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		sourcesCh <- vals
 	}()
 
@@ -1193,8 +1215,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctResources(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		resourcesCh <- vals
 	}()
 
@@ -1202,8 +1226,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctUsers(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		usersCh <- vals
 	}()
 
@@ -1211,8 +1237,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctIPs(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		ipsCh <- vals
 	}()
 
@@ -1220,8 +1248,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctApps(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		appsCh <- vals
 	}()
 
@@ -1229,8 +1259,10 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 		vals, err := s.repo.GetDistinctOrganizations(ctx, filter)
 		if err != nil {
 			errCh <- err
+
 			return
 		}
+
 		orgsCh <- vals
 	}()
 
@@ -1256,6 +1288,7 @@ func (s *Service) GetAllAggregations(ctx context.Context, filter *AggregationFil
 			if firstErr == nil {
 				firstErr = err
 			}
+
 			completed++
 		case <-ctx.Done():
 			return nil, ctx.Err()

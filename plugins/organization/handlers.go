@@ -10,13 +10,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// OrganizationHandler handles organization-related HTTP requests
+// OrganizationHandler handles organization-related HTTP requests.
 type OrganizationHandler struct {
 	orgService *organization.Service
 	plugin     *Plugin // Reference to plugin for notification sending
 }
 
-// Handler-level request types with path parameters
+// Handler-level request types with path parameters.
 type CreateOrganizationHandlerRequest struct {
 	organization.CreateOrganizationRequest
 }
@@ -44,7 +44,7 @@ type GetOrganizationBySlugRequest struct {
 }
 
 type ListMembersRequest struct {
-	ID    string `path:"id" validate:"required"`
+	ID    string `path:"id"     validate:"required"`
 	Page  int    `query:"page"`
 	Limit int    `query:"limit"`
 	Role  string `query:"role"`
@@ -56,13 +56,13 @@ type InviteMemberHandlerRequest struct {
 }
 
 type UpdateMemberHandlerRequest struct {
-	ID       string `path:"id" validate:"required"`
+	ID       string `path:"id"       validate:"required"`
 	MemberID string `path:"memberId" validate:"required"`
 	organization.UpdateMemberRequest
 }
 
 type RemoveMemberRequest struct {
-	ID       string `path:"id" validate:"required"`
+	ID       string `path:"id"       validate:"required"`
 	MemberID string `path:"memberId" validate:"required"`
 }
 
@@ -75,7 +75,7 @@ type DeclineInvitationRequest struct {
 }
 
 type ListTeamsRequest struct {
-	ID    string `path:"id" validate:"required"`
+	ID    string `path:"id"     validate:"required"`
 	Page  int    `query:"page"`
 	Limit int    `query:"limit"`
 }
@@ -86,18 +86,18 @@ type CreateTeamHandlerRequest struct {
 }
 
 type UpdateTeamHandlerRequest struct {
-	ID     string `path:"id" validate:"required"`
+	ID     string `path:"id"     validate:"required"`
 	TeamID string `path:"teamId" validate:"required"`
 	organization.UpdateTeamRequest
 }
 
 type DeleteTeamRequest struct {
-	ID     string `path:"id" validate:"required"`
+	ID     string `path:"id"     validate:"required"`
 	TeamID string `path:"teamId" validate:"required"`
 }
 
 // Response types
-// Use shared response type
+// Use shared response type.
 type MessageResponse = responses.MessageResponse
 
 type MembersResponse struct {
@@ -115,14 +115,14 @@ type TeamsResponse struct {
 	Total int                  `json:"total,omitempty"`
 }
 
-// NewOrganizationHandler creates a new organization handler
+// NewOrganizationHandler creates a new organization handler.
 func NewOrganizationHandler(orgService *organization.Service) *OrganizationHandler {
 	return &OrganizationHandler{
 		orgService: orgService,
 	}
 }
 
-// CreateOrganization handles organization creation requests
+// CreateOrganization handles organization creation requests.
 func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -157,7 +157,7 @@ func (h *OrganizationHandler) CreateOrganization(c forge.Context) error {
 	return c.JSON(201, org)
 }
 
-// GetOrganization handles get organization requests
+// GetOrganization handles get organization requests.
 func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -191,7 +191,7 @@ func (h *OrganizationHandler) GetOrganization(c forge.Context) error {
 	return c.JSON(200, org)
 }
 
-// ListOrganizations handles list organizations requests (user's organizations)
+// ListOrganizations handles list organizations requests (user's organizations).
 func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -211,6 +211,7 @@ func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 	if limit <= 0 {
 		limit = 10
 	}
+
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -229,7 +230,7 @@ func (h *OrganizationHandler) ListOrganizations(c forge.Context) error {
 	return c.JSON(200, orgs)
 }
 
-// UpdateOrganization handles organization update requests
+// UpdateOrganization handles organization update requests.
 func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -265,7 +266,7 @@ func (h *OrganizationHandler) UpdateOrganization(c forge.Context) error {
 	return c.JSON(200, org)
 }
 
-// DeleteOrganization handles organization deletion requests
+// DeleteOrganization handles organization deletion requests.
 func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -301,7 +302,7 @@ func (h *OrganizationHandler) DeleteOrganization(c forge.Context) error {
 	return c.JSON(204, nil)
 }
 
-// GetOrganizationBySlug handles get organization by slug requests
+// GetOrganizationBySlug handles get organization by slug requests.
 func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -342,7 +343,7 @@ func (h *OrganizationHandler) GetOrganizationBySlug(c forge.Context) error {
 	return c.JSON(200, org)
 }
 
-// ListMembers handles list organization members requests
+// ListMembers handles list organization members requests.
 func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -373,6 +374,7 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 	if limit <= 0 {
 		limit = 10
 	}
+
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -395,7 +397,7 @@ func (h *OrganizationHandler) ListMembers(c forge.Context) error {
 	return c.JSON(200, members)
 }
 
-// InviteMember handles member invitation requests
+// InviteMember handles member invitation requests.
 func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -448,7 +450,7 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 	return c.JSON(201, invitation)
 }
 
-// UpdateMember handles member update requests
+// UpdateMember handles member update requests.
 func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -477,7 +479,7 @@ func (h *OrganizationHandler) UpdateMember(c forge.Context) error {
 	return c.JSON(200, member)
 }
 
-// RemoveMember handles member removal requests
+// RemoveMember handles member removal requests.
 func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -506,7 +508,7 @@ func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 	return c.JSON(204, nil)
 }
 
-// AcceptInvitation handles invitation acceptance requests
+// AcceptInvitation handles invitation acceptance requests.
 func (h *OrganizationHandler) AcceptInvitation(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -529,7 +531,7 @@ func (h *OrganizationHandler) AcceptInvitation(c forge.Context) error {
 	return c.JSON(200, member)
 }
 
-// DeclineInvitation handles invitation decline requests
+// DeclineInvitation handles invitation decline requests.
 func (h *OrganizationHandler) DeclineInvitation(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -549,7 +551,7 @@ func (h *OrganizationHandler) DeclineInvitation(c forge.Context) error {
 	return c.JSON(200, &StatusResponse{Status: "declined"})
 }
 
-// ListTeams handles list teams requests
+// ListTeams handles list teams requests.
 func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -580,6 +582,7 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 	if limit <= 0 {
 		limit = 10
 	}
+
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -601,7 +604,7 @@ func (h *OrganizationHandler) ListTeams(c forge.Context) error {
 	return c.JSON(200, teams)
 }
 
-// CreateTeam handles team creation requests
+// CreateTeam handles team creation requests.
 func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -637,7 +640,7 @@ func (h *OrganizationHandler) CreateTeam(c forge.Context) error {
 	return c.JSON(201, team)
 }
 
-// UpdateTeam handles team update requests
+// UpdateTeam handles team update requests.
 func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -667,13 +670,14 @@ func (h *OrganizationHandler) UpdateTeam(c forge.Context) error {
 	if team.ProvisionedBy != nil && *team.ProvisionedBy == "scim" {
 		response := responses.NewResponseWithWarnings(team)
 		response.AddWarning("scim_managed_team", "This team is managed via SCIM provisioning. Manual changes may be overwritten by the identity provider.")
+
 		return c.JSON(200, response)
 	}
 
 	return c.JSON(200, team)
 }
 
-// DeleteTeam handles team deletion requests
+// DeleteTeam handles team deletion requests.
 func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -709,6 +713,7 @@ func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 	if team.ProvisionedBy != nil && *team.ProvisionedBy == "scim" {
 		response := responses.NewResponseWithWarnings(map[string]string{"message": "Team deleted"})
 		response.AddWarning("scim_managed_team", "This team was managed via SCIM provisioning. The deletion may be reversed by the identity provider.")
+
 		return c.JSON(200, response)
 	}
 

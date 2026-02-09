@@ -10,7 +10,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// MFAFactor stores enrolled authentication factors for users
+// MFAFactor stores enrolled authentication factors for users.
 type MFAFactor struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_factors,alias:mff"`
@@ -33,7 +33,7 @@ type MFAFactor struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFAChallenge stores active MFA verification challenges
+// MFAChallenge stores active MFA verification challenges.
 type MFAChallenge struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_challenges,alias:mfc"`
@@ -58,7 +58,7 @@ type MFAChallenge struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFASession represents an MFA verification session
+// MFASession represents an MFA verification session.
 type MFASession struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_sessions,alias:mfs"`
@@ -83,7 +83,7 @@ type MFASession struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFATrustedDevice stores trusted devices that can skip MFA
+// MFATrustedDevice stores trusted devices that can skip MFA.
 type MFATrustedDevice struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_trusted_devices,alias:mtd"`
@@ -103,7 +103,7 @@ type MFATrustedDevice struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFAPolicy defines organization-level MFA requirements
+// MFAPolicy defines organization-level MFA requirements.
 type MFAPolicy struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_policies,alias:mfp"`
@@ -127,7 +127,7 @@ type MFAPolicy struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFAAttempt tracks verification attempts for rate limiting and security
+// MFAAttempt tracks verification attempts for rate limiting and security.
 type MFAAttempt struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_attempts,alias:mfa"`
@@ -148,7 +148,7 @@ type MFAAttempt struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFARiskAssessment stores risk assessment results
+// MFARiskAssessment stores risk assessment results.
 type MFARiskAssessment struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_risk_assessments,alias:mra"`
@@ -170,7 +170,7 @@ type MFARiskAssessment struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// MFABypass represents temporary MFA bypass granted by admins
+// MFABypass represents temporary MFA bypass granted by admins.
 type MFABypass struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:mfa_bypasses,alias:mfb"`
@@ -189,13 +189,14 @@ type MFABypass struct {
 	App *App `bun:"rel:belongs-to,join:app_id=id"`
 }
 
-// JSONMap is a helper type for storing JSON data
-type JSONMap map[string]interface{}
+// JSONMap is a helper type for storing JSON data.
+type JSONMap map[string]any
 
-// Scan implements sql.Scanner for JSONMap
-func (j *JSONMap) Scan(value interface{}) error {
+// Scan implements sql.Scanner for JSONMap.
+func (j *JSONMap) Scan(value any) error {
 	if value == nil {
 		*j = make(JSONMap)
+
 		return nil
 	}
 
@@ -210,24 +211,27 @@ func (j *JSONMap) Scan(value interface{}) error {
 	}
 
 	*j = result
+
 	return nil
 }
 
-// Value implements driver.Valuer for JSONMap
+// Value implements driver.Valuer for JSONMap.
 func (j JSONMap) Value() (driver.Value, error) {
 	if j == nil {
 		return nil, nil
 	}
+
 	return json.Marshal(j)
 }
 
-// StringArray is a helper type for storing arrays of strings
+// StringArray is a helper type for storing arrays of strings.
 type StringArray []string
 
-// Scan implements sql.Scanner for StringArray
-func (s *StringArray) Scan(value interface{}) error {
+// Scan implements sql.Scanner for StringArray.
+func (s *StringArray) Scan(value any) error {
 	if value == nil {
 		*s = []string{}
+
 		return nil
 	}
 
@@ -242,13 +246,15 @@ func (s *StringArray) Scan(value interface{}) error {
 	}
 
 	*s = result
+
 	return nil
 }
 
-// Value implements driver.Valuer for StringArray
+// Value implements driver.Valuer for StringArray.
 func (s StringArray) Value() (driver.Value, error) {
 	if s == nil {
 		return nil, nil
 	}
+
 	return json.Marshal(s)
 }

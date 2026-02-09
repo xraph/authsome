@@ -18,12 +18,14 @@ import (
 
 // Token Management Handlers
 
-// ServeTokensListPage renders the SCIM tokens management page
+// ServeTokensListPage renders the SCIM tokens management page.
 func (e *DashboardExtension) ServeTokensListPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
+
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -52,19 +54,21 @@ func (e *DashboardExtension) ServeTokensListPage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// renderTokensListContent renders the tokens list page content
-func (e *DashboardExtension) renderTokensListContent(ctx context.Context, currentApp interface{}, currentEnv interface{}, orgID *xid.ID) g.Node {
+// renderTokensListContent renders the tokens list page content.
+func (e *DashboardExtension) renderTokensListContent(ctx context.Context, currentApp any, currentEnv any, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 
 	// Fetch tokens from service
 	app := currentApp.(*app.App)
 	env := currentEnv.(*environment.Environment)
+
 	tokens, err := e.plugin.service.ListTokens(ctx, &app.ID, &env.ID, orgID)
 	if err != nil {
 		return alertBox("error", "Error", "Failed to load SCIM tokens: "+err.Error())
 	}
 
 	mode := e.detectMode()
+
 	scopeLabel := "App"
 	if mode == "organization" && orgID != nil {
 		scopeLabel = "Organization"
@@ -118,7 +122,7 @@ func (e *DashboardExtension) renderTokensListContent(ctx context.Context, curren
 	)
 }
 
-// renderTokenCards renders token cards
+// renderTokenCards renders token cards.
 func (e *DashboardExtension) renderTokenCards(tokens []*SCIMToken, basePath string, appID *xid.ID) []g.Node {
 	cards := make([]g.Node, len(tokens))
 	for i, token := range tokens {
@@ -130,10 +134,11 @@ func (e *DashboardExtension) renderTokenCards(tokens []*SCIMToken, basePath stri
 			fmt.Sprintf("rotateToken('%s')", token.ID.String()),
 		)
 	}
+
 	return cards
 }
 
-// renderCreateTokenModal renders the create token modal
+// renderCreateTokenModal renders the create token modal.
 func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.ID) g.Node {
 	return Div(
 		ID("create-token-modal"),
@@ -267,7 +272,7 @@ func (e *DashboardExtension) renderCreateTokenModal(basePath string, appID *xid.
 	)
 }
 
-// renderTokenDisplayModal renders the modal that displays the newly created token
+// renderTokenDisplayModal renders the modal that displays the newly created token.
 func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 	return Div(
 		ID("token-display-modal"),
@@ -366,7 +371,7 @@ func (e *DashboardExtension) renderTokenDisplayModal() g.Node {
 	)
 }
 
-// HandleCreateToken handles token creation
+// HandleCreateToken handles token creation.
 func (e *DashboardExtension) HandleCreateToken(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 
@@ -420,8 +425,10 @@ func (e *DashboardExtension) HandleCreateToken(ctx *router.PageContext) (g.Node,
 
 	// Parse expiry
 	var expiresAt *time.Time
+
 	if expiresInStr != "" {
 		days := 90 // Default to 90 days
+
 		switch expiresInStr {
 		case "30":
 			days = 30
@@ -430,6 +437,7 @@ func (e *DashboardExtension) HandleCreateToken(ctx *router.PageContext) (g.Node,
 		case "365":
 			days = 365
 		}
+
 		expiry := time.Now().AddDate(0, 0, days)
 		expiresAt = &expiry
 	}
@@ -454,10 +462,11 @@ func (e *DashboardExtension) HandleCreateToken(ctx *router.PageContext) (g.Node,
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-tokens?success=created&token_id=%s",
 		e.baseUIPath, currentApp.ID.String(), token.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleRotateToken handles token rotation
+// HandleRotateToken handles token rotation.
 func (e *DashboardExtension) HandleRotateToken(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	tokenID := ctx.Param("id")
@@ -487,10 +496,11 @@ func (e *DashboardExtension) HandleRotateToken(ctx *router.PageContext) (g.Node,
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-tokens?success=rotated&token_id=%s",
 		e.baseUIPath, currentApp.ID.String(), newToken.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleRevokeToken handles token revocation
+// HandleRevokeToken handles token revocation.
 func (e *DashboardExtension) HandleRevokeToken(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	tokenID := ctx.Param("id")
@@ -520,10 +530,11 @@ func (e *DashboardExtension) HandleRevokeToken(ctx *router.PageContext) (g.Node,
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-tokens?success=revoked",
 		e.baseUIPath, currentApp.ID.String())
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }
 
-// HandleTestConnection handles connection testing
+// HandleTestConnection handles connection testing.
 func (e *DashboardExtension) HandleTestConnection(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	tokenID := ctx.Param("id")
@@ -554,8 +565,10 @@ func (e *DashboardExtension) HandleTestConnection(ctx *router.PageContext) (g.No
 	if !result.Success {
 		status = "failed"
 	}
+
 	redirectURL := fmt.Sprintf("%s/app/%s/settings/scim-tokens?test=%s",
 		e.baseUIPath, currentApp.ID.String(), status)
 	http.Redirect(ctx.ResponseWriter, ctx.Request, redirectURL, http.StatusSeeOther)
+
 	return nil, nil
 }

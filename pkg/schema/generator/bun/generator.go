@@ -10,25 +10,25 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator"
 )
 
-// Generator generates Bun migration files
+// Generator generates Bun migration files.
 type Generator struct{}
 
-// NewGenerator creates a new Bun generator
+// NewGenerator creates a new Bun generator.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// Name returns the generator name
+// Name returns the generator name.
 func (g *Generator) Name() string {
 	return "bun"
 }
 
-// Description returns the generator description
+// Description returns the generator description.
 func (g *Generator) Description() string {
 	return "Bun ORM migration generator (Go)"
 }
 
-// Generate generates Bun migration files
+// Generate generates Bun migration files.
 func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) error {
 	// Create output directory
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
@@ -50,7 +50,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	return nil
 }
 
-// generateMigration generates the Bun migration Go code
+// generateMigration generates the Bun migration Go code.
 func (g *Generator) generateMigration(schema *definition.Schema, opts generator.Options) string {
 	var b strings.Builder
 
@@ -75,7 +75,7 @@ func init() {
 	// Create tables
 	for _, model := range schema.Models {
 		b.WriteString(fmt.Sprintf("\t\t// Create %s table\n", model.Table))
-		b.WriteString(fmt.Sprintf("\t\t_, err := db.NewCreateTable().\n"))
+		b.WriteString("\t\t_, err := db.NewCreateTable().\n")
 		b.WriteString(fmt.Sprintf("\t\t\tModel((*schema.%s)(nil)).\n", model.Name))
 		b.WriteString("\t\t\tIfNotExists().\n")
 		b.WriteString("\t\t\tExec(ctx)\n")
@@ -86,9 +86,10 @@ func init() {
 
 	// Create indexes
 	b.WriteString("\t\t// Create indexes\n")
+
 	for _, model := range schema.Models {
 		for _, index := range model.Indexes {
-			b.WriteString(fmt.Sprintf("\t\t_, err = db.NewCreateIndex().\n"))
+			b.WriteString("\t\t_, err = db.NewCreateIndex().\n")
 			b.WriteString(fmt.Sprintf("\t\t\tModel((*schema.%s)(nil)).\n", model.Name))
 			b.WriteString(fmt.Sprintf("\t\t\tIndex(\"%s\").\n", index.Name))
 
@@ -115,9 +116,11 @@ func init() {
 	// Rollback - drop tables
 	b.WriteString("\t\t// Rollback - drop all tables\n")
 	b.WriteString("\t\ttables := []string{\n")
+
 	for _, model := range schema.Models {
 		b.WriteString(fmt.Sprintf("\t\t\t\"%s\",\n", model.Table))
 	}
+
 	b.WriteString("\t\t}\n\n")
 
 	b.WriteString("\t\tfor _, table := range tables {\n")

@@ -13,7 +13,7 @@ import (
 )
 
 // TestInitialMigration_M2MModelsRegistered verifies that m2m models are properly registered
-// in the initial migration and that table creation doesn't panic
+// in the initial migration and that table creation doesn't panic.
 func TestInitialMigration_M2MModelsRegistered(t *testing.T) {
 	// Create in-memory SQLite database
 	sqldb, err := sql.Open(sqliteshim.ShimName, "file::memory:?cache=shared")
@@ -65,6 +65,7 @@ func TestInitialMigration_M2MModelsRegistered(t *testing.T) {
 	// Insert test data
 	appID := xid.New()
 	systemActor := xid.New()
+
 	_, err = db.NewInsert().Model(&schema.App{
 		ID:   appID,
 		Name: "Test App",
@@ -79,6 +80,7 @@ func TestInitialMigration_M2MModelsRegistered(t *testing.T) {
 	}
 
 	teamID := xid.New()
+
 	_, err = db.NewInsert().Model(&schema.Team{
 		ID:    teamID,
 		AppID: appID,
@@ -94,6 +96,7 @@ func TestInitialMigration_M2MModelsRegistered(t *testing.T) {
 
 	// Query with m2m relation - this is what would panic without the fix
 	var teams []schema.Team
+
 	err = db.NewSelect().
 		Model(&teams).
 		Where("id = ?", teamID).
@@ -108,7 +111,7 @@ func TestInitialMigration_M2MModelsRegistered(t *testing.T) {
 }
 
 // TestMigration002_M2MModelsRegistered verifies that the 002 migration properly
-// registers m2m models before using them
+// registers m2m models before using them.
 func TestMigration002_M2MModelsRegistered(t *testing.T) {
 	// Create in-memory SQLite database
 	sqldb, err := sql.Open(sqliteshim.ShimName, "file::memory:?cache=shared")
@@ -169,6 +172,7 @@ func TestMigration002_M2MModelsRegistered(t *testing.T) {
 
 	// Test m2m relationship query
 	var teams []schema.Team
+
 	err = db.NewSelect().
 		Model(&teams).
 		Relation("Members"). // This triggers the m2m join

@@ -8,7 +8,7 @@ import (
 )
 
 // RoleRepository interface for RBAC operations on API keys
-// This is implemented by repository.APIKeyRoleRepository
+// This is implemented by repository.APIKeyRoleRepository.
 type RoleRepository interface {
 	// Role assignment
 	AssignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID, createdBy *xid.ID) error
@@ -30,14 +30,14 @@ type RoleRepository interface {
 	GetCreatorRoles(ctx context.Context, creatorID xid.ID, orgID *xid.ID) ([]*schema.Role, error)
 }
 
-// Role represents an RBAC role (simplified DTO)
+// Role represents an RBAC role (simplified DTO).
 type Role struct {
 	ID          xid.ID `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 }
 
-// Permission represents an RBAC permission (simplified DTO)
+// Permission represents an RBAC permission (simplified DTO).
 type Permission struct {
 	ID       xid.ID `json:"id"`
 	Action   string `json:"action"`           // e.g., "view", "edit", "delete", "*"
@@ -45,7 +45,7 @@ type Permission struct {
 	Source   string `json:"source,omitempty"` // "key", "creator", "impersonation"
 }
 
-// EffectivePermissions represents all permissions that apply to an API key
+// EffectivePermissions represents all permissions that apply to an API key.
 type EffectivePermissions struct {
 	Scopes               []string      `json:"scopes"`                      // Legacy scope strings
 	Permissions          []*Permission `json:"permissions"`                 // RBAC permissions
@@ -53,27 +53,29 @@ type EffectivePermissions struct {
 	ImpersonatingUser    *xid.ID       `json:"impersonatingUser,omitempty"` // If impersonating a user
 }
 
-// HasPermission checks if effective permissions include a specific action/resource
+// HasPermission checks if effective permissions include a specific action/resource.
 func (ep *EffectivePermissions) HasPermission(action, resource string) bool {
 	for _, perm := range ep.Permissions {
 		if matchPermission(perm, action, resource) {
 			return true
 		}
 	}
+
 	return false
 }
 
-// HasScope checks if effective permissions include a specific scope
+// HasScope checks if effective permissions include a specific scope.
 func (ep *EffectivePermissions) HasScope(scope string) bool {
 	for _, s := range ep.Scopes {
 		if s == scope || s == "admin:full" {
 			return true
 		}
 	}
+
 	return false
 }
 
-// CanAccess checks if effective permissions allow access (scopes OR RBAC)
+// CanAccess checks if effective permissions allow access (scopes OR RBAC).
 func (ep *EffectivePermissions) CanAccess(action, resource string) bool {
 	// Check scopes first (legacy)
 	scopeString := resource + ":" + action
@@ -90,14 +92,18 @@ func matchPermission(perm *Permission, action, resource string) bool {
 	if perm.Action == "*" && perm.Resource == "*" {
 		return true // Full admin
 	}
+
 	if perm.Action == "*" && perm.Resource == resource {
 		return true // All actions on resource
 	}
+
 	if perm.Action == action && perm.Resource == "*" {
 		return true // Specific action on all resources
 	}
+
 	if perm.Action == action && perm.Resource == resource {
 		return true // Exact match
 	}
+
 	return false
 }

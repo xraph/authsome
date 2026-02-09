@@ -24,6 +24,7 @@ func (s *RedisStorage) Increment(ctx context.Context, key string, window time.Du
 	// Use a pipeline to INCR and ensure expiry is set if missing.
 	pipe := s.client.Pipeline()
 	incr := pipe.Incr(ctx, key)
+
 	ttl := pipe.TTL(ctx, key)
 	if _, err := pipe.Exec(ctx); err != nil {
 		return 0, err
@@ -42,8 +43,9 @@ func (s *RedisStorage) Increment(ctx context.Context, key string, window time.Du
 	if err != nil {
 		return 0, err
 	}
+
 	return int(n), nil
 }
 
-// Assert RedisStorage implements rl.Storage
+// Assert RedisStorage implements rl.Storage.
 var _ rl.Storage = (*RedisStorage)(nil)

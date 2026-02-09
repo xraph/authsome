@@ -11,14 +11,14 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// ExportImportService handles export/import of features and plans
+// ExportImportService handles export/import of features and plans.
 type ExportImportService struct {
 	featureRepo repository.FeatureRepository
 	planRepo    repository.PlanRepository
 	eventRepo   repository.EventRepository
 }
 
-// NewExportImportService creates a new export/import service
+// NewExportImportService creates a new export/import service.
 func NewExportImportService(
 	featureRepo repository.FeatureRepository,
 	planRepo repository.PlanRepository,
@@ -31,7 +31,7 @@ func NewExportImportService(
 	}
 }
 
-// ExportData represents the exported data structure
+// ExportData represents the exported data structure.
 type ExportData struct {
 	Version    string          `json:"version"`
 	ExportedAt time.Time       `json:"exportedAt"`
@@ -40,63 +40,63 @@ type ExportData struct {
 	Plans      []ExportPlan    `json:"plans"`
 }
 
-// ExportFeature represents a feature in export format
+// ExportFeature represents a feature in export format.
 type ExportFeature struct {
-	Key          string                 `json:"key"`
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description"`
-	Type         string                 `json:"type"`
-	Unit         string                 `json:"unit"`
-	ResetPeriod  string                 `json:"resetPeriod"`
-	IsPublic     bool                   `json:"isPublic"`
-	DisplayOrder int                    `json:"displayOrder"`
-	Icon         string                 `json:"icon,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Tiers        []ExportFeatureTier    `json:"tiers,omitempty"`
+	Key          string              `json:"key"`
+	Name         string              `json:"name"`
+	Description  string              `json:"description"`
+	Type         string              `json:"type"`
+	Unit         string              `json:"unit"`
+	ResetPeriod  string              `json:"resetPeriod"`
+	IsPublic     bool                `json:"isPublic"`
+	DisplayOrder int                 `json:"displayOrder"`
+	Icon         string              `json:"icon,omitempty"`
+	Metadata     map[string]any      `json:"metadata,omitempty"`
+	Tiers        []ExportFeatureTier `json:"tiers,omitempty"`
 }
 
-// ExportFeatureTier represents a feature tier in export format
+// ExportFeatureTier represents a feature tier in export format.
 type ExportFeatureTier struct {
 	UpTo  int64  `json:"upTo"`
 	Value string `json:"value"`
 	Label string `json:"label"`
 }
 
-// ExportPlan represents a plan in export format
+// ExportPlan represents a plan in export format.
 type ExportPlan struct {
-	Name            string                 `json:"name"`
-	Slug            string                 `json:"slug"`
-	Description     string                 `json:"description"`
-	BillingPattern  string                 `json:"billingPattern"`
-	BillingInterval string                 `json:"billingInterval"`
-	BasePrice       int64                  `json:"basePrice"`
-	Currency        string                 `json:"currency"`
-	TrialDays       int                    `json:"trialDays"`
-	TierMode        string                 `json:"tierMode"`
-	IsActive        bool                   `json:"isActive"`
-	IsPublic        bool                   `json:"isPublic"`
-	DisplayOrder    int                    `json:"displayOrder"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Features        []ExportPlanFeature    `json:"features,omitempty"`
-	PriceTiers      []ExportPriceTier      `json:"priceTiers,omitempty"`
+	Name            string              `json:"name"`
+	Slug            string              `json:"slug"`
+	Description     string              `json:"description"`
+	BillingPattern  string              `json:"billingPattern"`
+	BillingInterval string              `json:"billingInterval"`
+	BasePrice       int64               `json:"basePrice"`
+	Currency        string              `json:"currency"`
+	TrialDays       int                 `json:"trialDays"`
+	TierMode        string              `json:"tierMode"`
+	IsActive        bool                `json:"isActive"`
+	IsPublic        bool                `json:"isPublic"`
+	DisplayOrder    int                 `json:"displayOrder"`
+	Metadata        map[string]any      `json:"metadata,omitempty"`
+	Features        []ExportPlanFeature `json:"features,omitempty"`
+	PriceTiers      []ExportPriceTier   `json:"priceTiers,omitempty"`
 }
 
-// ExportPlanFeature represents a plan feature link in export format
+// ExportPlanFeature represents a plan feature link in export format.
 type ExportPlanFeature struct {
-	FeatureKey    string      `json:"featureKey"`
-	Value         interface{} `json:"value"`
-	IsHighlighted bool        `json:"isHighlighted,omitempty"`
-	IsBlocked     bool        `json:"isBlocked,omitempty"`
+	FeatureKey    string `json:"featureKey"`
+	Value         any    `json:"value"`
+	IsHighlighted bool   `json:"isHighlighted,omitempty"`
+	IsBlocked     bool   `json:"isBlocked,omitempty"`
 }
 
-// ExportPriceTier represents a price tier in export format
+// ExportPriceTier represents a price tier in export format.
 type ExportPriceTier struct {
 	UpTo       int64 `json:"upTo"`
 	UnitAmount int64 `json:"unitAmount"`
 	FlatAmount int64 `json:"flatAmount"`
 }
 
-// ExportFeaturesAndPlans exports all features and plans for an app
+// ExportFeaturesAndPlans exports all features and plans for an app.
 func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID xid.ID) (*ExportData, error) {
 	export := &ExportData{
 		Version:    "1.0",
@@ -174,7 +174,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 
 		// Export plan features (legacy format)
 		for _, feature := range plan.Features {
-			var value interface{}
+			var value any
 			json.Unmarshal([]byte(feature.Value), &value)
 			exportPlan.Features = append(exportPlan.Features, ExportPlanFeature{
 				FeatureKey: feature.Key,
@@ -185,11 +185,12 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 		// Export new feature links (if present)
 		for _, link := range plan.FeatureLinks {
 			if link.Feature != nil {
-				var value interface{}
+				var value any
 				json.Unmarshal([]byte(link.Value), &value)
 
 				// Check if already exported (prefer feature links)
 				found := false
+
 				for i, f := range exportPlan.Features {
 					if f.FeatureKey == link.Feature.Key {
 						exportPlan.Features[i] = ExportPlanFeature{
@@ -199,6 +200,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 							IsBlocked:     link.IsBlocked,
 						}
 						found = true
+
 						break
 					}
 				}
@@ -229,7 +231,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 	return export, nil
 }
 
-// ImportFeaturesAndPlans imports features and plans from export data
+// ImportFeaturesAndPlans imports features and plans from export data.
 func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID xid.ID, data *ExportData, overwriteExisting bool) (*ImportResult, error) {
 	result := &ImportResult{
 		FeaturesCreated: 0,
@@ -241,6 +243,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 
 	// Import features first
 	featureKeyToID := make(map[string]xid.ID)
+
 	for _, exportFeature := range data.Features {
 		// Check if feature already exists
 		existing, _ := s.featureRepo.FindByKey(ctx, appID, exportFeature.Key)
@@ -249,6 +252,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 			if !overwriteExisting {
 				result.FeaturesSkipped++
 				featureKeyToID[exportFeature.Key] = existing.ID
+
 				continue
 			}
 			// Update existing feature
@@ -264,6 +268,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 
 			if err := s.featureRepo.Update(ctx, existing); err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to update feature %s: %v", exportFeature.Key, err))
+
 				continue
 			}
 
@@ -310,11 +315,12 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 			feature.UpdatedAt = now
 
 			if feature.Metadata == nil {
-				feature.Metadata = make(map[string]interface{})
+				feature.Metadata = make(map[string]any)
 			}
 
 			if err := s.featureRepo.Create(ctx, feature); err != nil {
 				result.Errors = append(result.Errors, fmt.Sprintf("Failed to create feature %s: %v", exportFeature.Key, err))
+
 				continue
 			}
 
@@ -347,11 +353,13 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 		if existing != nil {
 			if !overwriteExisting {
 				result.PlansSkipped++
+
 				continue
 			}
 			// Skip updating existing plans to avoid conflicts
 			result.PlansSkipped++
 			result.Errors = append(result.Errors, fmt.Sprintf("Plan with slug %s already exists, skipped", exportPlan.Slug))
+
 			continue
 		}
 
@@ -378,11 +386,12 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 		plan.UpdatedAt = now
 
 		if plan.Metadata == nil {
-			plan.Metadata = make(map[string]interface{})
+			plan.Metadata = make(map[string]any)
 		}
 
 		if err := s.planRepo.Create(ctx, plan); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("Failed to create plan %s: %v", exportPlan.Slug, err))
+
 			continue
 		}
 
@@ -391,6 +400,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 			featureID, exists := featureKeyToID[planFeature.FeatureKey]
 			if !exists {
 				result.Errors = append(result.Errors, fmt.Sprintf("Feature %s not found for plan %s", planFeature.FeatureKey, exportPlan.Slug))
+
 				continue
 			}
 
@@ -433,7 +443,7 @@ func (s *ExportImportService) ImportFeaturesAndPlans(ctx context.Context, appID 
 	return result, nil
 }
 
-// ImportResult contains the results of an import operation
+// ImportResult contains the results of an import operation.
 type ImportResult struct {
 	FeaturesCreated int      `json:"featuresCreated"`
 	FeaturesSkipped int      `json:"featuresSkipped"`

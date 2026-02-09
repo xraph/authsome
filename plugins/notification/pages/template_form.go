@@ -9,7 +9,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// TemplateFormModal renders a complete template form in a modal
+// TemplateFormModal renders a complete template form in a modal.
 func TemplateFormModal(appID string) g.Node {
 	return Div(
 		g.Attr("x-show", "showCreateModal || showEditModal"),
@@ -280,9 +280,10 @@ func TemplateFormModal(appID string) g.Node {
 	)
 }
 
-// templateFormData returns the Alpine.js data for the template form
-func templateFormData(appID string, existingTemplate interface{}) string {
+// templateFormData returns the Alpine.js data for the template form.
+func templateFormData(appID string, existingTemplate any) string {
 	var templateJSON string
+
 	if existingTemplate != nil {
 		bytes, _ := json.Marshal(existingTemplate)
 		templateJSON = string(bytes)

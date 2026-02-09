@@ -5,7 +5,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/providers/types"
 )
 
-// Re-export types for convenience
+// Re-export types for convenience.
 type (
 	PaymentProvider      = types.PaymentProvider
 	ProviderSubscription = types.ProviderSubscription
@@ -19,14 +19,14 @@ type (
 	WebhookEvent         = types.WebhookEvent
 )
 
-// Re-export checkout modes
+// Re-export checkout modes.
 const (
 	CheckoutModeSubscription = types.CheckoutModeSubscription
 	CheckoutModePayment      = types.CheckoutModePayment
 	CheckoutModeSetup        = types.CheckoutModeSetup
 )
 
-// Re-export event types
+// Re-export event types.
 const (
 	EventCustomerCreated          = types.EventCustomerCreated
 	EventCustomerUpdated          = types.EventCustomerUpdated

@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardIndexPage shows app selection or redirects to default app
+// DashboardIndexPage shows app selection or redirects to default app.
 func (p *PagesManager) DashboardIndexPage(ctx *router.PageContext) (g.Node, error) {
 	// // Check if user is authenticated
 	// user := p.checkExistingPageSession(ctx)
@@ -20,7 +20,6 @@ func (p *PagesManager) DashboardIndexPage(ctx *router.PageContext) (g.Node, erro
 	// 	ctx.ResponseWriter.WriteHeader(302)
 	// 	return nil, nil
 	// }
-
 	return primitives.Container(
 		Div(
 			g.Attr("x-data", `{
@@ -256,7 +255,7 @@ func (p *PagesManager) DashboardIndexPage(ctx *router.PageContext) (g.Node, erro
 	), nil
 }
 
-// createAppCard renders a card for creating a new app
+// createAppCard renders a card for creating a new app.
 func (p *PagesManager) createAppCard() g.Node {
 	return Div(
 		Button(
@@ -287,11 +286,12 @@ func (p *PagesManager) createAppCard() g.Node {
 	)
 }
 
-// CreateAppPage redirects to the index page with the create dialog open
+// CreateAppPage redirects to the index page with the create dialog open.
 func (p *PagesManager) CreateAppPage(ctx *router.PageContext) (g.Node, error) {
 	// Redirect to the index page with a query param to open the dialog
 	ctx.ResponseWriter.Header().Set("Location", p.baseUIPath+"/?create=true")
 	ctx.ResponseWriter.WriteHeader(302)
+
 	return nil, nil
 }
 

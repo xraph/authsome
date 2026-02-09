@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/forgeui/components/table"
 )
 
-// SessionsListPage renders the sessions list page with dynamic data loading
+// SessionsListPage renders the sessions list page with dynamic data loading.
 func SessionsListPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -126,7 +126,7 @@ func SessionsListPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// sessionsListData returns the Alpine.js data object for sessions list
+// sessionsListData returns the Alpine.js data object for sessions list.
 func sessionsListData(appID string) string {
 	return fmt.Sprintf(`{
 		sessions: [],
@@ -226,7 +226,7 @@ func sessionsListData(appID string) string {
 	}`, appID, appID)
 }
 
-// filterTab renders a filter tab button
+// filterTab renders a filter tab button.
 func filterTab(label, value, xModel string) g.Node {
 	return Button(
 		Type("button"),
@@ -237,7 +237,7 @@ func filterTab(label, value, xModel string) g.Node {
 	)
 }
 
-// sessionsGrid renders the sessions grid view
+// sessionsGrid renders the sessions grid view.
 func sessionsGrid(appBase string) g.Node {
 	return Div(
 		Class("grid gap-4 sm:grid-cols-2 lg:grid-cols-3"),
@@ -247,7 +247,7 @@ func sessionsGrid(appBase string) g.Node {
 	)
 }
 
-// sessionCard renders a single session card
+// sessionCard renders a single session card.
 func sessionCard(appBase string) g.Node {
 	return card.Card(
 		Class("hover:shadow-md transition-shadow hover:border-primary/50"),
@@ -354,7 +354,7 @@ func sessionCard(appBase string) g.Node {
 	)
 }
 
-// sessionsTable renders the sessions table view
+// sessionsTable renders the sessions table view.
 func sessionsTable(appBase string) g.Node {
 	return card.Card(
 		Div(

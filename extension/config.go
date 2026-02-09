@@ -13,65 +13,65 @@ import (
 	"github.com/xraph/authsome/plugins"
 )
 
-// Config holds the configuration for the AuthSome extension
+// Config holds the configuration for the AuthSome extension.
 type Config struct {
 	// RequireEmailVerified requires email verification for all users
-	RequireEmailVerified bool `yaml:"requireEmailVerified" json:"requireEmailVerified"`
+	RequireEmailVerified bool `json:"requireEmailVerified" yaml:"requireEmailVerified"`
 
 	// DisableOpenAPI disables the OpenAPI documentation
-	DisableOpenAPI bool `yaml:"disableOpenAPI" json:"disableOpenAPI"`
+	DisableOpenAPI bool `json:"disableOpenAPI" yaml:"disableOpenAPI"`
 
 	// BasePath is the base path where auth routes are mounted
-	BasePath string `yaml:"basePath" json:"basePath"`
+	BasePath string `json:"basePath" yaml:"basePath"`
 
 	// Database configuration - mutually exclusive options
 	// Database is a direct database connection (takes precedence)
-	Database interface{} `yaml:"-" json:"-"`
+	Database any `json:"-" yaml:"-"`
 	// DatabaseName is the name of the database to use from DatabaseManager
-	DatabaseName string `yaml:"databaseName" json:"databaseName"`
+	DatabaseName string `json:"databaseName" yaml:"databaseName"`
 
 	// CORS configuration
-	CORSEnabled    bool     `yaml:"corsEnabled" json:"corsEnabled"`
-	TrustedOrigins []string `yaml:"trustedOrigins" json:"trustedOrigins"`
+	CORSEnabled    bool     `json:"corsEnabled"    yaml:"corsEnabled"`
+	TrustedOrigins []string `json:"trustedOrigins" yaml:"trustedOrigins"`
 
 	// Secret for signing tokens
-	Secret string `yaml:"secret" json:"secret"`
+	Secret string `json:"secret" yaml:"secret"`
 
 	// RBACEnforce enables handler-level RBAC enforcement
-	RBACEnforce bool `yaml:"rbacEnforce" json:"rbacEnforce"`
+	RBACEnforce bool `json:"rbacEnforce" yaml:"rbacEnforce"`
 
 	// SecurityConfig for IP/country restrictions
-	SecurityConfig *security.Config `yaml:"security" json:"security"`
+	SecurityConfig *security.Config `json:"security" yaml:"security"`
 
 	// RateLimitConfig for rate limiting
-	RateLimitConfig *ratelimit.Config `yaml:"rateLimit" json:"rateLimit"`
+	RateLimitConfig *ratelimit.Config `json:"rateLimit" yaml:"rateLimit"`
 
 	// RateLimitStorage is the storage backend for rate limiting
-	RateLimitStorage ratelimit.Storage `yaml:"-" json:"-"`
+	RateLimitStorage ratelimit.Storage `json:"-" yaml:"-"`
 
 	// GeoIPProvider for country-based restrictions
-	GeoIPProvider security.GeoIPProvider `yaml:"-" json:"-"`
+	GeoIPProvider security.GeoIPProvider `json:"-" yaml:"-"`
 
 	// SessionCookie configures cookie-based session management
-	SessionCookie *session.CookieConfig `yaml:"sessionCookie" json:"sessionCookie"`
+	SessionCookie *session.CookieConfig `json:"sessionCookie" yaml:"sessionCookie"`
 
 	// SessionConfig configures session behavior (TTL, sliding window, refresh tokens)
-	SessionConfig *session.Config `yaml:"sessionConfig" json:"sessionConfig"`
+	SessionConfig *session.Config `json:"sessionConfig" yaml:"sessionConfig"`
 
 	// UserConfig configures user service behavior (password requirements, etc.)
-	UserConfig *user.Config `yaml:"userConfig" json:"userConfig"`
+	UserConfig *user.Config `json:"userConfig" yaml:"userConfig"`
 
 	// AuthMiddlewareConfig configures the authentication middleware behavior
-	AuthMiddlewareConfig *middleware.AuthMiddlewareConfig `yaml:"authMiddleware" json:"authMiddleware"`
+	AuthMiddlewareConfig *middleware.AuthMiddlewareConfig `json:"authMiddleware" yaml:"authMiddleware"`
 
 	// Plugins to register with AuthSome
-	Plugins []plugins.Plugin `yaml:"-" json:"-"`
+	Plugins []plugins.Plugin `json:"-" yaml:"-"`
 
 	// RequireConfig determines if configuration must be loaded from file
-	RequireConfig bool `yaml:"-" json:"-"`
+	RequireConfig bool `json:"-" yaml:"-"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() Config {
 	return Config{
 		BasePath:       "/api/auth",
@@ -82,38 +82,38 @@ func DefaultConfig() Config {
 	}
 }
 
-// ConfigOption is a functional option for configuring the extension
+// ConfigOption is a functional option for configuring the extension.
 type ConfigOption func(*Config)
 
-// WithBasePath sets the base path for routes
+// WithBasePath sets the base path for routes.
 func WithBasePath(path string) ConfigOption {
 	return func(c *Config) {
 		c.BasePath = path
 	}
 }
 
-// WithDatabase sets a direct database connection
+// WithDatabase sets a direct database connection.
 func WithDatabase(db *bun.DB) ConfigOption {
 	return func(c *Config) {
 		c.Database = db
 	}
 }
 
-// WithDatabaseName sets the database name to use from DatabaseManager
+// WithDatabaseName sets the database name to use from DatabaseManager.
 func WithDatabaseName(name string) ConfigOption {
 	return func(c *Config) {
 		c.DatabaseName = name
 	}
 }
 
-// WithCORSEnabled enables or disables CORS middleware
+// WithCORSEnabled enables or disables CORS middleware.
 func WithCORSEnabled(enabled bool) ConfigOption {
 	return func(c *Config) {
 		c.CORSEnabled = enabled
 	}
 }
 
-// WithTrustedOrigins sets trusted origins for CORS and auto-enables CORS if origins provided
+// WithTrustedOrigins sets trusted origins for CORS and auto-enables CORS if origins provided.
 func WithTrustedOrigins(origins []string) ConfigOption {
 	return func(c *Config) {
 		c.TrustedOrigins = origins
@@ -124,63 +124,63 @@ func WithTrustedOrigins(origins []string) ConfigOption {
 	}
 }
 
-// WithSecret sets the secret for token signing
+// WithSecret sets the secret for token signing.
 func WithSecret(secret string) ConfigOption {
 	return func(c *Config) {
 		c.Secret = secret
 	}
 }
 
-// WithRBACEnforcement enables/disables RBAC enforcement
+// WithRBACEnforcement enables/disables RBAC enforcement.
 func WithRBACEnforcement(enabled bool) ConfigOption {
 	return func(c *Config) {
 		c.RBACEnforce = enabled
 	}
 }
 
-// WithSecurityConfig sets security configuration
+// WithSecurityConfig sets security configuration.
 func WithSecurityConfig(config security.Config) ConfigOption {
 	return func(c *Config) {
 		c.SecurityConfig = &config
 	}
 }
 
-// WithRateLimitConfig sets rate limit configuration
+// WithRateLimitConfig sets rate limit configuration.
 func WithRateLimitConfig(config ratelimit.Config) ConfigOption {
 	return func(c *Config) {
 		c.RateLimitConfig = &config
 	}
 }
 
-// WithRateLimitStorage sets the rate limit storage backend
+// WithRateLimitStorage sets the rate limit storage backend.
 func WithRateLimitStorage(storage ratelimit.Storage) ConfigOption {
 	return func(c *Config) {
 		c.RateLimitStorage = storage
 	}
 }
 
-// WithGeoIPProvider sets the GeoIP provider
+// WithGeoIPProvider sets the GeoIP provider.
 func WithGeoIPProvider(provider security.GeoIPProvider) ConfigOption {
 	return func(c *Config) {
 		c.GeoIPProvider = provider
 	}
 }
 
-// WithPlugins sets the plugins to register
+// WithPlugins sets the plugins to register.
 func WithPlugins(plugins ...plugins.Plugin) ConfigOption {
 	return func(c *Config) {
 		c.Plugins = append(c.Plugins, plugins...)
 	}
 }
 
-// WithRequireConfig sets whether configuration must be loaded from file
+// WithRequireConfig sets whether configuration must be loaded from file.
 func WithRequireConfig(require bool) ConfigOption {
 	return func(c *Config) {
 		c.RequireConfig = require
 	}
 }
 
-// WithConfig sets the entire configuration
+// WithConfig sets the entire configuration.
 func WithConfig(config Config) ConfigOption {
 	return func(c *Config) {
 		*c = config
@@ -210,23 +210,25 @@ func WithGlobalCookieConfig(config session.CookieConfig) ConfigOption {
 }
 
 // WithSessionCookieEnabled enables or disables cookie-based session management globally
-// When enabled, authentication responses will automatically set secure HTTP cookies
+// When enabled, authentication responses will automatically set secure HTTP cookies.
 func WithSessionCookieEnabled(enabled bool) ConfigOption {
 	return func(c *Config) {
 		if c.SessionCookie == nil {
 			c.SessionCookie = &session.CookieConfig{}
 		}
+
 		c.SessionCookie.Enabled = enabled
 	}
 }
 
 // WithSessionCookieName sets the session cookie name
-// Default: "authsome_session"
+// Default: "authsome_session".
 func WithSessionCookieName(name string) ConfigOption {
 	return func(c *Config) {
 		if c.SessionCookie == nil {
 			c.SessionCookie = &session.CookieConfig{}
 		}
+
 		c.SessionCookie.Name = name
 	}
 }
@@ -244,6 +246,7 @@ func WithSessionCookieMaxAge(seconds int) ConfigOption {
 		if c.SessionCookie == nil {
 			c.SessionCookie = &session.CookieConfig{}
 		}
+
 		c.SessionCookie.MaxAge = &seconds
 	}
 }
@@ -306,6 +309,7 @@ func WithSlidingWindowSessions(enabled bool, renewalThreshold ...time.Duration) 
 		if c.SessionConfig == nil {
 			c.SessionConfig = &session.Config{}
 		}
+
 		c.SessionConfig.EnableSlidingWindow = enabled
 		if len(renewalThreshold) > 0 {
 			c.SessionConfig.SlidingRenewalAfter = renewalThreshold[0]
@@ -326,10 +330,12 @@ func WithRefreshTokens(enabled bool, accessTTL, refreshTTL time.Duration) Config
 		if c.SessionConfig == nil {
 			c.SessionConfig = &session.Config{}
 		}
+
 		c.SessionConfig.EnableRefreshTokens = enabled
 		if accessTTL > 0 {
 			c.SessionConfig.AccessTokenTTL = accessTTL
 		}
+
 		if refreshTTL > 0 {
 			c.SessionConfig.RefreshTokenTTL = refreshTTL
 		}
@@ -346,9 +352,11 @@ func WithSessionTTL(defaultTTL, rememberTTL time.Duration) ConfigOption {
 		if c.SessionConfig == nil {
 			c.SessionConfig = &session.Config{}
 		}
+
 		if defaultTTL > 0 {
 			c.SessionConfig.DefaultTTL = defaultTTL
 		}
+
 		if rememberTTL > 0 {
 			c.SessionConfig.RememberTTL = rememberTTL
 		}
@@ -392,6 +400,7 @@ func WithPasswordRequirements(reqs validator.PasswordRequirements) ConfigOption 
 		if c.UserConfig == nil {
 			c.UserConfig = &user.Config{}
 		}
+
 		c.UserConfig.PasswordRequirements = reqs
 	}
 }
@@ -464,6 +473,7 @@ func WithMinPasswordLength(length int) ConfigOption {
 		if c.UserConfig == nil {
 			c.UserConfig = &user.Config{}
 		}
+
 		c.UserConfig.PasswordRequirements.MinLength = length
 	}
 }

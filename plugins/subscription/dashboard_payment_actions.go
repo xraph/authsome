@@ -10,7 +10,7 @@ import (
 	g "maragu.dev/gomponents"
 )
 
-// HandleSetDefaultPaymentMethod sets a payment method as default via HTMX
+// HandleSetDefaultPaymentMethod sets a payment method as default via HTMX.
 func (e *DashboardExtension) HandleSetDefaultPaymentMethod(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -55,7 +55,7 @@ func (e *DashboardExtension) HandleSetDefaultPaymentMethod(ctx *router.PageConte
 	return html, nil
 }
 
-// HandleRemovePaymentMethod removes a payment method via HTMX
+// HandleRemovePaymentMethod removes a payment method via HTMX.
 func (e *DashboardExtension) HandleRemovePaymentMethod(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -82,6 +82,7 @@ func (e *DashboardExtension) HandleRemovePaymentMethod(ctx *router.PageContext) 
 	if err := e.plugin.paymentSvc.RemovePaymentMethod(reqCtx, pmID); err != nil {
 		// Check if it's trying to delete default payment method
 		ctx.ResponseWriter.Header().Set("HX-Trigger", `{"showToast": {"message": "Cannot remove default payment method", "type": "error"}}`)
+
 		return nil, errs.BadRequest("Cannot remove default payment method")
 	}
 
@@ -102,9 +103,10 @@ func (e *DashboardExtension) HandleRemovePaymentMethod(ctx *router.PageContext) 
 	return html, nil
 }
 
-// renderHTMX is a helper to render gomponents to HTTP response
+// renderHTMX is a helper to render gomponents to HTTP response.
 func renderHTMX(c *router.PageContext, node g.Node) error {
 	c.ResponseWriter.Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.ResponseWriter.WriteHeader(http.StatusOK)
+
 	return node.Render(c.ResponseWriter)
 }

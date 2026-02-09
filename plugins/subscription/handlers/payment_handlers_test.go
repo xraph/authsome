@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/core"
 )
 
-// MockPaymentService is a mock implementation of payment service
+// MockPaymentService is a mock implementation of payment service.
 type MockPaymentService struct {
 	mock.Mock
 }
@@ -23,6 +23,7 @@ func (m *MockPaymentService) CreateSetupIntent(ctx context.Context, orgID xid.ID
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*core.SetupIntentResult), args.Error(1)
 }
 
@@ -31,6 +32,7 @@ func (m *MockPaymentService) AddPaymentMethod(ctx context.Context, orgID xid.ID,
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*core.PaymentMethod), args.Error(1)
 }
 
@@ -39,16 +41,19 @@ func (m *MockPaymentService) ListPaymentMethods(ctx context.Context, orgID xid.I
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*core.PaymentMethod), args.Error(1)
 }
 
 func (m *MockPaymentService) SetDefaultPaymentMethod(ctx context.Context, orgID, pmID xid.ID) error {
 	args := m.Called(ctx, orgID, pmID)
+
 	return args.Error(0)
 }
 
 func (m *MockPaymentService) RemovePaymentMethod(ctx context.Context, pmID xid.ID) error {
 	args := m.Called(ctx, pmID)
+
 	return args.Error(0)
 }
 
@@ -57,10 +62,11 @@ func (m *MockPaymentService) GetDefaultPaymentMethod(ctx context.Context, orgID 
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*core.PaymentMethod), args.Error(1)
 }
 
-// MockCustomerService is a mock implementation of customer service
+// MockCustomerService is a mock implementation of customer service.
 type MockCustomerService struct {
 	mock.Mock
 }
@@ -70,6 +76,7 @@ func (m *MockCustomerService) GetByOrganizationID(ctx context.Context, orgID xid
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*core.Customer), args.Error(1)
 }
 
@@ -129,6 +136,7 @@ func TestPaymentHandlers_CreateSetupIntent(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/setup-intent", strings.NewReader(tt.requestBody))
 			req.Header.Set("Content-Type", "application/json")
+
 			w := httptest.NewRecorder()
 
 			// Note: In real tests, you would use a proper Forge context and call h.HandleCreateSetupIntent(c).
@@ -253,7 +261,7 @@ func TestPaymentHandlers_RemovePaymentMethod(t *testing.T) {
 	mockPaymentSvc.AssertExpectations(t)
 }
 
-// TestValidatePaymentMethodID tests payment method ID validation
+// TestValidatePaymentMethodID tests payment method ID validation.
 func TestValidatePaymentMethodID(t *testing.T) {
 	tests := []struct {
 		name    string

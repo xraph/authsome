@@ -2,7 +2,7 @@ package twofa
 
 import "github.com/xraph/forge"
 
-// Register registers 2FA routes under basePath
+// Register registers 2FA routes under basePath.
 func Register(router forge.Router, basePath string, h *Handler) {
 	grp := router.Group(basePath)
 	grp.POST("/2fa/enable", h.Enable)

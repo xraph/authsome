@@ -2,21 +2,22 @@ package oidcprovider
 
 import (
 	"context"
+	"slices"
 )
 
-// DiscoveryService handles OIDC discovery document generation
+// DiscoveryService handles OIDC discovery document generation.
 type DiscoveryService struct {
 	config Config
 }
 
-// NewDiscoveryService creates a new discovery service
+// NewDiscoveryService creates a new discovery service.
 func NewDiscoveryService(config Config) *DiscoveryService {
 	return &DiscoveryService{
 		config: config,
 	}
 }
 
-// GetDiscoveryDocument generates the OIDC discovery document (.well-known/openid-configuration)
+// GetDiscoveryDocument generates the OIDC discovery document (.well-known/openid-configuration).
 func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL, basePath string) *DiscoveryResponse {
 	// Ensure baseURL doesn't end with slash
 	if len(baseURL) > 0 && baseURL[len(baseURL)-1] == '/' {
@@ -38,6 +39,7 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL, ba
 
 	// Add device code grant if enabled
 	deviceAuthEndpoint := ""
+
 	if s.config.DeviceFlow.Enabled {
 		grantTypes = append(grantTypes, "urn:ietf:params:oauth:grant-type:device_code")
 		deviceAuthEndpoint = baseURL + basePath + "/device_authorization"
@@ -155,40 +157,28 @@ func (s *DiscoveryService) GetDiscoveryDocument(ctx context.Context, baseURL, ba
 	}
 }
 
-// GetIssuer returns the configured issuer URL
+// GetIssuer returns the configured issuer URL.
 func (s *DiscoveryService) GetIssuer() string {
 	return s.config.Issuer
 }
 
-// SupportsGrantType checks if a grant type is supported
+// SupportsGrantType checks if a grant type is supported.
 func (s *DiscoveryService) SupportsGrantType(grantType string) bool {
 	supported := []string{"authorization_code", "refresh_token", "client_credentials", "implicit"}
-	for _, gt := range supported {
-		if gt == grantType {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(supported, grantType)
 }
 
-// SupportsResponseType checks if a response type is supported
+// SupportsResponseType checks if a response type is supported.
 func (s *DiscoveryService) SupportsResponseType(responseType string) bool {
 	supported := []string{"code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"}
-	for _, rt := range supported {
-		if rt == responseType {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(supported, responseType)
 }
 
-// SupportsScope checks if a scope is supported
+// SupportsScope checks if a scope is supported.
 func (s *DiscoveryService) SupportsScope(scope string) bool {
 	supported := []string{"openid", "profile", "email", "phone", "address", "offline_access"}
-	for _, s := range supported {
-		if s == scope {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(supported, scope)
 }

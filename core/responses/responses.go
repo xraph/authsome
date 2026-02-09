@@ -19,24 +19,24 @@ import (
 // See internal/errs/errors.go for all available error constructors.
 type ErrorResponse = errs.AuthsomeError
 
-// MessageResponse represents a simple message response
+// MessageResponse represents a simple message response.
 type MessageResponse struct {
 	Message string `json:"message"`
 }
 
-// StatusResponse represents a status response
+// StatusResponse represents a status response.
 type StatusResponse struct {
 	Status string `json:"status"`
 }
 
-// SuccessResponse represents a success boolean response
+// SuccessResponse represents a success boolean response.
 type SuccessResponse struct {
 	Success bool `json:"success"`
 }
 
 // Auth-specific responses
 
-// AuthResponse represents a successful authentication response with user, session, and token
+// AuthResponse represents a successful authentication response with user, session, and token.
 type AuthResponse struct {
 	User         *user.User       `json:"user"`
 	Session      *session.Session `json:"session,omitempty"`
@@ -44,7 +44,7 @@ type AuthResponse struct {
 	RequireTwoFA bool             `json:"requireTwofa,omitempty"`
 }
 
-// TwoFARequiredResponse indicates that two-factor authentication is required
+// TwoFARequiredResponse indicates that two-factor authentication is required.
 type TwoFARequiredResponse struct {
 	User         *user.User `json:"user"`
 	RequireTwoFA bool       `json:"requireTwofa,omitempty"`
@@ -52,20 +52,20 @@ type TwoFARequiredResponse struct {
 }
 
 // VerifyResponse represents a verification response (used by emailotp, magiclink, phone plugins)
-// Uses interface{} for flexibility across different plugin implementations
+// Uses interface{} for flexibility across different plugin implementations.
 type VerifyResponse struct {
-	User    interface{} `json:"user"`
-	Session interface{} `json:"session"`
-	Token   string      `json:"token,omitempty"`
+	User    any    `json:"user"`
+	Session any    `json:"session"`
+	Token   string `json:"token,omitempty"`
 }
 
-// SessionResponse represents a session query response
+// SessionResponse represents a session query response.
 type SessionResponse struct {
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session,omitempty"`
 }
 
-// RefreshSessionResponse represents a refresh token response
+// RefreshSessionResponse represents a refresh token response.
 type RefreshSessionResponse struct {
 	User             *user.User       `json:"user"`
 	Session          *session.Session `json:"session"`
@@ -75,27 +75,27 @@ type RefreshSessionResponse struct {
 	RefreshExpiresAt string           `json:"refreshExpiresAt"`
 }
 
-// Warning represents a single warning message
+// Warning represents a single warning message.
 type Warning struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-// ResponseWithWarnings wraps any response data with optional warnings
+// ResponseWithWarnings wraps any response data with optional warnings.
 type ResponseWithWarnings struct {
-	Data     interface{} `json:"data"`
-	Warnings []Warning   `json:"warnings,omitempty"`
+	Data     any       `json:"data"`
+	Warnings []Warning `json:"warnings,omitempty"`
 }
 
-// NewResponseWithWarnings creates a new response with warnings
-func NewResponseWithWarnings(data interface{}, warnings ...Warning) *ResponseWithWarnings {
+// NewResponseWithWarnings creates a new response with warnings.
+func NewResponseWithWarnings(data any, warnings ...Warning) *ResponseWithWarnings {
 	return &ResponseWithWarnings{
 		Data:     data,
 		Warnings: warnings,
 	}
 }
 
-// AddWarning adds a warning to the response
+// AddWarning adds a warning to the response.
 func (r *ResponseWithWarnings) AddWarning(code, message string) {
 	r.Warnings = append(r.Warnings, Warning{
 		Code:    code,
@@ -103,7 +103,7 @@ func (r *ResponseWithWarnings) AddWarning(code, message string) {
 	})
 }
 
-// HasWarnings returns true if the response has any warnings
+// HasWarnings returns true if the response has any warnings.
 func (r *ResponseWithWarnings) HasWarnings() bool {
 	return len(r.Warnings) > 0
 }

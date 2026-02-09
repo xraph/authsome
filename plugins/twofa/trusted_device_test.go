@@ -16,6 +16,7 @@ func TestTrustedDeviceDaysValidation(t *testing.T) {
 	if days <= 0 || days > 90 {
 		days = 30
 	}
+
 	assert.Equal(t, 30, days)
 
 	// Days > 90 should cap at 30
@@ -23,6 +24,7 @@ func TestTrustedDeviceDaysValidation(t *testing.T) {
 	if days <= 0 || days > 90 {
 		days = 30
 	}
+
 	assert.Equal(t, 30, days)
 
 	// Valid days should be preserved
@@ -30,6 +32,7 @@ func TestTrustedDeviceDaysValidation(t *testing.T) {
 	if days <= 0 || days > 90 {
 		days = 30
 	}
+
 	assert.Equal(t, 60, days)
 
 	// Edge case: exactly 90 days
@@ -37,6 +40,7 @@ func TestTrustedDeviceDaysValidation(t *testing.T) {
 	if days <= 0 || days > 90 {
 		days = 30
 	}
+
 	assert.Equal(t, 90, days)
 }
 

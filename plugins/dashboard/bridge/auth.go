@@ -10,13 +10,13 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// AuthenticateInput represents the login request
+// AuthenticateInput represents the login request.
 type AuthenticateInput struct {
-	Email    string `json:"email" validate:"required,email"`
+	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required"`
 }
 
-// AuthenticateOutput represents the login response
+// AuthenticateOutput represents the login response.
 type AuthenticateOutput struct {
 	Success      bool      `json:"success"`
 	Message      string    `json:"message"`
@@ -25,21 +25,21 @@ type AuthenticateOutput struct {
 	User         *UserInfo `json:"user,omitempty"`
 }
 
-// UserInfo represents basic user information
+// UserInfo represents basic user information.
 type UserInfo struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name,omitempty"`
 }
 
-// RegisterInput represents the signup request
+// RegisterInput represents the signup request.
 type RegisterInput struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min:8"`
+	Email    string `json:"email"          validate:"required,email"`
+	Password string `json:"password"       validate:"required,min:8"`
 	Name     string `json:"name,omitempty"`
 }
 
-// RegisterOutput represents the signup response
+// RegisterOutput represents the signup response.
 type RegisterOutput struct {
 	Success      bool      `json:"success"`
 	Message      string    `json:"message"`
@@ -48,7 +48,7 @@ type RegisterOutput struct {
 	User         *UserInfo `json:"user,omitempty"`
 }
 
-// CheckSessionOutput represents session validation response
+// CheckSessionOutput represents session validation response.
 type CheckSessionOutput struct {
 	Valid     bool      `json:"valid"`
 	User      *UserInfo `json:"user,omitempty"`
@@ -56,36 +56,36 @@ type CheckSessionOutput struct {
 	SessionID string    `json:"sessionId,omitempty"`
 }
 
-// LogoutOutput represents logout response
+// LogoutOutput represents logout response.
 type LogoutOutput struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// RequestPasswordResetInput represents password reset request
+// RequestPasswordResetInput represents password reset request.
 type RequestPasswordResetInput struct {
 	Email string `json:"email" validate:"required,email"`
 }
 
-// RequestPasswordResetOutput represents password reset response
+// RequestPasswordResetOutput represents password reset response.
 type RequestPasswordResetOutput struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// ResetPasswordInput represents password reset with token
+// ResetPasswordInput represents password reset with token.
 type ResetPasswordInput struct {
-	Token    string `json:"token" validate:"required"`
+	Token    string `json:"token"    validate:"required"`
 	Password string `json:"password" validate:"required,min:8"`
 }
 
-// ResetPasswordOutput represents password reset response
+// ResetPasswordOutput represents password reset response.
 type ResetPasswordOutput struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
 
-// registerAuthFunctions registers authentication-related bridge functions
+// registerAuthFunctions registers authentication-related bridge functions.
 func (bm *BridgeManager) registerAuthFunctions() error {
 	// Login function
 	if err := bm.bridge.Register("authenticateUser", bm.authenticateUser); err != nil {
@@ -118,10 +118,11 @@ func (bm *BridgeManager) registerAuthFunctions() error {
 	}
 
 	bm.log.Info("auth bridge functions registered")
+
 	return nil
 }
 
-// authenticateUser handles user login via bridge
+// authenticateUser handles user login via bridge.
 func (bm *BridgeManager) authenticateUser(ctx bridge.Context, input AuthenticateInput) (*AuthenticateOutput, error) {
 	// Validate input
 	if input.Email == "" || input.Password == "" {
@@ -178,7 +179,7 @@ func (bm *BridgeManager) authenticateUser(ctx bridge.Context, input Authenticate
 	}, nil
 }
 
-// registerUser handles user registration via bridge
+// registerUser handles user registration via bridge.
 func (bm *BridgeManager) registerUser(ctx bridge.Context, input RegisterInput) (*RegisterOutput, error) {
 	// Validate input
 	if input.Email == "" || input.Password == "" {
@@ -248,7 +249,7 @@ func (bm *BridgeManager) registerUser(ctx bridge.Context, input RegisterInput) (
 	}, nil
 }
 
-// logoutUser handles user logout via bridge
+// logoutUser handles user logout via bridge.
 func (bm *BridgeManager) logoutUser(ctx bridge.Context, _ struct{}) (*LogoutOutput, error) {
 	user := ctx.User()
 	if user == nil {
@@ -271,7 +272,7 @@ func (bm *BridgeManager) logoutUser(ctx bridge.Context, _ struct{}) (*LogoutOutp
 	}, nil
 }
 
-// checkSession validates current session
+// checkSession validates current session.
 func (bm *BridgeManager) checkSession(ctx bridge.Context, _ struct{}) (*CheckSessionOutput, error) {
 	user := ctx.User()
 	if user == nil {
@@ -292,7 +293,7 @@ func (bm *BridgeManager) checkSession(ctx bridge.Context, _ struct{}) (*CheckSes
 	}, nil
 }
 
-// requestPasswordReset initiates password reset process
+// requestPasswordReset initiates password reset process.
 func (bm *BridgeManager) requestPasswordReset(ctx bridge.Context, input RequestPasswordResetInput) (*RequestPasswordResetOutput, error) {
 	if input.Email == "" {
 		return &RequestPasswordResetOutput{
@@ -327,7 +328,7 @@ func (bm *BridgeManager) requestPasswordReset(ctx bridge.Context, input RequestP
 	}, nil
 }
 
-// resetPassword resets password using token
+// resetPassword resets password using token.
 func (bm *BridgeManager) resetPassword(ctx bridge.Context, input ResetPasswordInput) (*ResetPasswordOutput, error) {
 	if input.Token == "" || input.Password == "" {
 		return &ResetPasswordOutput{

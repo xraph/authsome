@@ -7,19 +7,19 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-// WebAuthnWrapper wraps the go-webauthn/webauthn library for easier use
+// WebAuthnWrapper wraps the go-webauthn/webauthn library for easier use.
 type WebAuthnWrapper struct {
 	webAuthn *webauthn.WebAuthn
 	config   Config
 }
 
-// NewWebAuthnWrapper creates a new WebAuthn wrapper with configuration
+// NewWebAuthnWrapper creates a new WebAuthn wrapper with configuration.
 func NewWebAuthnWrapper(cfg Config) (*WebAuthnWrapper, error) {
 	// Convert origins string slice if needed
 	origins := cfg.RPOrigins
 	if len(origins) == 0 {
 		// Default to RPID if no origins specified
-		origins = []string{fmt.Sprintf("https://%s", cfg.RPID)}
+		origins = []string{"https://" + cfg.RPID}
 	}
 
 	wconfig := &webauthn.Config{
@@ -51,32 +51,32 @@ func NewWebAuthnWrapper(cfg Config) (*WebAuthnWrapper, error) {
 	}, nil
 }
 
-// BeginRegistration initiates WebAuthn credential registration
+// BeginRegistration initiates WebAuthn credential registration.
 func (w *WebAuthnWrapper) BeginRegistration(user webauthn.User, opts ...webauthn.RegistrationOption) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
 	return w.webAuthn.BeginRegistration(user, opts...)
 }
 
-// FinishRegistration completes WebAuthn credential registration
+// FinishRegistration completes WebAuthn credential registration.
 func (w *WebAuthnWrapper) FinishRegistration(user webauthn.User, session webauthn.SessionData, response *protocol.ParsedCredentialCreationData) (*webauthn.Credential, error) {
 	return w.webAuthn.CreateCredential(user, session, response)
 }
 
-// BeginLogin initiates WebAuthn authentication
+// BeginLogin initiates WebAuthn authentication.
 func (w *WebAuthnWrapper) BeginLogin(user webauthn.User, opts ...webauthn.LoginOption) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
 	return w.webAuthn.BeginLogin(user, opts...)
 }
 
-// FinishLogin completes WebAuthn authentication with credential verification
+// FinishLogin completes WebAuthn authentication with credential verification.
 func (w *WebAuthnWrapper) FinishLogin(user webauthn.User, session webauthn.SessionData, response *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, error) {
 	return w.webAuthn.ValidateLogin(user, session, response)
 }
 
-// BeginDiscoverableLogin initiates authentication for discoverable credentials (usernameless)
+// BeginDiscoverableLogin initiates authentication for discoverable credentials (usernameless).
 func (w *WebAuthnWrapper) BeginDiscoverableLogin(opts ...webauthn.LoginOption) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
 	return w.webAuthn.BeginDiscoverableLogin(opts...)
 }
 
-// ParseUserVerificationRequirement converts string to protocol type
+// ParseUserVerificationRequirement converts string to protocol type.
 func ParseUserVerificationRequirement(s string) protocol.UserVerificationRequirement {
 	switch s {
 	case "required":
@@ -90,7 +90,7 @@ func ParseUserVerificationRequirement(s string) protocol.UserVerificationRequire
 	}
 }
 
-// ParseAuthenticatorAttachment converts string to protocol type
+// ParseAuthenticatorAttachment converts string to protocol type.
 func ParseAuthenticatorAttachment(s string) protocol.AuthenticatorAttachment {
 	switch s {
 	case "platform":
@@ -102,15 +102,16 @@ func ParseAuthenticatorAttachment(s string) protocol.AuthenticatorAttachment {
 	}
 }
 
-// ParseResidentKeyRequirement converts bool to protocol type
+// ParseResidentKeyRequirement converts bool to protocol type.
 func ParseResidentKeyRequirement(required bool) protocol.ResidentKeyRequirement {
 	if required {
 		return protocol.ResidentKeyRequirementRequired
 	}
+
 	return protocol.ResidentKeyRequirementDiscouraged
 }
 
-// ParseConveyancePreference converts string to protocol type
+// ParseConveyancePreference converts string to protocol type.
 func ParseConveyancePreference(s string) protocol.ConveyancePreference {
 	switch s {
 	case "none":

@@ -8,7 +8,7 @@ import (
 )
 
 // OrganizationUIExtension is the interface that plugins implement to extend organization pages
-// This allows plugins to add widgets, tabs, actions, and quick links to organization-scoped pages
+// This allows plugins to add widgets, tabs, actions, and quick links to organization-scoped pages.
 type OrganizationUIExtension interface {
 	// ExtensionID returns a unique identifier for this extension
 	ExtensionID() string
@@ -34,7 +34,7 @@ type OrganizationUIExtension interface {
 	OrganizationSettingsSections() []OrganizationSettingsSection
 }
 
-// OrganizationWidget represents a stats card/widget on the organization detail page
+// OrganizationWidget represents a stats card/widget on the organization detail page.
 type OrganizationWidget struct {
 	// ID is a unique identifier for this widget
 	ID string
@@ -54,7 +54,7 @@ type OrganizationWidget struct {
 	Renderer func(ctx OrgExtensionContext) g.Node
 }
 
-// OrganizationTab represents a full-page tab for organization content
+// OrganizationTab represents a full-page tab for organization content.
 type OrganizationTab struct {
 	// ID is a unique identifier for this tab
 	ID string
@@ -74,7 +74,7 @@ type OrganizationTab struct {
 	Renderer func(ctx OrgExtensionContext) g.Node
 }
 
-// OrganizationAction represents an action button in the organization header
+// OrganizationAction represents an action button in the organization header.
 type OrganizationAction struct {
 	// ID is a unique identifier for this action
 	ID string
@@ -95,7 +95,7 @@ type OrganizationAction struct {
 	Action string
 }
 
-// OrganizationQuickLink represents a quick access card on the organization detail page
+// OrganizationQuickLink represents a quick access card on the organization detail page.
 type OrganizationQuickLink struct {
 	// ID is a unique identifier for this link
 	ID string
@@ -114,7 +114,7 @@ type OrganizationQuickLink struct {
 	RequireAdmin bool
 }
 
-// OrganizationSettingsSection represents a settings section for organization configuration
+// OrganizationSettingsSection represents a settings section for organization configuration.
 type OrganizationSettingsSection struct {
 	// ID is a unique identifier for this section
 	ID string
@@ -133,7 +133,7 @@ type OrganizationSettingsSection struct {
 }
 
 // OrgExtensionContext provides context information to extension renderers
-// Extensions receive minimal information and fetch their own data as needed
+// Extensions receive minimal information and fetch their own data as needed.
 type OrgExtensionContext struct {
 	// OrgID is the organization identifier
 	OrgID xid.ID
@@ -145,7 +145,7 @@ type OrgExtensionContext struct {
 	Request *http.Request
 	// GetOrg is a helper function to lazy-load the organization object if needed
 	// Most extensions should fetch their own org-scoped data instead
-	GetOrg func() (interface{}, error)
+	GetOrg func() (any, error)
 	// IsAdmin indicates if the current user has admin privileges in this org
 	IsAdmin bool
 }

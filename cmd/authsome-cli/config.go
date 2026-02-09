@@ -2,21 +2,23 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/xraph/authsome/internal/errs"
 	"gopkg.in/yaml.v3"
 )
 
-// configCmd represents the config command
+// configCmd represents the config command.
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage configuration",
 	Long:  `Commands for managing AuthSome configuration files.`,
 }
 
-// Config validate command
+// Config validate command.
 var configValidateCmd = &cobra.Command{
 	Use:   "validate [config-file]",
 	Short: "Validate configuration file",
@@ -27,11 +29,12 @@ var configValidateCmd = &cobra.Command{
 		if len(args) > 0 {
 			configFile = args[0]
 		}
+
 		return validateConfig(configFile)
 	},
 }
 
-// Config show command
+// Config show command.
 var configShowCmd = &cobra.Command{
 	Use:   "show [config-file]",
 	Short: "Show configuration",
@@ -42,11 +45,12 @@ var configShowCmd = &cobra.Command{
 		if len(args) > 0 {
 			configFile = args[0]
 		}
+
 		return showConfig(configFile)
 	},
 }
 
-// Config init command
+// Config init command.
 var configInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize configuration",
@@ -72,7 +76,7 @@ func init() {
 	configInitCmd.Flags().BoolP("force", "f", false, "Overwrite existing file")
 }
 
-// validateConfig validates a configuration file
+// validateConfig validates a configuration file.
 func validateConfig(configFile string) error {
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		return fmt.Errorf("configuration file not found: %s", configFile)
@@ -83,7 +87,7 @@ func validateConfig(configFile string) error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return fmt.Errorf("invalid YAML syntax: %w", err)
 	}
@@ -94,10 +98,11 @@ func validateConfig(configFile string) error {
 	}
 
 	fmt.Printf("Configuration file %s is valid\n", configFile)
+
 	return nil
 }
 
-// showConfig displays the configuration
+// showConfig displays the configuration.
 func showConfig(configFile string) error {
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
 		return fmt.Errorf("configuration file not found: %s", configFile)
@@ -110,16 +115,17 @@ func showConfig(configFile string) error {
 
 	fmt.Printf("Configuration from %s:\n\n", configFile)
 	fmt.Print(string(data))
+
 	return nil
 }
 
-// initConfig creates a new configuration file
+// initConfig creates a new configuration file.
 func initConfig(mode, output string, force bool) error {
 	if _, err := os.Stat(output); err == nil && !force {
 		return fmt.Errorf("configuration file already exists: %s (use --force to overwrite)", output)
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 
 	switch mode {
 	case "standalone":
@@ -147,11 +153,12 @@ func initConfig(mode, output string, force bool) error {
 	}
 
 	fmt.Printf("Configuration file created: %s (mode: %s)\n", output, mode)
+
 	return nil
 }
 
-// validateConfigStructure performs basic validation of config structure
-func validateConfigStructure(config map[string]interface{}) error {
+// validateConfigStructure performs basic validation of config structure.
+func validateConfigStructure(config map[string]any) error {
 	// Check for required top-level sections
 	requiredSections := []string{"server", "database", "auth"}
 	for _, section := range requiredSections {
@@ -161,64 +168,64 @@ func validateConfigStructure(config map[string]interface{}) error {
 	}
 
 	// Validate server section
-	if server, ok := config["server"].(map[string]interface{}); ok {
+	if server, ok := config["server"].(map[string]any); ok {
 		if _, exists := server["port"]; !exists {
-			return fmt.Errorf("missing server.port")
+			return errs.New(errs.CodeInvalidInput, "missing server.port", http.StatusBadRequest)
 		}
 	}
 
 	// Validate database section
-	if database, ok := config["database"].(map[string]interface{}); ok {
+	if database, ok := config["database"].(map[string]any); ok {
 		if _, exists := database["url"]; !exists {
-			return fmt.Errorf("missing database.url")
+			return errs.New(errs.CodeInvalidInput, "missing database.url", http.StatusBadRequest)
 		}
 	}
 
 	return nil
 }
 
-// getStandaloneConfig returns default standalone configuration
-func getStandaloneConfig() map[string]interface{} {
-	return map[string]interface{}{
-		"server": map[string]interface{}{
+// getStandaloneConfig returns default standalone configuration.
+func getStandaloneConfig() map[string]any {
+	return map[string]any{
+		"server": map[string]any{
 			"port":    8080,
 			"host":    "localhost",
 			"baseUrl": "http://localhost:8080",
 		},
-		"database": map[string]interface{}{
+		"database": map[string]any{
 			"url": "authsome.db",
 		},
-		"auth": map[string]interface{}{
+		"auth": map[string]any{
 			"mode": "standalone",
-			"session": map[string]interface{}{
+			"session": map[string]any{
 				"cookieName":   "authsome-session",
 				"cookieSecure": false,
 				"cookieMaxAge": 86400,
 			},
-			"password": map[string]interface{}{
+			"password": map[string]any{
 				"minLength":      8,
 				"requireUpper":   true,
 				"requireLower":   true,
 				"requireNumbers": true,
 				"requireSymbols": false,
 			},
-			"rateLimit": map[string]interface{}{
+			"rateLimit": map[string]any{
 				"enabled":     true,
 				"maxAttempts": 5,
 				"windowMs":    900000, // 15 minutes
 			},
 		},
-		"plugins": map[string]interface{}{
-			"username": map[string]interface{}{
+		"plugins": map[string]any{
+			"username": map[string]any{
 				"enabled": true,
 			},
-			"twofa": map[string]interface{}{
+			"twofa": map[string]any{
 				"enabled": false,
 			},
 		},
-		"email": map[string]interface{}{
+		"email": map[string]any{
 			"provider": "smtp",
-			"smtp": map[string]interface{}{
+			"smtp": map[string]any{
 				"host":     "localhost",
 				"port":     587,
 				"username": "",
@@ -229,16 +236,16 @@ func getStandaloneConfig() map[string]interface{} {
 	}
 }
 
-// getSaaSConfig returns default SaaS configuration
-func getSaaSConfig() map[string]interface{} {
+// getSaaSConfig returns default SaaS configuration.
+func getSaaSConfig() map[string]any {
 	config := getStandaloneConfig()
 
 	// Override for SaaS mode
-	auth := config["auth"].(map[string]interface{})
+	auth := config["auth"].(map[string]any)
 	auth["mode"] = "saas"
 
 	// Add organization settings
-	config["organizations"] = map[string]interface{}{
+	config["organizations"] = map[string]any{
 		"allowCreation":   true,
 		"requireApproval": false,
 		"defaultPlan":     "free",
@@ -246,7 +253,7 @@ func getSaaSConfig() map[string]interface{} {
 	}
 
 	// Add multi-tenancy settings
-	config["multiTenant"] = map[string]interface{}{
+	config["multiTenant"] = map[string]any{
 		"enabled":          true,
 		"subdomainRouting": false,
 		"pathBasedRouting": true,

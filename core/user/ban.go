@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// BanRepository defines the interface for user ban operations
+// BanRepository defines the interface for user ban operations.
 type BanRepository interface {
 	// Create a new ban record
 	CreateBan(ctx context.Context, ban *schema.UserBan) error
@@ -29,7 +29,7 @@ type BanRepository interface {
 	FindBanByID(ctx context.Context, banID string) (*schema.UserBan, error)
 }
 
-// Ban represents a user ban with business logic
+// Ban represents a user ban with business logic.
 type Ban struct {
 	ID           string
 	UserID       xid.ID     `json:"userID"`
@@ -43,7 +43,7 @@ type Ban struct {
 	UnbannedAt   *time.Time `json:"unbannedAt,omitempty"`
 }
 
-// BanRequest represents a request to ban a user
+// BanRequest represents a request to ban a user.
 type BanRequest struct {
 	UserID    xid.ID `json:"userID"`
 	Reason    string `json:"reason"`
@@ -51,39 +51,41 @@ type BanRequest struct {
 	ExpiresAt *time.Time
 }
 
-// UnbanRequest represents a request to unban a user
+// UnbanRequest represents a request to unban a user.
 type UnbanRequest struct {
 	UserID     xid.ID `json:"userID"`
 	UnbannedBy xid.ID `json:"unbannedBy"`
 	Reason     string
 }
 
-// BanService handles user banning operations
+// BanService handles user banning operations.
 type BanService struct {
 	banRepo      BanRepository
-	hookRegistry interface{} // Hook registry for lifecycle events
+	hookRegistry any // Hook registry for lifecycle events
 }
 
-// NewBanService creates a new ban service
+// NewBanService creates a new ban service.
 func NewBanService(banRepo BanRepository) *BanService {
 	return &BanService{
 		banRepo: banRepo,
 	}
 }
 
-// SetHookRegistry sets the hook registry for executing lifecycle hooks
-func (s *BanService) SetHookRegistry(registry interface{}) {
+// SetHookRegistry sets the hook registry for executing lifecycle hooks.
+func (s *BanService) SetHookRegistry(registry any) {
 	s.hookRegistry = registry
 }
 
-// BanUser bans a user with the given reason and optional expiration
+// BanUser bans a user with the given reason and optional expiration.
 func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error) {
 	if req.UserID.IsNil() {
 		return nil, errors.New("user ID is required")
 	}
+
 	if req.Reason == "" {
 		return nil, errors.New("ban reason is required")
 	}
+
 	if req.BannedBy.IsNil() {
 		return nil, errors.New("banned by user ID is required")
 	}
@@ -93,6 +95,7 @@ func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error)
 	if err != nil {
 		return nil, err
 	}
+
 	if existingBan != nil && existingBan.IsCurrentlyActive() {
 		return nil, errors.New("user is already banned")
 	}
@@ -129,11 +132,12 @@ func (s *BanService) BanUser(ctx context.Context, req *BanRequest) (*Ban, error)
 	return s.schemaToBan(ban), nil
 }
 
-// UnbanUser removes an active ban from a user
+// UnbanUser removes an active ban from a user.
 func (s *BanService) UnbanUser(ctx context.Context, req *UnbanRequest) error {
 	if req.UserID.IsNil() {
 		return errors.New("user ID is required")
 	}
+
 	if req.UnbannedBy.IsNil() {
 		return errors.New("unbanned by user ID is required")
 	}
@@ -143,6 +147,7 @@ func (s *BanService) UnbanUser(ctx context.Context, req *UnbanRequest) error {
 	if err != nil {
 		return err
 	}
+
 	if ban == nil {
 		return errors.New("no active ban found for user")
 	}
@@ -171,7 +176,7 @@ func (s *BanService) UnbanUser(ctx context.Context, req *UnbanRequest) error {
 	return nil
 }
 
-// CheckBan checks if a user is currently banned
+// CheckBan checks if a user is currently banned.
 func (s *BanService) CheckBan(ctx context.Context, userID string) (*Ban, error) {
 	if userID == "" {
 		return nil, errors.New("user ID is required")
@@ -194,7 +199,7 @@ func (s *BanService) CheckBan(ctx context.Context, userID string) (*Ban, error) 
 	return s.schemaToBan(ban), nil
 }
 
-// GetUserBans returns all bans for a user (including inactive)
+// GetUserBans returns all bans for a user (including inactive).
 func (s *BanService) GetUserBans(ctx context.Context, userID string) ([]*Ban, error) {
 	if userID == "" {
 		return nil, errors.New("user ID is required")
@@ -213,16 +218,17 @@ func (s *BanService) GetUserBans(ctx context.Context, userID string) ([]*Ban, er
 	return bans, nil
 }
 
-// IsUserBanned checks if a user is currently banned (convenience method)
+// IsUserBanned checks if a user is currently banned (convenience method).
 func (s *BanService) IsUserBanned(ctx context.Context, userID string) (bool, error) {
 	ban, err := s.CheckBan(ctx, userID)
 	if err != nil {
 		return false, err
 	}
+
 	return ban != nil, nil
 }
 
-// schemaToBan converts a schema.UserBan to a Ban
+// schemaToBan converts a schema.UserBan to a Ban.
 func (s *BanService) schemaToBan(schemaBan *schema.UserBan) *Ban {
 	return &Ban{
 		ID:           schemaBan.ID.String(),
@@ -238,12 +244,13 @@ func (s *BanService) schemaToBan(schemaBan *schema.UserBan) *Ban {
 	}
 }
 
-// generateBanID generates a unique ban ID
+// generateBanID generates a unique ban ID.
 func generateBanID() (string, error) {
 	// Use the same ID generation logic as other entities
 	id, err := crypto.GenerateID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate ban ID: %w", err)
 	}
+
 	return "ban_" + id, nil
 }

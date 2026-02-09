@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// OrganizationRepository defines the interface for organization data access
+// OrganizationRepository defines the interface for organization data access.
 type OrganizationRepository interface {
 	// Create creates a new organization
 	Create(ctx context.Context, org *Organization) error
@@ -34,7 +34,7 @@ type OrganizationRepository interface {
 	CountByUser(ctx context.Context, userID xid.ID) (int, error)
 }
 
-// MemberRepository defines the interface for organization member data access
+// MemberRepository defines the interface for organization member data access.
 type MemberRepository interface {
 	// Create creates a new organization member
 	Create(ctx context.Context, member *Member) error
@@ -64,7 +64,7 @@ type MemberRepository interface {
 	CountByOrganization(ctx context.Context, orgID xid.ID) (int, error)
 }
 
-// TeamRepository defines the interface for organization team data access
+// TeamRepository defines the interface for organization team data access.
 type TeamRepository interface {
 	// Create creates a new team
 	Create(ctx context.Context, team *Team) error
@@ -112,7 +112,7 @@ type TeamRepository interface {
 	ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error)
 }
 
-// InvitationRepository defines the interface for organization invitation data access
+// InvitationRepository defines the interface for organization invitation data access.
 type InvitationRepository interface {
 	// Create creates a new invitation
 	Create(ctx context.Context, inv *Invitation) error

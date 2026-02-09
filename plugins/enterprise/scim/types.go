@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SCIM 2.0 Schema URNs (RFC 7643)
+// SCIM 2.0 Schema URNs (RFC 7643).
 const (
 	SchemaCore            = "urn:ietf:params:scim:schemas:core:2.0:User"
 	SchemaEnterprise      = "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
@@ -22,7 +22,7 @@ const (
 	SchemaPatchOp         = "urn:ietf:params:scim:api:messages:2.0:PatchOp"
 )
 
-// SCIMUser represents a SCIM 2.0 User resource (RFC 7643 Section 4.1)
+// SCIMUser represents a SCIM 2.0 User resource (RFC 7643 Section 4.1).
 type SCIMUser struct {
 	// Common attributes
 	Schemas    []string  `json:"schemas"`
@@ -59,7 +59,7 @@ type SCIMUser struct {
 	EnterpriseUser *EnterpriseUser `json:"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User,omitempty"`
 }
 
-// SCIMGroup represents a SCIM 2.0 Group resource (RFC 7643 Section 4.2)
+// SCIMGroup represents a SCIM 2.0 Group resource (RFC 7643 Section 4.2).
 type SCIMGroup struct {
 	Schemas     []string          `json:"schemas"`
 	ID          string            `json:"id"`
@@ -69,7 +69,7 @@ type SCIMGroup struct {
 	Members     []MemberReference `json:"members,omitempty"`
 }
 
-// SCIMMeta contains resource metadata (RFC 7643 Section 3.1)
+// SCIMMeta contains resource metadata (RFC 7643 Section 3.1).
 type SCIMMeta struct {
 	ResourceType string    `json:"resourceType"`
 	Created      time.Time `json:"created"`
@@ -78,7 +78,7 @@ type SCIMMeta struct {
 	Version      string    `json:"version,omitempty"`
 }
 
-// SCIMName represents a user's name (RFC 7643 Section 4.1.1)
+// SCIMName represents a user's name (RFC 7643 Section 4.1.1).
 type SCIMName struct {
 	Formatted       string `json:"formatted,omitempty"`
 	FamilyName      string `json:"familyName,omitempty"`
@@ -88,7 +88,7 @@ type SCIMName struct {
 	HonorificSuffix string `json:"honorificSuffix,omitempty"`
 }
 
-// Email represents an email address (RFC 7643 Section 4.1.2)
+// Email represents an email address (RFC 7643 Section 4.1.2).
 type Email struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -96,7 +96,7 @@ type Email struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// PhoneNumber represents a phone number (RFC 7643 Section 4.1.2)
+// PhoneNumber represents a phone number (RFC 7643 Section 4.1.2).
 type PhoneNumber struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -104,7 +104,7 @@ type PhoneNumber struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// IM represents an instant messaging address (RFC 7643 Section 4.1.2)
+// IM represents an instant messaging address (RFC 7643 Section 4.1.2).
 type IM struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -112,7 +112,7 @@ type IM struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// Photo represents a photo URL (RFC 7643 Section 4.1.2)
+// Photo represents a photo URL (RFC 7643 Section 4.1.2).
 type Photo struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -120,7 +120,7 @@ type Photo struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// SCIMAddress represents a physical mailing address (RFC 7643 Section 4.1.2)
+// SCIMAddress represents a physical mailing address (RFC 7643 Section 4.1.2).
 type SCIMAddress struct {
 	Formatted     string `json:"formatted,omitempty"`
 	StreetAddress string `json:"streetAddress,omitempty"`
@@ -132,7 +132,7 @@ type SCIMAddress struct {
 	Primary       bool   `json:"primary,omitempty"`
 }
 
-// GroupReference represents a group membership (RFC 7643 Section 4.1.2)
+// GroupReference represents a group membership (RFC 7643 Section 4.1.2).
 type GroupReference struct {
 	Value   string `json:"value"` // Group ID
 	Ref     string `json:"$ref,omitempty"`
@@ -140,7 +140,7 @@ type GroupReference struct {
 	Type    string `json:"type,omitempty"` // direct, indirect
 }
 
-// Entitlement represents an entitlement (RFC 7643 Section 4.1.2)
+// Entitlement represents an entitlement (RFC 7643 Section 4.1.2).
 type Entitlement struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -148,7 +148,7 @@ type Entitlement struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// SCIMRole represents a role (RFC 7643 Section 4.1.2)
+// SCIMRole represents a role (RFC 7643 Section 4.1.2).
 type SCIMRole struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -156,7 +156,7 @@ type SCIMRole struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// X509Certificate represents an X.509 certificate (RFC 7643 Section 4.1.2)
+// X509Certificate represents an X.509 certificate (RFC 7643 Section 4.1.2).
 type X509Certificate struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
@@ -164,7 +164,7 @@ type X509Certificate struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
-// EnterpriseUser represents enterprise user extension (RFC 7643 Section 4.3)
+// EnterpriseUser represents enterprise user extension (RFC 7643 Section 4.3).
 type EnterpriseUser struct {
 	EmployeeNumber string            `json:"employeeNumber,omitempty"`
 	CostCenter     string            `json:"costCenter,omitempty"`
@@ -174,14 +174,14 @@ type EnterpriseUser struct {
 	Manager        *ManagerReference `json:"manager,omitempty"`
 }
 
-// ManagerReference represents a manager reference (RFC 7643 Section 4.3.1)
+// ManagerReference represents a manager reference (RFC 7643 Section 4.3.1).
 type ManagerReference struct {
 	Value       string `json:"value"` // Manager's ID
 	Ref         string `json:"$ref,omitempty"`
 	DisplayName string `json:"displayName,omitempty"`
 }
 
-// MemberReference represents a group member (RFC 7643 Section 4.2)
+// MemberReference represents a group member (RFC 7643 Section 4.2).
 type MemberReference struct {
 	Value   string `json:"value"` // User ID
 	Ref     string `json:"$ref,omitempty"`
@@ -189,16 +189,16 @@ type MemberReference struct {
 	Type    string `json:"type,omitempty"` // User or Group
 }
 
-// ListResponse represents a SCIM list response (RFC 7644 Section 3.4.2)
+// ListResponse represents a SCIM list response (RFC 7644 Section 3.4.2).
 type ListResponse struct {
-	Schemas      []string      `json:"schemas"`
-	TotalResults int           `json:"totalResults"`
-	StartIndex   int           `json:"startIndex"`
-	ItemsPerPage int           `json:"itemsPerPage"`
-	Resources    []interface{} `json:"Resources"`
+	Schemas      []string `json:"schemas"`
+	TotalResults int      `json:"totalResults"`
+	StartIndex   int      `json:"startIndex"`
+	ItemsPerPage int      `json:"itemsPerPage"`
+	Resources    []any    `json:"Resources"`
 }
 
-// ErrorResponse represents a SCIM error response (RFC 7644 Section 3.12)
+// ErrorResponse represents a SCIM error response (RFC 7644 Section 3.12).
 type ErrorResponse struct {
 	Schemas  []string `json:"schemas"`
 	Status   int      `json:"status"`
@@ -206,52 +206,52 @@ type ErrorResponse struct {
 	Detail   string   `json:"detail,omitempty"`
 }
 
-// PatchOp represents a PATCH operation (RFC 7644 Section 3.5.2)
+// PatchOp represents a PATCH operation (RFC 7644 Section 3.5.2).
 type PatchOp struct {
 	Schemas    []string         `json:"schemas"`
 	Operations []PatchOperation `json:"Operations"`
 }
 
-// PatchOperation represents a single patch operation (RFC 7644 Section 3.5.2)
+// PatchOperation represents a single patch operation (RFC 7644 Section 3.5.2).
 type PatchOperation struct {
-	Op    string      `json:"op"` // add, remove, replace
-	Path  string      `json:"path,omitempty"`
-	Value interface{} `json:"value,omitempty"`
+	Op    string `json:"op"` // add, remove, replace
+	Path  string `json:"path,omitempty"`
+	Value any    `json:"value,omitempty"`
 }
 
-// BulkRequest represents a bulk operation request (RFC 7644 Section 3.7)
+// BulkRequest represents a bulk operation request (RFC 7644 Section 3.7).
 type BulkRequest struct {
 	Schemas      []string        `json:"schemas"`
 	FailOnErrors int             `json:"failOnErrors,omitempty"`
 	Operations   []BulkOperation `json:"Operations"`
 }
 
-// BulkOperation represents a single bulk operation (RFC 7644 Section 3.7)
+// BulkOperation represents a single bulk operation (RFC 7644 Section 3.7).
 type BulkOperation struct {
-	Method  string      `json:"method"` // POST, PUT, PATCH, DELETE
-	BulkID  string      `json:"bulkId,omitempty"`
-	Version string      `json:"version,omitempty"`
-	Path    string      `json:"path"`
-	Data    interface{} `json:"data,omitempty"`
+	Method  string `json:"method"` // POST, PUT, PATCH, DELETE
+	BulkID  string `json:"bulkId,omitempty"`
+	Version string `json:"version,omitempty"`
+	Path    string `json:"path"`
+	Data    any    `json:"data,omitempty"`
 }
 
-// BulkResponse represents a bulk operation response (RFC 7644 Section 3.7)
+// BulkResponse represents a bulk operation response (RFC 7644 Section 3.7).
 type BulkResponse struct {
 	Schemas    []string              `json:"schemas"`
 	Operations []BulkOperationResult `json:"Operations"`
 }
 
-// BulkOperationResult represents a single bulk operation result (RFC 7644 Section 3.7)
+// BulkOperationResult represents a single bulk operation result (RFC 7644 Section 3.7).
 type BulkOperationResult struct {
-	Method   string      `json:"method"`
-	BulkID   string      `json:"bulkId,omitempty"`
-	Version  string      `json:"version,omitempty"`
-	Location string      `json:"location,omitempty"`
-	Status   int         `json:"status"`
-	Response interface{} `json:"response,omitempty"`
+	Method   string `json:"method"`
+	BulkID   string `json:"bulkId,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Location string `json:"location,omitempty"`
+	Status   int    `json:"status"`
+	Response any    `json:"response,omitempty"`
 }
 
-// ServiceProviderConfig represents the service provider configuration (RFC 7643 Section 5)
+// ServiceProviderConfig represents the service provider configuration (RFC 7643 Section 5).
 type ServiceProviderConfig struct {
 	Schemas               []string               `json:"schemas"`
 	DocumentationURI      string                 `json:"documentationUri,omitempty"`
@@ -265,25 +265,25 @@ type ServiceProviderConfig struct {
 	Meta                  *SCIMMeta              `json:"meta"`
 }
 
-// Supported indicates feature support (RFC 7643 Section 5)
+// Supported indicates feature support (RFC 7643 Section 5).
 type Supported struct {
 	Supported bool `json:"supported"`
 }
 
-// BulkSupport indicates bulk operation support (RFC 7643 Section 5)
+// BulkSupport indicates bulk operation support (RFC 7643 Section 5).
 type BulkSupport struct {
 	Supported      bool `json:"supported"`
 	MaxOperations  int  `json:"maxOperations"`
 	MaxPayloadSize int  `json:"maxPayloadSize"`
 }
 
-// FilterSupport indicates filter support (RFC 7643 Section 5)
+// FilterSupport indicates filter support (RFC 7643 Section 5).
 type FilterSupport struct {
 	Supported  bool `json:"supported"`
 	MaxResults int  `json:"maxResults"`
 }
 
-// AuthenticationScheme represents an authentication scheme (RFC 7643 Section 5)
+// AuthenticationScheme represents an authentication scheme (RFC 7643 Section 5).
 type AuthenticationScheme struct {
 	Type             string `json:"type"` // oauth, oauth2, oauthbearertoken, httpbasic, httpdigest
 	Name             string `json:"name"`
@@ -293,7 +293,7 @@ type AuthenticationScheme struct {
 	Primary          bool   `json:"primary,omitempty"`
 }
 
-// ResourceType represents a resource type (RFC 7643 Section 6)
+// ResourceType represents a resource type (RFC 7643 Section 6).
 type ResourceType struct {
 	Schemas          []string          `json:"schemas"`
 	ID               string            `json:"id"`
@@ -305,13 +305,13 @@ type ResourceType struct {
 	Meta             *SCIMMeta         `json:"meta"`
 }
 
-// SchemaExtension represents a schema extension (RFC 7643 Section 6)
+// SchemaExtension represents a schema extension (RFC 7643 Section 6).
 type SchemaExtension struct {
 	Schema   string `json:"schema"`
 	Required bool   `json:"required"`
 }
 
-// Schema represents a SCIM schema (RFC 7643 Section 7)
+// Schema represents a SCIM schema (RFC 7643 Section 7).
 type Schema struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name,omitempty"`
@@ -320,7 +320,7 @@ type Schema struct {
 	Meta        *SCIMMeta   `json:"meta,omitempty"`
 }
 
-// Attribute represents a schema attribute (RFC 7643 Section 7)
+// Attribute represents a schema attribute (RFC 7643 Section 7).
 type Attribute struct {
 	Name            string      `json:"name"`
 	Type            string      `json:"type"` // string, boolean, decimal, integer, dateTime, reference, complex, binary
@@ -339,7 +339,7 @@ type Attribute struct {
 // Database models for SCIM provisioning
 
 // ProvisioningToken represents a SCIM provisioning token (Bearer token)
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 type ProvisioningToken struct {
 	ID             xid.ID     `bun:"id,pk,type:varchar(20)"`
 	AppID          xid.ID     `bun:"app_id,type:varchar(20),notnull"`          // Platform app
@@ -359,48 +359,50 @@ type ProvisioningToken struct {
 }
 
 // ProvisioningLog represents a log entry for provisioning operations
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 type ProvisioningLog struct {
-	ID             xid.ID                 `bun:"id,pk,type:varchar(20)"`
-	AppID          xid.ID                 `bun:"app_id,type:varchar(20),notnull"`          // Platform app
-	EnvironmentID  xid.ID                 `bun:"environment_id,type:varchar(20),notnull"`  // Target environment
-	OrganizationID xid.ID                 `bun:"organization_id,type:varchar(20),notnull"` // User-created organization
-	TokenID        xid.ID                 `bun:"token_id,type:varchar(20)"`
-	Operation      string                 `bun:"operation,notnull"`     // CREATE_USER, UPDATE_USER, DELETE_USER, etc.
-	ResourceType   string                 `bun:"resource_type,notnull"` // User, Group
-	ResourceID     string                 `bun:"resource_id"`
-	ExternalID     string                 `bun:"external_id"`
-	Method         string                 `bun:"method,notnull"` // POST, PUT, PATCH, DELETE
-	Path           string                 `bun:"path,notnull"`
-	StatusCode     int                    `bun:"status_code,notnull"`
-	Success        bool                   `bun:"success,notnull"`
-	ErrorMessage   string                 `bun:"error_message"`
-	RequestBody    map[string]interface{} `bun:"request_body,type:jsonb"`
-	ResponseBody   map[string]interface{} `bun:"response_body,type:jsonb"`
-	IPAddress      string                 `bun:"ip_address"`
-	UserAgent      string                 `bun:"user_agent"`
-	DurationMS     int                    `bun:"duration_ms"`
-	CreatedAt      time.Time              `bun:"created_at,notnull"`
+	ID             xid.ID         `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID         `bun:"app_id,type:varchar(20),notnull"`          // Platform app
+	EnvironmentID  xid.ID         `bun:"environment_id,type:varchar(20),notnull"`  // Target environment
+	OrganizationID xid.ID         `bun:"organization_id,type:varchar(20),notnull"` // User-created organization
+	TokenID        xid.ID         `bun:"token_id,type:varchar(20)"`
+	Operation      string         `bun:"operation,notnull"`     // CREATE_USER, UPDATE_USER, DELETE_USER, etc.
+	ResourceType   string         `bun:"resource_type,notnull"` // User, Group
+	ResourceID     string         `bun:"resource_id"`
+	ExternalID     string         `bun:"external_id"`
+	Method         string         `bun:"method,notnull"` // POST, PUT, PATCH, DELETE
+	Path           string         `bun:"path,notnull"`
+	StatusCode     int            `bun:"status_code,notnull"`
+	Success        bool           `bun:"success,notnull"`
+	ErrorMessage   string         `bun:"error_message"`
+	RequestBody    map[string]any `bun:"request_body,type:jsonb"`
+	ResponseBody   map[string]any `bun:"response_body,type:jsonb"`
+	IPAddress      string         `bun:"ip_address"`
+	UserAgent      string         `bun:"user_agent"`
+	DurationMS     int            `bun:"duration_ms"`
+	CreatedAt      time.Time      `bun:"created_at,notnull"`
 }
 
 // AttributeMapping represents custom attribute mappings per organization
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 type AttributeMapping struct {
-	bun.BaseModel  `bun:"table:attribute_mappings,alias:am"`
-	ID             xid.ID                 `bun:"id,pk,type:varchar(20)"`
-	AppID          xid.ID                 `bun:"app_id,type:varchar(20),notnull"`                                    // Platform app
-	EnvironmentID  xid.ID                 `bun:"environment_id,type:varchar(20),notnull"`                            // Target environment
-	OrganizationID xid.ID                 `bun:"organization_id,type:varchar(20),notnull,unique:org_mapping_unique"` // User-created organization
-	Mappings       map[string]string      `bun:"mappings,type:jsonb,notnull"`                                        // SCIM attr -> AuthSome field
-	Metadata       map[string]interface{} `bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `bun:"created_at,notnull"`
-	UpdatedAt      time.Time              `bun:"updated_at,notnull"`
+	bun.BaseModel `bun:"table:attribute_mappings,alias:am"`
+
+	ID             xid.ID            `bun:"id,pk,type:varchar(20)"`
+	AppID          xid.ID            `bun:"app_id,type:varchar(20),notnull"`                                    // Platform app
+	EnvironmentID  xid.ID            `bun:"environment_id,type:varchar(20),notnull"`                            // Target environment
+	OrganizationID xid.ID            `bun:"organization_id,type:varchar(20),notnull,unique:org_mapping_unique"` // User-created organization
+	Mappings       map[string]string `bun:"mappings,type:jsonb,notnull"`                                        // SCIM attr -> AuthSome field
+	Metadata       map[string]any    `bun:"metadata,type:jsonb"`
+	CreatedAt      time.Time         `bun:"created_at,notnull"`
+	UpdatedAt      time.Time         `bun:"updated_at,notnull"`
 }
 
 // GroupMapping represents SCIM group to user-created organization team/role mapping
-// Updated for 3-tier architecture: App → Environment → Organization
+// Updated for 3-tier architecture: App → Environment → Organization.
 type GroupMapping struct {
-	bun.BaseModel  `bun:"table:group_mappings,alias:gm"`
+	bun.BaseModel `bun:"table:group_mappings,alias:gm"`
+
 	ID             xid.ID    `bun:"id,pk,type:varchar(20)"`
 	AppID          xid.ID    `bun:"app_id,type:varchar(20),notnull"`          // Platform app
 	EnvironmentID  xid.ID    `bun:"environment_id,type:varchar(20),notnull"`  // Target environment
@@ -415,15 +417,15 @@ type GroupMapping struct {
 
 // API Request/Response Types for SCIM Admin Endpoints
 
-// CreateTokenRequest is the request body for creating a provisioning token
+// CreateTokenRequest is the request body for creating a provisioning token.
 type CreateTokenRequest struct {
-	Name        string     `json:"name" validate:"required"`
+	Name        string     `json:"name"        validate:"required"`
 	Description string     `json:"description"`
-	Scopes      []string   `json:"scopes" validate:"required,min=1"`
+	Scopes      []string   `json:"scopes"      validate:"required,min=1"`
 	ExpiresAt   *time.Time `json:"expiresAt"`
 }
 
-// TokenResponse is the response for token creation
+// TokenResponse is the response for token creation.
 type TokenResponse struct {
 	Token   string `json:"token"`
 	ID      string `json:"id"`
@@ -431,13 +433,13 @@ type TokenResponse struct {
 	Message string `json:"message"`
 }
 
-// TokenListResponse represents a list of provisioning tokens (without actual token values)
+// TokenListResponse represents a list of provisioning tokens (without actual token values).
 type TokenListResponse struct {
 	Tokens []ProvisioningTokenInfo `json:"tokens"`
 	Total  int                     `json:"total"`
 }
 
-// ProvisioningTokenInfo contains token metadata without the actual token
+// ProvisioningTokenInfo contains token metadata without the actual token.
 type ProvisioningTokenInfo struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
@@ -449,18 +451,18 @@ type ProvisioningTokenInfo struct {
 	RevokedAt   *time.Time `json:"revokedAt,omitempty"`
 }
 
-// UpdateAttributeMappingsRequest is the request body for updating attribute mappings
+// UpdateAttributeMappingsRequest is the request body for updating attribute mappings.
 type UpdateAttributeMappingsRequest struct {
 	Mappings map[string]string `json:"mappings" validate:"required"`
 }
 
-// AttributeMappingsResponse is the response for attribute mappings
+// AttributeMappingsResponse is the response for attribute mappings.
 type AttributeMappingsResponse struct {
 	ID       string            `json:"id"`
 	Mappings map[string]string `json:"mappings"`
 }
 
-// SearchRequest represents a SCIM search request (RFC 7644 Section 3.4.3)
+// SearchRequest represents a SCIM search request (RFC 7644 Section 3.4.3).
 type SearchRequest struct {
 	Schemas            []string `json:"schemas"`
 	Attributes         []string `json:"attributes,omitempty"`
@@ -472,7 +474,7 @@ type SearchRequest struct {
 	Count              int      `json:"count,omitempty"`
 }
 
-// LogsResponse represents a list of provisioning logs
+// LogsResponse represents a list of provisioning logs.
 type LogsResponse struct {
 	Logs  []ProvisioningLog `json:"logs"`
 	Total int               `json:"total"`
@@ -480,7 +482,7 @@ type LogsResponse struct {
 	Limit int               `json:"limit"`
 }
 
-// StatsResponse represents provisioning statistics
+// StatsResponse represents provisioning statistics.
 type StatsResponse struct {
 	TotalOperations int               `json:"totalOperations"`
 	SuccessCount    int               `json:"successCount"`
@@ -494,13 +496,13 @@ type StatsResponse struct {
 	EndDate         *time.Time        `json:"endDate,omitempty"`
 }
 
-// UsersResponse wraps user list response for clarity
+// UsersResponse wraps user list response for clarity.
 type UsersResponse struct {
 	Users []SCIMUser `json:"users"`
 	Total int        `json:"total"`
 }
 
-// GroupsResponse wraps group list response for clarity
+// GroupsResponse wraps group list response for clarity.
 type GroupsResponse struct {
 	Groups []SCIMGroup `json:"groups"`
 	Total  int         `json:"total"`

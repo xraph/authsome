@@ -204,6 +204,7 @@ func TestApplySchema_Integration(t *testing.T) {
 
 	// Verify schema was created
 	var exists bool
+
 	err = db.NewRaw("SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = ?)", schemaName).
 		Scan(ctx, &exists)
 	require.NoError(t, err)
@@ -211,6 +212,7 @@ func TestApplySchema_Integration(t *testing.T) {
 
 	// Verify search_path was set
 	var searchPath string
+
 	err = db.NewRaw("SHOW search_path").Scan(ctx, &searchPath)
 	require.NoError(t, err)
 	assert.Contains(t, searchPath, schemaName, "search_path should contain custom schema")
@@ -221,6 +223,7 @@ func TestApplySchema_Integration(t *testing.T) {
 
 	// Verify table was created in the custom schema
 	var tableSchema string
+
 	err = db.NewRaw(`
 		SELECT schemaname 
 		FROM pg_tables 
@@ -284,6 +287,7 @@ func TestWrapConnection_Integration(t *testing.T) {
 
 	// Verify schema was created and search_path set
 	var searchPath string
+
 	err = wrappedDB.NewRaw("SHOW search_path").Scan(ctx, &searchPath)
 	require.NoError(t, err)
 	assert.Contains(t, searchPath, schemaName)
@@ -295,19 +299,19 @@ func TestWrapConnection_Integration(t *testing.T) {
 // Benchmark tests
 
 func BenchmarkValidateSchemaName(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = ValidateSchemaName("auth_system")
 	}
 }
 
 func BenchmarkQuoteIdentifier(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = quoteIdentifier("auth_system")
 	}
 }
 
 func BenchmarkGetTableName(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = GetTableName("auth", "users")
 	}
 }

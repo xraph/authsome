@@ -6,7 +6,7 @@ import (
 	forgedb "github.com/xraph/forge/extensions/database"
 )
 
-// Config represents the root configuration
+// Config represents the root configuration.
 type Config struct {
 	// RequireEmailVerification requires email verification for all users
 	RequireEmailVerification bool `json:"requireEmailVerification" yaml:"requireEmailVerification"`
@@ -19,7 +19,7 @@ type Config struct {
 	BaseURL string `json:"baseUrl" yaml:"baseUrl"`
 
 	// CORS configuration
-	CORSEnabled    bool     `json:"corsEnabled" yaml:"corsEnabled"`       // Enable/disable CORS middleware (default: false)
+	CORSEnabled    bool     `json:"corsEnabled"    yaml:"corsEnabled"`    // Enable/disable CORS middleware (default: false)
 	TrustedOrigins []string `json:"trustedOrigins" yaml:"trustedOrigins"` // Allowed origins for CORS
 
 	// Secret for signing tokens

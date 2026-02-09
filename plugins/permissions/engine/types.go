@@ -8,7 +8,7 @@ import (
 )
 
 // CompiledPolicy represents a policy compiled to executable CEL bytecode
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type CompiledPolicy struct {
 	// Policy metadata
 	PolicyID           xid.ID
@@ -37,22 +37,22 @@ type CompiledPolicy struct {
 	AvgLatencyMs    float64
 }
 
-// EvaluationContext contains all data available to policy expressions
+// EvaluationContext contains all data available to policy expressions.
 type EvaluationContext struct {
 	// Principal (user making the request)
-	Principal map[string]interface{} `json:"principal"`
+	Principal map[string]any `json:"principal"`
 
 	// Resource being accessed
-	Resource map[string]interface{} `json:"resource"`
+	Resource map[string]any `json:"resource"`
 
 	// Request context (IP, time, method, etc.)
-	Request map[string]interface{} `json:"request"`
+	Request map[string]any `json:"request"`
 
 	// Action being performed
 	Action string `json:"action"`
 }
 
-// Decision represents the result of an authorization evaluation
+// Decision represents the result of an authorization evaluation.
 type Decision struct {
 	// Allowed indicates if access is granted
 	Allowed bool `json:"allowed"`
@@ -74,7 +74,7 @@ type Decision struct {
 }
 
 // IndexKey represents a multi-dimensional index key for fast policy lookup
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type IndexKey struct {
 	AppID              string
 	EnvironmentID      string
@@ -83,15 +83,16 @@ type IndexKey struct {
 	Action             string
 }
 
-// String returns the string representation of the index key
+// String returns the string representation of the index key.
 func (k IndexKey) String() string {
 	if k.UserOrganizationID != "" {
 		return k.AppID + ":" + k.EnvironmentID + ":" + k.UserOrganizationID + ":" + k.ResourceType + ":" + k.Action
 	}
+
 	return k.AppID + ":" + k.EnvironmentID + "::" + k.ResourceType + ":" + k.Action
 }
 
-// EvaluationStats tracks performance metrics for policies
+// EvaluationStats tracks performance metrics for policies.
 type EvaluationStats struct {
 	PolicyID        string
 	EvaluationCount int64

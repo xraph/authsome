@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ClientDetailPage shows OAuth client details with tabs
+// ClientDetailPage shows OAuth client details with tabs.
 func (p *PagesManager) ClientDetailPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 	clientID := ctx.Param("clientId")

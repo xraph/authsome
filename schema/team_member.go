@@ -5,7 +5,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// TeamMember represents the team_members table
+// TeamMember represents the team_members table.
 type TeamMember struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:team_members,alias:tm"`
@@ -15,7 +15,7 @@ type TeamMember struct {
 	MemberID xid.ID `bun:"member_id,notnull,type:varchar(20)"`
 
 	// Provisioning tracking
-	ProvisionedBy *string `json:"provisionedBy,omitempty" bun:"provisioned_by,type:varchar(50)"` // e.g., "scim"
+	ProvisionedBy *string `bun:"provisioned_by,type:varchar(50)" json:"provisionedBy,omitempty"` // e.g., "scim"
 
 	// Relations
 	Team   *Team   `bun:"rel:belongs-to,join:team_id=id"`

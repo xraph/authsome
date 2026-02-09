@@ -16,25 +16,27 @@ import (
 // USER REPOSITORY IMPLEMENTATION
 // =============================================================================
 
-// UserRepository is a Bun-backed implementation of core user repository
+// UserRepository is a Bun-backed implementation of core user repository.
 type UserRepository struct {
 	db *bun.DB
 }
 
-// NewUserRepository creates a new user repository
+// NewUserRepository creates a new user repository.
 func NewUserRepository(db *bun.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// Create inserts a new user
+// Create inserts a new user.
 func (r *UserRepository) Create(ctx context.Context, user *schema.User) error {
 	_, err := r.db.NewInsert().Model(user).Exec(ctx)
+
 	return err
 }
 
-// FindByID finds a user by ID
+// FindByID finds a user by ID.
 func (r *UserRepository) FindByID(ctx context.Context, id xid.ID) (*schema.User, error) {
 	user := new(schema.User)
+
 	err := r.db.NewSelect().
 		Model(user).
 		Where("id = ?", id).
@@ -42,12 +44,14 @@ func (r *UserRepository) FindByID(ctx context.Context, id xid.ID) (*schema.User,
 	if err != nil {
 		return nil, err
 	}
+
 	return user, nil
 }
 
-// FindByEmail finds a user by email (global search, not app-scoped)
+// FindByEmail finds a user by email (global search, not app-scoped).
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*schema.User, error) {
 	user := new(schema.User)
+
 	err := r.db.NewSelect().
 		Model(user).
 		Where("email = ?", email).
@@ -55,12 +59,14 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*schema
 	if err != nil {
 		return nil, err
 	}
+
 	return user, nil
 }
 
-// FindByAppAndEmail finds a user by app ID and email (app-scoped search)
+// FindByAppAndEmail finds a user by app ID and email (app-scoped search).
 func (r *UserRepository) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*schema.User, error) {
 	user := new(schema.User)
+
 	err := r.db.NewSelect().
 		Model(user).
 		Where("app_id = ?", appID).
@@ -69,12 +75,14 @@ func (r *UserRepository) FindByAppAndEmail(ctx context.Context, appID xid.ID, em
 	if err != nil {
 		return nil, err
 	}
+
 	return user, nil
 }
 
-// FindByUsername finds a user by username
+// FindByUsername finds a user by username.
 func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*schema.User, error) {
 	user := new(schema.User)
+
 	err := r.db.NewSelect().
 		Model(user).
 		Where("username = ?", username).
@@ -82,28 +90,31 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	if err != nil {
 		return nil, err
 	}
+
 	return user, nil
 }
 
-// Update updates a user
+// Update updates a user.
 func (r *UserRepository) Update(ctx context.Context, user *schema.User) error {
 	_, err := r.db.NewUpdate().
 		Model(user).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// Delete deletes a user by ID
+// Delete deletes a user by ID.
 func (r *UserRepository) Delete(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.User)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// ListUsers lists users with pagination and filtering
+// ListUsers lists users with pagination and filtering.
 func (r *UserRepository) ListUsers(ctx context.Context, filter *core.ListUsersFilter) (*pagination.PageResponse[*schema.User], error) {
 	var users []*schema.User
 
@@ -139,7 +150,7 @@ func (r *UserRepository) ListUsers(ctx context.Context, filter *core.ListUsersFi
 	return pagination.NewPageResponse(users, int64(total), &filter.PaginationParams), nil
 }
 
-// CountUsers counts users with filtering
+// CountUsers counts users with filtering.
 func (r *UserRepository) CountUsers(ctx context.Context, filter *core.CountUsersFilter) (int, error) {
 	query := r.db.NewSelect().Model((*schema.User)(nil))
 

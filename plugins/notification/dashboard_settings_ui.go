@@ -7,7 +7,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// renderNotificationSettings renders the notification settings page
+// renderNotificationSettings renders the notification settings page.
 func (e *DashboardExtension) renderNotificationSettings(currentApp *app.App, basePath string, success bool) g.Node {
 	cfg := e.plugin.config
 

@@ -8,45 +8,45 @@ import (
 // UsageEvent represents the usage_events table for tracking API usage
 // Note: Indexes should be created in migrations for the following columns:
 // user_id, organization_id, session_id, api_key_id, method, endpoint,
-// status_code, auth_method, country, plugin, feature
+// status_code, auth_method, country, plugin, feature.
 type UsageEvent struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:usage_events,alias:ue"`
 
-	ID             xid.ID  `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID         *xid.ID `json:"userId,omitempty" bun:"user_id,type:varchar(20)"`
-	OrganizationID *xid.ID `json:"organizationId,omitempty" bun:"organization_id,type:varchar(20)"`
-	SessionID      *xid.ID `json:"sessionId,omitempty" bun:"session_id,type:varchar(20)"`
-	APIKeyID       *xid.ID `json:"apiKeyId,omitempty" bun:"api_key_id,type:varchar(20)"`
+	ID             xid.ID  `bun:"id,pk,type:varchar(20)"           json:"id"`
+	UserID         *xid.ID `bun:"user_id,type:varchar(20)"         json:"userId,omitempty"`
+	OrganizationID *xid.ID `bun:"organization_id,type:varchar(20)" json:"organizationId,omitempty"`
+	SessionID      *xid.ID `bun:"session_id,type:varchar(20)"      json:"sessionId,omitempty"`
+	APIKeyID       *xid.ID `bun:"api_key_id,type:varchar(20)"      json:"apiKeyId,omitempty"`
 
 	// Request details
-	Method     string `json:"method" bun:"method,notnull"`
-	Path       string `json:"path" bun:"path,notnull"`
-	Endpoint   string `json:"endpoint" bun:"endpoint"` // Normalized endpoint
-	StatusCode int    `json:"statusCode" bun:"status_code"`
+	Method     string `bun:"method,notnull" json:"method"`
+	Path       string `bun:"path,notnull"   json:"path"`
+	Endpoint   string `bun:"endpoint"       json:"endpoint"` // Normalized endpoint
+	StatusCode int    `bun:"status_code"    json:"statusCode"`
 
 	// Authentication context
-	AuthMethod string `json:"authMethod,omitempty" bun:"auth_method"` // session, apikey, jwt, anonymous
+	AuthMethod string `bun:"auth_method" json:"authMethod,omitempty"` // session, apikey, jwt, anonymous
 
 	// Network information
-	IPAddress string `json:"ipAddress,omitempty" bun:"ip_address"`
-	UserAgent string `json:"userAgent,omitempty" bun:"user_agent,type:text"`
-	Country   string `json:"country,omitempty" bun:"country"`
-	City      string `json:"city,omitempty" bun:"city"`
+	IPAddress string `bun:"ip_address"           json:"ipAddress,omitempty"`
+	UserAgent string `bun:"user_agent,type:text" json:"userAgent,omitempty"`
+	Country   string `bun:"country"              json:"country,omitempty"`
+	City      string `bun:"city"                 json:"city,omitempty"`
 
 	// Performance metrics
-	ResponseTimeMs int64 `json:"responseTimeMs" bun:"response_time_ms"`
-	RequestSize    int64 `json:"requestSize" bun:"request_size"`
-	ResponseSize   int64 `json:"responseSize" bun:"response_size"`
+	ResponseTimeMs int64 `bun:"response_time_ms" json:"responseTimeMs"`
+	RequestSize    int64 `bun:"request_size"     json:"requestSize"`
+	ResponseSize   int64 `bun:"response_size"    json:"responseSize"`
 
 	// Feature tracking
-	Plugin  string `json:"plugin,omitempty" bun:"plugin"`
-	Feature string `json:"feature,omitempty" bun:"feature"`
+	Plugin  string `bun:"plugin"  json:"plugin,omitempty"`
+	Feature string `bun:"feature" json:"feature,omitempty"`
 
 	// Error tracking
-	Error     string `json:"error,omitempty" bun:"error,type:text"`
-	ErrorCode string `json:"errorCode,omitempty" bun:"error_code"`
+	Error     string `bun:"error,type:text" json:"error,omitempty"`
+	ErrorCode string `bun:"error_code"      json:"errorCode,omitempty"`
 
 	// Metadata
-	Metadata string `json:"metadata,omitempty" bun:"metadata,type:text"` // JSON string
+	Metadata string `bun:"metadata,type:text" json:"metadata,omitempty"` // JSON string
 }

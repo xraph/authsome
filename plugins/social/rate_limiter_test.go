@@ -27,7 +27,7 @@ func TestRateLimiter_AllowWithoutRedis(t *testing.T) {
 	ctx := context.Background()
 
 	// Should allow unlimited requests
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		err := limiter.Allow(ctx, "oauth_signin", "test-key")
 		assert.NoError(t, err)
 	}

@@ -8,17 +8,17 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// VersionService handles template versioning operations
+// VersionService handles template versioning operations.
 type VersionService struct {
 	repo Repository
 }
 
-// NewVersionService creates a new version service
+// NewVersionService creates a new version service.
 func NewVersionService(repo Repository) *VersionService {
 	return &VersionService{repo: repo}
 }
 
-// CreateVersion creates a new version snapshot of a template
+// CreateVersion creates a new version snapshot of a template.
 func (s *VersionService) CreateVersion(ctx context.Context, template *schema.NotificationTemplate, changedBy *xid.ID, changes string) (*schema.NotificationTemplateVersion, error) {
 	version := &schema.NotificationTemplateVersion{
 		ID:         xid.New(),
@@ -39,46 +39,52 @@ func (s *VersionService) CreateVersion(ctx context.Context, template *schema.Not
 	return version, nil
 }
 
-// GetVersion retrieves a specific version by ID
+// GetVersion retrieves a specific version by ID.
 func (s *VersionService) GetVersion(ctx context.Context, id xid.ID) (*schema.NotificationTemplateVersion, error) {
 	version, err := s.repo.FindTemplateVersionByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find version: %w", err)
 	}
+
 	if version == nil {
 		return nil, VersionNotFound()
 	}
+
 	return version, nil
 }
 
-// ListVersions lists all versions for a template
+// ListVersions lists all versions for a template.
 func (s *VersionService) ListVersions(ctx context.Context, templateID xid.ID) ([]*schema.NotificationTemplateVersion, error) {
 	versions, err := s.repo.ListTemplateVersions(ctx, templateID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list versions: %w", err)
 	}
+
 	return versions, nil
 }
 
-// GetLatestVersion gets the most recent version for a template
+// GetLatestVersion gets the most recent version for a template.
 func (s *VersionService) GetLatestVersion(ctx context.Context, templateID xid.ID) (*schema.NotificationTemplateVersion, error) {
 	version, err := s.repo.GetLatestTemplateVersion(ctx, templateID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest version: %w", err)
 	}
+
 	if version == nil {
 		return nil, VersionNotFound()
 	}
+
 	return version, nil
 }
 
-// RestoreVersion restores a template to a previous version
+// RestoreVersion restores a template to a previous version.
 func (s *VersionService) RestoreVersion(ctx context.Context, templateID xid.ID, versionID xid.ID, restoredBy *xid.ID) error {
 	// Get the version to restore
 	version, err := s.repo.FindTemplateVersionByID(ctx, versionID)
 	if err != nil {
 		return fmt.Errorf("failed to find version: %w", err)
 	}
+
 	if version == nil {
 		return VersionNotFound()
 	}
@@ -88,6 +94,7 @@ func (s *VersionService) RestoreVersion(ctx context.Context, templateID xid.ID, 
 	if err != nil {
 		return fmt.Errorf("failed to find template: %w", err)
 	}
+
 	if template == nil {
 		return TemplateNotFound()
 	}
@@ -145,7 +152,7 @@ func (s *VersionService) RestoreVersion(ctx context.Context, templateID xid.ID, 
 	return nil
 }
 
-// CompareVersions compares two versions and returns the differences
+// CompareVersions compares two versions and returns the differences.
 func (s *VersionService) CompareVersions(ctx context.Context, version1ID, version2ID xid.ID) (*VersionComparison, error) {
 	v1, err := s.repo.FindTemplateVersionByID(ctx, version1ID)
 	if err != nil || v1 == nil {
@@ -167,7 +174,7 @@ func (s *VersionService) CompareVersions(ctx context.Context, version1ID, versio
 	return comparison, nil
 }
 
-// VersionComparison represents a comparison between two versions
+// VersionComparison represents a comparison between two versions.
 type VersionComparison struct {
 	Version1       *schema.NotificationTemplateVersion `json:"version1"`
 	Version2       *schema.NotificationTemplateVersion `json:"version2"`

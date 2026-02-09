@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// FeatureUsageService handles feature usage tracking and enforcement
+// FeatureUsageService handles feature usage tracking and enforcement.
 type FeatureUsageService struct {
 	usageRepo   repository.FeatureUsageRepository
 	featureRepo repository.FeatureRepository
@@ -22,7 +22,7 @@ type FeatureUsageService struct {
 	eventRepo   repository.EventRepository
 }
 
-// NewFeatureUsageService creates a new feature usage service
+// NewFeatureUsageService creates a new feature usage service.
 func NewFeatureUsageService(
 	usageRepo repository.FeatureUsageRepository,
 	featureRepo repository.FeatureRepository,
@@ -39,7 +39,7 @@ func NewFeatureUsageService(
 	}
 }
 
-// ConsumeFeature consumes feature quota for an organization
+// ConsumeFeature consumes feature quota for an organization.
 func (s *FeatureUsageService) ConsumeFeature(ctx context.Context, req *core.ConsumeFeatureRequest) (*core.FeatureUsageResponse, error) {
 	// Check idempotency
 	if req.IdempotencyKey != "" {
@@ -78,6 +78,7 @@ func (s *FeatureUsageService) ConsumeFeature(ctx context.Context, req *core.Cons
 	if limit == -1 {
 		// Unlimited - just log the consumption
 		s.logUsage(ctx, req.OrganizationID, feature.ID, req.FeatureKey, string(core.FeatureUsageActionConsume), req.Quantity, 0, 0, nil, req.Reason, req.IdempotencyKey, req.Metadata)
+
 		return &core.FeatureUsageResponse{
 			FeatureKey:   req.FeatureKey,
 			FeatureName:  feature.Name,
@@ -126,7 +127,7 @@ func (s *FeatureUsageService) ConsumeFeature(ctx context.Context, req *core.Cons
 	}, nil
 }
 
-// GrantFeature grants additional feature quota to an organization
+// GrantFeature grants additional feature quota to an organization.
 func (s *FeatureUsageService) GrantFeature(ctx context.Context, req *core.GrantFeatureRequest) (*core.FeatureGrant, error) {
 	// Validate grant type
 	if !req.GrantType.IsValid() {
@@ -165,7 +166,7 @@ func (s *FeatureUsageService) GrantFeature(ctx context.Context, req *core.GrantF
 	if req.Metadata != nil {
 		grant.Metadata = req.Metadata
 	} else {
-		grant.Metadata = make(map[string]interface{})
+		grant.Metadata = make(map[string]any)
 	}
 
 	if err := s.usageRepo.CreateGrant(ctx, grant); err != nil {
@@ -193,7 +194,7 @@ func (s *FeatureUsageService) GrantFeature(ctx context.Context, req *core.GrantF
 	}, nil
 }
 
-// RevokeGrant revokes a feature grant
+// RevokeGrant revokes a feature grant.
 func (s *FeatureUsageService) RevokeGrant(ctx context.Context, grantID xid.ID) error {
 	grant, err := s.usageRepo.FindGrantByID(ctx, grantID)
 	if err != nil {
@@ -206,7 +207,7 @@ func (s *FeatureUsageService) RevokeGrant(ctx context.Context, grantID xid.ID) e
 	return s.usageRepo.UpdateGrant(ctx, grant)
 }
 
-// GetUsage retrieves current usage for a feature
+// GetUsage retrieves current usage for a feature.
 func (s *FeatureUsageService) GetUsage(ctx context.Context, orgID xid.ID, featureKey string) (*core.FeatureUsageResponse, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -223,8 +224,11 @@ func (s *FeatureUsageService) GetUsage(ctx context.Context, orgID xid.ID, featur
 	// Get usage
 	usage, _ := s.usageRepo.FindUsage(ctx, orgID, feature.ID)
 
-	var currentUsage int64 = 0
-	var periodStart, periodEnd time.Time
+	var (
+		currentUsage           int64 = 0
+		periodStart, periodEnd time.Time
+	)
+
 	if usage != nil {
 		currentUsage = usage.CurrentUsage
 		periodStart = usage.PeriodStart
@@ -242,10 +246,7 @@ func (s *FeatureUsageService) GetUsage(ctx context.Context, orgID xid.ID, featur
 
 	var remaining int64 = -1
 	if limit != -1 {
-		remaining = limit - currentUsage
-		if remaining < 0 {
-			remaining = 0
-		}
+		remaining = max(limit-currentUsage, 0)
 	}
 
 	return &core.FeatureUsageResponse{
@@ -261,7 +262,7 @@ func (s *FeatureUsageService) GetUsage(ctx context.Context, orgID xid.ID, featur
 	}, nil
 }
 
-// CheckAccess checks if an organization has access to a feature
+// CheckAccess checks if an organization has access to a feature.
 func (s *FeatureUsageService) CheckAccess(ctx context.Context, orgID xid.ID, featureKey string) (*core.FeatureAccess, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -299,8 +300,11 @@ func (s *FeatureUsageService) CheckAccess(ctx context.Context, orgID xid.ID, fea
 
 	// Determine access based on feature type
 	featureType := core.FeatureType(feature.Type)
-	var hasAccess bool
-	var limit int64 = 0
+
+	var (
+		hasAccess bool
+		limit     int64 = 0
+	)
 
 	switch featureType {
 	case core.FeatureTypeBoolean:
@@ -321,6 +325,7 @@ func (s *FeatureUsageService) CheckAccess(ctx context.Context, orgID xid.ID, fea
 
 	// Get current usage
 	var currentUsage int64 = 0
+
 	usage, _ := s.usageRepo.FindUsage(ctx, orgID, feature.ID)
 	if usage != nil {
 		currentUsage = usage.CurrentUsage
@@ -337,10 +342,7 @@ func (s *FeatureUsageService) CheckAccess(ctx context.Context, orgID xid.ID, fea
 
 	var remaining int64 = -1
 	if effectiveLimit > 0 {
-		remaining = effectiveLimit - currentUsage
-		if remaining < 0 {
-			remaining = 0
-		}
+		remaining = max(effectiveLimit-currentUsage, 0)
 	}
 
 	return &core.FeatureAccess{
@@ -355,7 +357,7 @@ func (s *FeatureUsageService) CheckAccess(ctx context.Context, orgID xid.ID, fea
 	}, nil
 }
 
-// GetEffectiveLimit returns the total limit for a feature (plan limit + grants)
+// GetEffectiveLimit returns the total limit for a feature (plan limit + grants).
 func (s *FeatureUsageService) GetEffectiveLimit(ctx context.Context, orgID xid.ID, featureKey string) (int64, error) {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -382,6 +384,7 @@ func (s *FeatureUsageService) GetEffectiveLimit(ctx context.Context, orgID xid.I
 
 	// Determine base limit
 	var baseLimit int64 = 0
+
 	featureType := core.FeatureType(feature.Type)
 
 	switch featureType {
@@ -394,9 +397,11 @@ func (s *FeatureUsageService) GetEffectiveLimit(ctx context.Context, orgID xid.I
 	case core.FeatureTypeBoolean:
 		var val bool
 		json.Unmarshal([]byte(link.Value), &val)
+
 		if val {
 			return -1, nil // Boolean true = unlimited access
 		}
+
 		return 0, nil // Boolean false = no access
 	case core.FeatureTypeTiered:
 		// For tiered, the limit might be in the value or infinite
@@ -409,7 +414,7 @@ func (s *FeatureUsageService) GetEffectiveLimit(ctx context.Context, orgID xid.I
 	return baseLimit + grantedExtra, nil
 }
 
-// ResetUsage resets usage for a feature
+// ResetUsage resets usage for a feature.
 func (s *FeatureUsageService) ResetUsage(ctx context.Context, orgID xid.ID, featureKey string, actorID *xid.ID, reason string) error {
 	// Get subscription
 	sub, err := s.subRepo.FindByOrganizationID(ctx, orgID)
@@ -442,7 +447,7 @@ func (s *FeatureUsageService) ResetUsage(ctx context.Context, orgID xid.ID, feat
 	return nil
 }
 
-// GetAllUsage retrieves all feature usage for an organization
+// GetAllUsage retrieves all feature usage for an organization.
 func (s *FeatureUsageService) GetAllUsage(ctx context.Context, orgID xid.ID) ([]*core.FeatureUsageResponse, error) {
 	usages, err := s.usageRepo.ListUsage(ctx, orgID)
 	if err != nil {
@@ -460,10 +465,7 @@ func (s *FeatureUsageService) GetAllUsage(ctx context.Context, orgID xid.ID) ([]
 
 		var remaining int64 = -1
 		if limit != -1 {
-			remaining = limit - u.CurrentUsage
-			if remaining < 0 {
-				remaining = 0
-			}
+			remaining = max(limit-u.CurrentUsage, 0)
 		}
 
 		result = append(result, &core.FeatureUsageResponse{
@@ -482,7 +484,7 @@ func (s *FeatureUsageService) GetAllUsage(ctx context.Context, orgID xid.ID) ([]
 	return result, nil
 }
 
-// ListGrants lists all active grants for an organization
+// ListGrants lists all active grants for an organization.
 func (s *FeatureUsageService) ListGrants(ctx context.Context, orgID xid.ID) ([]*core.FeatureGrant, error) {
 	grants, err := s.usageRepo.ListAllOrgGrants(ctx, orgID)
 	if err != nil {
@@ -495,6 +497,7 @@ func (s *FeatureUsageService) ListGrants(ctx context.Context, orgID xid.ID) ([]*
 		if g.Feature != nil {
 			featureKey = g.Feature.Key
 		}
+
 		result[i] = &core.FeatureGrant{
 			ID:             g.ID,
 			OrganizationID: g.OrganizationID,
@@ -516,7 +519,7 @@ func (s *FeatureUsageService) ListGrants(ctx context.Context, orgID xid.ID) ([]*
 	return result, nil
 }
 
-// ProcessResets processes usage resets for features that need it
+// ProcessResets processes usage resets for features that need it.
 func (s *FeatureUsageService) ProcessResets(ctx context.Context) error {
 	// Process each reset period
 	periods := []string{
@@ -566,7 +569,7 @@ func (s *FeatureUsageService) getOrCreateUsage(ctx context.Context, orgID, featu
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
 		LastReset:      now,
-		Metadata:       make(map[string]interface{}),
+		Metadata:       make(map[string]any),
 	}
 	usage.CreatedAt = now
 	usage.UpdatedAt = now
@@ -596,7 +599,7 @@ func (s *FeatureUsageService) logUsage(ctx context.Context, orgID, featureID xid
 	if metadata != nil {
 		log.Metadata = metadata
 	} else {
-		log.Metadata = make(map[string]interface{})
+		log.Metadata = make(map[string]any)
 	}
 
 	s.usageRepo.CreateLog(ctx, log)
@@ -604,6 +607,7 @@ func (s *FeatureUsageService) logUsage(ctx context.Context, orgID, featureID xid
 
 func (s *FeatureUsageService) calculateNextPeriodEnd(period core.ResetPeriod) time.Time {
 	now := time.Now()
+
 	switch period {
 	case core.ResetPeriodDaily:
 		return now.AddDate(0, 0, 1)

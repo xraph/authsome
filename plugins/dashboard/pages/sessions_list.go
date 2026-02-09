@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SessionsListPage shows active sessions with pagination and filtering
+// SessionsListPage shows active sessions with pagination and filtering.
 func (p *PagesManager) SessionsListPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

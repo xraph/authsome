@@ -11,7 +11,6 @@ func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Add refresh token columns to sessions table (idempotent)
 		// These columns may already exist if the table was created from the current schema
-
 		columns := []struct {
 			name string
 			sql  string
@@ -30,6 +29,7 @@ func init() {
 					// Column already exists, skip
 					continue
 				}
+
 				return err
 			}
 		}

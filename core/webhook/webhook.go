@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -8,7 +9,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Webhook represents a webhook subscription (DTO)
+// Webhook represents a webhook subscription (DTO).
 type Webhook struct {
 	ID            xid.ID            `json:"id"`
 	AppID         xid.ID            `json:"appID"`
@@ -26,7 +27,7 @@ type Webhook struct {
 	FailureCount  int               `json:"failureCount"`
 }
 
-// ToSchema converts Webhook DTO to schema.Webhook
+// ToSchema converts Webhook DTO to schema.Webhook.
 func (w *Webhook) ToSchema() *schema.Webhook {
 	return &schema.Webhook{
 		ID:            w.ID,
@@ -46,11 +47,12 @@ func (w *Webhook) ToSchema() *schema.Webhook {
 	}
 }
 
-// FromSchemaWebhook converts schema.Webhook to Webhook DTO
+// FromSchemaWebhook converts schema.Webhook to Webhook DTO.
 func FromSchemaWebhook(w *schema.Webhook) *Webhook {
 	if w == nil {
 		return nil
 	}
+
 	return &Webhook{
 		ID:            w.ID,
 		AppID:         w.AppID,
@@ -69,27 +71,28 @@ func FromSchemaWebhook(w *schema.Webhook) *Webhook {
 	}
 }
 
-// FromSchemaWebhooks converts multiple schema.Webhook to Webhook DTOs
+// FromSchemaWebhooks converts multiple schema.Webhook to Webhook DTOs.
 func FromSchemaWebhooks(webhooks []*schema.Webhook) []*Webhook {
 	result := make([]*Webhook, len(webhooks))
 	for i, w := range webhooks {
 		result[i] = FromSchemaWebhook(w)
 	}
+
 	return result
 }
 
-// Event represents a webhook event (DTO)
+// Event represents a webhook event (DTO).
 type Event struct {
-	ID            xid.ID                 `json:"id"`
-	AppID         xid.ID                 `json:"appID"`
-	EnvironmentID xid.ID                 `json:"environmentID"`
-	Type          string                 `json:"type"`
-	Data          map[string]interface{} `json:"data"`
-	OccurredAt    time.Time              `json:"occurredAt"`
-	CreatedAt     time.Time              `json:"createdAt"`
+	ID            xid.ID         `json:"id"`
+	AppID         xid.ID         `json:"appID"`
+	EnvironmentID xid.ID         `json:"environmentID"`
+	Type          string         `json:"type"`
+	Data          map[string]any `json:"data"`
+	OccurredAt    time.Time      `json:"occurredAt"`
+	CreatedAt     time.Time      `json:"createdAt"`
 }
 
-// ToSchema converts Event DTO to schema.Event
+// ToSchema converts Event DTO to schema.Event.
 func (e *Event) ToSchema() *schema.Event {
 	return &schema.Event{
 		ID:            e.ID,
@@ -102,11 +105,12 @@ func (e *Event) ToSchema() *schema.Event {
 	}
 }
 
-// FromSchemaEvent converts schema.Event to Event DTO
+// FromSchemaEvent converts schema.Event to Event DTO.
 func FromSchemaEvent(e *schema.Event) *Event {
 	if e == nil {
 		return nil
 	}
+
 	return &Event{
 		ID:            e.ID,
 		AppID:         e.AppID,
@@ -118,16 +122,17 @@ func FromSchemaEvent(e *schema.Event) *Event {
 	}
 }
 
-// FromSchemaEvents converts multiple schema.Event to Event DTOs
+// FromSchemaEvents converts multiple schema.Event to Event DTOs.
 func FromSchemaEvents(events []*schema.Event) []*Event {
 	result := make([]*Event, len(events))
 	for i, e := range events {
 		result[i] = FromSchemaEvent(e)
 	}
+
 	return result
 }
 
-// Delivery represents a webhook delivery attempt (DTO)
+// Delivery represents a webhook delivery attempt (DTO).
 type Delivery struct {
 	ID          xid.ID     `json:"id"`
 	WebhookID   xid.ID     `json:"webhookID"`
@@ -142,10 +147,11 @@ type Delivery struct {
 	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
-// ToSchema converts Delivery DTO to schema.Delivery
+// ToSchema converts Delivery DTO to schema.Delivery.
 func (d *Delivery) ToSchema() *schema.Delivery {
 	statusCode := d.StatusCode
 	errorStr := d.Error
+
 	return &schema.Delivery{
 		ID:            d.ID,
 		WebhookID:     d.WebhookID,
@@ -161,11 +167,12 @@ func (d *Delivery) ToSchema() *schema.Delivery {
 	}
 }
 
-// FromSchemaDelivery converts schema.Delivery to Delivery DTO
+// FromSchemaDelivery converts schema.Delivery to Delivery DTO.
 func FromSchemaDelivery(d *schema.Delivery) *Delivery {
 	if d == nil {
 		return nil
 	}
+
 	delivery := &Delivery{
 		ID:          d.ID,
 		WebhookID:   d.WebhookID,
@@ -179,55 +186,59 @@ func FromSchemaDelivery(d *schema.Delivery) *Delivery {
 	if d.StatusCode != nil {
 		delivery.StatusCode = *d.StatusCode
 	}
+
 	if d.ResponseBody != nil {
 		delivery.Response = string(d.ResponseBody)
 	}
+
 	if d.Error != nil {
 		delivery.Error = *d.Error
 	}
+
 	return delivery
 }
 
-// FromSchemaDeliveries converts multiple schema.Delivery to Delivery DTOs
+// FromSchemaDeliveries converts multiple schema.Delivery to Delivery DTOs.
 func FromSchemaDeliveries(deliveries []*schema.Delivery) []*Delivery {
 	result := make([]*Delivery, len(deliveries))
 	for i, d := range deliveries {
 		result[i] = FromSchemaDelivery(d)
 	}
+
 	return result
 }
 
-// CreateWebhookRequest represents a request to create a webhook
+// CreateWebhookRequest represents a request to create a webhook.
 type CreateWebhookRequest struct {
-	AppID         xid.ID            `json:"appID" validate:"required"`
-	EnvironmentID xid.ID            `json:"environmentID" validate:"required"`
-	URL           string            `json:"url" validate:"required,url"`
-	Events        []string          `json:"events" validate:"required,min=1"`
-	MaxRetries    int               `json:"maxRetries" validate:"min=0,max=10"`
-	RetryBackoff  string            `json:"retryBackoff" validate:"oneof=exponential linear"`
+	AppID         xid.ID            `json:"appID"             validate:"required"`
+	EnvironmentID xid.ID            `json:"environmentID"     validate:"required"`
+	URL           string            `json:"url"               validate:"required,url"`
+	Events        []string          `json:"events"            validate:"required,min=1"`
+	MaxRetries    int               `json:"maxRetries"        validate:"min=0,max=10"`
+	RetryBackoff  string            `json:"retryBackoff"      validate:"oneof=exponential linear"`
 	Headers       map[string]string `json:"headers,omitempty"`
 }
 
-// UpdateWebhookRequest represents a request to update a webhook
+// UpdateWebhookRequest represents a request to update a webhook.
 type UpdateWebhookRequest struct {
-	URL          *string           `json:"url,omitempty" validate:"omitempty,url"`
-	Events       []string          `json:"events,omitempty" validate:"omitempty,min=1"`
+	URL          *string           `json:"url,omitempty"          validate:"omitempty,url"`
+	Events       []string          `json:"events,omitempty"       validate:"omitempty,min=1"`
 	Enabled      *bool             `json:"enabled,omitempty"`
-	MaxRetries   *int              `json:"maxRetries,omitempty" validate:"omitempty,min=0,max=10"`
+	MaxRetries   *int              `json:"maxRetries,omitempty"   validate:"omitempty,min=0,max=10"`
 	RetryBackoff *string           `json:"retryBackoff,omitempty" validate:"omitempty,oneof=exponential linear"`
 	Headers      map[string]string `json:"headers,omitempty"`
 }
 
-// ListWebhooksResponse is a type alias for paginated response
+// ListWebhooksResponse is a type alias for paginated response.
 type ListWebhooksResponse = pagination.PageResponse[*Webhook]
 
-// ListEventsResponse is a type alias for paginated response
+// ListEventsResponse is a type alias for paginated response.
 type ListEventsResponse = pagination.PageResponse[*Event]
 
-// ListDeliveriesResponse is a type alias for paginated response
+// ListDeliveriesResponse is a type alias for paginated response.
 type ListDeliveriesResponse = pagination.PageResponse[*Delivery]
 
-// EventType constants for webhook events
+// EventType constants for webhook events.
 const (
 	EventUserCreated       = "user.created"
 	EventUserUpdated       = "user.updated"
@@ -243,7 +254,7 @@ const (
 	EventMemberRoleChanged = "member.role_changed"
 )
 
-// AllEventTypes returns all available event types
+// AllEventTypes returns all available event types.
 func AllEventTypes() []string {
 	return []string{
 		EventUserCreated,
@@ -261,17 +272,13 @@ func AllEventTypes() []string {
 	}
 }
 
-// IsValidEventType checks if an event type is valid
+// IsValidEventType checks if an event type is valid.
 func IsValidEventType(eventType string) bool {
-	for _, validType := range AllEventTypes() {
-		if eventType == validType {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(AllEventTypes(), eventType)
 }
 
-// DeliveryStatus constants
+// DeliveryStatus constants.
 const (
 	DeliveryStatusPending   = "pending"
 	DeliveryStatusDelivered = "delivered"
@@ -279,7 +286,7 @@ const (
 	DeliveryStatusRetrying  = "retrying"
 )
 
-// RetryBackoff constants
+// RetryBackoff constants.
 const (
 	RetryBackoffExponential = "exponential"
 	RetryBackoffLinear      = "linear"

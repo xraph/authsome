@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// PermissionRepository provides basic CRUD for permissions
+// PermissionRepository provides basic CRUD for permissions.
 type PermissionRepository struct{ db *bun.DB }
 
 func NewPermissionRepository(db *bun.DB) *PermissionRepository { return &PermissionRepository{db: db} }
@@ -18,13 +18,17 @@ func (r *PermissionRepository) Create(ctx context.Context, perm *schema.Permissi
 	if perm.ID.IsNil() {
 		perm.ID = xid.New()
 	}
-	if perm.AuditableModel.CreatedBy.IsNil() {
-		perm.AuditableModel.CreatedBy = xid.New()
+
+	if perm.CreatedBy.IsNil() {
+		perm.CreatedBy = xid.New()
 	}
-	if perm.AuditableModel.UpdatedBy.IsNil() {
-		perm.AuditableModel.UpdatedBy = perm.AuditableModel.CreatedBy
+
+	if perm.UpdatedBy.IsNil() {
+		perm.UpdatedBy = perm.CreatedBy
 	}
+
 	_, err := r.db.NewInsert().Model(perm).Exec(ctx)
+
 	return err
 }
 
@@ -35,6 +39,7 @@ func (r *PermissionRepository) Update(ctx context.Context, perm *schema.Permissi
 		Model(perm).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
@@ -43,11 +48,13 @@ func (r *PermissionRepository) Delete(ctx context.Context, permissionID xid.ID) 
 		Model((*schema.Permission)(nil)).
 		Where("id = ?", permissionID).
 		Exec(ctx)
+
 	return err
 }
 
 func (r *PermissionRepository) FindByID(ctx context.Context, permissionID xid.ID) (*schema.Permission, error) {
 	var perm schema.Permission
+
 	err := r.db.NewSelect().
 		Model(&perm).
 		Where("id = ?", permissionID).
@@ -55,11 +62,13 @@ func (r *PermissionRepository) FindByID(ctx context.Context, permissionID xid.ID
 	if err != nil {
 		return nil, err
 	}
+
 	return &perm, nil
 }
 
 func (r *PermissionRepository) FindByName(ctx context.Context, name string, appID xid.ID, orgID *xid.ID) (*schema.Permission, error) {
 	var perm schema.Permission
+
 	q := r.db.NewSelect().
 		Model(&perm).
 		Where("name = ?", name).
@@ -75,11 +84,13 @@ func (r *PermissionRepository) FindByName(ctx context.Context, name string, appI
 	if err != nil {
 		return nil, err
 	}
+
 	return &perm, nil
 }
 
 func (r *PermissionRepository) ListByApp(ctx context.Context, appID xid.ID) ([]*schema.Permission, error) {
 	var perms []*schema.Permission
+
 	err := r.db.NewSelect().
 		Model(&perms).
 		Where("app_id = ?", appID).
@@ -90,11 +101,13 @@ func (r *PermissionRepository) ListByApp(ctx context.Context, appID xid.ID) ([]*
 	if err != nil {
 		return nil, err
 	}
+
 	return perms, nil
 }
 
 func (r *PermissionRepository) ListByOrg(ctx context.Context, orgID xid.ID) ([]*schema.Permission, error) {
 	var perms []*schema.Permission
+
 	err := r.db.NewSelect().
 		Model(&perms).
 		Where("organization_id = ?", orgID).
@@ -104,11 +117,13 @@ func (r *PermissionRepository) ListByOrg(ctx context.Context, orgID xid.ID) ([]*
 	if err != nil {
 		return nil, err
 	}
+
 	return perms, nil
 }
 
 func (r *PermissionRepository) ListByCategory(ctx context.Context, category string, appID xid.ID) ([]*schema.Permission, error) {
 	var perms []*schema.Permission
+
 	err := r.db.NewSelect().
 		Model(&perms).
 		Where("app_id = ?", appID).
@@ -119,6 +134,7 @@ func (r *PermissionRepository) ListByCategory(ctx context.Context, category stri
 	if err != nil {
 		return nil, err
 	}
+
 	return perms, nil
 }
 
@@ -143,5 +159,6 @@ func (r *PermissionRepository) CreateCustomPermission(ctx context.Context, name,
 	if err != nil {
 		return nil, err
 	}
+
 	return perm, nil
 }

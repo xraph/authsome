@@ -11,25 +11,27 @@ import (
 //go:embed authsome-schema.json
 var embeddedSchema []byte
 
-// GetEmbeddedSchema returns the embedded AuthSome schema
+// GetEmbeddedSchema returns the embedded AuthSome schema.
 func GetEmbeddedSchema() (*definition.Schema, error) {
 	var schema definition.Schema
 	if err := json.Unmarshal(embeddedSchema, &schema); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal embedded schema: %w", err)
 	}
+
 	return &schema, nil
 }
 
-// GetEmbeddedSchemaRaw returns the raw JSON bytes of the embedded schema
+// GetEmbeddedSchemaRaw returns the raw JSON bytes of the embedded schema.
 func GetEmbeddedSchemaRaw() []byte {
 	return embeddedSchema
 }
 
-// SchemaVersion returns the version of the embedded schema
+// SchemaVersion returns the version of the embedded schema.
 func SchemaVersion() (string, error) {
 	schema, err := GetEmbeddedSchema()
 	if err != nil {
 		return "", err
 	}
+
 	return schema.Version, nil
 }

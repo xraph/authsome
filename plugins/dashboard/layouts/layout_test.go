@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/core/user"
 )
 
-// Test humanizeSegment function
+// Test humanizeSegment function.
 func TestHumanizeSegment(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -31,7 +31,7 @@ func TestHumanizeSegment(t *testing.T) {
 	}
 }
 
-// Test isID function
+// Test isID function.
 func TestIsID(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -71,7 +71,7 @@ func TestIsID(t *testing.T) {
 	}
 }
 
-// Test getInitials function
+// Test getInitials function.
 func TestGetInitials(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -96,7 +96,7 @@ func TestGetInitials(t *testing.T) {
 	}
 }
 
-// Test getEntityLabel function logic
+// Test getEntityLabel function logic.
 func TestGetEntityLabelLogic(t *testing.T) {
 	// Create a test app
 	testApp := &app.App{
@@ -131,6 +131,7 @@ func TestGetEntityLabelLogic(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test the logic directly without needing PageContext
 			segment := tt.segments[tt.index]
+
 			var result string
 
 			if tt.index > 0 {
@@ -163,7 +164,7 @@ func TestGetEntityLabelLogic(t *testing.T) {
 	}
 }
 
-// Test that user dropdown works with real user data
+// Test that user dropdown works with real user data.
 func TestBuildUserAvatarLogic(t *testing.T) {
 	layoutManager := &LayoutManager{
 		baseUIPath: "/ui",
@@ -208,25 +209,25 @@ func TestBuildUserAvatarLogic(t *testing.T) {
 	})
 }
 
-// Benchmark humanizeSegment to ensure performance
+// Benchmark humanizeSegment to ensure performance.
 func BenchmarkHumanizeSegment(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		humanizeSegment("apps-management")
 	}
 }
 
-// Benchmark isID to ensure performance
+// Benchmark isID to ensure performance.
 func BenchmarkIsID(b *testing.B) {
 	id := xid.New().String()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		isID(id)
 	}
 }
 
-// Benchmark getInitials to ensure performance
+// Benchmark getInitials to ensure performance.
 func BenchmarkGetInitials(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		getInitials("John Doe")
 	}
 }

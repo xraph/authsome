@@ -6,7 +6,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// RegisterWebhookRoutes registers webhook-related routes
+// RegisterWebhookRoutes registers webhook-related routes.
 func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler) {
 	// Webhook management routes
 	webhooks := router.Group("/webhooks")
@@ -76,12 +76,12 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 
 // DTOs for webhook routes
 
-// WebhookErrorResponse represents an error response
+// WebhookErrorResponse represents an error response.
 type WebhookErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
-// WebhookDeleteResponse represents a successful webhook deletion
+// WebhookDeleteResponse represents a successful webhook deletion.
 type WebhookDeleteResponse struct {
-	Message string `json:"message" example:"webhook deleted successfully"`
+	Message string `example:"webhook deleted successfully" json:"message"`
 }

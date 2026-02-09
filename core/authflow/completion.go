@@ -15,30 +15,30 @@ import (
 )
 
 // AuthServiceInterface defines methods needed from auth service
-// This interface is implemented by core/auth.Service
+// This interface is implemented by core/auth.Service.
 type AuthServiceInterface interface {
 	SignUp(ctx context.Context, req *auth.SignUpRequest) (*responses.AuthResponse, error)
 	SignIn(ctx context.Context, req *auth.SignInRequest) (*responses.AuthResponse, error)
 	CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*responses.AuthResponse, error)
 }
 
-// DeviceServiceInterface defines methods needed from device service
+// DeviceServiceInterface defines methods needed from device service.
 type DeviceServiceInterface interface {
 	TrackDevice(ctx context.Context, appID, userID xid.ID, fingerprint, userAgent, ipAddress string) (*device.Device, error)
 }
 
-// AuditServiceInterface defines methods needed from audit service
+// AuditServiceInterface defines methods needed from audit service.
 type AuditServiceInterface interface {
 	Log(ctx context.Context, userID *xid.ID, action, target, ipAddress, userAgent, metadata string) error
 }
 
 // AppServiceInterface defines methods needed from app service
-// AppService is accessed via ServiceImpl.App
+// AppService is accessed via ServiceImpl.App.
 type AppServiceInterface interface {
 	GetCookieConfig(ctx context.Context, appID xid.ID) (*session.CookieConfig, error)
 }
 
-// CompletionService handles the final steps of authentication
+// CompletionService handles the final steps of authentication.
 type CompletionService struct {
 	authService   AuthServiceInterface
 	deviceService DeviceServiceInterface
@@ -47,7 +47,7 @@ type CompletionService struct {
 	cookieConfig  *session.CookieConfig
 }
 
-// NewCompletionService creates a new authentication completion service
+// NewCompletionService creates a new authentication completion service.
 func NewCompletionService(
 	authService AuthServiceInterface,
 	deviceService DeviceServiceInterface,
@@ -64,7 +64,7 @@ func NewCompletionService(
 	}
 }
 
-// CompleteAuthenticationRequest contains all data needed to complete authentication
+// CompleteAuthenticationRequest contains all data needed to complete authentication.
 type CompleteAuthenticationRequest struct {
 	User         *user.User
 	RememberMe   bool
@@ -76,7 +76,7 @@ type CompleteAuthenticationRequest struct {
 	AuthProvider string // "google", "github", etc. for social
 }
 
-// CompleteSignUpOrSignInRequest contains all data needed for signup or signin completion
+// CompleteSignUpOrSignInRequest contains all data needed for signup or signin completion.
 type CompleteSignUpOrSignInRequest struct {
 	Email        string     // Email for new user signup
 	Password     string     // Password for new user (may be empty for OAuth/magic link)
@@ -92,7 +92,7 @@ type CompleteSignUpOrSignInRequest struct {
 	AuthProvider string // e.g., "github", "google"
 }
 
-// CompleteAuthentication handles all post-authentication steps
+// CompleteAuthentication handles all post-authentication steps.
 func (s *CompletionService) CompleteAuthentication(req *CompleteAuthenticationRequest) (*responses.AuthResponse, error) {
 	ctx := req.Context
 
@@ -122,6 +122,7 @@ func (s *CompletionService) CompleteAuthentication(req *CompleteAuthenticationRe
 		if req.AuthProvider != "" {
 			action = action + "_" + req.AuthProvider
 		}
+
 		userID := req.User.ID
 		_ = s.auditService.Log(ctx, &userID, action, "user:"+userID.String(), req.IPAddress, req.UserAgent, "")
 	}
@@ -130,11 +131,14 @@ func (s *CompletionService) CompleteAuthentication(req *CompleteAuthenticationRe
 }
 
 // CompleteSignUpOrSignIn handles signup for new users or signin for existing users
-// This method ensures proper membership creation through decorated auth services
+// This method ensures proper membership creation through decorated auth services.
 func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRequest) (*responses.AuthResponse, error) {
 	ctx := req.Context
-	var authResp *responses.AuthResponse
-	var err error
+
+	var (
+		authResp *responses.AuthResponse
+		err      error
+	)
 
 	if req.IsNewUser {
 		// For new users, call SignUp which handles membership via decorator
@@ -146,6 +150,7 @@ func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRe
 			IPAddress:  req.IPAddress,
 			UserAgent:  req.UserAgent,
 		}
+
 		authResp, err = s.authService.SignUp(ctx, signupReq)
 		if err != nil {
 			return nil, errs.Wrap(err, "SIGNUP_FAILED", "Failed to sign up user", 500)
@@ -155,6 +160,7 @@ func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRe
 		if req.User == nil {
 			return nil, errs.New("USER_REQUIRED", "User is required for signin", 400)
 		}
+
 		authResp, err = s.authService.CreateSessionForUser(ctx, req.User, req.RememberMe, req.IPAddress, req.UserAgent)
 		if err != nil {
 			return nil, errs.Wrap(err, "SESSION_CREATION_FAILED", "Failed to create session", 500)
@@ -185,9 +191,11 @@ func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRe
 		} else {
 			action = "signin_" + req.AuthMethod
 		}
+
 		if req.AuthProvider != "" {
 			action = action + "_" + req.AuthProvider
 		}
+
 		userID := authResp.User.ID
 		_ = s.auditService.Log(ctx, &userID, action, "user:"+userID.String(), req.IPAddress, req.UserAgent, "")
 	}
@@ -195,7 +203,7 @@ func (s *CompletionService) CompleteSignUpOrSignIn(req *CompleteSignUpOrSignInRe
 	return authResp, nil
 }
 
-// setSessionCookie sets the session cookie in the response
+// setSessionCookie sets the session cookie in the response.
 func (s *CompletionService) setSessionCookie(ctx context.Context, c forge.Context, authResp *responses.AuthResponse, appID xid.ID) {
 	if authResp.Session == nil || authResp.Token == "" {
 		return
@@ -203,6 +211,7 @@ func (s *CompletionService) setSessionCookie(ctx context.Context, c forge.Contex
 
 	// Get app-specific cookie config first (includes global config as fallback)
 	var cookieConfig *session.CookieConfig
+
 	if s.appService != nil {
 		appCookieCfg, err := s.appService.GetCookieConfig(ctx, appID)
 		if err == nil && appCookieCfg != nil {
@@ -226,7 +235,7 @@ func (s *CompletionService) setSessionCookie(ctx context.Context, c forge.Contex
 	_ = session.SetCookie(c, authResp.Token, authResp.Session.ExpiresAt, cookieConfig)
 }
 
-// AppServiceAdapter adapts app.AppService to AppServiceInterface
+// AppServiceAdapter adapts app.AppService to AppServiceInterface.
 type AppServiceAdapter struct {
 	AppService interface {
 		GetCookieConfig(ctx context.Context, appID xid.ID) (*session.CookieConfig, error)
@@ -237,7 +246,7 @@ func (a *AppServiceAdapter) GetCookieConfig(ctx context.Context, appID xid.ID) (
 	return a.AppService.GetCookieConfig(ctx, appID)
 }
 
-// DeviceServiceAdapter adapts device.Service to DeviceServiceInterface
+// DeviceServiceAdapter adapts device.Service to DeviceServiceInterface.
 type DeviceServiceAdapter struct {
 	DeviceService *device.Service
 }
@@ -247,7 +256,7 @@ func (d *DeviceServiceAdapter) TrackDevice(ctx context.Context, appID, userID xi
 }
 
 // ExtractClientIP extracts client IP from request
-// This can be enhanced to check X-Forwarded-For headers
+// This can be enhanced to check X-Forwarded-For headers.
 func ExtractClientIP(remoteAddr string) string {
 	return remoteAddr
 }

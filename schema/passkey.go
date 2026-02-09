@@ -9,33 +9,33 @@ import (
 
 // Passkey stores WebAuthn/FIDO2 credentials
 // Updated for V2 architecture: App → Environment → Organization
-// Now includes full WebAuthn fields for production-ready implementation
+// Now includes full WebAuthn fields for production-ready implementation.
 type Passkey struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:passkeys,alias:pk"`
 
-	ID           xid.ID `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID       xid.ID `json:"userId" bun:"user_id,notnull,type:varchar(20)"`
-	CredentialID string `json:"credentialId" bun:"credential_id,notnull,unique"`
+	ID           xid.ID `bun:"id,pk,type:varchar(20)"           json:"id"`
+	UserID       xid.ID `bun:"user_id,notnull,type:varchar(20)" json:"userId"`
+	CredentialID string `bun:"credential_id,notnull,unique"     json:"credentialId"`
 
 	// WebAuthn cryptographic fields
-	PublicKey []byte `json:"-" bun:"public_key,notnull"`           // COSE encoded public key
-	AAGUID    []byte `json:"aaguid,omitempty" bun:"aaguid"`        // Authenticator AAGUID
-	SignCount uint32 `json:"signCount" bun:"sign_count,default:0"` // Counter for replay attack detection
+	PublicKey []byte `bun:"public_key,notnull"   json:"-"`                // COSE encoded public key
+	AAGUID    []byte `bun:"aaguid"               json:"aaguid,omitempty"` // Authenticator AAGUID
+	SignCount uint32 `bun:"sign_count,default:0" json:"signCount"`        // Counter for replay attack detection
 
 	// Authenticator metadata
-	AuthenticatorType string `json:"authenticatorType,omitempty" bun:"authenticator_type"` // "platform" or "cross-platform"
+	AuthenticatorType string `bun:"authenticator_type" json:"authenticatorType,omitempty"` // "platform" or "cross-platform"
 
 	// User-friendly naming for device management
-	Name string `json:"name,omitempty" bun:"name"`
+	Name string `bun:"name" json:"name,omitempty"`
 
 	// Resident key / discoverable credential support
-	IsResidentKey bool `json:"isResidentKey" bun:"is_resident_key,default:false"`
+	IsResidentKey bool `bun:"is_resident_key,default:false" json:"isResidentKey"`
 
 	// Usage tracking
-	LastUsedAt *time.Time `json:"lastUsedAt,omitempty" bun:"last_used_at"`
+	LastUsedAt *time.Time `bun:"last_used_at" json:"lastUsedAt,omitempty"`
 
 	// Multi-tenant scoping (App → Environment → Organization)
-	AppID              xid.ID  `json:"appId" bun:"app_id,notnull,type:varchar(20)"`                              // Platform app (required)
-	UserOrganizationID *xid.ID `json:"userOrganizationId,omitempty" bun:"user_organization_id,type:varchar(20)"` // User-created org (optional)
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"       json:"appId"`                        // Platform app (required)
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"` // User-created org (optional)
 }

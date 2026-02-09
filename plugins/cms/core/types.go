@@ -11,26 +11,26 @@ import (
 // ENUMS
 // =============================================================================
 
-// EntryStatus defines the status of a content entry
+// EntryStatus defines the status of a content entry.
 type EntryStatus string
 
 const (
-	// EntryStatusDraft indicates the entry is a draft
+	// EntryStatusDraft indicates the entry is a draft.
 	EntryStatusDraft EntryStatus = "draft"
-	// EntryStatusPublished indicates the entry is published
+	// EntryStatusPublished indicates the entry is published.
 	EntryStatusPublished EntryStatus = "published"
-	// EntryStatusArchived indicates the entry is archived
+	// EntryStatusArchived indicates the entry is archived.
 	EntryStatusArchived EntryStatus = "archived"
-	// EntryStatusScheduled indicates the entry is scheduled for publishing
+	// EntryStatusScheduled indicates the entry is scheduled for publishing.
 	EntryStatusScheduled EntryStatus = "scheduled"
 )
 
-// String returns the string representation of the status
+// String returns the string representation of the status.
 func (s EntryStatus) String() string {
 	return string(s)
 }
 
-// IsValid checks if the status is valid
+// IsValid checks if the status is valid.
 func (s EntryStatus) IsValid() bool {
 	switch s {
 	case EntryStatusDraft, EntryStatusPublished, EntryStatusArchived, EntryStatusScheduled:
@@ -40,35 +40,36 @@ func (s EntryStatus) IsValid() bool {
 	}
 }
 
-// ParseEntryStatus parses a string into an EntryStatus
+// ParseEntryStatus parses a string into an EntryStatus.
 func ParseEntryStatus(s string) (EntryStatus, bool) {
 	status := EntryStatus(s)
 	if status.IsValid() {
 		return status, true
 	}
+
 	return EntryStatusDraft, false
 }
 
-// RelationType defines the type of relation between content types
+// RelationType defines the type of relation between content types.
 type RelationType string
 
 const (
-	// RelationTypeOneToOne represents a one-to-one relation
+	// RelationTypeOneToOne represents a one-to-one relation.
 	RelationTypeOneToOne RelationType = "oneToOne"
-	// RelationTypeOneToMany represents a one-to-many relation
+	// RelationTypeOneToMany represents a one-to-many relation.
 	RelationTypeOneToMany RelationType = "oneToMany"
-	// RelationTypeManyToOne represents a many-to-one relation
+	// RelationTypeManyToOne represents a many-to-one relation.
 	RelationTypeManyToOne RelationType = "manyToOne"
-	// RelationTypeManyToMany represents a many-to-many relation
+	// RelationTypeManyToMany represents a many-to-many relation.
 	RelationTypeManyToMany RelationType = "manyToMany"
 )
 
-// String returns the string representation
+// String returns the string representation.
 func (r RelationType) String() string {
 	return string(r)
 }
 
-// IsValid checks if the relation type is valid
+// IsValid checks if the relation type is valid.
 func (r RelationType) IsValid() bool {
 	switch r {
 	case RelationTypeOneToOne, RelationTypeOneToMany, RelationTypeManyToOne, RelationTypeManyToMany:
@@ -78,21 +79,21 @@ func (r RelationType) IsValid() bool {
 	}
 }
 
-// OnDeleteAction defines what happens when a related entry is deleted
+// OnDeleteAction defines what happens when a related entry is deleted.
 type OnDeleteAction string
 
 const (
-	// OnDeleteCascade deletes the related entries
+	// OnDeleteCascade deletes the related entries.
 	OnDeleteCascade OnDeleteAction = "cascade"
-	// OnDeleteSetNull sets the relation to null
+	// OnDeleteSetNull sets the relation to null.
 	OnDeleteSetNull OnDeleteAction = "setNull"
-	// OnDeleteRestrict prevents deletion if related entries exist
+	// OnDeleteRestrict prevents deletion if related entries exist.
 	OnDeleteRestrict OnDeleteAction = "restrict"
-	// OnDeleteNoAction takes no action
+	// OnDeleteNoAction takes no action.
 	OnDeleteNoAction OnDeleteAction = "noAction"
 )
 
-// IsValid checks if the on-delete action is valid
+// IsValid checks if the on-delete action is valid.
 func (a OnDeleteAction) IsValid() bool {
 	switch a {
 	case OnDeleteCascade, OnDeleteSetNull, OnDeleteRestrict, OnDeleteNoAction:
@@ -106,14 +107,14 @@ func (a OnDeleteAction) IsValid() bool {
 // RELATION DTOs
 // =============================================================================
 
-// RelatedEntryDTO represents a related entry
+// RelatedEntryDTO represents a related entry.
 type RelatedEntryDTO struct {
 	ID    string                  `json:"id"`
 	Order int                     `json:"order"`
 	Entry *ContentEntrySummaryDTO `json:"entry,omitempty"`
 }
 
-// TypeRelationDTO represents a type relation definition
+// TypeRelationDTO represents a type relation definition.
 type TypeRelationDTO struct {
 	ID                     string    `json:"id"`
 	SourceContentTypeID    string    `json:"sourceContentTypeId"`
@@ -129,7 +130,7 @@ type TypeRelationDTO struct {
 	CreatedAt              time.Time `json:"createdAt"`
 }
 
-// CreateTypeRelationRequest is the request to create a type relation
+// CreateTypeRelationRequest is the request to create a type relation.
 type CreateTypeRelationRequest struct {
 	SourceContentTypeID xid.ID `json:"sourceContentTypeId"`
 	TargetContentTypeID xid.ID `json:"targetContentTypeId"`
@@ -139,23 +140,23 @@ type CreateTypeRelationRequest struct {
 	OnDelete            string `json:"onDelete,omitempty"`
 }
 
-// UpdateTypeRelationRequest is the request to update a type relation
+// UpdateTypeRelationRequest is the request to update a type relation.
 type UpdateTypeRelationRequest struct {
 	TargetFieldName *string `json:"targetFieldName,omitempty"`
 	OnDelete        *string `json:"onDelete,omitempty"`
 }
 
-// SetRelationRequest is the request to set a relation
+// SetRelationRequest is the request to set a relation.
 type SetRelationRequest struct {
 	TargetID xid.ID `json:"targetId"`
 }
 
-// SetRelationsRequest is the request to set multiple relations
+// SetRelationsRequest is the request to set multiple relations.
 type SetRelationsRequest struct {
 	TargetIDs []xid.ID `json:"targetIds"`
 }
 
-// ReorderRelationsRequest is the request to reorder relations
+// ReorderRelationsRequest is the request to reorder relations.
 type ReorderRelationsRequest struct {
 	OrderedTargetIDs []xid.ID `json:"orderedTargetIds"`
 }
@@ -164,7 +165,7 @@ type ReorderRelationsRequest struct {
 // CONTENT TYPE DTOs
 // =============================================================================
 
-// ContentTypeDTO is the API response for a content type
+// ContentTypeDTO is the API response for a content type.
 type ContentTypeDTO struct {
 	ID            string                 `json:"id"`
 	AppID         string                 `json:"appId"`
@@ -182,7 +183,7 @@ type ContentTypeDTO struct {
 	UpdatedAt     time.Time              `json:"updatedAt"`
 }
 
-// ContentTypeSettingsDTO represents content type settings
+// ContentTypeSettingsDTO represents content type settings.
 type ContentTypeSettingsDTO struct {
 	// Display settings
 	TitleField       string `json:"titleField,omitempty"`
@@ -203,7 +204,7 @@ type ContentTypeSettingsDTO struct {
 	MaxEntries int `json:"maxEntries,omitempty"`
 }
 
-// ContentTypeSummaryDTO is a lightweight content type for lists
+// ContentTypeSummaryDTO is a lightweight content type for lists.
 type ContentTypeSummaryDTO struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
@@ -220,7 +221,7 @@ type ContentTypeSummaryDTO struct {
 // COMPONENT SCHEMA DTOs
 // =============================================================================
 
-// ComponentSchemaDTO is the API response for a component schema
+// ComponentSchemaDTO is the API response for a component schema.
 type ComponentSchemaDTO struct {
 	ID            string              `json:"id"`
 	AppID         string              `json:"appId"`
@@ -237,7 +238,7 @@ type ComponentSchemaDTO struct {
 	UpdatedAt     time.Time           `json:"updatedAt"`
 }
 
-// ComponentSchemaSummaryDTO is a lightweight component schema for lists
+// ComponentSchemaSummaryDTO is a lightweight component schema for lists.
 type ComponentSchemaSummaryDTO struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
@@ -250,7 +251,7 @@ type ComponentSchemaSummaryDTO struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// NestedFieldDefDTO represents a field definition within a nested object or component schema
+// NestedFieldDefDTO represents a field definition within a nested object or component schema.
 type NestedFieldDefDTO struct {
 	Title       string           `json:"title"`
 	Name        string           `json:"name"`
@@ -260,16 +261,16 @@ type NestedFieldDefDTO struct {
 	Options     *FieldOptionsDTO `json:"options,omitempty"`
 }
 
-// CreateComponentSchemaRequest is the request to create a component schema
+// CreateComponentSchemaRequest is the request to create a component schema.
 type CreateComponentSchemaRequest struct {
-	Title       string              `json:"title" validate:"required,min=1,max=100"`
-	Name        string              `json:"name" validate:"required"`
+	Title       string              `json:"title"                 validate:"required,min=1,max=100"`
+	Name        string              `json:"name"                  validate:"required"`
 	Description string              `json:"description,omitempty"`
 	Icon        string              `json:"icon,omitempty"`
 	Fields      []NestedFieldDefDTO `json:"fields,omitempty"`
 }
 
-// UpdateComponentSchemaRequest is the request to update a component schema
+// UpdateComponentSchemaRequest is the request to update a component schema.
 type UpdateComponentSchemaRequest struct {
 	Title       string              `json:"title,omitempty"`
 	Description string              `json:"description,omitempty"`
@@ -277,7 +278,7 @@ type UpdateComponentSchemaRequest struct {
 	Fields      []NestedFieldDefDTO `json:"fields,omitempty"`
 }
 
-// ListComponentSchemasResponse is the response for listing component schemas
+// ListComponentSchemasResponse is the response for listing component schemas.
 type ListComponentSchemasResponse struct {
 	Components []*ComponentSchemaSummaryDTO `json:"components"`
 	Page       int                          `json:"page"`
@@ -290,7 +291,7 @@ type ListComponentSchemasResponse struct {
 // CONTENT FIELD DTOs
 // =============================================================================
 
-// ContentFieldDTO is the API response for a content field
+// ContentFieldDTO is the API response for a content field.
 type ContentFieldDTO struct {
 	ID            string          `json:"id"`
 	ContentTypeID string          `json:"contentTypeId"`
@@ -311,7 +312,7 @@ type ContentFieldDTO struct {
 	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
-// FieldOptionsDTO contains type-specific field options
+// FieldOptionsDTO contains type-specific field options.
 type FieldOptionsDTO struct {
 	// Text fields
 	MinLength int    `json:"minLength,omitempty"`
@@ -371,21 +372,21 @@ type FieldOptionsDTO struct {
 	ClearWhenHidden bool               `json:"clearWhenHidden,omitempty"` // Clear value when hidden
 }
 
-// OneOfSchemaOptionDTO defines a schema option for oneOf fields
+// OneOfSchemaOptionDTO defines a schema option for oneOf fields.
 type OneOfSchemaOptionDTO struct {
 	ComponentRef string              `json:"componentRef,omitempty"` // Reference to ComponentSchema slug
 	NestedFields []NestedFieldDefDTO `json:"nestedFields,omitempty"` // Or inline field definitions
 	Label        string              `json:"label,omitempty"`        // Display label for this option
 }
 
-// FieldConditionDTO defines a condition for showing/hiding fields
+// FieldConditionDTO defines a condition for showing/hiding fields.
 type FieldConditionDTO struct {
 	Field    string `json:"field"`           // Field name to watch
 	Operator string `json:"operator"`        // eq, ne, in, notIn, exists, notExists
 	Value    any    `json:"value,omitempty"` // Value(s) to compare
 }
 
-// ChoiceDTO represents a choice option for select fields
+// ChoiceDTO represents a choice option for select fields.
 type ChoiceDTO struct {
 	Value    string `json:"value"`
 	Label    string `json:"label"`
@@ -398,7 +399,7 @@ type ChoiceDTO struct {
 // CONTENT ENTRY DTOs
 // =============================================================================
 
-// ContentEntryDTO is the API response for a content entry
+// ContentEntryDTO is the API response for a content entry.
 type ContentEntryDTO struct {
 	ID            string                 `json:"id"`
 	ContentTypeID string                 `json:"contentTypeId"`
@@ -418,7 +419,7 @@ type ContentEntryDTO struct {
 	Relations map[string][]string `json:"relations,omitempty"`
 }
 
-// ContentEntrySummaryDTO is a lightweight entry for lists
+// ContentEntrySummaryDTO is a lightweight entry for lists.
 type ContentEntrySummaryDTO struct {
 	ID          string     `json:"id"`
 	Title       string     `json:"title,omitempty"`
@@ -434,7 +435,7 @@ type ContentEntrySummaryDTO struct {
 // CONTENT REVISION DTOs
 // =============================================================================
 
-// ContentRevisionDTO is the API response for a content revision
+// ContentRevisionDTO is the API response for a content revision.
 type ContentRevisionDTO struct {
 	ID           string         `json:"id"`
 	EntryID      string         `json:"entryId"`
@@ -450,16 +451,16 @@ type ContentRevisionDTO struct {
 // REQUEST DTOs
 // =============================================================================
 
-// CreateContentTypeRequest is the request to create a content type
+// CreateContentTypeRequest is the request to create a content type.
 type CreateContentTypeRequest struct {
-	Title       string                  `json:"title" validate:"required,min=1,max=100"`
-	Name        string                  `json:"name" validate:"required"`
+	Title       string                  `json:"title"                 validate:"required,min=1,max=100"`
+	Name        string                  `json:"name"                  validate:"required"`
 	Description string                  `json:"description,omitempty"`
 	Icon        string                  `json:"icon,omitempty"`
 	Settings    *ContentTypeSettingsDTO `json:"settings,omitempty"`
 }
 
-// UpdateContentTypeRequest is the request to update a content type
+// UpdateContentTypeRequest is the request to update a content type.
 type UpdateContentTypeRequest struct {
 	Title       string                  `json:"title,omitempty"`
 	Description string                  `json:"description,omitempty"`
@@ -467,12 +468,12 @@ type UpdateContentTypeRequest struct {
 	Settings    *ContentTypeSettingsDTO `json:"settings,omitempty"`
 }
 
-// CreateFieldRequest is the request to create a content field
+// CreateFieldRequest is the request to create a content field.
 type CreateFieldRequest struct {
-	Title        string           `json:"title" validate:"required,min=1,max=100"`
-	Name         string           `json:"name" validate:"required"`
+	Title        string           `json:"title"                  validate:"required,min=1,max=100"`
+	Name         string           `json:"name"                   validate:"required"`
 	Description  string           `json:"description,omitempty"`
-	Type         string           `json:"type" validate:"required"`
+	Type         string           `json:"type"                   validate:"required"`
 	Required     bool             `json:"required"`
 	Unique       bool             `json:"unique"`
 	Indexed      bool             `json:"indexed"`
@@ -484,7 +485,7 @@ type CreateFieldRequest struct {
 	ReadOnly     bool             `json:"readOnly"`
 }
 
-// UpdateFieldRequest is the request to update a content field
+// UpdateFieldRequest is the request to update a content field.
 type UpdateFieldRequest struct {
 	Title        string           `json:"title,omitempty"`
 	Description  string           `json:"description,omitempty"`
@@ -499,25 +500,25 @@ type UpdateFieldRequest struct {
 	ReadOnly     *bool            `json:"readOnly,omitempty"`
 }
 
-// ReorderFieldsRequest is the request to reorder fields
+// ReorderFieldsRequest is the request to reorder fields.
 type ReorderFieldsRequest struct {
 	FieldOrders []FieldOrderItem `json:"fieldOrders" validate:"required,min=1"`
 }
 
-// FieldOrderItem represents a field and its new order
+// FieldOrderItem represents a field and its new order.
 type FieldOrderItem struct {
 	FieldID string `json:"fieldId" validate:"required"`
 	Order   int    `json:"order"`
 }
 
-// CreateEntryRequest is the request to create a content entry
+// CreateEntryRequest is the request to create a content entry.
 type CreateEntryRequest struct {
-	Data        map[string]any `json:"data" validate:"required"`
+	Data        map[string]any `json:"data"                  validate:"required"`
 	Status      string         `json:"status,omitempty"`
 	ScheduledAt *time.Time     `json:"scheduledAt,omitempty"`
 }
 
-// UpdateEntryRequest is the request to update a content entry
+// UpdateEntryRequest is the request to update a content entry.
 type UpdateEntryRequest struct {
 	Data         map[string]any `json:"data,omitempty"`
 	Status       string         `json:"status,omitempty"`
@@ -525,14 +526,14 @@ type UpdateEntryRequest struct {
 	ChangeReason string         `json:"changeReason,omitempty"`
 }
 
-// PublishEntryRequest is the request to publish an entry
+// PublishEntryRequest is the request to publish an entry.
 type PublishEntryRequest struct {
 	ScheduledAt *time.Time `json:"scheduledAt,omitempty"`
 }
 
-// RollbackEntryRequest is the request to rollback an entry
+// RollbackEntryRequest is the request to rollback an entry.
 type RollbackEntryRequest struct {
-	TargetVersion int    `json:"targetVersion" validate:"required,min=1"`
+	TargetVersion int    `json:"targetVersion"    validate:"required,min=1"`
 	Reason        string `json:"reason,omitempty"`
 }
 
@@ -540,7 +541,7 @@ type RollbackEntryRequest struct {
 // QUERY DTOs
 // =============================================================================
 
-// ListContentTypesQuery defines query parameters for listing content types
+// ListContentTypesQuery defines query parameters for listing content types.
 type ListContentTypesQuery struct {
 	Search    string `json:"search,omitempty"`
 	SortBy    string `json:"sortBy,omitempty"`
@@ -549,7 +550,7 @@ type ListContentTypesQuery struct {
 	PageSize  int    `json:"pageSize,omitempty"`
 }
 
-// ListComponentSchemasQuery defines query parameters for listing component schemas
+// ListComponentSchemasQuery defines query parameters for listing component schemas.
 type ListComponentSchemasQuery struct {
 	Search    string `json:"search,omitempty"`
 	SortBy    string `json:"sortBy,omitempty"`
@@ -558,7 +559,7 @@ type ListComponentSchemasQuery struct {
 	PageSize  int    `json:"pageSize,omitempty"`
 }
 
-// ListEntriesQuery defines query parameters for listing entries
+// ListEntriesQuery defines query parameters for listing entries.
 type ListEntriesQuery struct {
 	Status    string         `json:"status,omitempty"`
 	Search    string         `json:"search,omitempty"`
@@ -571,7 +572,7 @@ type ListEntriesQuery struct {
 	Populate  []string       `json:"populate,omitempty"`
 }
 
-// ListRevisionsQuery defines query parameters for listing revisions
+// ListRevisionsQuery defines query parameters for listing revisions.
 type ListRevisionsQuery struct {
 	Page     int `json:"page,omitempty"`
 	PageSize int `json:"pageSize,omitempty"`
@@ -581,7 +582,7 @@ type ListRevisionsQuery struct {
 // RESPONSE DTOs
 // =============================================================================
 
-// ListContentTypesResponse is the response for listing content types
+// ListContentTypesResponse is the response for listing content types.
 type ListContentTypesResponse struct {
 	ContentTypes []*ContentTypeSummaryDTO `json:"contentTypes"`
 	Page         int                      `json:"page"`
@@ -590,7 +591,7 @@ type ListContentTypesResponse struct {
 	TotalPages   int                      `json:"totalPages"`
 }
 
-// ListEntriesResponse is the response for listing entries
+// ListEntriesResponse is the response for listing entries.
 type ListEntriesResponse struct {
 	Entries    []*ContentEntryDTO `json:"entries"`
 	Page       int                `json:"page"`
@@ -599,7 +600,7 @@ type ListEntriesResponse struct {
 	TotalPages int                `json:"totalPages"`
 }
 
-// ListRevisionsResponse is the response for listing revisions
+// ListRevisionsResponse is the response for listing revisions.
 type ListRevisionsResponse struct {
 	Revisions  []*ContentRevisionDTO `json:"revisions"`
 	Page       int                   `json:"page"`
@@ -612,7 +613,7 @@ type ListRevisionsResponse struct {
 // STATISTICS DTOs
 // =============================================================================
 
-// CMSStatsDTO contains overall CMS statistics
+// CMSStatsDTO contains overall CMS statistics.
 type CMSStatsDTO struct {
 	TotalContentTypes int            `json:"totalContentTypes"`
 	TotalEntries      int            `json:"totalEntries"`
@@ -623,7 +624,7 @@ type CMSStatsDTO struct {
 	ScheduledEntries  int            `json:"scheduledEntries"`
 }
 
-// ContentTypeStatsDTO contains statistics for a specific content type
+// ContentTypeStatsDTO contains statistics for a specific content type.
 type ContentTypeStatsDTO struct {
 	ContentTypeID    string         `json:"contentTypeId"`
 	TotalEntries     int            `json:"totalEntries"`
@@ -638,7 +639,7 @@ type ContentTypeStatsDTO struct {
 // REVISION DTOs (for revision service)
 // =============================================================================
 
-// RevisionDTO represents a content revision
+// RevisionDTO represents a content revision.
 type RevisionDTO struct {
 	ID        string         `json:"id"`
 	EntryID   string         `json:"entryId"`
@@ -649,26 +650,26 @@ type RevisionDTO struct {
 	CreatedAt time.Time      `json:"createdAt"`
 }
 
-// RevisionCompareDTO contains revision comparison results
+// RevisionCompareDTO contains revision comparison results.
 type RevisionCompareDTO struct {
 	From        *RevisionDTO      `json:"from"`
 	To          *RevisionDTO      `json:"to"`
 	Differences []FieldDifference `json:"differences"`
 }
 
-// DiffType represents the type of difference
+// DiffType represents the type of difference.
 type DiffType string
 
 const (
-	// DiffTypeAdded indicates a field was added
+	// DiffTypeAdded indicates a field was added.
 	DiffTypeAdded DiffType = "added"
-	// DiffTypeRemoved indicates a field was removed
+	// DiffTypeRemoved indicates a field was removed.
 	DiffTypeRemoved DiffType = "removed"
-	// DiffTypeModified indicates a field was modified
+	// DiffTypeModified indicates a field was modified.
 	DiffTypeModified DiffType = "modified"
 )
 
-// FieldDifference represents a difference in a specific field
+// FieldDifference represents a difference in a specific field.
 type FieldDifference struct {
 	Field    string   `json:"field"`
 	OldValue any      `json:"oldValue,omitempty"`
@@ -676,7 +677,7 @@ type FieldDifference struct {
 	Type     DiffType `json:"type"`
 }
 
-// PaginatedResponse is a generic paginated response wrapper
+// PaginatedResponse is a generic paginated response wrapper.
 type PaginatedResponse[T any] struct {
 	Items      []T `json:"items"`
 	Total      int `json:"total"`

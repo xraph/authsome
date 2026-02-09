@@ -8,7 +8,7 @@ import (
 
 // HookExecutor defines the interface for executing user-related hooks
 // This interface allows the user service to execute hooks without importing the hooks package,
-// avoiding circular dependencies (hooks package imports user for types)
+// avoiding circular dependencies (hooks package imports user for types).
 type HookExecutor interface {
 	ExecuteBeforeUserCreate(ctx context.Context, req *CreateUserRequest) error
 	ExecuteAfterUserCreate(ctx context.Context, user *User) error

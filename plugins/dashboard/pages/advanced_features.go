@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ConfigViewerPage shows system configuration
+// ConfigViewerPage shows system configuration.
 func (p *PagesManager) ConfigViewerPage(ctx *router.PageContext) (g.Node, error) {
 	return primitives.Container(
 		Div(
@@ -54,7 +54,7 @@ func (p *PagesManager) ConfigViewerPage(ctx *router.PageContext) (g.Node, error)
 	), nil
 }
 
-// AuditLogViewerPage shows audit logs
+// AuditLogViewerPage shows audit logs.
 func (p *PagesManager) AuditLogViewerPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -127,7 +127,7 @@ func (p *PagesManager) AuditLogViewerPage(ctx *router.PageContext) (g.Node, erro
 	), nil
 }
 
-// ErrorPage shows custom error page
+// ErrorPage shows custom error page.
 func (p *PagesManager) ErrorPage(ctx *router.PageContext) (g.Node, error) {
 	errorCode := ctx.Query("code")
 	errorMessage := ctx.Query("message")
@@ -135,6 +135,7 @@ func (p *PagesManager) ErrorPage(ctx *router.PageContext) (g.Node, error) {
 	if errorCode == "" {
 		errorCode = "500"
 	}
+
 	if errorMessage == "" {
 		errorMessage = "An unexpected error occurred"
 	}
@@ -160,7 +161,7 @@ func (p *PagesManager) ErrorPage(ctx *router.PageContext) (g.Node, error) {
 	), nil
 }
 
-// ForbiddenPage displays a 403 access denied page
+// ForbiddenPage displays a 403 access denied page.
 func (p *PagesManager) ForbiddenPage(loginURL string) g.Node {
 	return primitives.Container(
 		Div(

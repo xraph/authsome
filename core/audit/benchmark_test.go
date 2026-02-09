@@ -14,9 +14,10 @@ import (
 // PERFORMANCE BENCHMARKS
 // =============================================================================
 
-// BenchmarkEventCreation benchmarks audit event creation
+// BenchmarkEventCreation benchmarks audit event creation.
 func BenchmarkEventCreation(b *testing.B) {
 	ctx := context.Background()
+
 	service, _ := setupBenchService(b)
 	if service == nil {
 		b.Skip("Service not available for benchmark")
@@ -28,8 +29,7 @@ func BenchmarkEventCreation(b *testing.B) {
 		Resource: "/api/v1/auth",
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := service.Create(ctx, req)
 		if err != nil {
 			b.Fatal(err)
@@ -37,9 +37,10 @@ func BenchmarkEventCreation(b *testing.B) {
 	}
 }
 
-// BenchmarkStreamingThroughput benchmarks WebSocket streaming throughput
+// BenchmarkStreamingThroughput benchmarks WebSocket streaming throughput.
 func BenchmarkStreamingThroughput(b *testing.B) {
 	ctx := context.Background()
+
 	streamService := setupBenchStreamService(b)
 	if streamService == nil {
 		b.Skip("Stream service not available for benchmark")
@@ -74,16 +75,16 @@ func BenchmarkStreamingThroughput(b *testing.B) {
 		CreatedAt: time.Now(),
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Simulate event production
 		_ = testEvent
 	}
 }
 
-// BenchmarkBaselineCalculation benchmarks baseline calculation
+// BenchmarkBaselineCalculation benchmarks baseline calculation.
 func BenchmarkBaselineCalculation(b *testing.B) {
 	ctx := context.Background()
+
 	_, repo := setupBenchService(b)
 	if repo == nil {
 		b.Skip("Repository not available for benchmark")
@@ -95,8 +96,7 @@ func BenchmarkBaselineCalculation(b *testing.B) {
 	// Prepopulate user events for past 30 days
 	prepopulateUserEvents(b, repo, userID, 30*24*time.Hour, 1000)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := baselineCalc.Calculate(ctx, userID, 30*24*time.Hour)
 		if err != nil {
 			b.Fatal(err)
@@ -104,7 +104,7 @@ func BenchmarkBaselineCalculation(b *testing.B) {
 	}
 }
 
-// BenchmarkAnomalyDetection benchmarks anomaly detection
+// BenchmarkAnomalyDetection benchmarks anomaly detection.
 func BenchmarkAnomalyDetection(b *testing.B) {
 	ctx := context.Background()
 	detector := audit.NewAnomalyDetector()
@@ -125,8 +125,7 @@ func BenchmarkAnomalyDetection(b *testing.B) {
 		CreatedAt: time.Now().Truncate(24 * time.Hour).Add(3 * time.Hour), // 3 AM
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := detector.DetectAnomalies(ctx, testEvent, baseline)
 		if err != nil {
 			b.Fatal(err)
@@ -134,7 +133,7 @@ func BenchmarkAnomalyDetection(b *testing.B) {
 	}
 }
 
-// BenchmarkRiskScoring benchmarks risk score calculation
+// BenchmarkRiskScoring benchmarks risk score calculation.
 func BenchmarkRiskScoring(b *testing.B) {
 	ctx := context.Background()
 	riskEngine := audit.NewRiskEngine()
@@ -151,8 +150,7 @@ func BenchmarkRiskScoring(b *testing.B) {
 		{Type: "temporal_anomaly", Score: 60.0},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := riskEngine.Calculate(ctx, testEvent, anomalies, nil)
 		if err != nil {
 			b.Fatal(err)
@@ -160,15 +158,14 @@ func BenchmarkRiskScoring(b *testing.B) {
 	}
 }
 
-// BenchmarkSIEMExport benchmarks SIEM export throughput
+// BenchmarkSIEMExport benchmarks SIEM export throughput.
 func BenchmarkSIEMExport(b *testing.B) {
 	ctx := context.Background()
 	mockExporter := &MockExporter{name: "mock"}
 
 	testEvents := createBenchEvents(100)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := mockExporter.Export(ctx, testEvents)
 		if err != nil {
 			b.Fatal(err)
@@ -176,7 +173,7 @@ func BenchmarkSIEMExport(b *testing.B) {
 	}
 }
 
-// BenchmarkExportManager_Batching benchmarks export manager batching
+// BenchmarkExportManager_Batching benchmarks export manager batching.
 func BenchmarkExportManager_Batching(b *testing.B) {
 	manager := exporters.NewExportManager()
 	mockExporter := &MockExporter{name: "mock"}
@@ -194,8 +191,7 @@ func BenchmarkExportManager_Batching(b *testing.B) {
 		CreatedAt: time.Now(),
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := manager.Export(testEvent)
 		if err != nil {
 			b.Fatal(err)
@@ -220,6 +216,7 @@ func setupBenchStreamService(b *testing.B) *audit.PollingStreamService {
 	if repo == nil {
 		return nil
 	}
+
 	return audit.NewPollingStreamService(repo)
 }
 
@@ -239,7 +236,7 @@ func prepopulateUserEvents(b *testing.B, repo audit.Repository, userID xid.ID, p
 
 func createBenchEvents(count int) []*audit.Event {
 	events := make([]*audit.Event, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		events[i] = &audit.Event{
 			ID:        xid.New(),
 			AppID:     xid.New(),
@@ -249,6 +246,7 @@ func createBenchEvents(count int) []*audit.Event {
 			CreatedAt: time.Now(),
 		}
 	}
+
 	return events
 }
 
@@ -256,7 +254,7 @@ func createBenchEvents(count int) []*audit.Event {
 // MOCK EXPORTER FOR TESTING
 // =============================================================================
 
-// MockExporter for testing
+// MockExporter for testing.
 type MockExporter struct {
 	name          string
 	exportedCount int
@@ -268,6 +266,7 @@ func (m *MockExporter) Name() string {
 
 func (m *MockExporter) Export(ctx context.Context, events []*audit.Event) error {
 	m.exportedCount += len(events)
+
 	return nil
 }
 

@@ -1,6 +1,6 @@
 package types
 
-// Pagination options
+// Pagination options.
 type PaginationOptions struct {
 	Page     int
 	PageSize int
@@ -8,7 +8,7 @@ type PaginationOptions struct {
 	OrderDir string // "asc" or "desc"
 }
 
-// DefaultPagination returns default pagination options
+// DefaultPagination returns default pagination options.
 func DefaultPagination() PaginationOptions {
 	return PaginationOptions{
 		Page:     1,
@@ -18,9 +18,9 @@ func DefaultPagination() PaginationOptions {
 	}
 }
 
-// PaginatedResult represents a paginated result
+// PaginatedResult represents a paginated result.
 type PaginatedResult struct {
-	Data       interface{}
+	Data       any
 	Total      int
 	Page       int
 	PageSize   int

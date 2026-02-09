@@ -19,7 +19,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the email verification plugin
+// Plugin implements the email verification plugin.
 type Plugin struct {
 	service       *Service
 	notifAdapter  *notificationPlugin.Adapter
@@ -30,7 +30,7 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// Config holds the email verification plugin configuration
+// Config holds the email verification plugin configuration.
 type Config struct {
 	// TokenLength is the length of the verification token in bytes
 	TokenLength int `json:"tokenLength"`
@@ -48,7 +48,7 @@ type Config struct {
 	DevExposeToken bool `json:"devExposeToken"`
 }
 
-// DefaultConfig returns the default email verification plugin configuration
+// DefaultConfig returns the default email verification plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		TokenLength:          32,
@@ -61,59 +61,59 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the email verification plugin
+// PluginOption is a functional option for configuring the email verification plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithTokenLength sets the verification token length
+// WithTokenLength sets the verification token length.
 func WithTokenLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.TokenLength = length
 	}
 }
 
-// WithExpiryHours sets the token expiry time in hours
+// WithExpiryHours sets the token expiry time in hours.
 func WithExpiryHours(hours int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.ExpiryHours = hours
 	}
 }
 
-// WithMaxResendPerHour sets the maximum resend requests per hour
+// WithMaxResendPerHour sets the maximum resend requests per hour.
 func WithMaxResendPerHour(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxResendPerHour = max
 	}
 }
 
-// WithAutoSendOnSignup sets whether to automatically send verification on signup
+// WithAutoSendOnSignup sets whether to automatically send verification on signup.
 func WithAutoSendOnSignup(enable bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoSendOnSignup = enable
 	}
 }
 
-// WithAutoLoginAfterVerify sets whether to auto-login after verification
+// WithAutoLoginAfterVerify sets whether to auto-login after verification.
 func WithAutoLoginAfterVerify(enable bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AutoLoginAfterVerify = enable
 	}
 }
 
-// WithVerificationURL sets the frontend verification URL
+// WithVerificationURL sets the frontend verification URL.
 func WithVerificationURL(url string) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.VerificationURL = url
 	}
 }
 
-// NewPlugin creates a new email verification plugin instance
+// NewPlugin creates a new email verification plugin instance.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		defaultConfig: DefaultConfig(),
@@ -207,6 +207,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(handler)
 		}
+
 		return handler
 	}
 
@@ -275,6 +276,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				authCtx, ok := contexts.GetAuthContext(ctx)
 				if !ok || authCtx == nil {
 					p.logger.Warn("auth context not available in after sign up hook")
+
 					return nil // Don't fail the sign-up
 				}
 
@@ -282,6 +284,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 				appID := authCtx.AppID
 				if appID.IsNil() {
 					p.logger.Warn("app ID not available in auth context")
+
 					return nil // Don't fail the sign-up
 				}
 
@@ -294,6 +297,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 					// Don't fail the sign-up - user can request resend
 				}
 			}
+
 			return nil
 		})
 

@@ -24,10 +24,10 @@ import (
 var (
 	// E.164 phone number format: +[country code][subscriber number]
 	// Example: +1234567890, +442071838750
-	// Minimum 7 digits (e.g., +1234567), maximum 15 digits total
+	// Minimum 7 digits (e.g., +1234567), maximum 15 digits total.
 	phoneRegex = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
 
-	// Common errors
+	// Common errors.
 	ErrInvalidPhoneFormat = errors.New("invalid phone number format, must be E.164 format (e.g., +1234567890)")
 	ErrMissingPhone       = errors.New("phone number is required")
 	ErrMissingCode        = errors.New("verification code is required")
@@ -50,12 +50,15 @@ func NewService(r *repo.PhoneRepository, users *user.Service, authSvc *auth.Serv
 	if cfg.CodeLength == 0 {
 		cfg.CodeLength = 6
 	}
+
 	if cfg.ExpiryMinutes == 0 {
 		cfg.ExpiryMinutes = 10
 	}
+
 	if cfg.MaxAttempts == 0 {
 		cfg.MaxAttempts = 5
 	}
+
 	return &Service{
 		repo:         r,
 		users:        users,
@@ -66,19 +69,21 @@ func NewService(r *repo.PhoneRepository, users *user.Service, authSvc *auth.Serv
 	}
 }
 
-// validatePhone validates phone number in E.164 format
+// validatePhone validates phone number in E.164 format.
 func validatePhone(phone string) error {
 	p := strings.TrimSpace(phone)
 	if p == "" {
 		return ErrMissingPhone
 	}
+
 	if !phoneRegex.MatchString(p) {
 		return ErrInvalidPhoneFormat
 	}
+
 	return nil
 }
 
-// generateSecureCode generates a cryptographically secure numeric code
+// generateSecureCode generates a cryptographically secure numeric code.
 func generateSecureCode(length int) (string, error) {
 	if length <= 0 {
 		return "", errors.New("code length must be positive")
@@ -86,7 +91,7 @@ func generateSecureCode(length int) (string, error) {
 
 	// Calculate max value (10^length)
 	max := big.NewInt(1)
-	for i := 0; i < length; i++ {
+	for range length {
 		max.Mul(max, big.NewInt(10))
 	}
 
@@ -109,6 +114,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 	// Get app and org from context
 	appID, _ := contexts.GetAppID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -130,6 +136,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 				fmt.Sprintf("phone:%s error:%s", p, err.Error()), ip, ua,
 				fmt.Sprintf(`{"phone":"%s","error":"%s","app_id":"%s"}`, p, err.Error(), appID.String()))
 		}
+
 		return "", fmt.Errorf("failed to create verification code: %w", err)
 	}
 
@@ -157,6 +164,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 							if userOrgID != nil {
 								return userOrgID.String()
 							}
+
 							return ""
 						}()))
 			}
@@ -175,6 +183,7 @@ func (s *Service) SendCode(ctx context.Context, phone, ip, ua string) (string, e
 	if s.config.DevExposeCode {
 		return otp, nil
 	}
+
 	return "", nil
 }
 
@@ -187,9 +196,11 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	if err := validatePhone(p); err != nil {
 		return nil, err
 	}
+
 	if c == "" {
 		return nil, ErrMissingCode
 	}
+
 	if e == "" {
 		return nil, ErrMissingEmail
 	}
@@ -197,6 +208,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 	// Get app and org from context
 	appID, _ := contexts.GetAppID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var userOrgID *xid.ID
 	if orgID != xid.NilID() {
 		userOrgID = &orgID
@@ -211,8 +223,10 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","error":"%s"}`, p, e, err.Error()))
 		}
+
 		return nil, fmt.Errorf("failed to find verification code: %w", err)
 	}
+
 	if rec == nil {
 		// Audit expired/not found
 		if s.audit != nil {
@@ -221,8 +235,10 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 				ip, ua,
 				fmt.Sprintf(`{"phone":"%s","email":"%s","reason":"expired_or_not_found"}`, p, e))
 		}
+
 		return nil, ErrCodeExpired
 	}
+
 	if rec.Attempts >= s.config.MaxAttempts {
 		// Audit too many attempts
 		if s.audit != nil {
@@ -232,8 +248,10 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 				fmt.Sprintf(`{"phone":"%s","email":"%s","attempts":%d,"max_attempts":%d}`,
 					p, e, rec.Attempts, s.config.MaxAttempts))
 		}
+
 		return nil, ErrTooManyAttempts
 	}
+
 	if rec.Code != c {
 		_ = s.repo.IncrementAttempts(ctx, rec)
 		// Audit failed verification attempt
@@ -244,11 +262,13 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 				fmt.Sprintf(`{"phone":"%s","email":"%s","attempt":%d,"remaining_attempts":%d}`,
 					p, e, rec.Attempts+1, s.config.MaxAttempts-rec.Attempts-1))
 		}
+
 		return nil, ErrInvalidCode
 	}
 
 	// Mark code as consumed
 	_ = s.repo.Consume(ctx, rec, time.Now())
+
 	u, err := s.users.FindByEmail(ctx, e)
 	if err != nil || u == nil {
 		if !s.config.AllowImplicitSignup {
@@ -259,7 +279,8 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","email":"%s","implicit_signup_enabled":false}`, p, e))
 			}
-			return nil, fmt.Errorf("user not found and implicit signup is disabled")
+
+			return nil, errors.New("user not found and implicit signup is disabled")
 		}
 
 		// Create user via implicit signup
@@ -271,9 +292,12 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","email":"%s","error":"%s"}`, p, e, genErr.Error()))
 			}
+
 			return nil, fmt.Errorf("failed to generate password: %w", genErr)
 		}
+
 		name := e
+
 		u, err = s.users.Create(ctx, &user.CreateUserRequest{Email: e, Password: pwd, Name: name})
 		if err != nil {
 			// Audit user creation failure
@@ -283,6 +307,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 					ip, ua,
 					fmt.Sprintf(`{"phone":"%s","email":"%s","error":"%s"}`, p, e, err.Error()))
 			}
+
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
 
@@ -319,6 +344,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 				fmt.Sprintf(`{"phone":"%s","email":"%s","user_id":"%s","error":"%s"}`,
 					p, e, uid.String(), err.Error()))
 		}
+
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 

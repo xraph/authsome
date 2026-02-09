@@ -2,7 +2,7 @@ package apikey
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -10,10 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/pagination"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// mockEnvironmentRepository implements EnvironmentRepository for testing
+// mockEnvironmentRepository implements EnvironmentRepository for testing.
 type mockEnvironmentRepository struct {
 	environments map[xid.ID]*schema.Environment
 }
@@ -22,16 +23,18 @@ func (m *mockEnvironmentRepository) FindByID(ctx context.Context, id xid.ID) (*s
 	if env, ok := m.environments[id]; ok {
 		return env, nil
 	}
-	return nil, fmt.Errorf("environment not found")
+
+	return nil, errs.New(errs.CodeNotFound, "environment not found", http.StatusNotFound)
 }
 
-// mockAPIKeyRepository implements Repository for testing
+// mockAPIKeyRepository implements Repository for testing.
 type mockAPIKeyRepository struct {
 	keys map[xid.ID]*schema.APIKey
 }
 
 func (m *mockAPIKeyRepository) CreateAPIKey(ctx context.Context, key *schema.APIKey) error {
 	m.keys[key.ID] = key
+
 	return nil
 }
 
@@ -39,6 +42,7 @@ func (m *mockAPIKeyRepository) FindAPIKeyByID(ctx context.Context, id xid.ID) (*
 	if key, ok := m.keys[id]; ok {
 		return key, nil
 	}
+
 	return nil, ErrAPIKeyNotFound
 }
 
@@ -48,6 +52,7 @@ func (m *mockAPIKeyRepository) FindAPIKeyByPrefix(ctx context.Context, prefix st
 			return key, nil
 		}
 	}
+
 	return nil, ErrAPIKeyNotFound
 }
 
@@ -57,6 +62,7 @@ func (m *mockAPIKeyRepository) ListAPIKeys(ctx context.Context, filter *ListAPIK
 
 func (m *mockAPIKeyRepository) UpdateAPIKey(ctx context.Context, key *schema.APIKey) error {
 	m.keys[key.ID] = key
+
 	return nil
 }
 
@@ -67,13 +73,16 @@ func (m *mockAPIKeyRepository) UpdateAPIKeyUsage(ctx context.Context, id xid.ID,
 func (m *mockAPIKeyRepository) DeactivateAPIKey(ctx context.Context, id xid.ID) error {
 	if key, ok := m.keys[id]; ok {
 		key.Active = false
+
 		return nil
 	}
+
 	return ErrAPIKeyNotFound
 }
 
 func (m *mockAPIKeyRepository) DeleteAPIKey(ctx context.Context, id xid.ID) error {
 	delete(m.keys, id)
+
 	return nil
 }
 
@@ -221,10 +230,10 @@ func TestGeneratePrefix_EnvironmentTypes(t *testing.T) {
 			// The key should be in format: prefix.secret
 			// And prefix should be: {type}_{env}_{random}
 			parts := splitKeyParts(key.Key)
-			assert.Equal(t, 2, len(parts), "Key should have 2 parts (prefix.secret)")
+			assert.Len(t, parts, 2, "Key should have 2 parts (prefix.secret)")
 
 			prefix := parts[0]
-			assert.True(t, len(prefix) > len(tt.expectedPrefix),
+			assert.Greater(t, len(prefix), len(tt.expectedPrefix),
 				"Prefix should include random suffix")
 			assert.True(t, startsWith(prefix, tt.expectedPrefix),
 				"Prefix should start with %s, got: %s", tt.expectedPrefix, prefix)
@@ -294,7 +303,7 @@ func TestGeneratePrefix_Caching(t *testing.T) {
 	assert.Contains(t, key2.Key, "sk_dev_")
 
 	// Verify cache is populated
-	assert.Equal(t, 1, len(service.envCache), "Cache should have 1 entry")
+	assert.Len(t, service.envCache, 1, "Cache should have 1 entry")
 	assert.Equal(t, "dev", service.envCache[devEnvID], "Cache should map devEnvID to 'dev'")
 }
 
@@ -337,6 +346,7 @@ func TestGeneratePrefix_ErrorHandling(t *testing.T) {
 func splitKeyParts(key string) []string {
 	parts := []string{}
 	current := ""
+
 	for _, c := range key {
 		if c == '.' {
 			parts = append(parts, current)
@@ -345,9 +355,11 @@ func splitKeyParts(key string) []string {
 			current += string(c)
 		}
 	}
+
 	if current != "" {
 		parts = append(parts, current)
 	}
+
 	return parts
 }
 
@@ -355,5 +367,6 @@ func startsWith(s, prefix string) bool {
 	if len(s) < len(prefix) {
 		return false
 	}
+
 	return s[:len(prefix)] == prefix
 }

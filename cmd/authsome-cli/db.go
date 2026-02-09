@@ -18,39 +18,47 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 )
 
-// connectDatabaseMulti creates a database connection with support for PostgreSQL, MySQL, and SQLite
+// connectDatabaseMulti creates a database connection with support for PostgreSQL, MySQL, and SQLite.
 func connectDatabaseMulti() (*bun.DB, error) {
 	// Get database URL from config or environment
 	dbURL := viper.GetString("database.url")
 	if dbURL == "" {
 		dbURL = os.Getenv("DATABASE_URL")
 	}
+
 	if dbURL == "" {
 		dbURL = "authsome.db" // Default SQLite database
 	}
 
-	var sqldb *sql.DB
-	var db *bun.DB
-	var err error
+	var (
+		sqldb *sql.DB
+		db    *bun.DB
+		err   error
+	)
 
 	// Determine database type from URL
+
 	if strings.HasPrefix(dbURL, "postgres://") || strings.HasPrefix(dbURL, "postgresql://") {
 		// PostgreSQL
 		connector := pgdriver.NewConnector(pgdriver.WithDSN(dbURL))
 		sqldb = sql.OpenDB(connector)
 		db = bun.NewDB(sqldb, pgdialect.New())
+
 		if verbose {
 			log.Printf("Connected to PostgreSQL")
 		}
-	} else if strings.HasPrefix(dbURL, "mysql://") {
+	} else if after, ok := strings.CutPrefix(dbURL, "mysql://"); ok {
 		// MySQL
 		// Remove mysql:// prefix for go-sql-driver
-		mysqlDSN := strings.TrimPrefix(dbURL, "mysql://")
+		mysqlDSN := after
+
 		sqldb, err = sql.Open("mysql", mysqlDSN)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open MySQL connection: %w", err)
 		}
+
 		db = bun.NewDB(sqldb, mysqldialect.New())
+
 		if verbose {
 			log.Printf("Connected to MySQL")
 		}
@@ -70,7 +78,9 @@ func connectDatabaseMulti() (*bun.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open SQLite connection: %w", err)
 		}
+
 		db = bun.NewDB(sqldb, sqlitedialect.New())
+
 		if verbose {
 			log.Printf("Connected to SQLite: %s", dbURL)
 		}

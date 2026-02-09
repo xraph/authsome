@@ -11,9 +11,9 @@ import (
 // TEMPLATE KEY CONSTANTS
 // =============================================================================
 
-// Template key constants for predefined notification templates
+// Template key constants for predefined notification templates.
 const (
-	// Authentication templates
+	// Authentication templates.
 	TemplateKeyWelcome       = "auth.welcome"
 	TemplateKeyVerifyEmail   = "auth.verify_email"
 	TemplateKeyPasswordReset = "auth.password_reset"
@@ -23,7 +23,7 @@ const (
 	TemplateKeyPhoneOTP      = "auth.phone_otp"
 	TemplateKeySecurityAlert = "auth.security_alert"
 
-	// Organization templates
+	// Organization templates.
 	TemplateKeyOrgInvite        = "org.invite"
 	TemplateKeyOrgMemberAdded   = "org.member_added"
 	TemplateKeyOrgMemberRemoved = "org.member_removed"
@@ -32,7 +32,7 @@ const (
 	TemplateKeyOrgDeleted       = "org.deleted"
 	TemplateKeyOrgMemberLeft    = "org.member_left"
 
-	// Account management templates
+	// Account management templates.
 	TemplateKeyEmailChangeRequest = "account.email_change_request"
 	TemplateKeyEmailChanged       = "account.email_changed"
 	TemplateKeyPasswordChanged    = "account.password_changed"
@@ -42,21 +42,21 @@ const (
 	TemplateKeyAccountReactivated = "account.reactivated"
 	TemplateKeyDataExportReady    = "account.data_export_ready"
 
-	// Session/device templates
+	// Session/device templates.
 	TemplateKeyNewDeviceLogin     = "session.new_device"
 	TemplateKeyNewLocationLogin   = "session.new_location"
 	TemplateKeySuspiciousLogin    = "session.suspicious_login"
 	TemplateKeyDeviceRemoved      = "session.device_removed"
 	TemplateKeyAllSessionsRevoked = "session.all_revoked"
 
-	// Reminder templates
+	// Reminder templates.
 	TemplateKeyVerificationReminder = "reminder.verification"
 	TemplateKeyInactiveAccount      = "reminder.inactive"
 	TemplateKeyTrialExpiring        = "reminder.trial_expiring"
 	TemplateKeySubscriptionExpiring = "reminder.subscription_expiring"
 	TemplateKeyPasswordExpiring     = "reminder.password_expiring"
 
-	// Admin/moderation templates
+	// Admin/moderation templates.
 	TemplateKeyAccountLocked        = "admin.account_locked"
 	TemplateKeyAccountUnlocked      = "admin.account_unlocked"
 	TemplateKeyTermsUpdate          = "admin.terms_update"
@@ -69,7 +69,7 @@ const (
 // TEMPLATE METADATA
 // =============================================================================
 
-// TemplateMetadata contains metadata about a template including default content
+// TemplateMetadata contains metadata about a template including default content.
 type TemplateMetadata struct {
 	Key             string               `json:"key"`
 	Name            string               `json:"name"`
@@ -82,7 +82,7 @@ type TemplateMetadata struct {
 	DefaultBodyHTML string               `json:"defaultBodyHTML,omitempty"`
 }
 
-// createTemplateMetadataFromBuilder generates TemplateMetadata from a builder template
+// createTemplateMetadataFromBuilder generates TemplateMetadata from a builder template.
 func createTemplateMetadataFromBuilder(
 	key, name, description, builderKey string,
 	variables []string,
@@ -91,7 +91,7 @@ func createTemplateMetadataFromBuilder(
 	return createTemplateMetadataFromBuilderWithPriority(key, name, description, builderKey, variables, subject, PriorityNormal)
 }
 
-// createTemplateMetadataFromBuilderWithPriority generates TemplateMetadata with explicit priority
+// createTemplateMetadataFromBuilderWithPriority generates TemplateMetadata with explicit priority.
 func createTemplateMetadataFromBuilderWithPriority(
 	key, name, description, builderKey string,
 	variables []string,
@@ -116,6 +116,7 @@ func createTemplateMetadataFromBuilderWithPriority(
 
 	// Render to HTML
 	renderer := builder.NewRenderer(doc)
+
 	html, err := renderer.RenderToHTML()
 	if err != nil {
 		html = "Template rendering failed"
@@ -137,7 +138,7 @@ func createTemplateMetadataFromBuilderWithPriority(
 	}
 }
 
-// stripHTMLTags removes HTML tags for plain text fallback
+// stripHTMLTags removes HTML tags for plain text fallback.
 func stripHTMLTags(html string) string {
 	// Remove HTML tags
 	re := regexp.MustCompile(`<[^>]*>`)
@@ -146,7 +147,9 @@ func stripHTMLTags(html string) string {
 	// Clean up whitespace
 	text = strings.TrimSpace(text)
 	lines := strings.Split(text, "\n")
+
 	var cleaned []string
+
 	for _, line := range lines {
 		if trimmed := strings.TrimSpace(line); trimmed != "" {
 			cleaned = append(cleaned, trimmed)
@@ -156,7 +159,7 @@ func stripHTMLTags(html string) string {
 	return strings.Join(cleaned, "\n")
 }
 
-// GetDefaultTemplateMetadata returns metadata for all default templates
+// GetDefaultTemplateMetadata returns metadata for all default templates.
 func GetDefaultTemplateMetadata() []TemplateMetadata {
 	return []TemplateMetadata{
 		{
@@ -759,7 +762,7 @@ The {{.appName}} Security Team`,
 	}
 }
 
-// GetDefaultTemplate retrieves default template metadata by key
+// GetDefaultTemplate retrieves default template metadata by key.
 func GetDefaultTemplate(key string) (*TemplateMetadata, error) {
 	templates := GetDefaultTemplateMetadata()
 	for _, template := range templates {
@@ -767,33 +770,39 @@ func GetDefaultTemplate(key string) (*TemplateMetadata, error) {
 			return &template, nil
 		}
 	}
+
 	return nil, TemplateNotFound()
 }
 
-// GetTemplateKeysByType returns all template keys for a specific notification type
+// GetTemplateKeysByType returns all template keys for a specific notification type.
 func GetTemplateKeysByType(notifType NotificationType) []string {
 	templates := GetDefaultTemplateMetadata()
+
 	var keys []string
+
 	for _, template := range templates {
 		if template.Type == notifType {
 			keys = append(keys, template.Key)
 		}
 	}
+
 	return keys
 }
 
-// ValidateTemplateKey checks if a template key is a valid default template key
+// ValidateTemplateKey checks if a template key is a valid default template key.
 func ValidateTemplateKey(key string) bool {
 	_, err := GetDefaultTemplate(key)
+
 	return err == nil
 }
 
 // GetTemplatePriority returns the default priority for a template key
-// Returns PriorityNormal if template not found
+// Returns PriorityNormal if template not found.
 func GetTemplatePriority(key string) NotificationPriority {
 	template, err := GetDefaultTemplate(key)
 	if err != nil || template.Priority == "" {
 		return PriorityNormal
 	}
+
 	return template.Priority
 }

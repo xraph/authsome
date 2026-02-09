@@ -6,21 +6,21 @@ import (
 	g "maragu.dev/gomponents"
 )
 
-// NavigationPosition defines where a navigation item should be placed
+// NavigationPosition defines where a navigation item should be placed.
 type NavigationPosition string
 
 const (
-	// NavPositionMain places the item in the main navigation bar
+	// NavPositionMain places the item in the main navigation bar.
 	NavPositionMain NavigationPosition = "main"
-	// NavPositionSettings places the item in the settings section
+	// NavPositionSettings places the item in the settings section.
 	NavPositionSettings NavigationPosition = "settings"
-	// NavPositionUserDropdown places the item in the user dropdown menu
+	// NavPositionUserDropdown places the item in the user dropdown menu.
 	NavPositionUserDropdown NavigationPosition = "user_dropdown"
-	// NavPositionFooter places the item in the footer
+	// NavPositionFooter places the item in the footer.
 	NavPositionFooter NavigationPosition = "footer"
 )
 
-// NavigationItem represents a navigation link registered by a plugin
+// NavigationItem represents a navigation link registered by a plugin.
 type NavigationItem struct {
 	// ID is a unique identifier for this nav item (e.g., "multisession")
 	ID string
@@ -46,7 +46,7 @@ type NavigationItem struct {
 	PermissionRequired string
 }
 
-// Route represents a route registered by a plugin extension
+// Route represents a route registered by a plugin extension.
 type Route struct {
 	// Method is the HTTP method (GET, POST, etc.)
 	Method string
@@ -72,7 +72,7 @@ type Route struct {
 }
 
 // SettingsSection represents a section in the settings page
-// Deprecated: Use SettingsPage instead for full-page settings
+// Deprecated: Use SettingsPage instead for full-page settings.
 type SettingsSection struct {
 	// ID is a unique identifier for this section
 	ID string
@@ -88,7 +88,7 @@ type SettingsSection struct {
 	Renderer func(basePath string, currentApp *app.App) g.Node
 }
 
-// SettingsPage represents a full settings page in the sidebar navigation
+// SettingsPage represents a full settings page in the sidebar navigation.
 type SettingsPage struct {
 	// ID is a unique identifier for this page (e.g., "role-templates", "api-keys")
 	ID string
@@ -110,7 +110,7 @@ type SettingsPage struct {
 	RequireAdmin bool
 }
 
-// DashboardWidget represents a widget on the dashboard home page
+// DashboardWidget represents a widget on the dashboard home page.
 type DashboardWidget struct {
 	// ID is a unique identifier for this widget
 	ID string
@@ -127,7 +127,7 @@ type DashboardWidget struct {
 }
 
 // BridgeFunction represents a bridge function that extensions can register
-// Bridge functions are callable from the frontend using $bridge.call('extensionID.functionName', params)
+// Bridge functions are callable from the frontend using $bridge.call('extensionID.functionName', params).
 type BridgeFunction struct {
 	// Name is the function name (will be prefixed with extensionID, e.g., "cms.getEntries")
 	Name string
@@ -135,17 +135,17 @@ type BridgeFunction struct {
 	// Handler is the function that handles the bridge call
 	// Signature: func(ctx bridge.Context, input T) (output U, error)
 	// The handler receives typed input and returns typed output with error handling
-	Handler interface{}
+	Handler any
 
 	// Description for documentation/debugging
 	Description string
 
 	// Options for bridge registration (auth requirements, rate limiting, etc.)
 	// Use bridge.RequireAuth(), bridge.RequireRoles("admin"), etc.
-	Options []interface{} // Will be bridge.Option from forgeui/bridge
+	Options []any // Will be bridge.Option from forgeui/bridge
 }
 
-// DashboardExtension is the interface that plugins implement to extend the dashboard
+// DashboardExtension is the interface that plugins implement to extend the dashboard.
 type DashboardExtension interface {
 	// ExtensionID returns a unique identifier for this extension
 	ExtensionID() string

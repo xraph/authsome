@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// generateHTTPMiddleware generates http.RoundTripper middleware for the Go client
+// generateHTTPMiddleware generates http.RoundTripper middleware for the Go client.
 func (g *GoGenerator) generateHTTPMiddleware() error {
 	var sb strings.Builder
 

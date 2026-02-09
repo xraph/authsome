@@ -2,7 +2,7 @@ package app
 
 import "github.com/rs/xid"
 
-// Config represents app service configuration
+// Config represents app service configuration.
 type Config struct {
 	// PlatformAppID is the ID of the platform app (super admin)
 	PlatformAppID xid.ID `json:"platformAppId"`

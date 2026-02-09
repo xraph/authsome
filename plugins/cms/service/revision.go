@@ -11,13 +11,13 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// RevisionService handles revision operations
+// RevisionService handles revision operations.
 type RevisionService struct {
 	repo   repository.RevisionRepository
 	logger forge.Logger
 }
 
-// NewRevisionService creates a new revision service
+// NewRevisionService creates a new revision service.
 func NewRevisionService(repo repository.RevisionRepository, logger forge.Logger) *RevisionService {
 	return &RevisionService{
 		repo:   repo,
@@ -25,7 +25,7 @@ func NewRevisionService(repo repository.RevisionRepository, logger forge.Logger)
 	}
 }
 
-// List returns revisions for an entry
+// List returns revisions for an entry.
 func (s *RevisionService) List(ctx context.Context, entryID xid.ID, query *core.ListRevisionsQuery) (*core.PaginatedResponse[*core.RevisionDTO], error) {
 	if query == nil {
 		query = &core.ListRevisionsQuery{
@@ -37,6 +37,7 @@ func (s *RevisionService) List(ctx context.Context, entryID xid.ID, query *core.
 	if query.Page < 1 {
 		query.Page = 1
 	}
+
 	if query.PageSize < 1 {
 		query.PageSize = 20
 	}
@@ -65,7 +66,7 @@ func (s *RevisionService) List(ctx context.Context, entryID xid.ID, query *core.
 	}, nil
 }
 
-// GetByVersion returns a specific revision by version
+// GetByVersion returns a specific revision by version.
 func (s *RevisionService) GetByVersion(ctx context.Context, entryID xid.ID, version int) (*core.RevisionDTO, error) {
 	revision, err := s.repo.FindByVersion(ctx, entryID, version)
 	if err != nil {
@@ -75,7 +76,7 @@ func (s *RevisionService) GetByVersion(ctx context.Context, entryID xid.ID, vers
 	return s.toDTO(revision), nil
 }
 
-// Compare compares two revisions and returns the differences
+// Compare compares two revisions and returns the differences.
 func (s *RevisionService) Compare(ctx context.Context, entryID xid.ID, fromVersion, toVersion int) (*core.RevisionCompareDTO, error) {
 	fromRev, err := s.repo.FindByVersion(ctx, entryID, fromVersion)
 	if err != nil {
@@ -108,7 +109,7 @@ func (s *RevisionService) Compare(ctx context.Context, entryID xid.ID, fromVersi
 	}, nil
 }
 
-// Create creates a new revision
+// Create creates a new revision.
 func (s *RevisionService) Create(ctx context.Context, entryID xid.ID, data map[string]any, changedBy, reason string) (*core.RevisionDTO, error) {
 	// Get latest version
 	latestVersion, err := s.repo.GetLatestVersion(ctx, entryID)
@@ -138,7 +139,7 @@ func (s *RevisionService) Create(ctx context.Context, entryID xid.ID, data map[s
 	return s.toDTO(revision), nil
 }
 
-// CleanupOld removes old revisions exceeding the max count
+// CleanupOld removes old revisions exceeding the max count.
 func (s *RevisionService) CleanupOld(ctx context.Context, entryID xid.ID, maxRevisions int) error {
 	if maxRevisions < 1 {
 		maxRevisions = 50 // Default
@@ -147,7 +148,7 @@ func (s *RevisionService) CleanupOld(ctx context.Context, entryID xid.ID, maxRev
 	return s.repo.DeleteOldRevisions(ctx, entryID, maxRevisions)
 }
 
-// toDTO converts a revision model to DTO
+// toDTO converts a revision model to DTO.
 func (s *RevisionService) toDTO(rev *schema.ContentRevision) *core.RevisionDTO {
 	dto := &core.RevisionDTO{
 		ID:        rev.ID.String(),
@@ -160,5 +161,6 @@ func (s *RevisionService) toDTO(rev *schema.ContentRevision) *core.RevisionDTO {
 	if !rev.ChangedBy.IsNil() {
 		dto.ChangedBy = rev.ChangedBy.String()
 	}
+
 	return dto
 }

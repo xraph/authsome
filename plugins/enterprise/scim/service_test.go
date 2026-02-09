@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/core/user"
 )
 
-// Test basic SCIM user mapping
+// Test basic SCIM user mapping.
 func TestMapSCIMToAuthSomeUser(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -77,7 +77,7 @@ func TestMapSCIMToAuthSomeUser(t *testing.T) {
 	}
 }
 
-// Test SCIM user to AuthSome user mapping
+// Test SCIM user to AuthSome user mapping.
 func TestMapAuthSomeToSCIMUser(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -108,7 +108,7 @@ func TestMapAuthSomeToSCIMUser(t *testing.T) {
 	assert.NotNil(t, scimUser.Meta)
 }
 
-// Test helper functions
+// Test helper functions.
 func TestGetPrimaryEmail(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -165,7 +165,7 @@ func TestGetPrimaryEmail(t *testing.T) {
 	}
 }
 
-// Test validation
+// Test validation.
 func TestValidateUserAttributes(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -218,7 +218,7 @@ func TestValidateUserAttributes(t *testing.T) {
 	}
 }
 
-// Test patch operations
+// Test patch operations.
 func TestApplyPatchOperationToRequest(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -283,7 +283,7 @@ func TestApplyPatchOperationToRequest(t *testing.T) {
 	}
 }
 
-// Race condition tests
+// Race condition tests.
 func TestConcurrentGetPrimaryEmail(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -296,16 +296,17 @@ func TestConcurrentGetPrimaryEmail(t *testing.T) {
 	}
 
 	const goroutines = 100
+
 	done := make(chan string, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			email := service.getPrimaryEmail(scimUser)
 			done <- email
 		}()
 	}
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		email := <-done
 		assert.Equal(t, "test@example.com", email)
 	}
@@ -326,30 +327,33 @@ func TestConcurrentMapSCIMToAuthSomeUser(t *testing.T) {
 	}
 
 	const goroutines = 100
+
 	done := make(chan bool, goroutines)
 	errors := make(chan error, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			_, err := service.mapSCIMToAuthSomeUser(scimUser, xid.New())
 			if err != nil {
 				errors <- err
 			}
+
 			done <- true
 		}()
 	}
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		<-done
 	}
 
 	close(errors)
+
 	for err := range errors {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkMapSCIMToAuthSomeUser(b *testing.B) {
 	service := &Service{
 		config: DefaultConfig(),
@@ -364,8 +368,7 @@ func BenchmarkMapSCIMToAuthSomeUser(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = service.mapSCIMToAuthSomeUser(scimUser, xid.New())
 	}
 }
@@ -384,8 +387,7 @@ func BenchmarkMapAuthSomeToSCIMUser(b *testing.B) {
 		UpdatedAt:     time.Now(),
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = service.mapAuthSomeToSCIMUser(authUser, "ext123")
 	}
 }
@@ -402,8 +404,7 @@ func BenchmarkGetPrimaryEmail(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = service.getPrimaryEmail(scimUser)
 	}
 }
@@ -421,8 +422,7 @@ func BenchmarkValidateUserAttributes(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = service.validateUserAttributes(scimUser)
 	}
 }

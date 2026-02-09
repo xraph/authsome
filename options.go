@@ -13,10 +13,10 @@ import (
 	forgedb "github.com/xraph/forge/extensions/database"
 )
 
-// Option is a function that configures Auth
+// Option is a function that configures Auth.
 type Option func(*Auth)
 
-// WithForgeApp sets the Forge application instance
+// WithForgeApp sets the Forge application instance.
 func WithForgeApp(app forge.App) Option {
 	return func(a *Auth) {
 		a.forgeApp = app
@@ -24,8 +24,8 @@ func WithForgeApp(app forge.App) Option {
 }
 
 // WithDatabase sets the database connection directly (backwards compatible)
-// For new applications, consider using WithDatabaseManager with Forge's database extension
-func WithDatabase(db interface{}) Option {
+// For new applications, consider using WithDatabaseManager with Forge's database extension.
+func WithDatabase(db any) Option {
 	return func(a *Auth) {
 		a.db = db
 	}
@@ -33,7 +33,7 @@ func WithDatabase(db interface{}) Option {
 
 // WithDatabaseManager uses Forge's database extension DatabaseManager
 // This is the recommended approach when using Forge's database extension
-// The database will be resolved from the manager using the default or specified name
+// The database will be resolved from the manager using the default or specified name.
 func WithDatabaseManager(manager *forgedb.DatabaseManager, dbName ...string) Option {
 	return func(a *Auth) {
 		// Resolve database name (default if not specified)
@@ -50,28 +50,28 @@ func WithDatabaseManager(manager *forgedb.DatabaseManager, dbName ...string) Opt
 }
 
 // WithDatabaseFromForge resolves the database from Forge's DI container
-// This automatically uses the database extension if registered
+// This automatically uses the database extension if registered.
 func WithDatabaseFromForge() Option {
 	return func(a *Auth) {
 		a.config.UseForgeDI = true
 	}
 }
 
-// WithBasePath sets the base path for routes
+// WithBasePath sets the base path for routes.
 func WithBasePath(path string) Option {
 	return func(a *Auth) {
 		a.config.BasePath = path
 	}
 }
 
-// WithExcludeFromSchemas sets whether to exclude the extension from schemas
+// WithExcludeFromSchemas sets whether to exclude the extension from schemas.
 func WithGlobalRoutesOptions(opts ...forge.RouteOption) Option {
 	return func(a *Auth) {
 		a.globalRoutesOptions = append(a.globalRoutesOptions, opts...)
 	}
 }
 
-// WithGlobalGroupRoutesOptions sets the global group routes options
+// WithGlobalGroupRoutesOptions sets the global group routes options.
 func WithGlobalGroupRoutesOptions(opts ...forge.GroupOption) Option {
 	return func(a *Auth) {
 		a.globalGroupRoutesOptions = append(a.globalGroupRoutesOptions, opts...)
@@ -80,7 +80,7 @@ func WithGlobalGroupRoutesOptions(opts ...forge.GroupOption) Option {
 
 // WithCORSEnabled enables or disables CORS middleware
 // When enabled, uses TrustedOrigins for allowed origins
-// Default: false (disabled - let Forge or your app handle CORS)
+// Default: false (disabled - let Forge or your app handle CORS).
 func WithCORSEnabled(enabled bool) Option {
 	return func(a *Auth) {
 		a.config.CORSEnabled = enabled
@@ -88,14 +88,14 @@ func WithCORSEnabled(enabled bool) Option {
 }
 
 // WithTrustedOrigins sets trusted origins for CORS
-// Setting origins does NOT automatically enable CORS - use WithCORSEnabled(true)
+// Setting origins does NOT automatically enable CORS - use WithCORSEnabled(true).
 func WithTrustedOrigins(origins []string) Option {
 	return func(a *Auth) {
 		a.config.TrustedOrigins = origins
 	}
 }
 
-// WithSecret sets the secret for token signing
+// WithSecret sets the secret for token signing.
 func WithSecret(secret string) Option {
 	return func(a *Auth) {
 		a.config.Secret = secret
@@ -103,35 +103,35 @@ func WithSecret(secret string) Option {
 }
 
 // WithSecurityConfig sets security service configuration (IP rules, country rules)
-// Pass lists like IPWhitelist/IPBlacklist; Enabled true to enforce checks
+// Pass lists like IPWhitelist/IPBlacklist; Enabled true to enforce checks.
 func WithSecurityConfig(cfg sec.Config) Option {
 	return func(a *Auth) {
 		a.securityConfig = cfg
 	}
 }
 
-// WithRateLimitConfig sets rate limit configuration (enabled, default rule, per-path rules)
+// WithRateLimitConfig sets rate limit configuration (enabled, default rule, per-path rules).
 func WithRateLimitConfig(cfg rl.Config) Option {
 	return func(a *Auth) {
 		a.rateLimitConfig = cfg
 	}
 }
 
-// WithRateLimitStorage sets the rate limit storage backend (memory or redis)
+// WithRateLimitStorage sets the rate limit storage backend (memory or redis).
 func WithRateLimitStorage(storage rl.Storage) Option {
 	return func(a *Auth) {
 		a.rateLimitStorage = storage
 	}
 }
 
-// WithGeoIPProvider sets a GeoIP provider for country-based restrictions
+// WithGeoIPProvider sets a GeoIP provider for country-based restrictions.
 func WithGeoIPProvider(provider sec.GeoIPProvider) Option {
 	return func(a *Auth) {
 		a.geoipProvider = provider
 	}
 }
 
-// WithRBACEnforcement enables/disables handler-level RBAC enforcement
+// WithRBACEnforcement enables/disables handler-level RBAC enforcement.
 func WithRBACEnforcement(enabled bool) Option {
 	return func(a *Auth) {
 		a.config.RBACEnforce = enabled
@@ -142,7 +142,7 @@ func WithRBACEnforcement(enabled bool) Option {
 // This allows organizational separation of auth tables from application tables
 // Example: WithDatabaseSchema("auth") creates tables in the "auth" schema
 // Default: "" (uses database default, typically "public")
-// Note: Schema must be valid SQL identifier; will be created if it doesn't exist
+// Note: Schema must be valid SQL identifier; will be created if it doesn't exist.
 func WithDatabaseSchema(schema string) Option {
 	return func(a *Auth) {
 		a.config.DatabaseSchema = schema
@@ -166,7 +166,7 @@ func WithGlobalCookieConfig(config session.CookieConfig) Option {
 }
 
 // WithSessionCookieEnabled enables or disables cookie-based session management globally
-// When enabled, authentication responses will automatically set secure HTTP cookies
+// When enabled, authentication responses will automatically set secure HTTP cookies.
 func WithSessionCookieEnabled(enabled bool) Option {
 	return func(a *Auth) {
 		a.config.SessionCookie.Enabled = enabled
@@ -174,7 +174,7 @@ func WithSessionCookieEnabled(enabled bool) Option {
 }
 
 // WithSessionCookieName sets the session cookie name
-// Default: "authsome_session"
+// Default: "authsome_session".
 func WithSessionCookieName(name string) Option {
 	return func(a *Auth) {
 		a.config.SessionCookie.Name = name
@@ -273,6 +273,7 @@ func WithRefreshTokens(enabled bool, accessTTL, refreshTTL time.Duration) Option
 		if accessTTL > 0 {
 			a.config.SessionConfig.AccessTokenTTL = accessTTL
 		}
+
 		if refreshTTL > 0 {
 			a.config.SessionConfig.RefreshTokenTTL = refreshTTL
 		}
@@ -289,6 +290,7 @@ func WithSessionTTL(defaultTTL, rememberTTL time.Duration) Option {
 		if defaultTTL > 0 {
 			a.config.SessionConfig.DefaultTTL = defaultTTL
 		}
+
 		if rememberTTL > 0 {
 			a.config.SessionConfig.RememberTTL = rememberTTL
 		}

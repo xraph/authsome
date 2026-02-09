@@ -11,7 +11,7 @@ import (
 // Focused Service Interfaces (ISP Compliant)
 // =============================================================================
 
-// OrganizationOperations defines organization management operations
+// OrganizationOperations defines organization management operations.
 type OrganizationOperations interface {
 	// CreateOrganization creates a new user-created organization
 	CreateOrganization(ctx context.Context, req *CreateOrganizationRequest, creatorUserID, appID, environmentID xid.ID) (*Organization, error)
@@ -40,7 +40,7 @@ type OrganizationOperations interface {
 	ForceDeleteOrganization(ctx context.Context, id xid.ID) error
 }
 
-// MemberOperations defines member management operations
+// MemberOperations defines member management operations.
 type MemberOperations interface {
 	// AddMember adds a user as a member of an organization with a specified role
 	AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*Member, error)
@@ -98,7 +98,7 @@ type MemberOperations interface {
 	RequirePermission(ctx context.Context, orgID, userID xid.ID, action, resource string) error
 }
 
-// TeamOperations defines team management operations
+// TeamOperations defines team management operations.
 type TeamOperations interface {
 	// CreateTeam creates a new team within an organization
 	CreateTeam(ctx context.Context, orgID xid.ID, req *CreateTeamRequest, creatorUserID xid.ID) (*Team, error)
@@ -142,7 +142,7 @@ type TeamOperations interface {
 	ListMemberTeams(ctx context.Context, memberID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Team], error)
 }
 
-// InvitationOperations defines invitation management operations
+// InvitationOperations defines invitation management operations.
 type InvitationOperations interface {
 	// InviteMember creates an invitation for a user to join an organization
 	InviteMember(ctx context.Context, orgID xid.ID, req *InviteMemberRequest, inviterUserID xid.ID) (*Invitation, error)

@@ -31,7 +31,7 @@ import (
 	"github.com/xraph/authsome/core/user"
 )
 
-// Config holds the admin plugin configuration
+// Config holds the admin plugin configuration.
 type Config struct {
 	// RequiredRole is the role required to access admin endpoints
 	RequiredRole string `json:"required_role"`
@@ -45,7 +45,7 @@ type Config struct {
 	MaxImpersonationDuration time.Duration `json:"max_impersonation_duration"`
 }
 
-// DefaultConfig returns the default admin plugin configuration
+// DefaultConfig returns the default admin plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		RequiredRole:             "admin",
@@ -56,56 +56,60 @@ func DefaultConfig() Config {
 	}
 }
 
-// Service provides admin functionality for user management
+// Service provides admin functionality for user management.
 type Service struct {
 	config         Config
-	userService    interface{} // user.ServiceInterface
-	sessionService interface{} // session.ServiceInterface
+	userService    any // user.ServiceInterface
+	sessionService any // session.ServiceInterface
 	rbacService    *rbac.Service
-	auditService   interface{} // audit.ServiceInterface
-	banService     interface{} // user.BanServiceInterface
+	auditService   any // audit.ServiceInterface
+	banService     any // user.BanServiceInterface
 }
 
-// getUserService returns the user service with proper type
+// getUserService returns the user service with proper type.
 func (s *Service) getUserService() user.ServiceInterface {
 	if svc, ok := s.userService.(user.ServiceInterface); ok {
 		return svc
 	}
+
 	return nil
 }
 
-// getSessionService returns the session service with proper type
+// getSessionService returns the session service with proper type.
 func (s *Service) getSessionService() session.ServiceInterface {
 	if svc, ok := s.sessionService.(session.ServiceInterface); ok {
 		return svc
 	}
+
 	return nil
 }
 
-// getAuditService returns the audit service with proper type
+// getAuditService returns the audit service with proper type.
 func (s *Service) getAuditService() *audit.Service {
 	if svc, ok := s.auditService.(*audit.Service); ok {
 		return svc
 	}
+
 	return nil
 }
 
-// getBanService returns the ban service with proper type
+// getBanService returns the ban service with proper type.
 func (s *Service) getBanService() *user.BanService {
 	if svc, ok := s.banService.(*user.BanService); ok {
 		return svc
 	}
+
 	return nil
 }
 
-// NewService creates a new admin service
+// NewService creates a new admin service.
 func NewService(
 	config Config,
-	userService interface{}, // user.ServiceInterface
-	sessionService interface{}, // session.ServiceInterface
+	userService any, // user.ServiceInterface
+	sessionService any, // session.ServiceInterface
 	rbacService *rbac.Service,
-	auditService interface{}, // audit.ServiceInterface
-	banService interface{}, // user.BanServiceInterface
+	auditService any, // audit.ServiceInterface
+	banService any, // user.BanServiceInterface
 ) *Service {
 	return &Service{
 		config:         config,
@@ -118,7 +122,7 @@ func NewService(
 }
 
 // CreateUserRequest represents a request to create a user
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type CreateUserRequest struct {
 	AppID              xid.ID            `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID           `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -133,7 +137,7 @@ type CreateUserRequest struct {
 }
 
 // ListUsersRequest represents a request to list users
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type ListUsersRequest struct {
 	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -145,7 +149,7 @@ type ListUsersRequest struct {
 	AdminID            xid.ID  `json:"-"`                // Set by handler
 }
 
-// ListUsersResponse represents the response for listing users
+// ListUsersResponse represents the response for listing users.
 type ListUsersResponse struct {
 	Users      []*user.User `json:"users"`
 	Total      int          `json:"total"`
@@ -155,7 +159,7 @@ type ListUsersResponse struct {
 }
 
 // BanUserRequest represents a request to ban a user
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type BanUserRequest struct {
 	AppID              xid.ID     `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID    `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -166,7 +170,7 @@ type BanUserRequest struct {
 }
 
 // UnbanUserRequest represents a request to unban a user
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type UnbanUserRequest struct {
 	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -176,7 +180,7 @@ type UnbanUserRequest struct {
 }
 
 // ImpersonateUserRequest represents a request to impersonate a user
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type ImpersonateUserRequest struct {
 	AppID              xid.ID        `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID       `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -188,7 +192,7 @@ type ImpersonateUserRequest struct {
 }
 
 // SetUserRoleRequest represents a request to set a user's role
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type SetUserRoleRequest struct {
 	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -198,7 +202,7 @@ type SetUserRoleRequest struct {
 }
 
 // ListSessionsRequest represents a request to list sessions
-// Updated for V2 architecture
+// Updated for V2 architecture.
 type ListSessionsRequest struct {
 	AppID              xid.ID  `json:"app_id"`                         // Platform app (required)
 	UserOrganizationID *xid.ID `json:"user_organization_id,omitempty"` // User-created org (optional)
@@ -208,7 +212,7 @@ type ListSessionsRequest struct {
 	AdminID            xid.ID  `json:"-"` // Set by handler
 }
 
-// ListSessionsResponse represents the response for listing sessions
+// ListSessionsResponse represents the response for listing sessions.
 type ListSessionsResponse struct {
 	Sessions   []*session.Session `json:"sessions"`
 	Total      int                `json:"total"`
@@ -217,7 +221,7 @@ type ListSessionsResponse struct {
 	TotalPages int                `json:"total_pages"`
 }
 
-// CreateUser creates a new user with admin privileges
+// CreateUser creates a new user with admin privileges.
 func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user.User, error) {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserCreate); err != nil {
@@ -228,9 +232,11 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	if req.Email == "" {
 		return nil, errors.New("email is required")
 	}
+
 	if req.Password == "" {
 		return nil, errors.New("password is required")
 	}
+
 	if req.Name == "" {
 		return nil, errors.New("name is required")
 	}
@@ -253,6 +259,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	if req.UserOrganizationID != nil {
 		orgIDStr = req.UserOrganizationID.String()
 	}
+
 	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionUserCreated), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"created_user_id":"%s","email":"%s","name":"%s","app_id":"%s","organization_id":"%s"}`, newUser.ID.String(), newUser.Email, newUser.Name, req.AppID.String(), orgIDStr)); err != nil {
@@ -262,7 +269,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*user
 	return newUser, nil
 }
 
-// ListUsers lists users with filtering and pagination
+// ListUsers lists users with filtering and pagination.
 func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUsersResponse, error) {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserRead); err != nil {
@@ -273,6 +280,7 @@ func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUs
 	if req.Limit <= 0 || req.Limit > 100 {
 		req.Limit = 20
 	}
+
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -321,7 +329,7 @@ func (s *Service) ListUsers(ctx context.Context, req *ListUsersRequest) (*ListUs
 	}, nil
 }
 
-// DeleteUser deletes a user
+// DeleteUser deletes a user.
 func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, adminID, PermUserDelete); err != nil {
@@ -349,7 +357,7 @@ func (s *Service) DeleteUser(ctx context.Context, userID, adminID xid.ID) error 
 	return nil
 }
 
-// BanUser bans a user
+// BanUser bans a user.
 func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserBan); err != nil {
@@ -375,6 +383,7 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	if req.ExpiresAt != nil {
 		expiresAtStr = fmt.Sprintf(`"%s"`, req.ExpiresAt.Format(time.RFC3339))
 	}
+
 	if err := s.getAuditService().Log(ctx, &req.AdminID, string(audit.ActionUserBanned), "user",
 		getIPFromContext(ctx), getUserAgentFromContext(ctx),
 		fmt.Sprintf(`{"banned_user_id":"%s","reason":"%s","expires_at":%s}`, req.UserID.String(), req.Reason, expiresAtStr)); err != nil {
@@ -384,7 +393,7 @@ func (s *Service) BanUser(ctx context.Context, req *BanUserRequest) error {
 	return nil
 }
 
-// UnbanUser unbans a user
+// UnbanUser unbans a user.
 func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, PermUserBan); err != nil { // Same permission for ban/unban
@@ -412,7 +421,7 @@ func (s *Service) UnbanUser(ctx context.Context, req *UnbanUserRequest) error {
 	return nil
 }
 
-// ImpersonateUser creates a session for impersonating a user
+// ImpersonateUser creates a session for impersonating a user.
 func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserRequest) (*session.Session, error) {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, "user:impersonate"); err != nil {
@@ -424,15 +433,16 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	if err != nil {
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
+
 	if targetUser == nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, errors.New("user not found")
 	}
 
 	// Check if user is banned
 	if banned, err := s.getBanService().IsUserBanned(ctx, req.UserID.String()); err != nil {
 		return nil, fmt.Errorf("failed to check ban status: %w", err)
 	} else if banned {
-		return nil, fmt.Errorf("cannot impersonate banned user")
+		return nil, errors.New("cannot impersonate banned user")
 	}
 
 	// Set duration with max limit
@@ -482,7 +492,7 @@ func (s *Service) ImpersonateUser(ctx context.Context, req *ImpersonateUserReque
 	return newSession, nil
 }
 
-// SetUserRole sets a user's role
+// SetUserRole sets a user's role.
 func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, PermRoleAssign); err != nil {
@@ -508,7 +518,7 @@ func (s *Service) SetUserRole(ctx context.Context, req *SetUserRoleRequest) erro
 	return nil
 }
 
-// ListSessions lists all sessions with filtering and pagination
+// ListSessions lists all sessions with filtering and pagination.
 func (s *Service) ListSessions(ctx context.Context, req *ListSessionsRequest) (*ListSessionsResponse, error) {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, req.AdminID, "session:list"); err != nil {
@@ -519,6 +529,7 @@ func (s *Service) ListSessions(ctx context.Context, req *ListSessionsRequest) (*
 	if req.Limit <= 0 || req.Limit > 100 {
 		req.Limit = 20
 	}
+
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -535,7 +546,7 @@ func (s *Service) ListSessions(ctx context.Context, req *ListSessionsRequest) (*
 	}, nil
 }
 
-// RevokeSession revokes a session
+// RevokeSession revokes a session.
 func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) error {
 	// Check admin permissions
 	if err := s.checkAdminPermission(ctx, adminID, PermSessionRevoke); err != nil {
@@ -559,15 +570,16 @@ func (s *Service) RevokeSession(ctx context.Context, sessionID, adminID xid.ID) 
 	return nil
 }
 
-// checkAdminPermission checks if the admin has the required permission
+// checkAdminPermission checks if the admin has the required permission.
 func (s *Service) checkAdminPermission(ctx context.Context, userID xid.ID, permission string) error {
 	// Check if admin exists
 	admin, err := s.getUserService().FindByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("admin not found: %w", err)
 	}
+
 	if admin == nil {
-		return fmt.Errorf("admin not found")
+		return errors.New("admin not found")
 	}
 
 	// Get user roles from registry
@@ -590,7 +602,7 @@ func (s *Service) checkAdminPermission(ctx context.Context, userID xid.ID, permi
 	return nil
 }
 
-// filterUsersByStatus filters users by status
+// filterUsersByStatus filters users by status.
 func (s *Service) filterUsersByStatus(ctx context.Context, users []*user.User, status string) ([]*user.User, int) {
 	// This is a placeholder implementation
 	// In a real implementation, you would filter based on user status
@@ -598,14 +610,14 @@ func (s *Service) filterUsersByStatus(ctx context.Context, users []*user.User, s
 	return users, len(users)
 }
 
-// getIPFromContext extracts IP address from context
+// getIPFromContext extracts IP address from context.
 func getIPFromContext(ctx context.Context) string {
 	// This is a placeholder implementation
 	// In a real implementation, you would extract IP from context or request
 	return "127.0.0.1"
 }
 
-// getUserAgentFromContext extracts user agent from context
+// getUserAgentFromContext extracts user agent from context.
 func getUserAgentFromContext(ctx context.Context) string {
 	// This is a placeholder implementation
 	// In a real implementation, you would extract user agent from context or request

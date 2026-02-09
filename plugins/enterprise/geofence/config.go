@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Config holds the geofencing plugin configuration
+// Config holds the geofencing plugin configuration.
 type Config struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
@@ -40,13 +40,13 @@ type Config struct {
 	Notifications NotificationConfig `json:"notifications" yaml:"notifications"`
 }
 
-// RestrictionConfig configures geographic restrictions
+// RestrictionConfig configures geographic restrictions.
 type RestrictionConfig struct {
 	// Country/Region Controls
 	AllowedCountries []string `json:"allowedCountries" yaml:"allowedCountries"` // ISO 3166-1 alpha-2
 	BlockedCountries []string `json:"blockedCountries" yaml:"blockedCountries"` // ISO 3166-1 alpha-2
-	AllowedRegions   []string `json:"allowedRegions" yaml:"allowedRegions"`     // US: state codes, etc.
-	BlockedRegions   []string `json:"blockedRegions" yaml:"blockedRegions"`
+	AllowedRegions   []string `json:"allowedRegions"   yaml:"allowedRegions"`   // US: state codes, etc.
+	BlockedRegions   []string `json:"blockedRegions"   yaml:"blockedRegions"`
 
 	// City-Level Controls
 	AllowedCities []string `json:"allowedCities" yaml:"allowedCities"`
@@ -60,29 +60,29 @@ type RestrictionConfig struct {
 
 	// Behavior
 	DefaultAction string `json:"defaultAction" yaml:"defaultAction"` // "allow" or "deny"
-	StrictMode    bool   `json:"strictMode" yaml:"strictMode"`       // Deny on lookup failure
+	StrictMode    bool   `json:"strictMode"    yaml:"strictMode"`    // Deny on lookup failure
 }
 
-// TimeRestriction defines time-based access rules
+// TimeRestriction defines time-based access rules.
 type TimeRestriction struct {
-	Countries   []string `json:"countries" yaml:"countries"`
+	Countries   []string `json:"countries"   yaml:"countries"`
 	AllowedDays []string `json:"allowedDays" yaml:"allowedDays"` // Monday, Tuesday, etc.
-	StartHour   int      `json:"startHour" yaml:"startHour"`     // 0-23
-	EndHour     int      `json:"endHour" yaml:"endHour"`         // 0-23
-	Timezone    string   `json:"timezone" yaml:"timezone"`       // IANA timezone
+	StartHour   int      `json:"startHour"   yaml:"startHour"`   // 0-23
+	EndHour     int      `json:"endHour"     yaml:"endHour"`     // 0-23
+	Timezone    string   `json:"timezone"    yaml:"timezone"`    // IANA timezone
 }
 
-// GeolocationConfig configures IP geolocation services
+// GeolocationConfig configures IP geolocation services.
 type GeolocationConfig struct {
 	// Primary Provider
-	Provider         string            `json:"provider" yaml:"provider"` // maxmind, ipapi, ipinfo, ipgeolocation
-	ProviderConfig   map[string]string `json:"providerConfig" yaml:"providerConfig"`
+	Provider         string            `json:"provider"         yaml:"provider"` // maxmind, ipapi, ipinfo, ipgeolocation
+	ProviderConfig   map[string]string `json:"providerConfig"   yaml:"providerConfig"`
 	FallbackProvider string            `json:"fallbackProvider" yaml:"fallbackProvider"`
 
 	// MaxMind GeoIP2
-	MaxMindLicenseKey   string `json:"maxmindLicenseKey" yaml:"maxmindLicenseKey"`
+	MaxMindLicenseKey   string `json:"maxmindLicenseKey"   yaml:"maxmindLicenseKey"`
 	MaxMindDatabasePath string `json:"maxmindDatabasePath" yaml:"maxmindDatabasePath"`
-	MaxMindAutoUpdate   bool   `json:"maxmindAutoUpdate" yaml:"maxmindAutoUpdate"`
+	MaxMindAutoUpdate   bool   `json:"maxmindAutoUpdate"   yaml:"maxmindAutoUpdate"`
 
 	// IPInfo.io
 	IPInfoToken string `json:"ipinfoToken" yaml:"ipinfoToken"`
@@ -95,87 +95,87 @@ type GeolocationConfig struct {
 
 	// Caching
 	CacheDuration time.Duration `json:"cacheDuration" yaml:"cacheDuration"`
-	CacheMaxSize  int           `json:"cacheMaxSize" yaml:"cacheMaxSize"`
+	CacheMaxSize  int           `json:"cacheMaxSize"  yaml:"cacheMaxSize"`
 
 	// Performance
-	Timeout    time.Duration `json:"timeout" yaml:"timeout"`
+	Timeout    time.Duration `json:"timeout"    yaml:"timeout"`
 	MaxRetries int           `json:"maxRetries" yaml:"maxRetries"`
 
 	// Accuracy Requirements
 	MinAccuracyKm float64 `json:"minAccuracyKm" yaml:"minAccuracyKm"` // Minimum accuracy in km
 }
 
-// GPSConfig configures GPS-based authentication
+// GPSConfig configures GPS-based authentication.
 type GPSConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// Coordinate Requirements
-	RequireGPS        bool    `json:"requireGps" yaml:"requireGps"`
+	RequireGPS        bool    `json:"requireGps"        yaml:"requireGps"`
 	MaxAccuracyMeters float64 `json:"maxAccuracyMeters" yaml:"maxAccuracyMeters"`
 	MinAccuracyMeters float64 `json:"minAccuracyMeters" yaml:"minAccuracyMeters"`
 
 	// Geofencing
-	Geofences          []Geofence `json:"geofences" yaml:"geofences"`
+	Geofences          []Geofence `json:"geofences"          yaml:"geofences"`
 	RequireInsideFence bool       `json:"requireInsideFence" yaml:"requireInsideFence"`
 
 	// Movement Detection
-	MaxSpeedKmh    float64       `json:"maxSpeedKmh" yaml:"maxSpeedKmh"` // Alert on impossible travel speed
+	MaxSpeedKmh    float64       `json:"maxSpeedKmh"    yaml:"maxSpeedKmh"` // Alert on impossible travel speed
 	MinTimeBetween time.Duration `json:"minTimeBetween" yaml:"minTimeBetween"`
 
 	// Validation
 	ValidateTimestamp bool          `json:"validateTimestamp" yaml:"validateTimestamp"`
-	MaxTimestampAge   time.Duration `json:"maxTimestampAge" yaml:"maxTimestampAge"`
+	MaxTimestampAge   time.Duration `json:"maxTimestampAge"   yaml:"maxTimestampAge"`
 }
 
-// Geofence defines a geographic boundary
+// Geofence defines a geographic boundary.
 type Geofence struct {
-	ID          string `json:"id" yaml:"id"`
-	Name        string `json:"name" yaml:"name"`
+	ID          string `json:"id"          yaml:"id"`
+	Name        string `json:"name"        yaml:"name"`
 	Description string `json:"description" yaml:"description"`
-	Type        string `json:"type" yaml:"type"` // "circle", "polygon"
+	Type        string `json:"type"        yaml:"type"` // "circle", "polygon"
 
 	// Circle
 	CenterLat float64 `json:"centerLat" yaml:"centerLat"`
 	CenterLon float64 `json:"centerLon" yaml:"centerLon"`
-	RadiusKm  float64 `json:"radiusKm" yaml:"radiusKm"`
+	RadiusKm  float64 `json:"radiusKm"  yaml:"radiusKm"`
 
 	// Polygon (array of [lat, lon] pairs)
 	Coordinates [][2]float64 `json:"coordinates" yaml:"coordinates"`
 
 	// Rules
 	Action string   `json:"action" yaml:"action"` // "allow" or "deny"
-	Users  []string `json:"users" yaml:"users"`   // Specific user IDs (empty = all)
-	Roles  []string `json:"roles" yaml:"roles"`   // Specific roles (empty = all)
+	Users  []string `json:"users"  yaml:"users"`  // Specific user IDs (empty = all)
+	Roles  []string `json:"roles"  yaml:"roles"`  // Specific roles (empty = all)
 }
 
-// DetectionConfig configures VPN/proxy detection
+// DetectionConfig configures VPN/proxy detection.
 type DetectionConfig struct {
 	// VPN Detection
-	DetectVPN   bool     `json:"detectVpn" yaml:"detectVpn"`
-	BlockVPN    bool     `json:"blockVpn" yaml:"blockVpn"`
+	DetectVPN   bool     `json:"detectVpn"   yaml:"detectVpn"`
+	BlockVPN    bool     `json:"blockVpn"    yaml:"blockVpn"`
 	AllowedVPNs []string `json:"allowedVpns" yaml:"allowedVpns"` // Whitelisted VPN providers
 
 	// Proxy Detection
-	DetectProxy    bool     `json:"detectProxy" yaml:"detectProxy"`
-	BlockProxy     bool     `json:"blockProxy" yaml:"blockProxy"`
+	DetectProxy    bool     `json:"detectProxy"    yaml:"detectProxy"`
+	BlockProxy     bool     `json:"blockProxy"     yaml:"blockProxy"`
 	AllowedProxies []string `json:"allowedProxies" yaml:"allowedProxies"`
 
 	// Tor Detection
 	DetectTor bool `json:"detectTor" yaml:"detectTor"`
-	BlockTor  bool `json:"blockTor" yaml:"blockTor"`
+	BlockTor  bool `json:"blockTor"  yaml:"blockTor"`
 
 	// Datacenter Detection
 	DetectDatacenter bool `json:"detectDatacenter" yaml:"detectDatacenter"`
-	BlockDatacenter  bool `json:"blockDatacenter" yaml:"blockDatacenter"`
+	BlockDatacenter  bool `json:"blockDatacenter"  yaml:"blockDatacenter"`
 
 	// Detection Services
-	Provider       string            `json:"provider" yaml:"provider"` // ipqs, proxycheck, vpnapi
+	Provider       string            `json:"provider"       yaml:"provider"` // ipqs, proxycheck, vpnapi
 	ProviderConfig map[string]string `json:"providerConfig" yaml:"providerConfig"`
 
 	// IPQualityScore
-	IPQSKey        string  `json:"ipqsKey" yaml:"ipqsKey"`
+	IPQSKey        string  `json:"ipqsKey"        yaml:"ipqsKey"`
 	IPQSStrictness int     `json:"ipqsStrictness" yaml:"ipqsStrictness"` // 0-3
-	IPQSMinScore   float64 `json:"ipqsMinScore" yaml:"ipqsMinScore"`     // 0-100
+	IPQSMinScore   float64 `json:"ipqsMinScore"   yaml:"ipqsMinScore"`   // 0-100
 
 	// ProxyCheck.io
 	ProxyCheckKey string `json:"proxycheckKey" yaml:"proxycheckKey"`
@@ -185,106 +185,106 @@ type DetectionConfig struct {
 
 	// Caching
 	CacheDuration time.Duration `json:"cacheDuration" yaml:"cacheDuration"`
-	CacheMaxSize  int           `json:"cacheMaxSize" yaml:"cacheMaxSize"`
+	CacheMaxSize  int           `json:"cacheMaxSize"  yaml:"cacheMaxSize"`
 }
 
-// CorporateConfig configures corporate network detection
+// CorporateConfig configures corporate network detection.
 type CorporateConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// Network Ranges
-	Networks       []string `json:"networks" yaml:"networks"` // CIDR ranges
+	Networks       []string `json:"networks"       yaml:"networks"` // CIDR ranges
 	RequireNetwork bool     `json:"requireNetwork" yaml:"requireNetwork"`
 
 	// DNS-Based Detection
 	RequiredDNS []string `json:"requiredDns" yaml:"requiredDns"` // Expected DNS servers
 
 	// Certificate-Based Detection
-	RequireCert  bool     `json:"requireCert" yaml:"requireCert"`
+	RequireCert  bool     `json:"requireCert"  yaml:"requireCert"`
 	TrustedCerts []string `json:"trustedCerts" yaml:"trustedCerts"` // Cert fingerprints
 
 	// Hybrid Detection
 	AllowExternal bool `json:"allowExternal" yaml:"allowExternal"` // Allow external if other auth strong
-	RequireMFA    bool `json:"requireMfa" yaml:"requireMfa"`       // Require MFA for external
+	RequireMFA    bool `json:"requireMfa"    yaml:"requireMfa"`    // Require MFA for external
 }
 
-// TravelConfig configures travel notifications
+// TravelConfig configures travel notifications.
 type TravelConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// Detection Thresholds
-	MinDistanceKm  float64       `json:"minDistanceKm" yaml:"minDistanceKm"`   // Trigger distance
+	MinDistanceKm  float64       `json:"minDistanceKm"  yaml:"minDistanceKm"`  // Trigger distance
 	MinTimeBetween time.Duration `json:"minTimeBetween" yaml:"minTimeBetween"` // Minimum time between locations
-	MaxSpeedKmh    float64       `json:"maxSpeedKmh" yaml:"maxSpeedKmh"`       // Impossible travel speed
+	MaxSpeedKmh    float64       `json:"maxSpeedKmh"    yaml:"maxSpeedKmh"`    // Impossible travel speed
 
 	// Notification Settings
-	NotifyUser      bool          `json:"notifyUser" yaml:"notifyUser"`
-	NotifyAdmin     bool          `json:"notifyAdmin" yaml:"notifyAdmin"`
+	NotifyUser      bool          `json:"notifyUser"      yaml:"notifyUser"`
+	NotifyAdmin     bool          `json:"notifyAdmin"     yaml:"notifyAdmin"`
 	RequireApproval bool          `json:"requireApproval" yaml:"requireApproval"` // Block until approved
 	ApprovalTimeout time.Duration `json:"approvalTimeout" yaml:"approvalTimeout"`
 
 	// Channels
-	EmailNotify   bool `json:"emailNotify" yaml:"emailNotify"`
-	SMSNotify     bool `json:"smsNotify" yaml:"smsNotify"`
-	PushNotify    bool `json:"pushNotify" yaml:"pushNotify"`
+	EmailNotify   bool `json:"emailNotify"   yaml:"emailNotify"`
+	SMSNotify     bool `json:"smsNotify"     yaml:"smsNotify"`
+	PushNotify    bool `json:"pushNotify"    yaml:"pushNotify"`
 	WebhookNotify bool `json:"webhookNotify" yaml:"webhookNotify"`
 
 	// Auto-Approval
-	AutoApproveAfter  time.Duration `json:"autoApproveAfter" yaml:"autoApproveAfter"`
+	AutoApproveAfter  time.Duration `json:"autoApproveAfter"  yaml:"autoApproveAfter"`
 	TrustFrequentDest bool          `json:"trustFrequentDest" yaml:"trustFrequentDest"` // Trust frequent destinations
 }
 
-// SessionConfig configures geofence session management
+// SessionConfig configures geofence session management.
 type SessionConfig struct {
 	// Location Tracking
-	TrackLocation  bool          `json:"trackLocation" yaml:"trackLocation"`
+	TrackLocation  bool          `json:"trackLocation"  yaml:"trackLocation"`
 	UpdateInterval time.Duration `json:"updateInterval" yaml:"updateInterval"`
 
 	// Session Validation
-	ValidateOnRequest     bool `json:"validateOnRequest" yaml:"validateOnRequest"`
+	ValidateOnRequest     bool `json:"validateOnRequest"     yaml:"validateOnRequest"`
 	InvalidateOnViolation bool `json:"invalidateOnViolation" yaml:"invalidateOnViolation"`
 
 	// Grace Period
-	GracePeriod   time.Duration `json:"gracePeriod" yaml:"gracePeriod"` // Allow brief violations
+	GracePeriod   time.Duration `json:"gracePeriod"   yaml:"gracePeriod"` // Allow brief violations
 	MaxViolations int           `json:"maxViolations" yaml:"maxViolations"`
 }
 
-// APIConfig configures geofencing API endpoints
+// APIConfig configures geofencing API endpoints.
 type APIConfig struct {
-	BasePath         string `json:"basePath" yaml:"basePath"`
+	BasePath         string `json:"basePath"         yaml:"basePath"`
 	EnableManagement bool   `json:"enableManagement" yaml:"enableManagement"`
 	EnableValidation bool   `json:"enableValidation" yaml:"enableValidation"`
-	EnableMetrics    bool   `json:"enableMetrics" yaml:"enableMetrics"`
-	EnableRealtime   bool   `json:"enableRealtime" yaml:"enableRealtime"` // WebSocket for live tracking
+	EnableMetrics    bool   `json:"enableMetrics"    yaml:"enableMetrics"`
+	EnableRealtime   bool   `json:"enableRealtime"   yaml:"enableRealtime"` // WebSocket for live tracking
 }
 
-// SecurityConfig configures security settings
+// SecurityConfig configures security settings.
 type SecurityConfig struct {
 	// Rate Limiting
-	RateLimitEnabled   bool `json:"rateLimitEnabled" yaml:"rateLimitEnabled"`
+	RateLimitEnabled   bool `json:"rateLimitEnabled"   yaml:"rateLimitEnabled"`
 	MaxChecksPerMinute int  `json:"maxChecksPerMinute" yaml:"maxChecksPerMinute"`
-	MaxChecksPerHour   int  `json:"maxChecksPerHour" yaml:"maxChecksPerHour"`
+	MaxChecksPerHour   int  `json:"maxChecksPerHour"   yaml:"maxChecksPerHour"`
 
 	// Audit Logging
-	AuditAllChecks  bool `json:"auditAllChecks" yaml:"auditAllChecks"`
+	AuditAllChecks  bool `json:"auditAllChecks"  yaml:"auditAllChecks"`
 	AuditViolations bool `json:"auditViolations" yaml:"auditViolations"`
-	AuditTravel     bool `json:"auditTravel" yaml:"auditTravel"`
+	AuditTravel     bool `json:"auditTravel"     yaml:"auditTravel"`
 
 	// Data Storage
-	StoreLocations    bool          `json:"storeLocations" yaml:"storeLocations"`
+	StoreLocations    bool          `json:"storeLocations"    yaml:"storeLocations"`
 	LocationRetention time.Duration `json:"locationRetention" yaml:"locationRetention"`
-	AnonymizeOldData  bool          `json:"anonymizeOldData" yaml:"anonymizeOldData"`
+	AnonymizeOldData  bool          `json:"anonymizeOldData"  yaml:"anonymizeOldData"`
 
 	// Privacy
 	ConsentRequired bool `json:"consentRequired" yaml:"consentRequired"`
-	AllowOptOut     bool `json:"allowOptOut" yaml:"allowOptOut"`
+	AllowOptOut     bool `json:"allowOptOut"     yaml:"allowOptOut"`
 
 	// Notifications
 	NotifyOnViolation bool `json:"notifyOnViolation" yaml:"notifyOnViolation"`
-	NotifyOnAnomaly   bool `json:"notifyOnAnomaly" yaml:"notifyOnAnomaly"`
+	NotifyOnAnomaly   bool `json:"notifyOnAnomaly"   yaml:"notifyOnAnomaly"`
 }
 
-// DefaultConfig returns the default geofencing configuration
+// DefaultConfig returns the default geofencing configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled: true,
@@ -409,27 +409,27 @@ func DefaultConfig() *Config {
 	}
 }
 
-// NotificationConfig configures session security notifications
+// NotificationConfig configures session security notifications.
 type NotificationConfig struct {
 	// General
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// New Location Notifications
-	NewLocationEnabled     bool    `json:"newLocationEnabled" yaml:"newLocationEnabled"`
+	NewLocationEnabled     bool    `json:"newLocationEnabled"     yaml:"newLocationEnabled"`
 	NewLocationThresholdKm float64 `json:"newLocationThresholdKm" yaml:"newLocationThresholdKm"` // Trigger at N km distance
 
 	// Suspicious Login Notifications
-	SuspiciousLoginEnabled        bool    `json:"suspiciousLoginEnabled" yaml:"suspiciousLoginEnabled"`
+	SuspiciousLoginEnabled        bool    `json:"suspiciousLoginEnabled"        yaml:"suspiciousLoginEnabled"`
 	SuspiciousLoginScoreThreshold float64 `json:"suspiciousLoginScoreThreshold" yaml:"suspiciousLoginScoreThreshold"` // IPQS fraud score threshold
 
 	// Detection Types
 	ImpossibleTravelEnabled bool `json:"impossibleTravelEnabled" yaml:"impossibleTravelEnabled"`
-	VpnDetectionEnabled     bool `json:"vpnDetectionEnabled" yaml:"vpnDetectionEnabled"`
-	ProxyDetectionEnabled   bool `json:"proxyDetectionEnabled" yaml:"proxyDetectionEnabled"`
-	TorDetectionEnabled     bool `json:"torDetectionEnabled" yaml:"torDetectionEnabled"`
+	VpnDetectionEnabled     bool `json:"vpnDetectionEnabled"     yaml:"vpnDetectionEnabled"`
+	ProxyDetectionEnabled   bool `json:"proxyDetectionEnabled"   yaml:"proxyDetectionEnabled"`
+	TorDetectionEnabled     bool `json:"torDetectionEnabled"     yaml:"torDetectionEnabled"`
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	if c.Restrictions.MaxDistanceKm < 0 {
 		return errors.New("max distance cannot be negative")
@@ -439,6 +439,7 @@ func (c *Config) Validate() error {
 		if c.GPS.MaxAccuracyMeters < c.GPS.MinAccuracyMeters {
 			return errors.New("max accuracy cannot be less than min accuracy")
 		}
+
 		if c.GPS.MaxSpeedKmh <= 0 {
 			return errors.New("max speed must be positive")
 		}

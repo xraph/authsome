@@ -191,7 +191,7 @@ func NewRepo(db *bun.DB) Repository {
 	}
 }
 
-// Core repositories
+// Core repositories.
 func (r *Repo) User() *UserRepository {
 	return r.user
 }
@@ -204,7 +204,7 @@ func (r *Repo) SocialAccount() SocialAccountRepository {
 	return r.socialAccount
 }
 
-// Authentication & Security
+// Authentication & Security.
 func (r *Repo) APIKey() *APIKeyRepository {
 	return r.apiKey
 }
@@ -253,7 +253,7 @@ func (r *Repo) Notification() notification.Repository {
 	return r.notification
 }
 
-// OAuth & SSO
+// OAuth & SSO.
 func (r *Repo) OAuthToken() *OAuthTokenRepository {
 	return r.oauthToken
 }
@@ -274,7 +274,7 @@ func (r *Repo) SocialProviderConfig() SocialProviderConfigRepository {
 	return r.socialProviderConfig
 }
 
-// Multi-factor Authentication
+// Multi-factor Authentication.
 func (r *Repo) TwoFA() *TwoFARepository {
 	return r.twoFA
 }
@@ -287,7 +287,7 @@ func (r *Repo) EmailOTP() *EmailOTPRepository {
 	return r.emailOTP
 }
 
-// Authentication Methods
+// Authentication Methods.
 func (r *Repo) Phone() *PhoneRepository {
 	return r.phone
 }
@@ -296,7 +296,7 @@ func (r *Repo) MagicLink() *MagicLinkRepository {
 	return r.magicLink
 }
 
-// Identity & Verification
+// Identity & Verification.
 func (r *Repo) IdentityVerification() *IdentityVerificationRepository {
 	return r.identityVerification
 }
@@ -305,7 +305,7 @@ func (r *Repo) Verification() *verificationRepository {
 	return r.verification
 }
 
-// App & Environment
+// App & Environment.
 func (r *Repo) App() *AppRepository {
 	return r.app
 }
@@ -314,12 +314,12 @@ func (r *Repo) Environment() environment.Repository {
 	return r.environment
 }
 
-// Impersonation
+// Impersonation.
 func (r *Repo) Impersonation() *ImpersonationRepository {
 	return r.impersonation
 }
 
-// Forms & Webhooks
+// Forms & Webhooks.
 func (r *Repo) Forms() forms.Repository {
 	return r.forms
 }
@@ -328,7 +328,7 @@ func (r *Repo) Webhook() webhook.Repository {
 	return r.webhook
 }
 
-// Organization repositories
+// Organization repositories.
 func (r *Repo) Organization() organization.OrganizationRepository {
 	return r.organization
 }

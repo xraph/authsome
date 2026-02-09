@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// EnvironmentsManagementPage shows environment management (if multiapp plugin is enabled)
+// EnvironmentsManagementPage shows environment management (if multiapp plugin is enabled).
 func (p *PagesManager) EnvironmentsManagementPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

@@ -10,7 +10,7 @@ import (
 )
 
 // Repository defines the interface for webhook storage operations
-// Following ISP - works with schema types
+// Following ISP - works with schema types.
 type Repository interface {
 	// Webhook operations
 	CreateWebhook(ctx context.Context, webhook *schema.Webhook) error

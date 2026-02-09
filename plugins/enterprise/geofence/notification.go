@@ -8,8 +8,8 @@ import (
 	"github.com/rs/xid"
 )
 
-// getNotificationAdapter retrieves the notification adapter from service registry
-func (s *Service) getNotificationAdapter() interface{} {
+// getNotificationAdapter retrieves the notification adapter from service registry.
+func (s *Service) getNotificationAdapter() any {
 	if s.authInst == nil {
 		return nil
 	}
@@ -17,7 +17,7 @@ func (s *Service) getNotificationAdapter() interface{} {
 	// Type assert to access service registry
 	authInst, ok := s.authInst.(interface {
 		GetServiceRegistry() interface {
-			Get(string) (interface{}, bool)
+			Get(string) (any, bool)
 		}
 	})
 	if !ok {
@@ -37,8 +37,8 @@ func (s *Service) getNotificationAdapter() interface{} {
 	return adapter
 }
 
-// getUserService retrieves user service from registry
-func (s *Service) getUserService() interface{} {
+// getUserService retrieves user service from registry.
+func (s *Service) getUserService() any {
 	if s.authInst == nil {
 		return nil
 	}
@@ -61,7 +61,7 @@ func (s *Service) getUserService() interface{} {
 	return authInst.GetServiceRegistry().UserService()
 }
 
-// notifyNewLocation sends new location login notification
+// notifyNewLocation sends new location login notification.
 func (s *Service) notifyNewLocation(ctx context.Context, userID xid.ID, appID xid.ID, newLoc *GeoData, oldLoc *GeoData, distance float64) error {
 	// Type assert to notification adapter
 	adapter := s.getNotificationAdapter()
@@ -122,7 +122,7 @@ func (s *Service) notifyNewLocation(ctx context.Context, userID xid.ID, appID xi
 	)
 }
 
-// notifySuspiciousLogin sends suspicious login notification
+// notifySuspiciousLogin sends suspicious login notification.
 func (s *Service) notifySuspiciousLogin(ctx context.Context, userID xid.ID, appID xid.ID, reason string, loc *GeoData) error {
 	adapter := s.getNotificationAdapter()
 	if adapter == nil {

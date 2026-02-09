@@ -14,14 +14,14 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// AppsListOutput represents apps list response
+// AppsListOutput represents apps list response.
 type AppsListOutput struct {
 	Apps         []AppItem `json:"apps"`
 	IsMultiApp   bool      `json:"isMultiApp"`   // Whether multiapp mode is enabled
 	DefaultAppID string    `json:"defaultAppId"` // Default app ID in standalone mode
 }
 
-// AppItem represents an app in the list
+// AppItem represents an app in the list.
 type AppItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -31,12 +31,12 @@ type AppItem struct {
 	Status      string `json:"status"`
 }
 
-// AppDetailInput represents app detail request
+// AppDetailInput represents app detail request.
 type AppDetailInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// AppDetailOutput represents app detail response
+// AppDetailOutput represents app detail response.
 type AppDetailOutput struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -47,25 +47,25 @@ type AppDetailOutput struct {
 	Status      string `json:"status"`
 }
 
-// CreateAppInput represents app creation request
+// CreateAppInput represents app creation request.
 type CreateAppInput struct {
-	Name        string `json:"name" validate:"required"`
+	Name        string `json:"name"                  validate:"required"`
 	Description string `json:"description,omitempty"`
 }
 
-// UpdateAppInput represents app update request
+// UpdateAppInput represents app update request.
 type UpdateAppInput struct {
-	AppID       string `json:"appId" validate:"required"`
+	AppID       string `json:"appId"                 validate:"required"`
 	Name        string `json:"name,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
-// DeleteAppInput represents app delete request
+// DeleteAppInput represents app delete request.
 type DeleteAppInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// registerAppFunctions registers app management bridge functions
+// registerAppFunctions registers app management bridge functions.
 func (bm *BridgeManager) registerAppFunctions() error {
 	// List apps - no auth required as it's read-only and needed for navbar
 	if err := bm.bridge.Register("getAppsList", bm.getAppsList,
@@ -103,10 +103,11 @@ func (bm *BridgeManager) registerAppFunctions() error {
 	}
 
 	bm.log.Info("app bridge functions registered")
+
 	return nil
 }
 
-// getAppsList retrieves list of apps
+// getAppsList retrieves list of apps.
 func (bm *BridgeManager) getAppsList(ctx bridge.Context, _ struct{}) (*AppsListOutput, error) {
 	goCtx := bm.buildContext(ctx)
 
@@ -121,6 +122,7 @@ func (bm *BridgeManager) getAppsList(ctx bridge.Context, _ struct{}) (*AppsListO
 	response, err := bm.appSvc.ListApps(goCtx, filter)
 	if err != nil {
 		bm.log.Error("failed to list apps", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch apps")
 	}
 
@@ -129,10 +131,12 @@ func (bm *BridgeManager) getAppsList(ctx bridge.Context, _ struct{}) (*AppsListO
 	for i, a := range response.Data {
 		// Count users for this app
 		userCount := 0
+
 		if bm.userSvc != nil {
 			userFilter := &user.CountUsersFilter{
 				AppID: a.ID,
 			}
+
 			count, err := bm.userSvc.CountUsers(goCtx, userFilter)
 			if err == nil {
 				userCount = count
@@ -141,6 +145,7 @@ func (bm *BridgeManager) getAppsList(ctx bridge.Context, _ struct{}) (*AppsListO
 
 		// Extract description from metadata if available
 		description := ""
+
 		if a.Metadata != nil {
 			if desc, ok := a.Metadata["description"].(string); ok {
 				description = desc
@@ -174,7 +179,7 @@ func (bm *BridgeManager) getAppsList(ctx bridge.Context, _ struct{}) (*AppsListO
 	}, nil
 }
 
-// getAppDetail retrieves detailed information about an app
+// getAppDetail retrieves detailed information about an app.
 func (bm *BridgeManager) getAppDetail(ctx bridge.Context, input AppDetailInput) (*AppDetailOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -192,15 +197,18 @@ func (bm *BridgeManager) getAppDetail(ctx bridge.Context, input AppDetailInput) 
 	a, err := bm.appSvc.FindAppByID(goCtx, appID)
 	if err != nil {
 		bm.log.Error("failed to find app", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "app not found")
 	}
 
 	// Count users for this app
 	userCount := 0
+
 	if bm.userSvc != nil {
 		userFilter := &user.CountUsersFilter{
 			AppID: appID,
 		}
+
 		count, err := bm.userSvc.CountUsers(goCtx, userFilter)
 		if err == nil {
 			userCount = count
@@ -209,6 +217,7 @@ func (bm *BridgeManager) getAppDetail(ctx bridge.Context, input AppDetailInput) 
 
 	// Extract description from metadata if available
 	description := ""
+
 	if a.Metadata != nil {
 		if desc, ok := a.Metadata["description"].(string); ok {
 			description = desc
@@ -226,7 +235,7 @@ func (bm *BridgeManager) getAppDetail(ctx bridge.Context, input AppDetailInput) 
 	}, nil
 }
 
-// createApp creates a new app
+// createApp creates a new app.
 func (bm *BridgeManager) createApp(ctx bridge.Context, input CreateAppInput) (*GenericSuccessOutput, error) {
 	if input.Name == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "name is required")
@@ -238,6 +247,7 @@ func (bm *BridgeManager) createApp(ctx bridge.Context, input CreateAppInput) (*G
 	count, err := bm.appSvc.CountApps(goCtx)
 	if err != nil {
 		bm.log.Error("failed to count apps", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to check multiapp status")
 	}
 
@@ -248,7 +258,7 @@ func (bm *BridgeManager) createApp(ctx bridge.Context, input CreateAppInput) (*G
 	}
 
 	// Create app
-	metadata := make(map[string]interface{})
+	metadata := make(map[string]any)
 	if input.Description != "" {
 		metadata["description"] = input.Description
 	}
@@ -261,6 +271,7 @@ func (bm *BridgeManager) createApp(ctx bridge.Context, input CreateAppInput) (*G
 	_, err = bm.appSvc.CreateApp(goCtx, createReq)
 	if err != nil {
 		bm.log.Error("failed to create app", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to create app")
 	}
 
@@ -276,7 +287,7 @@ func (bm *BridgeManager) createApp(ctx bridge.Context, input CreateAppInput) (*G
 	}, nil
 }
 
-// updateApp updates app information
+// updateApp updates app information.
 func (bm *BridgeManager) updateApp(ctx bridge.Context, input UpdateAppInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -295,6 +306,7 @@ func (bm *BridgeManager) updateApp(ctx bridge.Context, input UpdateAppInput) (*G
 	a, err := bm.appSvc.FindAppByID(goCtx, appID)
 	if err != nil {
 		bm.log.Error("failed to find app", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "app not found")
 	}
 
@@ -308,8 +320,9 @@ func (bm *BridgeManager) updateApp(ctx bridge.Context, input UpdateAppInput) (*G
 	if input.Description != "" {
 		metadata := a.Metadata
 		if metadata == nil {
-			metadata = make(map[string]interface{})
+			metadata = make(map[string]any)
 		}
+
 		metadata["description"] = input.Description
 		updateReq.Metadata = metadata
 	}
@@ -318,6 +331,7 @@ func (bm *BridgeManager) updateApp(ctx bridge.Context, input UpdateAppInput) (*G
 	_, err = bm.appSvc.UpdateApp(goCtx, appID, updateReq)
 	if err != nil {
 		bm.log.Error("failed to update app", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update app")
 	}
 
@@ -333,7 +347,7 @@ func (bm *BridgeManager) updateApp(ctx bridge.Context, input UpdateAppInput) (*G
 	}, nil
 }
 
-// deleteApp deletes an app
+// deleteApp deletes an app.
 func (bm *BridgeManager) deleteApp(ctx bridge.Context, input DeleteAppInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -351,6 +365,7 @@ func (bm *BridgeManager) deleteApp(ctx bridge.Context, input DeleteAppInput) (*G
 	a, err := bm.appSvc.FindAppByID(goCtx, appID)
 	if err != nil {
 		bm.log.Error("failed to find app", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "app not found")
 	}
 
@@ -362,6 +377,7 @@ func (bm *BridgeManager) deleteApp(ctx bridge.Context, input DeleteAppInput) (*G
 	err = bm.appSvc.DeleteApp(goCtx, appID)
 	if err != nil {
 		bm.log.Error("failed to delete app", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to delete app")
 	}
 

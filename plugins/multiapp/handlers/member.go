@@ -14,19 +14,19 @@ import (
 	"github.com/xraph/forge"
 )
 
-// MemberHandler handles app member-related HTTP requests
+// MemberHandler handles app member-related HTTP requests.
 type MemberHandler struct {
 	appService *coreapp.ServiceImpl
 }
 
-// NewMemberHandler creates a new member handler
+// NewMemberHandler creates a new member handler.
 func NewMemberHandler(appService *coreapp.ServiceImpl) *MemberHandler {
 	return &MemberHandler{
 		appService: appService,
 	}
 }
 
-// AddMember handles adding a member to an organization
+// AddMember handles adding a member to an organization.
 func (h *MemberHandler) AddMember(c forge.Context) error {
 	var req AddMemberRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -58,13 +58,14 @@ func (h *MemberHandler) AddMember(c forge.Context) error {
 	return c.JSON(http.StatusCreated, member)
 }
 
-// RemoveMember handles removing a member from an organization
+// RemoveMember handles removing a member from an organization.
 func (h *MemberHandler) RemoveMember(c forge.Context) error {
 	memberIDStr := c.Param("memberId")
 
 	if memberIDStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_MEMBER_ID", "Member ID parameter is required", http.StatusBadRequest))
 	}
+
 	memberID, err := xid.FromString(memberIDStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_MEMBER_ID", "Invalid member ID format", http.StatusBadRequest))
@@ -78,12 +79,13 @@ func (h *MemberHandler) RemoveMember(c forge.Context) error {
 	return c.JSON(http.StatusNoContent, nil)
 }
 
-// ListMembers handles listing app members
+// ListMembers handles listing app members.
 func (h *MemberHandler) ListMembers(c forge.Context) error {
 	appIDStr := c.Param("orgId")
 	if appIDStr == "" {
 		return c.JSON(http.StatusBadRequest, errs.New("MISSING_APP_ID", "App ID parameter is required", http.StatusBadRequest))
 	}
+
 	appID, err := xid.FromString(appIDStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_APP_ID", "Invalid app ID format", http.StatusBadRequest))
@@ -121,13 +123,13 @@ func (h *MemberHandler) ListMembers(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"data":       response.Data,
 		"pagination": response.Pagination,
 	})
 }
 
-// UpdateMemberRole handles updating a member's role in an organization
+// UpdateMemberRole handles updating a member's role in an organization.
 func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 	memberIDStr := c.Param("memberId")
 
@@ -155,6 +157,7 @@ func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 	if req.Role != nil {
 		member.Role = app.MemberRole(*req.Role)
 	}
+
 	member.UpdatedAt = time.Now()
 
 	// Save changes
@@ -165,7 +168,7 @@ func (h *MemberHandler) UpdateMemberRole(c forge.Context) error {
 	return c.JSON(http.StatusOK, member)
 }
 
-// InviteMember handles inviting a member to an organization
+// InviteMember handles inviting a member to an organization.
 func (h *MemberHandler) InviteMember(c forge.Context) error {
 	appIDStr := c.Param("orgId")
 	if appIDStr == "" {
@@ -183,14 +186,16 @@ func (h *MemberHandler) InviteMember(c forge.Context) error {
 	}
 
 	// Get inviter user ID from context (this would typically come from auth middleware)
-	inviterUserIDStr := c.Request().Header.Get("X-User-ID") // placeholder
+	inviterUserIDStr := c.Request().Header.Get("X-User-Id") // placeholder
 	if inviterUserIDStr == "" {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "Unauthorized access", http.StatusUnauthorized))
 	}
+
 	inviterUserID, err := xid.FromString(inviterUserIDStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_INVITER_ID", "Invalid inviter user ID format", http.StatusBadRequest))
 	}
+
 	if inviterUserID.IsNil() {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "Unauthorized access", http.StatusUnauthorized))
 	}
@@ -215,7 +220,7 @@ func (h *MemberHandler) InviteMember(c forge.Context) error {
 	return c.JSON(http.StatusCreated, invitation)
 }
 
-// UpdateMember handles updating a member in an organization
+// UpdateMember handles updating a member in an organization.
 func (h *MemberHandler) UpdateMember(c forge.Context) error {
 	memberIDStr := c.Param("memberId")
 	if memberIDStr == "" {
@@ -242,6 +247,7 @@ func (h *MemberHandler) UpdateMember(c forge.Context) error {
 	if req.Role != nil {
 		member.Role = app.MemberRole(*req.Role)
 	}
+
 	member.UpdatedAt = time.Now()
 
 	// Save changes
@@ -252,7 +258,7 @@ func (h *MemberHandler) UpdateMember(c forge.Context) error {
 	return c.JSON(http.StatusOK, member)
 }
 
-// GetInvitation handles getting an invitation by token
+// GetInvitation handles getting an invitation by token.
 func (h *MemberHandler) GetInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
@@ -267,7 +273,7 @@ func (h *MemberHandler) GetInvitation(c forge.Context) error {
 	return c.JSON(http.StatusOK, invitation)
 }
 
-// AcceptInvitation handles accepting an invitation
+// AcceptInvitation handles accepting an invitation.
 func (h *MemberHandler) AcceptInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {
@@ -275,7 +281,7 @@ func (h *MemberHandler) AcceptInvitation(c forge.Context) error {
 	}
 
 	// Get user ID from context (this would typically come from auth middleware)
-	userIDStr := c.Request().Header.Get("X-User-ID") // placeholder
+	userIDStr := c.Request().Header.Get("X-User-Id") // placeholder
 	if userIDStr == "" {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "Unauthorized access", http.StatusUnauthorized))
 	}
@@ -293,7 +299,7 @@ func (h *MemberHandler) AcceptInvitation(c forge.Context) error {
 	return c.JSON(http.StatusOK, member)
 }
 
-// DeclineInvitation handles declining an invitation
+// DeclineInvitation handles declining an invitation.
 func (h *MemberHandler) DeclineInvitation(c forge.Context) error {
 	token := c.Param("token")
 	if token == "" {

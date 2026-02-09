@@ -11,29 +11,29 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator"
 )
 
-// Generator generates Diesel migration files
+// Generator generates Diesel migration files.
 type Generator struct{}
 
-// NewGenerator creates a new Diesel generator
+// NewGenerator creates a new Diesel generator.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// Name returns the generator name
+// Name returns the generator name.
 func (g *Generator) Name() string {
 	return "diesel"
 }
 
-// Description returns the generator description
+// Description returns the generator description.
 func (g *Generator) Description() string {
 	return "Diesel migration generator (Rust)"
 }
 
-// Generate generates Diesel migration files
+// Generate generates Diesel migration files.
 func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) error {
 	// Create migrations directory with timestamp
 	timestamp := time.Now().Format("2006-01-02-150405")
-	migrationDir := filepath.Join(opts.OutputDir, fmt.Sprintf("%s_authsome_initial", timestamp))
+	migrationDir := filepath.Join(opts.OutputDir, timestamp+"_authsome_initial")
 
 	if err := os.MkdirAll(migrationDir, 0755); err != nil {
 		return fmt.Errorf("failed to create migration directory: %w", err)
@@ -41,6 +41,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 
 	// Generate up.sql
 	upSQL := g.generateUpSQL(schema)
+
 	upPath := filepath.Join(migrationDir, "up.sql")
 	if err := os.WriteFile(upPath, []byte(upSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write up.sql: %w", err)
@@ -48,6 +49,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 
 	// Generate down.sql
 	downSQL := g.generateDownSQL(schema)
+
 	downPath := filepath.Join(migrationDir, "down.sql")
 	if err := os.WriteFile(downPath, []byte(downSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write down.sql: %w", err)
@@ -60,7 +62,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	return nil
 }
 
-// generateUpSQL generates the up migration SQL (PostgreSQL syntax)
+// generateUpSQL generates the up migration SQL (PostgreSQL syntax).
 func (g *Generator) generateUpSQL(schema *definition.Schema) string {
 	var b strings.Builder
 
@@ -84,7 +86,7 @@ func (g *Generator) generateUpSQL(schema *definition.Schema) string {
 	return b.String()
 }
 
-// generateDownSQL generates the down migration SQL
+// generateDownSQL generates the down migration SQL.
 func (g *Generator) generateDownSQL(schema *definition.Schema) string {
 	var b strings.Builder
 
@@ -104,7 +106,7 @@ func (g *Generator) generateDownSQL(schema *definition.Schema) string {
 	return b.String()
 }
 
-// generateCreateTable generates a CREATE TABLE statement (PostgreSQL syntax)
+// generateCreateTable generates a CREATE TABLE statement (PostgreSQL syntax).
 func (g *Generator) generateCreateTable(model definition.Model) string {
 	var b strings.Builder
 
@@ -128,10 +130,11 @@ func (g *Generator) generateCreateTable(model definition.Model) string {
 				toColumnName(refField))
 
 			if field.References.OnDelete != "" {
-				fkConstraint += fmt.Sprintf(" ON DELETE %s", field.References.OnDelete)
+				fkConstraint += " ON DELETE " + field.References.OnDelete
 			}
+
 			if field.References.OnUpdate != "" {
-				fkConstraint += fmt.Sprintf(" ON UPDATE %s", field.References.OnUpdate)
+				fkConstraint += " ON UPDATE " + field.References.OnUpdate
 			}
 
 			columns = append(columns, fkConstraint)
@@ -144,7 +147,7 @@ func (g *Generator) generateCreateTable(model definition.Model) string {
 	return b.String()
 }
 
-// generateColumn generates a column definition (PostgreSQL syntax)
+// generateColumn generates a column definition (PostgreSQL syntax).
 func (g *Generator) generateColumn(field definition.Field) string {
 	parts := []string{
 		"    " + field.Column,
@@ -170,14 +173,14 @@ func (g *Generator) generateColumn(field definition.Field) string {
 	if field.Default != nil {
 		defaultVal := g.formatDefault(field.Default, field.Type)
 		if defaultVal != "" {
-			parts = append(parts, fmt.Sprintf("DEFAULT %s", defaultVal))
+			parts = append(parts, "DEFAULT "+defaultVal)
 		}
 	}
 
 	return strings.Join(parts, " ")
 }
 
-// generateCreateIndex generates a CREATE INDEX statement
+// generateCreateIndex generates a CREATE INDEX statement.
 func (g *Generator) generateCreateIndex(model definition.Model, index definition.Index) string {
 	uniqueStr := ""
 	if index.Unique {
@@ -191,13 +194,14 @@ func (g *Generator) generateCreateIndex(model definition.Model, index definition
 		strings.Join(index.Columns, ", "))
 }
 
-// mapToPostgreSQLType maps a field type to PostgreSQL type
+// mapToPostgreSQLType maps a field type to PostgreSQL type.
 func (g *Generator) mapToPostgreSQLType(field definition.Field) string {
 	switch field.Type {
 	case definition.FieldTypeString:
 		if field.Length > 0 {
 			return fmt.Sprintf("VARCHAR(%d)", field.Length)
 		}
+
 		return "VARCHAR(255)"
 	case definition.FieldTypeText:
 		return "TEXT"
@@ -230,8 +234,8 @@ func (g *Generator) mapToPostgreSQLType(field definition.Field) string {
 	}
 }
 
-// formatDefault formats a default value for PostgreSQL
-func (g *Generator) formatDefault(value interface{}, fieldType definition.FieldType) string {
+// formatDefault formats a default value for PostgreSQL.
+func (g *Generator) formatDefault(value any, fieldType definition.FieldType) string {
 	if value == nil {
 		return ""
 	}
@@ -241,14 +245,17 @@ func (g *Generator) formatDefault(value interface{}, fieldType definition.FieldT
 		if v == "current_timestamp" {
 			return "CURRENT_TIMESTAMP"
 		}
+
 		if fieldType == definition.FieldTypeBoolean {
 			if v == "true" {
 				return "true"
 			}
+
 			if v == "false" {
 				return "false"
 			}
 		}
+
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
 	case int, int32, int64, float32, float64:
 		return fmt.Sprintf("%v", v)
@@ -256,6 +263,7 @@ func (g *Generator) formatDefault(value interface{}, fieldType definition.FieldT
 		if v {
 			return "true"
 		}
+
 		return "false"
 	default:
 		return fmt.Sprintf("'%v'", v)
@@ -267,6 +275,7 @@ func toTableName(modelName string) string {
 	if !strings.HasSuffix(snake, "s") {
 		snake += "s"
 	}
+
 	return snake
 }
 
@@ -276,15 +285,18 @@ func toColumnName(fieldName string) string {
 
 func toSnakeCase(s string) string {
 	var result strings.Builder
+
 	for i, c := range s {
 		if c >= 'A' && c <= 'Z' {
 			if i > 0 {
 				result.WriteRune('_')
 			}
+
 			result.WriteRune(c + 32)
 		} else {
 			result.WriteRune(c)
 		}
 	}
+
 	return result.String()
 }

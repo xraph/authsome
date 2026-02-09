@@ -10,7 +10,7 @@ import (
 )
 
 // Register registers auth routes using forge.Router
-// authMiddleware is applied to all routes to extract and validate API keys for app identification
+// authMiddleware is applied to all routes to extract and validate API keys for app identification.
 func Register(router forge.Router, basePath string, h *handlers.AuthHandler, authMiddleware forge.Middleware) {
 	authGroup := router.Group(basePath)
 
@@ -204,113 +204,113 @@ func Register(router forge.Router, basePath string, h *handlers.AuthHandler, aut
 
 // DTOs for auth routes
 
-// ErrorResponse represents an error response
+// ErrorResponse represents an error response.
 type ErrorResponse struct {
-	Error string `json:"error" example:"Error message"`
+	Error string `example:"Error message" json:"error"`
 }
 
-// StatusResponse represents a status response
+// StatusResponse represents a status response.
 type StatusResponse struct {
-	Status string `json:"status" example:"success"`
+	Status string `example:"success" json:"status"`
 }
 
-// SignOutRequest represents a sign out request
+// SignOutRequest represents a sign out request.
 type SignOutRequest struct {
-	Token string `json:"token" validate:"required" example:"session_token_here"`
+	Token string `example:"session_token_here" json:"token" validate:"required"`
 }
 
 type RefreshSessionRequest struct {
-	RefreshToken string `json:"refreshToken" validate:"required" example:"refresh_token_here"`
+	RefreshToken string `example:"refresh_token_here" json:"refreshToken" validate:"required"`
 }
 
 type RefreshSessionResponse struct {
-	Session          interface{} `json:"session"`
-	AccessToken      string      `json:"accessToken"`
-	RefreshToken     string      `json:"refreshToken"`
-	ExpiresAt        string      `json:"expiresAt"`
-	RefreshExpiresAt string      `json:"refreshExpiresAt"`
+	Session          any    `json:"session"`
+	AccessToken      string `json:"accessToken"`
+	RefreshToken     string `json:"refreshToken"`
+	ExpiresAt        string `json:"expiresAt"`
+	RefreshExpiresAt string `json:"refreshExpiresAt"`
 }
 
-// SessionResponse represents session information
+// SessionResponse represents session information.
 type SessionResponse struct {
-	User    *user.User             `json:"user"`
-	Session map[string]interface{} `json:"session"`
+	User    *user.User     `json:"user"`
+	Session map[string]any `json:"session"`
 }
 
-// DevicesResponse represents a list of devices
+// DevicesResponse represents a list of devices.
 type DevicesResponse []device.Device
 
-// RevokeDeviceRequest represents a device revocation request
+// RevokeDeviceRequest represents a device revocation request.
 type RevokeDeviceRequest struct {
-	Fingerprint string `json:"fingerprint" validate:"required" example:"device_fingerprint_here"`
+	Fingerprint string `example:"device_fingerprint_here" json:"fingerprint" validate:"required"`
 }
 
-// UpdateUserRequest represents a user update request
+// UpdateUserRequest represents a user update request.
 type UpdateUserRequest struct {
-	Name            *string `json:"name,omitempty" example:"John Doe"`
-	Image           *string `json:"image,omitempty" example:"https://example.com/avatar.jpg"`
-	Username        *string `json:"username,omitempty" example:"johndoe"`
-	DisplayUsername *string `json:"display_username,omitempty" example:"John D."`
+	Name            *string `example:"John Doe"                       json:"name,omitempty"`
+	Image           *string `example:"https://example.com/avatar.jpg" json:"image,omitempty"`
+	Username        *string `example:"johndoe"                        json:"username,omitempty"`
+	DisplayUsername *string `example:"John D."                        json:"display_username,omitempty"`
 }
 
-// PasswordResetRequestDTO represents a password reset request
+// PasswordResetRequestDTO represents a password reset request.
 type PasswordResetRequestDTO struct {
-	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
 
-// PasswordResetRequestResponse represents the response to a password reset request
+// PasswordResetRequestResponse represents the response to a password reset request.
 type PasswordResetRequestResponse struct {
-	Message string `json:"message" example:"If the email exists, a password reset link has been sent"`
+	Message string `example:"If the email exists, a password reset link has been sent" json:"message"`
 }
 
-// PasswordResetConfirmDTO represents a password reset confirmation
+// PasswordResetConfirmDTO represents a password reset confirmation.
 type PasswordResetConfirmDTO struct {
-	Token       string `json:"token" validate:"required" example:"reset_token_here"`
-	NewPassword string `json:"newPassword" validate:"required,min=8" example:"NewSecurePass123!"`
+	Token       string `example:"reset_token_here"  json:"token"       validate:"required"`
+	NewPassword string `example:"NewSecurePass123!" json:"newPassword" validate:"required,min=8"`
 }
 
-// PasswordResetResponse represents the response to a password reset confirmation
+// PasswordResetResponse represents the response to a password reset confirmation.
 type PasswordResetResponse struct {
-	Message string `json:"message" example:"Password has been reset successfully"`
+	Message string `example:"Password has been reset successfully" json:"message"`
 }
 
-// TokenValidationResponse represents a token validation response
+// TokenValidationResponse represents a token validation response.
 type TokenValidationResponse struct {
-	Valid bool `json:"valid" example:"true"`
+	Valid bool `example:"true" json:"valid"`
 }
 
-// ChangePasswordDTO represents a password change request
+// ChangePasswordDTO represents a password change request.
 type ChangePasswordDTO struct {
-	OldPassword string `json:"oldPassword" validate:"required" example:"CurrentPass123!"`
-	NewPassword string `json:"newPassword" validate:"required,min=8" example:"NewSecurePass123!"`
+	OldPassword string `example:"CurrentPass123!"   json:"oldPassword" validate:"required"`
+	NewPassword string `example:"NewSecurePass123!" json:"newPassword" validate:"required,min=8"`
 }
 
-// PasswordChangeResponse represents the response to a password change
+// PasswordChangeResponse represents the response to a password change.
 type PasswordChangeResponse struct {
-	Message string `json:"message" example:"Password changed successfully"`
+	Message string `example:"Password changed successfully" json:"message"`
 }
 
-// EmailChangeRequestDTO represents an email change request
+// EmailChangeRequestDTO represents an email change request.
 type EmailChangeRequestDTO struct {
-	NewEmail string `json:"newEmail" validate:"required,email" example:"newemail@example.com"`
+	NewEmail string `example:"newemail@example.com" json:"newEmail" validate:"required,email"`
 }
 
-// EmailChangeRequestResponse represents the response to an email change request
+// EmailChangeRequestResponse represents the response to an email change request.
 type EmailChangeRequestResponse struct {
-	Message string `json:"message" example:"Email change confirmation sent to your current email address"`
+	Message string `example:"Email change confirmation sent to your current email address" json:"message"`
 }
 
-// EmailChangeConfirmDTO represents an email change confirmation
+// EmailChangeConfirmDTO represents an email change confirmation.
 type EmailChangeConfirmDTO struct {
-	Token string `json:"token" validate:"required" example:"change_token_here"`
+	Token string `example:"change_token_here" json:"token" validate:"required"`
 }
 
-// EmailChangeResponse represents the response to an email change confirmation
+// EmailChangeResponse represents the response to an email change confirmation.
 type EmailChangeResponse struct {
-	Message string `json:"message" example:"Email address has been changed successfully"`
+	Message string `example:"Email address has been changed successfully" json:"message"`
 }
 
-// RegisterAudit registers audit routes under a base path
+// RegisterAudit registers audit routes under a base path.
 func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandler, authMiddleware forge.Middleware) {
 	grp := router.Group(basePath)
 
@@ -411,16 +411,16 @@ func RegisterAudit(router forge.Router, basePath string, h *handlers.AuditHandle
 	)
 }
 
-// AuditEventsResponse represents a paginated list of audit events
+// AuditEventsResponse represents a paginated list of audit events.
 type AuditEventsResponse struct {
-	Data       interface{} `json:"data"`
-	Total      int         `json:"total"`
-	Page       int         `json:"page"`
-	PageSize   int         `json:"page_size"`
-	TotalPages int         `json:"total_pages"`
+	Data       any `json:"data"`
+	Total      int `json:"total"`
+	Page       int `json:"page"`
+	PageSize   int `json:"page_size"`
+	TotalPages int `json:"total_pages"`
 }
 
-// Aggregation response types
+// Aggregation response types.
 type AggregationsResponse struct{}
 type ActionsAggregationResponse struct{}
 type SourcesAggregationResponse struct{}
@@ -431,7 +431,7 @@ type AppsAggregationResponse struct{}
 type OrganizationsAggregationResponse struct{}
 
 // RegisterApp registers app (platform tenant) routes under a base path
-// This is used when multitenancy plugin is NOT enabled
+// This is used when multitenancy plugin is NOT enabled.
 func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, authMiddleware forge.Middleware) {
 	org := router.Group(basePath)
 
@@ -665,14 +665,14 @@ func RegisterApp(router forge.Router, basePath string, h *handlers.AppHandler, a
 	RegisterAppRBAC(org, h)
 }
 
-// App DTOs (placeholder types - actual implementations should be in handlers or core)
+// App DTOs (placeholder types - actual implementations should be in handlers or core).
 type AppResponse struct{}
-type AppsResponse []interface{}
+type AppsResponse []any
 type MemberResponse struct{}
-type MembersResponse []interface{}
+type MembersResponse []any
 type TeamResponse struct{}
-type TeamsResponse []interface{}
-type TeamMembersResponse []interface{}
+type TeamsResponse []any
+type TeamMembersResponse []any
 type InvitationResponse struct{}
 type CookieConfigResponse struct{}
 type CookieConfigRequest struct{}
@@ -680,7 +680,7 @@ type CookieConfigUpdateResponse struct{}
 
 // RegisterAppRBAC registers RBAC-related routes (policies, roles, user roles)
 // This is used when multitenancy plugin IS enabled to supplement its routes
-// Note: These routes don't apply middleware as they're nested under RegisterApp which already applies it
+// Note: These routes don't apply middleware as they're nested under RegisterApp which already applies it.
 func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	// Policies
 	router.POST("/policies", h.CreatePolicy,
@@ -771,12 +771,12 @@ func RegisterAppRBAC(router forge.Router, h *handlers.AppHandler) {
 	)
 }
 
-// RBAC DTOs
+// RBAC DTOs.
 type PolicyResponse struct{}
-type PoliciesResponse []interface{}
+type PoliciesResponse []any
 type RoleResponse struct{}
-type RolesResponse []interface{}
-type UserRolesResponse []interface{}
+type RolesResponse []any
+type UserRolesResponse []any
 
 // RegisterAPIKey is DEPRECATED and removed.
 // API key routes are now handled by the apikey plugin.
@@ -784,13 +784,13 @@ type UserRolesResponse []interface{}
 
 // RegisterJWT is DEPRECATED - JWT routes are now handled by the JWT plugin.
 // The JWT plugin registers its own routes via plugin.RegisterRoutes().
-// Use: auth.RegisterPlugin(jwt.NewPlugin())
-func RegisterJWT(router forge.Router, basePath string, h interface{}) {
+// Use: auth.RegisterPlugin(jwt.NewPlugin()).
+func RegisterJWT(router forge.Router, basePath string, h any) {
 	// DEPRECATED: This function is kept for backwards compatibility but does nothing.
 	// JWT routes are now registered by the JWT plugin itself.
 }
 
-// RegisterWebhook registers webhook routes under a base path
+// RegisterWebhook registers webhook routes under a base path.
 func RegisterWebhook(router forge.Router, basePath string, h *handlers.WebhookHandler) {
 	grp := router.Group(basePath)
 	RegisterWebhookRoutes(grp, h)

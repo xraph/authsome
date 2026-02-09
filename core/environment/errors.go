@@ -36,7 +36,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// Environment CRUD errors
+// Environment CRUD errors.
 func EnvironmentNotFound(id string) *errs.AuthsomeError {
 	return errs.New(CodeEnvironmentNotFound, "Environment not found", http.StatusNotFound).
 		WithContext("environment_id", id)
@@ -57,7 +57,7 @@ func DefaultEnvironmentNotFound(appID string) *errs.AuthsomeError {
 		WithContext("app_id", appID)
 }
 
-// Environment deletion errors
+// Environment deletion errors.
 func CannotDeleteDefaultEnvironment() *errs.AuthsomeError {
 	return errs.New(CodeCannotDeleteDefaultEnvironment, "Cannot delete default environment", http.StatusForbidden)
 }
@@ -66,7 +66,7 @@ func CannotDeleteProductionEnvironment() *errs.AuthsomeError {
 	return errs.New(CodeCannotDeleteProductionEnvironment, "Cannot delete production environment without explicit confirmation", http.StatusForbidden)
 }
 
-// Environment modification errors
+// Environment modification errors.
 func CannotModifyDefaultEnvironmentType() *errs.AuthsomeError {
 	return errs.New(CodeCannotModifyDefaultEnvironmentType, "Cannot change default environment type", http.StatusForbidden)
 }
@@ -81,7 +81,7 @@ func EnvironmentLimitReached(limit int) *errs.AuthsomeError {
 		WithContext("limit", limit)
 }
 
-// Promotion errors
+// Promotion errors.
 func PromotionNotAllowed() *errs.AuthsomeError {
 	return errs.New(CodePromotionNotAllowed, "Environment promotion is disabled", http.StatusForbidden)
 }
@@ -101,7 +101,7 @@ func PromotionInProgress(id string) *errs.AuthsomeError {
 		WithContext("promotion_id", id)
 }
 
-// Validation errors
+// Validation errors.
 func InvalidEnvironmentStatus(status string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidEnvironmentStatus, "Invalid environment status", http.StatusBadRequest).
 		WithContext("status", status)

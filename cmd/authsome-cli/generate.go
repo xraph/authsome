@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"os"
@@ -12,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// generateCmd represents the generate command
+// generateCmd represents the generate command.
 var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "Code generation commands",
@@ -110,6 +111,7 @@ var generateConfigCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Generated %s mode configuration: %s\n", mode, outputPath)
+
 		return nil
 	},
 }
@@ -127,7 +129,7 @@ var generateSecretCmd = &cobra.Command{
 		}
 
 		// Convert to hex string
-		secret := fmt.Sprintf("%x", bytes)
+		secret := hex.EncodeToString(bytes)
 		fmt.Printf("Generated secret (%d bytes): %s\n", length, secret)
 
 		return nil

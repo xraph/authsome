@@ -7,12 +7,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// LINEProvider implements OAuth for LINE
+// LINEProvider implements OAuth for LINE.
 type LINEProvider struct {
 	*BaseProvider
 }
 
-// NewLINEProvider creates a new LINE OAuth provider
+// NewLINEProvider creates a new LINE OAuth provider.
 func NewLINEProvider(config ProviderConfig) *LINEProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -34,11 +34,11 @@ func NewLINEProvider(config ProviderConfig) *LINEProvider {
 	return &LINEProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from LINE API
+// GetUserInfo fetches user information from LINE API.
 func (l *LINEProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := l.oauth2Config.Client(ctx, token)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, client, l.userInfoURL, &raw); err != nil {
 		return nil, fmt.Errorf("failed to fetch LINE user info: %w", err)
 	}
@@ -50,9 +50,11 @@ func (l *LINEProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*U
 	if userID, ok := raw["userId"].(string); ok {
 		userInfo.ID = userID
 	}
+
 	if displayName, ok := raw["displayName"].(string); ok {
 		userInfo.Name = displayName
 	}
+
 	if picture, ok := raw["pictureUrl"].(string); ok {
 		userInfo.Avatar = picture
 	}

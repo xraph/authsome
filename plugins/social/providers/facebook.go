@@ -8,12 +8,12 @@ import (
 	"golang.org/x/oauth2/facebook"
 )
 
-// FacebookProvider implements OAuth for Facebook
+// FacebookProvider implements OAuth for Facebook.
 type FacebookProvider struct {
 	*BaseProvider
 }
 
-// NewFacebookProvider creates a new Facebook OAuth provider
+// NewFacebookProvider creates a new Facebook OAuth provider.
 func NewFacebookProvider(config ProviderConfig) *FacebookProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -35,11 +35,11 @@ func NewFacebookProvider(config ProviderConfig) *FacebookProvider {
 	return &FacebookProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from Facebook Graph API
+// GetUserInfo fetches user information from Facebook Graph API.
 func (f *FacebookProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := f.oauth2Config.Client(ctx, token)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, client, f.userInfoURL, &raw); err != nil {
 		return nil, fmt.Errorf("failed to fetch Facebook user info: %w", err)
 	}
@@ -51,21 +51,26 @@ func (f *FacebookProvider) GetUserInfo(ctx context.Context, token *oauth2.Token)
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if email, ok := raw["email"].(string); ok {
 		userInfo.Email = email
 		userInfo.EmailVerified = true // Facebook emails are verified
 	}
+
 	if name, ok := raw["name"].(string); ok {
 		userInfo.Name = name
 	}
+
 	if firstName, ok := raw["first_name"].(string); ok {
 		userInfo.FirstName = firstName
 	}
+
 	if lastName, ok := raw["last_name"].(string); ok {
 		userInfo.LastName = lastName
 	}
-	if picture, ok := raw["picture"].(map[string]interface{}); ok {
-		if data, ok := picture["data"].(map[string]interface{}); ok {
+
+	if picture, ok := raw["picture"].(map[string]any); ok {
+		if data, ok := picture["data"].(map[string]any); ok {
 			if url, ok := data["url"].(string); ok {
 				userInfo.Avatar = url
 			}

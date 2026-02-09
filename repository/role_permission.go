@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// RolePermissionRepository handles role-permission relationships
+// RolePermissionRepository handles role-permission relationships.
 type RolePermissionRepository struct{ db *bun.DB }
 
 func NewRolePermissionRepository(db *bun.DB) *RolePermissionRepository {
@@ -45,6 +45,7 @@ func (r *RolePermissionRepository) AssignPermission(ctx context.Context, roleID,
 	_, err = r.db.NewInsert().
 		Model(rp).
 		Exec(ctx)
+
 	return err
 }
 
@@ -54,11 +55,13 @@ func (r *RolePermissionRepository) UnassignPermission(ctx context.Context, roleI
 		Where("role_id = ?", roleID).
 		Where("permission_id = ?", permissionID).
 		Exec(ctx)
+
 	return err
 }
 
 func (r *RolePermissionRepository) GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*schema.Permission, error) {
 	var permissions []*schema.Permission
+
 	err := r.db.NewSelect().
 		Model(&permissions).
 		Join("INNER JOIN role_permissions AS rp ON rp.permission_id = perm.id").
@@ -69,11 +72,13 @@ func (r *RolePermissionRepository) GetRolePermissions(ctx context.Context, roleI
 	if err != nil {
 		return nil, err
 	}
+
 	return permissions, nil
 }
 
 func (r *RolePermissionRepository) GetPermissionRoles(ctx context.Context, permissionID xid.ID) ([]*schema.Role, error) {
 	var roles []*schema.Role
+
 	err := r.db.NewSelect().
 		Model(&roles).
 		Join("INNER JOIN role_permissions AS rp ON rp.role_id = r.id").
@@ -83,6 +88,7 @@ func (r *RolePermissionRepository) GetPermissionRoles(ctx context.Context, permi
 	if err != nil {
 		return nil, err
 	}
+
 	return roles, nil
 }
 
@@ -101,6 +107,7 @@ func (r *RolePermissionRepository) ReplaceRolePermissions(ctx context.Context, r
 		// Insert new associations
 		if len(permissionIDs) > 0 {
 			now := time.Now()
+
 			rolePermissions := make([]*schema.RolePermission, 0, len(permissionIDs))
 			for _, permID := range permissionIDs {
 				rolePermissions = append(rolePermissions, &schema.RolePermission{

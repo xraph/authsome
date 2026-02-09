@@ -12,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardExtension implements ui.DashboardExtension for the OIDC provider plugin
+// DashboardExtension implements ui.DashboardExtension for the OIDC provider plugin.
 type DashboardExtension struct {
 	clientRepo     *repository.OAuthClientRepository
 	tokenRepo      *repository.OAuthTokenRepository
@@ -24,7 +24,7 @@ type DashboardExtension struct {
 	pagesManager   *pages.PagesManager
 }
 
-// NewDashboardExtension creates a new dashboard extension
+// NewDashboardExtension creates a new dashboard extension.
 func NewDashboardExtension(
 	clientRepo *repository.OAuthClientRepository,
 	tokenRepo *repository.OAuthTokenRepository,
@@ -58,19 +58,19 @@ func NewDashboardExtension(
 	return ext
 }
 
-// ExtensionID returns the unique identifier for this extension
+// ExtensionID returns the unique identifier for this extension.
 func (e *DashboardExtension) ExtensionID() string {
 	return "oidcprovider"
 }
 
-// SetBaseUIPath sets the base UI path for navigation links
+// SetBaseUIPath sets the base UI path for navigation links.
 func (e *DashboardExtension) SetBaseUIPath(baseUIPath string) {
 	if e.pagesManager != nil {
 		e.pagesManager.SetBaseUIPath(baseUIPath)
 	}
 }
 
-// NavigationItems returns navigation items for OAuth & OIDC section
+// NavigationItems returns navigation items for OAuth & OIDC section.
 func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	return []ui.NavigationItem{
 		{
@@ -83,6 +83,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 				if currentApp == nil {
 					return basePath + "/oauth/clients"
 				}
+
 				return basePath + "/app/" + currentApp.ID.String() + "/oauth/clients"
 			},
 			ActiveChecker: func(activePage string) bool {
@@ -97,7 +98,7 @@ func (e *DashboardExtension) NavigationItems() []ui.NavigationItem {
 	}
 }
 
-// Routes returns dashboard routes for OIDC provider pages
+// Routes returns dashboard routes for OIDC provider pages.
 func (e *DashboardExtension) Routes() []ui.Route {
 	return []ui.Route{
 		// OAuth Clients List
@@ -175,12 +176,12 @@ func (e *DashboardExtension) Routes() []ui.Route {
 	}
 }
 
-// SettingsSections returns settings sections (deprecated, returning empty)
+// SettingsSections returns settings sections (deprecated, returning empty).
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{}
 }
 
-// SettingsPages returns full settings pages
+// SettingsPages returns full settings pages.
 func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	return []ui.SettingsPage{
 		{
@@ -197,7 +198,7 @@ func (e *DashboardExtension) SettingsPages() []ui.SettingsPage {
 	}
 }
 
-// DashboardWidgets returns widgets for the main dashboard
+// DashboardWidgets returns widgets for the main dashboard.
 func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	return []ui.DashboardWidget{
 		{
@@ -267,7 +268,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 	}
 }
 
-// BridgeFunctions returns bridge functions for OIDC provider
+// BridgeFunctions returns bridge functions for OIDC provider.
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		// Client management

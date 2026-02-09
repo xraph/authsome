@@ -13,13 +13,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// FeaturesMigration handles migration of existing PlanFeature data to the new Feature system
+// FeaturesMigration handles migration of existing PlanFeature data to the new Feature system.
 type FeaturesMigration struct {
 	db     *bun.DB
 	logger forge.Logger
 }
 
-// NewFeaturesMigration creates a new features migration utility
+// NewFeaturesMigration creates a new features migration utility.
 func NewFeaturesMigration(db *bun.DB, logger forge.Logger) *FeaturesMigration {
 	return &FeaturesMigration{
 		db:     db,
@@ -27,7 +27,7 @@ func NewFeaturesMigration(db *bun.DB, logger forge.Logger) *FeaturesMigration {
 	}
 }
 
-// MigrateResult contains the results of a migration operation
+// MigrateResult contains the results of a migration operation.
 type MigrateResult struct {
 	FeaturesCreated int      `json:"featuresCreated"`
 	LinksCreated    int      `json:"linksCreated"`
@@ -35,7 +35,7 @@ type MigrateResult struct {
 }
 
 // MigrateExistingFeatures migrates existing PlanFeature entries to the new Feature system
-// This is a non-destructive operation that creates new Feature entities and links them to plans
+// This is a non-destructive operation that creates new Feature entities and links them to plans.
 func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID xid.ID) (*MigrateResult, error) {
 	result := &MigrateResult{
 		Errors: make([]string, 0),
@@ -59,6 +59,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 	}
 
 	var uniqueFeatures []featureKeyInfo
+
 	err = tx.NewSelect().
 		Model((*schema.SubscriptionPlanFeature)(nil)).
 		ColumnExpr("DISTINCT spf.key, spf.name, spf.description, spf.type").
@@ -77,6 +78,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 	for _, uf := range uniqueFeatures {
 		// Check if feature already exists
 		var existing schema.Feature
+
 		err := tx.NewSelect().
 			Model(&existing).
 			Where("app_id = ?", appID).
@@ -86,6 +88,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 			// Feature already exists, use its ID
 			featureKeyToID[uf.Key] = existing.ID
 			m.logger.Debug("feature already exists", forge.F("key", uf.Key))
+
 			continue
 		}
 
@@ -100,7 +103,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 			Type:        uf.Type,
 			ResetPeriod: determineResetPeriod(uf.Type),
 			IsPublic:    true,
-			Metadata:    make(map[string]interface{}),
+			Metadata:    make(map[string]any),
 		}
 		feature.CreatedAt = now
 		feature.UpdatedAt = now
@@ -108,16 +111,19 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 		_, err = tx.NewInsert().Model(feature).Exec(ctx)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("failed to create feature %s: %v", uf.Key, err))
+
 			continue
 		}
 
 		featureKeyToID[uf.Key] = feature.ID
 		result.FeaturesCreated++
+
 		m.logger.Debug("created feature", forge.F("key", uf.Key), forge.F("id", feature.ID.String()))
 	}
 
 	// Step 3: Get all PlanFeature entries and create PlanFeatureLink entries
 	var planFeatures []schema.SubscriptionPlanFeature
+
 	err = tx.NewSelect().
 		Model(&planFeatures).
 		Join("JOIN subscription_plans sp ON sp.id = spf.plan_id").
@@ -130,12 +136,14 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 	for _, pf := range planFeatures {
 		featureID, ok := featureKeyToID[pf.Key]
 		if !ok {
-			result.Errors = append(result.Errors, fmt.Sprintf("feature ID not found for key %s", pf.Key))
+			result.Errors = append(result.Errors, "feature ID not found for key "+pf.Key)
+
 			continue
 		}
 
 		// Check if link already exists
 		var existing schema.PlanFeatureLink
+
 		err := tx.NewSelect().
 			Model(&existing).
 			Where("plan_id = ?", pf.PlanID).
@@ -155,7 +163,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 			Value:            pf.Value,
 			IsBlocked:        false,
 			IsHighlighted:    false,
-			OverrideSettings: make(map[string]interface{}),
+			OverrideSettings: make(map[string]any),
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		}
@@ -163,6 +171,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 		_, err = tx.NewInsert().Model(link).Exec(ctx)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("failed to create link for plan %s feature %s: %v", pf.PlanID.String(), pf.Key, err))
+
 			continue
 		}
 
@@ -182,12 +191,13 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 	return result, nil
 }
 
-// ValidateMigration checks if all existing PlanFeature entries have corresponding Feature entities and links
+// ValidateMigration checks if all existing PlanFeature entries have corresponding Feature entities and links.
 func (m *FeaturesMigration) ValidateMigration(ctx context.Context, appID xid.ID) (bool, []string, error) {
 	var issues []string
 
 	// Get all plan features
 	var planFeatures []schema.SubscriptionPlanFeature
+
 	err := m.db.NewSelect().
 		Model(&planFeatures).
 		Join("JOIN subscription_plans sp ON sp.id = spf.plan_id").
@@ -200,18 +210,21 @@ func (m *FeaturesMigration) ValidateMigration(ctx context.Context, appID xid.ID)
 	for _, pf := range planFeatures {
 		// Check if feature exists
 		var feature schema.Feature
+
 		err := m.db.NewSelect().
 			Model(&feature).
 			Where("app_id = ?", appID).
 			Where("key = ?", pf.Key).
 			Scan(ctx)
 		if err != nil {
-			issues = append(issues, fmt.Sprintf("feature not found for key %s", pf.Key))
+			issues = append(issues, "feature not found for key "+pf.Key)
+
 			continue
 		}
 
 		// Check if link exists
 		var link schema.PlanFeatureLink
+
 		err = m.db.NewSelect().
 			Model(&link).
 			Where("plan_id = ?", pf.PlanID).
@@ -225,7 +238,7 @@ func (m *FeaturesMigration) ValidateMigration(ctx context.Context, appID xid.ID)
 	return len(issues) == 0, issues, nil
 }
 
-// GetMigrationStatus returns the current migration status for an app
+// GetMigrationStatus returns the current migration status for an app.
 func (m *FeaturesMigration) GetMigrationStatus(ctx context.Context, appID xid.ID) (*MigrationStatus, error) {
 	status := &MigrationStatus{}
 
@@ -238,6 +251,7 @@ func (m *FeaturesMigration) GetMigrationStatus(ctx context.Context, appID xid.ID
 	if err != nil {
 		return nil, fmt.Errorf("failed to count plan features: %w", err)
 	}
+
 	status.OldPlanFeaturesCount = count
 
 	// Count new features
@@ -248,6 +262,7 @@ func (m *FeaturesMigration) GetMigrationStatus(ctx context.Context, appID xid.ID
 	if err != nil {
 		return nil, fmt.Errorf("failed to count features: %w", err)
 	}
+
 	status.NewFeaturesCount = count
 
 	// Count links
@@ -259,6 +274,7 @@ func (m *FeaturesMigration) GetMigrationStatus(ctx context.Context, appID xid.ID
 	if err != nil {
 		return nil, fmt.Errorf("failed to count links: %w", err)
 	}
+
 	status.LinksCount = count
 
 	// Validate
@@ -269,7 +285,7 @@ func (m *FeaturesMigration) GetMigrationStatus(ctx context.Context, appID xid.ID
 	return status, nil
 }
 
-// MigrationStatus represents the current migration status
+// MigrationStatus represents the current migration status.
 type MigrationStatus struct {
 	OldPlanFeaturesCount int      `json:"oldPlanFeaturesCount"`
 	NewFeaturesCount     int      `json:"newFeaturesCount"`
@@ -278,10 +294,11 @@ type MigrationStatus struct {
 	Issues               []string `json:"issues,omitempty"`
 }
 
-// SyncFeatureFromLegacy syncs a single feature from legacy PlanFeature to the new system
+// SyncFeatureFromLegacy syncs a single feature from legacy PlanFeature to the new system.
 func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid.ID, featureKey string) error {
 	// Get all plan features with this key
 	var planFeatures []schema.SubscriptionPlanFeature
+
 	err := m.db.NewSelect().
 		Model(&planFeatures).
 		Join("JOIN subscription_plans sp ON sp.id = spf.plan_id").
@@ -301,6 +318,7 @@ func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid
 
 	// Get or create feature
 	var feature schema.Feature
+
 	err = m.db.NewSelect().
 		Model(&feature).
 		Where("app_id = ?", appID).
@@ -318,7 +336,7 @@ func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid
 			Type:        template.Type,
 			ResetPeriod: determineResetPeriod(template.Type),
 			IsPublic:    true,
-			Metadata:    make(map[string]interface{}),
+			Metadata:    make(map[string]any),
 		}
 		feature.CreatedAt = now
 		feature.UpdatedAt = now
@@ -333,6 +351,7 @@ func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid
 	for _, pf := range planFeatures {
 		// Check if link exists
 		var existing schema.PlanFeatureLink
+
 		err := m.db.NewSelect().
 			Model(&existing).
 			Where("plan_id = ?", pf.PlanID).
@@ -351,7 +370,7 @@ func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid
 			Value:            pf.Value,
 			IsBlocked:        false,
 			IsHighlighted:    false,
-			OverrideSettings: make(map[string]interface{}),
+			OverrideSettings: make(map[string]any),
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		}
@@ -365,7 +384,7 @@ func (m *FeaturesMigration) SyncFeatureFromLegacy(ctx context.Context, appID xid
 	return nil
 }
 
-// ExportFeatures exports features and links to JSON format
+// ExportFeatures exports features and links to JSON format.
 func (m *FeaturesMigration) ExportFeatures(ctx context.Context, appID xid.ID) ([]byte, error) {
 	type exportData struct {
 		Features []schema.Feature         `json:"features"`

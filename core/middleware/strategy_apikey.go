@@ -14,14 +14,14 @@ import (
 // - Authorization: ApiKey <key>
 // - Authorization: Bearer <key> (if key has pk_/sk_/rk_ prefix)
 // - X-API-Key: <key>
-// - Query param (if enabled, not recommended)
+// - Query param (if enabled, not recommended).
 type APIKeyStrategy struct {
 	service           *apikey.Service
 	allowInQuery      bool
 	additionalHeaders []string
 }
 
-// NewAPIKeyStrategy creates a new API key authentication strategy
+// NewAPIKeyStrategy creates a new API key authentication strategy.
 func NewAPIKeyStrategy(service *apikey.Service, allowInQuery bool) *APIKeyStrategy {
 	return &APIKeyStrategy{
 		service:      service,
@@ -32,24 +32,24 @@ func NewAPIKeyStrategy(service *apikey.Service, allowInQuery bool) *APIKeyStrate
 	}
 }
 
-// ID returns the strategy identifier
+// ID returns the strategy identifier.
 func (s *APIKeyStrategy) ID() string {
 	return "apikey"
 }
 
-// Priority returns the strategy priority (10 = high priority for API keys)
+// Priority returns the strategy priority (10 = high priority for API keys).
 func (s *APIKeyStrategy) Priority() int {
 	return 10
 }
 
-// Extract attempts to extract an API key from the request
-func (s *APIKeyStrategy) Extract(c forge.Context) (interface{}, bool) {
+// Extract attempts to extract an API key from the request.
+func (s *APIKeyStrategy) Extract(c forge.Context) (any, bool) {
 	// Method 1: Authorization header with ApiKey scheme
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader != "" {
 		// ApiKey pk_test_xxx or ApiKey sk_test_xxx
-		if strings.HasPrefix(authHeader, "ApiKey ") {
-			apiKey := strings.TrimPrefix(authHeader, "ApiKey ")
+		if after, ok := strings.CutPrefix(authHeader, "ApiKey "); ok {
+			apiKey := after
 			if apiKey != "" {
 				return apiKey, true
 			}
@@ -57,8 +57,8 @@ func (s *APIKeyStrategy) Extract(c forge.Context) (interface{}, bool) {
 
 		// Bearer pk_test_xxx (if starts with pk_/sk_/rk_)
 		// IMPORTANT: Only extract if it's actually an API key, not a JWT
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token := after
 			token = strings.TrimSpace(token)
 
 			// Only accept if it starts with known API key prefixes
@@ -98,8 +98,8 @@ func (s *APIKeyStrategy) Extract(c forge.Context) (interface{}, bool) {
 	return nil, false
 }
 
-// Authenticate validates the API key and builds auth context
-func (s *APIKeyStrategy) Authenticate(ctx context.Context, credentials interface{}) (*contexts.AuthContext, error) {
+// Authenticate validates the API key and builds auth context.
+func (s *APIKeyStrategy) Authenticate(ctx context.Context, credentials any) (*contexts.AuthContext, error) {
 	apiKeyStr, ok := credentials.(string)
 	if !ok {
 		return nil, &AuthStrategyError{
@@ -129,6 +129,7 @@ func (s *APIKeyStrategy) Authenticate(ctx context.Context, credentials interface
 		if resp.Error != "" {
 			errMsg = resp.Error
 		}
+
 		return nil, &AuthStrategyError{
 			Strategy: s.ID(),
 			Message:  errMsg,
@@ -158,7 +159,7 @@ func (s *APIKeyStrategy) Authenticate(ctx context.Context, credentials interface
 	return authCtx, nil
 }
 
-// AuthStrategyError represents an authentication strategy error
+// AuthStrategyError represents an authentication strategy error.
 type AuthStrategyError struct {
 	Strategy string
 	Message  string
@@ -169,6 +170,7 @@ func (e *AuthStrategyError) Error() string {
 	if e.Err != nil {
 		return e.Strategy + ": " + e.Message + ": " + e.Err.Error()
 	}
+
 	return e.Strategy + ": " + e.Message
 }
 

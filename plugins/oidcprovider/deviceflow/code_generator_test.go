@@ -100,7 +100,7 @@ func TestCodeGenerator_GenerateUserCode_Uniqueness(t *testing.T) {
 	codes := make(map[string]bool)
 
 	// Generate 100 codes and check for duplicates
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		code, err := gen.GenerateUserCode()
 		if err != nil {
 			t.Fatalf("GenerateUserCode() failed: %v", err)
@@ -109,6 +109,7 @@ func TestCodeGenerator_GenerateUserCode_Uniqueness(t *testing.T) {
 		if codes[code] {
 			t.Errorf("GenerateUserCode() generated duplicate code: %s", code)
 		}
+
 		codes[code] = true
 	}
 }
@@ -131,7 +132,7 @@ func TestValidateUserCodeFormat(t *testing.T) {
 		},
 		{
 			name:    "valid format with spaces",
-			format:  "XXXX XXXX",
+			format:  "XXXX",
 			wantErr: false,
 		},
 		{

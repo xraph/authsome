@@ -6,9 +6,9 @@ import (
 	"fmt"
 )
 
-// Domain errors for the subscription plugin
+// Domain errors for the subscription plugin.
 var (
-	// Plan errors
+	// Plan errors.
 	ErrPlanNotFound           = errors.New("plan not found")
 	ErrPlanAlreadyExists      = errors.New("plan with this slug already exists")
 	ErrPlanNotActive          = errors.New("plan is not active")
@@ -17,7 +17,7 @@ var (
 	ErrInvalidBillingPattern  = errors.New("invalid billing pattern")
 	ErrInvalidBillingInterval = errors.New("invalid billing interval")
 
-	// Subscription errors
+	// Subscription errors.
 	ErrSubscriptionNotFound      = errors.New("subscription not found")
 	ErrSubscriptionAlreadyExists = errors.New("organization already has an active subscription")
 	ErrSubscriptionNotActive     = errors.New("subscription is not active")
@@ -26,7 +26,7 @@ var (
 	ErrCannotDowngrade           = errors.New("cannot downgrade subscription with current usage")
 	ErrInvalidQuantity           = errors.New("invalid subscription quantity")
 
-	// Add-on errors
+	// Add-on errors.
 	ErrAddOnNotFound        = errors.New("add-on not found")
 	ErrAddOnAlreadyExists   = errors.New("add-on with this slug already exists")
 	ErrAddOnNotActive       = errors.New("add-on is not active")
@@ -35,35 +35,35 @@ var (
 	ErrAddOnNotAttached     = errors.New("add-on is not attached to subscription")
 	ErrAddOnMaxQuantity     = errors.New("add-on maximum quantity exceeded")
 
-	// Invoice errors
+	// Invoice errors.
 	ErrInvoiceNotFound    = errors.New("invoice not found")
 	ErrInvoiceAlreadyPaid = errors.New("invoice is already paid")
 	ErrInvoiceVoided      = errors.New("invoice has been voided")
 	ErrInvoiceNotOpen     = errors.New("invoice is not open for payment")
 
-	// Usage errors
+	// Usage errors.
 	ErrUsageRecordNotFound  = errors.New("usage record not found")
 	ErrDuplicateUsageRecord = errors.New("duplicate usage record (idempotency key)")
 	ErrInvalidUsageMetric   = errors.New("invalid usage metric key")
 	ErrInvalidUsageAction   = errors.New("invalid usage action")
 
-	// Payment method errors
+	// Payment method errors.
 	ErrPaymentMethodNotFound      = errors.New("payment method not found")
 	ErrPaymentMethodRequired      = errors.New("payment method is required")
 	ErrPaymentMethodExpired       = errors.New("payment method is expired")
 	ErrDefaultPaymentMethodDelete = errors.New("cannot delete default payment method")
 
-	// Customer errors
+	// Customer errors.
 	ErrCustomerNotFound      = errors.New("customer not found")
 	ErrCustomerAlreadyExists = errors.New("customer already exists for organization")
 
-	// Provider errors
+	// Provider errors.
 	ErrProviderNotConfigured   = errors.New("payment provider is not configured")
 	ErrProviderAPIError        = errors.New("payment provider API error")
 	ErrWebhookSignatureInvalid = errors.New("invalid webhook signature")
 	ErrWebhookEventUnhandled   = errors.New("webhook event not handled")
 
-	// Feature/limit errors
+	// Feature/limit errors.
 	ErrFeatureLimitExceeded = errors.New("feature limit exceeded")
 	ErrSeatLimitExceeded    = errors.New("seat limit exceeded")
 	ErrSubscriptionRequired = errors.New("subscription is required")
@@ -80,59 +80,63 @@ var (
 	ErrFeatureGrantNotFound = errors.New("feature grant not found")
 	ErrFeatureUsageNotFound = errors.New("feature usage record not found")
 
-	// General errors
+	// General errors.
 	ErrInvalidCurrency = errors.New("invalid currency code")
 	ErrInvalidAppID    = errors.New("invalid app ID")
 	ErrInvalidOrgID    = errors.New("invalid organization ID")
 	ErrUnauthorized    = errors.New("unauthorized access")
 )
 
-// SubscriptionError represents a domain-specific error with additional context
+// SubscriptionError represents a domain-specific error with additional context.
 type SubscriptionError struct {
 	Err     error
 	Message string
 	Code    string
-	Details map[string]interface{}
+	Details map[string]any
 }
 
-// Error implements the error interface
+// Error implements the error interface.
 func (e *SubscriptionError) Error() string {
 	if e.Message != "" {
 		return fmt.Sprintf("%s: %v", e.Message, e.Err)
 	}
+
 	return e.Err.Error()
 }
 
-// Unwrap returns the underlying error
+// Unwrap returns the underlying error.
 func (e *SubscriptionError) Unwrap() error {
 	return e.Err
 }
 
-// New creates a new subscription error with context
+// New creates a new subscription error with context.
 func New(err error, message string) *SubscriptionError {
 	return &SubscriptionError{
 		Err:     err,
 		Message: message,
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 }
 
-// WithCode adds an error code
+// WithCode adds an error code.
 func (e *SubscriptionError) WithCode(code string) *SubscriptionError {
 	e.Code = code
+
 	return e
 }
 
-// WithDetails adds details to the error
-func (e *SubscriptionError) WithDetails(key string, value interface{}) *SubscriptionError {
+// WithDetails adds details to the error.
+func (e *SubscriptionError) WithDetails(key string, value any) *SubscriptionError {
 	if e.Details == nil {
-		e.Details = make(map[string]interface{})
+		e.Details = make(map[string]any)
 	}
+
 	e.Details[key] = value
+
 	return e
 }
 
-// IsNotFoundError checks if the error is a "not found" type error
+// IsNotFoundError checks if the error is a "not found" type error.
 func IsNotFoundError(err error) bool {
 	return errors.Is(err, ErrPlanNotFound) ||
 		errors.Is(err, ErrSubscriptionNotFound) ||
@@ -147,7 +151,7 @@ func IsNotFoundError(err error) bool {
 		errors.Is(err, ErrFeatureUsageNotFound)
 }
 
-// IsValidationError checks if the error is a validation error
+// IsValidationError checks if the error is a validation error.
 func IsValidationError(err error) bool {
 	return errors.Is(err, ErrInvalidPlanSlug) ||
 		errors.Is(err, ErrInvalidBillingPattern) ||
@@ -162,7 +166,7 @@ func IsValidationError(err error) bool {
 		errors.Is(err, ErrInvalidResetPeriod)
 }
 
-// IsConflictError checks if the error is a conflict/duplicate error
+// IsConflictError checks if the error is a conflict/duplicate error.
 func IsConflictError(err error) bool {
 	return errors.Is(err, ErrPlanAlreadyExists) ||
 		errors.Is(err, ErrSubscriptionAlreadyExists) ||
@@ -174,7 +178,7 @@ func IsConflictError(err error) bool {
 		errors.Is(err, ErrFeatureAlreadyLinked)
 }
 
-// IsLimitError checks if the error is a limit-related error
+// IsLimitError checks if the error is a limit-related error.
 func IsLimitError(err error) bool {
 	return errors.Is(err, ErrFeatureLimitExceeded) ||
 		errors.Is(err, ErrSeatLimitExceeded) ||
@@ -182,7 +186,7 @@ func IsLimitError(err error) bool {
 		errors.Is(err, ErrInsufficientQuota)
 }
 
-// IsPaymentError checks if the error is payment-related
+// IsPaymentError checks if the error is payment-related.
 func IsPaymentError(err error) bool {
 	return errors.Is(err, ErrPaymentMethodNotFound) ||
 		errors.Is(err, ErrPaymentMethodRequired) ||

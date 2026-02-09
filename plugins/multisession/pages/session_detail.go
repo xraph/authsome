@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/card"
 )
 
-// SessionDetailPage renders the session detail page with dynamic data loading
+// SessionDetailPage renders the session detail page with dynamic data loading.
 func SessionDetailPage(currentApp *app.App, sessionID, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -166,7 +166,7 @@ func SessionDetailPage(currentApp *app.App, sessionID, basePath string) g.Node {
 	)
 }
 
-// sessionDetailData returns the Alpine.js data object for session detail
+// sessionDetailData returns the Alpine.js data object for session detail.
 func sessionDetailData(appID, sessionID string) string {
 	return fmt.Sprintf(`{
 		session: null,

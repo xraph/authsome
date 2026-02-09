@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// CursorData represents the data encoded in a cursor
+// CursorData represents the data encoded in a cursor.
 type CursorData struct {
 	ID        string    `json:"id"`
 	Timestamp time.Time `json:"ts"`
 	Value     string    `json:"val,omitempty"` // For sorting by fields other than timestamp
 }
 
-// EncodeCursor encodes cursor data into a base64 string
+// EncodeCursor encodes cursor data into a base64 string.
 func EncodeCursor(id string, timestamp time.Time, value string) (string, error) {
 	data := CursorData{
 		ID:        id,
@@ -28,10 +28,11 @@ func EncodeCursor(id string, timestamp time.Time, value string) (string, error) 
 	}
 
 	encoded := base64.URLEncoding.EncodeToString(jsonData)
+
 	return encoded, nil
 }
 
-// DecodeCursor decodes a base64 cursor string back to CursorData
+// DecodeCursor decodes a base64 cursor string back to CursorData.
 func DecodeCursor(cursor string) (*CursorData, error) {
 	if cursor == "" {
 		return nil, nil
@@ -50,12 +51,12 @@ func DecodeCursor(cursor string) (*CursorData, error) {
 	return &data, nil
 }
 
-// SimpleCursorEncode encodes a simple string cursor
+// SimpleCursorEncode encodes a simple string cursor.
 func SimpleCursorEncode(value string) string {
 	return base64.URLEncoding.EncodeToString([]byte(value))
 }
 
-// SimpleCursorDecode decodes a simple string cursor
+// SimpleCursorDecode decodes a simple string cursor.
 func SimpleCursorDecode(cursor string) (string, error) {
 	if cursor == "" {
 		return "", nil

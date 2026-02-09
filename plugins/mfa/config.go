@@ -1,15 +1,17 @@
 package mfa
 
-// Config holds MFA plugin configuration
+import "slices"
+
+// Config holds MFA plugin configuration.
 type Config struct {
 	// Global settings
-	Enabled            bool `json:"enabled" default:"true"`
-	RequireForAllUsers bool `json:"require_for_all_users" default:"false"`
-	GracePeriodDays    int  `json:"grace_period_days" default:"7"`
+	Enabled            bool `default:"true"  json:"enabled"`
+	RequireForAllUsers bool `default:"false" json:"require_for_all_users"`
+	GracePeriodDays    int  `default:"7"     json:"grace_period_days"`
 
 	// Factor settings
 	AllowedFactorTypes  []FactorType `json:"allowed_factor_types"`
-	RequiredFactorCount int          `json:"required_factor_count" default:"1"`
+	RequiredFactorCount int          `default:"1"                 json:"required_factor_count"`
 
 	// TOTP settings
 	TOTP TOTPConfig `json:"totp"`
@@ -30,8 +32,8 @@ type Config struct {
 	TrustedDevices TrustedDevicesConfig `json:"trusted_devices"`
 
 	// Challenge settings
-	ChallengeExpiryMinutes int `json:"challenge_expiry_minutes" default:"5"`
-	MaxAttempts            int `json:"max_attempts" default:"3"`
+	ChallengeExpiryMinutes int `default:"5" json:"challenge_expiry_minutes"`
+	MaxAttempts            int `default:"3" json:"max_attempts"`
 
 	// Rate limiting
 	RateLimit RateLimitConfig `json:"rate_limit"`
@@ -40,94 +42,94 @@ type Config struct {
 	AdaptiveMFA AdaptiveMFAConfig `json:"adaptive_mfa"`
 
 	// Session settings
-	SessionExpiryMinutes int `json:"session_expiry_minutes" default:"15"`
+	SessionExpiryMinutes int `default:"15" json:"session_expiry_minutes"`
 }
 
-// TOTPConfig configures TOTP (Google Authenticator) settings
+// TOTPConfig configures TOTP (Google Authenticator) settings.
 type TOTPConfig struct {
-	Enabled    bool   `json:"enabled" default:"true"`
-	Issuer     string `json:"issuer" default:"AuthSome"`
-	Period     int    `json:"period" default:"30"` // Seconds
-	Digits     int    `json:"digits" default:"6"`
-	Algorithm  string `json:"algorithm" default:"SHA1"` // SHA1, SHA256, SHA512
-	WindowSize int    `json:"window_size" default:"1"`  // Past/future periods to accept
+	Enabled    bool   `default:"true"     json:"enabled"`
+	Issuer     string `default:"AuthSome" json:"issuer"`
+	Period     int    `default:"30"       json:"period"` // Seconds
+	Digits     int    `default:"6"        json:"digits"`
+	Algorithm  string `default:"SHA1"     json:"algorithm"`   // SHA1, SHA256, SHA512
+	WindowSize int    `default:"1"        json:"window_size"` // Past/future periods to accept
 }
 
-// SMSConfig configures SMS verification settings
+// SMSConfig configures SMS verification settings.
 type SMSConfig struct {
-	Enabled           bool             `json:"enabled" default:"true"`
+	Enabled           bool             `default:"true"              json:"enabled"`
 	Provider          string           `json:"provider"` // "twilio", "vonage", etc.
-	CodeLength        int              `json:"code_length" default:"6"`
-	CodeExpiryMinutes int              `json:"code_expiry_minutes" default:"5"`
+	CodeLength        int              `default:"6"                 json:"code_length"`
+	CodeExpiryMinutes int              `default:"5"                 json:"code_expiry_minutes"`
 	TemplateID        string           `json:"template_id"`
 	RateLimit         *RateLimitConfig `json:"rate_limit,omitempty"`
 }
 
-// EmailConfig configures email verification settings
+// EmailConfig configures email verification settings.
 type EmailConfig struct {
-	Enabled           bool             `json:"enabled" default:"true"`
+	Enabled           bool             `default:"true"              json:"enabled"`
 	Provider          string           `json:"provider"` // Email provider
-	CodeLength        int              `json:"code_length" default:"6"`
-	CodeExpiryMinutes int              `json:"code_expiry_minutes" default:"10"`
+	CodeLength        int              `default:"6"                 json:"code_length"`
+	CodeExpiryMinutes int              `default:"10"                json:"code_expiry_minutes"`
 	TemplateID        string           `json:"template_id"`
 	RateLimit         *RateLimitConfig `json:"rate_limit,omitempty"`
 }
 
-// WebAuthnConfig configures WebAuthn/FIDO2 settings
+// WebAuthnConfig configures WebAuthn/FIDO2 settings.
 type WebAuthnConfig struct {
-	Enabled                bool     `json:"enabled" default:"true"`
-	RPDisplayName          string   `json:"rp_display_name" default:"AuthSome"`
-	RPID                   string   `json:"rp_id"`                                 // e.g., "example.com"
-	RPOrigins              []string `json:"rp_origins"`                            // Allowed origins
-	AttestationPreference  string   `json:"attestation_preference" default:"none"` // none, indirect, direct
+	Enabled                bool     `default:"true"     json:"enabled"`
+	RPDisplayName          string   `default:"AuthSome" json:"rp_display_name"`
+	RPID                   string   `json:"rp_id"`                                     // e.g., "example.com"
+	RPOrigins              []string `json:"rp_origins"`                                // Allowed origins
+	AttestationPreference  string   `default:"none"     json:"attestation_preference"` // none, indirect, direct
 	AuthenticatorSelection struct {
-		RequireResidentKey     bool   `json:"require_resident_key" default:"false"`
-		ResidentKeyRequirement string `json:"resident_key_requirement" default:"preferred"` // discouraged, preferred, required
-		UserVerification       string `json:"user_verification" default:"preferred"`        // discouraged, preferred, required
+		RequireResidentKey     bool   `default:"false"     json:"require_resident_key"`
+		ResidentKeyRequirement string `default:"preferred" json:"resident_key_requirement"` // discouraged, preferred, required
+		UserVerification       string `default:"preferred" json:"user_verification"`        // discouraged, preferred, required
 	} `json:"authenticator_selection"`
-	Timeout int `json:"timeout" default:"60000"` // Milliseconds
+	Timeout int `default:"60000" json:"timeout"` // Milliseconds
 }
 
-// BackupCodesConfig configures backup recovery codes
+// BackupCodesConfig configures backup recovery codes.
 type BackupCodesConfig struct {
-	Enabled    bool   `json:"enabled" default:"true"`
-	Count      int    `json:"count" default:"10"`
-	Length     int    `json:"length" default:"8"`
-	Format     string `json:"format" default:"XXXX-XXXX"` // Code format
-	AllowReuse bool   `json:"allow_reuse" default:"false"`
+	Enabled    bool   `default:"true"      json:"enabled"`
+	Count      int    `default:"10"        json:"count"`
+	Length     int    `default:"8"         json:"length"`
+	Format     string `default:"XXXX-XXXX" json:"format"` // Code format
+	AllowReuse bool   `default:"false"     json:"allow_reuse"`
 }
 
-// TrustedDevicesConfig configures trusted device settings
+// TrustedDevicesConfig configures trusted device settings.
 type TrustedDevicesConfig struct {
-	Enabled           bool `json:"enabled" default:"true"`
-	DefaultExpiryDays int  `json:"default_expiry_days" default:"30"`
-	MaxExpiryDays     int  `json:"max_expiry_days" default:"90"`
-	MaxDevicesPerUser int  `json:"max_devices_per_user" default:"5"`
+	Enabled           bool `default:"true" json:"enabled"`
+	DefaultExpiryDays int  `default:"30"   json:"default_expiry_days"`
+	MaxExpiryDays     int  `default:"90"   json:"max_expiry_days"`
+	MaxDevicesPerUser int  `default:"5"    json:"max_devices_per_user"`
 }
 
-// RateLimitConfig configures rate limiting
+// RateLimitConfig configures rate limiting.
 type RateLimitConfig struct {
-	Enabled        bool `json:"enabled" default:"true"`
-	MaxAttempts    int  `json:"max_attempts" default:"5"`
-	WindowMinutes  int  `json:"window_minutes" default:"15"`
-	LockoutMinutes int  `json:"lockout_minutes" default:"30"`
+	Enabled        bool `default:"true" json:"enabled"`
+	MaxAttempts    int  `default:"5"    json:"max_attempts"`
+	WindowMinutes  int  `default:"15"   json:"window_minutes"`
+	LockoutMinutes int  `default:"30"   json:"lockout_minutes"`
 }
 
-// AdaptiveMFAConfig configures risk-based authentication
+// AdaptiveMFAConfig configures risk-based authentication.
 type AdaptiveMFAConfig struct {
-	Enabled                bool    `json:"enabled" default:"false"`
-	RiskThreshold          float64 `json:"risk_threshold" default:"50.0"` // 0-100
-	FactorLocationChange   bool    `json:"factor_location_change" default:"true"`
-	FactorNewDevice        bool    `json:"factor_new_device" default:"true"`
-	FactorVelocity         bool    `json:"factor_velocity" default:"true"`
-	FactorIPReputation     bool    `json:"factor_ip_reputation" default:"false"`
-	RequireStepUpThreshold float64 `json:"require_step_up_threshold" default:"75.0"`
-	LocationChangeRisk     float64 `json:"location_change_risk" default:"30.0"`
-	NewDeviceRisk          float64 `json:"new_device_risk" default:"40.0"`
-	VelocityRisk           float64 `json:"velocity_risk" default:"50.0"`
+	Enabled                bool    `default:"false" json:"enabled"`
+	RiskThreshold          float64 `default:"50.0"  json:"risk_threshold"` // 0-100
+	FactorLocationChange   bool    `default:"true"  json:"factor_location_change"`
+	FactorNewDevice        bool    `default:"true"  json:"factor_new_device"`
+	FactorVelocity         bool    `default:"true"  json:"factor_velocity"`
+	FactorIPReputation     bool    `default:"false" json:"factor_ip_reputation"`
+	RequireStepUpThreshold float64 `default:"75.0"  json:"require_step_up_threshold"`
+	LocationChangeRisk     float64 `default:"30.0"  json:"location_change_risk"`
+	NewDeviceRisk          float64 `default:"40.0"  json:"new_device_risk"`
+	VelocityRisk           float64 `default:"50.0"  json:"velocity_risk"`
 }
 
-// DefaultConfig returns default MFA configuration
+// DefaultConfig returns default MFA configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled:             true,
@@ -196,7 +198,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	if c.RequiredFactorCount < 0 {
 		c.RequiredFactorCount = 1
@@ -225,18 +227,14 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// IsFactorAllowed checks if a factor type is allowed
+// IsFactorAllowed checks if a factor type is allowed.
 func (c *Config) IsFactorAllowed(factorType FactorType) bool {
-	for _, allowed := range c.AllowedFactorTypes {
-		if allowed == factorType {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(c.AllowedFactorTypes, factorType)
 }
 
-// GetFactorConfig returns configuration for a specific factor type
-func (c *Config) GetFactorConfig(factorType FactorType) interface{} {
+// GetFactorConfig returns configuration for a specific factor type.
+func (c *Config) GetFactorConfig(factorType FactorType) any {
 	switch factorType {
 	case FactorTypeTOTP:
 		return &c.TOTP

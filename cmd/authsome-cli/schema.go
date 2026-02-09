@@ -8,14 +8,14 @@ import (
 	"github.com/xraph/authsome/pkg/schema/extractor"
 )
 
-// schemaCmd represents the schema command
+// schemaCmd represents the schema command.
 var schemaCmd = &cobra.Command{
 	Use:   "schema",
 	Short: "Schema management commands",
 	Long:  `Commands for managing database schema definitions, extraction, and validation.`,
 }
 
-// schemaExtractCmd extracts schema from Go structs
+// schemaExtractCmd extracts schema from Go structs.
 var schemaExtractCmd = &cobra.Command{
 	Use:   "extract",
 	Short: "Extract schema from Go source files",
@@ -56,7 +56,7 @@ different ORMs.`,
 	},
 }
 
-// schemaValidateCmd validates a schema file
+// schemaValidateCmd validates a schema file.
 var schemaValidateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate a schema definition file",
@@ -91,7 +91,7 @@ Checks for:
 	},
 }
 
-// schemaInfoCmd shows information about a schema
+// schemaInfoCmd shows information about a schema.
 var schemaInfoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Show schema information",
@@ -128,7 +128,7 @@ var schemaInfoCmd = &cobra.Command{
 	},
 }
 
-// schemaDiffCmd compares two schema files
+// schemaDiffCmd compares two schema files.
 var schemaDiffCmd = &cobra.Command{
 	Use:   "diff",
 	Short: "Compare two schema files",

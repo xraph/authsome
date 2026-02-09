@@ -19,7 +19,7 @@ import (
 // Bridge Handler Implementations
 // =============================================================================
 
-// bridgeGetOrganizations handles the getOrganizations bridge call
+// bridgeGetOrganizations handles the getOrganizations bridge call.
 func (e *DashboardExtension) bridgeGetOrganizations(ctx bridge.Context, input GetOrganizationsInput) (*GetOrganizationsResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -36,10 +36,8 @@ func (e *DashboardExtension) bridgeGetOrganizations(ctx bridge.Context, input Ge
 	envID, _ := contexts.GetEnvironmentID(goCtx)
 
 	// Set pagination defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	limit := input.Limit
 	if limit < 1 || limit > 100 {
 		limit = 20
@@ -73,6 +71,7 @@ func (e *DashboardExtension) bridgeGetOrganizations(ctx bridge.Context, input Ge
 			OrganizationID:   org.ID,
 			PaginationParams: pagination.PaginationParams{Limit: 1},
 		})
+
 		memberCount := int64(0)
 		if membersResp != nil && membersResp.Pagination != nil {
 			memberCount = membersResp.Pagination.Total
@@ -83,6 +82,7 @@ func (e *DashboardExtension) bridgeGetOrganizations(ctx bridge.Context, input Ge
 			OrganizationID:   org.ID,
 			PaginationParams: pagination.PaginationParams{Limit: 1},
 		})
+
 		teamCount := int64(0)
 		if teamsResp != nil && teamsResp.Pagination != nil {
 			teamCount = teamsResp.Pagination.Total
@@ -129,7 +129,7 @@ func (e *DashboardExtension) bridgeGetOrganizations(ctx bridge.Context, input Ge
 	}, nil
 }
 
-// bridgeGetOrganization handles the getOrganization bridge call
+// bridgeGetOrganization handles the getOrganization bridge call.
 func (e *DashboardExtension) bridgeGetOrganization(ctx bridge.Context, input GetOrganizationInput) (*GetOrganizationResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -161,6 +161,7 @@ func (e *DashboardExtension) bridgeGetOrganization(ctx bridge.Context, input Get
 		OrganizationID:   orgID,
 		PaginationParams: pagination.PaginationParams{Limit: 1},
 	})
+
 	memberCount := int64(0)
 	if membersResp != nil && membersResp.Pagination != nil {
 		memberCount = membersResp.Pagination.Total
@@ -170,6 +171,7 @@ func (e *DashboardExtension) bridgeGetOrganization(ctx bridge.Context, input Get
 		OrganizationID:   orgID,
 		PaginationParams: pagination.PaginationParams{Limit: 1},
 	})
+
 	teamCount := int64(0)
 	if teamsResp != nil && teamsResp.Pagination != nil {
 		teamCount = teamsResp.Pagination.Total
@@ -181,6 +183,7 @@ func (e *DashboardExtension) bridgeGetOrganization(ctx bridge.Context, input Get
 		Status:           &pendingStatus,
 		PaginationParams: pagination.PaginationParams{Limit: 1},
 	})
+
 	invitationCount := int64(0)
 	if invitesResp != nil && invitesResp.Pagination != nil {
 		invitationCount = invitesResp.Pagination.Total
@@ -205,7 +208,7 @@ func (e *DashboardExtension) bridgeGetOrganization(ctx bridge.Context, input Get
 	}, nil
 }
 
-// bridgeCreateOrganization handles the createOrganization bridge call
+// bridgeCreateOrganization handles the createOrganization bridge call.
 func (e *DashboardExtension) bridgeCreateOrganization(ctx bridge.Context, input CreateOrganizationInput) (*CreateOrganizationResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -229,6 +232,7 @@ func (e *DashboardExtension) bridgeCreateOrganization(ctx bridge.Context, input 
 	if input.Logo != "" {
 		req.Logo = &input.Logo
 	}
+
 	if input.Metadata != nil {
 		req.Metadata = input.Metadata
 	}
@@ -251,7 +255,7 @@ func (e *DashboardExtension) bridgeCreateOrganization(ctx bridge.Context, input 
 	}, nil
 }
 
-// bridgeUpdateOrganization handles the updateOrganization bridge call
+// bridgeUpdateOrganization handles the updateOrganization bridge call.
 func (e *DashboardExtension) bridgeUpdateOrganization(ctx bridge.Context, input UpdateOrganizationInput) (*UpdateOrganizationResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -274,9 +278,11 @@ func (e *DashboardExtension) bridgeUpdateOrganization(ctx bridge.Context, input 
 	if input.Name != "" {
 		req.Name = &input.Name
 	}
+
 	if input.Logo != "" {
 		req.Logo = &input.Logo
 	}
+
 	if input.Metadata != nil {
 		req.Metadata = input.Metadata
 	}
@@ -299,7 +305,7 @@ func (e *DashboardExtension) bridgeUpdateOrganization(ctx bridge.Context, input 
 	}, nil
 }
 
-// bridgeDeleteOrganization handles the deleteOrganization bridge call
+// bridgeDeleteOrganization handles the deleteOrganization bridge call.
 func (e *DashboardExtension) bridgeDeleteOrganization(ctx bridge.Context, input DeleteOrganizationInput) (*DeleteOrganizationResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -326,7 +332,7 @@ func (e *DashboardExtension) bridgeDeleteOrganization(ctx bridge.Context, input 
 	return &DeleteOrganizationResult{Success: true}, nil
 }
 
-// bridgeGetMembers handles the getMembers bridge call
+// bridgeGetMembers handles the getMembers bridge call.
 func (e *DashboardExtension) bridgeGetMembers(ctx bridge.Context, input GetMembersInput) (*GetMembersResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -345,10 +351,8 @@ func (e *DashboardExtension) bridgeGetMembers(ctx bridge.Context, input GetMembe
 	}
 
 	// Set pagination defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	limit := input.Limit
 	if limit < 1 || limit > 100 {
 		limit = 20
@@ -412,7 +416,7 @@ func (e *DashboardExtension) bridgeGetMembers(ctx bridge.Context, input GetMembe
 	}, nil
 }
 
-// bridgeInviteMember handles the inviteMember bridge call
+// bridgeInviteMember handles the inviteMember bridge call.
 func (e *DashboardExtension) bridgeInviteMember(ctx bridge.Context, input InviteMemberInput) (*InviteMemberResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -461,7 +465,7 @@ func (e *DashboardExtension) bridgeInviteMember(ctx bridge.Context, input Invite
 	}, nil
 }
 
-// bridgeUpdateMemberRole handles the updateMemberRole bridge call
+// bridgeUpdateMemberRole handles the updateMemberRole bridge call.
 func (e *DashboardExtension) bridgeUpdateMemberRole(ctx bridge.Context, input UpdateMemberRoleInput) (*UpdateMemberRoleResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -473,6 +477,7 @@ func (e *DashboardExtension) bridgeUpdateMemberRole(ctx bridge.Context, input Up
 	if err != nil {
 		return nil, errs.BadRequest("invalid orgId")
 	}
+
 	memberID, err := xid.FromString(input.MemberID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid memberId")
@@ -514,7 +519,7 @@ func (e *DashboardExtension) bridgeUpdateMemberRole(ctx bridge.Context, input Up
 	}, nil
 }
 
-// bridgeRemoveMember handles the removeMember bridge call
+// bridgeRemoveMember handles the removeMember bridge call.
 func (e *DashboardExtension) bridgeRemoveMember(ctx bridge.Context, input RemoveMemberInput) (*RemoveMemberResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -526,6 +531,7 @@ func (e *DashboardExtension) bridgeRemoveMember(ctx bridge.Context, input Remove
 	if err != nil {
 		return nil, errs.BadRequest("invalid orgId")
 	}
+
 	memberID, err := xid.FromString(input.MemberID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid memberId")
@@ -545,7 +551,7 @@ func (e *DashboardExtension) bridgeRemoveMember(ctx bridge.Context, input Remove
 	return &RemoveMemberResult{Success: true}, nil
 }
 
-// bridgeGetTeams handles the getTeams bridge call
+// bridgeGetTeams handles the getTeams bridge call.
 func (e *DashboardExtension) bridgeGetTeams(ctx bridge.Context, input GetTeamsInput) (*GetTeamsResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -564,10 +570,8 @@ func (e *DashboardExtension) bridgeGetTeams(ctx bridge.Context, input GetTeamsIn
 	}
 
 	// Set pagination defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	limit := input.Limit
 	if limit < 1 || limit > 100 {
 		limit = 20
@@ -600,6 +604,7 @@ func (e *DashboardExtension) bridgeGetTeams(ctx bridge.Context, input GetTeamsIn
 			TeamID:           team.ID,
 			PaginationParams: pagination.PaginationParams{Limit: 1},
 		})
+
 		memberCount := int64(0)
 		if teamMembersResp != nil && teamMembersResp.Pagination != nil {
 			memberCount = teamMembersResp.Pagination.Total
@@ -633,7 +638,7 @@ func (e *DashboardExtension) bridgeGetTeams(ctx bridge.Context, input GetTeamsIn
 	}, nil
 }
 
-// bridgeCreateTeam handles the createTeam bridge call
+// bridgeCreateTeam handles the createTeam bridge call.
 func (e *DashboardExtension) bridgeCreateTeam(ctx bridge.Context, input CreateTeamInput) (*CreateTeamResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -658,6 +663,7 @@ func (e *DashboardExtension) bridgeCreateTeam(ctx bridge.Context, input CreateTe
 	if input.Description != "" {
 		req.Description = &input.Description
 	}
+
 	if input.Metadata != nil {
 		req.Metadata = input.Metadata
 	}
@@ -679,7 +685,7 @@ func (e *DashboardExtension) bridgeCreateTeam(ctx bridge.Context, input CreateTe
 	}, nil
 }
 
-// bridgeUpdateTeam handles the updateTeam bridge call
+// bridgeUpdateTeam handles the updateTeam bridge call.
 func (e *DashboardExtension) bridgeUpdateTeam(ctx bridge.Context, input UpdateTeamInput) (*UpdateTeamResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -691,6 +697,7 @@ func (e *DashboardExtension) bridgeUpdateTeam(ctx bridge.Context, input UpdateTe
 	if err != nil {
 		return nil, errs.BadRequest("invalid orgId")
 	}
+
 	teamID, err := xid.FromString(input.TeamID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid teamId")
@@ -706,9 +713,11 @@ func (e *DashboardExtension) bridgeUpdateTeam(ctx bridge.Context, input UpdateTe
 	if input.Name != "" {
 		req.Name = &input.Name
 	}
+
 	if input.Description != "" {
 		req.Description = &input.Description
 	}
+
 	if input.Metadata != nil {
 		req.Metadata = input.Metadata
 	}
@@ -723,6 +732,7 @@ func (e *DashboardExtension) bridgeUpdateTeam(ctx bridge.Context, input UpdateTe
 		TeamID:           teamID,
 		PaginationParams: pagination.PaginationParams{Limit: 1},
 	})
+
 	memberCount := int64(0)
 	if teamMembersResp != nil && teamMembersResp.Pagination != nil {
 		memberCount = teamMembersResp.Pagination.Total
@@ -740,7 +750,7 @@ func (e *DashboardExtension) bridgeUpdateTeam(ctx bridge.Context, input UpdateTe
 	}, nil
 }
 
-// bridgeDeleteTeam handles the deleteTeam bridge call
+// bridgeDeleteTeam handles the deleteTeam bridge call.
 func (e *DashboardExtension) bridgeDeleteTeam(ctx bridge.Context, input DeleteTeamInput) (*DeleteTeamResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -752,6 +762,7 @@ func (e *DashboardExtension) bridgeDeleteTeam(ctx bridge.Context, input DeleteTe
 	if err != nil {
 		return nil, errs.BadRequest("invalid orgId")
 	}
+
 	teamID, err := xid.FromString(input.TeamID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid teamId")
@@ -771,7 +782,7 @@ func (e *DashboardExtension) bridgeDeleteTeam(ctx bridge.Context, input DeleteTe
 	return &DeleteTeamResult{Success: true}, nil
 }
 
-// bridgeGetInvitations handles the getInvitations bridge call
+// bridgeGetInvitations handles the getInvitations bridge call.
 func (e *DashboardExtension) bridgeGetInvitations(ctx bridge.Context, input GetInvitationsInput) (*GetInvitationsResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -790,10 +801,8 @@ func (e *DashboardExtension) bridgeGetInvitations(ctx bridge.Context, input GetI
 	}
 
 	// Set pagination defaults
-	page := input.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(input.Page, 1)
+
 	limit := input.Limit
 	if limit < 1 || limit > 100 {
 		limit = 20
@@ -855,7 +864,7 @@ func (e *DashboardExtension) bridgeGetInvitations(ctx bridge.Context, input GetI
 	}, nil
 }
 
-// bridgeCancelInvitation handles the cancelInvitation bridge call
+// bridgeCancelInvitation handles the cancelInvitation bridge call.
 func (e *DashboardExtension) bridgeCancelInvitation(ctx bridge.Context, input CancelInvitationInput) (*CancelInvitationResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -867,6 +876,7 @@ func (e *DashboardExtension) bridgeCancelInvitation(ctx bridge.Context, input Ca
 	if err != nil {
 		return nil, errs.BadRequest("invalid orgId")
 	}
+
 	inviteID, err := xid.FromString(input.InviteID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid inviteId")
@@ -886,7 +896,7 @@ func (e *DashboardExtension) bridgeCancelInvitation(ctx bridge.Context, input Ca
 	return &CancelInvitationResult{Success: true}, nil
 }
 
-// bridgeGetExtensionData handles the getExtensionData bridge call
+// bridgeGetExtensionData handles the getExtensionData bridge call.
 func (e *DashboardExtension) bridgeGetExtensionData(ctx bridge.Context, input GetExtensionDataInput) (*GetExtensionDataResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -898,6 +908,7 @@ func (e *DashboardExtension) bridgeGetExtensionData(ctx bridge.Context, input Ge
 	if err != nil {
 		return nil, errs.BadRequest("invalid appId")
 	}
+
 	orgID, err := xid.FromString(input.OrgID)
 	if err != nil {
 		return nil, errs.BadRequest("invalid orgId")
@@ -923,7 +934,7 @@ func (e *DashboardExtension) bridgeGetExtensionData(ctx bridge.Context, input Ge
 		AppID:    appID,
 		BasePath: "", // Not needed for bridge
 		Request:  nil,
-		GetOrg: func() (interface{}, error) {
+		GetOrg: func() (any, error) {
 			return org, nil
 		},
 		IsAdmin: isAdmin,
@@ -1006,7 +1017,7 @@ func (e *DashboardExtension) bridgeGetExtensionData(ctx bridge.Context, input Ge
 	}, nil
 }
 
-// bridgeGetRoleTemplates handles the getRoleTemplates bridge call
+// bridgeGetRoleTemplates handles the getRoleTemplates bridge call.
 func (e *DashboardExtension) bridgeGetRoleTemplates(ctx bridge.Context, input GetRoleTemplatesInput) (*GetRoleTemplatesResult, error) {
 	// For now, return mock data since role templates are not fully implemented in the core
 	// In a real implementation, this would query the database
@@ -1030,11 +1041,12 @@ func (e *DashboardExtension) bridgeGetRoleTemplates(ctx bridge.Context, input Ge
 	}, nil
 }
 
-// bridgeGetRoleTemplate handles the getRoleTemplate bridge call
+// bridgeGetRoleTemplate handles the getRoleTemplate bridge call.
 func (e *DashboardExtension) bridgeGetRoleTemplate(ctx bridge.Context, input GetRoleTemplateInput) (*GetRoleTemplateResult, error) {
 	// For now, return mock data
 	// In a real implementation, this would query the database by ID
 	var template RoleTemplateDTO
+
 	switch input.TemplateID {
 	case "tpl_admin":
 		template = RoleTemplateDTO{
@@ -1059,7 +1071,7 @@ func (e *DashboardExtension) bridgeGetRoleTemplate(ctx bridge.Context, input Get
 	}, nil
 }
 
-// bridgeCreateRoleTemplate handles the createRoleTemplate bridge call
+// bridgeCreateRoleTemplate handles the createRoleTemplate bridge call.
 func (e *DashboardExtension) bridgeCreateRoleTemplate(ctx bridge.Context, input CreateRoleTemplateInput) (*CreateRoleTemplateResult, error) {
 	// For now, return mock data
 	// In a real implementation, this would create a new template in the database
@@ -1075,7 +1087,7 @@ func (e *DashboardExtension) bridgeCreateRoleTemplate(ctx bridge.Context, input 
 	}, nil
 }
 
-// bridgeUpdateRoleTemplate handles the updateRoleTemplate bridge call
+// bridgeUpdateRoleTemplate handles the updateRoleTemplate bridge call.
 func (e *DashboardExtension) bridgeUpdateRoleTemplate(ctx bridge.Context, input UpdateRoleTemplateInput) (*UpdateRoleTemplateResult, error) {
 	// For now, return mock data
 	// In a real implementation, this would update the template in the database
@@ -1091,7 +1103,7 @@ func (e *DashboardExtension) bridgeUpdateRoleTemplate(ctx bridge.Context, input 
 	}, nil
 }
 
-// bridgeDeleteRoleTemplate handles the deleteRoleTemplate bridge call
+// bridgeDeleteRoleTemplate handles the deleteRoleTemplate bridge call.
 func (e *DashboardExtension) bridgeDeleteRoleTemplate(ctx bridge.Context, input DeleteRoleTemplateInput) (*DeleteRoleTemplateResult, error) {
 	// For now, just return success
 	// In a real implementation, this would delete the template from the database
@@ -1104,17 +1116,17 @@ func (e *DashboardExtension) bridgeDeleteRoleTemplate(ctx bridge.Context, input 
 // Settings Bridge Handlers
 // =============================================================================
 
-// GetSettingsInput is the input for bridgeGetSettings
+// GetSettingsInput is the input for bridgeGetSettings.
 type GetSettingsInput struct {
 	AppID string `json:"appId"`
 }
 
-// GetSettingsResult is the output for bridgeGetSettings
+// GetSettingsResult is the output for bridgeGetSettings.
 type GetSettingsResult struct {
 	Settings OrganizationSettingsDTO `json:"settings"`
 }
 
-// OrganizationSettingsDTO contains organization plugin settings
+// OrganizationSettingsDTO contains organization plugin settings.
 type OrganizationSettingsDTO struct {
 	Enabled                  bool   `json:"enabled,omitempty"`
 	AllowUserCreation        bool   `json:"allowUserCreation,omitempty"`
@@ -1127,18 +1139,18 @@ type OrganizationSettingsDTO struct {
 	AllowMultipleMemberships bool   `json:"allowMultipleMemberships,omitempty"`
 }
 
-// UpdateSettingsInput is the input for bridgeUpdateSettings
+// UpdateSettingsInput is the input for bridgeUpdateSettings.
 type UpdateSettingsInput struct {
 	AppID    string                  `json:"appId"`
 	Settings OrganizationSettingsDTO `json:"settings"`
 }
 
-// UpdateSettingsResult is the output for bridgeUpdateSettings
+// UpdateSettingsResult is the output for bridgeUpdateSettings.
 type UpdateSettingsResult struct {
 	Success bool `json:"success"`
 }
 
-// bridgeGetSettings handles the getSettings bridge call
+// bridgeGetSettings handles the getSettings bridge call.
 func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSettingsInput) (*GetSettingsResult, error) {
 	_, _, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -1149,10 +1161,7 @@ func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSett
 	config := e.plugin.config
 
 	// Convert hours to days for the UI
-	invitationExpiryDays := config.InvitationExpiryHours / 24
-	if invitationExpiryDays < 1 {
-		invitationExpiryDays = 1
-	}
+	invitationExpiryDays := max(config.InvitationExpiryHours/24, 1)
 
 	return &GetSettingsResult{
 		Settings: OrganizationSettingsDTO{
@@ -1169,7 +1178,7 @@ func (e *DashboardExtension) bridgeGetSettings(ctx bridge.Context, input GetSett
 	}, nil
 }
 
-// bridgeUpdateSettings handles the updateSettings bridge call
+// bridgeUpdateSettings handles the updateSettings bridge call.
 func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input UpdateSettingsInput) (*UpdateSettingsResult, error) {
 	goCtx, userID, err := e.buildContextFromBridge(ctx, input.AppID)
 	if err != nil {
@@ -1185,12 +1194,15 @@ func (e *DashboardExtension) bridgeUpdateSettings(ctx bridge.Context, input Upda
 	if input.Settings.MaxOrgsPerUser > 0 {
 		e.plugin.config.MaxOrganizationsPerUser = input.Settings.MaxOrgsPerUser
 	}
+
 	if input.Settings.MaxMembersPerOrg > 0 {
 		e.plugin.config.MaxMembersPerOrganization = input.Settings.MaxMembersPerOrg
 	}
+
 	if input.Settings.MaxTeamsPerOrg >= 0 {
 		e.plugin.config.MaxTeamsPerOrganization = input.Settings.MaxTeamsPerOrg
 	}
+
 	if input.Settings.InvitationExpiryDays > 0 {
 		// Convert days to hours for storage
 		e.plugin.config.InvitationExpiryHours = input.Settings.InvitationExpiryDays * 24
@@ -1220,6 +1232,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 	// Get the already-enriched context from the HTTP request
 	// The dashboard v2 BridgeContextMiddleware has already set user ID, app ID, and environment ID
 	var goCtx context.Context
+
 	req := bridgeCtx.Request()
 
 	if req != nil {
@@ -1235,6 +1248,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 	requestedAppID, err := xid.FromString(appID)
 	if err != nil {
 		e.plugin.logger.Error("[OrgBridge] Invalid app ID", forge.F("appID", appID), forge.F("error", err))
+
 		return nil, xid.ID{}, errs.BadRequest("invalid appId")
 	}
 
@@ -1247,6 +1261,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 
 	if !hasUserID || userID == xid.NilID() {
 		e.plugin.logger.Error("[OrgBridge] Unauthorized - no user ID in context")
+
 		return nil, xid.ID{}, errs.Unauthorized()
 	}
 
@@ -1267,30 +1282,37 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 	return goCtx, userID, nil
 }
 
-// stringPtrToString converts *string to string
+// stringPtrToString converts *string to string.
 func stringPtrToString(s *string) string {
 	if s == nil {
 		return ""
 	}
+
 	return *s
 }
 
-// renderIconToHTML renders a gomponent icon to HTML string
+// renderIconToHTML renders a gomponent icon to HTML string.
 func renderIconToHTML(icon g.Node) string {
 	if icon == nil {
 		return ""
 	}
+
 	var sb strings.Builder
+
 	_ = icon.Render(&sb)
+
 	return sb.String()
 }
 
-// renderNodeToHTML renders a gomponent node to HTML string
+// renderNodeToHTML renders a gomponent node to HTML string.
 func renderNodeToHTML(node g.Node) string {
 	if node == nil {
 		return ""
 	}
+
 	var sb strings.Builder
+
 	_ = node.Render(&sb)
+
 	return sb.String()
 }

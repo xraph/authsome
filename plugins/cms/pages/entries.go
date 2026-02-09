@@ -16,7 +16,7 @@ import (
 // Entries List Page
 // =============================================================================
 
-// EntriesListPage renders the entries list page for a content type
+// EntriesListPage renders the entries list page for a content type.
 func EntriesListPage(
 	currentApp *app.App,
 	basePath string,
@@ -64,18 +64,18 @@ func EntriesListPage(
 	)
 }
 
-// entriesStats renders entry statistics
+// entriesStats renders entry statistics.
 func entriesStats(stats *core.ContentTypeStatsDTO) g.Node {
 	return Div(
 		Class("grid grid-cols-2 md:grid-cols-4 gap-4"),
-		StatCard("Total", fmt.Sprintf("%d", stats.TotalEntries), lucide.FileText(Class("size-5")), "text-blue-600"),
-		StatCard("Published", fmt.Sprintf("%d", stats.PublishedEntries), lucide.CircleCheck(Class("size-5")), "text-green-600"),
-		StatCard("Drafts", fmt.Sprintf("%d", stats.DraftEntries), lucide.Pencil(Class("size-5")), "text-yellow-600"),
-		StatCard("Archived", fmt.Sprintf("%d", stats.ArchivedEntries), lucide.Archive(Class("size-5")), "text-gray-600"),
+		StatCard("Total", strconv.Itoa(stats.TotalEntries), lucide.FileText(Class("size-5")), "text-blue-600"),
+		StatCard("Published", strconv.Itoa(stats.PublishedEntries), lucide.CircleCheck(Class("size-5")), "text-green-600"),
+		StatCard("Drafts", strconv.Itoa(stats.DraftEntries), lucide.Pencil(Class("size-5")), "text-yellow-600"),
+		StatCard("Archived", strconv.Itoa(stats.ArchivedEntries), lucide.Archive(Class("size-5")), "text-gray-600"),
 	)
 }
 
-// entriesFilters renders search and filter controls
+// entriesFilters renders search and filter controls.
 func entriesFilters(typeBase, searchQuery, statusFilter string) g.Node {
 	return Div(
 		Class("flex flex-wrap gap-3"),
@@ -99,7 +99,7 @@ func entriesFilters(typeBase, searchQuery, statusFilter string) g.Node {
 	)
 }
 
-// entriesTable renders the entries table
+// entriesTable renders the entries table.
 func entriesTable(appBase string, contentType *core.ContentTypeDTO, entries []*core.ContentEntryDTO, page, totalPages int) g.Node {
 	typeBase := appBase + "/cms/types/" + contentType.Name
 
@@ -129,7 +129,7 @@ func entriesTable(appBase string, contentType *core.ContentTypeDTO, entries []*c
 	)
 }
 
-// entryRow renders a single entry row
+// entryRow renders a single entry row.
 func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO) g.Node {
 	// Get title field value - defaults to entry ID
 	// Priority: configured titleField > common field names (title, label) > entry ID
@@ -148,6 +148,7 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 			if val, ok := entry.Data[fieldName]; ok {
 				if s, ok := val.(string); ok && s != "" {
 					title = s
+
 					break
 				}
 			}
@@ -156,6 +157,7 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 
 	// Get description field value if specified
 	description := ""
+
 	if contentType.Settings.DescriptionField != "" {
 		if val, ok := entry.Data[contentType.Settings.DescriptionField]; ok {
 			if s, ok := val.(string); ok {
@@ -169,6 +171,7 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 
 	// Get preview field value if specified
 	preview := ""
+
 	if contentType.Settings.PreviewField != "" {
 		if val, ok := entry.Data[contentType.Settings.PreviewField]; ok {
 			// Handle different types for preview field
@@ -178,6 +181,7 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 			case float64, int, int64:
 				preview = fmt.Sprintf("%v", v)
 			}
+
 			if len(preview) > 50 {
 				preview = preview[:50] + "..."
 			}
@@ -234,7 +238,7 @@ func entryRow(typeBase string, contentType *core.ContentTypeDTO, entry *core.Con
 // Entry Detail Page
 // =============================================================================
 
-// EntryDetailPage renders the entry detail/view page
+// EntryDetailPage renders the entry detail/view page.
 func EntryDetailPage(
 	currentApp *app.App,
 	basePath string,
@@ -263,6 +267,7 @@ func EntryDetailPage(
 			if val, ok := entry.Data[fieldName]; ok {
 				if s, ok := val.(string); ok && s != "" {
 					title = s
+
 					break
 				}
 			}
@@ -343,7 +348,7 @@ func EntryDetailPage(
 	)
 }
 
-// entryDataCard renders the entry data
+// entryDataCard renders the entry data.
 func entryDataCard(contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO) g.Node {
 	// Build field rows
 	rows := make([]g.Node, 0)
@@ -353,13 +358,14 @@ func entryDataCard(contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO
 		if !exists {
 			value = nil
 		}
+
 		rows = append(rows, entryFieldRow(field, value))
 	}
 
 	return CardWithHeader("Entry Data", nil, g.Group(rows))
 }
 
-// entryFieldRow renders a single field value row
+// entryFieldRow renders a single field value row.
 func entryFieldRow(field *core.ContentFieldDTO, value any) g.Node {
 	// Use Title if available, fallback to Name for display label
 	label := field.Name
@@ -393,7 +399,7 @@ func entryFieldRow(field *core.ContentFieldDTO, value any) g.Node {
 	)
 }
 
-// renderFieldValue renders a field value based on its type
+// renderFieldValue renders a field value based on its type.
 func renderFieldValue(fieldType string, value any) g.Node {
 	if value == nil {
 		return Span(
@@ -408,6 +414,7 @@ func renderFieldValue(fieldType string, value any) g.Node {
 			if b {
 				return Badge("Yes", "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")
 			}
+
 			return Badge("No", "bg-slate-100 text-slate-700 dark:bg-gray-800 dark:text-gray-400")
 		}
 	case "richtext", "markdown":
@@ -442,11 +449,13 @@ func renderFieldValue(fieldType string, value any) g.Node {
 		if s, ok := value.(string); ok {
 			return Badge(s, "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400")
 		}
+
 		if arr, ok := value.([]any); ok {
 			badges := make([]g.Node, len(arr))
 			for i, v := range arr {
 				badges[i] = Badge(fmt.Sprintf("%v", v), "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400")
 			}
+
 			return Div(Class("flex flex-wrap gap-1"), g.Group(badges))
 		}
 	}
@@ -458,12 +467,12 @@ func renderFieldValue(fieldType string, value any) g.Node {
 	)
 }
 
-// entryMetadataCard renders entry metadata
+// entryMetadataCard renders entry metadata.
 func entryMetadataCard(entry *core.ContentEntryDTO) g.Node {
 	rows := []g.Node{
 		metadataRow("ID", Code(Class("text-xs"), g.Text(entry.ID))),
 		metadataRow("Status", StatusBadge(entry.Status)),
-		metadataRow("Version", g.Text(fmt.Sprintf("%d", entry.Version))),
+		metadataRow("Version", g.Text(strconv.Itoa(entry.Version))),
 		metadataRow("Created", g.Text(FormatTime(entry.CreatedAt))),
 		metadataRow("Updated", g.Text(FormatTime(entry.UpdatedAt))),
 	}
@@ -480,7 +489,7 @@ func entryMetadataCard(entry *core.ContentEntryDTO) g.Node {
 	)
 }
 
-// metadataRow renders a metadata row
+// metadataRow renders a metadata row.
 func metadataRow(label string, value g.Node) g.Node {
 	return Div(
 		Class("flex items-center justify-between py-1"),
@@ -489,13 +498,15 @@ func metadataRow(label string, value g.Node) g.Node {
 	)
 }
 
-// entryRevisionsCard renders revision history
+// entryRevisionsCard renders revision history.
 func entryRevisionsCard(entryBase string, revisions []*core.ContentRevisionDTO) g.Node {
 	items := make([]g.Node, 0, 5)
+
 	for i, rev := range revisions {
 		if i >= 5 {
 			break
 		}
+
 		items = append(items, Div(
 			Class("flex items-center justify-between py-2 border-b border-slate-100 dark:border-gray-800 last:border-b-0"),
 			Div(
@@ -525,7 +536,7 @@ func entryRevisionsCard(entryBase string, revisions []*core.ContentRevisionDTO) 
 // Create/Edit Entry Page
 // =============================================================================
 
-// CreateEntryPage renders the create entry form
+// CreateEntryPage renders the create entry form.
 func CreateEntryPage(
 	currentApp *app.App,
 	basePath string,
@@ -535,7 +546,7 @@ func CreateEntryPage(
 	return entryForm(currentApp, basePath, contentType, nil, err, "Create Entry")
 }
 
-// EditEntryPage renders the edit entry form
+// EditEntryPage renders the edit entry form.
 func EditEntryPage(
 	currentApp *app.App,
 	basePath string,
@@ -546,7 +557,7 @@ func EditEntryPage(
 	return entryForm(currentApp, basePath, contentType, entry, err, "Edit Entry")
 }
 
-// entryForm renders the entry form (used for both create and edit)
+// entryForm renders the entry form (used for both create and edit).
 func entryForm(
 	currentApp *app.App,
 	basePath string,
@@ -616,6 +627,7 @@ func entryForm(
 								status: formData.get('status') || 'draft'
 							});`, currentApp.ID.String(), contentType.Name, entry.ID)
 						}
+
 						return fmt.Sprintf(`const result = await $bridge.call('cms.createEntry', {
 							appId: '%s',
 							typeName: '%s',
@@ -626,6 +638,7 @@ func entryForm(
 						if isEdit {
 							return "Entry updated successfully"
 						}
+
 						return "Entry created successfully"
 					}(), typeBase+"/entries")),
 					Class("space-y-6"),
@@ -635,17 +648,21 @@ func entryForm(
 					// Dynamic fields based on content type (skip hidden fields)
 					g.Group(func() []g.Node {
 						var fields []g.Node
+
 						for _, field := range contentType.Fields {
 							// Skip hidden fields in the form
 							if field.Hidden {
 								continue
 							}
+
 							var value any
 							if entry != nil {
 								value = entry.Data[field.Name]
 							}
+
 							fields = append(fields, entryFormField(field, value))
 						}
+
 						return fields
 					}()),
 
@@ -719,7 +736,7 @@ func entryForm(
 	)
 }
 
-// buildFormAlpineData builds the Alpine.js data object for the entry form
+// buildFormAlpineData builds the Alpine.js data object for the entry form.
 func buildFormAlpineData(contentType *core.ContentTypeDTO, entry *core.ContentEntryDTO) string {
 	// Build initial state from entry data
 	formData := make(map[string]any)
@@ -739,9 +756,10 @@ func buildFormAlpineData(contentType *core.ContentTypeDTO, entry *core.ContentEn
 	}`, string(formDataJSON))
 }
 
-// entryFormField renders a form field based on field type
+// entryFormField renders a form field based on field type.
 func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 	fieldName := "data[" + field.Name + "]"
+
 	valueStr := ""
 	if value != nil {
 		valueStr = fmt.Sprintf("%v", value)
@@ -809,18 +827,23 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 				if field.Required {
 					inputAttrs = append(inputAttrs, Required())
 				}
+
 				if field.Options.MinLength > 0 {
-					inputAttrs = append(inputAttrs, g.Attr("minlength", fmt.Sprintf("%d", field.Options.MinLength)))
+					inputAttrs = append(inputAttrs, g.Attr("minlength", strconv.Itoa(field.Options.MinLength)))
 				}
+
 				if field.Options.MaxLength > 0 {
-					inputAttrs = append(inputAttrs, g.Attr("maxlength", fmt.Sprintf("%d", field.Options.MaxLength)))
+					inputAttrs = append(inputAttrs, g.Attr("maxlength", strconv.Itoa(field.Options.MaxLength)))
 				}
+
 				if field.Options.Pattern != "" {
 					inputAttrs = append(inputAttrs, g.Attr("pattern", field.Options.Pattern))
 				}
+
 				return []g.Node{Input(inputAttrs...)}
 			case "select":
 				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+
 				if field.Options.Choices != nil {
 					for _, choice := range field.Options.Choices {
 						opts = append(opts, Option(
@@ -830,6 +853,7 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 						))
 					}
 				}
+
 				return []g.Node{
 					Select(
 						ID(fieldName),
@@ -853,21 +877,26 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 				if field.Required {
 					inputAttrs = append(inputAttrs, Required())
 				}
+
 				if field.Options.Min != nil {
 					inputAttrs = append(inputAttrs, g.Attr("min", fmt.Sprintf("%v", *field.Options.Min)))
 				}
+
 				if field.Options.Max != nil {
 					inputAttrs = append(inputAttrs, g.Attr("max", fmt.Sprintf("%v", *field.Options.Max)))
 				}
+
 				if field.Options.Step != nil {
 					inputAttrs = append(inputAttrs, g.Attr("step", fmt.Sprintf("%v", *field.Options.Step)))
 				}
+
 				return []g.Node{Input(inputAttrs...)}
 			case "date", "datetime":
 				inputType := "date"
 				if field.Type == "datetime" {
 					inputType = "datetime-local"
 				}
+
 				return []g.Node{
 					Input(
 						Type(inputType),
@@ -955,7 +984,7 @@ func entryFormField(field *core.ContentFieldDTO, value any) g.Node {
 	return fieldContent
 }
 
-// buildConditionalVisibilityAttrs builds Alpine.js attributes for conditional visibility
+// buildConditionalVisibilityAttrs builds Alpine.js attributes for conditional visibility.
 func buildConditionalVisibilityAttrs(field *core.ContentFieldDTO) []g.Node {
 	attrs := []g.Node{}
 
@@ -1060,7 +1089,7 @@ func buildConditionalVisibilityAttrs(field *core.ContentFieldDTO) []g.Node {
 	return attrs
 }
 
-// buildConditionExpression builds an Alpine.js expression for a field condition
+// buildConditionExpression builds an Alpine.js expression for a field condition.
 func buildConditionExpression(cond *core.FieldConditionDTO) string {
 	switch cond.Operator {
 	case "eq", "ne", "in", "notIn", "exists", "notExists":
@@ -1070,15 +1099,17 @@ func buildConditionExpression(cond *core.FieldConditionDTO) string {
 	}
 }
 
-// conditionValueToJS converts a condition value to JavaScript representation
+// conditionValueToJS converts a condition value to JavaScript representation.
 func conditionValueToJS(value any) string {
 	if value == nil {
 		return "null"
 	}
+
 	bytes, err := json.Marshal(value)
 	if err != nil {
 		return "null"
 	}
+
 	return string(bytes)
 }
 
@@ -1086,7 +1117,7 @@ func conditionValueToJS(value any) string {
 // Nested Object/Array Field Rendering
 // =============================================================================
 
-// renderObjectField renders a nested object field with sub-fields
+// renderObjectField renders a nested object field with sub-fields.
 func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
 	// Get nested fields from options (should be resolved from ComponentRef if applicable)
 	nestedFields := field.Options.NestedFields
@@ -1106,6 +1137,7 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 				),
 			)
 		}
+
 		return Div(
 			Class("p-3 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800/50 dark:border-gray-700"),
 			Div(
@@ -1122,6 +1154,7 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 
 	// Convert value to map
 	valueMap := make(map[string]any)
+
 	if value != nil {
 		if m, ok := value.(map[string]any); ok {
 			valueMap = m
@@ -1176,6 +1209,7 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 					subValue := valueMap[nf.Name]
 					fields[i] = renderNestedFieldInput(nf, subFieldName, subValue, 1)
 				}
+
 				return fields
 			}()),
 
@@ -1189,7 +1223,7 @@ func renderObjectField(field *core.ContentFieldDTO, fieldName string, value any)
 	)
 }
 
-// renderArrayField renders an array of objects with add/remove functionality
+// renderArrayField renders an array of objects with add/remove functionality.
 func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
 	// Get nested fields from options (should be resolved from ComponentRef if applicable)
 	nestedFields := field.Options.NestedFields
@@ -1209,6 +1243,7 @@ func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) 
 				),
 			)
 		}
+
 		return Div(
 			Class("p-3 bg-slate-50 border border-slate-200 rounded-lg dark:bg-gray-800/50 dark:border-gray-700"),
 			Div(
@@ -1225,6 +1260,7 @@ func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) 
 
 	// Convert value to slice
 	var items []map[string]any
+
 	if value != nil {
 		if arr, ok := value.([]any); ok {
 			for _, item := range arr {
@@ -1246,13 +1282,16 @@ func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) 
 	for _, nf := range nestedFields {
 		emptyItem[nf.Name] = ""
 	}
+
 	emptyItemJSON, _ := json.Marshal(emptyItem)
 
 	minItems := 0
 	maxItems := -1
+
 	if field.Options.MinItems != nil {
 		minItems = *field.Options.MinItems
 	}
+
 	if field.Options.MaxItems != nil {
 		maxItems = *field.Options.MaxItems
 	}
@@ -1358,7 +1397,7 @@ func renderArrayField(field *core.ContentFieldDTO, fieldName string, value any) 
 	)
 }
 
-// renderOneOfField renders a oneOf (discriminated union) field
+// renderOneOfField renders a oneOf (discriminated union) field.
 func renderOneOfField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
 	// Get discriminator field and schemas from options
 	discriminatorField := field.Options.DiscriminatorField
@@ -1382,6 +1421,7 @@ func renderOneOfField(field *core.ContentFieldDTO, fieldName string, value any) 
 
 	// Convert value to map
 	valueMap := make(map[string]any)
+
 	if value != nil {
 		if m, ok := value.(map[string]any); ok {
 			valueMap = m
@@ -1522,6 +1562,7 @@ func renderOneOfField(field *core.ContentFieldDTO, fieldName string, value any) 
 								for i, nf := range schemaOpt.NestedFields {
 									fields[i] = renderOneOfNestedFieldInput(nf, nf.Name)
 								}
+
 								return fields
 							}()),
 						))
@@ -1542,6 +1583,7 @@ func renderOneOfField(field *core.ContentFieldDTO, fieldName string, value any) 
 						))
 					}
 				}
+
 				return nodes
 			}()),
 
@@ -1566,7 +1608,7 @@ func renderOneOfField(field *core.ContentFieldDTO, fieldName string, value any) 
 	)
 }
 
-// renderArrayItemEditor renders the editor for a single array item
+// renderArrayItemEditor renders the editor for a single array item.
 func renderArrayItemEditor(nestedFields []core.NestedFieldDefDTO, fieldName string) g.Node {
 	return Div(
 		Class("relative p-4 border border-slate-200 rounded-lg dark:border-gray-700 bg-slate-50/50 dark:bg-gray-800/30"),
@@ -1596,13 +1638,14 @@ func renderArrayItemEditor(nestedFields []core.NestedFieldDefDTO, fieldName stri
 				for i, nf := range nestedFields {
 					fields[i] = renderArrayItemField(nf, fieldName, i)
 				}
+
 				return fields
 			}()),
 		),
 	)
 }
 
-// renderArrayItemField renders a single field within an array item
+// renderArrayItemField renders a single field within an array item.
 func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldIndex int) g.Node {
 	// Note: This function creates a template that will be used with x-for
 	// The actual field name and value binding happens through Alpine.js
@@ -1624,7 +1667,7 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 
 		// Render input based on type
 		g.Group(func() []g.Node {
-			xModel := fmt.Sprintf("item.%s", field.Name)
+			xModel := "item." + field.Name
 
 			switch field.Type {
 			case "boolean":
@@ -1697,11 +1740,13 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 				}
 			case "select":
 				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+
 				if field.Options != nil && field.Options.Choices != nil {
 					for _, choice := range field.Options.Choices {
 						opts = append(opts, Option(Value(choice.Value), g.Text(choice.Label)))
 					}
 				}
+
 				return []g.Node{
 					Select(
 						g.Attr("x-model", xModel),
@@ -1731,7 +1776,7 @@ func renderArrayItemField(field core.NestedFieldDefDTO, fieldName string, fieldI
 	)
 }
 
-// renderOneOfNestedFieldInput renders a nested field input within a oneOf field using Alpine.js binding
+// renderOneOfNestedFieldInput renders a nested field input within a oneOf field using Alpine.js binding.
 func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string) g.Node {
 	xModel := fmt.Sprintf("data['%s']", fieldName)
 
@@ -1788,11 +1833,13 @@ func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string)
 				}
 			case "select":
 				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+
 				if field.Options != nil && len(field.Options.Choices) > 0 {
 					for _, choice := range field.Options.Choices {
 						opts = append(opts, Option(Value(choice.Value), g.Text(choice.Label)))
 					}
 				}
+
 				return []g.Node{
 					Select(
 						g.Attr("x-model", xModel),
@@ -1804,6 +1851,7 @@ func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string)
 			case "json":
 				// JSON editor with Alpine.js validation and formatting
 				jsonEditorID := "json-editor-" + fieldName
+
 				return []g.Node{
 					Div(
 						g.Attr("x-data", fmt.Sprintf(`{
@@ -1850,13 +1898,15 @@ func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string)
 				}
 			default: // text, email, url, etc.
 				inputType := "text"
-				if field.Type == "email" {
+				switch field.Type {
+				case "email":
 					inputType = "email"
-				} else if field.Type == "url" {
+				case "url":
 					inputType = "url"
-				} else if field.Type == "date" {
+				case "date":
 					inputType = "date"
 				}
+
 				return []g.Node{
 					Input(
 						Type(inputType),
@@ -1879,7 +1929,7 @@ func renderOneOfNestedFieldInput(field core.NestedFieldDefDTO, fieldName string)
 	)
 }
 
-// renderNestedFieldInput renders an input for a nested field (used in object fields)
+// renderNestedFieldInput renders an input for a nested field (used in object fields).
 func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, value any, depth int) g.Node {
 	valueStr := ""
 	if value != nil {
@@ -1910,6 +1960,7 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 				if b, ok := value.(bool); ok {
 					checked = b
 				}
+
 				return []g.Node{
 					Div(
 						Class("flex items-center gap-2"),
@@ -2002,6 +2053,7 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 				}
 			case "select":
 				opts := []g.Node{Option(Value(""), g.Text("Select..."))}
+
 				if field.Options != nil && field.Options.Choices != nil {
 					for _, choice := range field.Options.Choices {
 						opts = append(opts, Option(
@@ -2011,6 +2063,7 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 						))
 					}
 				}
+
 				return []g.Node{
 					Select(
 						ID(fieldName),
@@ -2027,18 +2080,22 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 						renderNestedObjectFieldInput(field.Options.NestedFields, fieldName, value, depth+1),
 					}
 				}
+
 				return []g.Node{
 					P(Class("text-xs text-slate-400"), g.Text("Max nesting depth reached")),
 				}
 			case "json":
 				// JSON editor for nested fields
 				jsonValue := "{}"
+
 				if value != nil {
 					if jsonBytes, err := json.Marshal(value); err == nil {
 						jsonValue = string(jsonBytes)
 					}
 				}
+
 				jsonEditorID := "json-editor-" + fieldName
+
 				return []g.Node{
 					Div(
 						g.Attr("x-data", fmt.Sprintf(`{
@@ -2116,9 +2173,10 @@ func renderNestedFieldInput(field core.NestedFieldDefDTO, fieldName string, valu
 	)
 }
 
-// renderNestedObjectFieldInput renders inputs for nested object fields within an object
+// renderNestedObjectFieldInput renders inputs for nested object fields within an object.
 func renderNestedObjectFieldInput(fields []core.NestedFieldDefDTO, baseName string, value any, depth int) g.Node {
 	valueMap := make(map[string]any)
+
 	if value != nil {
 		if m, ok := value.(map[string]any); ok {
 			valueMap = m
@@ -2134,6 +2192,7 @@ func renderNestedObjectFieldInput(fields []core.NestedFieldDefDTO, baseName stri
 				subValue := valueMap[f.Name]
 				nodes[i] = renderNestedFieldInput(f, subFieldName, subValue, depth)
 			}
+
 			return nodes
 		}()),
 	)
@@ -2143,10 +2202,11 @@ func renderNestedObjectFieldInput(fields []core.NestedFieldDefDTO, baseName stri
 // JSON Editor Field (Monaco Editor)
 // =============================================================================
 
-// renderJsonEditorField renders a JSON editor for JSON fields
+// renderJsonEditorField renders a JSON editor for JSON fields.
 func renderJsonEditorField(field *core.ContentFieldDTO, fieldName string, value any) g.Node {
 	// Convert value to JSON string
 	jsonValue := "{}"
+
 	if value != nil {
 		switch v := value.(type) {
 		case string:
@@ -2244,7 +2304,7 @@ func renderJsonEditorField(field *core.ContentFieldDTO, fieldName string, value 
 	)
 }
 
-// escapeJSONForJS escapes a JSON string for safe embedding in JavaScript
+// escapeJSONForJS escapes a JSON string for safe embedding in JavaScript.
 func escapeJSONForJS(jsonStr string) string {
 	// Parse and re-marshal to ensure valid JSON
 	var parsed any
@@ -2261,6 +2321,7 @@ func escapeJSONForJS(jsonStr string) string {
 	// Escape for JavaScript string context
 	escaped := string(bytes)
 	escaped = fmt.Sprintf("`%s`", escaped)
+
 	return escaped
 }
 
@@ -2268,7 +2329,7 @@ func escapeJSONForJS(jsonStr string) string {
 // Slug Field with Auto-Generation
 // =============================================================================
 
-// renderSlugField renders a slug field with optional auto-generation from another field
+// renderSlugField renders a slug field with optional auto-generation from another field.
 func renderSlugField(field *core.ContentFieldDTO, fieldName string, value string) g.Node {
 	sourceField := field.Options.SourceField
 	hasSourceField := sourceField != ""
@@ -2286,6 +2347,7 @@ func renderSlugField(field *core.ContentFieldDTO, fieldName string, value string
 		if field.Required {
 			inputAttrs = append(inputAttrs, Required())
 		}
+
 		return Input(inputAttrs...)
 	}
 

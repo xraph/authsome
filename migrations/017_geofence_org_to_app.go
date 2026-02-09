@@ -20,6 +20,7 @@ func init() {
 		for _, table := range tables {
 			// Check if table exists before trying to rename column
 			var exists bool
+
 			err := db.NewSelect().
 				ColumnExpr("to_regclass(?) IS NOT NULL", "public."+table).
 				Scan(ctx, &exists)
@@ -31,6 +32,7 @@ func init() {
 
 			// Check if organization_id column exists
 			var colExists bool
+
 			err = db.NewRaw(`
 				SELECT EXISTS (
 					SELECT 1 
@@ -74,6 +76,7 @@ func init() {
 		for _, table := range tables {
 			// Check if table exists
 			var exists bool
+
 			err := db.NewSelect().
 				ColumnExpr("to_regclass(?) IS NOT NULL", "public."+table).
 				Scan(ctx, &exists)
@@ -84,6 +87,7 @@ func init() {
 
 			// Check if app_id column exists
 			var colExists bool
+
 			err = db.NewRaw(`
 				SELECT EXISTS (
 					SELECT 1 

@@ -8,14 +8,15 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// GoogleProvider implements OAuth for Google
+// GoogleProvider implements OAuth for Google.
 type GoogleProvider struct {
 	*BaseProvider
+
 	accessType string
 	prompt     string
 }
 
-// NewGoogleProvider creates a new Google OAuth provider
+// NewGoogleProvider creates a new Google OAuth provider.
 func NewGoogleProvider(config ProviderConfig) *GoogleProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -45,12 +46,12 @@ func NewGoogleProvider(config ProviderConfig) *GoogleProvider {
 	}
 }
 
-// GetOAuth2Config overrides to add Google-specific options
+// GetOAuth2Config overrides to add Google-specific options.
 func (g *GoogleProvider) GetOAuth2Config() *oauth2.Config {
 	return g.oauth2Config
 }
 
-// GetAuthURL returns the authorization URL with Google-specific parameters
+// GetAuthURL returns the authorization URL with Google-specific parameters.
 func (g *GoogleProvider) GetAuthURL(state string) string {
 	opts := []oauth2.AuthCodeOption{}
 
@@ -65,11 +66,11 @@ func (g *GoogleProvider) GetAuthURL(state string) string {
 	return g.oauth2Config.AuthCodeURL(state, opts...)
 }
 
-// GetUserInfo fetches user information from Google
+// GetUserInfo fetches user information from Google.
 func (g *GoogleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := g.oauth2Config.Client(ctx, token)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, client, g.userInfoURL, &raw); err != nil {
 		return nil, fmt.Errorf("failed to fetch Google user info: %w", err)
 	}
@@ -81,21 +82,27 @@ func (g *GoogleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if email, ok := raw["email"].(string); ok {
 		userInfo.Email = email
 	}
+
 	if verified, ok := raw["verified_email"].(bool); ok {
 		userInfo.EmailVerified = verified
 	}
+
 	if name, ok := raw["name"].(string); ok {
 		userInfo.Name = name
 	}
+
 	if givenName, ok := raw["given_name"].(string); ok {
 		userInfo.FirstName = givenName
 	}
+
 	if familyName, ok := raw["family_name"].(string); ok {
 		userInfo.LastName = familyName
 	}
+
 	if picture, ok := raw["picture"].(string); ok {
 		userInfo.Avatar = picture
 	}

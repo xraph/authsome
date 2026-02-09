@@ -15,10 +15,10 @@ func init() {
 
 		// Check if verifications table exists
 		var tableExists bool
+
 		err := db.NewSelect().
 			ColumnExpr("EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = ?)", "verifications").
 			Scan(ctx, &tableExists)
-
 		if err != nil {
 			// Try SQLite approach
 			err = db.NewSelect().
@@ -37,20 +37,22 @@ func init() {
 
 		// Check if code column already exists
 		var columnExists bool
+
 		err = db.NewSelect().
 			ColumnExpr("EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = ? AND column_name = ?)", "verifications", "code").
 			Scan(ctx, &columnExists)
-
 		if err != nil {
 			// Try SQLite approach using pragma
 			var columns []struct {
 				Name string `bun:"name"`
 			}
+
 			err = db.NewRaw("PRAGMA table_info(verifications)").Scan(ctx, &columns)
 			if err == nil {
 				for _, col := range columns {
 					if col.Name == "code" {
 						columnExists = true
+
 						break
 					}
 				}

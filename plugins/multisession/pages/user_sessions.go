@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/card"
 )
 
-// UserSessionsPage renders all sessions for a specific user
+// UserSessionsPage renders all sessions for a specific user.
 func UserSessionsPage(currentApp *app.App, userID, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -131,7 +131,7 @@ func UserSessionsPage(currentApp *app.App, userID, basePath string) g.Node {
 	)
 }
 
-// userSessionsData returns the Alpine.js data object for user sessions
+// userSessionsData returns the Alpine.js data object for user sessions.
 func userSessionsData(appID, userID string) string {
 	return fmt.Sprintf(`{
 		sessions: [],
@@ -223,7 +223,7 @@ func userSessionsData(appID, userID string) string {
 	}`, userID, appID, userID, appID, appID, userID)
 }
 
-// userSessionCard renders a session card in the user sessions page
+// userSessionCard renders a session card in the user sessions page.
 func userSessionCard(appBase string) g.Node {
 	return card.Card(
 		Class("hover:shadow-md transition-shadow hover:border-primary/50"),

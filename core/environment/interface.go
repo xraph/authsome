@@ -12,7 +12,7 @@ import (
 
 // EnvironmentService defines the contract for environment service operations
 // This allows plugins to decorate the service with additional behavior
-// Following the pattern from core/jwt and core/app architecture
+// Following the pattern from core/jwt and core/app architecture.
 type EnvironmentService interface {
 	// Environment operations
 	CreateEnvironment(ctx context.Context, req *CreateEnvironmentRequest) (*Environment, error)
@@ -30,5 +30,5 @@ type EnvironmentService interface {
 	ListPromotions(ctx context.Context, filter *ListPromotionsFilter) (*ListPromotionsResponse, error)
 }
 
-// Ensure Service implements EnvironmentService
+// Ensure Service implements EnvironmentService.
 var _ EnvironmentService = (*Service)(nil)

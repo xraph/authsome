@@ -19,6 +19,7 @@ func init() {
 		}
 
 		fmt.Println("✓ Successfully created compliance tables")
+
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Rollback: Drop all compliance tables

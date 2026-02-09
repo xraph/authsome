@@ -13,23 +13,24 @@ import (
 	"github.com/xraph/authsome/core/audit"
 )
 
-// Service handles step-up authentication business logic
+// Service handles step-up authentication business logic.
 type Service struct {
 	repo         Repository
 	config       *Config
 	auditService AuditServiceInterface
 }
 
-// AuditServiceInterface defines the interface for audit logging
+// AuditServiceInterface defines the interface for audit logging.
 type AuditServiceInterface interface {
 	Log(ctx context.Context, event *audit.Event) error
 }
 
-// NewService creates a new step-up service
+// NewService creates a new step-up service.
 func NewService(repo Repository, config *Config, auditService AuditServiceInterface) *Service {
 	if config == nil {
 		config = DefaultConfig()
 	}
+
 	return &Service{
 		repo:         repo,
 		config:       config,
@@ -37,7 +38,7 @@ func NewService(repo Repository, config *Config, auditService AuditServiceInterf
 	}
 }
 
-// EvaluationContext contains context for evaluating step-up requirements
+// EvaluationContext contains context for evaluating step-up requirements.
 type EvaluationContext struct {
 	UserID       string
 	OrgID        string
@@ -55,7 +56,7 @@ type EvaluationContext struct {
 	Metadata     map[string]interface{}
 }
 
-// EvaluationResult contains the result of step-up evaluation
+// EvaluationResult contains the result of step-up evaluation.
 type EvaluationResult struct {
 	Required          bool                   `json:"required"`
 	SecurityLevel     SecurityLevel          `json:"security_level,omitempty"`
@@ -71,7 +72,7 @@ type EvaluationResult struct {
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// VerifyRequest contains the request to verify step-up authentication
+// VerifyRequest contains the request to verify step-up authentication.
 type VerifyRequest struct {
 	RequirementID  string             `json:"requirement_id,omitempty"`
 	ChallengeToken string             `json:"challenge_token,omitempty"`
@@ -84,7 +85,7 @@ type VerifyRequest struct {
 	UserAgent      string             `json:"user_agent,omitempty"`
 }
 
-// VerifyResponse contains the response from verification
+// VerifyResponse contains the response from verification.
 type VerifyResponse struct {
 	Success          bool                   `json:"success"`
 	VerificationID   string                 `json:"verification_id,omitempty"`
@@ -95,7 +96,7 @@ type VerifyResponse struct {
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// EvaluateRequirement evaluates whether step-up authentication is required
+// EvaluateRequirement evaluates whether step-up authentication is required.
 func (s *Service) EvaluateRequirement(ctx context.Context, evalCtx *EvaluationContext) (*EvaluationResult, error) {
 	if !s.config.Enabled {
 		return &EvaluationResult{
@@ -134,6 +135,7 @@ func (s *Service) EvaluateRequirement(ctx context.Context, evalCtx *EvaluationCo
 		if level, matches := s.evaluatePolicy(policy, evalCtx); matches {
 			if s.isHigherLevel(level, requiredLevel) {
 				requiredLevel = level
+
 				matchedRules = append(matchedRules, policy.Name)
 				reason = policy.Description
 			}
@@ -162,6 +164,7 @@ func (s *Service) EvaluateRequirement(ctx context.Context, evalCtx *EvaluationCo
 				if s.matchesOrg(rule.OrgID, evalCtx.OrgID) {
 					if s.isHigherLevel(rule.SecurityLevel, requiredLevel) {
 						requiredLevel = rule.SecurityLevel
+
 						matchedRules = append(matchedRules, fmt.Sprintf("Amount: %.2f %s", evalCtx.Amount, evalCtx.Currency))
 						reason = rule.Description
 					}
@@ -190,6 +193,7 @@ func (s *Service) EvaluateRequirement(ctx context.Context, evalCtx *EvaluationCo
 		riskLevel := s.evaluateRiskLevel(evalCtx.RiskScore)
 		if s.isHigherLevel(riskLevel, requiredLevel) {
 			requiredLevel = riskLevel
+
 			matchedRules = append(matchedRules, fmt.Sprintf("Risk Score: %.2f", evalCtx.RiskScore))
 			reason = fmt.Sprintf("Risk-based requirement (score: %.2f)", evalCtx.RiskScore)
 		}
@@ -272,11 +276,13 @@ func (s *Service) EvaluateRequirement(ctx context.Context, evalCtx *EvaluationCo
 	}, nil
 }
 
-// VerifyStepUp verifies a step-up authentication attempt
+// VerifyStepUp verifies a step-up authentication attempt.
 func (s *Service) VerifyStepUp(ctx context.Context, req *VerifyRequest) (*VerifyResponse, error) {
 	// Get requirement
-	var requirement *StepUpRequirement
-	var err error
+	var (
+		requirement *StepUpRequirement
+		err         error
+	)
 
 	if req.ChallengeToken != "" {
 		requirement, err = s.repo.GetRequirementByToken(ctx, req.ChallengeToken)
@@ -308,6 +314,7 @@ func (s *Service) VerifyStepUp(ctx context.Context, req *VerifyRequest) (*Verify
 	if requirement.ExpiresAt.Before(time.Now()) {
 		requirement.Status = "expired"
 		_ = s.repo.UpdateRequirement(ctx, requirement)
+
 		return &VerifyResponse{
 			Success: false,
 			Error:   "Step-up requirement has expired",
@@ -332,6 +339,7 @@ func (s *Service) VerifyStepUp(ctx context.Context, req *VerifyRequest) (*Verify
 	if !verified {
 		attempt.FailureReason = "Invalid credential"
 	}
+
 	_ = s.repo.CreateAttempt(ctx, attempt)
 
 	if !verified {
@@ -385,6 +393,7 @@ func (s *Service) VerifyStepUp(ctx context.Context, req *VerifyRequest) (*Verify
 
 	// Remember device if requested
 	deviceRemembered := false
+
 	if req.RememberDevice && s.config.RememberStepUp && req.DeviceID != "" {
 		device := &StepUpRememberedDevice{
 			ID:            uuid.New().String(),
@@ -466,11 +475,13 @@ func (s *Service) matchesRoute(pattern, route string) bool {
 	// Support trailing wildcard
 	if strings.HasSuffix(pattern, "*") {
 		prefix := strings.TrimSuffix(pattern, "*")
+
 		return strings.HasPrefix(route, prefix)
 	}
 
 	// Use path.Match for glob patterns
 	matched, _ := path.Match(pattern, route)
+
 	return matched
 }
 
@@ -478,12 +489,15 @@ func (s *Service) matchesAmount(rule AmountRule, amount float64, currency string
 	if rule.Currency != "" && rule.Currency != currency {
 		return false
 	}
+
 	if amount < rule.MinAmount {
 		return false
 	}
+
 	if rule.MaxAmount > 0 && amount > rule.MaxAmount {
 		return false
 	}
+
 	return true
 }
 
@@ -500,6 +514,7 @@ func (s *Service) isHigherLevel(level1, level2 SecurityLevel) bool {
 		SecurityLevelHigh:     3,
 		SecurityLevelCritical: 4,
 	}
+
 	return levels[level1] > levels[level2]
 }
 
@@ -507,12 +522,15 @@ func (s *Service) evaluateRiskLevel(riskScore float64) SecurityLevel {
 	if riskScore >= s.config.RiskThresholdHigh {
 		return SecurityLevelCritical
 	}
+
 	if riskScore >= s.config.RiskThresholdMedium {
 		return SecurityLevelHigh
 	}
+
 	if riskScore >= s.config.RiskThresholdLow {
 		return SecurityLevelMedium
 	}
+
 	return SecurityLevelLow
 }
 
@@ -547,6 +565,7 @@ func (s *Service) getExpiryTime(level SecurityLevel) time.Time {
 func (s *Service) generateChallengeToken() string {
 	b := make([]byte, 32)
 	rand.Read(b)
+
 	return base64.URLEncoding.EncodeToString(b)
 }
 
@@ -581,6 +600,7 @@ func (s *Service) auditLog(ctx context.Context, userID, orgID, eventType string,
 	if ip, ok := data["ip"].(string); ok {
 		log.IP = ip
 	}
+
 	if ua, ok := data["user_agent"].(string); ok {
 		log.UserAgent = ua
 	}
@@ -588,7 +608,7 @@ func (s *Service) auditLog(ctx context.Context, userID, orgID, eventType string,
 	_ = s.repo.CreateAuditLog(ctx, log)
 }
 
-// ForgetDevice removes a remembered device
+// ForgetDevice removes a remembered device.
 func (s *Service) ForgetDevice(ctx context.Context, userID, orgID, deviceID string) error {
 	device, err := s.repo.GetRememberedDevice(ctx, userID, orgID, deviceID)
 	if err != nil {
@@ -606,7 +626,7 @@ func (s *Service) ForgetDevice(ctx context.Context, userID, orgID, deviceID stri
 	return nil
 }
 
-// CleanupExpired removes expired requirements and devices
+// CleanupExpired removes expired requirements and devices.
 func (s *Service) CleanupExpired(ctx context.Context) error {
 	if err := s.repo.DeleteExpiredRequirements(ctx); err != nil {
 		return fmt.Errorf("failed to cleanup expired requirements: %w", err)

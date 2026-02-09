@@ -13,7 +13,7 @@ var (
 	verbose bool
 )
 
-// rootCmd represents the base command when called without any subcommands
+// rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "authsome",
 	Short: "AuthSome CLI tool",

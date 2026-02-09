@@ -12,7 +12,7 @@ import (
 )
 
 // Authsome defines the public API for the Auth instance
-// This interface enables better testability and allows for alternative implementations
+// This interface enables better testability and allows for alternative implementations.
 type Authsome interface {
 	// Initialize initializes all core services
 	Initialize(ctx context.Context) error

@@ -10,13 +10,13 @@ import (
 	"github.com/xraph/authsome/types"
 )
 
-// ChangePasswordRequest represents a password change request
+// ChangePasswordRequest represents a password change request.
 type ChangePasswordRequest struct {
 	OldPassword string `json:"oldPassword" validate:"required"`
 	NewPassword string `json:"newPassword" validate:"required,min=8"`
 }
 
-// ChangePassword changes a user's password after verifying the old password
+// ChangePassword changes a user's password after verifying the old password.
 func (s *Service) ChangePassword(ctx context.Context, userID xid.ID, oldPassword, newPassword string) error {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -58,13 +58,14 @@ func (s *Service) ChangePassword(ctx context.Context, userID xid.ID, oldPassword
 	return nil
 }
 
-// getHookRegistry retrieves the hook registry if available
-func (s *Service) getHookRegistry() interface{} {
+// getHookRegistry retrieves the hook registry if available.
+func (s *Service) getHookRegistry() any {
 	// Try to get from users service if it implements the interface
 	if userSvc, ok := s.users.(interface {
-		GetHookRegistry() interface{}
+		GetHookRegistry() any
 	}); ok {
 		return userSvc.GetHookRegistry()
 	}
+
 	return nil
 }

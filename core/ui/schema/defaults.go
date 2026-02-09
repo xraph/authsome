@@ -1,12 +1,12 @@
 package schema
 
-// DefaultAppSettingsSchemaID is the ID for the default app settings schema
+// DefaultAppSettingsSchemaID is the ID for the default app settings schema.
 const DefaultAppSettingsSchemaID = "app_settings"
 
-// DefaultAppSettingsSchemaName is the name for the default app settings schema
+// DefaultAppSettingsSchemaName is the name for the default app settings schema.
 const DefaultAppSettingsSchemaName = "Application Settings"
 
-// Section IDs
+// Section IDs.
 const (
 	SectionIDGeneral        = "general"
 	SectionIDSecurity       = "security"
@@ -16,7 +16,7 @@ const (
 	SectionIDBranding       = "branding"
 )
 
-// DefaultAppSettingsSchema returns the default schema for app settings
+// DefaultAppSettingsSchema returns the default schema for app settings.
 func DefaultAppSettingsSchema() *Schema {
 	return &Schema{
 		ID:          DefaultAppSettingsSchemaID,
@@ -34,7 +34,7 @@ func DefaultAppSettingsSchema() *Schema {
 	}
 }
 
-// GeneralSettingsSection returns the general settings section
+// GeneralSettingsSection returns the general settings section.
 func GeneralSettingsSection() *Section {
 	return NewSectionBuilder(SectionIDGeneral, "General Settings").
 		Description("Configure basic application settings").
@@ -105,7 +105,7 @@ func GeneralSettingsSection() *Section {
 		Build()
 }
 
-// SecuritySettingsSection returns the security settings section
+// SecuritySettingsSection returns the security settings section.
 func SecuritySettingsSection() *Section {
 	return NewSectionBuilder(SectionIDSecurity, "Security Settings").
 		Description("Configure password policies and security features").
@@ -198,7 +198,7 @@ func SecuritySettingsSection() *Section {
 		Build()
 }
 
-// SessionSettingsSection returns the session settings section
+// SessionSettingsSection returns the session settings section.
 func SessionSettingsSection() *Section {
 	return NewSectionBuilder(SectionIDSession, "Session Settings").
 		Description("Configure user session behavior").
@@ -288,7 +288,7 @@ func SessionSettingsSection() *Section {
 		Build()
 }
 
-// NotificationSettingsSection returns the notification settings section
+// NotificationSettingsSection returns the notification settings section.
 func NotificationSettingsSection() *Section {
 	return NewSectionBuilder(SectionIDNotification, "Notification Settings").
 		Description("Configure email and SMS notification preferences").
@@ -361,7 +361,7 @@ func NotificationSettingsSection() *Section {
 		Build()
 }
 
-// AuthenticationSettingsSection returns the authentication settings section
+// AuthenticationSettingsSection returns the authentication settings section.
 func AuthenticationSettingsSection() *Section {
 	return NewSectionBuilder(SectionIDAuthentication, "Authentication Methods").
 		Description("Configure which authentication methods are available").
@@ -437,7 +437,7 @@ func AuthenticationSettingsSection() *Section {
 		Build()
 }
 
-// BrandingSettingsSection returns the branding settings section
+// BrandingSettingsSection returns the branding settings section.
 func BrandingSettingsSection() *Section {
 	return NewSectionBuilder(SectionIDBranding, "Branding").
 		Description("Customize the look and feel of authentication pages").
@@ -513,7 +513,7 @@ func BrandingSettingsSection() *Section {
 		Build()
 }
 
-// timezoneOptions returns common timezone options
+// timezoneOptions returns common timezone options.
 func timezoneOptions() []SelectOption {
 	return []SelectOption{
 		{Value: "UTC", Label: "UTC"},
@@ -536,7 +536,7 @@ func timezoneOptions() []SelectOption {
 	}
 }
 
-// languageOptions returns supported language options
+// languageOptions returns supported language options.
 func languageOptions() []SelectOption {
 	return []SelectOption{
 		{Value: "en", Label: "English"},
@@ -554,7 +554,7 @@ func languageOptions() []SelectOption {
 	}
 }
 
-// RegisterDefaultSections registers all default sections in the global registry
+// RegisterDefaultSections registers all default sections in the global registry.
 func RegisterDefaultSections() error {
 	schema := DefaultAppSettingsSchema()
 	for _, section := range schema.Sections {
@@ -562,5 +562,6 @@ func RegisterDefaultSections() error {
 			return err
 		}
 	}
+
 	return nil
 }

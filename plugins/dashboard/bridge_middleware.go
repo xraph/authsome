@@ -19,7 +19,7 @@ import (
 // 3. Environment ID from cookie
 //
 // This middleware runs BEFORE bridge function execution, so all bridge functions
-// automatically receive an enriched context via bridgeCtx.Context()
+// automatically receive an enriched context via bridgeCtx.Context().
 func (p *Plugin) BridgeContextMiddleware() http.Handler {
 	// Get the original bridge HTTP handler
 	originalHandler := p.fuiBridge.Handler()
@@ -62,6 +62,7 @@ func (p *Plugin) enrichBridgeContext(r *http.Request) context.Context {
 			forge.F("error", err),
 			forge.F("availableCookies", cookieNames),
 			forge.F("lookingFor", sessionCookieName))
+
 		return ctx
 	}
 
@@ -76,6 +77,7 @@ func (p *Plugin) enrichBridgeContext(r *http.Request) context.Context {
 		p.log.Warn("[BridgeMiddleware] Invalid session token in bridge request",
 			forge.F("error", err),
 			forge.F("hasSession", sess != nil))
+
 		return ctx
 	}
 
@@ -103,11 +105,13 @@ func (p *Plugin) enrichBridgeContext(r *http.Request) context.Context {
 
 	// Step 4: Extract Environment ID from cookie OR fall back to default
 	envSet := false
+
 	if envCookie, err := r.Cookie(environmentCookieName); err == nil && envCookie != nil && envCookie.Value != "" {
 		if envID, err := xid.FromString(envCookie.Value); err == nil && !envID.IsNil() {
 			ctx = contexts.SetEnvironmentID(ctx, envID)
 			p.log.Debug("[BridgeMiddleware] Enriched context with environment ID from cookie",
 				forge.F("envId", envID.String()))
+
 			envSet = true
 		}
 	}
@@ -131,5 +135,6 @@ func (p *Plugin) enrichBridgeContext(r *http.Request) context.Context {
 	ctx = context.WithValue(ctx, "session", sess)
 
 	p.log.Debug("[BridgeMiddleware] Context enrichment complete")
+
 	return ctx
 }

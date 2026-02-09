@@ -22,12 +22,15 @@ func TestURLParser_Parse_Filters(t *testing.T) {
 		}
 
 		found := false
+
 		for _, cond := range q.Filters.Conditions {
 			if cond.Field == "status" && cond.Value == "published" {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			t.Error("expected status=published filter condition")
 		}
@@ -47,6 +50,7 @@ func TestURLParser_Parse_Filters(t *testing.T) {
 		}
 
 		found := false
+
 		for _, cond := range q.Filters.Conditions {
 			if cond.Field == "price" && cond.Operator == OpGreaterThanEqual {
 				found = true
@@ -54,6 +58,7 @@ func TestURLParser_Parse_Filters(t *testing.T) {
 				break
 			}
 		}
+
 		if !found {
 			t.Error("expected price>=100 filter condition")
 		}
@@ -92,12 +97,15 @@ func TestURLParser_Parse_Filters(t *testing.T) {
 		}
 
 		found := false
+
 		for _, cond := range q.Filters.Conditions {
 			if cond.Field == "status" && cond.Operator == OpIn {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			t.Error("expected status IN filter condition")
 		}
@@ -120,6 +128,7 @@ func TestURLParser_Parse_Pagination(t *testing.T) {
 		if q.Page != 2 {
 			t.Errorf("expected page 2, got %d", q.Page)
 		}
+
 		if q.PageSize != 25 {
 			t.Errorf("expected pageSize 25, got %d", q.PageSize)
 		}
@@ -138,6 +147,7 @@ func TestURLParser_Parse_Pagination(t *testing.T) {
 		if q.Limit != 10 {
 			t.Errorf("expected limit 10, got %d", q.Limit)
 		}
+
 		if q.Offset != 20 {
 			t.Errorf("expected offset 20, got %d", q.Offset)
 		}
@@ -193,6 +203,7 @@ func TestURLParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "createdAt" {
 			t.Errorf("expected field 'createdAt', got '%s'", q.Sort[0].Field)
 		}
+
 		if !q.Sort[0].Descending {
 			t.Error("expected descending to be true")
 		}
@@ -214,6 +225,7 @@ func TestURLParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "title" {
 			t.Errorf("expected field 'title', got '%s'", q.Sort[0].Field)
 		}
+
 		if q.Sort[0].Descending {
 			t.Error("expected descending to be false")
 		}
@@ -235,11 +247,11 @@ func TestURLParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "updatedAt" || !q.Sort[0].Descending {
 			t.Errorf("expected updatedAt desc, got %s %v", q.Sort[0].Field, q.Sort[0].Descending)
 		}
+
 		if q.Sort[1].Field != "title" || q.Sort[1].Descending {
 			t.Errorf("expected title asc, got %s %v", q.Sort[1].Field, q.Sort[1].Descending)
 		}
 	})
-
 }
 
 func TestURLParser_Parse_Search(t *testing.T) {
@@ -272,7 +284,6 @@ func TestURLParser_Parse_Search(t *testing.T) {
 			t.Errorf("expected search 'search term', got '%s'", q.Search)
 		}
 	})
-
 }
 
 func TestURLParser_Parse_Select(t *testing.T) {
@@ -496,7 +507,7 @@ func TestURLParser_Parse_AllOperators(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkURLParser_Parse_Simple(b *testing.B) {
 	parser := NewURLParser()
 	values := url.Values{}
@@ -504,8 +515,7 @@ func BenchmarkURLParser_Parse_Simple(b *testing.B) {
 	values.Set("page", "1")
 	values.Set("pageSize", "10")
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(values)
 	}
 }
@@ -522,8 +532,7 @@ func BenchmarkURLParser_Parse_Complex(b *testing.B) {
 	values.Set("search", "hello")
 	values.Set("populate", "author,category")
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(values)
 	}
 }

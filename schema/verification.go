@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Verification represents email/phone verification tokens
+// Verification represents email/phone verification tokens.
 type Verification struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:verifications,alias:v"`

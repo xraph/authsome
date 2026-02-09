@@ -2,9 +2,10 @@ package utils
 
 import "github.com/xraph/forge"
 
-// ExtensionRouter wraps the base router and auto-applies exclusion
+// ExtensionRouter wraps the base router and auto-applies exclusion.
 type ExtensionRouter struct {
 	forge.Router
+
 	ext forge.Extension
 }
 

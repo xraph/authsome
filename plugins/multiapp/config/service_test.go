@@ -11,23 +11,23 @@ import (
 	"github.com/xraph/forge"
 )
 
-// MockConfigManager implements forge.ConfigManager for testing
+// MockConfigManager implements forge.ConfigManager for testing.
 type MockConfigManager struct {
-	data map[string]interface{}
+	data map[string]any
 }
 
 func NewMockConfigManager() *MockConfigManager {
 	return &MockConfigManager{
-		data: make(map[string]interface{}),
+		data: make(map[string]any),
 	}
 }
 
-// Required core methods that we actually use
-func (m *MockConfigManager) Bind(key string, target interface{}) error {
+// Required core methods that we actually use.
+func (m *MockConfigManager) Bind(key string, target any) error {
 	return nil
 }
 
-func (m *MockConfigManager) Get(key string) interface{} {
+func (m *MockConfigManager) Get(key string) any {
 	return m.data[key]
 }
 
@@ -35,9 +35,11 @@ func (m *MockConfigManager) GetString(key string, defaultValue ...string) string
 	if v, ok := m.data[key].(string); ok {
 		return v
 	}
+
 	if len(defaultValue) > 0 {
 		return defaultValue[0]
 	}
+
 	return ""
 }
 
@@ -45,9 +47,11 @@ func (m *MockConfigManager) GetInt(key string, defaultValue ...int) int {
 	if v, ok := m.data[key].(int); ok {
 		return v
 	}
+
 	if len(defaultValue) > 0 {
 		return defaultValue[0]
 	}
+
 	return 0
 }
 
@@ -55,18 +59,21 @@ func (m *MockConfigManager) GetBool(key string, defaultValue ...bool) bool {
 	if v, ok := m.data[key].(bool); ok {
 		return v
 	}
+
 	if len(defaultValue) > 0 {
 		return defaultValue[0]
 	}
+
 	return false
 }
 
 func (m *MockConfigManager) IsSet(key string) bool {
 	_, exists := m.data[key]
+
 	return exists
 }
 
-func (m *MockConfigManager) Set(key string, value interface{}) {
+func (m *MockConfigManager) Set(key string, value any) {
 	m.data[key] = value
 }
 
@@ -75,10 +82,11 @@ func (m *MockConfigManager) AllKeys() []string {
 	for k := range m.data {
 		keys = append(keys, k)
 	}
+
 	return keys
 }
 
-// Stub methods to satisfy interface (not used in our tests)
+// Stub methods to satisfy interface (not used in our tests).
 func (m *MockConfigManager) Name() string                                           { return "mock" }
 func (m *MockConfigManager) SecretsManager() forge.SecretsManager                   { return nil }
 func (m *MockConfigManager) LoadFrom(sources ...forge.ConfigSource) error           { return nil }
@@ -121,7 +129,7 @@ func (m *MockConfigManager) GetStringMapString(key string, defaultValue ...map[s
 func (m *MockConfigManager) GetStringMapStringSlice(key string, defaultValue ...map[string][]string) map[string][]string {
 	return nil
 }
-func (m *MockConfigManager) GetWithOptions(key string, opts ...forge.GetOption) (interface{}, error) {
+func (m *MockConfigManager) GetWithOptions(key string, opts ...forge.GetOption) (any, error) {
 	return nil, nil
 }
 func (m *MockConfigManager) GetStringWithOptions(key string, opts ...forge.GetOption) (string, error) {
@@ -136,33 +144,33 @@ func (m *MockConfigManager) GetBoolWithOptions(key string, opts ...forge.GetOpti
 func (m *MockConfigManager) GetDurationWithOptions(key string, opts ...forge.GetOption) (time.Duration, error) {
 	return 0, nil
 }
-func (m *MockConfigManager) BindWithDefault(key string, target interface{}, defaultValue interface{}) error {
+func (m *MockConfigManager) BindWithDefault(key string, target any, defaultValue any) error {
 	return nil
 }
-func (m *MockConfigManager) BindWithOptions(key string, target interface{}, options forge.BindOptions) error {
+func (m *MockConfigManager) BindWithOptions(key string, target any, options forge.BindOptions) error {
 	return nil
 }
-func (m *MockConfigManager) WatchWithCallback(key string, callback func(string, interface{})) {}
-func (m *MockConfigManager) WatchChanges(callback func(forge.ConfigChange))                   {}
-func (m *MockConfigManager) GetSourceMetadata() map[string]*forge.SourceMetadata              { return nil }
-func (m *MockConfigManager) GetKeys() []string                                                { return m.AllKeys() }
-func (m *MockConfigManager) GetSection(key string) map[string]interface{}                     { return nil }
-func (m *MockConfigManager) HasKey(key string) bool                                           { return m.IsSet(key) }
-func (m *MockConfigManager) Size() int                                                        { return len(m.data) }
-func (m *MockConfigManager) Sub(key string) forge.ConfigManager                               { return nil }
-func (m *MockConfigManager) MergeWith(other forge.ConfigManager) error                        { return nil }
-func (m *MockConfigManager) Clone() forge.ConfigManager                                       { return m }
-func (m *MockConfigManager) GetAllSettings() map[string]interface{}                           { return m.data }
-func (m *MockConfigManager) Reset()                                                           {}
-func (m *MockConfigManager) ExpandEnvVars() error                                             { return nil }
-func (m *MockConfigManager) SafeGet(key string, expectedType reflect.Type) (interface{}, error) {
+func (m *MockConfigManager) WatchWithCallback(key string, callback func(string, any)) {}
+func (m *MockConfigManager) WatchChanges(callback func(forge.ConfigChange))           {}
+func (m *MockConfigManager) GetSourceMetadata() map[string]*forge.SourceMetadata      { return nil }
+func (m *MockConfigManager) GetKeys() []string                                        { return m.AllKeys() }
+func (m *MockConfigManager) GetSection(key string) map[string]any                     { return nil }
+func (m *MockConfigManager) HasKey(key string) bool                                   { return m.IsSet(key) }
+func (m *MockConfigManager) Size() int                                                { return len(m.data) }
+func (m *MockConfigManager) Sub(key string) forge.ConfigManager                       { return nil }
+func (m *MockConfigManager) MergeWith(other forge.ConfigManager) error                { return nil }
+func (m *MockConfigManager) Clone() forge.ConfigManager                               { return m }
+func (m *MockConfigManager) GetAllSettings() map[string]any                           { return m.data }
+func (m *MockConfigManager) Reset()                                                   {}
+func (m *MockConfigManager) ExpandEnvVars() error                                     { return nil }
+func (m *MockConfigManager) SafeGet(key string, expectedType reflect.Type) (any, error) {
 	return nil, nil
 }
 func (m *MockConfigManager) GetBytesSize(key string, defaultValue ...uint64) uint64 { return 0 }
 func (m *MockConfigManager) InConfig(key string) bool                               { return m.IsSet(key) }
-func (m *MockConfigManager) UnmarshalKey(key string, rawVal interface{}) error      { return nil }
-func (m *MockConfigManager) Unmarshal(rawVal interface{}) error                     { return nil }
-func (m *MockConfigManager) AllSettings() map[string]interface{}                    { return m.data }
+func (m *MockConfigManager) UnmarshalKey(key string, rawVal any) error              { return nil }
+func (m *MockConfigManager) Unmarshal(rawVal any) error                             { return nil }
+func (m *MockConfigManager) AllSettings() map[string]any                            { return m.data }
 func (m *MockConfigManager) ReadInConfig() error                                    { return nil }
 func (m *MockConfigManager) SetConfigType(configType string)                        {}
 func (m *MockConfigManager) SetConfigFile(filePath string) error                    { return nil }
@@ -170,7 +178,7 @@ func (m *MockConfigManager) ConfigFileUsed() string                             
 func (m *MockConfigManager) WatchConfig() error                                     { return nil }
 func (m *MockConfigManager) OnConfigChange(callback func(forge.ConfigChange))       {}
 
-// Ensure MockConfigManager implements forge.ConfigManager
+// Ensure MockConfigManager implements forge.ConfigManager.
 var _ forge.ConfigManager = (*MockConfigManager)(nil)
 
 func TestNewService(t *testing.T) {
@@ -285,10 +293,10 @@ func TestService_LoadAppConfig(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	service := NewService(mockConfig)
 
-	appConfig := map[string]interface{}{
-		"auth": map[string]interface{}{
-			"oauth": map[string]interface{}{
-				"google": map[string]interface{}{
+	appConfig := map[string]any{
+		"auth": map[string]any{
+			"oauth": map[string]any{
+				"google": map[string]any{
 					"clientId": "app-client-id",
 					"enabled":  true,
 				},
@@ -333,7 +341,7 @@ func TestService_GetAppConfig(t *testing.T) {
 	mockConfig := NewMockConfigManager()
 	service := NewService(mockConfig)
 
-	appConfig := map[string]interface{}{
+	appConfig := map[string]any{
 		"key1": "value1",
 		"key2": 123,
 		"key3": true,
@@ -378,29 +386,31 @@ func TestService_ConcurrentAccess(t *testing.T) {
 	done := make(chan bool)
 
 	// Writer goroutines
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(id int) {
 			appID := "app-" + string(rune('A'+id))
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				_ = service.Set(appID, "auth.test.key", j)
 			}
+
 			done <- true
 		}(i)
 	}
 
 	// Reader goroutines
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(id int) {
 			appID := "app-" + string(rune('A'+id))
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				_ = service.GetString(appID, "auth.test.key")
 			}
+
 			done <- true
 		}(i)
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		<-done
 	}
 
@@ -423,7 +433,7 @@ func TestService_LoadAppConfigRequiresAppID(t *testing.T) {
 	service := NewService(mockConfig)
 
 	// Loading config without app ID should fail
-	err := service.LoadAppConfig("", map[string]interface{}{})
+	err := service.LoadAppConfig("", map[string]any{})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "app ID is required")
 }

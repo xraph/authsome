@@ -18,10 +18,9 @@ import (
 	"github.com/xraph/forgeui/router"
 )
 
-// HandleCreatePlan handles plan creation form submission
+// HandleCreatePlan handles plan creation form submission.
 func (e *DashboardExtension) HandleCreatePlan(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -65,6 +64,7 @@ func (e *DashboardExtension) HandleCreatePlan(ctx *router.PageContext) (g.Node, 
 
 	// Build metadata based on billing pattern
 	metadata := make(map[string]any)
+
 	switch billingPattern {
 	case "per_seat":
 		if v := form.Get("seat_price"); v != "" {
@@ -72,11 +72,13 @@ func (e *DashboardExtension) HandleCreatePlan(ctx *router.PageContext) (g.Node, 
 				metadata["seat_price"] = seatPrice
 			}
 		}
+
 		if v := form.Get("min_seats"); v != "" {
 			if minSeats, err := strconv.Atoi(v); err == nil {
 				metadata["min_seats"] = minSeats
 			}
 		}
+
 		if v := form.Get("max_seats"); v != "" {
 			if maxSeats, err := strconv.Atoi(v); err == nil {
 				metadata["max_seats"] = maxSeats
@@ -90,11 +92,13 @@ func (e *DashboardExtension) HandleCreatePlan(ctx *router.PageContext) (g.Node, 
 		if v := form.Get("unit_name"); v != "" {
 			metadata["unit_name"] = v
 		}
+
 		if v := form.Get("unit_price"); v != "" {
 			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
 				metadata["unit_price"] = unitPrice
 			}
 		}
+
 		if v := form.Get("usage_aggregation"); v != "" {
 			metadata["usage_aggregation"] = v
 		}
@@ -104,14 +108,17 @@ func (e *DashboardExtension) HandleCreatePlan(ctx *router.PageContext) (g.Node, 
 				metadata["hybrid_base_price"] = hybridBase
 			}
 		}
+
 		if v := form.Get("hybrid_unit_name"); v != "" {
 			metadata["unit_name"] = v
 		}
+
 		if v := form.Get("hybrid_unit_price"); v != "" {
 			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
 				metadata["unit_price"] = unitPrice
 			}
 		}
+
 		if v := form.Get("included_units"); v != "" {
 			if includedUnits, err := strconv.Atoi(v); err == nil {
 				metadata["included_units"] = includedUnits
@@ -144,13 +151,13 @@ func (e *DashboardExtension) HandleCreatePlan(ctx *router.PageContext) (g.Node, 
 
 	// Redirect to plan detail page
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+plan.ID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleUpdatePlan handles plan update form submission
+// HandleUpdatePlan handles plan update form submission.
 func (e *DashboardExtension) HandleUpdatePlan(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -197,11 +204,13 @@ func (e *DashboardExtension) HandleUpdatePlan(ctx *router.PageContext) (g.Node, 
 				metadata["seat_price"] = seatPrice
 			}
 		}
+
 		if v := form.Get("min_seats"); v != "" {
 			if minSeats, err := strconv.Atoi(v); err == nil {
 				metadata["min_seats"] = minSeats
 			}
 		}
+
 		if v := form.Get("max_seats"); v != "" {
 			if maxSeats, err := strconv.Atoi(v); err == nil {
 				metadata["max_seats"] = maxSeats
@@ -215,11 +224,13 @@ func (e *DashboardExtension) HandleUpdatePlan(ctx *router.PageContext) (g.Node, 
 		if v := form.Get("unit_name"); v != "" {
 			metadata["unit_name"] = v
 		}
+
 		if v := form.Get("unit_price"); v != "" {
 			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
 				metadata["unit_price"] = unitPrice
 			}
 		}
+
 		if v := form.Get("usage_aggregation"); v != "" {
 			metadata["usage_aggregation"] = v
 		}
@@ -229,14 +240,17 @@ func (e *DashboardExtension) HandleUpdatePlan(ctx *router.PageContext) (g.Node, 
 				metadata["hybrid_base_price"] = hybridBase
 			}
 		}
+
 		if v := form.Get("hybrid_unit_name"); v != "" {
 			metadata["unit_name"] = v
 		}
+
 		if v := form.Get("hybrid_unit_price"); v != "" {
 			if unitPrice, err := strconv.ParseInt(v, 10, 64); err == nil {
 				metadata["unit_price"] = unitPrice
 			}
 		}
+
 		if v := form.Get("included_units"); v != "" {
 			if includedUnits, err := strconv.Atoi(v); err == nil {
 				metadata["included_units"] = includedUnits
@@ -264,13 +278,13 @@ func (e *DashboardExtension) HandleUpdatePlan(ctx *router.PageContext) (g.Node, 
 
 	// Redirect to plan detail
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleArchivePlan handles plan archiving (deactivation)
+// HandleArchivePlan handles plan archiving (deactivation).
 func (e *DashboardExtension) HandleArchivePlan(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -291,13 +305,13 @@ func (e *DashboardExtension) HandleArchivePlan(ctx *router.PageContext) (g.Node,
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleSyncPlan handles syncing a plan to the payment provider
+// HandleSyncPlan handles syncing a plan to the payment provider.
 func (e *DashboardExtension) HandleSyncPlan(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -318,13 +332,13 @@ func (e *DashboardExtension) HandleSyncPlan(ctx *router.PageContext) (g.Node, er
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleSyncPlanFromProvider syncs a single plan from the payment provider
+// HandleSyncPlanFromProvider syncs a single plan from the payment provider.
 func (e *DashboardExtension) HandleSyncPlanFromProvider(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -355,13 +369,13 @@ func (e *DashboardExtension) HandleSyncPlanFromProvider(ctx *router.PageContext)
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans/"+planID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleSyncAllPlansFromProvider syncs all plans from the payment provider
+// HandleSyncAllPlansFromProvider syncs all plans from the payment provider.
 func (e *DashboardExtension) HandleSyncAllPlansFromProvider(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -378,14 +392,15 @@ func (e *DashboardExtension) HandleSyncAllPlansFromProvider(ctx *router.PageCont
 
 	// Redirect to plans list with success message (plans count synced)
 	_ = syncedPlans // Could show success message with count
+
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleDeletePlan handles permanent plan deletion
+// HandleDeletePlan handles permanent plan deletion.
 func (e *DashboardExtension) HandleDeletePlan(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -406,13 +421,13 @@ func (e *DashboardExtension) HandleDeletePlan(ctx *router.PageContext) (g.Node, 
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/plans", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleCancelSubscription handles subscription cancellation
+// HandleCancelSubscription handles subscription cancellation.
 func (e *DashboardExtension) HandleCancelSubscription(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -431,19 +446,20 @@ func (e *DashboardExtension) HandleCancelSubscription(ctx *router.PageContext) (
 		Immediate: false, // Cancel at end of period
 		Reason:    "Canceled via dashboard",
 	}
+
 	err = e.plugin.subscriptionSvc.Cancel(reqCtx, subID, cancelReq)
 	if err != nil {
 		return nil, errs.InternalServerError("Failed to cancel subscription", err)
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/subscriptions/"+subID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleCreateAddOn handles add-on creation form submission
+// HandleCreateAddOn handles add-on creation form submission.
 func (e *DashboardExtension) HandleCreateAddOn(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -495,13 +511,13 @@ func (e *DashboardExtension) HandleCreateAddOn(ctx *router.PageContext) (g.Node,
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/addons", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleSyncInvoices handles syncing invoices from Stripe
+// HandleSyncInvoices handles syncing invoices from Stripe.
 func (e *DashboardExtension) HandleSyncInvoices(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -515,18 +531,19 @@ func (e *DashboardExtension) HandleSyncInvoices(ctx *router.PageContext) (g.Node
 	if err != nil {
 		// Redirect back with error message
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/invoices?error=sync_failed", http.StatusFound)
+
 		return nil, nil
 	}
 
 	// Redirect back with success message
-	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/invoices?success=synced&count="+fmt.Sprintf("%d", syncedCount), http.StatusFound)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/invoices?success=synced&count="+strconv.Itoa(syncedCount), http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleMarkInvoicePaid handles marking an invoice as paid
+// HandleMarkInvoicePaid handles marking an invoice as paid.
 func (e *DashboardExtension) HandleMarkInvoicePaid(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -546,14 +563,14 @@ func (e *DashboardExtension) HandleMarkInvoicePaid(ctx *router.PageContext) (g.N
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/invoices/"+invoiceID.String(), http.StatusFound)
+
 	return nil, nil
 }
 
 // HandleCreateCoupon handles coupon creation form submission
-// TODO: Implement when couponSvc is added to Plugin
+// TODO: Implement when couponSvc is added to Plugin.
 func (e *DashboardExtension) HandleCreateCoupon(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -564,16 +581,18 @@ func (e *DashboardExtension) HandleCreateCoupon(ctx *router.PageContext) (g.Node
 	// Coupon service not yet integrated into Plugin
 	// For now, redirect back to coupons page
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/coupons", http.StatusFound)
+
 	return nil, nil
 }
 
-// linkFeaturesFromForm processes the feature selection from the plan form
+// linkFeaturesFromForm processes the feature selection from the plan form.
 func (e *DashboardExtension) linkFeaturesFromForm(ctx context.Context, planID xid.ID, form url.Values, appID xid.ID) {
 	// Get all features for the app
 	features, _, _ := e.plugin.featureSvc.List(ctx, appID, "", false, 1, 1000)
 
 	// Get existing linked features
 	existingLinks, _ := e.plugin.featureSvc.GetPlanFeatures(ctx, planID)
+
 	existingMap := make(map[string]bool)
 	for _, link := range existingLinks {
 		existingMap[link.FeatureID.String()] = true
@@ -623,10 +642,9 @@ func (e *DashboardExtension) linkFeaturesFromForm(ctx context.Context, planID xi
 	}
 }
 
-// HandleExportFeaturesAndPlans exports features and plans as JSON
+// HandleExportFeaturesAndPlans exports features and plans as JSON.
 func (e *DashboardExtension) HandleExportFeaturesAndPlans(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid request")
@@ -644,14 +662,14 @@ func (e *DashboardExtension) HandleExportFeaturesAndPlans(ctx *router.PageContex
 	ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
 	ctx.ResponseWriter.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=features-plans-export-%s.json", time.Now().Format("2006-01-02")))
 
-	_ = exportData  // TODO: Actually write the export data to response
+	_ = exportData // TODO: Actually write the export data to response
+
 	return nil, nil // Success
 }
 
-// HandleImportFeaturesAndPlans imports features and plans from JSON
+// HandleImportFeaturesAndPlans imports features and plans from JSON.
 func (e *DashboardExtension) HandleImportFeaturesAndPlans(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -681,13 +699,13 @@ func (e *DashboardExtension) HandleImportFeaturesAndPlans(ctx *router.PageContex
 
 	// Redirect with success message
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features", http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleShowImportForm displays the import form page
+// HandleShowImportForm displays the import form page.
 func (e *DashboardExtension) HandleShowImportForm(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -837,19 +855,20 @@ func (e *DashboardExtension) HandleShowImportForm(ctx *router.PageContext) (g.No
 	ctx.ResponseWriter.Header().Set("Content-Type", "text/html; charset=utf-8")
 	ctx.ResponseWriter.WriteHeader(http.StatusOK)
 	_, _ = ctx.ResponseWriter.Write([]byte(html))
+
 	return nil, nil
 }
 
-// HandleSyncFeature handles syncing a feature to the provider
+// HandleSyncFeature handles syncing a feature to the provider.
 func (e *DashboardExtension) HandleSyncFeature(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -865,19 +884,20 @@ func (e *DashboardExtension) HandleSyncFeature(ctx *router.PageContext) (g.Node,
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr, http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleSyncFeatureFromProvider syncs a feature from the payment provider
+// HandleSyncFeatureFromProvider syncs a feature from the payment provider.
 func (e *DashboardExtension) HandleSyncFeatureFromProvider(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
 	}
 
 	featureIDStr := ctx.Param("featureId")
+
 	featureID, err := xid.FromString(featureIDStr)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid feature ID")
@@ -903,13 +923,13 @@ func (e *DashboardExtension) HandleSyncFeatureFromProvider(ctx *router.PageConte
 	}
 
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features/"+featureIDStr, http.StatusFound)
+
 	return nil, nil
 }
 
-// HandleSyncAllFeaturesFromProvider syncs all features from the payment provider
+// HandleSyncAllFeaturesFromProvider syncs all features from the payment provider.
 func (e *DashboardExtension) HandleSyncAllFeaturesFromProvider(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -928,16 +948,19 @@ func (e *DashboardExtension) HandleSyncAllFeaturesFromProvider(ctx *router.PageC
 	syncedFeatures, err := e.plugin.featureSvc.SyncAllFromProvider(reqCtx, productID)
 	if err != nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features?error=sync_failed", http.StatusFound)
+
 		return nil, nil
 	}
 
 	// Redirect to features list with success message (features count synced)
 	_ = syncedFeatures // Could show success message with count
+
 	http.Redirect(ctx.ResponseWriter, ctx.Request, basePath+"/app/"+currentApp.ID.String()+"/billing/features", http.StatusFound)
+
 	return nil, nil
 }
 
-// Suppress unused variable warnings
+// Suppress unused variable warnings.
 var _ = func() {
 	var ctx *router.PageContext
 	var e *DashboardExtension

@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// CookieConfig represents the configuration for session cookies
+// CookieConfig represents the configuration for session cookies.
 type CookieConfig struct {
 	Enabled  bool   `json:"enabled"`            // Enable/disable cookie setting
 	Name     string `json:"name"`               // Cookie name (default: "authsome_session")
@@ -17,7 +17,7 @@ type CookieConfig struct {
 	MaxAge   *int   `json:"maxAge,omitempty"`   // MaxAge in seconds (nil = use session duration)
 }
 
-// DefaultCookieConfig returns a cookie configuration with sensible defaults
+// DefaultCookieConfig returns a cookie configuration with sensible defaults.
 func DefaultCookieConfig() CookieConfig {
 	return CookieConfig{
 		Enabled:  false, // Opt-in by default
@@ -32,11 +32,12 @@ func DefaultCookieConfig() CookieConfig {
 // The override config takes precedence over the base config for non-zero values
 // Special handling for boolean fields:
 // - Enabled: Only override if override.Enabled is true (can't distinguish false from unset)
-// - HttpOnly: Only override if override.HttpOnly is false (since default is true)
+// - HttpOnly: Only override if override.HttpOnly is false (since default is true).
 func (c *CookieConfig) Merge(override *CookieConfig) *CookieConfig {
 	if override == nil {
 		// Return a copy of the base config
 		merged := *c
+
 		return &merged
 	}
 
@@ -98,7 +99,7 @@ func (c *CookieConfig) Merge(override *CookieConfig) *CookieConfig {
 }
 
 // ParseSameSite converts a string to http.SameSite constant
-// Returns Lax as default for invalid values
+// Returns Lax as default for invalid values.
 func ParseSameSite(s string) http.SameSite {
 	switch s {
 	case "Strict", "strict":
@@ -114,11 +115,12 @@ func ParseSameSite(s string) http.SameSite {
 }
 
 // UnmarshalCookieConfigFromJSON unmarshals cookie config from JSON bytes
-// This is a helper for extracting cookie config from app metadata
+// This is a helper for extracting cookie config from app metadata.
 func UnmarshalCookieConfigFromJSON(data []byte) (*CookieConfig, error) {
 	var config CookieConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
+
 	return &config, nil
 }

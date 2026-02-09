@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Mock plugin for testing
+// Mock plugin for testing.
 type mockPlugin struct {
 	id           string
 	dependencies []string
@@ -24,7 +24,7 @@ func (m *mockPlugin) RegisterServiceDecorators(reg *registry.ServiceRegistry) er
 }
 func (m *mockPlugin) Migrate() error { return nil }
 
-// Implement PluginWithDependencies if dependencies are provided
+// Implement PluginWithDependencies if dependencies are provided.
 func (m *mockPlugin) Dependencies() []string {
 	return m.dependencies
 }
@@ -40,9 +40,11 @@ func TestListSorted_NoDependencies(t *testing.T) {
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
+
 	if err := registry.Register(p3); err != nil {
 		t.Fatalf("failed to register plugin3: %v", err)
 	}
@@ -68,6 +70,7 @@ func TestListSorted_SimpleDependency(t *testing.T) {
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
+
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
@@ -86,6 +89,7 @@ func TestListSorted_SimpleDependency(t *testing.T) {
 	if sorted[0].ID() != "plugin1" {
 		t.Errorf("expected plugin1 first, got %s", sorted[0].ID())
 	}
+
 	if sorted[1].ID() != "plugin2" {
 		t.Errorf("expected plugin2 second, got %s", sorted[1].ID())
 	}
@@ -103,9 +107,11 @@ func TestListSorted_ChainDependency(t *testing.T) {
 	if err := registry.Register(p3); err != nil {
 		t.Fatalf("failed to register plugin3: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
+
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
@@ -124,9 +130,11 @@ func TestListSorted_ChainDependency(t *testing.T) {
 	if sorted[0].ID() != "plugin1" {
 		t.Errorf("expected plugin1 first, got %s", sorted[0].ID())
 	}
+
 	if sorted[1].ID() != "plugin2" {
 		t.Errorf("expected plugin2 second, got %s", sorted[1].ID())
 	}
+
 	if sorted[2].ID() != "plugin3" {
 		t.Errorf("expected plugin3 third, got %s", sorted[2].ID())
 	}
@@ -143,9 +151,11 @@ func TestListSorted_MultipleDependencies(t *testing.T) {
 	if err := registry.Register(p3); err != nil {
 		t.Fatalf("failed to register plugin3: %v", err)
 	}
+
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
@@ -167,14 +177,17 @@ func TestListSorted_MultipleDependencies(t *testing.T) {
 	// plugin1 and plugin2 must be before plugin3
 	foundPlugin1 := false
 	foundPlugin2 := false
-	for i := 0; i < 2; i++ {
+
+	for i := range 2 {
 		if sorted[i].ID() == "plugin1" {
 			foundPlugin1 = true
 		}
+
 		if sorted[i].ID() == "plugin2" {
 			foundPlugin2 = true
 		}
 	}
+
 	if !foundPlugin1 || !foundPlugin2 {
 		t.Error("plugin1 and plugin2 must be before plugin3")
 	}
@@ -190,6 +203,7 @@ func TestListSorted_CircularDependency(t *testing.T) {
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
@@ -237,6 +251,7 @@ func TestValidateDependencies_Success(t *testing.T) {
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
@@ -256,6 +271,7 @@ func TestValidateDependencies_Failure(t *testing.T) {
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register plugin1: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register plugin2: %v", err)
 	}
@@ -284,15 +300,19 @@ func TestListSorted_ComplexDAG(t *testing.T) {
 	if err := registry.Register(p3); err != nil {
 		t.Fatalf("failed to register p3: %v", err)
 	}
+
 	if err := registry.Register(p5); err != nil {
 		t.Fatalf("failed to register p5: %v", err)
 	}
+
 	if err := registry.Register(p1); err != nil {
 		t.Fatalf("failed to register p1: %v", err)
 	}
+
 	if err := registry.Register(p4); err != nil {
 		t.Fatalf("failed to register p4: %v", err)
 	}
+
 	if err := registry.Register(p2); err != nil {
 		t.Fatalf("failed to register p2: %v", err)
 	}
@@ -316,15 +336,19 @@ func TestListSorted_ComplexDAG(t *testing.T) {
 	if position["p3"] <= position["p1"] {
 		t.Error("p3 must come after p1")
 	}
+
 	if position["p3"] <= position["p2"] {
 		t.Error("p3 must come after p2")
 	}
+
 	if position["p4"] <= position["p2"] {
 		t.Error("p4 must come after p2")
 	}
+
 	if position["p5"] <= position["p3"] {
 		t.Error("p5 must come after p3")
 	}
+
 	if position["p5"] <= position["p4"] {
 		t.Error("p5 must come after p4")
 	}

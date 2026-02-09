@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// DeviceInfo contains parsed device information from user agent
+// DeviceInfo contains parsed device information from user agent.
 type DeviceInfo struct {
 	DeviceType string // Desktop, Mobile, Tablet, Bot, Unknown
 	OS         string // Windows, macOS, Linux, iOS, Android, ChromeOS, etc.
@@ -18,7 +18,7 @@ type DeviceInfo struct {
 	IsBot      bool
 }
 
-// ParseUserAgent parses a user agent string and extracts device information
+// ParseUserAgent parses a user agent string and extracts device information.
 func ParseUserAgent(ua string) *DeviceInfo {
 	info := &DeviceInfo{
 		DeviceType: "Unknown",
@@ -37,6 +37,7 @@ func ParseUserAgent(ua string) *DeviceInfo {
 		info.DeviceType = "Bot"
 		info.IsBot = true
 		info.Browser = detectBot(uaLower)
+
 		return info
 	}
 
@@ -68,6 +69,7 @@ func detectOS(ua, uaLower string) (string, string) {
 		if strings.Contains(ua, "Windows NT 10.0") {
 			return "Windows", "10/11"
 		}
+
 		return "Windows", "10"
 	case strings.Contains(uaLower, "windows nt 6.3"):
 		return "Windows", "8.1"
@@ -167,6 +169,7 @@ func detectDeviceType(uaLower string) (deviceType string, isMobile, isTablet, is
 		if strings.Contains(uaLower, "android") && !strings.Contains(uaLower, "mobile") {
 			return "Tablet", false, true, false
 		}
+
 		return "Mobile", true, false, false
 	}
 
@@ -200,6 +203,7 @@ func extractVersion(ua, prefix string) string {
 	if idx == -1 {
 		return ""
 	}
+
 	start := idx + len(prefix)
 	if start >= len(ua) {
 		return ""
@@ -212,6 +216,7 @@ func extractVersion(ua, prefix string) string {
 		if c == ' ' || c == ';' || c == ')' || c == '(' {
 			break
 		}
+
 		end++
 	}
 
@@ -221,6 +226,7 @@ func extractVersion(ua, prefix string) string {
 	if len(parts) >= 2 {
 		return parts[0] + "." + parts[1]
 	}
+
 	return version
 }
 
@@ -230,6 +236,7 @@ func extractMacVersion(ua string) string {
 	if idx == -1 {
 		return ""
 	}
+
 	start := idx + len("Mac OS X ")
 	if start >= len(ua) {
 		return ""
@@ -241,15 +248,18 @@ func extractMacVersion(ua string) string {
 		if c == ')' || c == ';' || c == ' ' {
 			break
 		}
+
 		end++
 	}
 
 	version := ua[start:end]
 	version = strings.ReplaceAll(version, "_", ".")
+
 	parts := strings.Split(version, ".")
 	if len(parts) >= 2 {
 		return parts[0] + "." + parts[1]
 	}
+
 	return version
 }
 
@@ -259,16 +269,18 @@ func containsAny(s string, substrs []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-// FormatDeviceInfo returns a human-readable device string
+// FormatDeviceInfo returns a human-readable device string.
 func (d *DeviceInfo) FormatDeviceInfo() string {
 	if d.Browser == "Unknown" && d.OS == "Unknown" {
 		return "Unknown Device"
 	}
 
 	var parts []string
+
 	if d.Browser != "Unknown" {
 		if d.BrowserVer != "" {
 			parts = append(parts, d.Browser+" "+d.BrowserVer)
@@ -288,7 +300,7 @@ func (d *DeviceInfo) FormatDeviceInfo() string {
 	return strings.Join(parts, " on ")
 }
 
-// ShortDeviceInfo returns a compact device string
+// ShortDeviceInfo returns a compact device string.
 func (d *DeviceInfo) ShortDeviceInfo() string {
 	if d.Browser == "Unknown" && d.OS == "Unknown" {
 		return "Unknown"
@@ -297,10 +309,11 @@ func (d *DeviceInfo) ShortDeviceInfo() string {
 	if d.Browser != "Unknown" {
 		return d.Browser
 	}
+
 	return d.OS
 }
 
-// FormatRelativeTime formats a time as relative time (e.g., "2 hours ago")
+// FormatRelativeTime formats a time as relative time (e.g., "2 hours ago").
 func FormatRelativeTime(t time.Time) string {
 	now := time.Now()
 	diff := now.Sub(t)
@@ -313,31 +326,35 @@ func FormatRelativeTime(t time.Time) string {
 		if mins == 1 {
 			return "1 minute ago"
 		}
+
 		return strings.Replace("X minutes ago", "X", itoa(mins), 1)
 	case diff < 24*time.Hour:
 		hours := int(diff.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
+
 		return strings.Replace("X hours ago", "X", itoa(hours), 1)
 	case diff < 7*24*time.Hour:
 		days := int(diff.Hours() / 24)
 		if days == 1 {
 			return "Yesterday"
 		}
+
 		return strings.Replace("X days ago", "X", itoa(days), 1)
 	case diff < 30*24*time.Hour:
 		weeks := int(diff.Hours() / 24 / 7)
 		if weeks == 1 {
 			return "1 week ago"
 		}
+
 		return strings.Replace("X weeks ago", "X", itoa(weeks), 1)
 	default:
 		return t.Format("Jan 2, 2006")
 	}
 }
 
-// FormatExpiresIn formats time until expiration
+// FormatExpiresIn formats time until expiration.
 func FormatExpiresIn(t time.Time) string {
 	now := time.Now()
 	if t.Before(now) {
@@ -352,46 +369,52 @@ func FormatExpiresIn(t time.Time) string {
 		if mins <= 1 {
 			return "< 1 minute"
 		}
+
 		return strings.Replace("X minutes", "X", itoa(mins), 1)
 	case diff < 24*time.Hour:
 		hours := int(diff.Hours())
 		if hours == 1 {
 			return "1 hour"
 		}
+
 		return strings.Replace("X hours", "X", itoa(hours), 1)
 	case diff < 7*24*time.Hour:
 		days := int(diff.Hours() / 24)
 		if days == 1 {
 			return "1 day"
 		}
+
 		return strings.Replace("X days", "X", itoa(days), 1)
 	default:
 		return t.Format("Jan 2")
 	}
 }
 
-// Simple int to string without importing strconv in helpers
+// Simple int to string without importing strconv in helpers.
 func itoa(i int) string {
 	if i == 0 {
 		return "0"
 	}
+
 	if i < 0 {
 		return "-" + itoa(-i)
 	}
+
 	var digits []byte
 	for i > 0 {
 		digits = append([]byte{byte('0' + i%10)}, digits...)
 		i /= 10
 	}
+
 	return string(digits)
 }
 
-// IsSessionActive checks if a session is currently active
+// IsSessionActive checks if a session is currently active.
 func IsSessionActive(expiresAt time.Time) bool {
 	return time.Now().Before(expiresAt)
 }
 
-// IsSessionExpiringSoon checks if session expires within given duration
+// IsSessionExpiringSoon checks if session expires within given duration.
 func IsSessionExpiringSoon(expiresAt time.Time, within time.Duration) bool {
 	return time.Until(expiresAt) < within && time.Until(expiresAt) > 0
 }

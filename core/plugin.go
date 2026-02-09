@@ -17,7 +17,7 @@ import (
 // - DI Container: auth.GetForgeApp().Container()
 //
 // Plugins can resolve services from the DI container using the helper functions
-// in the authsome package (e.g., authsome.ResolveUserService, authsome.ResolveAuditService)
+// in the authsome package (e.g., authsome.ResolveUserService, authsome.ResolveAuditService).
 type Plugin interface {
 	// ID returns the unique plugin identifier
 	ID() string

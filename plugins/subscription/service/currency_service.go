@@ -10,51 +10,55 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/repository"
 )
 
-// CurrencyService handles currency and exchange rate operations
+// CurrencyService handles currency and exchange rate operations.
 type CurrencyService struct {
 	repo repository.CurrencyRepository
 }
 
-// NewCurrencyService creates a new currency service
+// NewCurrencyService creates a new currency service.
 func NewCurrencyService(repo repository.CurrencyRepository) *CurrencyService {
 	return &CurrencyService{repo: repo}
 }
 
-// ListCurrencies returns all supported currencies
+// ListCurrencies returns all supported currencies.
 func (s *CurrencyService) ListCurrencies(ctx context.Context) ([]*core.SupportedCurrency, error) {
 	return s.repo.ListCurrencies(ctx)
 }
 
-// GetCurrency returns a currency by code
+// GetCurrency returns a currency by code.
 func (s *CurrencyService) GetCurrency(ctx context.Context, code string) (*core.SupportedCurrency, error) {
 	return s.repo.GetCurrency(ctx, code)
 }
 
-// CreateCurrency creates a new supported currency
+// CreateCurrency creates a new supported currency.
 func (s *CurrencyService) CreateCurrency(ctx context.Context, currency *core.SupportedCurrency) error {
 	if currency.ID.IsNil() {
 		currency.ID = xid.New()
 	}
+
 	currency.CreatedAt = time.Now()
 	currency.UpdatedAt = time.Now()
+
 	return s.repo.CreateCurrency(ctx, currency)
 }
 
-// SetDefaultCurrency sets a currency as the default
+// SetDefaultCurrency sets a currency as the default.
 func (s *CurrencyService) SetDefaultCurrency(ctx context.Context, code string) error {
 	currency, err := s.repo.GetCurrency(ctx, code)
 	if err != nil {
 		return err
 	}
+
 	if currency == nil {
 		return fmt.Errorf("currency not found: %s", code)
 	}
 
 	currency.IsDefault = true
+
 	return s.repo.UpdateCurrency(ctx, currency)
 }
 
-// CreateExchangeRate creates a new exchange rate
+// CreateExchangeRate creates a new exchange rate.
 func (s *CurrencyService) CreateExchangeRate(ctx context.Context, req *core.CreateExchangeRateRequest, appID xid.ID) (*core.ExchangeRate, error) {
 	rate := &core.ExchangeRate{
 		ID:           xid.New(),
@@ -71,6 +75,7 @@ func (s *CurrencyService) CreateExchangeRate(ctx context.Context, req *core.Crea
 	if rate.ValidFrom.IsZero() {
 		rate.ValidFrom = time.Now()
 	}
+
 	if rate.Source == "" {
 		rate.Source = "manual"
 	}
@@ -78,10 +83,11 @@ func (s *CurrencyService) CreateExchangeRate(ctx context.Context, req *core.Crea
 	if err := s.repo.CreateExchangeRate(ctx, rate); err != nil {
 		return nil, err
 	}
+
 	return rate, nil
 }
 
-// GetExchangeRate returns the current exchange rate between two currencies
+// GetExchangeRate returns the current exchange rate between two currencies.
 func (s *CurrencyService) GetExchangeRate(ctx context.Context, fromCurrency, toCurrency string) (*core.ExchangeRate, error) {
 	if fromCurrency == toCurrency {
 		return &core.ExchangeRate{
@@ -90,15 +96,16 @@ func (s *CurrencyService) GetExchangeRate(ctx context.Context, fromCurrency, toC
 			Rate:         1.0,
 		}, nil
 	}
+
 	return s.repo.GetExchangeRate(ctx, fromCurrency, toCurrency)
 }
 
-// ListExchangeRates returns all exchange rates for an app
+// ListExchangeRates returns all exchange rates for an app.
 func (s *CurrencyService) ListExchangeRates(ctx context.Context, appID xid.ID) ([]*core.ExchangeRate, error) {
 	return s.repo.ListExchangeRates(ctx, appID)
 }
 
-// Convert converts an amount from one currency to another
+// Convert converts an amount from one currency to another.
 func (s *CurrencyService) Convert(ctx context.Context, req *core.ConvertCurrencyRequest) (*core.ConvertCurrencyResponse, error) {
 	if req.FromCurrency == req.ToCurrency {
 		return &core.ConvertCurrencyResponse{
@@ -115,6 +122,7 @@ func (s *CurrencyService) Convert(ctx context.Context, req *core.ConvertCurrency
 	if err != nil {
 		return nil, err
 	}
+
 	if rate == nil {
 		return nil, fmt.Errorf("exchange rate not found for %s to %s", req.FromCurrency, req.ToCurrency)
 	}
@@ -131,7 +139,7 @@ func (s *CurrencyService) Convert(ctx context.Context, req *core.ConvertCurrency
 	}, nil
 }
 
-// FormatAmount formats an amount for display
+// FormatAmount formats an amount for display.
 func (s *CurrencyService) FormatAmount(amount int64, currency string) string {
 	return core.FormatAmount(amount, currency)
 }

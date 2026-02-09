@@ -10,14 +10,14 @@ import (
 	"github.com/xraph/authsome/plugins/cms/service"
 )
 
-// RevisionHandler handles content revision HTTP requests
+// RevisionHandler handles content revision HTTP requests.
 type RevisionHandler struct {
 	revisionService    *service.RevisionService
 	entryService       *service.ContentEntryService
 	contentTypeService *service.ContentTypeService
 }
 
-// NewRevisionHandler creates a new revision handler
+// NewRevisionHandler creates a new revision handler.
 func NewRevisionHandler(
 	revSvc *service.RevisionService,
 	entrySvc *service.ContentEntryService,
@@ -31,7 +31,7 @@ func NewRevisionHandler(
 }
 
 // ListRevisions lists revisions for an entry
-// GET /cms/:type/:id/revisions
+// GET /cms/:type/:id/revisions.
 func (h *RevisionHandler) ListRevisions(c forge.Context) error {
 	var req ListRevisionsRequest
 
@@ -66,7 +66,7 @@ func (h *RevisionHandler) ListRevisions(c forge.Context) error {
 }
 
 // GetRevision retrieves a specific revision
-// GET /cms/:type/:id/revisions/:version
+// GET /cms/:type/:id/revisions/:version.
 func (h *RevisionHandler) GetRevision(c forge.Context) error {
 	var req GetRevisionRequest
 
@@ -95,7 +95,7 @@ func (h *RevisionHandler) GetRevision(c forge.Context) error {
 }
 
 // RestoreRevision restores an entry to a specific revision
-// POST /cms/:type/:id/revisions/:version/restore
+// POST /cms/:type/:id/revisions/:version/restore.
 func (h *RevisionHandler) RestoreRevision(c forge.Context) error {
 	var req GetRevisionRequest
 
@@ -124,7 +124,7 @@ func (h *RevisionHandler) RestoreRevision(c forge.Context) error {
 }
 
 // CompareRevisions compares two revisions
-// GET /cms/:type/:id/revisions/compare?from=:v1&to=:v2
+// GET /cms/:type/:id/revisions/compare?from=:v1&to=:v2.
 func (h *RevisionHandler) CompareRevisions(c forge.Context) error {
 	typeSlug := c.Param("type")
 	entryID := c.Param("id")

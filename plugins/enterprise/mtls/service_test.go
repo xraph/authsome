@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Mock repository for testing
+// Mock repository for testing.
 type mockRepository struct {
 	certificates map[string]*Certificate
 	trustAnchors map[string]*TrustAnchor
@@ -26,6 +26,7 @@ func newMockRepository() *mockRepository {
 
 func (m *mockRepository) CreateCertificate(ctx context.Context, cert *Certificate) error {
 	m.certificates[cert.ID] = cert
+
 	return nil
 }
 
@@ -34,6 +35,7 @@ func (m *mockRepository) GetCertificate(ctx context.Context, id string) (*Certif
 	if !exists {
 		return nil, ErrCertificateNotFound
 	}
+
 	return cert, nil
 }
 
@@ -43,6 +45,7 @@ func (m *mockRepository) GetCertificateByFingerprint(ctx context.Context, finger
 			return cert, nil
 		}
 	}
+
 	return nil, ErrCertificateNotFound
 }
 
@@ -52,28 +55,35 @@ func (m *mockRepository) GetCertificateBySerialNumber(ctx context.Context, seria
 			return cert, nil
 		}
 	}
+
 	return nil, ErrCertificateNotFound
 }
 
 func (m *mockRepository) ListCertificates(ctx context.Context, filters CertificateFilters) ([]*Certificate, error) {
 	results := make([]*Certificate, 0)
+
 	for _, cert := range m.certificates {
 		if filters.OrganizationID != "" && cert.OrganizationID != filters.OrganizationID {
 			continue
 		}
+
 		if filters.UserID != "" && cert.UserID != filters.UserID {
 			continue
 		}
+
 		if filters.Status != "" && cert.Status != filters.Status {
 			continue
 		}
+
 		results = append(results, cert)
 	}
+
 	return results, nil
 }
 
 func (m *mockRepository) UpdateCertificate(ctx context.Context, cert *Certificate) error {
 	m.certificates[cert.ID] = cert
+
 	return nil
 }
 
@@ -82,41 +92,49 @@ func (m *mockRepository) RevokeCertificate(ctx context.Context, id string, reaso
 	if !exists {
 		return ErrCertificateNotFound
 	}
+
 	now := time.Now()
 	cert.Status = "revoked"
 	cert.RevokedAt = &now
 	cert.RevokedReason = reason
+
 	return nil
 }
 
 func (m *mockRepository) DeleteCertificate(ctx context.Context, id string) error {
 	delete(m.certificates, id)
+
 	return nil
 }
 
 func (m *mockRepository) GetUserCertificates(ctx context.Context, userID string) ([]*Certificate, error) {
 	results := make([]*Certificate, 0)
+
 	for _, cert := range m.certificates {
 		if cert.UserID == userID && cert.Status == "active" {
 			results = append(results, cert)
 		}
 	}
+
 	return results, nil
 }
 
 func (m *mockRepository) GetDeviceCertificates(ctx context.Context, deviceID string) ([]*Certificate, error) {
 	results := make([]*Certificate, 0)
+
 	for _, cert := range m.certificates {
 		if cert.DeviceID == deviceID && cert.Status == "active" {
 			results = append(results, cert)
 		}
 	}
+
 	return results, nil
 }
 
 func (m *mockRepository) GetExpiringCertificates(ctx context.Context, orgID string, days int) ([]*Certificate, error) {
 	expiryDate := time.Now().AddDate(0, 0, days)
 	results := make([]*Certificate, 0)
+
 	for _, cert := range m.certificates {
 		if cert.OrganizationID == orgID &&
 			cert.Status == "active" &&
@@ -125,11 +143,13 @@ func (m *mockRepository) GetExpiringCertificates(ctx context.Context, orgID stri
 			results = append(results, cert)
 		}
 	}
+
 	return results, nil
 }
 
 func (m *mockRepository) CreateTrustAnchor(ctx context.Context, anchor *TrustAnchor) error {
 	m.trustAnchors[anchor.ID] = anchor
+
 	return nil
 }
 
@@ -138,6 +158,7 @@ func (m *mockRepository) GetTrustAnchor(ctx context.Context, id string) (*TrustA
 	if !exists {
 		return nil, ErrTrustAnchorNotFound
 	}
+
 	return anchor, nil
 }
 
@@ -147,26 +168,31 @@ func (m *mockRepository) GetTrustAnchorByFingerprint(ctx context.Context, finger
 			return anchor, nil
 		}
 	}
+
 	return nil, ErrTrustAnchorNotFound
 }
 
 func (m *mockRepository) ListTrustAnchors(ctx context.Context, orgID string) ([]*TrustAnchor, error) {
 	results := make([]*TrustAnchor, 0)
+
 	for _, anchor := range m.trustAnchors {
 		if anchor.OrganizationID == orgID && anchor.Status == "active" {
 			results = append(results, anchor)
 		}
 	}
+
 	return results, nil
 }
 
 func (m *mockRepository) UpdateTrustAnchor(ctx context.Context, anchor *TrustAnchor) error {
 	m.trustAnchors[anchor.ID] = anchor
+
 	return nil
 }
 
 func (m *mockRepository) DeleteTrustAnchor(ctx context.Context, id string) error {
 	delete(m.trustAnchors, id)
+
 	return nil
 }
 
@@ -212,6 +238,7 @@ func (m *mockRepository) DeleteExpiredOCSPResponses(ctx context.Context) error {
 
 func (m *mockRepository) CreateAuthEvent(ctx context.Context, event *CertificateAuthEvent) error {
 	m.authEvents = append(m.authEvents, event)
+
 	return nil
 }
 
@@ -221,21 +248,25 @@ func (m *mockRepository) ListAuthEvents(ctx context.Context, filters AuthEventFi
 
 func (m *mockRepository) GetAuthEventStats(ctx context.Context, orgID string, since time.Time) (*AuthEventStats, error) {
 	stats := &AuthEventStats{}
+
 	for _, event := range m.authEvents {
 		if event.OrganizationID == orgID && event.CreatedAt.After(since) {
 			stats.TotalAttempts++
-			if event.Status == "success" {
+			switch event.Status {
+			case "success":
 				stats.SuccessfulAuths++
-			} else if event.Status == "failed" {
+			case "failed":
 				stats.FailedAuths++
 			}
 		}
 	}
+
 	return stats, nil
 }
 
 func (m *mockRepository) CreatePolicy(ctx context.Context, policy *CertificatePolicy) error {
 	m.policies[policy.ID] = policy
+
 	return nil
 }
 
@@ -244,6 +275,7 @@ func (m *mockRepository) GetPolicy(ctx context.Context, id string) (*Certificate
 	if !exists {
 		return nil, ErrPolicyNotFound
 	}
+
 	return policy, nil
 }
 
@@ -253,26 +285,31 @@ func (m *mockRepository) GetDefaultPolicy(ctx context.Context, orgID string) (*C
 			return policy, nil
 		}
 	}
+
 	return nil, ErrPolicyNotFound
 }
 
 func (m *mockRepository) ListPolicies(ctx context.Context, orgID string) ([]*CertificatePolicy, error) {
 	results := make([]*CertificatePolicy, 0)
+
 	for _, policy := range m.policies {
 		if policy.OrganizationID == orgID {
 			results = append(results, policy)
 		}
 	}
+
 	return results, nil
 }
 
 func (m *mockRepository) UpdatePolicy(ctx context.Context, policy *CertificatePolicy) error {
 	m.policies[policy.ID] = policy
+
 	return nil
 }
 
 func (m *mockRepository) DeletePolicy(ctx context.Context, id string) error {
 	delete(m.policies, id)
+
 	return nil
 }
 
@@ -455,8 +492,7 @@ func BenchmarkService_RegisterCertificate(b *testing.B) {
 	validator := NewCertificateValidator(config, repo, nil)
 	service := NewService(config, repo, validator, nil, nil, nil)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req := &RegisterCertificateRequest{
 			OrganizationID:   "test_org",
 			UserID:           "user_123",

@@ -29,342 +29,342 @@ import (
 // Type Exports from Core Packages
 // ============================================================================
 
-// App Package Exports
+// App Package Exports.
 type (
-	// AppService is the service interface for app operations
+	// AppService is the service interface for app operations.
 	AppService = app.AppService
 
-	// AppConfig holds app service configuration
+	// AppConfig holds app service configuration.
 	AppConfig = app.Config
 
-	// App represents an application entity
+	// App represents an application entity.
 	App = app.App
 
-	// Member represents an app member
+	// Member represents an app member.
 	Member = app.Member
 
-	// Team represents a team within an app
+	// Team represents a team within an app.
 	Team = app.Team
 
-	// TeamMember represents a team member
+	// TeamMember represents a team member.
 	TeamMember = app.TeamMember
 
-	// Invitation represents an app invitation
+	// Invitation represents an app invitation.
 	Invitation = app.Invitation
 
-	// Environment represents an environment
+	// Environment represents an environment.
 	Environment = environment.Environment
 
-	// CreateAppRequest is the request for creating an app
+	// CreateAppRequest is the request for creating an app.
 	CreateAppRequest = app.CreateAppRequest
 
-	// UpdateAppRequest is the request for updating an app
+	// UpdateAppRequest is the request for updating an app.
 	UpdateAppRequest = app.UpdateAppRequest
 
-	// CreateTeamRequest is the request for creating a team
+	// CreateTeamRequest is the request for creating a team.
 	CreateTeamRequest = app.CreateTeamRequest
 
-	// UpdateTeamRequest is the request for updating a team
+	// UpdateTeamRequest is the request for updating a team.
 	UpdateTeamRequest = app.UpdateTeamRequest
 
-	// UpdateMemberRequest is the request for updating a member
+	// UpdateMemberRequest is the request for updating a member.
 	UpdateMemberRequest = app.UpdateMemberRequest
 
-	// InviteMemberRequest is the request for inviting a member
+	// InviteMemberRequest is the request for inviting a member.
 	InviteMemberRequest = app.InviteMemberRequest
 
-	// AppRepository defines the app repository interface
+	// AppRepository defines the app repository interface.
 	AppRepository = app.AppRepository
 
-	// MemberRepository defines the member repository interface
+	// MemberRepository defines the member repository interface.
 	MemberRepository = app.MemberRepository
 
-	// TeamRepository defines the team repository interface
+	// TeamRepository defines the team repository interface.
 	TeamRepository = app.TeamRepository
 
-	// InvitationRepository defines the invitation repository interface
+	// InvitationRepository defines the invitation repository interface.
 	InvitationRepository = app.InvitationRepository
 
-	// EnvironmentRepository defines the environment repository interface
+	// EnvironmentRepository defines the environment repository interface.
 	EnvironmentRepository = environment.Repository
 )
 
-// Auth Package Exports
+// Auth Package Exports.
 type (
-	// AuthService is the authentication service interface
+	// AuthService is the authentication service interface.
 	AuthService = auth.ServiceInterface
 
-	// AuthConfig holds auth service configuration
+	// AuthConfig holds auth service configuration.
 	AuthConfig = auth.Config
 
-	// SignInRequest is the request for signing in
+	// SignInRequest is the request for signing in.
 	SignInRequest = auth.SignInRequest
 
-	// SignUpRequest is the request for signing up
+	// SignUpRequest is the request for signing up.
 	SignUpRequest = auth.SignUpRequest
 
-	// AuthResponse is the response from authentication operations
+	// AuthResponse is the response from authentication operations.
 	AuthResponse = responses.AuthResponse
 )
 
-// User Package Exports
+// User Package Exports.
 type (
-	// UserService is the user service interface
+	// UserService is the user service interface.
 	UserService = user.ServiceInterface
 
-	// UserConfig holds user service configuration
+	// UserConfig holds user service configuration.
 	UserConfig = user.Config
 
-	// User represents a user entity
+	// User represents a user entity.
 	User = user.User
 
-	// CreateUserRequest is the request for creating a user
+	// CreateUserRequest is the request for creating a user.
 	CreateUserRequest = user.CreateUserRequest
 
-	// UpdateUserRequest is the request for updating a user
+	// UpdateUserRequest is the request for updating a user.
 	UpdateUserRequest = user.UpdateUserRequest
 )
 
-// Session Package Exports
+// Session Package Exports.
 type (
-	// SessionService is the session service interface
+	// SessionService is the session service interface.
 	SessionService = session.ServiceInterface
 
-	// SessionConfig holds session service configuration
+	// SessionConfig holds session service configuration.
 	SessionConfig = session.Config
 
-	// Session represents a session entity
+	// Session represents a session entity.
 	Session = session.Session
 
-	// CreateSessionRequest is the request for creating a session
+	// CreateSessionRequest is the request for creating a session.
 	CreateSessionRequest = session.CreateSessionRequest
 )
 
-// JWT Package Exports
+// JWT Package Exports.
 type (
-	// JWTService is the JWT service
+	// JWTService is the JWT service.
 	JWTService = jwt.Service
 
-	// JWTConfig holds JWT service configuration
+	// JWTConfig holds JWT service configuration.
 	JWTConfig = jwt.Config
 
-	// JWTKey represents a JWT key entity
+	// JWTKey represents a JWT key entity.
 	JWTKey = jwt.JWTKey
 
-	// CreateJWTKeyRequest is the request for creating a JWT key
+	// CreateJWTKeyRequest is the request for creating a JWT key.
 	CreateJWTKeyRequest = jwt.CreateJWTKeyRequest
 
-	// GenerateTokenRequest is the request for generating a JWT token
+	// GenerateTokenRequest is the request for generating a JWT token.
 	GenerateTokenRequest = jwt.GenerateTokenRequest
 )
 
-// APIKey Package Exports
+// APIKey Package Exports.
 type (
-	// APIKeyService is the API key service
+	// APIKeyService is the API key service.
 	APIKeyService = apikey.Service
 
-	// APIKeyConfig holds API key service configuration
+	// APIKeyConfig holds API key service configuration.
 	APIKeyConfig = apikey.Config
 
-	// APIKey represents an API key entity
+	// APIKey represents an API key entity.
 	APIKey = apikey.APIKey
 
-	// CreateAPIKeyRequest is the request for creating an API key
+	// CreateAPIKeyRequest is the request for creating an API key.
 	CreateAPIKeyRequest = apikey.CreateAPIKeyRequest
 )
 
-// Webhook Package Exports
+// Webhook Package Exports.
 type (
-	// WebhookService is the webhook service
+	// WebhookService is the webhook service.
 	WebhookService = webhook.Service
 
-	// WebhookConfig holds webhook service configuration
+	// WebhookConfig holds webhook service configuration.
 	WebhookConfig = webhook.Config
 
-	// Webhook represents a webhook entity
+	// Webhook represents a webhook entity.
 	Webhook = webhook.Webhook
 
-	// CreateWebhookRequest is the request for creating a webhook
+	// CreateWebhookRequest is the request for creating a webhook.
 	CreateWebhookRequest = webhook.CreateWebhookRequest
 
-	// WebhookEvent represents a webhook event
+	// WebhookEvent represents a webhook event.
 	WebhookEvent = webhook.Event
 
-	// WebhookDelivery represents a webhook delivery
+	// WebhookDelivery represents a webhook delivery.
 	WebhookDelivery = webhook.Delivery
 )
 
-// Notification Package Exports
+// Notification Package Exports.
 type (
-	// NotificationService is the notification service
+	// NotificationService is the notification service.
 	NotificationService = notification.Service
 
-	// NotificationConfig holds notification service configuration
+	// NotificationConfig holds notification service configuration.
 	NotificationConfig = notification.Config
 
-	// Notification represents a notification entity
+	// Notification represents a notification entity.
 	Notification = notification.Notification
 
-	// NotificationTemplate represents a notification template
+	// NotificationTemplate represents a notification template.
 	NotificationTemplate = notification.Template
 )
 
-// Audit Package Exports
+// Audit Package Exports.
 type (
-	// AuditService is the audit service
+	// AuditService is the audit service.
 	AuditService = aud.Service
 )
 
-// RBAC Package Exports
+// RBAC Package Exports.
 type (
-	// RBACService is the RBAC service
+	// RBACService is the RBAC service.
 	RBACService = rbac.Service
 
-	// Role represents a role entity
+	// Role represents a role entity.
 	Role = rbac.Role
 
-	// Permission represents a permission
+	// Permission represents a permission.
 	Permission = rbac.Permission
 
-	// Policy represents a policy
+	// Policy represents a policy.
 	Policy = rbac.Policy
 
-	// RoleRegistry is the role registry for registering roles
+	// RoleRegistry is the role registry for registering roles.
 	RoleRegistry = rbac.RoleRegistry
 )
 
-// Device Package Exports
+// Device Package Exports.
 type (
-	// DeviceService is the device service
+	// DeviceService is the device service.
 	DeviceService = dev.Service
 
-	// Device represents a device entity
+	// Device represents a device entity.
 	Device = dev.Device
 )
 
-// Security Package Exports
+// Security Package Exports.
 type (
-	// SecurityService is the security service
+	// SecurityService is the security service.
 	SecurityService = sec.Service
 
-	// SecurityConfig holds security service configuration
+	// SecurityConfig holds security service configuration.
 	SecurityConfig = sec.Config
 
-	// GeoIPProvider is the interface for GeoIP providers
+	// GeoIPProvider is the interface for GeoIP providers.
 	GeoIPProvider = sec.GeoIPProvider
 )
 
-// Rate Limit Package Exports
+// Rate Limit Package Exports.
 type (
-	// RateLimitService is the rate limit service
+	// RateLimitService is the rate limit service.
 	RateLimitService = rl.Service
 
-	// RateLimitConfig holds rate limit service configuration
+	// RateLimitConfig holds rate limit service configuration.
 	RateLimitConfig = rl.Config
 
-	// RateLimitStorage is the interface for rate limit storage
+	// RateLimitStorage is the interface for rate limit storage.
 	RateLimitStorage = rl.Storage
 )
 
-// Organization Package Exports
+// Organization Package Exports.
 type (
-	// OrganizationService is the organization service interface
+	// OrganizationService is the organization service interface.
 	OrganizationService = organization.OrganizationService
 
-	// OrganizationConfig holds organization service configuration
+	// OrganizationConfig holds organization service configuration.
 	OrganizationConfig = organization.Config
 
-	// Organization represents an organization entity
+	// Organization represents an organization entity.
 	Organization = organization.Organization
 )
 
-// Contexts Package Exports
+// Contexts Package Exports.
 type (
-	// AuthContext holds complete authentication state for a request
+	// AuthContext holds complete authentication state for a request.
 	AuthContext = contexts.AuthContext
 
-	// AuthMethod indicates how the request was authenticated
+	// AuthMethod indicates how the request was authenticated.
 	AuthMethod = contexts.AuthMethod
 )
 
-// AuthMethod constants
+// AuthMethod constants.
 const (
-	// AuthMethodNone indicates no authentication
+	// AuthMethodNone indicates no authentication.
 	AuthMethodNone = contexts.AuthMethodNone
 
-	// AuthMethodSession indicates session-based authentication
+	// AuthMethodSession indicates session-based authentication.
 	AuthMethodSession = contexts.AuthMethodSession
 
-	// AuthMethodAPIKey indicates API key authentication
+	// AuthMethodAPIKey indicates API key authentication.
 	AuthMethodAPIKey = contexts.AuthMethodAPIKey
 
-	// AuthMethodBoth indicates both session and API key authentication
+	// AuthMethodBoth indicates both session and API key authentication.
 	AuthMethodBoth = contexts.AuthMethodBoth
 )
 
-// Hook Package Exports
+// Hook Package Exports.
 type (
-	// HookRegistry is the registry for registering hooks
+	// HookRegistry is the registry for registering hooks.
 	HookRegistry = hooks.HookRegistry
 )
 
-// Schema Package Exports - Database Models
+// Schema Package Exports - Database Models.
 type (
-	// SchemaApp is the database model for apps
+	// SchemaApp is the database model for apps.
 	SchemaApp = schema.App
 
-	// SchemaMember is the database model for members
+	// SchemaMember is the database model for members.
 	SchemaMember = schema.Member
 
-	// SchemaTeam is the database model for teams
+	// SchemaTeam is the database model for teams.
 	SchemaTeam = schema.Team
 
-	// SchemaTeamMember is the database model for team members
+	// SchemaTeamMember is the database model for team members.
 	SchemaTeamMember = schema.TeamMember
 
-	// SchemaInvitation is the database model for invitations
+	// SchemaInvitation is the database model for invitations.
 	SchemaInvitation = schema.Invitation
 
-	// SchemaUser is the database model for users
+	// SchemaUser is the database model for users.
 	SchemaUser = schema.User
 
-	// SchemaSession is the database model for sessions
+	// SchemaSession is the database model for sessions.
 	SchemaSession = schema.Session
 
-	// SchemaRole is the database model for roles
+	// SchemaRole is the database model for roles.
 	SchemaRole = schema.Role
 
-	// SchemaUserRole is the database model for user roles
+	// SchemaUserRole is the database model for user roles.
 	SchemaUserRole = schema.UserRole
 
-	// SchemaWebhook is the database model for webhooks
+	// SchemaWebhook is the database model for webhooks.
 	SchemaWebhook = schema.Webhook
 
-	// SchemaNotification is the database model for notifications
+	// SchemaNotification is the database model for notifications.
 	SchemaNotification = schema.Notification
 
-	// SchemaAPIKey is the database model for API keys
+	// SchemaAPIKey is the database model for API keys.
 	SchemaAPIKey = schema.APIKey
 
-	// SchemaJWTKey is the database model for JWT keys
+	// SchemaJWTKey is the database model for JWT keys.
 	SchemaJWTKey = schema.JWTKey
 
-	// SchemaDevice is the database model for devices
+	// SchemaDevice is the database model for devices.
 	SchemaDevice = schema.Device
 )
 
-// Plugin Package Exports
+// Plugin Package Exports.
 type (
-	// Plugin is the interface that all plugins must implement
+	// Plugin is the interface that all plugins must implement.
 	Plugin = plugins.Plugin
 
-	// PluginRegistry is the registry for managing plugins
+	// PluginRegistry is the registry for managing plugins.
 	PluginRegistry = plugins.PluginRegistry
 )
 
-// ServiceImpl Registry Export
+// ServiceImpl Registry Export.
 type (
-	// ServiceRegistry manages all core services and allows plugins to replace them
+	// ServiceRegistry manages all core services and allows plugins to replace them.
 	ServiceRegistry = registry.ServiceRegistry
 )
 
@@ -372,41 +372,41 @@ type (
 // Function Exports from Core Packages
 // ============================================================================
 
-// RBAC Functions
+// RBAC Functions.
 var (
-	// RegisterDefaultPlatformRoles registers default platform roles
+	// RegisterDefaultPlatformRoles registers default platform roles.
 	RegisterDefaultPlatformRoles = rbac.RegisterDefaultPlatformRoles
 )
 
-// Contexts Functions
+// Contexts Functions.
 var (
-	// App Context Functions
+	// App Context Functions.
 	GetAppID     = contexts.GetAppID
 	SetAppID     = contexts.SetAppID
 	RequireAppID = contexts.RequireAppID
 
-	// Environment Context Functions
+	// Environment Context Functions.
 	GetEnvironmentID     = contexts.GetEnvironmentID
 	SetEnvironmentID     = contexts.SetEnvironmentID
 	RequireEnvironmentID = contexts.RequireEnvironmentID
 
-	// Organization Context Functions
+	// Organization Context Functions.
 	GetOrganizationID     = contexts.GetOrganizationID
 	SetOrganizationID     = contexts.SetOrganizationID
 	RequireOrganizationID = contexts.RequireOrganizationID
 
-	// User Context Functions
+	// User Context Functions.
 	GetUserID     = contexts.GetUserID
 	SetUserID     = contexts.SetUserID
 	RequireUserID = contexts.RequireUserID
 
-	// Composite Context Helpers
+	// Composite Context Helpers.
 	WithAppAndOrganization            = contexts.WithAppAndOrganization
 	WithAppAndUser                    = contexts.WithAppAndUser
 	WithAppEnvironmentAndOrganization = contexts.WithAppEnvironmentAndOrganization
 	WithAll                           = contexts.WithAll
 
-	// Auth Context Functions
+	// Auth Context Functions.
 	SetAuthContext     = contexts.SetAuthContext
 	GetAuthContext     = contexts.GetAuthContext
 	RequireAuthContext = contexts.RequireAuthContext
@@ -418,55 +418,55 @@ var (
 )
 
 type (
-	// AfterOrganizationCreateHook registers a user lifecycle hook
+	// AfterOrganizationCreateHook registers a user lifecycle hook.
 	AfterOrganizationCreateHook = hooks.AfterOrganizationCreateHook
 
-	// AfterSessionCreateHook registers a session lifecycle hook
+	// AfterSessionCreateHook registers a session lifecycle hook.
 	AfterSessionCreateHook = hooks.AfterSessionCreateHook
 
-	// AfterSignUpHook registers an authentication lifecycle hook
+	// AfterSignUpHook registers an authentication lifecycle hook.
 	AfterSignUpHook = hooks.AfterSignUpHook
 
-	// AfterSignInHook registers an authentication lifecycle hook
+	// AfterSignInHook registers an authentication lifecycle hook.
 	AfterSignInHook = hooks.AfterSignInHook
 
-	// AfterSignOutHook registers an authentication lifecycle hook
+	// AfterSignOutHook registers an authentication lifecycle hook.
 	AfterSignOutHook = hooks.AfterSignOutHook
 
-	// AfterMemberAddHook registers an organization lifecycle hook
+	// AfterMemberAddHook registers an organization lifecycle hook.
 	AfterMemberAddHook = hooks.AfterMemberAddHook
 )
 
-// Schema Enums - Type aliases for cleaner API (re-exported from core/app)
+// Schema Enums - Type aliases for cleaner API (re-exported from core/app).
 type (
-	// Member enums
+	// Member enums.
 	MemberRole   = app.MemberRole
 	MemberStatus = app.MemberStatus
 
-	// Invitation enums
+	// Invitation enums.
 	InvitationStatus = app.InvitationStatus
 )
 
-// Enum constants exported for convenience
+// Enum constants exported for convenience.
 const (
-	// Member Roles
+	// Member Roles.
 	MemberRoleOwner  = app.MemberRoleOwner
 	MemberRoleAdmin  = app.MemberRoleAdmin
 	MemberRoleMember = app.MemberRoleMember
 
-	// Member Statuses
+	// Member Statuses.
 	MemberStatusActive    = app.MemberStatusActive
 	MemberStatusSuspended = app.MemberStatusSuspended
 	MemberStatusPending   = app.MemberStatusPending
 
-	// Invitation Statuses
+	// Invitation Statuses.
 	InvitationStatusPending   = app.InvitationStatusPending
 	InvitationStatusAccepted  = app.InvitationStatusAccepted
 	InvitationStatusExpired   = app.InvitationStatusExpired
 	InvitationStatusCancelled = app.InvitationStatusCancelled
 	InvitationStatusDeclined  = app.InvitationStatusDeclined
 
-	// Backward compatibility aliases
+	// Backward compatibility aliases.
 	RoleOwner       = app.MemberRoleOwner
 	RoleAdmin       = app.MemberRoleAdmin
 	RoleMember      = app.MemberRoleMember
@@ -479,33 +479,33 @@ const (
 // Error Exports from Core Packages
 // ============================================================================
 
-// Context Errors
+// Context Errors.
 var (
-	// ErrAppContextRequired is returned when app context is required but not found
+	// ErrAppContextRequired is returned when app context is required but not found.
 	ErrAppContextRequired = contexts.ErrAppContextRequired
 
-	// ErrEnvironmentContextRequired is returned when environment context is required but not found
+	// ErrEnvironmentContextRequired is returned when environment context is required but not found.
 	ErrEnvironmentContextRequired = contexts.ErrEnvironmentContextRequired
 
-	// ErrOrganizationContextRequired is returned when organization context is required but not found
+	// ErrOrganizationContextRequired is returned when organization context is required but not found.
 	ErrOrganizationContextRequired = contexts.ErrOrganizationContextRequired
 
-	// ErrUserContextRequired is returned when user context is required but not found
+	// ErrUserContextRequired is returned when user context is required but not found.
 	ErrUserContextRequired = contexts.ErrUserContextRequired
 
-	// ErrAuthContextRequired is returned when auth context is required but not found
+	// ErrAuthContextRequired is returned when auth context is required but not found.
 	ErrAuthContextRequired = contexts.ErrAuthContextRequired
 
-	// ErrUserAuthRequired is returned when user authentication is required
+	// ErrUserAuthRequired is returned when user authentication is required.
 	ErrUserAuthRequired = contexts.ErrUserAuthRequired
 
-	// ErrAPIKeyRequired is returned when API key authentication is required
+	// ErrAPIKeyRequired is returned when API key authentication is required.
 	ErrAPIKeyRequired = contexts.ErrAPIKeyRequired
 
-	// ErrInsufficientScope is returned when API key lacks required scope
+	// ErrInsufficientScope is returned when API key lacks required scope.
 	ErrInsufficientScope = contexts.ErrInsufficientScope
 
-	// ErrInsufficientPermission is returned when lacking required RBAC permission
+	// ErrInsufficientPermission is returned when lacking required RBAC permission.
 	ErrInsufficientPermission = contexts.ErrInsufficientPermission
 )
 
@@ -513,50 +513,50 @@ var (
 // Middleware Package Exports
 // ============================================================================
 
-// Middleware Configuration
+// Middleware Configuration.
 type (
-	// AuthMiddleware is the authentication middleware
+	// AuthMiddleware is the authentication middleware.
 	AuthMiddleware = middleware.AuthMiddleware
 
-	// AuthMiddlewareConfig configures the authentication middleware behavior
+	// AuthMiddlewareConfig configures the authentication middleware behavior.
 	AuthMiddlewareConfig = middleware.AuthMiddlewareConfig
 
-	// ContextConfig configures how app and environment context is populated
+	// ContextConfig configures how app and environment context is populated.
 	ContextConfig = middleware.ContextConfig
 
-	// ContextResolution tracks how context values were resolved
+	// ContextResolution tracks how context values were resolved.
 	ContextResolution = middleware.ContextResolution
 
-	// ContextSource indicates where the context value came from
+	// ContextSource indicates where the context value came from.
 	ContextSource = middleware.ContextSource
 )
 
-// Context Source Constants
+// Context Source Constants.
 const (
-	// ContextSourceNone indicates no context source
+	// ContextSourceNone indicates no context source.
 	ContextSourceNone = middleware.ContextSourceNone
 
-	// ContextSourceExisting indicates context already exists in request
+	// ContextSourceExisting indicates context already exists in request.
 	ContextSourceExisting = middleware.ContextSourceExisting
 
-	// ContextSourceHeader indicates context from HTTP header
+	// ContextSourceHeader indicates context from HTTP header.
 	ContextSourceHeader = middleware.ContextSourceHeader
 
-	// ContextSourceAPIKey indicates context from verified API key
+	// ContextSourceAPIKey indicates context from verified API key.
 	ContextSourceAPIKey = middleware.ContextSourceAPIKey
 
-	// ContextSourceDefault indicates context from default config
+	// ContextSourceDefault indicates context from default config.
 	ContextSourceDefault = middleware.ContextSourceDefault
 
-	// ContextSourceAutoDetect indicates context from AuthSome config
+	// ContextSourceAutoDetect indicates context from AuthSome config.
 	ContextSourceAutoDetect = middleware.ContextSourceAutoDetect
 )
 
-// Middleware Config Functions
+// Middleware Config Functions.
 var (
-	// NewAuthMiddleware creates a new authentication middleware
+	// NewAuthMiddleware creates a new authentication middleware.
 	NewAuthMiddleware = middleware.NewAuthMiddleware
 
-	// DefaultContextConfig returns a ContextConfig with sensible defaults
+	// DefaultContextConfig returns a ContextConfig with sensible defaults.
 	DefaultContextConfig = middleware.DefaultContextConfig
 )

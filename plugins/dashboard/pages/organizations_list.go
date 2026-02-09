@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// OrganizationsListPage shows list of organizations
+// OrganizationsListPage shows list of organizations.
 func (p *PagesManager) OrganizationsListPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 
@@ -147,10 +147,11 @@ func (p *PagesManager) OrganizationsListPage(ctx *router.PageContext) (g.Node, e
 	), nil
 }
 
-// OrganizationDetailPage shows organization details with tabs, stats, and extension support
+// OrganizationDetailPage shows organization details with tabs, stats, and extension support.
 func (p *PagesManager) OrganizationDetailPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 	orgID := ctx.Param("orgId")
+
 	activeTab := ctx.Query("tab")
 	if activeTab == "" {
 		activeTab = "overview"
@@ -290,7 +291,7 @@ func (p *PagesManager) OrganizationDetailPage(ctx *router.PageContext) (g.Node, 
 	), nil
 }
 
-// organizationDetailData returns the Alpine.js data object for the organization detail page
+// organizationDetailData returns the Alpine.js data object for the organization detail page.
 func (p *PagesManager) organizationDetailData(appID, orgID, appBase string) string {
 	return `{
 		organization: null,
@@ -504,7 +505,7 @@ func (p *PagesManager) organizationDetailData(appID, orgID, appBase string) stri
 	}`
 }
 
-// organizationHeader renders the organization header with logo, name, and actions
+// organizationHeader renders the organization header with logo, name, and actions.
 func (p *PagesManager) organizationHeader(appBase, orgID string) g.Node {
 	return card.Card(
 		card.Content(
@@ -598,7 +599,7 @@ func (p *PagesManager) organizationHeader(appBase, orgID string) g.Node {
 	)
 }
 
-// organizationTabs renders the tab navigation
+// organizationTabs renders the tab navigation.
 func (p *PagesManager) organizationTabs(appBase, orgID, activeTab string) g.Node {
 	tabs := []struct {
 		ID    string
@@ -641,7 +642,7 @@ func (p *PagesManager) organizationTabs(appBase, orgID, activeTab string) g.Node
 	)
 }
 
-// statsCard renders a stats card with icon
+// statsCard renders a stats card with icon.
 func (p *PagesManager) statsCard(label, valueExpr string, icon g.Node) g.Node {
 	return card.Card(
 		card.Content(
@@ -660,7 +661,7 @@ func (p *PagesManager) statsCard(label, valueExpr string, icon g.Node) g.Node {
 	)
 }
 
-// quickLinksSection renders the quick links
+// quickLinksSection renders the quick links.
 func (p *PagesManager) quickLinksSection(appBase, orgID string) g.Node {
 	return Div(
 		Class("space-y-4"),
@@ -702,7 +703,7 @@ func (p *PagesManager) quickLinksSection(appBase, orgID string) g.Node {
 	)
 }
 
-// quickLinkCard renders a quick link card
+// quickLinkCard renders a quick link card.
 func (p *PagesManager) quickLinkCard(title, description, actionType, actionValue string, icon g.Node) g.Node {
 	var actionAttr g.Node
 	if actionType == "href" {
@@ -738,10 +739,11 @@ func (p *PagesManager) quickLinkCard(title, description, actionType, actionValue
 			),
 		)
 	}
+
 	return actionAttr
 }
 
-// extensionWidgetsSection renders extension widgets
+// extensionWidgetsSection renders extension widgets.
 func (p *PagesManager) extensionWidgetsSection() g.Node {
 	return g.El("template", g.Attr("x-if", "extensionData.widgets.length > 0"),
 		Div(
@@ -764,7 +766,7 @@ func (p *PagesManager) extensionWidgetsSection() g.Node {
 	)
 }
 
-// membersTabContent renders the members tab
+// membersTabContent renders the members tab.
 func (p *PagesManager) membersTabContent(appID, orgID, appBase string) g.Node {
 	return Div(
 		Class("space-y-4"),
@@ -857,7 +859,7 @@ func (p *PagesManager) membersTabContent(appID, orgID, appBase string) g.Node {
 	)
 }
 
-// teamsTabContent renders the teams tab
+// teamsTabContent renders the teams tab.
 func (p *PagesManager) teamsTabContent(appID, orgID, appBase string) g.Node {
 	return Div(
 		Class("space-y-4"),
@@ -931,7 +933,7 @@ func (p *PagesManager) teamsTabContent(appID, orgID, appBase string) g.Node {
 	)
 }
 
-// invitationsTabContent renders the invitations tab
+// invitationsTabContent renders the invitations tab.
 func (p *PagesManager) invitationsTabContent(appID, orgID, appBase string) g.Node {
 	return Div(
 		Class("space-y-4"),
@@ -997,7 +999,7 @@ func (p *PagesManager) invitationsTabContent(appID, orgID, appBase string) g.Nod
 	)
 }
 
-// inviteMemberModal renders the invite member modal
+// inviteMemberModal renders the invite member modal.
 func (p *PagesManager) inviteMemberModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showInviteModal"),
@@ -1056,7 +1058,7 @@ func (p *PagesManager) inviteMemberModal() g.Node {
 	)
 }
 
-// createTeamModal renders the create team modal
+// createTeamModal renders the create team modal.
 func (p *PagesManager) createTeamModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showCreateTeamModal"),
@@ -1115,7 +1117,7 @@ func (p *PagesManager) createTeamModal() g.Node {
 	)
 }
 
-// deleteConfirmationModal renders the delete confirmation modal
+// deleteConfirmationModal renders the delete confirmation modal.
 func (p *PagesManager) deleteConfirmationModal(appBase string) g.Node {
 	return Div(
 		g.Attr("x-show", "showDeleteModal"),
@@ -1161,7 +1163,7 @@ func (p *PagesManager) deleteConfirmationModal(appBase string) g.Node {
 	)
 }
 
-// OrganizationEditPage shows the organization edit form
+// OrganizationEditPage shows the organization edit form.
 func (p *PagesManager) OrganizationEditPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 	orgID := ctx.Param("orgId")

@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// CouponRepository defines the interface for coupon operations
+// CouponRepository defines the interface for coupon operations.
 type CouponRepository interface {
 	// Coupon operations
 	CreateCoupon(ctx context.Context, coupon *core.Coupon) error
@@ -42,26 +42,28 @@ type CouponRepository interface {
 	IncrementPromoRedemptions(ctx context.Context, id xid.ID) error
 }
 
-// couponRepository implements CouponRepository using Bun
+// couponRepository implements CouponRepository using Bun.
 type couponRepository struct {
 	db *bun.DB
 }
 
-// NewCouponRepository creates a new coupon repository
+// NewCouponRepository creates a new coupon repository.
 func NewCouponRepository(db *bun.DB) CouponRepository {
 	return &couponRepository{db: db}
 }
 
-// CreateCoupon creates a new coupon
+// CreateCoupon creates a new coupon.
 func (r *couponRepository) CreateCoupon(ctx context.Context, coupon *core.Coupon) error {
 	model := couponToSchema(coupon)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetCoupon returns a coupon by ID
+// GetCoupon returns a coupon by ID.
 func (r *couponRepository) GetCoupon(ctx context.Context, id xid.ID) (*core.Coupon, error) {
 	var coupon schema.SubscriptionCoupon
+
 	err := r.db.NewSelect().
 		Model(&coupon).
 		Where("id = ?", id).
@@ -70,14 +72,17 @@ func (r *couponRepository) GetCoupon(ctx context.Context, id xid.ID) (*core.Coup
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToCoupon(&coupon), nil
 }
 
-// GetCouponByCode returns a coupon by code
+// GetCouponByCode returns a coupon by code.
 func (r *couponRepository) GetCouponByCode(ctx context.Context, appID xid.ID, code string) (*core.Coupon, error) {
 	var coupon schema.SubscriptionCoupon
+
 	err := r.db.NewSelect().
 		Model(&coupon).
 		Where("app_id = ?", appID).
@@ -87,14 +92,17 @@ func (r *couponRepository) GetCouponByCode(ctx context.Context, appID xid.ID, co
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToCoupon(&coupon), nil
 }
 
-// ListCoupons returns all coupons for an app
+// ListCoupons returns all coupons for an app.
 func (r *couponRepository) ListCoupons(ctx context.Context, appID xid.ID, status *core.CouponStatus, page, pageSize int) ([]*core.Coupon, int, error) {
 	var coupons []schema.SubscriptionCoupon
+
 	query := r.db.NewSelect().
 		Model(&coupons).
 		Where("app_id = ?", appID)
@@ -121,10 +129,11 @@ func (r *couponRepository) ListCoupons(ctx context.Context, appID xid.ID, status
 	for i, c := range coupons {
 		result[i] = schemaToCoupon(&c)
 	}
+
 	return result, count, nil
 }
 
-// UpdateCoupon updates a coupon
+// UpdateCoupon updates a coupon.
 func (r *couponRepository) UpdateCoupon(ctx context.Context, coupon *core.Coupon) error {
 	model := couponToSchema(coupon)
 	model.UpdatedAt = time.Now()
@@ -132,19 +141,21 @@ func (r *couponRepository) UpdateCoupon(ctx context.Context, coupon *core.Coupon
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteCoupon deletes a coupon
+// DeleteCoupon deletes a coupon.
 func (r *couponRepository) DeleteCoupon(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionCoupon)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// IncrementRedemptions increments the redemption count
+// IncrementRedemptions increments the redemption count.
 func (r *couponRepository) IncrementRedemptions(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.SubscriptionCoupon)(nil)).
@@ -152,19 +163,22 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id xid.ID) 
 		Set("updated_at = ?", time.Now()).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// CreateRedemption creates a new redemption
+// CreateRedemption creates a new redemption.
 func (r *couponRepository) CreateRedemption(ctx context.Context, redemption *core.CouponRedemption) error {
 	model := redemptionToSchema(redemption)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetRedemption returns a redemption by ID
+// GetRedemption returns a redemption by ID.
 func (r *couponRepository) GetRedemption(ctx context.Context, id xid.ID) (*core.CouponRedemption, error) {
 	var redemption schema.SubscriptionCouponRedemption
+
 	err := r.db.NewSelect().
 		Model(&redemption).
 		Relation("Coupon").
@@ -174,14 +188,17 @@ func (r *couponRepository) GetRedemption(ctx context.Context, id xid.ID) (*core.
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToRedemption(&redemption), nil
 }
 
-// GetRedemptionByCouponAndOrg returns a redemption by coupon and org
+// GetRedemptionByCouponAndOrg returns a redemption by coupon and org.
 func (r *couponRepository) GetRedemptionByCouponAndOrg(ctx context.Context, couponID, orgID xid.ID) (*core.CouponRedemption, error) {
 	var redemption schema.SubscriptionCouponRedemption
+
 	err := r.db.NewSelect().
 		Model(&redemption).
 		Where("coupon_id = ?", couponID).
@@ -192,14 +209,17 @@ func (r *couponRepository) GetRedemptionByCouponAndOrg(ctx context.Context, coup
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToRedemption(&redemption), nil
 }
 
-// ListRedemptions returns all redemptions for a coupon
+// ListRedemptions returns all redemptions for a coupon.
 func (r *couponRepository) ListRedemptions(ctx context.Context, couponID xid.ID, page, pageSize int) ([]*core.CouponRedemption, int, error) {
 	var redemptions []schema.SubscriptionCouponRedemption
+
 	query := r.db.NewSelect().
 		Model(&redemptions).
 		Where("coupon_id = ?", couponID)
@@ -222,12 +242,14 @@ func (r *couponRepository) ListRedemptions(ctx context.Context, couponID xid.ID,
 	for i, r := range redemptions {
 		result[i] = schemaToRedemption(&r)
 	}
+
 	return result, count, nil
 }
 
-// ListRedemptionsByOrg returns all redemptions for an organization
+// ListRedemptionsByOrg returns all redemptions for an organization.
 func (r *couponRepository) ListRedemptionsByOrg(ctx context.Context, orgID xid.ID) ([]*core.CouponRedemption, error) {
 	var redemptions []schema.SubscriptionCouponRedemption
+
 	err := r.db.NewSelect().
 		Model(&redemptions).
 		Relation("Coupon").
@@ -242,29 +264,33 @@ func (r *couponRepository) ListRedemptionsByOrg(ctx context.Context, orgID xid.I
 	for i, r := range redemptions {
 		result[i] = schemaToRedemption(&r)
 	}
+
 	return result, nil
 }
 
-// CountRedemptionsByOrg counts redemptions by coupon and org
+// CountRedemptionsByOrg counts redemptions by coupon and org.
 func (r *couponRepository) CountRedemptionsByOrg(ctx context.Context, couponID, orgID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.SubscriptionCouponRedemption)(nil)).
 		Where("coupon_id = ?", couponID).
 		Where("organization_id = ?", orgID).
 		Count(ctx)
+
 	return count, err
 }
 
-// CreatePromotionCode creates a new promotion code
+// CreatePromotionCode creates a new promotion code.
 func (r *couponRepository) CreatePromotionCode(ctx context.Context, code *core.PromotionCode) error {
 	model := promotionCodeToSchema(code)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetPromotionCode returns a promotion code by ID
+// GetPromotionCode returns a promotion code by ID.
 func (r *couponRepository) GetPromotionCode(ctx context.Context, id xid.ID) (*core.PromotionCode, error) {
 	var code schema.SubscriptionPromotionCode
+
 	err := r.db.NewSelect().
 		Model(&code).
 		Relation("Coupon").
@@ -274,14 +300,17 @@ func (r *couponRepository) GetPromotionCode(ctx context.Context, id xid.ID) (*co
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToPromotionCode(&code), nil
 }
 
-// GetPromotionCodeByCode returns a promotion code by code
+// GetPromotionCodeByCode returns a promotion code by code.
 func (r *couponRepository) GetPromotionCodeByCode(ctx context.Context, appID xid.ID, code string) (*core.PromotionCode, error) {
 	var promo schema.SubscriptionPromotionCode
+
 	err := r.db.NewSelect().
 		Model(&promo).
 		Relation("Coupon").
@@ -292,14 +321,17 @@ func (r *couponRepository) GetPromotionCodeByCode(ctx context.Context, appID xid
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToPromotionCode(&promo), nil
 }
 
-// ListPromotionCodes returns all promotion codes for a coupon
+// ListPromotionCodes returns all promotion codes for a coupon.
 func (r *couponRepository) ListPromotionCodes(ctx context.Context, couponID xid.ID, page, pageSize int) ([]*core.PromotionCode, int, error) {
 	var codes []schema.SubscriptionPromotionCode
+
 	query := r.db.NewSelect().
 		Model(&codes).
 		Where("coupon_id = ?", couponID)
@@ -322,10 +354,11 @@ func (r *couponRepository) ListPromotionCodes(ctx context.Context, couponID xid.
 	for i, c := range codes {
 		result[i] = schemaToPromotionCode(&c)
 	}
+
 	return result, count, nil
 }
 
-// UpdatePromotionCode updates a promotion code
+// UpdatePromotionCode updates a promotion code.
 func (r *couponRepository) UpdatePromotionCode(ctx context.Context, code *core.PromotionCode) error {
 	model := promotionCodeToSchema(code)
 	model.UpdatedAt = time.Now()
@@ -333,19 +366,21 @@ func (r *couponRepository) UpdatePromotionCode(ctx context.Context, code *core.P
 		Model(model).
 		WherePK().
 		Exec(ctx)
+
 	return err
 }
 
-// DeletePromotionCode deletes a promotion code
+// DeletePromotionCode deletes a promotion code.
 func (r *couponRepository) DeletePromotionCode(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewDelete().
 		Model((*schema.SubscriptionPromotionCode)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
-// IncrementPromoRedemptions increments the promo code redemption count
+// IncrementPromoRedemptions increments the promo code redemption count.
 func (r *couponRepository) IncrementPromoRedemptions(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.SubscriptionPromotionCode)(nil)).
@@ -353,13 +388,14 @@ func (r *couponRepository) IncrementPromoRedemptions(ctx context.Context, id xid
 		Set("updated_at = ?", time.Now()).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
 // Helper functions
 
 func schemaToCoupon(s *schema.SubscriptionCoupon) *core.Coupon {
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if s.Metadata != "" {
 		_ = json.Unmarshal([]byte(s.Metadata), &metadata)
 	}
@@ -397,6 +433,7 @@ func schemaToCoupon(s *schema.SubscriptionCoupon) *core.Coupon {
 
 func couponToSchema(c *core.Coupon) *schema.SubscriptionCoupon {
 	metadata := ""
+
 	if c.Metadata != nil {
 		metadataBytes, _ := json.Marshal(c.Metadata)
 		metadata = string(metadataBytes)

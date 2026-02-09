@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// PopulateConfig configures relation population
+// PopulateConfig configures relation population.
 type PopulateConfig struct {
 	// Fields to populate (comma-separated or array)
 	Fields []string
@@ -21,7 +21,7 @@ type PopulateConfig struct {
 	SelectFields map[string][]string
 }
 
-// DefaultPopulateConfig returns the default populate configuration
+// DefaultPopulateConfig returns the default populate configuration.
 func DefaultPopulateConfig() *PopulateConfig {
 	return &PopulateConfig{
 		Fields:       []string{},
@@ -31,15 +31,16 @@ func DefaultPopulateConfig() *PopulateConfig {
 }
 
 // ParsePopulate parses a populate string into config
-// Format: "field1,field2" or "field1.subfield,field2"
+// Format: "field1,field2" or "field1.subfield,field2".
 func ParsePopulate(populate string) *PopulateConfig {
 	if populate == "" {
 		return nil
 	}
 
 	config := DefaultPopulateConfig()
-	fields := strings.Split(populate, ",")
-	for _, f := range fields {
+
+	fields := strings.SplitSeq(populate, ",")
+	for f := range fields {
 		f = strings.TrimSpace(f)
 		if f != "" {
 			config.Fields = append(config.Fields, f)
@@ -49,17 +50,17 @@ func ParsePopulate(populate string) *PopulateConfig {
 	return config
 }
 
-// Populator handles relation population for queries
+// Populator handles relation population for queries.
 type Populator struct {
 	db *bun.DB
 }
 
-// NewPopulator creates a new populator
+// NewPopulator creates a new populator.
 func NewPopulator(db *bun.DB) *Populator {
 	return &Populator{db: db}
 }
 
-// PopulateEntries populates relations for a slice of entries
+// PopulateEntries populates relations for a slice of entries.
 func (p *Populator) PopulateEntries(ctx context.Context, entries []*schema.ContentEntry, config *PopulateConfig) error {
 	if config == nil || len(config.Fields) == 0 || len(entries) == 0 {
 		return nil
@@ -79,6 +80,7 @@ func (p *Populator) PopulateEntries(ctx context.Context, entries []*schema.Conte
 
 		// Get all relations for this field across all entries
 		var relations []*schema.ContentRelation
+
 		err := p.db.NewSelect().
 			Model(&relations).
 			Where("source_entry_id IN (?)", bun.In(entryIDs)).
@@ -92,6 +94,7 @@ func (p *Populator) PopulateEntries(ctx context.Context, entries []*schema.Conte
 
 		// Group relations by source entry
 		relationsBySource := make(map[xid.ID][]*schema.ContentEntry)
+
 		for _, rel := range relations {
 			if rel.TargetEntry != nil {
 				relationsBySource[rel.SourceEntryID] = append(relationsBySource[rel.SourceEntryID], rel.TargetEntry)
@@ -103,6 +106,7 @@ func (p *Populator) PopulateEntries(ctx context.Context, entries []*schema.Conte
 			if entry.PopulatedRelations == nil {
 				entry.PopulatedRelations = make(map[string][]*schema.ContentEntry)
 			}
+
 			if relatedEntries, ok := relationsBySource[entry.ID]; ok {
 				entry.PopulatedRelations[baseField] = relatedEntries
 			} else {
@@ -114,6 +118,7 @@ func (p *Populator) PopulateEntries(ctx context.Context, entries []*schema.Conte
 		if len(parts) > 1 && config.MaxDepth > 1 {
 			// Collect related entries for nested population
 			var nestedEntries []*schema.ContentEntry
+
 			for _, entry := range entries {
 				if related, ok := entry.PopulatedRelations[baseField]; ok {
 					nestedEntries = append(nestedEntries, related...)
@@ -137,17 +142,19 @@ func (p *Populator) PopulateEntries(ctx context.Context, entries []*schema.Conte
 	return nil
 }
 
-// PopulateEntry populates relations for a single entry
+// PopulateEntry populates relations for a single entry.
 func (p *Populator) PopulateEntry(ctx context.Context, entry *schema.ContentEntry, config *PopulateConfig) error {
 	if entry == nil {
 		return nil
 	}
+
 	return p.PopulateEntries(ctx, []*schema.ContentEntry{entry}, config)
 }
 
-// GetRelatedEntryIDs returns the IDs of related entries for a field
+// GetRelatedEntryIDs returns the IDs of related entries for a field.
 func (p *Populator) GetRelatedEntryIDs(ctx context.Context, entryID xid.ID, fieldSlug string) ([]xid.ID, error) {
 	var relations []*schema.ContentRelation
+
 	err := p.db.NewSelect().
 		Model(&relations).
 		Where("source_entry_id = ?", entryID).
@@ -162,12 +169,14 @@ func (p *Populator) GetRelatedEntryIDs(ctx context.Context, entryID xid.ID, fiel
 	for i, rel := range relations {
 		ids[i] = rel.TargetEntryID
 	}
+
 	return ids, nil
 }
 
-// GetRelatedEntries returns the related entries for a field
+// GetRelatedEntries returns the related entries for a field.
 func (p *Populator) GetRelatedEntries(ctx context.Context, entryID xid.ID, fieldSlug string) ([]*schema.ContentEntry, error) {
 	var relations []*schema.ContentRelation
+
 	err := p.db.NewSelect().
 		Model(&relations).
 		Where("source_entry_id = ?", entryID).
@@ -185,12 +194,14 @@ func (p *Populator) GetRelatedEntries(ctx context.Context, entryID xid.ID, field
 			entries = append(entries, rel.TargetEntry)
 		}
 	}
+
 	return entries, nil
 }
 
-// GetReverseRelatedEntries returns entries that reference this entry
+// GetReverseRelatedEntries returns entries that reference this entry.
 func (p *Populator) GetReverseRelatedEntries(ctx context.Context, entryID xid.ID, fieldSlug string) ([]*schema.ContentEntry, error) {
 	var relations []*schema.ContentRelation
+
 	err := p.db.NewSelect().
 		Model(&relations).
 		Where("target_entry_id = ?", entryID).
@@ -208,10 +219,11 @@ func (p *Populator) GetReverseRelatedEntries(ctx context.Context, entryID xid.ID
 			entries = append(entries, rel.SourceEntry)
 		}
 	}
+
 	return entries, nil
 }
 
-// PopulateEntryDTO populates relation fields in an entry DTO
+// PopulateEntryDTO populates relation fields in an entry DTO.
 func PopulateEntryDTO(entry *schema.ContentEntry, dto *core.ContentEntryDTO) {
 	if entry == nil || dto == nil || entry.PopulatedRelations == nil {
 		return
@@ -228,6 +240,7 @@ func PopulateEntryDTO(entry *schema.ContentEntry, dto *core.ContentEntryDTO) {
 		for i, related := range relatedEntries {
 			ids[i] = related.ID.String()
 		}
+
 		dto.Relations[fieldSlug] = ids
 	}
 }

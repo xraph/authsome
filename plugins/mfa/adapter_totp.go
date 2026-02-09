@@ -8,13 +8,14 @@ import (
 	"github.com/xraph/authsome/plugins/twofa"
 )
 
-// TOTPFactorAdapter integrates twofa plugin's TOTP functionality as an MFA factor
+// TOTPFactorAdapter integrates twofa plugin's TOTP functionality as an MFA factor.
 type TOTPFactorAdapter struct {
 	BaseFactorAdapter
+
 	twofaService *twofa.Service
 }
 
-// NewTOTPFactorAdapter creates a new TOTP factor adapter
+// NewTOTPFactorAdapter creates a new TOTP factor adapter.
 func NewTOTPFactorAdapter(twofaService *twofa.Service, enabled bool) *TOTPFactorAdapter {
 	return &TOTPFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
@@ -25,7 +26,7 @@ func NewTOTPFactorAdapter(twofaService *twofa.Service, enabled bool) *TOTPFactor
 	}
 }
 
-// Enroll initiates TOTP enrollment
+// Enroll initiates TOTP enrollment.
 func (a *TOTPFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
 		return nil, errs.BadRequest("TOTP MFA factor not available")
@@ -39,6 +40,7 @@ func (a *TOTPFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata 
 
 	// Create enrollment response with provisioning data
 	factorID := xid.New()
+
 	return &FactorEnrollmentResponse{
 		FactorID: factorID,
 		Type:     FactorTypeTOTP,
@@ -52,7 +54,7 @@ func (a *TOTPFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata 
 	}, nil
 }
 
-// VerifyEnrollment verifies TOTP enrollment by checking first code
+// VerifyEnrollment verifies TOTP enrollment by checking first code.
 func (a *TOTPFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	if !a.IsAvailable() {
 		return errs.BadRequest("TOTP MFA factor not available")
@@ -65,7 +67,7 @@ func (a *TOTPFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID x
 }
 
 // Challenge initiates a TOTP verification challenge
-// For TOTP, there's no async challenge - user provides code directly
+// For TOTP, there's no async challenge - user provides code directly.
 func (a *TOTPFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
 		return nil, errs.BadRequest("TOTP MFA factor not available")
@@ -86,7 +88,7 @@ func (a *TOTPFactorAdapter) Challenge(ctx context.Context, factor *Factor, metad
 	return challenge, nil
 }
 
-// Verify verifies a TOTP code
+// Verify verifies a TOTP code.
 func (a *TOTPFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
 		return false, errs.BadRequest("TOTP MFA factor not available")

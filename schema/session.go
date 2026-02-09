@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Session represents the session table
+// Session represents the session table.
 type Session struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:sessions,alias:s"`

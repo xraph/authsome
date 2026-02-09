@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"text/tabwriter"
 	"time"
@@ -10,10 +11,11 @@ import (
 	"github.com/rs/xid"
 	"github.com/spf13/cobra"
 	"github.com/uptrace/bun"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// appCmd represents the app command
+// appCmd represents the app command.
 var appCmd = &cobra.Command{
 	Use:   "app",
 	Short: "App management commands",
@@ -39,6 +41,7 @@ var appListCmd = &cobra.Command{
 		}
 
 		printApps(apps)
+
 		return nil
 	},
 }
@@ -54,10 +57,10 @@ var appCreateCmd = &cobra.Command{
 		logo, _ := cmd.Flags().GetString("logo")
 
 		if name == "" {
-			return fmt.Errorf("app name is required")
+			return errs.New(errs.CodeInvalidInput, "app name is required", http.StatusBadRequest)
 		}
 		if slug == "" {
-			return fmt.Errorf("app slug is required")
+			return errs.New(errs.CodeInvalidInput, "app slug is required", http.StatusBadRequest)
 		}
 
 		db, err := connectAppDB(dbURL)
@@ -102,6 +105,7 @@ var appShowCmd = &cobra.Command{
 			if err.Error() == "sql: no rows in result set" {
 				return fmt.Errorf("app not found: %s", appID)
 			}
+
 			return fmt.Errorf("failed to get app: %w", err)
 		}
 
@@ -111,6 +115,7 @@ var appShowCmd = &cobra.Command{
 		}
 
 		printAppDetails(app, members)
+
 		return nil
 	},
 }
@@ -128,6 +133,7 @@ var appDeleteCmd = &cobra.Command{
 		if !confirm {
 			fmt.Printf("This will permanently delete app '%s' and all its data.\n", appID)
 			fmt.Println("Use --confirm flag to proceed.")
+
 			return nil
 		}
 
@@ -142,6 +148,7 @@ var appDeleteCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Successfully deleted app: %s\n", appID)
+
 		return nil
 	},
 }
@@ -167,6 +174,7 @@ var appMembersCmd = &cobra.Command{
 		}
 
 		printAppMembersList(members)
+
 		return nil
 	},
 }
@@ -198,6 +206,7 @@ var appAddMemberCmd = &cobra.Command{
 		}
 
 		fmt.Printf("✓ Successfully added user %s to app %s with role: %s\n", userID, appID, role)
+
 		return nil
 	},
 }
@@ -224,6 +233,7 @@ var appRemoveMemberCmd = &cobra.Command{
 		}
 
 		fmt.Printf("✓ Successfully removed user %s from app %s\n", userID, appID)
+
 		return nil
 	},
 }
@@ -252,23 +262,25 @@ func init() {
 	appAddMemberCmd.Flags().String("role", "member", "Member role (default: member)")
 }
 
-// connectAppDB connects to the database for app operations
+// connectAppDB connects to the database for app operations.
 func connectAppDB(dbURL string) (*bun.DB, error) {
 	// Use the shared multi-database connection function
 	return connectDatabaseMulti()
 }
 
-// listApps retrieves all apps
+// listApps retrieves all apps.
 func listApps(db *bun.DB) ([]*schema.App, error) {
 	var apps []*schema.App
+
 	err := db.NewSelect().
 		Model(&apps).
 		Order("created_at DESC").
 		Scan(context.Background())
+
 	return apps, err
 }
 
-// createApp creates a new app
+// createApp creates a new app.
 func createApp(db *bun.DB, name, slug, logo string) (*schema.App, error) {
 	appID := xid.New()
 	systemID := xid.New() // System user for CLI operations
@@ -282,8 +294,8 @@ func createApp(db *bun.DB, name, slug, logo string) (*schema.App, error) {
 
 	// Set audit fields manually for CLI operations
 	app.AuditableModel.ID = appID
-	app.AuditableModel.CreatedBy = systemID
-	app.AuditableModel.UpdatedBy = systemID
+	app.CreatedBy = systemID
+	app.UpdatedBy = systemID
 
 	_, err := db.NewInsert().Model(app).Exec(context.Background())
 	if err != nil {
@@ -293,19 +305,21 @@ func createApp(db *bun.DB, name, slug, logo string) (*schema.App, error) {
 	return app, nil
 }
 
-// getApp retrieves a specific app
+// getApp retrieves a specific app.
 func getApp(db *bun.DB, appID string) (*schema.App, error) {
 	app := &schema.App{}
 	err := db.NewSelect().
 		Model(app).
 		Where("id = ? OR slug = ?", appID, appID).
 		Scan(context.Background())
+
 	return app, err
 }
 
-// getAppMembers retrieves members of an app
+// getAppMembers retrieves members of an app.
 func getAppMembers(db *bun.DB, appID string) ([]*AppMemberWithUser, error) {
 	var members []*AppMemberWithUser
+
 	err := db.NewSelect().
 		Model((*schema.Member)(nil)).
 		Column("m.*").
@@ -314,10 +328,11 @@ func getAppMembers(db *bun.DB, appID string) ([]*AppMemberWithUser, error) {
 		Where("m.app_id = ?", appID).
 		Order("m.created_at DESC").
 		Scan(context.Background(), &members)
+
 	return members, err
 }
 
-// addAppMember adds a user to an app
+// addAppMember adds a user to an app.
 func addAppMember(db *bun.DB, appID string, userID string, role string) error {
 	ctx := context.Background()
 
@@ -334,6 +349,7 @@ func addAppMember(db *bun.DB, appID string, userID string, role string) error {
 
 	// Check if user exists
 	var user schema.User
+
 	err = db.NewSelect().Model(&user).Where("id = ?", parsedUserID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
@@ -341,6 +357,7 @@ func addAppMember(db *bun.DB, appID string, userID string, role string) error {
 
 	// Check if app exists
 	var app schema.App
+
 	err = db.NewSelect().Model(&app).Where("id = ?", parsedAppID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("app not found: %w", err)
@@ -348,11 +365,12 @@ func addAppMember(db *bun.DB, appID string, userID string, role string) error {
 
 	// Check if member already exists
 	var existingMember schema.Member
+
 	err = db.NewSelect().Model(&existingMember).
 		Where("user_id = ? AND app_id = ?", parsedUserID, parsedAppID).
 		Scan(ctx)
 	if err == nil {
-		return fmt.Errorf("user is already a member of this app")
+		return errs.New(errs.CodeInvalidInput, "user is already a member of this app", http.StatusBadRequest)
 	}
 
 	// Create member
@@ -367,8 +385,8 @@ func addAppMember(db *bun.DB, appID string, userID string, role string) error {
 
 	// Set audit fields
 	member.AuditableModel.ID = memberID
-	member.AuditableModel.CreatedBy = systemID
-	member.AuditableModel.UpdatedBy = systemID
+	member.CreatedBy = systemID
+	member.UpdatedBy = systemID
 
 	_, err = db.NewInsert().Model(member).Exec(ctx)
 	if err != nil {
@@ -378,7 +396,7 @@ func addAppMember(db *bun.DB, appID string, userID string, role string) error {
 	return nil
 }
 
-// removeAppMember removes a user from an app
+// removeAppMember removes a user from an app.
 func removeAppMember(db *bun.DB, appID string, userID string) error {
 	ctx := context.Background()
 
@@ -395,6 +413,7 @@ func removeAppMember(db *bun.DB, appID string, userID string) error {
 
 	// Check if member exists
 	var member schema.Member
+
 	err = db.NewSelect().Model(&member).
 		Where("user_id = ? AND app_id = ?", parsedUserID, parsedAppID).
 		Scan(ctx)
@@ -411,7 +430,7 @@ func removeAppMember(db *bun.DB, appID string, userID string) error {
 	return nil
 }
 
-// deleteApp deletes an app and its members
+// deleteApp deletes an app and its members.
 func deleteApp(db *bun.DB, appID string) error {
 	ctx := context.Background()
 
@@ -423,6 +442,7 @@ func deleteApp(db *bun.DB, appID string) error {
 
 	// Check if app exists
 	var app schema.App
+
 	err = db.NewSelect().Model(&app).Where("id = ?", parsedAppID).Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("app not found: %w", err)
@@ -449,14 +469,15 @@ func deleteApp(db *bun.DB, appID string) error {
 	return nil
 }
 
-// AppMemberWithUser represents a member with user details
+// AppMemberWithUser represents a member with user details.
 type AppMemberWithUser struct {
 	schema.Member
+
 	Email string `bun:"email"`
 	Name  string `bun:"name"`
 }
 
-// printApps prints a table of apps
+// printApps prints a table of apps.
 func printApps(apps []*schema.App) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "ID\tNAME\tSLUG\tCREATED")
@@ -474,7 +495,7 @@ func printApps(apps []*schema.App) {
 	w.Flush()
 }
 
-// printAppDetails prints detailed app information
+// printAppDetails prints detailed app information.
 func printAppDetails(app *schema.App, members []*AppMemberWithUser) {
 	fmt.Printf("App Details:\n")
 	fmt.Printf("  ID: %s\n", app.ID)
@@ -491,7 +512,7 @@ func printAppDetails(app *schema.App, members []*AppMemberWithUser) {
 	}
 }
 
-// printAppMembersList prints a table of members
+// printAppMembersList prints a table of members.
 func printAppMembersList(members []*AppMemberWithUser) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "EMAIL\tNAME\tROLE\tJOINED")

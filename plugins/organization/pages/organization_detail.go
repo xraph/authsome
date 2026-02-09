@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/forgeui/components/button"
 )
 
-// OrganizationDetailPage renders the organization detail/overview page
+// OrganizationDetailPage renders the organization detail/overview page.
 func OrganizationDetailPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 
@@ -96,7 +96,7 @@ func OrganizationDetailPage(currentApp *app.App, orgID, basePath string) g.Node 
 	)
 }
 
-// organizationDetailData returns the Alpine.js data object
+// organizationDetailData returns the Alpine.js data object.
 func organizationDetailData(appID, orgID, basePath string) string {
 	return fmt.Sprintf(`{
 		organization: null,
@@ -184,7 +184,7 @@ func organizationDetailData(appID, orgID, basePath string) string {
 	}`, appID, orgID, appID, orgID, appID, orgID, basePath, appID)
 }
 
-// organizationHeader renders the organization header with logo, name, and actions
+// organizationHeader renders the organization header with logo, name, and actions.
 func organizationHeader(appBase, orgID string) g.Node {
 	return Card(
 		Class("p-6"),
@@ -281,7 +281,7 @@ func organizationHeader(appBase, orgID string) g.Node {
 	)
 }
 
-// organizationTabs renders the tab navigation for organization pages
+// organizationTabs renders the tab navigation for organization pages.
 func organizationTabs(appBase, orgID string) g.Node {
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
 
@@ -341,7 +341,7 @@ func organizationTabs(appBase, orgID string) g.Node {
 	)
 }
 
-// quickLinksSection renders the quick access links grid
+// quickLinksSection renders the quick access links grid.
 func quickLinksSection(appBase, orgID string) g.Node {
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
 
@@ -413,7 +413,7 @@ func quickLinksSection(appBase, orgID string) g.Node {
 	)
 }
 
-// extensionWidgetsSection renders the extension widgets
+// extensionWidgetsSection renders the extension widgets.
 func extensionWidgetsSection() g.Node {
 	return Div(
 		g.Attr("x-show", "extensionData.widgets.length > 0"),
@@ -457,7 +457,7 @@ func extensionWidgetsSection() g.Node {
 	)
 }
 
-// deleteConfirmationModal renders the delete confirmation modal
+// deleteConfirmationModal renders the delete confirmation modal.
 func deleteConfirmationModal(appBase, orgID string) g.Node {
 	return Div(
 		g.Attr("x-show", "showDeleteModal"),

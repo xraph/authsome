@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Template represents an email template
+// Template represents an email template.
 type Template struct {
 	Name     string
 	Subject  string
@@ -15,7 +15,7 @@ type Template struct {
 	TextBody string
 }
 
-// TemplateData represents data passed to email templates
+// TemplateData represents data passed to email templates.
 type TemplateData struct {
 	UserName         string
 	UserEmail        string
@@ -34,7 +34,7 @@ type TemplateData struct {
 	AppName          string
 }
 
-// DefaultTemplates contains the default email templates
+// DefaultTemplates contains the default email templates.
 var DefaultTemplates = map[string]*Template{
 	"verification": {
 		Name:    "verification",
@@ -316,7 +316,7 @@ Need help? Contact us at {{.SupportEmail}}
 	},
 }
 
-// RenderTemplate renders an email template with the provided data
+// RenderTemplate renders an email template with the provided data.
 func RenderTemplate(templateName string, data *TemplateData) (*RenderedTemplate, error) {
 	tmpl, exists := DefaultTemplates[templateName]
 	if !exists {
@@ -363,24 +363,26 @@ func RenderTemplate(templateName string, data *TemplateData) (*RenderedTemplate,
 	}, nil
 }
 
-// RenderedTemplate represents a rendered email template
+// RenderedTemplate represents a rendered email template.
 type RenderedTemplate struct {
 	Subject  string
 	HTMLBody string
 	TextBody string
 }
 
-// GetTemplate returns a template by name
+// GetTemplate returns a template by name.
 func GetTemplate(name string) (*Template, bool) {
 	tmpl, exists := DefaultTemplates[name]
+
 	return tmpl, exists
 }
 
-// ListTemplates returns all available template names
+// ListTemplates returns all available template names.
 func ListTemplates() []string {
 	names := make([]string, 0, len(DefaultTemplates))
 	for name := range DefaultTemplates {
 		names = append(names, name)
 	}
+
 	return names
 }

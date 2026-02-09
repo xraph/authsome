@@ -8,13 +8,12 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// IndexPage - Dashboard entry point that handles app selection or redirect
+// IndexPage - Dashboard entry point that handles app selection or redirect.
 func (p *PagesManager) IndexPage(ctx *router.PageContext) (g.Node, error) {
 	// In standalone mode, we would redirect to default app
 	// In multiapp mode, show app selection
 	// For now, we'll show the app selection interface
 	// The bridge will determine available apps based on mode
-
 	return primitives.Container(
 		Div(
 			Class("p-8"),
@@ -148,7 +147,7 @@ func (p *PagesManager) IndexPage(ctx *router.PageContext) (g.Node, error) {
 	), nil
 }
 
-// renderAppCard renders a single app card for the grid
+// renderAppCard renders a single app card for the grid.
 func (p *PagesManager) renderAppCard() g.Node {
 	return Div(
 		g.Attr(":key", "app.id"),

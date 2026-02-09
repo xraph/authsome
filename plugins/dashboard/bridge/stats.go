@@ -14,12 +14,12 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// DashboardStatsInput represents stats request
+// DashboardStatsInput represents stats request.
 type DashboardStatsInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// DashboardStatsOutput represents dashboard statistics
+// DashboardStatsOutput represents dashboard statistics.
 type DashboardStatsOutput struct {
 	TotalUsers     int64         `json:"totalUsers"`
 	ActiveUsers    int64         `json:"activeUsers"`
@@ -31,24 +31,24 @@ type DashboardStatsOutput struct {
 	UserGrowthData []GrowthPoint `json:"userGrowthData"`
 }
 
-// GrowthPoint represents a data point for growth charts
+// GrowthPoint represents a data point for growth charts.
 type GrowthPoint struct {
 	Date  string `json:"date"`
 	Count int64  `json:"count"`
 }
 
-// RecentActivityInput represents recent activity request
+// RecentActivityInput represents recent activity request.
 type RecentActivityInput struct {
-	AppID string `json:"appId" validate:"required"`
+	AppID string `json:"appId"           validate:"required"`
 	Limit int    `json:"limit,omitempty"`
 }
 
-// RecentActivityOutput represents recent activity
+// RecentActivityOutput represents recent activity.
 type RecentActivityOutput struct {
 	Activities []ActivityItem `json:"activities"`
 }
 
-// ActivityItem represents a single activity
+// ActivityItem represents a single activity.
 type ActivityItem struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"`
@@ -58,7 +58,7 @@ type ActivityItem struct {
 	Icon        string `json:"icon,omitempty"`
 }
 
-// registerStatsFunctions registers statistics-related bridge functions
+// registerStatsFunctions registers statistics-related bridge functions.
 func (bm *BridgeManager) registerStatsFunctions() error {
 	// Dashboard stats function
 	if err := bm.bridge.Register("getDashboardStats", bm.getDashboardStats,
@@ -103,10 +103,11 @@ func (bm *BridgeManager) registerStatsFunctions() error {
 	}
 
 	bm.log.Info("stats bridge functions registered")
+
 	return nil
 }
 
-// getDashboardStats retrieves dashboard statistics
+// getDashboardStats retrieves dashboard statistics.
 func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardStatsInput) (*DashboardStatsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -130,6 +131,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 	userFilter := &user.CountUsersFilter{
 		AppID: appID,
 	}
+
 	count, err := bm.userSvc.CountUsers(goCtx, userFilter)
 	if err != nil {
 		bm.log.Error("failed to count users", forge.F("error", err.Error()))
@@ -143,6 +145,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 		AppID:        appID,
 		CreatedSince: &startOfToday,
 	}
+
 	count, err = bm.userSvc.CountUsers(goCtx, newUserTodayFilter)
 	if err != nil {
 		bm.log.Error("failed to count new users today", forge.F("error", err.Error()))
@@ -156,6 +159,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 		AppID:        appID,
 		CreatedSince: &startOfWeek,
 	}
+
 	count, err = bm.userSvc.CountUsers(goCtx, newUserWeekFilter)
 	if err != nil {
 		bm.log.Error("failed to count new users this week", forge.F("error", err.Error()))
@@ -173,6 +177,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 	}
 	sessionResponse, err := bm.sessionSvc.ListSessions(goCtx, sessionFilter)
 	allSessions := []*session.Session{}
+
 	if err != nil {
 		bm.log.Error("failed to list sessions", forge.F("error", err.Error()))
 	} else if sessionResponse != nil {
@@ -205,6 +210,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 
 	// Generate simple growth data (last 7 days)
 	growthData := []GrowthPoint{}
+
 	for i := 6; i >= 0; i-- {
 		date := time.Now().Add(-time.Duration(i) * 24 * time.Hour)
 		dateStr := date.Format("2006-01-02")
@@ -215,6 +221,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 			AppID:        appID,
 			CreatedSince: &dateCutoff,
 		}
+
 		count, err := bm.userSvc.CountUsers(goCtx, userCountFilter)
 		if err != nil {
 			// Use estimated value if query fails
@@ -239,7 +246,7 @@ func (bm *BridgeManager) getDashboardStats(ctx bridge.Context, input DashboardSt
 	}, nil
 }
 
-// getRecentActivity retrieves recent activity
+// getRecentActivity retrieves recent activity.
 func (bm *BridgeManager) getRecentActivity(ctx bridge.Context, input RecentActivityInput) (*RecentActivityOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -271,14 +278,15 @@ func (bm *BridgeManager) getRecentActivity(ctx bridge.Context, input RecentActiv
 			},
 			AppID: &appID,
 		}
-		eventResponse, err := bm.auditSvc.List(goCtx, listFilter)
 
+		eventResponse, err := bm.auditSvc.List(goCtx, listFilter)
 		if err != nil {
 			bm.log.Error("failed to list audit events", forge.F("error", err.Error()))
 		} else if eventResponse != nil {
 			// Transform audit events to activity items
 			for _, event := range eventResponse.Data {
 				userEmail := ""
+
 				if event.UserID != nil {
 					// Look up user email
 					user, err := bm.userSvc.FindByID(goCtx, *event.UserID)
@@ -305,7 +313,7 @@ func (bm *BridgeManager) getRecentActivity(ctx bridge.Context, input RecentActiv
 	}, nil
 }
 
-// generateActivityDescription generates a human-readable description for an event type
+// generateActivityDescription generates a human-readable description for an event type.
 func generateActivityDescription(eventType string) string {
 	descriptions := map[string]string{
 		"user.created":         "New user registered",
@@ -324,10 +332,11 @@ func generateActivityDescription(eventType string) string {
 	if desc, ok := descriptions[eventType]; ok {
 		return desc
 	}
+
 	return eventType
 }
 
-// getIconForEventType returns an appropriate icon name for an event type
+// getIconForEventType returns an appropriate icon name for an event type.
 func getIconForEventType(eventType string) string {
 	icons := map[string]string{
 		"user.created":         "user-plus",
@@ -346,10 +355,11 @@ func getIconForEventType(eventType string) string {
 	if icon, ok := icons[eventType]; ok {
 		return icon
 	}
+
 	return "activity"
 }
 
-// getGrowthData retrieves user growth data for charts
+// getGrowthData retrieves user growth data for charts.
 func (bm *BridgeManager) getGrowthData(ctx bridge.Context, input DashboardStatsInput) (*[]GrowthPoint, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -377,11 +387,13 @@ func (bm *BridgeManager) getGrowthData(ctx bridge.Context, input DashboardStatsI
 			AppID:        appID,
 			CreatedSince: &date,
 		}
+
 		count, err := bm.userSvc.CountUsers(goCtx, userCountFilter)
 		if err != nil {
 			bm.log.Error("failed to count users for growth data",
 				forge.F("error", err.Error()),
 				forge.F("date", dateStr))
+
 			count = 0
 		}
 
@@ -394,17 +406,17 @@ func (bm *BridgeManager) getGrowthData(ctx bridge.Context, input DashboardStatsI
 	return &growthData, nil
 }
 
-// SystemStatusInput represents system status request
+// SystemStatusInput represents system status request.
 type SystemStatusInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// SystemStatusOutput represents system status
+// SystemStatusOutput represents system status.
 type SystemStatusOutput struct {
 	Components []StatusComponent `json:"components"`
 }
 
-// StatusComponent represents a single system component status
+// StatusComponent represents a single system component status.
 type StatusComponent struct {
 	Name        string `json:"name"`
 	Status      string `json:"status"` // "operational", "degraded", "down"
@@ -412,7 +424,7 @@ type StatusComponent struct {
 	Color       string `json:"color"` // "green", "yellow", "red"
 }
 
-// getSystemStatus retrieves system component statuses
+// getSystemStatus retrieves system component statuses.
 func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusInput) (*SystemStatusOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -445,6 +457,7 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 		Status: "operational",
 		Color:  "green",
 	}
+
 	if bm.userSvc != nil {
 		// Try to count users as a health check
 		_, err := bm.userSvc.CountUsers(goCtx, &user.CountUsersFilter{AppID: appID})
@@ -458,6 +471,7 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 		userStatus.Color = "red"
 		userStatus.Description = "Service unavailable"
 	}
+
 	components = append(components, userStatus)
 
 	// Check session service
@@ -466,6 +480,7 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 		Status: "operational",
 		Color:  "green",
 	}
+
 	if bm.sessionSvc != nil {
 		// Try to list sessions as a health check
 		_, err := bm.sessionSvc.ListSessions(goCtx, &session.ListSessionsFilter{
@@ -482,6 +497,7 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 		sessionStatus.Color = "red"
 		sessionStatus.Description = "Service unavailable"
 	}
+
 	components = append(components, sessionStatus)
 
 	// Check audit service
@@ -490,6 +506,7 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 		Status: "operational",
 		Color:  "green",
 	}
+
 	if bm.auditSvc != nil {
 		// Try to list events as a health check
 		_, err := bm.auditSvc.List(goCtx, &audit.ListEventsFilter{
@@ -506,6 +523,7 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 		auditStatus.Color = "yellow"
 		auditStatus.Description = "Service not configured"
 	}
+
 	components = append(components, auditStatus)
 
 	return &SystemStatusOutput{
@@ -513,19 +531,19 @@ func (bm *BridgeManager) getSystemStatus(ctx bridge.Context, input SystemStatusI
 	}, nil
 }
 
-// PluginsOverviewInput represents plugins overview request
+// PluginsOverviewInput represents plugins overview request.
 type PluginsOverviewInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// PluginsOverviewOutput represents plugins overview
+// PluginsOverviewOutput represents plugins overview.
 type PluginsOverviewOutput struct {
 	EnabledCount int          `json:"enabledCount"`
 	TotalCount   int          `json:"totalCount"`
 	Plugins      []PluginInfo `json:"plugins"`
 }
 
-// PluginInfo represents information about a plugin
+// PluginInfo represents information about a plugin.
 type PluginInfo struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -535,7 +553,7 @@ type PluginInfo struct {
 	Icon        string `json:"icon"`
 }
 
-// getPluginsOverview retrieves overview of enabled plugins
+// getPluginsOverview retrieves overview of enabled plugins.
 func (bm *BridgeManager) getPluginsOverview(ctx bridge.Context, input PluginsOverviewInput) (*PluginsOverviewOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -606,17 +624,17 @@ func (bm *BridgeManager) getPluginsOverview(ctx bridge.Context, input PluginsOve
 	}, nil
 }
 
-// ExtensionWidgetsInput represents extension widgets request
+// ExtensionWidgetsInput represents extension widgets request.
 type ExtensionWidgetsInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// ExtensionWidgetsOutput represents extension widgets
+// ExtensionWidgetsOutput represents extension widgets.
 type ExtensionWidgetsOutput struct {
 	Widgets []ExtensionWidget `json:"widgets"`
 }
 
-// ExtensionWidget represents a dashboard extension widget
+// ExtensionWidget represents a dashboard extension widget.
 type ExtensionWidget struct {
 	ExtensionID string `json:"extensionId"`
 	Title       string `json:"title"`
@@ -624,7 +642,7 @@ type ExtensionWidget struct {
 	Type        string `json:"type"`    // "html", "component", "chart"
 }
 
-// getExtensionWidgets retrieves dashboard extension widgets
+// getExtensionWidgets retrieves dashboard extension widgets.
 func (bm *BridgeManager) getExtensionWidgets(ctx bridge.Context, input ExtensionWidgetsInput) (*ExtensionWidgetsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")

@@ -40,6 +40,7 @@ func init() {
 		}
 
 		fmt.Println(" [OK]")
+
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		fmt.Print(" [down migration] dropping device_codes table")
@@ -54,6 +55,7 @@ func init() {
 		}
 
 		fmt.Println(" [OK]")
+
 		return nil
 	})
 }

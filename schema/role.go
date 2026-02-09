@@ -8,7 +8,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Role table
+// Role table.
 type Role struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:roles,alias:r"`
@@ -33,7 +33,7 @@ type Role struct {
 }
 
 // BeforeAppendModel is called before inserting or updating a role
-// This ensures critical validation happens at the database layer
+// This ensures critical validation happens at the database layer.
 func (r *Role) BeforeAppendModel(ctx context.Context, query bun.Query) error {
 	// Only validate on INSERT operations
 	switch query.(type) {

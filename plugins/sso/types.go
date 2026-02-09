@@ -9,10 +9,10 @@ import (
 // REQUEST TYPES
 // =============================================================================
 
-// RegisterProviderRequest represents a request to register a new SSO provider
+// RegisterProviderRequest represents a request to register a new SSO provider.
 type RegisterProviderRequest struct {
 	ProviderID string `json:"providerId" validate:"required"`
-	Type       string `json:"type" validate:"required,oneof=saml oidc"`
+	Type       string `json:"type"       validate:"required,oneof=saml oidc"`
 	Domain     string `json:"domain"`
 
 	// Attribute mapping from user fields to SSO attribute names
@@ -30,7 +30,7 @@ type RegisterProviderRequest struct {
 	OIDCRedirectURI  string `json:"oidcRedirectURI"`
 }
 
-// OIDCLoginRequest represents a request to initiate OIDC login
+// OIDCLoginRequest represents a request to initiate OIDC login.
 type OIDCLoginRequest struct {
 	RedirectURI string `json:"redirectUri"`
 	State       string `json:"state"`
@@ -38,12 +38,12 @@ type OIDCLoginRequest struct {
 	Scope       string `json:"scope"` // Optional custom scope
 }
 
-// SAMLLoginRequest represents a request to initiate SAML login
+// SAMLLoginRequest represents a request to initiate SAML login.
 type SAMLLoginRequest struct {
 	RelayState string `json:"relayState"`
 }
 
-// DiscoverProviderRequest represents a request to discover SSO provider by email
+// DiscoverProviderRequest represents a request to discover SSO provider by email.
 type DiscoverProviderRequest struct {
 	Email string `json:"email" validate:"required,email"`
 }
@@ -52,21 +52,21 @@ type DiscoverProviderRequest struct {
 // RESPONSE TYPES
 // =============================================================================
 
-// SSOAuthResponse represents a successful SSO authentication response
+// SSOAuthResponse represents a successful SSO authentication response.
 type SSOAuthResponse struct {
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session"`
 	Token   string           `json:"token"`
 }
 
-// ProviderRegisteredResponse represents a successful provider registration
+// ProviderRegisteredResponse represents a successful provider registration.
 type ProviderRegisteredResponse struct {
 	ProviderID string `json:"providerId"`
 	Type       string `json:"type"`
 	Status     string `json:"status"`
 }
 
-// OIDCLoginResponse represents the response to OIDC login initiation
+// OIDCLoginResponse represents the response to OIDC login initiation.
 type OIDCLoginResponse struct {
 	AuthURL    string `json:"authUrl"`
 	State      string `json:"state"`
@@ -74,32 +74,32 @@ type OIDCLoginResponse struct {
 	ProviderID string `json:"providerId"`
 }
 
-// SAMLLoginResponse represents the response to SAML login initiation
+// SAMLLoginResponse represents the response to SAML login initiation.
 type SAMLLoginResponse struct {
 	RedirectURL string `json:"redirectUrl"`
 	RequestID   string `json:"requestId"`
 	ProviderID  string `json:"providerId"`
 }
 
-// MetadataResponse represents SAML SP metadata
+// MetadataResponse represents SAML SP metadata.
 type MetadataResponse struct {
 	Metadata string `json:"metadata"`
 }
 
-// ProviderDiscoveredResponse represents the result of provider discovery
+// ProviderDiscoveredResponse represents the result of provider discovery.
 type ProviderDiscoveredResponse struct {
 	Found      bool   `json:"found"`
 	ProviderID string `json:"providerId,omitempty"`
 	Type       string `json:"type,omitempty"`
 }
 
-// ProviderListResponse represents a list of SSO providers
+// ProviderListResponse represents a list of SSO providers.
 type ProviderListResponse struct {
 	Providers []ProviderInfo `json:"providers"`
 	Total     int            `json:"total"`
 }
 
-// ProviderInfo represents basic SSO provider information
+// ProviderInfo represents basic SSO provider information.
 type ProviderInfo struct {
 	ProviderID string `json:"providerId"`
 	Type       string `json:"type"`
@@ -107,7 +107,7 @@ type ProviderInfo struct {
 	CreatedAt  string `json:"createdAt"`
 }
 
-// ProviderDetailResponse represents detailed SSO provider information
+// ProviderDetailResponse represents detailed SSO provider information.
 type ProviderDetailResponse struct {
 	ProviderID       string            `json:"providerId"`
 	Type             string            `json:"type"`

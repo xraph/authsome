@@ -9,13 +9,13 @@ import (
 	"github.com/xraph/authsome/internal/clients/manifest"
 )
 
-// RustGenerator generates Rust client code
+// RustGenerator generates Rust client code.
 type RustGenerator struct {
 	outputDir string
 	manifests []*manifest.Manifest
 }
 
-// NewRustGenerator creates a new Rust generator
+// NewRustGenerator creates a new Rust generator.
 func NewRustGenerator(outputDir string, manifests []*manifest.Manifest) *RustGenerator {
 	return &RustGenerator{
 		outputDir: outputDir,
@@ -23,7 +23,7 @@ func NewRustGenerator(outputDir string, manifests []*manifest.Manifest) *RustGen
 	}
 }
 
-// Generate generates Rust client code
+// Generate generates Rust client code.
 func (g *RustGenerator) Generate() error {
 	if err := g.createDirectories(); err != nil {
 		return err
@@ -95,6 +95,7 @@ url = "2.4"
 [dev-dependencies]
 tokio-test = "0.4"
 `
+
 	return g.writeFile("Cargo.toml", content)
 }
 
@@ -106,6 +107,7 @@ func (g *RustGenerator) generateTypes() error {
 
 	// Collect all types from all manifests
 	typeMap := make(map[string]*manifest.TypeDef)
+
 	for _, m := range g.manifests {
 		for _, t := range m.Types {
 			if _, exists := typeMap[t.Name]; !exists {
@@ -119,6 +121,7 @@ func (g *RustGenerator) generateTypes() error {
 		if t.Description != "" {
 			sb.WriteString(fmt.Sprintf("/// %s\n", t.Description))
 		}
+
 		sb.WriteString("#[derive(Debug, Clone, Serialize, Deserialize)]\n")
 		sb.WriteString(fmt.Sprintf("pub struct %s {\n", t.Name))
 
@@ -136,13 +139,16 @@ func (g *RustGenerator) generateTypes() error {
 
 			// Add serde attribute for JSON field mapping
 			sb.WriteString(fmt.Sprintf("    #[serde(rename = \"%s\"", field.Name))
+
 			if !field.Required {
 				sb.WriteString(", skip_serializing_if = \"Option::is_none\"")
 			}
+
 			sb.WriteString(")]\n")
 
 			sb.WriteString(fmt.Sprintf("    pub %s: %s,\n", g.snakeCase(field.Name), rustType))
 		}
+
 		sb.WriteString("}\n\n")
 	}
 
@@ -210,6 +216,7 @@ impl AuthsomeError {
 
 pub type Result<T> = std::result::Result<T, AuthsomeError>;
 `
+
 	return g.writeFile("src/error.rs", content)
 }
 
@@ -227,6 +234,7 @@ pub trait ClientPlugin: Send + Sync {
     fn init(&mut self, client: AuthsomeClient);
 }
 `
+
 	return g.writeFile("src/plugin.rs", content)
 }
 
@@ -244,9 +252,11 @@ func (g *RustGenerator) generateClient() error {
 
 	// Find core manifest
 	var coreManifest *manifest.Manifest
+
 	for _, m := range g.manifests {
 		if m.PluginID == "core" {
 			coreManifest = m
+
 			break
 		}
 	}
@@ -372,64 +382,77 @@ func (g *RustGenerator) generateRustMethod(sb *strings.Builder, m *manifest.Mani
 
 	// Generate request struct if needed
 	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf("    /// Request for %s\n", methodName))
+		fmt.Fprintf(sb, "    /// Request for %s\n", methodName)
 		sb.WriteString("    #[derive(Debug, Serialize)]\n")
-		sb.WriteString(fmt.Sprintf("    pub struct %sRequest {\n", route.Name))
+		fmt.Fprintf(sb, "    pub struct %sRequest {\n", route.Name)
+
 		for name, typeStr := range route.Request {
 			field := manifest.ParseField(name, typeStr)
+
 			rustType := g.mapTypeToRust(field.Type)
 			if field.Array {
 				rustType = fmt.Sprintf("Vec<%s>", rustType)
 			}
+
 			if !field.Required {
 				rustType = fmt.Sprintf("Option<%s>", rustType)
 			}
-			sb.WriteString(fmt.Sprintf("        #[serde(rename = \"%s\"", field.Name))
+
+			fmt.Fprintf(sb, "        #[serde(rename = \"%s\"", field.Name)
+
 			if !field.Required {
 				sb.WriteString(", skip_serializing_if = \"Option::is_none\"")
 			}
+
 			sb.WriteString(")]\n")
-			sb.WriteString(fmt.Sprintf("        pub %s: %s,\n", g.snakeCase(field.Name), rustType))
+			fmt.Fprintf(sb, "        pub %s: %s,\n", g.snakeCase(field.Name), rustType)
 		}
+
 		sb.WriteString("    }\n\n")
 	}
 
 	// Generate response struct if needed
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("    /// Response for %s\n", methodName))
+		fmt.Fprintf(sb, "    /// Response for %s\n", methodName)
 		sb.WriteString("    #[derive(Debug, Deserialize)]\n")
-		sb.WriteString(fmt.Sprintf("    pub struct %sResponse {\n", route.Name))
+		fmt.Fprintf(sb, "    pub struct %sResponse {\n", route.Name)
+
 		for name, typeStr := range route.Response {
 			field := manifest.ParseField(name, typeStr)
+
 			rustType := g.mapTypeToRust(field.Type)
 			if field.Array {
 				rustType = fmt.Sprintf("Vec<%s>", rustType)
 			}
-			sb.WriteString(fmt.Sprintf("        #[serde(rename = \"%s\")]\n", field.Name))
-			sb.WriteString(fmt.Sprintf("        pub %s: %s,\n", g.snakeCase(field.Name), rustType))
+
+			fmt.Fprintf(sb, "        #[serde(rename = \"%s\")]\n", field.Name)
+			fmt.Fprintf(sb, "        pub %s: %s,\n", g.snakeCase(field.Name), rustType)
 		}
+
 		sb.WriteString("    }\n\n")
 	}
 
 	// Generate method
 	if route.Description != "" {
-		sb.WriteString(fmt.Sprintf("    /// %s\n", route.Description))
+		fmt.Fprintf(sb, "    /// %s\n", route.Description)
 	}
-	sb.WriteString(fmt.Sprintf("    pub async fn %s(\n", methodName))
+
+	fmt.Fprintf(sb, "    pub async fn %s(\n", methodName)
 	sb.WriteString("        &self,\n")
 
 	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf("        request: %sRequest,\n", route.Name))
+		fmt.Fprintf(sb, "        request: %sRequest,\n", route.Name)
 	}
+
 	if len(route.Params) > 0 {
 		for paramName, typeStr := range route.Params {
 			field := manifest.ParseField(paramName, typeStr)
-			sb.WriteString(fmt.Sprintf("        %s: %s,\n", g.snakeCase(field.Name), g.mapTypeToRust(field.Type)))
+			fmt.Fprintf(sb, "        %s: %s,\n", g.snakeCase(field.Name), g.mapTypeToRust(field.Type))
 		}
 	}
 
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("    ) -> Result<%sResponse> {\n", route.Name))
+		fmt.Fprintf(sb, "    ) -> Result<%sResponse> {\n", route.Name)
 	} else {
 		sb.WriteString("    ) -> Result<()> {\n")
 	}
@@ -438,22 +461,26 @@ func (g *RustGenerator) generateRustMethod(sb *strings.Builder, m *manifest.Mani
 	path := m.BasePath + route.Path
 	if len(route.Params) > 0 {
 		sb.WriteString("        let path = format!(\"")
+
 		for paramName := range route.Params {
 			path = strings.ReplaceAll(path, "{"+paramName+"}", "{}")
 		}
+
 		sb.WriteString(path)
 		sb.WriteString("\"")
+
 		for paramName := range route.Params {
-			sb.WriteString(fmt.Sprintf(", %s", g.snakeCase(paramName)))
+			fmt.Fprintf(sb, ", %s", g.snakeCase(paramName))
 		}
+
 		sb.WriteString(");\n")
 	} else {
-		sb.WriteString(fmt.Sprintf("        let path = \"%s\";\n", path))
+		fmt.Fprintf(sb, "        let path = \"%s\";\n", path)
 	}
 
 	// Make request
 	sb.WriteString("        self.request(\n")
-	sb.WriteString(fmt.Sprintf("            Method::%s,\n", strings.ToUpper(route.Method)))
+	fmt.Fprintf(sb, "            Method::%s,\n", strings.ToUpper(route.Method))
 	sb.WriteString("            &path,\n")
 
 	if len(route.Request) > 0 {
@@ -538,54 +565,66 @@ func (g *RustGenerator) generatePluginRustMethod(sb *strings.Builder, m *manifes
 	// Generate request/response structs similar to client methods
 	if len(route.Request) > 0 {
 		sb.WriteString("    #[derive(Debug, Serialize)]\n")
-		sb.WriteString(fmt.Sprintf("    pub struct %sRequest {\n", route.Name))
+		fmt.Fprintf(sb, "    pub struct %sRequest {\n", route.Name)
+
 		for name, typeStr := range route.Request {
 			field := manifest.ParseField(name, typeStr)
+
 			rustType := g.mapTypeToRust(field.Type)
 			if field.Array {
 				rustType = fmt.Sprintf("Vec<%s>", rustType)
 			}
+
 			if !field.Required {
 				rustType = fmt.Sprintf("Option<%s>", rustType)
 			}
-			sb.WriteString(fmt.Sprintf("        #[serde(rename = \"%s\"", field.Name))
+
+			fmt.Fprintf(sb, "        #[serde(rename = \"%s\"", field.Name)
+
 			if !field.Required {
 				sb.WriteString(", skip_serializing_if = \"Option::is_none\"")
 			}
+
 			sb.WriteString(")]\n")
-			sb.WriteString(fmt.Sprintf("        pub %s: %s,\n", g.snakeCase(field.Name), rustType))
+			fmt.Fprintf(sb, "        pub %s: %s,\n", g.snakeCase(field.Name), rustType)
 		}
+
 		sb.WriteString("    }\n\n")
 	}
 
 	if len(route.Response) > 0 {
 		sb.WriteString("    #[derive(Debug, Deserialize)]\n")
-		sb.WriteString(fmt.Sprintf("    pub struct %sResponse {\n", route.Name))
+		fmt.Fprintf(sb, "    pub struct %sResponse {\n", route.Name)
+
 		for name, typeStr := range route.Response {
 			field := manifest.ParseField(name, typeStr)
+
 			rustType := g.mapTypeToRust(field.Type)
 			if field.Array {
 				rustType = fmt.Sprintf("Vec<%s>", rustType)
 			}
-			sb.WriteString(fmt.Sprintf("        #[serde(rename = \"%s\")]\n", field.Name))
-			sb.WriteString(fmt.Sprintf("        pub %s: %s,\n", g.snakeCase(field.Name), rustType))
+
+			fmt.Fprintf(sb, "        #[serde(rename = \"%s\")]\n", field.Name)
+			fmt.Fprintf(sb, "        pub %s: %s,\n", g.snakeCase(field.Name), rustType)
 		}
+
 		sb.WriteString("    }\n\n")
 	}
 
 	// Generate method (placeholder - would need access to client's private request method)
 	if route.Description != "" {
-		sb.WriteString(fmt.Sprintf("    /// %s\n", route.Description))
+		fmt.Fprintf(sb, "    /// %s\n", route.Description)
 	}
-	sb.WriteString(fmt.Sprintf("    pub async fn %s(\n", methodName))
+
+	fmt.Fprintf(sb, "    pub async fn %s(\n", methodName)
 	sb.WriteString("        &self,\n")
 
 	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf("        _request: %sRequest,\n", route.Name))
+		fmt.Fprintf(sb, "        _request: %sRequest,\n", route.Name)
 	}
 
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("    ) -> Result<%sResponse> {{\n", route.Name))
+		fmt.Fprintf(sb, "    ) -> Result<%sResponse> {{\n", route.Name)
 	} else {
 		sb.WriteString("    ) -> Result<()> {\n")
 	}
@@ -636,12 +675,15 @@ func (g *RustGenerator) mapTypeToRust(t string) string {
 
 func (g *RustGenerator) snakeCase(s string) string {
 	var result strings.Builder
+
 	for i, r := range s {
 		if i > 0 && r >= 'A' && r <= 'Z' {
 			result.WriteRune('_')
 		}
+
 		result.WriteRune(r)
 	}
+
 	return strings.ToLower(result.String())
 }
 
@@ -649,6 +691,7 @@ func (g *RustGenerator) pascalCase(s string) string {
 	if len(s) == 0 {
 		return s
 	}
+
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
@@ -657,5 +700,6 @@ func (g *RustGenerator) writeFile(path string, content string) error {
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return err
 	}
+
 	return os.WriteFile(fullPath, []byte(content), 0644)
 }

@@ -9,14 +9,15 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Session represents a user session (DTO)
+// Session represents a user session (DTO).
 type Session = base.Session
 
-// FromSchemaSession converts schema.Session to Session DTO
+// FromSchemaSession converts schema.Session to Session DTO.
 func FromSchemaSession(s *schema.Session) *Session {
 	if s == nil {
 		return nil
 	}
+
 	return &Session{
 		ID:                    s.ID,
 		Token:                 s.Token,
@@ -35,19 +36,20 @@ func FromSchemaSession(s *schema.Session) *Session {
 	}
 }
 
-// FromSchemaSessions converts multiple schema.Session to Session DTOs
+// FromSchemaSessions converts multiple schema.Session to Session DTOs.
 func FromSchemaSessions(sessions []*schema.Session) []*Session {
 	result := make([]*Session, len(sessions))
 	for i, s := range sessions {
 		result[i] = FromSchemaSession(s)
 	}
+
 	return result
 }
 
-// ListSessionsResponse is a type alias for paginated response
+// ListSessionsResponse is a type alias for paginated response.
 type ListSessionsResponse = pagination.PageResponse[*Session]
 
-// CreateSessionRequest represents the data to create a session
+// CreateSessionRequest represents the data to create a session.
 type CreateSessionRequest struct {
 	AppID          xid.ID  `json:"appID"`
 	EnvironmentID  *xid.ID `json:"environmentID,omitempty"`
@@ -58,7 +60,7 @@ type CreateSessionRequest struct {
 	Remember       bool    `json:"remember"`
 }
 
-// RefreshResponse represents the response from refreshing a session
+// RefreshResponse represents the response from refreshing a session.
 type RefreshResponse struct {
 	Session          *Session  `json:"session"`          // Updated session with new access token
 	AccessToken      string    `json:"accessToken"`      // New short-lived access token

@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/xraph/authsome/internal/clients/introspector"
+	"github.com/xraph/authsome/internal/errs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,7 +66,7 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	}
 
 	if pluginID == "" {
-		return fmt.Errorf("--plugin flag is required (or use --core for core handlers)")
+		return errs.New(errs.CodeInvalidInput, "--plugin flag is required (or use --core for core handlers)", http.StatusBadRequest)
 	}
 
 	if pluginID == "all" {
@@ -85,6 +87,7 @@ func introspectPlugin(intro *introspector.Introspector, pluginID, outputDir stri
 	// Check if manifest has routes - skip if none (middleware/service only plugins)
 	if len(manifest.Routes) == 0 {
 		fmt.Printf("⚠ Skipped: Plugin has no HTTP routes (middleware/service only)\n")
+
 		return nil
 	}
 
@@ -102,6 +105,7 @@ func introspectPlugin(intro *introspector.Introspector, pluginID, outputDir stri
 	if dryRun {
 		fmt.Printf("\n--- %s.yaml ---\n", pluginID)
 		fmt.Println(string(yamlData))
+
 		return nil
 	}
 
@@ -127,6 +131,7 @@ func introspectCore(intro *introspector.Introspector, outputDir string, dryRun b
 
 	// Introspect handlers directory
 	handlersPath := filepath.Join(".", "handlers")
+
 	routeInfo, err := intro.IntrospectHandlers(handlersPath)
 	if err != nil {
 		return fmt.Errorf("failed to introspect handlers: %w", err)
@@ -134,6 +139,7 @@ func introspectCore(intro *introspector.Introspector, outputDir string, dryRun b
 
 	// Introspect routes
 	routesPath := filepath.Join(".", "routes")
+
 	registrations, err := intro.IntrospectRoutes(routesPath)
 	if err != nil {
 		return fmt.Errorf("failed to introspect routes: %w", err)
@@ -148,9 +154,11 @@ func introspectCore(intro *introspector.Introspector, outputDir string, dryRun b
 		for _, reg := range registrations {
 			if reg.HandlerName == route.Name {
 				fmt.Printf("  ✓ %s %s → %s\n", reg.Method, reg.Path, route.Name)
+
 				if route.RequestType != "" {
 					fmt.Printf("     Request: %s\n", route.RequestType)
 				}
+
 				if route.ResponseType != "" {
 					fmt.Printf("     Response: %s\n", route.ResponseType)
 				}
@@ -167,13 +175,16 @@ func introspectCore(intro *introspector.Introspector, outputDir string, dryRun b
 
 func introspectAllPlugins(intro *introspector.Introspector, outputDir string, dryRun bool) error {
 	pluginsDir := filepath.Join(".", "plugins")
+
 	entries, err := os.ReadDir(pluginsDir)
 	if err != nil {
 		return fmt.Errorf("failed to read plugins directory: %w", err)
 	}
 
-	var successCount int
-	var failCount int
+	var (
+		successCount int
+		failCount    int
+	)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -190,15 +201,19 @@ func introspectAllPlugins(intro *introspector.Introspector, outputDir string, dr
 		// Handle enterprise as a composite plugin with sub-plugins
 		if pluginID == "enterprise" {
 			fmt.Printf("\n")
+
 			success, fail := introspectEnterprisePlugins(intro, outputDir, dryRun)
 			successCount += success
 			failCount += fail
+
 			continue
 		}
 
 		fmt.Printf("\n")
+
 		if err := introspectPlugin(intro, pluginID, outputDir, dryRun); err != nil {
 			fmt.Printf("✗ Failed to introspect %s: %v\n", pluginID, err)
+
 			failCount++
 		} else {
 			successCount++
@@ -208,6 +223,7 @@ func introspectAllPlugins(intro *introspector.Introspector, outputDir string, dr
 	fmt.Printf("\n")
 	fmt.Printf("Summary:\n")
 	fmt.Printf("  ✓ Success: %d\n", successCount)
+
 	if failCount > 0 {
 		fmt.Printf("  ✗ Failed: %d\n", failCount)
 	}
@@ -217,14 +233,18 @@ func introspectAllPlugins(intro *introspector.Introspector, outputDir string, dr
 
 func introspectEnterprisePlugins(intro *introspector.Introspector, outputDir string, dryRun bool) (int, int) {
 	enterpriseDir := filepath.Join(".", "plugins", "enterprise")
+
 	entries, err := os.ReadDir(enterpriseDir)
 	if err != nil {
 		fmt.Printf("✗ Failed to read enterprise directory: %v\n", err)
+
 		return 0, 1
 	}
 
-	var successCount int
-	var failCount int
+	var (
+		successCount int
+		failCount    int
+	)
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -240,20 +260,25 @@ func introspectEnterprisePlugins(intro *introspector.Introspector, outputDir str
 		manifest, err := intro.GenerateManifest(fullPluginID)
 		if err != nil {
 			fmt.Printf("✗ Failed to introspect %s: %v\n", fullPluginID, err)
+
 			failCount++
+
 			continue
 		}
 
 		// Check if manifest has routes - skip if none
 		if len(manifest.Routes) == 0 {
 			fmt.Printf("⚠ Skipped %s: No HTTP routes (middleware/service only)\n", subPluginID)
+
 			continue
 		}
 
 		// Validate manifest
 		if err := manifest.Validate(); err != nil {
 			fmt.Printf("✗ Failed to introspect %s: generated manifest is invalid: %v\n", fullPluginID, err)
+
 			failCount++
+
 			continue
 		}
 
@@ -261,34 +286,43 @@ func introspectEnterprisePlugins(intro *introspector.Introspector, outputDir str
 		yamlData, err := yaml.Marshal(manifest)
 		if err != nil {
 			fmt.Printf("✗ Failed to marshal %s manifest: %v\n", fullPluginID, err)
+
 			failCount++
+
 			continue
 		}
 
 		if dryRun {
 			fmt.Printf("\n--- %s.yaml ---\n", subPluginID)
 			fmt.Println(string(yamlData))
+
 			successCount++
+
 			continue
 		}
 
 		// Write to file
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			fmt.Printf("✗ Failed to create output directory: %v\n", err)
+
 			failCount++
+
 			continue
 		}
 
 		outputPath := filepath.Join(outputDir, "enterprise-"+subPluginID+".yaml")
 		if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
 			fmt.Printf("✗ Failed to write %s manifest: %v\n", fullPluginID, err)
+
 			failCount++
+
 			continue
 		}
 
 		fmt.Printf("✓ Generated manifest: %s\n", outputPath)
 		fmt.Printf("  - %d routes\n", len(manifest.Routes))
 		fmt.Printf("  - %d types\n", len(manifest.Types))
+
 		successCount++
 	}
 

@@ -63,6 +63,7 @@ func TestEncryptionService_NewEncryptionService(t *testing.T) {
 
 func TestEncryptionService_EncryptDecrypt(t *testing.T) {
 	key, _ := GenerateMasterKey()
+
 	svc, err := NewEncryptionService(key)
 	if err != nil {
 		t.Fatalf("Failed to create encryption service: %v", err)
@@ -184,6 +185,7 @@ func TestEncryptionService_DeriveKey(t *testing.T) {
 	svc.cacheMu.RLock()
 	_, cached := svc.keyCache["app1:env1"]
 	svc.cacheMu.RUnlock()
+
 	if !cached {
 		t.Error("Derived key should be cached")
 	}
@@ -228,6 +230,7 @@ func TestEncryptionService_ClearKeyForTenant(t *testing.T) {
 	if exists1 {
 		t.Error("app1:env1 should be cleared from cache")
 	}
+
 	if !exists2 {
 		t.Error("app2:env2 should still be in cache")
 	}
@@ -275,14 +278,13 @@ func TestEncryptionService_ReEncrypt(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkEncrypt(b *testing.B) {
 	key, _ := GenerateMasterKey()
 	svc, _ := NewEncryptionService(key)
 	plaintext := []byte("secret data for benchmarking")
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		svc.Encrypt(plaintext, "app", "env")
 	}
 }
@@ -293,8 +295,7 @@ func BenchmarkDecrypt(b *testing.B) {
 	plaintext := []byte("secret data for benchmarking")
 	ciphertext, nonce, _ := svc.Encrypt(plaintext, "app", "env")
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		svc.Decrypt(ciphertext, nonce, "app", "env")
 	}
 }
@@ -303,8 +304,7 @@ func BenchmarkDeriveKey(b *testing.B) {
 	key, _ := GenerateMasterKey()
 	svc, _ := NewEncryptionService(key)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Clear cache to benchmark actual derivation
 		svc.ClearKeyCache()
 		svc.DeriveKey("app", "env")

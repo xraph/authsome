@@ -12,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SettingsPage shows OIDC provider settings
+// SettingsPage shows OIDC provider settings.
 func (p *PagesManager) SettingsPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

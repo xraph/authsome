@@ -9,15 +9,15 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 )
 
-// authsomeLib implements cel.Library for AuthSome custom functions
+// authsomeLib implements cel.Library for AuthSome custom functions.
 type authsomeLib struct{}
 
-// LibraryName returns the name of this library
+// LibraryName returns the name of this library.
 func (authsomeLib) LibraryName() string {
 	return "authsome.permissions"
 }
 
-// CompileOptions returns compilation options for custom functions
+// CompileOptions returns compilation options for custom functions.
 func (authsomeLib) CompileOptions() []cel.EnvOption {
 	return []cel.EnvOption{
 		// Context-dependent functions (declared but not fully implemented yet)
@@ -64,6 +64,7 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 				cel.FunctionBinding(func(vals ...ref.Val) ref.Val {
 					now := time.Now().UTC()
 					weekday := now.Weekday()
+
 					return types.Bool(weekday >= time.Monday && weekday <= time.Friday)
 				}))),
 
@@ -94,7 +95,9 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					if !ok {
 						return types.NewErr("days_since requires timestamp argument")
 					}
+
 					duration := time.Since(timestamp)
+
 					return types.Int(int64(duration.Hours() / 24))
 				}))),
 
@@ -107,7 +110,9 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 					if !ok {
 						return types.NewErr("hours_since requires timestamp argument")
 					}
+
 					duration := time.Since(timestamp)
+
 					return types.Int(int64(duration.Hours()))
 				}))),
 
@@ -131,15 +136,15 @@ func (authsomeLib) CompileOptions() []cel.EnvOption {
 	}
 }
 
-// ProgramOptions returns runtime program options
+// ProgramOptions returns runtime program options.
 func (authsomeLib) ProgramOptions() []cel.ProgramOption {
 	// No additional program options needed
 	// Function bindings are already provided in CompileOptions
 	return []cel.ProgramOption{}
 }
 
-// Helper function to check if a principal has a role (used by evaluator in Week 2+)
-func HasRole(principal map[string]interface{}, role string) bool {
+// Helper function to check if a principal has a role (used by evaluator in Week 2+).
+func HasRole(principal map[string]any, role string) bool {
 	if principal == nil {
 		return false
 	}
@@ -150,7 +155,7 @@ func HasRole(principal map[string]interface{}, role string) bool {
 	}
 
 	// Handle []interface{}
-	if roleList, ok := roles.([]interface{}); ok {
+	if roleList, ok := roles.([]any); ok {
 		for _, r := range roleList {
 			if roleStr, ok := r.(string); ok {
 				if strings.EqualFold(roleStr, role) {
@@ -158,6 +163,7 @@ func HasRole(principal map[string]interface{}, role string) bool {
 				}
 			}
 		}
+
 		return false
 	}
 
@@ -168,6 +174,7 @@ func HasRole(principal map[string]interface{}, role string) bool {
 				return true
 			}
 		}
+
 		return false
 	}
 

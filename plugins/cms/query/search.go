@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// SearchConfig configures full-text search behavior
+// SearchConfig configures full-text search behavior.
 type SearchConfig struct {
 	// Query is the search query string
 	Query string
@@ -30,7 +30,7 @@ type SearchConfig struct {
 	MinScore float64
 }
 
-// DefaultSearchConfig returns the default search configuration
+// DefaultSearchConfig returns the default search configuration.
 func DefaultSearchConfig() *SearchConfig {
 	return &SearchConfig{
 		Language:          "english",
@@ -41,24 +41,24 @@ func DefaultSearchConfig() *SearchConfig {
 	}
 }
 
-// SearchResult represents a search result with ranking
+// SearchResult represents a search result with ranking.
 type SearchResult struct {
 	Entry      *schema.ContentEntry
 	Score      float64
 	Highlights map[string]string
 }
 
-// Searcher handles full-text search operations
+// Searcher handles full-text search operations.
 type Searcher struct {
 	db *bun.DB
 }
 
-// NewSearcher creates a new searcher
+// NewSearcher creates a new searcher.
 func NewSearcher(db *bun.DB) *Searcher {
 	return &Searcher{db: db}
 }
 
-// Search performs a full-text search on content entries
+// Search performs a full-text search on content entries.
 func (s *Searcher) Search(ctx context.Context, contentTypeID xid.ID, config *SearchConfig, page, pageSize int) ([]*SearchResult, int, error) {
 	if config == nil || config.Query == "" {
 		return nil, 0, nil
@@ -93,6 +93,7 @@ func (s *Searcher) Search(ctx context.Context, contentTypeID xid.ID, config *Sea
 				language, field, language,
 			))
 		}
+
 		query = query.Where("("+strings.Join(fieldConditions, " OR ")+")", searchQuery)
 	} else {
 		// Search all text in data JSONB
@@ -129,6 +130,7 @@ func (s *Searcher) Search(ctx context.Context, contentTypeID xid.ID, config *Sea
 
 	// Execute query
 	var entries []*schema.ContentEntry
+
 	err = query.Scan(ctx, &entries)
 	if err != nil {
 		return nil, 0, core.ErrInternalError("failed to execute search", err)
@@ -152,7 +154,7 @@ func (s *Searcher) Search(ctx context.Context, contentTypeID xid.ID, config *Sea
 	return results, total, nil
 }
 
-// SearchAll searches across all content types
+// SearchAll searches across all content types.
 func (s *Searcher) SearchAll(ctx context.Context, appID, envID xid.ID, config *SearchConfig, page, pageSize int) ([]*SearchResult, int, error) {
 	if config == nil || config.Query == "" {
 		return nil, 0, nil
@@ -194,6 +196,7 @@ func (s *Searcher) SearchAll(ctx context.Context, appID, envID xid.ID, config *S
 		Offset((page - 1) * pageSize)
 
 	var entries []*schema.ContentEntry
+
 	err = query.Scan(ctx, &entries)
 	if err != nil {
 		return nil, 0, core.ErrInternalError("failed to execute search", err)
@@ -214,7 +217,7 @@ func (s *Searcher) SearchAll(ctx context.Context, appID, envID xid.ID, config *S
 	return results, total, nil
 }
 
-// generateHighlights creates highlighted snippets for search results
+// generateHighlights creates highlighted snippets for search results.
 func (s *Searcher) generateHighlights(entry *schema.ContentEntry, config *SearchConfig) map[string]string {
 	highlights := make(map[string]string)
 	if entry.Data == nil {
@@ -223,9 +226,11 @@ func (s *Searcher) generateHighlights(entry *schema.ContentEntry, config *Search
 
 	startTag := config.HighlightStartTag
 	endTag := config.HighlightEndTag
+
 	if startTag == "" {
 		startTag = "<mark>"
 	}
+
 	if endTag == "" {
 		endTag = "</mark>"
 	}
@@ -255,19 +260,21 @@ func (s *Searcher) generateHighlights(entry *schema.ContentEntry, config *Search
 	return highlights
 }
 
-// highlightText highlights search terms in text
+// highlightText highlights search terms in text.
 func highlightText(text string, searchTerms []string, startTag, endTag string) string {
 	lowerText := strings.ToLower(text)
 	result := text
 
 	for _, term := range searchTerms {
 		term = strings.ToLower(term)
+
 		startIdx := 0
 		for {
 			idx := strings.Index(strings.ToLower(result[startIdx:]), term)
 			if idx == -1 {
 				break
 			}
+
 			actualIdx := startIdx + idx
 			// Insert highlight tags
 			result = result[:actualIdx] + startTag + result[actualIdx:actualIdx+len(term)] + endTag + result[actualIdx+len(term):]
@@ -284,16 +291,18 @@ func highlightText(text string, searchTerms []string, startTag, endTag string) s
 			// Start before the highlight
 			result = "..." + result[highlightIdx-30:]
 		}
+
 		if len(result) > maxLen {
 			result = result[:maxLen] + "..."
 		}
 	}
 
 	_ = lowerText // Silence unused warning
+
 	return result
 }
 
-// normalizeSearchQuery cleans and normalizes a search query
+// normalizeSearchQuery cleans and normalizes a search query.
 func normalizeSearchQuery(query string) string {
 	// Trim and collapse whitespace
 	query = strings.TrimSpace(query)
@@ -302,6 +311,7 @@ func normalizeSearchQuery(query string) string {
 	// Remove special characters that could break PostgreSQL text search
 	// Keep alphanumeric, spaces, and common punctuation
 	var result strings.Builder
+
 	for _, r := range query {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' || r == '-' || r == '\'' {
 			result.WriteRune(r)
@@ -311,7 +321,7 @@ func normalizeSearchQuery(query string) string {
 	return result.String()
 }
 
-// SuggestSearch returns search suggestions based on existing content
+// SuggestSearch returns search suggestions based on existing content.
 func (s *Searcher) SuggestSearch(ctx context.Context, contentTypeID xid.ID, prefix string, limit int) ([]string, error) {
 	if prefix == "" || limit <= 0 {
 		return nil, nil
@@ -325,6 +335,7 @@ func (s *Searcher) SuggestSearch(ctx context.Context, contentTypeID xid.ID, pref
 	// Query distinct values that start with the prefix
 	// This is a simplified suggestion - for production you might want trigram similarity
 	var suggestions []string
+
 	err := s.db.NewSelect().
 		Model((*schema.ContentEntry)(nil)).
 		ColumnExpr("DISTINCT data::text").
@@ -333,7 +344,6 @@ func (s *Searcher) SuggestSearch(ctx context.Context, contentTypeID xid.ID, pref
 		Where("data::text ILIKE ?", prefix+"%").
 		Limit(limit).
 		Scan(ctx, &suggestions)
-
 	if err != nil {
 		return nil, core.ErrInternalError("failed to get search suggestions", err)
 	}

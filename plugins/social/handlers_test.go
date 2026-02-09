@@ -25,10 +25,11 @@ func TestSignInRequest_JSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	var decoded SignInRequest
+
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 	assert.Equal(t, "google", decoded.Provider)
-	assert.Equal(t, 2, len(decoded.Scopes))
+	assert.Len(t, decoded.Scopes, 2)
 }
 
 func TestLinkAccountRequest_JSON(t *testing.T) {
@@ -41,10 +42,11 @@ func TestLinkAccountRequest_JSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	var decoded LinkAccountRequest
+
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 	assert.Equal(t, "github", decoded.Provider)
-	assert.Equal(t, 1, len(decoded.Scopes))
+	assert.Len(t, decoded.Scopes, 1)
 }
 
 func TestAuthURLResponse_JSON(t *testing.T) {
@@ -56,6 +58,7 @@ func TestAuthURLResponse_JSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	var decoded AuthURLResponse
+
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 	assert.Contains(t, decoded.URL, "accounts.google.com")
@@ -77,6 +80,7 @@ func TestCallbackDataResponse_JSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	var decoded CallbackDataResponse
+
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 	assert.Equal(t, userID, decoded.User.ID)
@@ -93,9 +97,10 @@ func TestProvidersResponse_JSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	var decoded ProvidersResponse
+
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
-	assert.Equal(t, 3, len(decoded.Providers))
+	assert.Len(t, decoded.Providers, 3)
 	assert.Contains(t, decoded.Providers, "google")
 }
 

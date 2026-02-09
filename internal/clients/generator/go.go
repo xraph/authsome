@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/authsome/internal/clients/manifest"
 )
 
-// GoGenerator generates Go client code
+// GoGenerator generates Go client code.
 type GoGenerator struct {
 	outputDir   string
 	manifests   []*manifest.Manifest
@@ -17,11 +17,12 @@ type GoGenerator struct {
 	moduleName  string
 }
 
-// NewGoGenerator creates a new Go generator
+// NewGoGenerator creates a new Go generator.
 func NewGoGenerator(outputDir string, manifests []*manifest.Manifest, moduleName string) *GoGenerator {
 	if moduleName == "" {
 		moduleName = "github.com/xraph/authsome/clients/go"
 	}
+
 	return &GoGenerator{
 		outputDir:   outputDir,
 		manifests:   manifests,
@@ -30,7 +31,7 @@ func NewGoGenerator(outputDir string, manifests []*manifest.Manifest, moduleName
 	}
 }
 
-// Generate generates Go client code
+// Generate generates Go client code.
 func (g *GoGenerator) Generate() error {
 	if err := g.createDirectories(); err != nil {
 		return err
@@ -101,6 +102,7 @@ go 1.21
 
 require ()
 `, g.moduleName)
+
 	return g.writeFile("go.mod", content)
 }
 
@@ -213,6 +215,7 @@ func (g *GoGenerator) generateTypes() error {
 				td := t // Create a copy
 				typeMap[t.Name] = &td
 			}
+
 			break
 		}
 	}
@@ -265,6 +268,7 @@ func (g *GoGenerator) generateTypes() error {
 		if t.Description != "" {
 			sb.WriteString(fmt.Sprintf("// %s represents %s\n", t.Name, t.Description))
 		}
+
 		sb.WriteString(fmt.Sprintf("type %s struct {\n", t.Name))
 
 		for name, typeStr := range t.Fields {
@@ -307,6 +311,7 @@ func (g *GoGenerator) generateTypes() error {
 			sb.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n",
 				g.exportedName(field.Name), goType, jsonTag))
 		}
+
 		sb.WriteString("}\n\n")
 	}
 
@@ -371,6 +376,7 @@ func NewError(statusCode int, message string) *Error {
 	}
 }
 `
+
 	return g.writeFile("errors.go", content)
 }
 
@@ -388,6 +394,7 @@ type Plugin interface {
 	Init(client *Client) error
 }
 `
+
 	return g.writeFile("plugin.go", content)
 }
 
@@ -408,9 +415,11 @@ func (g *GoGenerator) generateClient() error {
 
 	// Find core manifest
 	var coreManifest *manifest.Manifest
+
 	for _, m := range g.manifests {
 		if m.PluginID == "core" {
 			coreManifest = m
+
 			break
 		}
 	}
@@ -617,22 +626,24 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 
 	// Generate method
 	if route.Description != "" {
-		sb.WriteString(fmt.Sprintf("// %s %s\n", methodName, route.Description))
+		fmt.Fprintf(sb, "// %s %s\n", methodName, route.Description)
 	}
-	sb.WriteString(fmt.Sprintf("func (c *Client) %s(ctx context.Context", methodName))
+
+	fmt.Fprintf(sb, "func (c *Client) %s(ctx context.Context", methodName)
 
 	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf(", req *%sRequest", methodName))
+		fmt.Fprintf(sb, ", req *%sRequest", methodName)
 	}
+
 	if len(route.Params) > 0 {
 		for paramName, typeStr := range route.Params {
 			field := manifest.ParseField(paramName, typeStr)
-			sb.WriteString(fmt.Sprintf(", %s %s", field.Name, g.mapTypeToGo(field.Type)))
+			fmt.Fprintf(sb, ", %s %s", field.Name, g.mapTypeToGo(field.Type))
 		}
 	}
 
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf(") (*%sResponse, error) {\n", methodName))
+		fmt.Fprintf(sb, ") (*%sResponse, error) {\n", methodName)
 	} else {
 		sb.WriteString(") error {\n")
 	}
@@ -643,14 +654,15 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 		for paramName := range route.Params {
 			path = strings.ReplaceAll(path, "{"+paramName+"}", `" + url.PathEscape(`+paramName+`) + "`)
 		}
-		sb.WriteString(fmt.Sprintf("\tpath := \"%s\"\n", path))
+
+		fmt.Fprintf(sb, "\tpath := \"%s\"\n", path)
 	} else {
-		sb.WriteString(fmt.Sprintf("\tpath := \"%s\"\n", path))
+		fmt.Fprintf(sb, "\tpath := \"%s\"\n", path)
 	}
 
 	// Make request
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("\tvar result %sResponse\n", methodName))
+		fmt.Fprintf(sb, "\tvar result %sResponse\n", methodName)
 	}
 
 	sb.WriteString("\terr := c.request(ctx, \"")
@@ -662,6 +674,7 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 	} else {
 		sb.WriteString("nil")
 	}
+
 	sb.WriteString(", ")
 
 	if len(route.Response) > 0 {
@@ -669,6 +682,7 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 	} else {
 		sb.WriteString("nil")
 	}
+
 	sb.WriteString(", ")
 
 	if route.Auth {
@@ -676,6 +690,7 @@ func (g *GoGenerator) generateGoMethod(sb *strings.Builder, m *manifest.Manifest
 	} else {
 		sb.WriteString("false")
 	}
+
 	sb.WriteString(")\n")
 
 	if len(route.Response) > 0 {
@@ -700,6 +715,7 @@ func (g *GoGenerator) generatePlugins() error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -710,18 +726,22 @@ func (g *GoGenerator) generatePluginFile(m *manifest.Manifest) error {
 
 	// Check if we need net/url import (for path parameters)
 	hasPathParams := false
+
 	for _, route := range m.Routes {
 		if len(route.Params) > 0 {
 			hasPathParams = true
+
 			break
 		}
 	}
 
 	sb.WriteString("import (\n")
 	sb.WriteString("\t\"context\"\n")
+
 	if hasPathParams {
 		sb.WriteString("\t\"net/url\"\n")
 	}
+
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("\t\"%s\"\n", g.moduleName))
 	sb.WriteString(")\n\n")
@@ -767,22 +787,24 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 
 	// Generate method
 	if route.Description != "" {
-		sb.WriteString(fmt.Sprintf("// %s %s\n", methodName, route.Description))
+		fmt.Fprintf(sb, "// %s %s\n", methodName, route.Description)
 	}
-	sb.WriteString(fmt.Sprintf("func (p *Plugin) %s(ctx context.Context", methodName))
+
+	fmt.Fprintf(sb, "func (p *Plugin) %s(ctx context.Context", methodName)
 
 	if len(route.Request) > 0 {
-		sb.WriteString(fmt.Sprintf(", req *authsome.%sRequest", methodName))
+		fmt.Fprintf(sb, ", req *authsome.%sRequest", methodName)
 	}
+
 	if len(route.Params) > 0 {
 		for paramName, typeStr := range route.Params {
 			field := manifest.ParseField(paramName, typeStr)
-			sb.WriteString(fmt.Sprintf(", %s %s", field.Name, g.mapTypeToGo(field.Type)))
+			fmt.Fprintf(sb, ", %s %s", field.Name, g.mapTypeToGo(field.Type))
 		}
 	}
 
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf(") (*authsome.%sResponse, error) {\n", methodName))
+		fmt.Fprintf(sb, ") (*authsome.%sResponse, error) {\n", methodName)
 	} else {
 		sb.WriteString(") error {\n")
 	}
@@ -793,14 +815,15 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 		for paramName := range route.Params {
 			path = strings.ReplaceAll(path, "{"+paramName+"}", `" + url.PathEscape(`+paramName+`) + "`)
 		}
-		sb.WriteString(fmt.Sprintf("\tpath := \"%s\"\n", path))
+
+		fmt.Fprintf(sb, "\tpath := \"%s\"\n", path)
 	} else {
-		sb.WriteString(fmt.Sprintf("\tpath := \"%s\"\n", path))
+		fmt.Fprintf(sb, "\tpath := \"%s\"\n", path)
 	}
 
 	// Make request through client
 	if len(route.Response) > 0 {
-		sb.WriteString(fmt.Sprintf("\tvar result authsome.%sResponse\n", methodName))
+		fmt.Fprintf(sb, "\tvar result authsome.%sResponse\n", methodName)
 	}
 
 	sb.WriteString("\terr := p.client.Request(ctx, \"")
@@ -812,6 +835,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 	} else {
 		sb.WriteString("nil")
 	}
+
 	sb.WriteString(", ")
 
 	if len(route.Response) > 0 {
@@ -819,6 +843,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 	} else {
 		sb.WriteString("nil")
 	}
+
 	sb.WriteString(", ")
 
 	if route.Auth {
@@ -826,6 +851,7 @@ func (g *GoGenerator) generatePluginGoMethod(sb *strings.Builder, m *manifest.Ma
 	} else {
 		sb.WriteString("false")
 	}
+
 	sb.WriteString(")\n")
 
 	if len(route.Response) > 0 {
@@ -926,6 +952,7 @@ func (g *GoGenerator) exportedName(s string) string {
 	if len(s) == 0 {
 		return s
 	}
+
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
@@ -937,15 +964,17 @@ func (g *GoGenerator) isCustomType(t string) bool {
 		"bool": true, "boolean": true,
 		"object": true, "map": true,
 	}
+
 	return !primitives[t]
 }
 
-// mapTypeToGoWithPackage maps a type to Go type with package qualifier for custom types
+// mapTypeToGoWithPackage maps a type to Go type with package qualifier for custom types.
 func (g *GoGenerator) mapTypeToGoWithPackage(t string) string {
 	if g.isCustomType(t) {
 		// Custom types need package qualifier (authsome.TypeName)
 		return "authsome." + t
 	}
+
 	return g.mapTypeToGo(t)
 }
 
@@ -954,5 +983,6 @@ func (g *GoGenerator) writeFile(path string, content string) error {
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return err
 	}
+
 	return os.WriteFile(fullPath, []byte(content), 0644)
 }

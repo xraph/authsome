@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/core"
 )
 
-// PlanServiceInterface defines the plan service interface
+// PlanServiceInterface defines the plan service interface.
 type PlanServiceInterface interface {
 	Create(ctx context.Context, appID xid.ID, req *core.CreatePlanRequest) (*core.Plan, error)
 	Update(ctx context.Context, id xid.ID, req *core.UpdatePlanRequest) (*core.Plan, error)
@@ -23,7 +23,7 @@ type PlanServiceInterface interface {
 	SyncAllFromProvider(ctx context.Context, appID xid.ID) ([]*core.Plan, error)
 }
 
-// SubscriptionServiceInterface defines the subscription service interface
+// SubscriptionServiceInterface defines the subscription service interface.
 type SubscriptionServiceInterface interface {
 	Create(ctx context.Context, req *core.CreateSubscriptionRequest) (*core.Subscription, error)
 	Update(ctx context.Context, id xid.ID, req *core.UpdateSubscriptionRequest) (*core.Subscription, error)
@@ -42,7 +42,7 @@ type SubscriptionServiceInterface interface {
 	SyncToProvider(ctx context.Context, id xid.ID) error
 }
 
-// AddOnServiceInterface defines the add-on service interface
+// AddOnServiceInterface defines the add-on service interface.
 type AddOnServiceInterface interface {
 	Create(ctx context.Context, appID xid.ID, req *core.CreateAddOnRequest) (*core.AddOn, error)
 	Update(ctx context.Context, id xid.ID, req *core.UpdateAddOnRequest) (*core.AddOn, error)
@@ -53,7 +53,7 @@ type AddOnServiceInterface interface {
 	GetAvailableForPlan(ctx context.Context, planID xid.ID) ([]*core.AddOn, error)
 }
 
-// InvoiceServiceInterface defines the invoice service interface
+// InvoiceServiceInterface defines the invoice service interface.
 type InvoiceServiceInterface interface {
 	GetByID(ctx context.Context, id xid.ID) (*core.Invoice, error)
 	GetByNumber(ctx context.Context, number string) (*core.Invoice, error)
@@ -63,7 +63,7 @@ type InvoiceServiceInterface interface {
 	SyncFromProvider(ctx context.Context, providerInvoiceID string) (*core.Invoice, error)
 }
 
-// UsageServiceInterface defines the usage service interface
+// UsageServiceInterface defines the usage service interface.
 type UsageServiceInterface interface {
 	RecordUsage(ctx context.Context, req *core.RecordUsageRequest) (*core.UsageRecord, error)
 	GetSummary(ctx context.Context, req *core.GetUsageSummaryRequest) (*core.UsageSummary, error)
@@ -71,7 +71,7 @@ type UsageServiceInterface interface {
 	ReportToProvider(ctx context.Context, batchSize int) error
 }
 
-// PaymentServiceInterface defines the payment service interface
+// PaymentServiceInterface defines the payment service interface.
 type PaymentServiceInterface interface {
 	CreateSetupIntent(ctx context.Context, orgID xid.ID) (*core.SetupIntentResult, error)
 	AddPaymentMethod(ctx context.Context, req *core.AddPaymentMethodRequest) (*core.PaymentMethod, error)
@@ -81,7 +81,7 @@ type PaymentServiceInterface interface {
 	GetDefaultPaymentMethod(ctx context.Context, orgID xid.ID) (*core.PaymentMethod, error)
 }
 
-// CustomerServiceInterface defines the customer service interface
+// CustomerServiceInterface defines the customer service interface.
 type CustomerServiceInterface interface {
 	Create(ctx context.Context, req *core.CreateCustomerRequest) (*core.Customer, error)
 	Update(ctx context.Context, id xid.ID, req *core.UpdateCustomerRequest) (*core.Customer, error)
@@ -90,17 +90,17 @@ type CustomerServiceInterface interface {
 	SyncToProvider(ctx context.Context, id xid.ID) error
 }
 
-// EnforcementServiceInterface defines the enforcement service interface
+// EnforcementServiceInterface defines the enforcement service interface.
 type EnforcementServiceInterface interface {
 	CheckFeatureAccess(ctx context.Context, orgID xid.ID, feature string) (bool, error)
 	GetRemainingSeats(ctx context.Context, orgID xid.ID) (int, error)
 	GetFeatureLimit(ctx context.Context, orgID xid.ID, feature string) (int64, error)
 	GetAllLimits(ctx context.Context, orgID xid.ID) (map[string]*core.UsageLimit, error)
-	EnforceSubscriptionRequired(ctx context.Context, req interface{}) error
+	EnforceSubscriptionRequired(ctx context.Context, req any) error
 	EnforceSeatLimit(ctx context.Context, orgID string, userID xid.ID) error
 }
 
-// FeatureServiceInterface defines the feature service interface
+// FeatureServiceInterface defines the feature service interface.
 type FeatureServiceInterface interface {
 	Create(ctx context.Context, appID xid.ID, req *core.CreateFeatureRequest) (*core.Feature, error)
 	Update(ctx context.Context, id xid.ID, req *core.UpdateFeatureRequest) (*core.Feature, error)

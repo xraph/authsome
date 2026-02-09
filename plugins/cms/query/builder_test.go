@@ -39,7 +39,7 @@ func TestToSnakeCase(t *testing.T) {
 func TestToString(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected string
 	}{
 		{"string", "hello", "hello"},
@@ -66,7 +66,7 @@ func TestToString(t *testing.T) {
 func TestToBool(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected bool
 	}{
 		{"bool true", true, true},
@@ -97,7 +97,8 @@ func TestToBool(t *testing.T) {
 
 func TestToSlice(t *testing.T) {
 	t.Run("interface slice", func(t *testing.T) {
-		input := []interface{}{"a", "b", "c"}
+		input := []any{"a", "b", "c"}
+
 		result := toSlice(input)
 		if len(result) != 3 {
 			t.Errorf("expected length 3, got %d", len(result))
@@ -106,6 +107,7 @@ func TestToSlice(t *testing.T) {
 
 	t.Run("string slice", func(t *testing.T) {
 		input := []string{"a", "b", "c"}
+
 		result := toSlice(input)
 		if len(result) != 3 {
 			t.Errorf("expected length 3, got %d", len(result))
@@ -114,10 +116,12 @@ func TestToSlice(t *testing.T) {
 
 	t.Run("single value", func(t *testing.T) {
 		input := "single"
+
 		result := toSlice(input)
 		if len(result) != 1 {
 			t.Errorf("expected length 1, got %d", len(result))
 		}
+
 		if result[0] != "single" {
 			t.Errorf("expected 'single', got %v", result[0])
 		}
@@ -134,27 +138,33 @@ func TestToSlice(t *testing.T) {
 func TestToStringSlice(t *testing.T) {
 	t.Run("string slice", func(t *testing.T) {
 		input := []string{"a", "b", "c"}
+
 		result := toStringSlice(input)
 		if len(result) != 3 {
 			t.Errorf("expected length 3, got %d", len(result))
 		}
+
 		if result[0] != "a" || result[1] != "b" || result[2] != "c" {
 			t.Errorf("unexpected values: %v", result)
 		}
 	})
 
 	t.Run("interface slice", func(t *testing.T) {
-		input := []interface{}{"a", 1, true}
+		input := []any{"a", 1, true}
+
 		result := toStringSlice(input)
 		if len(result) != 3 {
 			t.Errorf("expected length 3, got %d", len(result))
 		}
+
 		if result[0] != "a" {
 			t.Errorf("expected 'a', got %s", result[0])
 		}
+
 		if result[1] != "1" {
 			t.Errorf("expected '1', got %s", result[1])
 		}
+
 		if result[2] != "true" {
 			t.Errorf("expected 'true', got %s", result[2])
 		}
@@ -162,10 +172,12 @@ func TestToStringSlice(t *testing.T) {
 
 	t.Run("single string", func(t *testing.T) {
 		input := "single"
+
 		result := toStringSlice(input)
 		if len(result) != 1 {
 			t.Errorf("expected length 1, got %d", len(result))
 		}
+
 		if result[0] != "single" {
 			t.Errorf("expected 'single', got %s", result[0])
 		}
@@ -173,17 +185,19 @@ func TestToStringSlice(t *testing.T) {
 
 	t.Run("single int", func(t *testing.T) {
 		input := 42
+
 		result := toStringSlice(input)
 		if len(result) != 1 {
 			t.Errorf("expected length 1, got %d", len(result))
 		}
+
 		if result[0] != "42" {
 			t.Errorf("expected '42', got %s", result[0])
 		}
 	})
 }
 
-// Test helper functions from json_parser.go
+// Test helper functions from json_parser.go.
 func TestSplitFirst(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -204,8 +218,10 @@ func TestSplitFirst(t *testing.T) {
 			result := splitFirst(tt.input, tt.sep)
 			if len(result) != len(tt.expected) {
 				t.Errorf("splitFirst(%q, %q) returned %d parts, expected %d", tt.input, tt.sep, len(result), len(tt.expected))
+
 				return
 			}
+
 			for i, v := range result {
 				if v != tt.expected[i] {
 					t.Errorf("splitFirst(%q, %q)[%d] = %q, expected %q", tt.input, tt.sep, i, v, tt.expected[i])
@@ -257,8 +273,10 @@ func TestSplitAndTrim(t *testing.T) {
 			result := splitAndTrim(tt.input, tt.sep)
 			if len(result) != len(tt.expected) {
 				t.Errorf("splitAndTrim(%q, %q) returned %d parts, expected %d: %v", tt.input, tt.sep, len(result), len(tt.expected), result)
+
 				return
 			}
+
 			for i, v := range result {
 				if v != tt.expected[i] {
 					t.Errorf("splitAndTrim(%q, %q)[%d] = %q, expected %q", tt.input, tt.sep, i, v, tt.expected[i])
@@ -268,12 +286,11 @@ func TestSplitAndTrim(t *testing.T) {
 	}
 }
 
-// Benchmark helper functions
+// Benchmark helper functions.
 func BenchmarkToSnakeCase(b *testing.B) {
 	inputs := []string{"createdAt", "updatedAt", "publishedAt", "contentTypeID"}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, input := range inputs {
 			toSnakeCase(input)
 		}
@@ -281,10 +298,9 @@ func BenchmarkToSnakeCase(b *testing.B) {
 }
 
 func BenchmarkToString(b *testing.B) {
-	inputs := []interface{}{"hello", 42, 3.14, true}
+	inputs := []any{"hello", 42, 3.14, true}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, input := range inputs {
 			toString(input)
 		}

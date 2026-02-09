@@ -5,7 +5,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// BaseLayout renders a minimal HTML structure (used for error pages and fallbacks)
+// BaseLayout renders a minimal HTML structure (used for error pages and fallbacks).
 func BaseLayout(data PageData, content g.Node) g.Node {
 	return Doctype(
 		HTML(
@@ -25,7 +25,7 @@ func BaseLayout(data PageData, content g.Node) g.Node {
 	)
 }
 
-// EmptyLayout renders a minimal layout without header/footer
+// EmptyLayout renders a minimal layout without header/footer.
 func EmptyLayout(data PageData, content g.Node) g.Node {
 	return Doctype(
 		HTML(
@@ -45,7 +45,7 @@ func EmptyLayout(data PageData, content g.Node) g.Node {
 	)
 }
 
-// BaseSidebarLayout renders a minimal sidebar layout (used when handler renders with layout)
+// BaseSidebarLayout renders a minimal sidebar layout (used when handler renders with layout).
 func BaseSidebarLayout(data PageData, content g.Node) g.Node {
 	return Doctype(
 		HTML(

@@ -1,6 +1,6 @@
 package query
 
-// OperatorInfo provides metadata about an operator
+// OperatorInfo provides metadata about an operator.
 type OperatorInfo struct {
 	// Operator is the operator code
 	Operator FilterOperator `json:"operator"`
@@ -21,7 +21,7 @@ type OperatorInfo struct {
 	ValueType string `json:"valueType"`
 }
 
-// GetAllOperators returns information about all available operators
+// GetAllOperators returns information about all available operators.
 func GetAllOperators() []OperatorInfo {
 	return []OperatorInfo{
 		// Comparison operators
@@ -198,37 +198,42 @@ func GetAllOperators() []OperatorInfo {
 	}
 }
 
-// GetOperatorInfo returns information about a specific operator
+// GetOperatorInfo returns information about a specific operator.
 func GetOperatorInfo(op FilterOperator) *OperatorInfo {
 	for _, info := range GetAllOperators() {
 		if info.Operator == op {
 			return &info
 		}
 	}
+
 	return nil
 }
 
-// GetOperatorsForFieldType returns operators applicable to a field type
+// GetOperatorsForFieldType returns operators applicable to a field type.
 func GetOperatorsForFieldType(fieldType string) []OperatorInfo {
 	var applicable []OperatorInfo
+
 	for _, info := range GetAllOperators() {
 		for _, ft := range info.ApplicableTo {
 			if ft == "all" || ft == fieldType {
 				applicable = append(applicable, info)
+
 				break
 			}
 		}
 	}
+
 	return applicable
 }
 
-// ParseOperator parses an operator string
+// ParseOperator parses an operator string.
 func ParseOperator(s string) (FilterOperator, bool) {
 	op := FilterOperator(s)
+
 	return op, op.IsValid()
 }
 
-// OperatorAliases maps common aliases to operators
+// OperatorAliases maps common aliases to operators.
 var OperatorAliases = map[string]FilterOperator{
 	"=":            OpEqual,
 	"==":           OpEqual,
@@ -265,7 +270,7 @@ var OperatorAliases = map[string]FilterOperator{
 	"jsonHasKey":   OpJsonHasKey,
 }
 
-// ResolveOperator resolves an operator string to a FilterOperator
+// ResolveOperator resolves an operator string to a FilterOperator.
 func ResolveOperator(s string) (FilterOperator, bool) {
 	// First try direct parse
 	op := FilterOperator(s)

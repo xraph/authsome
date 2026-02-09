@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SubscriptionBillingMetric represents a billing metric in the database
+// SubscriptionBillingMetric represents a billing metric in the database.
 type SubscriptionBillingMetric struct {
 	bun.BaseModel `bun:"table:subscription_billing_metrics,alias:sbm"`
 
@@ -21,7 +21,7 @@ type SubscriptionBillingMetric struct {
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionMovement represents a subscription movement event in the database
+// SubscriptionMovement represents a subscription movement event in the database.
 type SubscriptionMovement struct {
 	bun.BaseModel `bun:"table:subscription_movements,alias:sm"`
 
@@ -47,7 +47,7 @@ type SubscriptionMovement struct {
 	NewPlan      *SubscriptionPlan `bun:"rel:belongs-to,join:new_plan_id=id"`
 }
 
-// SubscriptionCohort represents cohort data in the database
+// SubscriptionCohort represents cohort data in the database.
 type SubscriptionCohort struct {
 	bun.BaseModel `bun:"table:subscription_cohorts,alias:sco"`
 

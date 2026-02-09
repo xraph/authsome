@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Repository defines the interface for JWT key storage operations
-// This follows the Interface Segregation Principle from core/app architecture
+// This follows the Interface Segregation Principle from core/app architecture.
 type Repository interface {
 	// CreateJWTKey creates a new JWT key
 	CreateJWTKey(ctx context.Context, key *schema.JWTKey) error

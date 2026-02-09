@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// MockOrganizationUIExtension is a mock implementation for testing
+// MockOrganizationUIExtension is a mock implementation for testing.
 type MockOrganizationUIExtension struct {
 	id      string
 	widgets []ui.OrganizationWidget
@@ -48,7 +48,7 @@ func TestNewOrganizationUIRegistry(t *testing.T) {
 	registry := NewOrganizationUIRegistry()
 	assert.NotNil(t, registry)
 	assert.NotNil(t, registry.extensions)
-	assert.Len(t, registry.extensions, 0)
+	assert.Empty(t, registry.extensions)
 }
 
 func TestOrganizationUIRegistry_Register(t *testing.T) {
@@ -88,6 +88,7 @@ func TestOrganizationUIRegistry_Register(t *testing.T) {
 
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}
@@ -453,18 +454,20 @@ func TestOrganizationUIRegistry_ThreadSafety(t *testing.T) {
 
 	// Test concurrent registration
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(id int) {
 			ext := &MockOrganizationUIExtension{
 				id: string(rune('a' + id)),
 			}
 			registry.Register(ext)
+
 			done <- true
 		}(i)
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
@@ -479,7 +482,7 @@ func mockContext() ui.OrgExtensionContext {
 		AppID:    xid.New(),
 		BasePath: "/api",
 		Request:  &http.Request{},
-		GetOrg: func() (interface{}, error) {
+		GetOrg: func() (any, error) {
 			return nil, nil
 		},
 		IsAdmin: true,

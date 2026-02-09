@@ -13,12 +13,12 @@ import (
 // MIGRATION HANDLER
 // =============================================================================
 
-// MigrationHandler handles RBAC migration API endpoints
+// MigrationHandler handles RBAC migration API endpoints.
 type MigrationHandler struct {
 	migrationService *migration.RBACMigrationService
 }
 
-// NewMigrationHandler creates a new migration handler
+// NewMigrationHandler creates a new migration handler.
 func NewMigrationHandler(migrationService *migration.RBACMigrationService) *MigrationHandler {
 	return &MigrationHandler{
 		migrationService: migrationService,
@@ -29,13 +29,13 @@ func NewMigrationHandler(migrationService *migration.RBACMigrationService) *Migr
 // MIGRATION DTOs
 // =============================================================================
 
-// MigrateAllRequest is the request to migrate all RBAC policies
+// MigrateAllRequest is the request to migrate all RBAC policies.
 type MigrateAllRequest struct {
 	DryRun           bool `json:"dryRun"`
 	PreserveOriginal bool `json:"preserveOriginal"`
 }
 
-// MigrateAllResponse is the response from migrating all RBAC policies
+// MigrateAllResponse is the response from migrating all RBAC policies.
 type MigrateAllResponse struct {
 	TotalPolicies     int                      `json:"totalPolicies"`
 	MigratedPolicies  int                      `json:"migratedPolicies"`
@@ -48,7 +48,7 @@ type MigrateAllResponse struct {
 	DryRun            bool                     `json:"dryRun"`
 }
 
-// MigrationErrorResponse represents a migration error in API response
+// MigrationErrorResponse represents a migration error in API response.
 type MigrationErrorResponse struct {
 	PolicyIndex int    `json:"policyIndex"`
 	Subject     string `json:"subject"`
@@ -56,7 +56,7 @@ type MigrationErrorResponse struct {
 	Error       string `json:"error"`
 }
 
-// PolicyPreviewResponse represents a preview of a converted policy
+// PolicyPreviewResponse represents a preview of a converted policy.
 type PolicyPreviewResponse struct {
 	Name        string   `json:"name"`
 	Expression  string   `json:"expression"`
@@ -65,23 +65,23 @@ type PolicyPreviewResponse struct {
 	Description string   `json:"description"`
 }
 
-// MigrateRolesRequest is the request to migrate role-based permissions
+// MigrateRolesRequest is the request to migrate role-based permissions.
 type MigrateRolesRequest struct {
 	DryRun bool `json:"dryRun"`
 }
 
-// MigrateRolesResponse is the response from migrating roles
+// MigrateRolesResponse is the response from migrating roles.
 type MigrateRolesResponse = MigrateAllResponse
 
-// PreviewConversionRequest is the request to preview an RBAC policy conversion
+// PreviewConversionRequest is the request to preview an RBAC policy conversion.
 type PreviewConversionRequest struct {
-	Subject   string   `json:"subject" validate:"required"`
-	Actions   []string `json:"actions" validate:"required,min=1"`
-	Resource  string   `json:"resource" validate:"required"`
+	Subject   string   `json:"subject"             validate:"required"`
+	Actions   []string `json:"actions"             validate:"required,min=1"`
+	Resource  string   `json:"resource"            validate:"required"`
 	Condition string   `json:"condition,omitempty"`
 }
 
-// PreviewConversionResponse is the response from previewing a conversion
+// PreviewConversionResponse is the response from previewing a conversion.
 type PreviewConversionResponse struct {
 	Success       bool   `json:"success"`
 	CELExpression string `json:"celExpression,omitempty"`
@@ -91,12 +91,12 @@ type PreviewConversionResponse struct {
 	Error         string `json:"error,omitempty"`
 }
 
-// GetMigrationStatusRequest is the request to get migration status
+// GetMigrationStatusRequest is the request to get migration status.
 type GetMigrationStatusRequest struct {
 	// No fields needed
 }
 
-// GetMigrationStatusResponse is the response with migration status
+// GetMigrationStatusResponse is the response with migration status.
 type GetMigrationStatusResponse struct {
 	HasMigratedPolicies bool   `json:"hasMigratedPolicies"`
 	MigratedCount       int    `json:"migratedCount"`
@@ -108,7 +108,7 @@ type GetMigrationStatusResponse struct {
 // HANDLERS
 // =============================================================================
 
-// MigrateAll migrates all RBAC policies to the permissions system
+// MigrateAll migrates all RBAC policies to the permissions system.
 func (h *MigrationHandler) MigrateAll(c forge.Context) error {
 	// Extract context
 	appID, envID, orgID, userID, err := extractMigrationContext(c)
@@ -148,10 +148,11 @@ func (h *MigrationHandler) MigrateAll(c forge.Context) error {
 
 	// Convert to response
 	response := convertMigrationResult(result)
+
 	return c.JSON(200, response)
 }
 
-// MigrateRoles migrates role-based permissions to policies
+// MigrateRoles migrates role-based permissions to policies.
 func (h *MigrationHandler) MigrateRoles(c forge.Context) error {
 	// Extract context
 	appID, envID, _, userID, err := extractMigrationContext(c)
@@ -181,10 +182,11 @@ func (h *MigrationHandler) MigrateRoles(c forge.Context) error {
 
 	// Convert to response
 	response := convertMigrationResult(result)
+
 	return c.JSON(200, response)
 }
 
-// PreviewConversion previews the conversion of an RBAC policy
+// PreviewConversion previews the conversion of an RBAC policy.
 func (h *MigrationHandler) PreviewConversion(c forge.Context) error {
 	// Bind request
 	var req PreviewConversionRequest
@@ -237,7 +239,7 @@ func (h *MigrationHandler) PreviewConversion(c forge.Context) error {
 // HELPERS
 // =============================================================================
 
-// extractMigrationContext extracts app, env, org, user IDs from context
+// extractMigrationContext extracts app, env, org, user IDs from context.
 func extractMigrationContext(c forge.Context) (appID, envID xid.ID, orgID *xid.ID, userID xid.ID, err error) {
 	ctx := c.Request().Context()
 
@@ -259,7 +261,7 @@ func extractMigrationContext(c forge.Context) (appID, envID xid.ID, orgID *xid.I
 	return appID, envID, orgID, userID, nil
 }
 
-// convertMigrationResult converts internal result to API response
+// convertMigrationResult converts internal result to API response.
 func convertMigrationResult(result *migration.MigrationResult) *MigrateAllResponse {
 	response := &MigrateAllResponse{
 		TotalPolicies:    result.TotalPolicies,

@@ -13,7 +13,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Provider defines the interface for OAuth providers
+// Provider defines the interface for OAuth providers.
 type Provider interface {
 	// ID returns the provider identifier (e.g., "google", "github")
 	ID() string
@@ -31,20 +31,20 @@ type Provider interface {
 	GetScopes() []string
 }
 
-// UserInfo represents standardized user information from OAuth providers
+// UserInfo represents standardized user information from OAuth providers.
 type UserInfo struct {
-	ID            string                 // Provider's user ID
-	Email         string                 // User email
-	EmailVerified bool                   // Whether email is verified
-	Name          string                 // Full name
-	FirstName     string                 // First name
-	LastName      string                 // Last name
-	Avatar        string                 // Profile picture URL
-	Username      string                 // Username (if available)
-	Raw           map[string]interface{} // Raw provider response
+	ID            string         // Provider's user ID
+	Email         string         // User email
+	EmailVerified bool           // Whether email is verified
+	Name          string         // Full name
+	FirstName     string         // First name
+	LastName      string         // Last name
+	Avatar        string         // Profile picture URL
+	Username      string         // Username (if available)
+	Raw           map[string]any // Raw provider response
 }
 
-// BaseProvider provides common OAuth2 functionality
+// BaseProvider provides common OAuth2 functionality.
 type BaseProvider struct {
 	id           string
 	name         string
@@ -58,7 +58,7 @@ type BaseProvider struct {
 	oauth2Config *oauth2.Config
 }
 
-// NewBaseProvider creates a new base provider
+// NewBaseProvider creates a new base provider.
 func NewBaseProvider(id, name, authURL, tokenURL, userInfoURL, clientID, clientSecret, redirectURL string, scopes []string) *BaseProvider {
 	bp := &BaseProvider{
 		id:           id,
@@ -102,9 +102,9 @@ func (bp *BaseProvider) GetScopes() []string {
 	return bp.scopes
 }
 
-// FetchJSON is a helper to fetch and decode JSON from an API endpoint
-func FetchJSON(ctx context.Context, client *http.Client, url string, v interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+// FetchJSON is a helper to fetch and decode JSON from an API endpoint.
+func FetchJSON(ctx context.Context, client *http.Client, url string, v any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -117,6 +117,7 @@ func FetchJSON(ctx context.Context, client *http.Client, url string, v interface
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -127,12 +128,13 @@ func FetchJSON(ctx context.Context, client *http.Client, url string, v interface
 	return nil
 }
 
-// PostForm is a helper for POST requests with form data
-func PostForm(ctx context.Context, client *http.Client, url string, data url.Values, v interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(data.Encode()))
+// PostForm is a helper for POST requests with form data.
+func PostForm(ctx context.Context, client *http.Client, url string, data url.Values, v any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(data.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
@@ -143,6 +145,7 @@ func PostForm(ctx context.Context, client *http.Client, url string, data url.Val
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -155,21 +158,21 @@ func PostForm(ctx context.Context, client *http.Client, url string, data url.Val
 	return nil
 }
 
-// ProviderConfig holds configuration for a social provider
+// ProviderConfig holds configuration for a social provider.
 type ProviderConfig struct {
-	ClientID     string   `json:"clientId" yaml:"clientId"`
+	ClientID     string   `json:"clientId"     yaml:"clientId"`
 	ClientSecret string   `json:"clientSecret" yaml:"clientSecret"`
-	RedirectURL  string   `json:"redirectUrl" yaml:"redirectUrl"`
-	CallbackURL  string   `json:"callbackUrl" yaml:"callbackUrl"`
-	Scopes       []string `json:"scopes" yaml:"scopes"`
-	Enabled      bool     `json:"enabled" yaml:"enabled"`
+	RedirectURL  string   `json:"redirectUrl"  yaml:"redirectUrl"`
+	CallbackURL  string   `json:"callbackUrl"  yaml:"callbackUrl"`
+	Scopes       []string `json:"scopes"       yaml:"scopes"`
+	Enabled      bool     `json:"enabled"      yaml:"enabled"`
 
 	// Advanced options (provider-specific)
 	AccessType string `json:"accessType" yaml:"accessType"` // For Google: "offline" for refresh tokens
-	Prompt     string `json:"prompt" yaml:"prompt"`         // For Google: "select_account consent"
+	Prompt     string `json:"prompt"     yaml:"prompt"`     // For Google: "select_account consent"
 }
 
-// TokenResponse represents a standardized OAuth token response
+// TokenResponse represents a standardized OAuth token response.
 type TokenResponse struct {
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
@@ -180,7 +183,7 @@ type TokenResponse struct {
 	ExpiresAt    time.Time `json:"-"`                  // Calculated expiration time
 }
 
-// CalculateExpiration calculates the token expiration time
+// CalculateExpiration calculates the token expiration time.
 func (tr *TokenResponse) CalculateExpiration() {
 	if tr.ExpiresIn > 0 {
 		tr.ExpiresAt = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second)

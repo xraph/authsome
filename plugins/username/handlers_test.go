@@ -12,12 +12,12 @@ import (
 	"github.com/xraph/authsome/core/user"
 )
 
-// TestRequestTypes tests request struct serialization
+// TestRequestTypes tests request struct serialization.
 func TestRequestTypes(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     string
-		expected interface{}
+		expected any
 	}{
 		{
 			name: "SignUpRequest",
@@ -52,6 +52,7 @@ func TestRequestTypes(t *testing.T) {
 			switch expected := tt.expected.(type) {
 			case *SignUpRequest:
 				var req SignUpRequest
+
 				err := json.Unmarshal([]byte(tt.data), &req)
 				require.NoError(t, err)
 				assert.Equal(t, expected.Username, req.Username)
@@ -59,6 +60,7 @@ func TestRequestTypes(t *testing.T) {
 
 			case *SignInRequest:
 				var req SignInRequest
+
 				err := json.Unmarshal([]byte(tt.data), &req)
 				require.NoError(t, err)
 				assert.Equal(t, expected.Username, req.Username)
@@ -69,7 +71,7 @@ func TestRequestTypes(t *testing.T) {
 	}
 }
 
-// TestResponseTypes tests response struct serialization
+// TestResponseTypes tests response struct serialization.
 func TestResponseTypes(t *testing.T) {
 	t.Run("SignUpResponse", func(t *testing.T) {
 		resp := &SignUpResponse{
@@ -81,6 +83,7 @@ func TestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded SignUpResponse
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -110,6 +113,7 @@ func TestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded SignInResponse
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -135,6 +139,7 @@ func TestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded TwoFARequiredResponse
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -157,6 +162,7 @@ func TestResponseTypes(t *testing.T) {
 		require.NoError(t, err)
 
 		var decoded AccountLockedResponse
+
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -167,7 +173,7 @@ func TestResponseTypes(t *testing.T) {
 	})
 }
 
-// TestValidationTags tests validation tags on request types
+// TestValidationTags tests validation tags on request types.
 func TestValidationTags(t *testing.T) {
 	t.Run("SignUpRequest has required tags", func(t *testing.T) {
 		req := SignUpRequest{}

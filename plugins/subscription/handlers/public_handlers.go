@@ -10,13 +10,13 @@ import (
 	"github.com/xraph/forge"
 )
 
-// PublicHandlers handles HTTP requests for public pricing APIs
+// PublicHandlers handles HTTP requests for public pricing APIs.
 type PublicHandlers struct {
 	featureSvc *service.FeatureService
 	planSvc    *service.PlanService
 }
 
-// NewPublicHandlers creates a new public handlers instance
+// NewPublicHandlers creates a new public handlers instance.
 func NewPublicHandlers(featureSvc *service.FeatureService, planSvc *service.PlanService) *PublicHandlers {
 	return &PublicHandlers{
 		featureSvc: featureSvc,
@@ -24,7 +24,7 @@ func NewPublicHandlers(featureSvc *service.FeatureService, planSvc *service.Plan
 	}
 }
 
-// PublicPlan represents a plan in public API format
+// PublicPlan represents a plan in public API format.
 type PublicPlan struct {
 	ID              string                    `json:"id"`
 	Slug            string                    `json:"slug"`
@@ -40,7 +40,7 @@ type PublicPlan struct {
 	Metadata        map[string]any            `json:"metadata,omitempty"`
 }
 
-// HandleListPublicPlans handles listing public plans with features
+// HandleListPublicPlans handles listing public plans with features.
 func (h *PublicHandlers) HandleListPublicPlans(c forge.Context) error {
 	appID := getAppID(c)
 	if appID.IsNil() {
@@ -78,12 +78,12 @@ func (h *PublicHandlers) HandleListPublicPlans(c forge.Context) error {
 		result = append(result, publicPlan)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"plans": result,
 	})
 }
 
-// HandleGetPublicPlan handles getting a single public plan by slug
+// HandleGetPublicPlan handles getting a single public plan by slug.
 func (h *PublicHandlers) HandleGetPublicPlan(c forge.Context) error {
 	appID := getAppID(c)
 	if appID.IsNil() {
@@ -128,7 +128,7 @@ func (h *PublicHandlers) HandleGetPublicPlan(c forge.Context) error {
 	return c.JSON(200, publicPlan)
 }
 
-// HandleGetPublicPlanFeatures handles getting features for a public plan
+// HandleGetPublicPlanFeatures handles getting features for a public plan.
 func (h *PublicHandlers) HandleGetPublicPlanFeatures(c forge.Context) error {
 	appID := getAppID(c)
 	if appID.IsNil() {
@@ -155,12 +155,12 @@ func (h *PublicHandlers) HandleGetPublicPlanFeatures(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"features": features,
 	})
 }
 
-// HandleListPublicFeatures handles listing all public features
+// HandleListPublicFeatures handles listing all public features.
 func (h *PublicHandlers) HandleListPublicFeatures(c forge.Context) error {
 	appID := getAppID(c)
 	if appID.IsNil() {
@@ -172,12 +172,12 @@ func (h *PublicHandlers) HandleListPublicFeatures(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"features": features,
 	})
 }
 
-// HandleComparePlans handles comparing features across plans
+// HandleComparePlans handles comparing features across plans.
 func (h *PublicHandlers) HandleComparePlans(c forge.Context) error {
 	appID := getAppID(c)
 	if appID.IsNil() {
@@ -207,14 +207,14 @@ func (h *PublicHandlers) HandleComparePlans(c forge.Context) error {
 	}
 
 	// Build comparison matrix
-	comparison := make(map[string]map[string]interface{})
+	comparison := make(map[string]map[string]any)
 	for _, f := range allFeatures {
-		comparison[f.Key] = map[string]interface{}{
+		comparison[f.Key] = map[string]any{
 			"name":        f.Name,
 			"description": f.Description,
 			"type":        f.Type,
 			"unit":        f.Unit,
-			"plans":       make(map[string]interface{}),
+			"plans":       make(map[string]any),
 		}
 	}
 
@@ -232,8 +232,8 @@ func (h *PublicHandlers) HandleComparePlans(c forge.Context) error {
 
 		for _, f := range features {
 			if featureData, ok := comparison[f.Key]; ok {
-				plans := featureData["plans"].(map[string]interface{})
-				plans[planIDStr] = map[string]interface{}{
+				plans := featureData["plans"].(map[string]any)
+				plans[planIDStr] = map[string]any{
 					"value":         f.Value,
 					"isHighlighted": f.IsHighlighted,
 					"isBlocked":     f.IsBlocked,
@@ -242,7 +242,7 @@ func (h *PublicHandlers) HandleComparePlans(c forge.Context) error {
 		}
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"comparison": comparison,
 	})
 }
@@ -256,6 +256,7 @@ func filterPublicMetadata(metadata map[string]any) map[string]any {
 
 	// Filter out private metadata fields (those starting with _)
 	result := make(map[string]any)
+
 	for k, v := range metadata {
 		if len(k) > 0 && k[0] != '_' {
 			result[k] = v
@@ -265,6 +266,7 @@ func filterPublicMetadata(metadata map[string]any) map[string]any {
 	if len(result) == 0 {
 		return nil
 	}
+
 	return result
 }
 
@@ -272,18 +274,23 @@ func splitString(s, sep string) []string {
 	if s == "" {
 		return nil
 	}
+
 	result := make([]string, 0)
 	start := 0
-	for i := 0; i < len(s); i++ {
+
+	for i := range len(s) {
 		if s[i] == sep[0] {
 			if start < i {
 				result = append(result, s[start:i])
 			}
+
 			start = i + 1
 		}
 	}
+
 	if start < len(s) {
 		result = append(result, s[start:])
 	}
+
 	return result
 }

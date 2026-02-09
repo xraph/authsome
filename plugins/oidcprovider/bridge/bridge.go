@@ -13,16 +13,16 @@ import (
 )
 
 // OIDCServiceInterface defines the OIDC service methods needed by bridge functions
-// Using interface{} for config to avoid import cycle issues
+// Using interface{} for config to avoid import cycle issues.
 type OIDCServiceInterface interface {
-	GetConfig() interface{}
+	GetConfig() any
 	GetCurrentKeyID() (string, error)
 	GetLastKeyRotation() time.Time
 	RotateKeys() error
-	GetDeviceFlowService() interface{}
+	GetDeviceFlowService() any
 }
 
-// BridgeManager manages all bridge functions for the OIDC provider plugin
+// BridgeManager manages all bridge functions for the OIDC provider plugin.
 type BridgeManager struct {
 	clientRepo     *repository.OAuthClientRepository
 	tokenRepo      *repository.OAuthTokenRepository
@@ -32,7 +32,7 @@ type BridgeManager struct {
 	logger         forge.Logger
 }
 
-// NewBridgeManager creates a new bridge manager
+// NewBridgeManager creates a new bridge manager.
 func NewBridgeManager(
 	clientRepo *repository.OAuthClientRepository,
 	tokenRepo *repository.OAuthTokenRepository,
@@ -52,7 +52,7 @@ func NewBridgeManager(
 }
 
 // buildContext creates a Go context from bridge context with authentication
-// This leverages the enriched context from dashboard v2 middleware
+// This leverages the enriched context from dashboard v2 middleware.
 func (bm *BridgeManager) buildContext(ctx bridge.Context) (context.Context, xid.ID, xid.ID, error) {
 	// Get the enriched context from the HTTP request
 	goCtx := context.Background()
@@ -84,7 +84,7 @@ func (bm *BridgeManager) buildContext(ctx bridge.Context) (context.Context, xid.
 	return goCtx, userID, appID, nil
 }
 
-// buildContextWithAppID creates a context with a specific app ID override
+// buildContextWithAppID creates a context with a specific app ID override.
 func (bm *BridgeManager) buildContextWithAppID(ctx bridge.Context, appIDStr string) (context.Context, xid.ID, xid.ID, error) {
 	goCtx, userID, _, err := bm.buildContext(ctx)
 	if err != nil {

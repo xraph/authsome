@@ -14,7 +14,7 @@ import (
 	notifplugin "github.com/xraph/authsome/plugins/notification"
 )
 
-// TestNotificationIntegration_AuthWelcome tests welcome email integration
+// TestNotificationIntegration_AuthWelcome tests welcome email integration.
 func TestNotificationIntegration_AuthWelcome(t *testing.T) {
 	t.Skip("Integration test - requires full system setup")
 
@@ -41,7 +41,7 @@ func TestNotificationIntegration_AuthWelcome(t *testing.T) {
 	t.Log("Welcome email should be sent after user creation")
 }
 
-// TestNotificationIntegration_DeviceSecurity tests device security notifications
+// TestNotificationIntegration_DeviceSecurity tests device security notifications.
 func TestNotificationIntegration_DeviceSecurity(t *testing.T) {
 	t.Skip("Integration test - requires full system setup")
 
@@ -73,7 +73,7 @@ func TestNotificationIntegration_DeviceSecurity(t *testing.T) {
 	}
 }
 
-// TestNotificationIntegration_AccountLifecycle tests account lifecycle notifications
+// TestNotificationIntegration_AccountLifecycle tests account lifecycle notifications.
 func TestNotificationIntegration_AccountLifecycle(t *testing.T) {
 	t.Skip("Integration test - requires full system setup")
 
@@ -129,7 +129,7 @@ func TestNotificationIntegration_AccountLifecycle(t *testing.T) {
 	}
 }
 
-// TestNotificationIntegration_OrganizationEvents tests organization notifications
+// TestNotificationIntegration_OrganizationEvents tests organization notifications.
 func TestNotificationIntegration_OrganizationEvents(t *testing.T) {
 	t.Skip("Integration test - requires full system setup")
 
@@ -172,7 +172,7 @@ func TestNotificationIntegration_OrganizationEvents(t *testing.T) {
 	}
 }
 
-// TestNotificationConfig_AutoSendFlags tests configuration flags
+// TestNotificationConfig_AutoSendFlags tests configuration flags.
 func TestNotificationConfig_AutoSendFlags(t *testing.T) {
 	cfg := notifplugin.DefaultConfig()
 
@@ -189,7 +189,7 @@ func TestNotificationConfig_AutoSendFlags(t *testing.T) {
 	assert.False(t, cfg.AutoSend.Auth.MFACode, "Auth.MFACode should be disabled (plugin controlled)")
 }
 
-// TestNotificationConfig_CustomAutoSend tests custom configuration
+// TestNotificationConfig_CustomAutoSend tests custom configuration.
 func TestNotificationConfig_CustomAutoSend(t *testing.T) {
 	cfg := notifplugin.Config{
 		AutoSend: notifplugin.AutoSendConfig{
@@ -214,7 +214,7 @@ func TestNotificationConfig_CustomAutoSend(t *testing.T) {
 	assert.False(t, cfg.AutoSend.Account.UsernameChanged)
 }
 
-// TestHookRegistry_NotificationHooksRegistered tests that hooks are properly registered
+// TestHookRegistry_NotificationHooksRegistered tests that hooks are properly registered.
 func TestHookRegistry_NotificationHooksRegistered(t *testing.T) {
 	registry := hooks.NewHookRegistry()
 
@@ -227,7 +227,7 @@ func TestHookRegistry_NotificationHooksRegistered(t *testing.T) {
 	assert.Equal(t, 1, counts["onEmailChanged"], "OnEmailChanged hook should be registered")
 }
 
-// TestNotificationAdapter_Methods tests that all adapter methods exist and work
+// TestNotificationAdapter_Methods tests that all adapter methods exist and work.
 func TestNotificationAdapter_Methods(t *testing.T) {
 	t.Skip("Unit test - requires mock template service")
 
@@ -271,7 +271,7 @@ func TestNotificationAdapter_Methods(t *testing.T) {
 	}
 }
 
-// TestNotificationIntegration_E2E is a comprehensive end-to-end test
+// TestNotificationIntegration_E2E is a comprehensive end-to-end test.
 func TestNotificationIntegration_E2E(t *testing.T) {
 	t.Skip("E2E test - requires full AuthSome instance")
 
@@ -307,7 +307,7 @@ func TestNotificationIntegration_E2E(t *testing.T) {
 	})
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkNotificationHookExecution(b *testing.B) {
 	registry := hooks.NewHookRegistry()
 	ctx := context.Background()
@@ -318,15 +318,14 @@ func BenchmarkNotificationHookExecution(b *testing.B) {
 		return nil
 	})
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = registry.ExecuteOnEmailChanged(ctx, userID, "old@example.com", "new@example.com")
 	}
 }
 
 // Helper functions for integration tests
 
-// mockNotificationProvider creates a mock provider for testing
+// mockNotificationProvider creates a mock provider for testing.
 type mockNotificationProvider struct {
 	sentNotifications []mockSentNotification
 }
@@ -345,6 +344,7 @@ func (m *mockNotificationProvider) Send(ctx context.Context, recipient, subject,
 		Body:      body,
 		Timestamp: time.Now(),
 	})
+
 	return nil
 }
 
@@ -352,6 +352,7 @@ func (m *mockNotificationProvider) LastSent() *mockSentNotification {
 	if len(m.sentNotifications) == 0 {
 		return nil
 	}
+
 	return &m.sentNotifications[len(m.sentNotifications)-1]
 }
 
@@ -359,7 +360,7 @@ func (m *mockNotificationProvider) Reset() {
 	m.sentNotifications = nil
 }
 
-// assertNotificationSent is a test helper to verify notification delivery
+// assertNotificationSent is a test helper to verify notification delivery.
 func assertNotificationSent(t *testing.T, provider *mockNotificationProvider, expectedRecipient string, expectedTemplateKey string) {
 	require.NotNil(t, provider.LastSent(), "Expected notification to be sent")
 	assert.Equal(t, expectedRecipient, provider.LastSent().Recipient)

@@ -28,6 +28,7 @@ func (m *mockAuthService) SignUp(ctx context.Context, req *auth.SignUpRequest) (
 		Email: req.Email,
 		Name:  req.Name,
 	}
+
 	return &responses.AuthResponse{
 		User: newUser,
 		Session: &session.Session{
@@ -40,11 +41,13 @@ func (m *mockAuthService) SignUp(ctx context.Context, req *auth.SignUpRequest) (
 
 func (m *mockAuthService) SignIn(ctx context.Context, req *auth.SignInRequest) (*responses.AuthResponse, error) {
 	m.signInCalled = true
+
 	return nil, nil // Not used in these tests
 }
 
 func (m *mockAuthService) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ipAddress, userAgent string) (*responses.AuthResponse, error) {
 	m.createSessionCalled = true
+
 	return &responses.AuthResponse{
 		User: u,
 		Session: &session.Session{
@@ -61,6 +64,7 @@ type mockDeviceService struct {
 
 func (m *mockDeviceService) TrackDevice(ctx context.Context, appID, userID xid.ID, fingerprint, userAgent, ipAddress string) (*device.Device, error) {
 	m.trackCalled = true
+
 	return &device.Device{
 		ID:     xid.New(),
 		UserID: userID,
@@ -75,6 +79,7 @@ type mockAuditService struct {
 func (m *mockAuditService) Log(ctx context.Context, userID *xid.ID, action, target, ipAddress, userAgent, metadata string) error {
 	m.logCalled = true
 	m.lastAction = action
+
 	return nil
 }
 
@@ -345,7 +350,7 @@ func TestCompletionService_CompleteSignUpOrSignIn_ExistingUserNilUser(t *testing
 	assert.Contains(t, err.Error(), "USER_REQUIRED", "Error should indicate user is required")
 }
 
-// MockForgeContext implements a minimal forge.Context for testing cookie setting
+// MockForgeContext implements a minimal forge.Context for testing cookie setting.
 type mockForgeContext struct {
 	cookies map[string]*mockCookie
 }
@@ -390,7 +395,6 @@ func TestCompletionService_CookieSettingForSocialLogin(t *testing.T) {
 	// 1. ForgeContext != nil
 	// 2. cookieConfig != nil && cookieConfig.Enabled
 	// 3. authResp != nil with Session and Token
-
 	t.Run("Cookie config enabled - cookie should be set", func(t *testing.T) {
 		authSvc := &mockAuthService{}
 		appSvc := &mockAppService{} // Returns enabled cookie config

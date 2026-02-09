@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// RolePermission represents the many-to-many relationship between roles and permissions
+// RolePermission represents the many-to-many relationship between roles and permissions.
 type RolePermission struct {
 	bun.BaseModel `bun:"table:role_permissions,alias:rp"`
 

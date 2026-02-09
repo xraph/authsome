@@ -19,7 +19,7 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// BridgeManager manages all bridge functions for the dashboard
+// BridgeManager manages all bridge functions for the dashboard.
 type BridgeManager struct {
 	bridge   *bridge.Bridge
 	services *services.Services
@@ -43,12 +43,12 @@ type BridgeManager struct {
 	extensionRegistry ExtensionRegistry
 }
 
-// ExtensionRegistry interface for accessing dashboard extensions
+// ExtensionRegistry interface for accessing dashboard extensions.
 type ExtensionRegistry interface {
 	GetDashboardWidgets() []ui.DashboardWidget
 }
 
-// NewBridgeManager creates a new bridge manager with an existing bridge instance
+// NewBridgeManager creates a new bridge manager with an existing bridge instance.
 func NewBridgeManager(
 	existingBridge *bridge.Bridge,
 	services *services.Services,
@@ -83,7 +83,7 @@ func NewBridgeManager(
 	}
 }
 
-// RegisterFunctions registers all bridge functions
+// RegisterFunctions registers all bridge functions.
 func (bm *BridgeManager) RegisterFunctions() error {
 	// Auth functions
 	if err := bm.registerAuthFunctions(); err != nil {
@@ -131,10 +131,11 @@ func (bm *BridgeManager) RegisterFunctions() error {
 	}
 
 	bm.log.Info("all bridge functions registered successfully")
+
 	return nil
 }
 
-// GetBridge returns the bridge instance
+// GetBridge returns the bridge instance.
 func (bm *BridgeManager) GetBridge() *bridge.Bridge {
 	return bm.bridge
 }

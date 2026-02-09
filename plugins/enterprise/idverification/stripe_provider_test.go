@@ -138,7 +138,7 @@ func TestStripeIdentityProvider_Mock(t *testing.T) {
 	})
 }
 
-// Integration test with real Stripe API (requires STRIPE_SECRET_KEY env var)
+// Integration test with real Stripe API (requires STRIPE_SECRET_KEY env var).
 func TestStripeIdentityProvider_Real(t *testing.T) {
 	apiKey := os.Getenv("STRIPE_SECRET_KEY")
 	if apiKey == "" {
@@ -175,7 +175,7 @@ func TestStripeIdentityProvider_Real(t *testing.T) {
 			OrganizationID: orgID,
 			UserID:         userID,
 			SuccessURL:     "https://example.com/success",
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"test": "true",
 			},
 		}
@@ -285,6 +285,7 @@ func TestStripeIdentityProvider_ParseWebhook(t *testing.T) {
 				if err == nil {
 					t.Error("Expected error, got nil")
 				}
+
 				return
 			}
 

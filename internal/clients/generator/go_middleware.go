@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// generateForgeMiddleware generates Forge-specific middleware for the Go client
+// generateForgeMiddleware generates Forge-specific middleware for the Go client.
 func (g *GoGenerator) generateForgeMiddleware() error {
 	var sb strings.Builder
 

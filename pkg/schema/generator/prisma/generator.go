@@ -10,25 +10,25 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator"
 )
 
-// Generator generates Prisma schema files
+// Generator generates Prisma schema files.
 type Generator struct{}
 
-// NewGenerator creates a new Prisma generator
+// NewGenerator creates a new Prisma generator.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// Name returns the generator name
+// Name returns the generator name.
 func (g *Generator) Name() string {
 	return "prisma"
 }
 
-// Description returns the generator description
+// Description returns the generator description.
 func (g *Generator) Description() string {
 	return "Prisma schema generator (TypeScript)"
 }
 
-// Generate generates Prisma schema file
+// Generate generates Prisma schema file.
 func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) error {
 	// Create output directory
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
@@ -50,7 +50,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	return nil
 }
 
-// generateSchema generates the Prisma schema
+// generateSchema generates the Prisma schema.
 func (g *Generator) generateSchema(schema *definition.Schema, opts generator.Options) string {
 	var b strings.Builder
 
@@ -81,13 +81,14 @@ func (g *Generator) generateSchema(schema *definition.Schema, opts generator.Opt
 	return b.String()
 }
 
-// generateModel generates a Prisma model
+// generateModel generates a Prisma model.
 func (g *Generator) generateModel(model definition.Model) string {
 	var b strings.Builder
 
 	if model.Description != "" {
 		b.WriteString(fmt.Sprintf("/// %s\n", model.Description))
 	}
+
 	b.WriteString(fmt.Sprintf("model %s {\n", model.Name))
 
 	// Generate fields
@@ -100,6 +101,7 @@ func (g *Generator) generateModel(model definition.Model) string {
 	// Generate indexes
 	if len(model.Indexes) > 0 {
 		b.WriteString("\n")
+
 		for _, index := range model.Indexes {
 			if index.Unique {
 				b.WriteString(fmt.Sprintf("  @@unique([%s], name: \"%s\")\n",
@@ -118,7 +120,7 @@ func (g *Generator) generateModel(model definition.Model) string {
 	return b.String()
 }
 
-// generateField generates a Prisma field
+// generateField generates a Prisma field.
 func (g *Generator) generateField(field definition.Field) string {
 	prismaType := g.mapToPrismaType(field)
 	parts := []string{field.Name, prismaType}
@@ -164,7 +166,7 @@ func (g *Generator) generateField(field definition.Field) string {
 	return strings.Join(parts, " ")
 }
 
-// mapToPrismaType maps a field type to a Prisma type
+// mapToPrismaType maps a field type to a Prisma type.
 func (g *Generator) mapToPrismaType(field definition.Field) string {
 	var prismaType string
 
@@ -194,15 +196,18 @@ func (g *Generator) mapToPrismaType(field definition.Field) string {
 
 func toSnakeCase(s string) string {
 	var result strings.Builder
+
 	for i, c := range s {
 		if c >= 'A' && c <= 'Z' {
 			if i > 0 {
 				result.WriteRune('_')
 			}
+
 			result.WriteRune(c + 32)
 		} else {
 			result.WriteRune(c)
 		}
 	}
+
 	return result.String()
 }

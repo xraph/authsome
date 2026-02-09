@@ -3,6 +3,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/rs/xid"
@@ -14,20 +15,20 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ComponentSchemaService handles component schema business logic
+// ComponentSchemaService handles component schema business logic.
 type ComponentSchemaService struct {
 	repo          repository.ComponentSchemaRepository
 	maxComponents int
 	logger        forge.Logger
 }
 
-// ComponentSchemaServiceConfig holds configuration for the service
+// ComponentSchemaServiceConfig holds configuration for the service.
 type ComponentSchemaServiceConfig struct {
 	MaxComponentSchemas int
 	Logger              forge.Logger
 }
 
-// NewComponentSchemaService creates a new component schema service
+// NewComponentSchemaService creates a new component schema service.
 func NewComponentSchemaService(
 	repo repository.ComponentSchemaRepository,
 	config ComponentSchemaServiceConfig,
@@ -36,6 +37,7 @@ func NewComponentSchemaService(
 	if maxComponents <= 0 {
 		maxComponents = 100 // Default
 	}
+
 	return &ComponentSchemaService{
 		repo:          repo,
 		maxComponents: maxComponents,
@@ -47,13 +49,14 @@ func NewComponentSchemaService(
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new component schema
+// Create creates a new component schema.
 func (s *ComponentSchemaService) Create(ctx context.Context, req *core.CreateComponentSchemaRequest) (*core.ComponentSchemaDTO, error) {
 	// Get app/env context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -64,6 +67,7 @@ func (s *ComponentSchemaService) Create(ctx context.Context, req *core.CreateCom
 	if slug == "" {
 		slug = generateSlug(req.Name)
 	}
+
 	if !slugPattern.MatchString(slug) {
 		return nil, core.ErrInvalidComponentSchemaSlug(slug, "must start with a letter and contain only letters, numbers, underscores, and hyphens")
 	}
@@ -73,6 +77,7 @@ func (s *ComponentSchemaService) Create(ctx context.Context, req *core.CreateCom
 	if err != nil {
 		return nil, core.ErrDatabaseError("failed to check slug existence", err)
 	}
+
 	if exists {
 		return nil, core.ErrComponentSchemaExists(slug)
 	}
@@ -108,7 +113,7 @@ func (s *ComponentSchemaService) Create(ctx context.Context, req *core.CreateCom
 	return s.toDTO(component, 0), nil
 }
 
-// GetByID retrieves a component schema by ID
+// GetByID retrieves a component schema by ID.
 func (s *ComponentSchemaService) GetByID(ctx context.Context, id xid.ID) (*core.ComponentSchemaDTO, error) {
 	component, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -127,12 +132,13 @@ func (s *ComponentSchemaService) GetByID(ctx context.Context, id xid.ID) (*core.
 	return s.toDTO(component, usageCount), nil
 }
 
-// GetBySlug retrieves a component schema by slug
+// GetBySlug retrieves a component schema by slug.
 func (s *ComponentSchemaService) GetByName(ctx context.Context, name string) (*core.ComponentSchemaDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -148,12 +154,13 @@ func (s *ComponentSchemaService) GetByName(ctx context.Context, name string) (*c
 	return s.toDTO(component, usageCount), nil
 }
 
-// List lists component schemas with pagination
+// List lists component schemas with pagination.
 func (s *ComponentSchemaService) List(ctx context.Context, query *core.ListComponentSchemasQuery) (*core.ListComponentSchemasResponse, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -169,6 +176,7 @@ func (s *ComponentSchemaService) List(ctx context.Context, query *core.ListCompo
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+
 	totalPages := (total + pageSize - 1) / pageSize
 
 	// Convert to DTOs
@@ -187,7 +195,7 @@ func (s *ComponentSchemaService) List(ctx context.Context, query *core.ListCompo
 	}, nil
 }
 
-// Update updates a component schema
+// Update updates a component schema.
 func (s *ComponentSchemaService) Update(ctx context.Context, id xid.ID, req *core.UpdateComponentSchemaRequest) (*core.ComponentSchemaDTO, error) {
 	// Get existing component
 	component, err := s.repo.FindByID(ctx, id)
@@ -200,6 +208,7 @@ func (s *ComponentSchemaService) Update(ctx context.Context, id xid.ID, req *cor
 		if err := s.validateNestedFields(req.Fields, nil); err != nil {
 			return nil, err
 		}
+
 		component.Fields = s.dtoToSchemaFields(req.Fields)
 	}
 
@@ -207,9 +216,11 @@ func (s *ComponentSchemaService) Update(ctx context.Context, id xid.ID, req *cor
 	if req.Title != "" {
 		component.Title = req.Title
 	}
+
 	if req.Description != "" {
 		component.Description = req.Description
 	}
+
 	if req.Icon != "" {
 		component.Icon = req.Icon
 	}
@@ -231,7 +242,7 @@ func (s *ComponentSchemaService) Update(ctx context.Context, id xid.ID, req *cor
 	return s.toDTO(component, usageCount), nil
 }
 
-// Delete deletes a component schema
+// Delete deletes a component schema.
 func (s *ComponentSchemaService) Delete(ctx context.Context, id xid.ID) error {
 	// Get existing component
 	component, err := s.repo.FindByID(ctx, id)
@@ -242,10 +253,12 @@ func (s *ComponentSchemaService) Delete(ctx context.Context, id xid.ID) error {
 	// Check if in use
 	appID, _ := contexts.GetAppID(ctx)
 	envID, _ := contexts.GetEnvironmentID(ctx)
+
 	usageCount, err := s.repo.CountUsages(ctx, appID, envID, component.Name)
 	if err != nil {
 		return core.ErrDatabaseError("failed to check component usage", err)
 	}
+
 	if usageCount > 0 {
 		return core.ErrComponentSchemaInUse(component.Name, usageCount)
 	}
@@ -257,7 +270,7 @@ func (s *ComponentSchemaService) Delete(ctx context.Context, id xid.ID) error {
 // Validation
 // =============================================================================
 
-// validateNestedFields validates nested field definitions
+// validateNestedFields validates nested field definitions.
 func (s *ComponentSchemaService) validateNestedFields(fields []core.NestedFieldDefDTO, seenSlugs map[string]bool) error {
 	if seenSlugs == nil {
 		seenSlugs = make(map[string]bool)
@@ -268,9 +281,11 @@ func (s *ComponentSchemaService) validateNestedFields(fields []core.NestedFieldD
 		if field.Name == "" {
 			return core.ErrFieldRequired("name")
 		}
+
 		if field.Name == "" {
 			return core.ErrFieldRequired("slug")
 		}
+
 		if field.Type == "" {
 			return core.ErrFieldRequired("type")
 		}
@@ -284,6 +299,7 @@ func (s *ComponentSchemaService) validateNestedFields(fields []core.NestedFieldD
 		if seenSlugs[field.Name] {
 			return core.ErrFieldExists(field.Name)
 		}
+
 		seenSlugs[field.Name] = true
 
 		// Validate field type
@@ -308,13 +324,11 @@ func (s *ComponentSchemaService) validateNestedFields(fields []core.NestedFieldD
 	return nil
 }
 
-// ValidateComponentRef validates that a component reference is valid and not circular
+// ValidateComponentRef validates that a component reference is valid and not circular.
 func (s *ComponentSchemaService) ValidateComponentRef(ctx context.Context, componentSlug string, visited []string) error {
 	// Check for circular reference
-	for _, v := range visited {
-		if v == componentSlug {
-			return core.ErrCircularComponentRef(buildRefPath(visited, componentSlug))
-		}
+	if slices.Contains(visited, componentSlug) {
+		return core.ErrCircularComponentRef(buildRefPath(visited, componentSlug))
 	}
 
 	// Get app/env context
@@ -322,6 +336,7 @@ func (s *ComponentSchemaService) ValidateComponentRef(ctx context.Context, compo
 	if !ok {
 		return core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return core.ErrEnvContextMissing()
@@ -335,6 +350,7 @@ func (s *ComponentSchemaService) ValidateComponentRef(ctx context.Context, compo
 
 	// Check nested component refs recursively
 	visited = append(visited, componentSlug)
+
 	for _, field := range component.Fields {
 		if field.Options != nil && field.Options.ComponentRef != "" {
 			if err := s.ValidateComponentRef(ctx, field.Options.ComponentRef, visited); err != nil {
@@ -346,19 +362,23 @@ func (s *ComponentSchemaService) ValidateComponentRef(ctx context.Context, compo
 	return nil
 }
 
-// buildRefPath builds a string representation of the reference path
+// buildRefPath builds a string representation of the reference path.
 func buildRefPath(visited []string, current string) string {
 	path := ""
 	for _, v := range visited {
 		if path != "" {
 			path += " -> "
 		}
+
 		path += v
 	}
+
 	if path != "" {
 		path += " -> "
 	}
+
 	path += current
+
 	return path
 }
 
@@ -366,7 +386,7 @@ func buildRefPath(visited []string, current string) string {
 // Conversion helpers
 // =============================================================================
 
-// toDTO converts a schema component to a DTO
+// toDTO converts a schema component to a DTO.
 func (s *ComponentSchemaService) toDTO(component *schema.ComponentSchema, usageCount int) *core.ComponentSchemaDTO {
 	return &core.ComponentSchemaDTO{
 		ID:            component.ID.String(),
@@ -385,7 +405,7 @@ func (s *ComponentSchemaService) toDTO(component *schema.ComponentSchema, usageC
 	}
 }
 
-// toSummaryDTO converts a schema component to a summary DTO
+// toSummaryDTO converts a schema component to a summary DTO.
 func (s *ComponentSchemaService) toSummaryDTO(component *schema.ComponentSchema, usageCount int) *core.ComponentSchemaSummaryDTO {
 	return &core.ComponentSchemaSummaryDTO{
 		ID:          component.ID.String(),
@@ -400,7 +420,7 @@ func (s *ComponentSchemaService) toSummaryDTO(component *schema.ComponentSchema,
 	}
 }
 
-// schemaToFieldDTOs converts schema nested fields to DTOs
+// schemaToFieldDTOs converts schema nested fields to DTOs.
 func (s *ComponentSchemaService) schemaToFieldDTOs(fields schema.NestedFieldDefs) []core.NestedFieldDefDTO {
 	if fields == nil {
 		return []core.NestedFieldDefDTO{}
@@ -419,10 +439,11 @@ func (s *ComponentSchemaService) schemaToFieldDTOs(fields schema.NestedFieldDefs
 			dtos[i].Options = s.schemaOptionsToDTO(field.Options)
 		}
 	}
+
 	return dtos
 }
 
-// schemaOptionsToDTO converts schema field options to DTO
+// schemaOptionsToDTO converts schema field options to DTO.
 func (s *ComponentSchemaService) schemaOptionsToDTO(opts *schema.FieldOptions) *core.FieldOptionsDTO {
 	if opts == nil {
 		return nil
@@ -478,7 +499,7 @@ func (s *ComponentSchemaService) schemaOptionsToDTO(opts *schema.FieldOptions) *
 	return dto
 }
 
-// dtoToSchemaFields converts DTO nested fields to schema
+// dtoToSchemaFields converts DTO nested fields to schema.
 func (s *ComponentSchemaService) dtoToSchemaFields(fields []core.NestedFieldDefDTO) schema.NestedFieldDefs {
 	if fields == nil {
 		return schema.NestedFieldDefs{}
@@ -497,10 +518,11 @@ func (s *ComponentSchemaService) dtoToSchemaFields(fields []core.NestedFieldDefD
 			schemaFields[i].Options = s.dtoToSchemaOptions(field.Options)
 		}
 	}
+
 	return schemaFields
 }
 
-// dtoToSchemaOptions converts DTO field options to schema
+// dtoToSchemaOptions converts DTO field options to schema.
 func (s *ComponentSchemaService) dtoToSchemaOptions(opts *core.FieldOptionsDTO) *schema.FieldOptions {
 	if opts == nil {
 		return nil
@@ -560,19 +582,21 @@ func (s *ComponentSchemaService) dtoToSchemaOptions(opts *core.FieldOptionsDTO) 
 // Resolution helpers
 // =============================================================================
 
-// ResolveComponentSchema resolves a component reference and returns the nested fields
+// ResolveComponentSchema resolves a component reference and returns the nested fields.
 func (s *ComponentSchemaService) ResolveComponentSchema(ctx context.Context, componentName string) ([]core.NestedFieldDefDTO, error) {
 	dto, err := s.GetByName(ctx, componentName)
 	if err != nil {
 		return nil, err
 	}
+
 	return dto.Fields, nil
 }
 
-// GetEffectiveFields returns the effective nested fields for a field, resolving component refs
+// GetEffectiveFields returns the effective nested fields for a field, resolving component refs.
 func (s *ComponentSchemaService) GetEffectiveFields(ctx context.Context, field *core.ContentFieldDTO) ([]core.NestedFieldDefDTO, error) {
 	if field.Options.ComponentRef != "" {
 		return s.ResolveComponentSchema(ctx, field.Options.ComponentRef)
 	}
+
 	return field.Options.NestedFields, nil
 }

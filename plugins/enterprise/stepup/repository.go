@@ -8,7 +8,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Repository defines the interface for step-up data persistence
+// Repository defines the interface for step-up data persistence.
 type Repository interface {
 	// Verifications
 	CreateVerification(ctx context.Context, verification *StepUpVerification) error
@@ -49,12 +49,12 @@ type Repository interface {
 	ListAuditLogs(ctx context.Context, userID, orgID string, limit, offset int) ([]*StepUpAuditLog, error)
 }
 
-// BunRepository implements Repository using Bun ORM
+// BunRepository implements Repository using Bun ORM.
 type BunRepository struct {
 	db *bun.DB
 }
 
-// NewBunRepository creates a new Bun-based repository
+// NewBunRepository creates a new Bun-based repository.
 func NewBunRepository(db *bun.DB) *BunRepository {
 	return &BunRepository{db: db}
 }
@@ -66,11 +66,13 @@ func (r *BunRepository) CreateVerification(ctx context.Context, verification *St
 	if err != nil {
 		return fmt.Errorf("failed to create verification: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetVerification(ctx context.Context, id string) (*StepUpVerification, error) {
 	verification := &StepUpVerification{}
+
 	err := r.db.NewSelect().
 		Model(verification).
 		Where("id = ?", id).
@@ -78,11 +80,13 @@ func (r *BunRepository) GetVerification(ctx context.Context, id string) (*StepUp
 	if err != nil {
 		return nil, fmt.Errorf("failed to get verification: %w", err)
 	}
+
 	return verification, nil
 }
 
 func (r *BunRepository) GetLatestVerification(ctx context.Context, userID, orgID string, level SecurityLevel) (*StepUpVerification, error) {
 	verification := &StepUpVerification{}
+
 	err := r.db.NewSelect().
 		Model(verification).
 		Where("user_id = ? AND org_id = ? AND security_level = ?", userID, orgID, level).
@@ -93,11 +97,13 @@ func (r *BunRepository) GetLatestVerification(ctx context.Context, userID, orgID
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest verification: %w", err)
 	}
+
 	return verification, nil
 }
 
 func (r *BunRepository) ListVerifications(ctx context.Context, userID, orgID string, limit, offset int) ([]*StepUpVerification, error) {
 	var verifications []*StepUpVerification
+
 	err := r.db.NewSelect().
 		Model(&verifications).
 		Where("user_id = ? AND org_id = ?", userID, orgID).
@@ -108,6 +114,7 @@ func (r *BunRepository) ListVerifications(ctx context.Context, userID, orgID str
 	if err != nil {
 		return nil, fmt.Errorf("failed to list verifications: %w", err)
 	}
+
 	return verifications, nil
 }
 
@@ -118,11 +125,13 @@ func (r *BunRepository) CreateRequirement(ctx context.Context, requirement *Step
 	if err != nil {
 		return fmt.Errorf("failed to create requirement: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetRequirement(ctx context.Context, id string) (*StepUpRequirement, error) {
 	requirement := &StepUpRequirement{}
+
 	err := r.db.NewSelect().
 		Model(requirement).
 		Where("id = ?", id).
@@ -130,11 +139,13 @@ func (r *BunRepository) GetRequirement(ctx context.Context, id string) (*StepUpR
 	if err != nil {
 		return nil, fmt.Errorf("failed to get requirement: %w", err)
 	}
+
 	return requirement, nil
 }
 
 func (r *BunRepository) GetRequirementByToken(ctx context.Context, token string) (*StepUpRequirement, error) {
 	requirement := &StepUpRequirement{}
+
 	err := r.db.NewSelect().
 		Model(requirement).
 		Where("challenge_token = ?", token).
@@ -144,6 +155,7 @@ func (r *BunRepository) GetRequirementByToken(ctx context.Context, token string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get requirement by token: %w", err)
 	}
+
 	return requirement, nil
 }
 
@@ -155,11 +167,13 @@ func (r *BunRepository) UpdateRequirement(ctx context.Context, requirement *Step
 	if err != nil {
 		return fmt.Errorf("failed to update requirement: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) ListPendingRequirements(ctx context.Context, userID, orgID string) ([]*StepUpRequirement, error) {
 	var requirements []*StepUpRequirement
+
 	err := r.db.NewSelect().
 		Model(&requirements).
 		Where("user_id = ? AND org_id = ?", userID, orgID).
@@ -170,6 +184,7 @@ func (r *BunRepository) ListPendingRequirements(ctx context.Context, userID, org
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pending requirements: %w", err)
 	}
+
 	return requirements, nil
 }
 
@@ -181,6 +196,7 @@ func (r *BunRepository) DeleteExpiredRequirements(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete expired requirements: %w", err)
 	}
+
 	return nil
 }
 
@@ -191,11 +207,13 @@ func (r *BunRepository) CreateRememberedDevice(ctx context.Context, device *Step
 	if err != nil {
 		return fmt.Errorf("failed to create remembered device: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetRememberedDevice(ctx context.Context, userID, orgID, deviceID string) (*StepUpRememberedDevice, error) {
 	device := &StepUpRememberedDevice{}
+
 	err := r.db.NewSelect().
 		Model(device).
 		Where("user_id = ? AND org_id = ? AND device_id = ?", userID, orgID, deviceID).
@@ -204,11 +222,13 @@ func (r *BunRepository) GetRememberedDevice(ctx context.Context, userID, orgID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get remembered device: %w", err)
 	}
+
 	return device, nil
 }
 
 func (r *BunRepository) ListRememberedDevices(ctx context.Context, userID, orgID string) ([]*StepUpRememberedDevice, error) {
 	var devices []*StepUpRememberedDevice
+
 	err := r.db.NewSelect().
 		Model(&devices).
 		Where("user_id = ? AND org_id = ?", userID, orgID).
@@ -218,6 +238,7 @@ func (r *BunRepository) ListRememberedDevices(ctx context.Context, userID, orgID
 	if err != nil {
 		return nil, fmt.Errorf("failed to list remembered devices: %w", err)
 	}
+
 	return devices, nil
 }
 
@@ -229,6 +250,7 @@ func (r *BunRepository) UpdateRememberedDevice(ctx context.Context, device *Step
 	if err != nil {
 		return fmt.Errorf("failed to update remembered device: %w", err)
 	}
+
 	return nil
 }
 
@@ -240,6 +262,7 @@ func (r *BunRepository) DeleteRememberedDevice(ctx context.Context, id string) e
 	if err != nil {
 		return fmt.Errorf("failed to delete remembered device: %w", err)
 	}
+
 	return nil
 }
 
@@ -251,6 +274,7 @@ func (r *BunRepository) DeleteExpiredRememberedDevices(ctx context.Context) erro
 	if err != nil {
 		return fmt.Errorf("failed to delete expired remembered devices: %w", err)
 	}
+
 	return nil
 }
 
@@ -261,11 +285,13 @@ func (r *BunRepository) CreateAttempt(ctx context.Context, attempt *StepUpAttemp
 	if err != nil {
 		return fmt.Errorf("failed to create attempt: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) ListAttempts(ctx context.Context, requirementID string) ([]*StepUpAttempt, error) {
 	var attempts []*StepUpAttempt
+
 	err := r.db.NewSelect().
 		Model(&attempts).
 		Where("requirement_id = ?", requirementID).
@@ -274,6 +300,7 @@ func (r *BunRepository) ListAttempts(ctx context.Context, requirementID string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list attempts: %w", err)
 	}
+
 	return attempts, nil
 }
 
@@ -287,6 +314,7 @@ func (r *BunRepository) CountFailedAttempts(ctx context.Context, userID, orgID s
 	if err != nil {
 		return 0, fmt.Errorf("failed to count failed attempts: %w", err)
 	}
+
 	return count, nil
 }
 
@@ -297,11 +325,13 @@ func (r *BunRepository) CreatePolicy(ctx context.Context, policy *StepUpPolicy) 
 	if err != nil {
 		return fmt.Errorf("failed to create policy: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) GetPolicy(ctx context.Context, id string) (*StepUpPolicy, error) {
 	policy := &StepUpPolicy{}
+
 	err := r.db.NewSelect().
 		Model(policy).
 		Where("id = ?", id).
@@ -309,11 +339,13 @@ func (r *BunRepository) GetPolicy(ctx context.Context, id string) (*StepUpPolicy
 	if err != nil {
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
+
 	return policy, nil
 }
 
 func (r *BunRepository) ListPolicies(ctx context.Context, orgID string) ([]*StepUpPolicy, error) {
 	var policies []*StepUpPolicy
+
 	err := r.db.NewSelect().
 		Model(&policies).
 		Where("org_id = ?", orgID).
@@ -323,11 +355,13 @@ func (r *BunRepository) ListPolicies(ctx context.Context, orgID string) ([]*Step
 	if err != nil {
 		return nil, fmt.Errorf("failed to list policies: %w", err)
 	}
+
 	return policies, nil
 }
 
 func (r *BunRepository) UpdatePolicy(ctx context.Context, policy *StepUpPolicy) error {
 	policy.UpdatedAt = time.Now()
+
 	_, err := r.db.NewUpdate().
 		Model(policy).
 		WherePK().
@@ -335,6 +369,7 @@ func (r *BunRepository) UpdatePolicy(ctx context.Context, policy *StepUpPolicy) 
 	if err != nil {
 		return fmt.Errorf("failed to update policy: %w", err)
 	}
+
 	return nil
 }
 
@@ -346,6 +381,7 @@ func (r *BunRepository) DeletePolicy(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete policy: %w", err)
 	}
+
 	return nil
 }
 
@@ -356,16 +392,19 @@ func (r *BunRepository) CreateAuditLog(ctx context.Context, log *StepUpAuditLog)
 	if err != nil {
 		return fmt.Errorf("failed to create audit log: %w", err)
 	}
+
 	return nil
 }
 
 func (r *BunRepository) ListAuditLogs(ctx context.Context, userID, orgID string, limit, offset int) ([]*StepUpAuditLog, error) {
 	var logs []*StepUpAuditLog
+
 	query := r.db.NewSelect().Model(&logs)
 
 	if userID != "" {
 		query = query.Where("user_id = ?", userID)
 	}
+
 	if orgID != "" {
 		query = query.Where("org_id = ?", orgID)
 	}
@@ -378,5 +417,6 @@ func (r *BunRepository) ListAuditLogs(ctx context.Context, userID, orgID string,
 	if err != nil {
 		return nil, fmt.Errorf("failed to list audit logs: %w", err)
 	}
+
 	return logs, nil
 }

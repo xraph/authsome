@@ -10,31 +10,31 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles step-up HTTP requests
+// Handler handles step-up HTTP requests.
 type Handler struct {
 	service *Service
 	config  *Config
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
 type RequirementsResponse struct {
-	Requirements interface{} `json:"requirements"`
-	Count        int         `json:"count"`
+	Requirements any `json:"requirements"`
+	Count        int `json:"count"`
 }
 
 type VerificationsResponse struct {
-	Verifications interface{} `json:"verifications"`
-	Count         int         `json:"count"`
+	Verifications any `json:"verifications"`
+	Count         int `json:"count"`
 }
 
 type StepUpDevicesResponse struct {
-	Devices interface{} `json:"devices"`
-	Count   int         `json:"count"`
+	Devices any `json:"devices"`
+	Count   int `json:"count"`
 }
 
 type ForgetDeviceResponse struct {
@@ -42,7 +42,7 @@ type ForgetDeviceResponse struct {
 	Message string `json:"message"`
 }
 
-// NewHandler creates a new step-up handler
+// NewHandler creates a new step-up handler.
 func NewHandler(service *Service, config *Config) *Handler {
 	return &Handler{
 		service: service,
@@ -50,18 +50,18 @@ func NewHandler(service *Service, config *Config) *Handler {
 	}
 }
 
-// EvaluateRequest is the request for evaluating step-up requirements
+// EvaluateRequest is the request for evaluating step-up requirements.
 type EvaluateRequest struct {
-	Route        string                 `json:"route,omitempty"`
-	Method       string                 `json:"method,omitempty"`
-	Amount       float64                `json:"amount,omitempty"`
-	Currency     string                 `json:"currency,omitempty"`
-	ResourceType string                 `json:"resource_type,omitempty"`
-	Action       string                 `json:"action,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Route        string         `json:"route,omitempty"`
+	Method       string         `json:"method,omitempty"`
+	Amount       float64        `json:"amount,omitempty"`
+	Currency     string         `json:"currency,omitempty"`
+	ResourceType string         `json:"resource_type,omitempty"`
+	Action       string         `json:"action,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
 }
 
-// Evaluate handles POST /stepup/evaluate
+// Evaluate handles POST /stepup/evaluate.
 func (h *Handler) Evaluate(c forge.Context) error {
 	var req EvaluateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -102,7 +102,7 @@ func (h *Handler) Evaluate(c forge.Context) error {
 	return c.JSON(200, result)
 }
 
-// Verify handles POST /stepup/verify
+// Verify handles POST /stepup/verify.
 func (h *Handler) Verify(c forge.Context) error {
 	var req VerifyRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -130,7 +130,7 @@ func (h *Handler) Verify(c forge.Context) error {
 	return c.JSON(200, response)
 }
 
-// GetRequirement handles GET /stepup/requirements/:id
+// GetRequirement handles GET /stepup/requirements/:id.
 func (h *Handler) GetRequirement(c forge.Context) error {
 	requirementID := c.Param("id")
 	if requirementID == "" {
@@ -151,7 +151,7 @@ func (h *Handler) GetRequirement(c forge.Context) error {
 	return c.JSON(200, requirement)
 }
 
-// ListPendingRequirements handles GET /stepup/requirements/pending
+// ListPendingRequirements handles GET /stepup/requirements/pending.
 func (h *Handler) ListPendingRequirements(c forge.Context) error {
 	userID := c.Get("user_id")
 	orgID := c.Get("org_id")
@@ -172,7 +172,7 @@ func (h *Handler) ListPendingRequirements(c forge.Context) error {
 	return c.JSON(200, &RequirementsResponse{Requirements: requirements, Count: len(requirements)})
 }
 
-// ListVerifications handles GET /stepup/verifications
+// ListVerifications handles GET /stepup/verifications.
 func (h *Handler) ListVerifications(c forge.Context) error {
 	userID := c.Get("user_id")
 	orgID := c.Get("org_id")
@@ -184,11 +184,13 @@ func (h *Handler) ListVerifications(c forge.Context) error {
 	// Parse pagination
 	limit := 20
 	offset := 0
+
 	if l := c.Request().URL.Query().Get("limit"); l != "" {
 		if parsed, err := parseIntParam(l); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
+
 	if o := c.Request().URL.Query().Get("offset"); o != "" {
 		if parsed, err := parseIntParam(o); err == nil && parsed >= 0 {
 			offset = parsed
@@ -206,7 +208,7 @@ func (h *Handler) ListVerifications(c forge.Context) error {
 		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list verifications"))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"verifications": verifications,
 		"count":         len(verifications),
 		"limit":         limit,
@@ -214,7 +216,7 @@ func (h *Handler) ListVerifications(c forge.Context) error {
 	})
 }
 
-// ListRememberedDevices handles GET /stepup/devices
+// ListRememberedDevices handles GET /stepup/devices.
 func (h *Handler) ListRememberedDevices(c forge.Context) error {
 	userID := c.Get("user_id")
 	orgID := c.Get("org_id")
@@ -235,7 +237,7 @@ func (h *Handler) ListRememberedDevices(c forge.Context) error {
 	return c.JSON(200, &StepUpDevicesResponse{Devices: devices, Count: len(devices)})
 }
 
-// ForgetDevice handles DELETE /stepup/devices/:id
+// ForgetDevice handles DELETE /stepup/devices/:id.
 func (h *Handler) ForgetDevice(c forge.Context) error {
 	deviceID := c.Param("id")
 	if deviceID == "" {
@@ -262,7 +264,7 @@ func (h *Handler) ForgetDevice(c forge.Context) error {
 	return c.JSON(200, &ForgetDeviceResponse{Success: true, Message: "Device forgotten successfully"})
 }
 
-// CreatePolicy handles POST /stepup/policies
+// CreatePolicy handles POST /stepup/policies.
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	var policy StepUpPolicy
 	if err := json.NewDecoder(c.Request().Body).Decode(&policy); err != nil {
@@ -274,6 +276,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	if orgID == nil {
 		return c.JSON(401, errs.UnauthorizedWithMessage("Organization context required"))
 	}
+
 	policy.OrgID = orgID.(string)
 
 	// Generate ID if not provided
@@ -288,7 +291,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 	return c.JSON(201, policy)
 }
 
-// ListPolicies handles GET /stepup/policies
+// ListPolicies handles GET /stepup/policies.
 func (h *Handler) ListPolicies(c forge.Context) error {
 	orgID := c.Get("org_id")
 	if orgID == nil {
@@ -300,13 +303,13 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list policies"))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"policies": policies,
 		"count":    len(policies),
 	})
 }
 
-// GetPolicy handles GET /stepup/policies/:id
+// GetPolicy handles GET /stepup/policies/:id.
 func (h *Handler) GetPolicy(c forge.Context) error {
 	policyID := c.Param("id")
 	if policyID == "" {
@@ -327,7 +330,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 	return c.JSON(200, policy)
 }
 
-// UpdatePolicy handles PUT /stepup/policies/:id
+// UpdatePolicy handles PUT /stepup/policies/:id.
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	policyID := c.Param("id")
 	if policyID == "" {
@@ -364,7 +367,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 	return c.JSON(200, updates)
 }
 
-// DeletePolicy handles DELETE /stepup/policies/:id
+// DeletePolicy handles DELETE /stepup/policies/:id.
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	policyID := c.Param("id")
 	if policyID == "" {
@@ -387,13 +390,13 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to delete policy"))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"success": true,
 		"message": "Policy deleted successfully",
 	})
 }
 
-// GetAuditLogs handles GET /stepup/audit
+// GetAuditLogs handles GET /stepup/audit.
 func (h *Handler) GetAuditLogs(c forge.Context) error {
 	userID := c.Get("user_id")
 	orgID := c.Get("org_id")
@@ -405,11 +408,13 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 	// Parse pagination
 	limit := 50
 	offset := 0
+
 	if l := c.Request().URL.Query().Get("limit"); l != "" {
 		if parsed, err := parseIntParam(l); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
+
 	if o := c.Request().URL.Query().Get("offset"); o != "" {
 		if parsed, err := parseIntParam(o); err == nil && parsed >= 0 {
 			offset = parsed
@@ -427,7 +432,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 		return c.JSON(500, errs.InternalServerErrorWithMessage("Failed to list audit logs"))
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"logs":   logs,
 		"count":  len(logs),
 		"limit":  limit,
@@ -435,7 +440,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 	})
 }
 
-// Status handles GET /stepup/status
+// Status handles GET /stepup/status.
 func (h *Handler) Status(c forge.Context) error {
 	userID := c.Get("user_id")
 	orgID := c.Get("org_id")
@@ -471,7 +476,7 @@ func (h *Handler) Status(c forge.Context) error {
 		getStringOrEmpty(orgID),
 	)
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"enabled":            h.config.Enabled,
 		"current_level":      currentLevel,
 		"pending_count":      len(pending),
@@ -483,13 +488,15 @@ func (h *Handler) Status(c forge.Context) error {
 
 // Helper functions
 
-func getStringOrEmpty(v interface{}) string {
+func getStringOrEmpty(v any) string {
 	if v == nil {
 		return ""
 	}
+
 	if s, ok := v.(string); ok {
 		return s
 	}
+
 	return ""
 }
 
@@ -500,7 +507,7 @@ func extractDeviceID(c forge.Context) string {
 	}
 
 	// Check header
-	if deviceID := c.Request().Header.Get("X-Device-ID"); deviceID != "" {
+	if deviceID := c.Request().Header.Get("X-Device-Id"); deviceID != "" {
 		return deviceID
 	}
 
@@ -516,7 +523,9 @@ func extractDeviceID(c forge.Context) string {
 
 func parseIntParam(s string) (int, error) {
 	var i int
+
 	_, err := fmt.Sscanf(s, "%d", &i)
+
 	return i, err
 }
 

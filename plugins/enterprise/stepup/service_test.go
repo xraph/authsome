@@ -9,13 +9,14 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// Mock repository for testing
+// Mock repository for testing.
 type mockRepository struct {
 	mock.Mock
 }
 
 func (m *mockRepository) CreateVerification(ctx context.Context, verification *StepUpVerification) error {
 	args := m.Called(ctx, verification)
+
 	return args.Error(0)
 }
 
@@ -24,6 +25,7 @@ func (m *mockRepository) GetVerification(ctx context.Context, id string) (*StepU
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*StepUpVerification), args.Error(1)
 }
 
@@ -32,6 +34,7 @@ func (m *mockRepository) GetLatestVerification(ctx context.Context, userID, orgI
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*StepUpVerification), args.Error(1)
 }
 
@@ -40,11 +43,13 @@ func (m *mockRepository) ListVerifications(ctx context.Context, userID, orgID st
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*StepUpVerification), args.Error(1)
 }
 
 func (m *mockRepository) CreateRequirement(ctx context.Context, requirement *StepUpRequirement) error {
 	args := m.Called(ctx, requirement)
+
 	return args.Error(0)
 }
 
@@ -53,6 +58,7 @@ func (m *mockRepository) GetRequirement(ctx context.Context, id string) (*StepUp
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*StepUpRequirement), args.Error(1)
 }
 
@@ -61,11 +67,13 @@ func (m *mockRepository) GetRequirementByToken(ctx context.Context, token string
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*StepUpRequirement), args.Error(1)
 }
 
 func (m *mockRepository) UpdateRequirement(ctx context.Context, requirement *StepUpRequirement) error {
 	args := m.Called(ctx, requirement)
+
 	return args.Error(0)
 }
 
@@ -74,16 +82,19 @@ func (m *mockRepository) ListPendingRequirements(ctx context.Context, userID, or
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*StepUpRequirement), args.Error(1)
 }
 
 func (m *mockRepository) DeleteExpiredRequirements(ctx context.Context) error {
 	args := m.Called(ctx)
+
 	return args.Error(0)
 }
 
 func (m *mockRepository) CreateRememberedDevice(ctx context.Context, device *StepUpRememberedDevice) error {
 	args := m.Called(ctx, device)
+
 	return args.Error(0)
 }
 
@@ -92,6 +103,7 @@ func (m *mockRepository) GetRememberedDevice(ctx context.Context, userID, orgID,
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*StepUpRememberedDevice), args.Error(1)
 }
 
@@ -100,26 +112,31 @@ func (m *mockRepository) ListRememberedDevices(ctx context.Context, userID, orgI
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*StepUpRememberedDevice), args.Error(1)
 }
 
 func (m *mockRepository) UpdateRememberedDevice(ctx context.Context, device *StepUpRememberedDevice) error {
 	args := m.Called(ctx, device)
+
 	return args.Error(0)
 }
 
 func (m *mockRepository) DeleteRememberedDevice(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *mockRepository) DeleteExpiredRememberedDevices(ctx context.Context) error {
 	args := m.Called(ctx)
+
 	return args.Error(0)
 }
 
 func (m *mockRepository) CreateAttempt(ctx context.Context, attempt *StepUpAttempt) error {
 	args := m.Called(ctx, attempt)
+
 	return args.Error(0)
 }
 
@@ -128,16 +145,19 @@ func (m *mockRepository) ListAttempts(ctx context.Context, requirementID string)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*StepUpAttempt), args.Error(1)
 }
 
 func (m *mockRepository) CountFailedAttempts(ctx context.Context, userID, orgID string, since time.Time) (int, error) {
 	args := m.Called(ctx, userID, orgID, since)
+
 	return args.Int(0), args.Error(1)
 }
 
 func (m *mockRepository) CreatePolicy(ctx context.Context, policy *StepUpPolicy) error {
 	args := m.Called(ctx, policy)
+
 	return args.Error(0)
 }
 
@@ -146,6 +166,7 @@ func (m *mockRepository) GetPolicy(ctx context.Context, id string) (*StepUpPolic
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*StepUpPolicy), args.Error(1)
 }
 
@@ -154,21 +175,25 @@ func (m *mockRepository) ListPolicies(ctx context.Context, orgID string) ([]*Ste
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*StepUpPolicy), args.Error(1)
 }
 
 func (m *mockRepository) UpdatePolicy(ctx context.Context, policy *StepUpPolicy) error {
 	args := m.Called(ctx, policy)
+
 	return args.Error(0)
 }
 
 func (m *mockRepository) DeletePolicy(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *mockRepository) CreateAuditLog(ctx context.Context, log *StepUpAuditLog) error {
 	args := m.Called(ctx, log)
+
 	return args.Error(0)
 }
 
@@ -177,6 +202,7 @@ func (m *mockRepository) ListAuditLogs(ctx context.Context, userID, orgID string
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*StepUpAuditLog), args.Error(1)
 }
 

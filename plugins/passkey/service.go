@@ -19,7 +19,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Service provides passkey/WebAuthn operations with full cryptographic verification
+// Service provides passkey/WebAuthn operations with full cryptographic verification.
 type Service struct {
 	db             *bun.DB
 	userSvc        *user.Service
@@ -30,7 +30,7 @@ type Service struct {
 	challengeStore ChallengeStore
 }
 
-// NewService creates a new passkey service with WebAuthn support
+// NewService creates a new passkey service with WebAuthn support.
 func NewService(db *bun.DB, userSvc *user.Service, authSvc *auth.Service, auditSvc *audit.Service, cfg Config) (*Service, error) {
 	// Create WebAuthn wrapper
 	webauthnWrapper, err := NewWebAuthnWrapper(cfg)
@@ -52,7 +52,7 @@ func NewService(db *bun.DB, userSvc *user.Service, authSvc *auth.Service, auditS
 	}, nil
 }
 
-// BeginRegistration initiates WebAuthn passkey registration with cryptographic challenge
+// BeginRegistration initiates WebAuthn passkey registration with cryptographic challenge.
 func (s *Service) BeginRegistration(ctx context.Context, userID xid.ID, req BeginRegisterRequest) (*BeginRegisterResponse, error) {
 	// Get app and org from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -128,7 +128,7 @@ func (s *Service) BeginRegistration(ctx context.Context, userID xid.ID, req Begi
 	}, nil
 }
 
-// FinishRegistration completes passkey registration with attestation verification
+// FinishRegistration completes passkey registration with attestation verification.
 func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credentialResponse []byte, name, ip, ua string) (*FinishRegisterResponse, error) {
 	// Get app and org from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -137,6 +137,7 @@ func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credent
 	}
 
 	orgID, _ := contexts.GetOrganizationID(ctx)
+
 	var userOrgID *xid.ID
 	if !orgID.IsNil() {
 		userOrgID = &orgID
@@ -156,6 +157,7 @@ func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credent
 
 	// Get challenge session
 	challengeB64 := base64.RawURLEncoding.EncodeToString([]byte(parsedResponse.Response.CollectedClientData.Challenge))
+
 	var challengeSession *ChallengeSession
 	// Try to find the challenge session by searching for matching challenge
 	// In production, you'd include sessionID in the client request
@@ -207,8 +209,8 @@ func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credent
 		AppID:              appID,
 		UserOrganizationID: userOrgID,
 	}
-	passkey.AuditableModel.CreatedBy = passkey.ID
-	passkey.AuditableModel.UpdatedBy = passkey.ID
+	passkey.CreatedBy = passkey.ID
+	passkey.UpdatedBy = passkey.ID
 
 	_, err = s.db.NewInsert().Model(passkey).Exec(ctx)
 	if err != nil {
@@ -234,7 +236,7 @@ func (s *Service) FinishRegistration(ctx context.Context, userID xid.ID, credent
 	}, nil
 }
 
-// BeginLogin initiates WebAuthn authentication challenge
+// BeginLogin initiates WebAuthn authentication challenge.
 func (s *Service) BeginLogin(ctx context.Context, userID xid.ID, req BeginLoginRequest) (*BeginLoginResponse, error) {
 	// Get app and org from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -294,7 +296,7 @@ func (s *Service) BeginLogin(ctx context.Context, userID xid.ID, req BeginLoginR
 	}, nil
 }
 
-// FinishLogin completes authentication with signature verification and creates session
+// FinishLogin completes authentication with signature verification and creates session.
 func (s *Service) FinishLogin(ctx context.Context, credentialResponse []byte, remember bool, ip, ua string) (*LoginResponse, error) {
 	// Parse credential assertion response
 	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(bytes.NewReader(credentialResponse))
@@ -307,6 +309,7 @@ func (s *Service) FinishLogin(ctx context.Context, credentialResponse []byte, re
 
 	// Find passkey by credential ID
 	var passkey schema.Passkey
+
 	err = s.db.NewSelect().Model(&passkey).
 		Where("credential_id = ?", credentialID).
 		Scan(ctx)
@@ -349,6 +352,7 @@ func (s *Service) FinishLogin(ctx context.Context, credentialResponse []byte, re
 
 	// Update passkey sign count and last used
 	now := time.Now()
+
 	_, err = s.db.NewUpdate().Model(&passkey).
 		Set("sign_count = ?", credential.Authenticator.SignCount).
 		Set("last_used_at = ?", now).
@@ -369,7 +373,7 @@ func (s *Service) FinishLogin(ctx context.Context, credentialResponse []byte, re
 	// Audit log
 	if s.audit != nil {
 		uid := u.ID
-		_ = s.audit.Log(ctx, &uid, string(audit.ActionPasskeyLogin), "user:"+uid.String(), ip, ua, fmt.Sprintf("passkey_id=%s", passkey.ID.String()))
+		_ = s.audit.Log(ctx, &uid, string(audit.ActionPasskeyLogin), "user:"+uid.String(), ip, ua, "passkey_id="+passkey.ID.String())
 	}
 
 	return &LoginResponse{
@@ -380,7 +384,7 @@ func (s *Service) FinishLogin(ctx context.Context, credentialResponse []byte, re
 	}, nil
 }
 
-// List retrieves all passkeys for a user (app and org scoped)
+// List retrieves all passkeys for a user (app and org scoped).
 func (s *Service) List(ctx context.Context, userID xid.ID) (*ListPasskeysResponse, error) {
 	// Get app and org from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -415,7 +419,7 @@ func (s *Service) List(ctx context.Context, userID xid.ID) (*ListPasskeysRespons
 	}, nil
 }
 
-// Update updates a passkey's metadata (primarily name)
+// Update updates a passkey's metadata (primarily name).
 func (s *Service) Update(ctx context.Context, passkeyID xid.ID, name string) (*UpdatePasskeyResponse, error) {
 	// Get app and org from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -441,12 +445,14 @@ func (s *Service) Update(ctx context.Context, passkeyID xid.ID, name string) (*U
 	if err != nil {
 		return nil, errs.DatabaseError("check passkey", err)
 	}
+
 	if !exists {
 		return nil, errs.PasskeyNotFound()
 	}
 
 	// Update name
 	now := time.Now()
+
 	_, err = s.db.NewUpdate().Model((*schema.Passkey)(nil)).
 		Set("name = ?", name).
 		Set("updated_at = ?", now).
@@ -463,7 +469,7 @@ func (s *Service) Update(ctx context.Context, passkeyID xid.ID, name string) (*U
 	}, nil
 }
 
-// Delete removes a passkey (app and org scoped)
+// Delete removes a passkey (app and org scoped).
 func (s *Service) Delete(ctx context.Context, passkeyID xid.ID, ip, ua string) error {
 	// Get app and org from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -475,6 +481,7 @@ func (s *Service) Delete(ctx context.Context, passkeyID xid.ID, ip, ua string) e
 
 	// Fetch passkey to verify ownership and get userID for audit
 	var passkey schema.Passkey
+
 	q := s.db.NewSelect().Model(&passkey).
 		Where("id = ?", passkeyID).
 		Where("app_id = ?", appID)
@@ -504,11 +511,12 @@ func (s *Service) Delete(ctx context.Context, passkeyID xid.ID, ip, ua string) e
 	return nil
 }
 
-// getPasskeysForUser retrieves all passkeys for a user with app/org scoping
+// getPasskeysForUser retrieves all passkeys for a user with app/org scoping.
 func (s *Service) getPasskeysForUser(ctx context.Context, userID, appID xid.ID) ([]schema.Passkey, error) {
 	orgID, _ := contexts.GetOrganizationID(ctx)
 
 	var passkeys []schema.Passkey
+
 	q := s.db.NewSelect().Model(&passkeys).
 		Where("user_id = ?", userID).
 		Where("app_id = ?", appID)
@@ -520,10 +528,11 @@ func (s *Service) getPasskeysForUser(ctx context.Context, userID, appID xid.ID) 
 	}
 
 	err := q.Scan(ctx)
+
 	return passkeys, err
 }
 
-// BeginDiscoverableLogin initiates authentication for discoverable credentials (usernameless)
+// BeginDiscoverableLogin initiates authentication for discoverable credentials (usernameless).
 func (s *Service) BeginDiscoverableLogin(ctx context.Context, req BeginLoginRequest) (*BeginLoginResponse, error) {
 	// Prepare login options
 	var opts []webauthn.LoginOption

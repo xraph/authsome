@@ -12,14 +12,15 @@ import (
 	"github.com/xraph/authsome/plugins/phone"
 )
 
-// SMSFactorAdapter integrates phone plugin as an MFA factor (not primary auth)
+// SMSFactorAdapter integrates phone plugin as an MFA factor (not primary auth).
 type SMSFactorAdapter struct {
 	BaseFactorAdapter
+
 	phoneService *phone.Service
 	notifAdapter *notificationPlugin.Adapter
 }
 
-// NewSMSFactorAdapter creates a new SMS factor adapter
+// NewSMSFactorAdapter creates a new SMS factor adapter.
 func NewSMSFactorAdapter(phoneService *phone.Service, notifAdapter *notificationPlugin.Adapter, enabled bool) *SMSFactorAdapter {
 	return &SMSFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
@@ -31,7 +32,7 @@ func NewSMSFactorAdapter(phoneService *phone.Service, notifAdapter *notification
 	}
 }
 
-// Enroll registers a phone number for MFA
+// Enroll registers a phone number for MFA.
 func (a *SMSFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
 		return nil, errs.BadRequest("SMS MFA factor not available")
@@ -58,7 +59,7 @@ func (a *SMSFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata m
 	}, nil
 }
 
-// VerifyEnrollment sends a test code to verify phone works
+// VerifyEnrollment sends a test code to verify phone works.
 func (a *SMSFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	if !a.IsAvailable() {
 		return errs.BadRequest("SMS MFA factor not available")
@@ -72,7 +73,7 @@ func (a *SMSFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xi
 	return nil
 }
 
-// Challenge sends an SMS OTP code for MFA verification
+// Challenge sends an SMS OTP code for MFA verification.
 func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
 		return nil, errs.BadRequest("SMS MFA factor not available")
@@ -120,6 +121,7 @@ func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metada
 				IPAddress:   ip,
 				UserAgent:   ua,
 			}
+
 			return challenge, nil
 		}
 	}
@@ -130,6 +132,7 @@ func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metada
 		if err != nil {
 			return nil, errs.Wrap(err, "SEND_SMS_CODE_FAILED", "Failed to send SMS code", 500)
 		}
+
 		if sentCode != "" {
 			code = sentCode
 		}
@@ -154,7 +157,7 @@ func (a *SMSFactorAdapter) Challenge(ctx context.Context, factor *Factor, metada
 	return challenge, nil
 }
 
-// Verify verifies an SMS OTP code
+// Verify verifies an SMS OTP code.
 func (a *SMSFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
 		return false, errs.BadRequest("SMS MFA factor not available")
@@ -169,7 +172,7 @@ func (a *SMSFactorAdapter) Verify(ctx context.Context, challenge *Challenge, res
 }
 
 // maskPhone masks a phone number for display
-// e.g., "+15551234567" -> "+1***-***-4567"
+// e.g., "+15551234567" -> "+1***-***-4567".
 func maskPhone(phone string) string {
 	if len(phone) < 4 {
 		return "***"

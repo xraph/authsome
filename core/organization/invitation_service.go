@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// InvitationService handles invitation lifecycle operations
+// InvitationService handles invitation lifecycle operations.
 type InvitationService struct {
 	repo       InvitationRepository
 	memberRepo MemberRepository       // For creating members (cross-aggregate)
@@ -22,7 +22,7 @@ type InvitationService struct {
 	roleRepo   rbac.RoleRepository // For RBAC role validation
 }
 
-// NewInvitationService creates a new invitation service
+// NewInvitationService creates a new invitation service.
 func NewInvitationService(repo InvitationRepository, memberRepo MemberRepository, orgRepo OrganizationRepository, cfg Config, rbacSvc *rbac.Service, roleRepo rbac.RoleRepository) *InvitationService {
 	return &InvitationService{
 		repo:       repo,
@@ -41,7 +41,7 @@ func NewInvitationService(repo InvitationRepository, memberRepo MemberRepository
 // Validation rules:
 // - Always allows hardcoded roles (owner, admin, member)
 // - If AllowAppLevelRoles=true: Allows app-level roles (organization_id IS NULL) and org-specific roles
-// - If AllowAppLevelRoles=false: Only allows hardcoded roles
+// - If AllowAppLevelRoles=false: Only allows hardcoded roles.
 func (s *InvitationService) validateRoleAgainstRBAC(ctx context.Context, appID xid.ID, roleInput string) error {
 	if s.roleRepo == nil {
 		// Fallback to static validation if no RBAC role repository
@@ -56,8 +56,10 @@ func (s *InvitationService) validateRoleAgainstRBAC(ctx context.Context, appID x
 	// Detect if input is a role ID (20 chars alphanumeric) or a role name
 	isRoleID := len(roleInput) == 20 && isAlphanumeric(roleInput)
 
-	var role *schema.Role
-	var err error
+	var (
+		role *schema.Role
+		err  error
+	)
 
 	if isRoleID {
 		// Try to find role by ID
@@ -65,6 +67,7 @@ func (s *InvitationService) validateRoleAgainstRBAC(ctx context.Context, appID x
 		if parseErr != nil {
 			return InvalidRole(roleInput)
 		}
+
 		role, err = s.roleRepo.FindByID(ctx, roleID)
 		if err != nil {
 			return InvalidRole(roleInput)
@@ -99,7 +102,7 @@ func (s *InvitationService) validateRoleAgainstRBAC(ctx context.Context, appID x
 	return InvalidRoleWithHint(roleInput, "custom roles disabled - enable AllowAppLevelRoles config to use app-level RBAC roles")
 }
 
-// InviteMember creates an invitation for a user to join an organization
+// InviteMember creates an invitation for a user to join an organization.
 func (s *InvitationService) InviteMember(ctx context.Context, orgID xid.ID, req *InviteMemberRequest, inviterUserID xid.ID) (*Invitation, error) {
 	// Get organization to access appID for role validation
 	org, err := s.orgRepo.FindByID(ctx, orgID)
@@ -117,6 +120,7 @@ func (s *InvitationService) InviteMember(ctx context.Context, orgID xid.ID, req 
 	if err != nil || inviter == nil {
 		return nil, NotAdmin()
 	}
+
 	if inviter.Role != RoleOwner && inviter.Role != RoleAdmin {
 		return nil, NotAdmin()
 	}
@@ -148,16 +152,17 @@ func (s *InvitationService) InviteMember(ctx context.Context, orgID xid.ID, req 
 	return invitation, nil
 }
 
-// FindInvitationByID retrieves an invitation by its ID
+// FindInvitationByID retrieves an invitation by its ID.
 func (s *InvitationService) FindInvitationByID(ctx context.Context, id xid.ID) (*Invitation, error) {
 	invitation, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, InvitationNotFound()
 	}
+
 	return invitation, nil
 }
 
-// FindInvitationByToken retrieves an invitation by its token
+// FindInvitationByToken retrieves an invitation by its token.
 func (s *InvitationService) FindInvitationByToken(ctx context.Context, token string) (*Invitation, error) {
 	invitation, err := s.repo.FindByToken(ctx, token)
 	if err != nil {
@@ -169,13 +174,14 @@ func (s *InvitationService) FindInvitationByToken(ctx context.Context, token str
 		invitation.Status = InvitationStatusExpired
 		invitation.UpdatedAt = time.Now().UTC()
 		s.repo.Update(ctx, invitation)
+
 		return nil, err
 	}
 
 	return invitation, nil
 }
 
-// ListInvitations retrieves a paginated list of invitations for an organization
+// ListInvitations retrieves a paginated list of invitations for an organization.
 func (s *InvitationService) ListInvitations(ctx context.Context, filter *ListInvitationsFilter) (*pagination.PageResponse[*Invitation], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -186,7 +192,7 @@ func (s *InvitationService) ListInvitations(ctx context.Context, filter *ListInv
 }
 
 // AcceptInvitation accepts an invitation and adds the user to the organization
-// This is a cross-aggregate operation: it updates the invitation and creates a member
+// This is a cross-aggregate operation: it updates the invitation and creates a member.
 func (s *InvitationService) AcceptInvitation(ctx context.Context, token string, userID xid.ID) (*Member, error) {
 	invitation, err := s.FindInvitationByToken(ctx, token)
 	if err != nil {
@@ -236,7 +242,7 @@ func (s *InvitationService) AcceptInvitation(ctx context.Context, token string, 
 	return member, nil
 }
 
-// DeclineInvitation declines an invitation
+// DeclineInvitation declines an invitation.
 func (s *InvitationService) DeclineInvitation(ctx context.Context, token string) error {
 	invitation, err := s.FindInvitationByToken(ctx, token)
 	if err != nil {
@@ -249,7 +255,7 @@ func (s *InvitationService) DeclineInvitation(ctx context.Context, token string)
 	return s.repo.Update(ctx, invitation)
 }
 
-// CancelInvitation cancels a pending invitation (admin/owner only)
+// CancelInvitation cancels a pending invitation (admin/owner only).
 func (s *InvitationService) CancelInvitation(ctx context.Context, id, cancellerUserID xid.ID) error {
 	invitation, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -261,6 +267,7 @@ func (s *InvitationService) CancelInvitation(ctx context.Context, id, cancellerU
 	if err != nil || member == nil {
 		return NotAdmin()
 	}
+
 	if member.Role != RoleOwner && member.Role != RoleAdmin {
 		return NotAdmin()
 	}
@@ -276,7 +283,7 @@ func (s *InvitationService) CancelInvitation(ctx context.Context, id, cancellerU
 	return s.repo.Update(ctx, invitation)
 }
 
-// ResendInvitation resends an invitation with a new token and updated expiry
+// ResendInvitation resends an invitation with a new token and updated expiry.
 func (s *InvitationService) ResendInvitation(ctx context.Context, id, resenderUserID xid.ID) (*Invitation, error) {
 	invitation, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -288,6 +295,7 @@ func (s *InvitationService) ResendInvitation(ctx context.Context, id, resenderUs
 	if err != nil || member == nil {
 		return nil, NotAdmin()
 	}
+
 	if member.Role != RoleOwner && member.Role != RoleAdmin {
 		return nil, NotAdmin()
 	}
@@ -317,10 +325,10 @@ func (s *InvitationService) ResendInvitation(ctx context.Context, id, resenderUs
 	return invitation, nil
 }
 
-// CleanupExpiredInvitations removes all expired invitations
+// CleanupExpiredInvitations removes all expired invitations.
 func (s *InvitationService) CleanupExpiredInvitations(ctx context.Context) (int, error) {
 	return s.repo.DeleteExpired(ctx)
 }
 
-// Type assertion to ensure InvitationService implements InvitationOperations
+// Type assertion to ensure InvitationService implements InvitationOperations.
 var _ InvitationOperations = (*InvitationService)(nil)

@@ -8,7 +8,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// AnalyticsPage renders the analytics dashboard
+// AnalyticsPage renders the analytics dashboard.
 func AnalyticsPage(currentApp *app.App, basePath string) g.Node {
 	return primitives.Container(
 		Div(

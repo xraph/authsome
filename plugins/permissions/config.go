@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Config represents the permissions plugin configuration
+// Config represents the permissions plugin configuration.
 type Config struct {
 	// Enabled controls whether the permissions system is active
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -34,7 +34,7 @@ type Config struct {
 	Organizations map[string]*OrgConfig `json:"organizations" yaml:"organizations"`
 }
 
-// EngineConfig controls the policy evaluation engine
+// EngineConfig controls the policy evaluation engine.
 type EngineConfig struct {
 	// MaxPolicyComplexity limits the number of operations in a policy
 	// Default: 100
@@ -65,7 +65,7 @@ type EngineConfig struct {
 	AttributeCacheTTL time.Duration `json:"attributeCacheTTL" yaml:"attributeCacheTTL"`
 }
 
-// CacheConfig controls caching behavior
+// CacheConfig controls caching behavior.
 type CacheConfig struct {
 	// Enabled controls whether caching is active
 	// Default: true
@@ -97,7 +97,7 @@ type CacheConfig struct {
 	InvalidateOnChange bool `json:"invalidateOnChange" yaml:"invalidateOnChange"`
 }
 
-// PerformanceConfig controls performance tuning
+// PerformanceConfig controls performance tuning.
 type PerformanceConfig struct {
 	// EnableMetrics enables Prometheus metrics
 	// Default: true
@@ -120,7 +120,7 @@ type PerformanceConfig struct {
 	EnableProfiling bool `json:"enableProfiling" yaml:"enableProfiling"`
 }
 
-// MigrationConfig controls RBAC → Permissions migration
+// MigrationConfig controls RBAC → Permissions migration.
 type MigrationConfig struct {
 	// AutoMigrate automatically converts RBAC policies
 	// Default: false (requires manual migration)
@@ -139,7 +139,7 @@ type MigrationConfig struct {
 	DryRun bool `json:"dryRun" yaml:"dryRun"`
 }
 
-// OrgConfig allows organization-specific overrides
+// OrgConfig allows organization-specific overrides.
 type OrgConfig struct {
 	// Enabled controls if permissions are enabled for this org
 	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
@@ -160,7 +160,7 @@ type OrgConfig struct {
 	InheritPlatform *bool `json:"inheritPlatform,omitempty" yaml:"inheritPlatform,omitempty"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled: true,
@@ -200,7 +200,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// LoadConfig loads configuration from Forge config manager
+// LoadConfig loads configuration from Forge config manager.
 func LoadConfig(configManager forge.ConfigManager) (*Config, error) {
 	config := DefaultConfig()
 
@@ -223,7 +223,7 @@ func LoadConfig(configManager forge.ConfigManager) (*Config, error) {
 	return config, nil
 }
 
-// Validate checks if the configuration is valid
+// Validate checks if the configuration is valid.
 func (c *Config) Validate() error {
 	// Validate mode
 	validModes := map[string]bool{
@@ -239,6 +239,7 @@ func (c *Config) Validate() error {
 	if c.Engine.MaxPolicyComplexity < 10 {
 		return fmt.Errorf("maxPolicyComplexity too low: %d (minimum: 10)", c.Engine.MaxPolicyComplexity)
 	}
+
 	if c.Engine.MaxPolicyComplexity > 10000 {
 		return fmt.Errorf("maxPolicyComplexity too high: %d (maximum: 10000)", c.Engine.MaxPolicyComplexity)
 	}
@@ -246,6 +247,7 @@ func (c *Config) Validate() error {
 	if c.Engine.EvaluationTimeout < time.Millisecond {
 		return fmt.Errorf("evaluationTimeout too low: %s (minimum: 1ms)", c.Engine.EvaluationTimeout)
 	}
+
 	if c.Engine.EvaluationTimeout > time.Second {
 		return fmt.Errorf("evaluationTimeout too high: %s (maximum: 1s)", c.Engine.EvaluationTimeout)
 	}
@@ -253,6 +255,7 @@ func (c *Config) Validate() error {
 	if c.Engine.MaxPoliciesPerOrg < 1 {
 		return fmt.Errorf("maxPoliciesPerOrg too low: %d (minimum: 1)", c.Engine.MaxPoliciesPerOrg)
 	}
+
 	if c.Engine.MaxPoliciesPerOrg > 100000 {
 		return fmt.Errorf("maxPoliciesPerOrg too high: %d (maximum: 100000)", c.Engine.MaxPoliciesPerOrg)
 	}
@@ -260,6 +263,7 @@ func (c *Config) Validate() error {
 	if c.Engine.MaxParallelEvaluations < 1 {
 		return fmt.Errorf("maxParallelEvaluations too low: %d (minimum: 1)", c.Engine.MaxParallelEvaluations)
 	}
+
 	if c.Engine.MaxParallelEvaluations > 32 {
 		return fmt.Errorf("maxParallelEvaluations too high: %d (maximum: 32)", c.Engine.MaxParallelEvaluations)
 	}
@@ -277,6 +281,7 @@ func (c *Config) Validate() error {
 	if c.Cache.LocalCacheSize < 100 {
 		return fmt.Errorf("localCacheSize too low: %d (minimum: 100)", c.Cache.LocalCacheSize)
 	}
+
 	if c.Cache.LocalCacheSize > 1000000 {
 		return fmt.Errorf("localCacheSize too high: %d (maximum: 1000000)", c.Cache.LocalCacheSize)
 	}
@@ -289,7 +294,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// GetOrgConfig returns the effective configuration for an organization
+// GetOrgConfig returns the effective configuration for an organization.
 func (c *Config) GetOrgConfig(orgID string) *Config {
 	// Start with global config
 	orgConfig := *c
@@ -299,6 +304,7 @@ func (c *Config) GetOrgConfig(orgID string) *Config {
 		if override.Enabled != nil {
 			orgConfig.Enabled = *override.Enabled
 		}
+
 		if override.MaxPolicies != nil {
 			orgConfig.Engine.MaxPoliciesPerOrg = *override.MaxPolicies
 		}
@@ -307,11 +313,12 @@ func (c *Config) GetOrgConfig(orgID string) *Config {
 	return &orgConfig
 }
 
-// MergeOrgConfig merges organization-specific settings
+// MergeOrgConfig merges organization-specific settings.
 func (c *Config) MergeOrgConfig(orgID string, override *OrgConfig) {
 	if c.Organizations == nil {
 		c.Organizations = make(map[string]*OrgConfig)
 	}
+
 	c.Organizations[orgID] = override
 }
 

@@ -27,7 +27,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Mock audit repository for testing
+// Mock audit repository for testing.
 type mockAuditRepo struct{}
 
 func (m *mockAuditRepo) Create(ctx context.Context, event *schema.AuditEvent) error { return nil }
@@ -112,7 +112,7 @@ func (m *mockAuditRepo) GetDistinctOrganizations(ctx context.Context, filter *au
 	return nil, nil
 }
 
-// Mock webhook repository for testing
+// Mock webhook repository for testing.
 type mockWebhookRepo struct{}
 
 func (m *mockWebhookRepo) CreateWebhook(ctx context.Context, wh *schema.Webhook) error { return nil }
@@ -189,7 +189,7 @@ func (m *mockWebhookRepo) FindPendingDeliveries(ctx context.Context, limit int) 
 	return []*schema.Delivery{}, nil
 }
 
-// Envelope type for paginated policies list responses
+// Envelope type for paginated policies list responses.
 type PaginatedPolicies struct {
 	Data       []schema.Policy
 	Total      int
@@ -198,7 +198,7 @@ type PaginatedPolicies struct {
 	TotalPages int
 }
 
-// In-memory user repo
+// In-memory user repo.
 type memUserRepo struct {
 	byID    map[xid.ID]*schema.User
 	byEmail map[string]*schema.User
@@ -210,18 +210,21 @@ func newMemUserRepo() *memUserRepo {
 func (m *memUserRepo) Create(_ context.Context, u *schema.User) error {
 	m.byID[u.ID] = u
 	m.byEmail[u.Email] = u
+
 	return nil
 }
 func (m *memUserRepo) FindByID(_ context.Context, id xid.ID) (*schema.User, error) {
 	if u, ok := m.byID[id]; ok {
 		return u, nil
 	}
+
 	return nil, nil
 }
 func (m *memUserRepo) FindByEmail(_ context.Context, email string) (*schema.User, error) {
 	if u, ok := m.byEmail[email]; ok {
 		return u, nil
 	}
+
 	return nil, nil
 }
 func (m *memUserRepo) FindByAppAndEmail(_ context.Context, appID xid.ID, email string) (*schema.User, error) {
@@ -229,6 +232,7 @@ func (m *memUserRepo) FindByAppAndEmail(_ context.Context, appID xid.ID, email s
 	if u, ok := m.byEmail[email]; ok {
 		return u, nil
 	}
+
 	return nil, nil
 }
 func (m *memUserRepo) FindByUsername(_ context.Context, username string) (*schema.User, error) {
@@ -237,11 +241,13 @@ func (m *memUserRepo) FindByUsername(_ context.Context, username string) (*schem
 			return u, nil
 		}
 	}
+
 	return nil, nil
 }
 func (m *memUserRepo) Update(_ context.Context, u *schema.User) error {
 	m.byID[u.ID] = u
 	m.byEmail[u.Email] = u
+
 	return nil
 }
 func (m *memUserRepo) Delete(_ context.Context, id xid.ID) error {
@@ -249,22 +255,27 @@ func (m *memUserRepo) Delete(_ context.Context, id xid.ID) error {
 		delete(m.byID, id)
 		delete(m.byEmail, u.Email)
 	}
+
 	return nil
 }
 func (m *memUserRepo) ListUsers(_ context.Context, filter *user.ListUsersFilter) (*pagination.PageResponse[*schema.User], error) {
 	out := []*schema.User{}
 	i := 0
 	offset := filter.Offset
+
 	limit := filter.Limit
 	if limit == 0 {
 		limit = 50
 	}
+
 	for _, u := range m.byID {
 		if i >= offset && len(out) < limit {
 			out = append(out, u)
 		}
+
 		i++
 	}
+
 	return &pagination.PageResponse[*schema.User]{
 		Data: out,
 		Pagination: &pagination.PageMeta{
@@ -282,7 +293,7 @@ func (m *memUserRepo) CountUsers(_ context.Context, filter *user.CountUsersFilte
 	return len(m.byID), nil
 }
 
-// In-memory session repo
+// In-memory session repo.
 type memSessionRepo struct {
 	byToken map[string]*schema.Session
 	byID    map[xid.ID]*schema.Session
@@ -297,6 +308,7 @@ func newMemSessionRepo() *memSessionRepo {
 func (m *memSessionRepo) CreateSession(_ context.Context, s *schema.Session) error {
 	m.byToken[s.Token] = s
 	m.byID[s.ID] = s
+
 	return nil
 }
 func (m *memSessionRepo) FindSessionByID(_ context.Context, id xid.ID) (*schema.Session, error) {
@@ -304,6 +316,7 @@ func (m *memSessionRepo) FindSessionByID(_ context.Context, id xid.ID) (*schema.
 	if !ok {
 		return nil, nil
 	}
+
 	return s, nil
 }
 func (m *memSessionRepo) FindSessionByToken(_ context.Context, token string) (*schema.Session, error) {
@@ -311,27 +324,35 @@ func (m *memSessionRepo) FindSessionByToken(_ context.Context, token string) (*s
 	if !ok {
 		return nil, nil
 	}
+
 	return s, nil
 }
 func (m *memSessionRepo) ListSessions(_ context.Context, filter *session.ListSessionsFilter) (*pagination.PageResponse[*schema.Session], error) {
 	var sessions []*schema.Session
+
 	count := 0
 	offset := filter.Offset
+
 	limit := filter.Limit
 	if limit == 0 {
 		limit = 50
 	}
+
 	for _, s := range m.byID {
 		// Apply userID filter if present
 		if filter.UserID != nil && !filter.UserID.IsNil() && s.UserID != *filter.UserID {
 			continue
 		}
+
 		if count >= offset && len(sessions) < limit {
 			sessions = append(sessions, s)
 		}
+
 		count++
 	}
+
 	total := count
+
 	return &pagination.PageResponse[*schema.Session]{
 		Data: sessions,
 		Pagination: &pagination.PageMeta{
@@ -349,7 +370,9 @@ func (m *memSessionRepo) RevokeSession(_ context.Context, token string) error {
 	if s, ok := m.byToken[token]; ok {
 		delete(m.byID, s.ID)
 	}
+
 	delete(m.byToken, token)
+
 	return nil
 }
 func (m *memSessionRepo) RevokeSessionByID(_ context.Context, id xid.ID) error {
@@ -357,16 +380,20 @@ func (m *memSessionRepo) RevokeSessionByID(_ context.Context, id xid.ID) error {
 		delete(m.byToken, s.Token)
 		delete(m.byID, id)
 	}
+
 	return nil
 }
 func (m *memSessionRepo) CountSessions(_ context.Context, appID xid.ID, userID *xid.ID) (int, error) {
 	count := 0
+
 	for _, s := range m.byID {
 		if userID != nil && !userID.IsNil() && s.UserID != *userID {
 			continue
 		}
+
 		count++
 	}
+
 	return count, nil
 }
 func (m *memSessionRepo) CleanupExpiredSessions(_ context.Context) (int, error) {
@@ -379,14 +406,17 @@ func (m *memSessionRepo) FindSessionByRefreshToken(_ context.Context, refreshTok
 			return s, nil
 		}
 	}
+
 	return nil, nil
 }
 func (m *memSessionRepo) UpdateSessionExpiry(_ context.Context, id xid.ID, expiresAt time.Time) error {
 	if s, ok := m.byID[id]; ok {
 		s.ExpiresAt = expiresAt
 		s.UpdatedAt = time.Now()
+
 		return nil
 	}
+
 	return nil
 }
 func (m *memSessionRepo) RefreshSessionTokens(_ context.Context, id xid.ID, newAccessToken string, accessTokenExpiresAt time.Time, newRefreshToken string, refreshTokenExpiresAt time.Time) error {
@@ -404,6 +434,7 @@ func (m *memSessionRepo) RefreshSessionTokens(_ context.Context, id xid.ID, newA
 	s.LastRefreshedAt = &now
 	s.UpdatedAt = now
 	m.byToken[newAccessToken] = s
+
 	return nil
 }
 
@@ -449,19 +480,23 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// SignUp
 	signupBody := map[string]any{"email": "alice@example.com", "password": "password123", "name": "Alice"}
 	buf, _ := json.Marshal(signupBody)
+
 	resp, err := http.Post(srv.URL+"/api/auth/signup", "application/json", bytes.NewReader(buf))
 	if err != nil {
 		t.Fatalf("signup request error: %v", err)
 	}
-	if resp.StatusCode != 200 {
+
+	if resp.StatusCode != http.StatusOK {
 		var errResp map[string]any
 		json.NewDecoder(resp.Body).Decode(&errResp)
 		t.Fatalf("expected 200, got %d, error: %v", resp.StatusCode, errResp)
 	}
+
 	var signupRes auth.AuthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&signupRes); err != nil {
 		t.Fatalf("decode signup: %v", err)
 	}
+
 	if signupRes.Token == "" {
 		t.Fatalf("expected token after signup")
 	}
@@ -469,17 +504,21 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// SignIn
 	signinBody := map[string]any{"email": "alice@example.com", "password": "password123"}
 	buf2, _ := json.Marshal(signinBody)
+
 	resp2, err := http.Post(srv.URL+"/api/auth/signin", "application/json", bytes.NewReader(buf2))
 	if err != nil {
 		t.Fatalf("signin request error: %v", err)
 	}
-	if resp2.StatusCode != 200 {
+
+	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 signin, got %d", resp2.StatusCode)
 	}
+
 	var signinRes auth.AuthResponse
 	if err := json.NewDecoder(resp2.Body).Decode(&signinRes); err != nil {
 		t.Fatalf("decode signin: %v", err)
 	}
+
 	if signinRes.Token == "" {
 		t.Fatalf("expected token after signin")
 	}
@@ -487,22 +526,26 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	// GetSession via cookie
 	req3, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/auth/session", nil)
 	req3.AddCookie(&http.Cookie{Name: "authsome_session", Value: signinRes.Token})
+
 	resp3, err := http.DefaultClient.Do(req3)
 	if err != nil {
 		t.Fatalf("get session error: %v", err)
 	}
-	if resp3.StatusCode != 200 {
+
+	if resp3.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 session, got %d", resp3.StatusCode)
 	}
 
 	// SignOut
 	signoutBody := map[string]any{"token": signinRes.Token}
 	buf4, _ := json.Marshal(signoutBody)
+
 	resp4, err := http.Post(srv.URL+"/api/auth/signout", "application/json", bytes.NewReader(buf4))
 	if err != nil {
 		t.Fatalf("signout request error: %v", err)
 	}
-	if resp4.StatusCode != 200 {
+
+	if resp4.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 signout, got %d", resp4.StatusCode)
 	}
 }

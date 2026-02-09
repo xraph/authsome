@@ -9,96 +9,96 @@ import (
 	mainschema "github.com/xraph/authsome/schema"
 )
 
-// OrganizationFeatureUsage tracks feature usage per organization
+// OrganizationFeatureUsage tracks feature usage per organization.
 type OrganizationFeatureUsage struct {
 	bun.BaseModel `bun:"table:subscription_org_feature_usage,alias:sofu"`
 
-	ID             xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	FeatureID      xid.ID                 `json:"featureId" bun:"feature_id,notnull,type:varchar(20)"`
-	CurrentUsage   int64                  `json:"currentUsage" bun:"current_usage,notnull,default:0"`
-	PeriodStart    time.Time              `json:"periodStart" bun:"period_start,notnull"`
-	PeriodEnd      time.Time              `json:"periodEnd" bun:"period_end,notnull"`
-	LastReset      time.Time              `json:"lastReset" bun:"last_reset,notnull"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
-	UpdatedAt      time.Time              `json:"updatedAt" bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	ID             xid.ID         `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	OrganizationID xid.ID         `bun:"organization_id,notnull,type:varchar(20)"              json:"organizationId"`
+	FeatureID      xid.ID         `bun:"feature_id,notnull,type:varchar(20)"                   json:"featureId"`
+	CurrentUsage   int64          `bun:"current_usage,notnull,default:0"                       json:"currentUsage"`
+	PeriodStart    time.Time      `bun:"period_start,notnull"                                  json:"periodStart"`
+	PeriodEnd      time.Time      `bun:"period_end,notnull"                                    json:"periodEnd"`
+	LastReset      time.Time      `bun:"last_reset,notnull"                                    json:"lastReset"`
+	Metadata       map[string]any `bun:"metadata,type:jsonb"                                   json:"metadata"`
+	CreatedAt      time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt      time.Time      `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updatedAt"`
 
 	// Relations
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
-	Feature      *Feature                 `json:"feature,omitempty" bun:"rel:belongs-to,join:feature_id=id"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
+	Feature      *Feature                 `bun:"rel:belongs-to,join:feature_id=id"      json:"feature,omitempty"`
 }
 
-// FeatureUsageLog provides an audit trail for feature usage changes
+// FeatureUsageLog provides an audit trail for feature usage changes.
 type FeatureUsageLog struct {
 	bun.BaseModel `bun:"table:subscription_feature_usage_logs,alias:sful"`
 
-	ID             xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	FeatureID      xid.ID                 `json:"featureId" bun:"feature_id,notnull,type:varchar(20)"`
-	Action         string                 `json:"action" bun:"action,notnull"` // consume, grant, reset, adjust
-	Quantity       int64                  `json:"quantity" bun:"quantity,notnull"`
-	PreviousUsage  int64                  `json:"previousUsage" bun:"previous_usage,notnull,default:0"`
-	NewUsage       int64                  `json:"newUsage" bun:"new_usage,notnull,default:0"`
-	ActorID        *xid.ID                `json:"actorId" bun:"actor_id,type:varchar(20)"`
-	Reason         string                 `json:"reason" bun:"reason"`
-	IdempotencyKey string                 `json:"idempotencyKey" bun:"idempotency_key"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt      time.Time              `json:"createdAt" bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID             xid.ID         `bun:"id,pk,type:varchar(20)"                                json:"id"`
+	OrganizationID xid.ID         `bun:"organization_id,notnull,type:varchar(20)"              json:"organizationId"`
+	FeatureID      xid.ID         `bun:"feature_id,notnull,type:varchar(20)"                   json:"featureId"`
+	Action         string         `bun:"action,notnull"                                        json:"action"` // consume, grant, reset, adjust
+	Quantity       int64          `bun:"quantity,notnull"                                      json:"quantity"`
+	PreviousUsage  int64          `bun:"previous_usage,notnull,default:0"                      json:"previousUsage"`
+	NewUsage       int64          `bun:"new_usage,notnull,default:0"                           json:"newUsage"`
+	ActorID        *xid.ID        `bun:"actor_id,type:varchar(20)"                             json:"actorId"`
+	Reason         string         `bun:"reason"                                                json:"reason"`
+	IdempotencyKey string         `bun:"idempotency_key"                                       json:"idempotencyKey"`
+	Metadata       map[string]any `bun:"metadata,type:jsonb"                                   json:"metadata"`
+	CreatedAt      time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"createdAt"`
 
 	// Relations
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
-	Feature      *Feature                 `json:"feature,omitempty" bun:"rel:belongs-to,join:feature_id=id"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
+	Feature      *Feature                 `bun:"rel:belongs-to,join:feature_id=id"      json:"feature,omitempty"`
 }
 
-// FeatureGrant provides additional feature access beyond the plan
+// FeatureGrant provides additional feature access beyond the plan.
 type FeatureGrant struct {
 	mainschema.AuditableModel `bun:",inline"`
 	bun.BaseModel             `bun:"table:subscription_feature_grants,alias:sfg"`
 
-	ID             xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID xid.ID                 `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	FeatureID      xid.ID                 `json:"featureId" bun:"feature_id,notnull,type:varchar(20)"`
-	GrantType      string                 `json:"grantType" bun:"grant_type,notnull"` // addon, override, promotion, trial, manual
-	Value          int64                  `json:"value" bun:"value,notnull"`          // Additional quota
-	ExpiresAt      *time.Time             `json:"expiresAt" bun:"expires_at"`
-	SourceType     string                 `json:"sourceType" bun:"source_type"`              // addon, coupon, promotion, etc.
-	SourceID       *xid.ID                `json:"sourceId" bun:"source_id,type:varchar(20)"` // AddOn ID, Promotion ID, etc.
-	Reason         string                 `json:"reason" bun:"reason"`
-	IsActive       bool                   `json:"isActive" bun:"is_active,notnull,default:true"`
-	Metadata       map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	ID             xid.ID         `bun:"id,pk,type:varchar(20)"                   json:"id"`
+	OrganizationID xid.ID         `bun:"organization_id,notnull,type:varchar(20)" json:"organizationId"`
+	FeatureID      xid.ID         `bun:"feature_id,notnull,type:varchar(20)"      json:"featureId"`
+	GrantType      string         `bun:"grant_type,notnull"                       json:"grantType"` // addon, override, promotion, trial, manual
+	Value          int64          `bun:"value,notnull"                            json:"value"`     // Additional quota
+	ExpiresAt      *time.Time     `bun:"expires_at"                               json:"expiresAt"`
+	SourceType     string         `bun:"source_type"                              json:"sourceType"` // addon, coupon, promotion, etc.
+	SourceID       *xid.ID        `bun:"source_id,type:varchar(20)"               json:"sourceId"`   // AddOn ID, Promotion ID, etc.
+	Reason         string         `bun:"reason"                                   json:"reason"`
+	IsActive       bool           `bun:"is_active,notnull,default:true"           json:"isActive"`
+	Metadata       map[string]any `bun:"metadata,type:jsonb"                      json:"metadata"`
 
 	// Relations
-	Organization *mainschema.Organization `json:"organization,omitempty" bun:"rel:belongs-to,join:organization_id=id"`
-	Feature      *Feature                 `json:"feature,omitempty" bun:"rel:belongs-to,join:feature_id=id"`
+	Organization *mainschema.Organization `bun:"rel:belongs-to,join:organization_id=id" json:"organization,omitempty"`
+	Feature      *Feature                 `bun:"rel:belongs-to,join:feature_id=id"      json:"feature,omitempty"`
 }
 
-// FeatureUsageAction defines the type of usage action
+// FeatureUsageAction defines the type of usage action.
 type FeatureUsageAction string
 
 const (
-	// FeatureUsageActionConsume decrements the available quota
+	// FeatureUsageActionConsume decrements the available quota.
 	FeatureUsageActionConsume FeatureUsageAction = "consume"
-	// FeatureUsageActionGrant adds to the quota
+	// FeatureUsageActionGrant adds to the quota.
 	FeatureUsageActionGrant FeatureUsageAction = "grant"
-	// FeatureUsageActionReset resets the usage counter
+	// FeatureUsageActionReset resets the usage counter.
 	FeatureUsageActionReset FeatureUsageAction = "reset"
-	// FeatureUsageActionAdjust manually adjusts the usage
+	// FeatureUsageActionAdjust manually adjusts the usage.
 	FeatureUsageActionAdjust FeatureUsageAction = "adjust"
 )
 
-// FeatureGrantType defines the type of feature grant
+// FeatureGrantType defines the type of feature grant.
 type FeatureGrantType string
 
 const (
-	// FeatureGrantTypeAddon is a grant from an add-on purchase
+	// FeatureGrantTypeAddon is a grant from an add-on purchase.
 	FeatureGrantTypeAddon FeatureGrantType = "addon"
-	// FeatureGrantTypeOverride is a manual override
+	// FeatureGrantTypeOverride is a manual override.
 	FeatureGrantTypeOverride FeatureGrantType = "override"
-	// FeatureGrantTypePromotion is a promotional grant
+	// FeatureGrantTypePromotion is a promotional grant.
 	FeatureGrantTypePromotion FeatureGrantType = "promotion"
-	// FeatureGrantTypeTrial is a trial grant
+	// FeatureGrantTypeTrial is a trial grant.
 	FeatureGrantTypeTrial FeatureGrantType = "trial"
-	// FeatureGrantTypeManual is a manually added grant
+	// FeatureGrantTypeManual is a manually added grant.
 	FeatureGrantTypeManual FeatureGrantType = "manual"
 )

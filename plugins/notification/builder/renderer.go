@@ -8,17 +8,17 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// Renderer converts email builder documents to HTML
+// Renderer converts email builder documents to HTML.
 type Renderer struct {
 	document *Document
 }
 
-// NewRenderer creates a new renderer for the given document
+// NewRenderer creates a new renderer for the given document.
 func NewRenderer(document *Document) *Renderer {
 	return &Renderer{document: document}
 }
 
-// Render renders the document to gomponents Node
+// Render renders the document to gomponents Node.
 func (r *Renderer) Render() (g.Node, error) {
 	if err := r.document.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid document: %w", err)
@@ -27,7 +27,7 @@ func (r *Renderer) Render() (g.Node, error) {
 	return r.renderBlock(r.document.Root), nil
 }
 
-// RenderToHTML renders the document to HTML string
+// RenderToHTML renders the document to HTML string.
 func (r *Renderer) RenderToHTML() (string, error) {
 	node, err := r.Render()
 	if err != nil {
@@ -42,7 +42,7 @@ func (r *Renderer) RenderToHTML() (string, error) {
 	return sb.String(), nil
 }
 
-// renderBlock renders a single block based on its type
+// renderBlock renders a single block based on its type.
 func (r *Renderer) renderBlock(blockID string) g.Node {
 	block, exists := r.document.Blocks[blockID]
 	if !exists {
@@ -79,7 +79,7 @@ func (r *Renderer) renderBlock(blockID string) g.Node {
 	}
 }
 
-// renderEmailLayout renders the root email layout
+// renderEmailLayout renders the root email layout.
 func (r *Renderer) renderEmailLayout(block Block) g.Node {
 	data := block.Data
 	backdropColor := getString(data, "backdropColor", "#F8F8F8")
@@ -127,7 +127,7 @@ func (r *Renderer) renderEmailLayout(block Block) g.Node {
 	)
 }
 
-// renderText renders a text block
+// renderText renders a text block.
 func (r *Renderer) renderText(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -142,7 +142,7 @@ func (r *Renderer) renderText(block Block) g.Node {
 	)
 }
 
-// renderHeading renders a heading block
+// renderHeading renders a heading block.
 func (r *Renderer) renderHeading(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -160,7 +160,7 @@ func (r *Renderer) renderHeading(block Block) g.Node {
 
 	if !strings.Contains(styleStr, "font-size") {
 		if size, ok := defaultSizes[level]; ok {
-			styleStr += fmt.Sprintf("; font-size: %s", size)
+			styleStr += "; font-size: " + size
 		}
 	}
 
@@ -182,7 +182,7 @@ func (r *Renderer) renderHeading(block Block) g.Node {
 	}
 }
 
-// renderButton renders a button block
+// renderButton renders a button block.
 func (r *Renderer) renderButton(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -219,7 +219,7 @@ func (r *Renderer) renderButton(block Block) g.Node {
 	)
 }
 
-// renderImage renders an image block
+// renderImage renders an image block.
 func (r *Renderer) renderImage(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -234,7 +234,7 @@ func (r *Renderer) renderImage(block Block) g.Node {
 
 	containerStyle := r.buildStyle(style)
 	if !strings.Contains(containerStyle, "text-align") {
-		containerStyle += fmt.Sprintf("; text-align: %s", alignment)
+		containerStyle += "; text-align: " + alignment
 	}
 
 	imgStyle := fmt.Sprintf("max-width: %s; height: %s; display: block;", width, height)
@@ -258,7 +258,7 @@ func (r *Renderer) renderImage(block Block) g.Node {
 	return Div(g.Attr("style", containerStyle), img)
 }
 
-// renderDivider renders a divider block
+// renderDivider renders a divider block.
 func (r *Renderer) renderDivider(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -276,7 +276,7 @@ func (r *Renderer) renderDivider(block Block) g.Node {
 	)
 }
 
-// renderSpacer renders a spacer block
+// renderSpacer renders a spacer block.
 func (r *Renderer) renderSpacer(block Block) g.Node {
 	data := block.Data
 	props := getMap(data, "props")
@@ -286,7 +286,7 @@ func (r *Renderer) renderSpacer(block Block) g.Node {
 	return Div(g.Attr("style", fmt.Sprintf("height: %dpx; line-height: %dpx;", height, height)), g.Text("\u00A0"))
 }
 
-// renderContainer renders a container block
+// renderContainer renders a container block.
 func (r *Renderer) renderContainer(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -297,7 +297,7 @@ func (r *Renderer) renderContainer(block Block) g.Node {
 	containerStyle := r.buildStyle(style)
 
 	if backgroundColor != "transparent" && backgroundColor != "" {
-		containerStyle += fmt.Sprintf("; background-color: %s", backgroundColor)
+		containerStyle += "; background-color: " + backgroundColor
 	}
 
 	return Div(
@@ -306,7 +306,7 @@ func (r *Renderer) renderContainer(block Block) g.Node {
 	)
 }
 
-// renderColumns renders a columns block
+// renderColumns renders a columns block.
 func (r *Renderer) renderColumns(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -323,7 +323,7 @@ func (r *Renderer) renderColumns(block Block) g.Node {
 	)
 }
 
-// renderColumn renders a column block
+// renderColumn renders a column block.
 func (r *Renderer) renderColumn(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -334,7 +334,7 @@ func (r *Renderer) renderColumn(block Block) g.Node {
 	cellStyle := r.buildStyle(style)
 
 	if width != "auto" && width != "" {
-		cellStyle += fmt.Sprintf("; width: %s", width)
+		cellStyle += "; width: " + width
 	}
 
 	return Td(
@@ -343,7 +343,7 @@ func (r *Renderer) renderColumn(block Block) g.Node {
 	)
 }
 
-// renderHTML renders raw HTML block
+// renderHTML renders raw HTML block.
 func (r *Renderer) renderHTML(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -358,7 +358,7 @@ func (r *Renderer) renderHTML(block Block) g.Node {
 	)
 }
 
-// renderAvatar renders an avatar block
+// renderAvatar renders an avatar block.
 func (r *Renderer) renderAvatar(block Block) g.Node {
 	data := block.Data
 	style := getMap(data, "style")
@@ -375,9 +375,10 @@ func (r *Renderer) renderAvatar(block Block) g.Node {
 	}
 
 	borderRadius := "50%"
-	if shape == "square" {
+	switch shape {
+	case "square":
 		borderRadius = "0"
-	} else if shape == "rounded" {
+	case "rounded":
 		borderRadius = "8px"
 	}
 
@@ -396,40 +397,46 @@ func (r *Renderer) renderAvatar(block Block) g.Node {
 	)
 }
 
-// renderChildren renders multiple child blocks
+// renderChildren renders multiple child blocks.
 func (r *Renderer) renderChildren(childrenIDs []string) []g.Node {
 	nodes := make([]g.Node, 0, len(childrenIDs))
 	for _, childID := range childrenIDs {
 		nodes = append(nodes, r.renderBlock(childID))
 	}
+
 	return nodes
 }
 
-// buildStyle builds a CSS style string from style map
-func (r *Renderer) buildStyle(styleMap map[string]interface{}) string {
+// buildStyle builds a CSS style string from style map.
+func (r *Renderer) buildStyle(styleMap map[string]any) string {
 	var styles []string
 
 	if color := getString(styleMap, "color", ""); color != "" {
-		styles = append(styles, fmt.Sprintf("color: %s", color))
+		styles = append(styles, "color: "+color)
 	}
+
 	if bgColor := getString(styleMap, "backgroundColor", ""); bgColor != "" {
-		styles = append(styles, fmt.Sprintf("background-color: %s", bgColor))
+		styles = append(styles, "background-color: "+bgColor)
 	}
+
 	if fontFamily := getString(styleMap, "fontFamily", ""); fontFamily != "" {
-		styles = append(styles, fmt.Sprintf("font-family: %s", fontFamily))
+		styles = append(styles, "font-family: "+fontFamily)
 	}
+
 	if fontSize := getInt(styleMap, "fontSize", 0); fontSize > 0 {
 		styles = append(styles, fmt.Sprintf("font-size: %dpx", fontSize))
 	}
+
 	if fontWeight := getString(styleMap, "fontWeight", ""); fontWeight != "" {
-		styles = append(styles, fmt.Sprintf("font-weight: %s", fontWeight))
+		styles = append(styles, "font-weight: "+fontWeight)
 	}
+
 	if textAlign := getString(styleMap, "textAlign", ""); textAlign != "" {
-		styles = append(styles, fmt.Sprintf("text-align: %s", textAlign))
+		styles = append(styles, "text-align: "+textAlign)
 	}
 
 	// Handle padding
-	if paddingMap, ok := styleMap["padding"].(map[string]interface{}); ok {
+	if paddingMap, ok := styleMap["padding"].(map[string]any); ok {
 		top := getInt(paddingMap, "top", 0)
 		right := getInt(paddingMap, "right", 0)
 		bottom := getInt(paddingMap, "bottom", 0)
@@ -442,49 +449,57 @@ func (r *Renderer) buildStyle(styleMap map[string]interface{}) string {
 
 // Helper functions to safely extract values from maps
 
-func getString(m map[string]interface{}, key, defaultVal string) string {
+func getString(m map[string]any, key, defaultVal string) string {
 	if v, ok := m[key].(string); ok {
 		return v
 	}
+
 	return defaultVal
 }
 
-func getInt(m map[string]interface{}, key string, defaultVal int) int {
+func getInt(m map[string]any, key string, defaultVal int) int {
 	if v, ok := m[key].(float64); ok {
 		return int(v)
 	}
+
 	if v, ok := m[key].(int); ok {
 		return v
 	}
+
 	return defaultVal
 }
 
-func getBool(m map[string]interface{}, key string, defaultVal bool) bool {
+func getBool(m map[string]any, key string, defaultVal bool) bool {
 	if v, ok := m[key].(bool); ok {
 		return v
 	}
+
 	return defaultVal
 }
 
-func getMap(m map[string]interface{}, key string) map[string]interface{} {
-	if v, ok := m[key].(map[string]interface{}); ok {
+func getMap(m map[string]any, key string) map[string]any {
+	if v, ok := m[key].(map[string]any); ok {
 		return v
 	}
-	return make(map[string]interface{})
+
+	return make(map[string]any)
 }
 
-func getStringArray(m map[string]interface{}, key string) []string {
-	if v, ok := m[key].([]interface{}); ok {
+func getStringArray(m map[string]any, key string) []string {
+	if v, ok := m[key].([]any); ok {
 		result := make([]string, 0, len(v))
 		for _, item := range v {
 			if str, ok := item.(string); ok {
 				result = append(result, str)
 			}
 		}
+
 		return result
 	}
+
 	if v, ok := m[key].([]string); ok {
 		return v
 	}
+
 	return []string{}
 }

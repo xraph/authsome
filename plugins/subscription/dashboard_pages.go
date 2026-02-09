@@ -13,7 +13,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ServeBillingOverviewPage renders the billing overview dashboard
+// ServeBillingOverviewPage renders the billing overview dashboard.
 func (e *DashboardExtension) ServeBillingOverviewPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -30,12 +30,16 @@ func (e *DashboardExtension) ServeBillingOverviewPage(ctx *router.PageContext) (
 	subs, subCount, _ := e.plugin.subscriptionSvc.List(reqCtx, nil, nil, nil, "", 1, 100)
 
 	// Count by status
-	var activeCount, trialingCount, canceledCount int
-	var mrr int64
+	var (
+		activeCount, trialingCount, canceledCount int
+		mrr                                       int64
+	)
+
 	for _, sub := range subs {
 		switch sub.Status {
 		case "active":
 			activeCount++
+
 			if sub.Plan != nil {
 				switch sub.Plan.BillingInterval {
 				case "monthly":
@@ -171,7 +175,7 @@ func (e *DashboardExtension) ServeBillingOverviewPage(ctx *router.PageContext) (
 	return content, nil
 }
 
-// ServePlansListPage renders the plans list page
+// ServePlansListPage renders the plans list page.
 func (e *DashboardExtension) ServePlansListPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -246,7 +250,7 @@ func (e *DashboardExtension) ServePlansListPage(ctx *router.PageContext) (g.Node
 	return content, nil
 }
 
-// ServeSubscriptionsListPage renders the subscriptions list page
+// ServeSubscriptionsListPage renders the subscriptions list page.
 func (e *DashboardExtension) ServeSubscriptionsListPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -267,6 +271,7 @@ func (e *DashboardExtension) ServeSubscriptionsListPage(ctx *router.PageContext)
 
 	// Count by status for filters
 	allSubs, _, _ := e.plugin.subscriptionSvc.List(reqCtx, nil, nil, nil, "", 1, 10000)
+
 	statusCounts := make(map[string]int)
 	for _, sub := range allSubs {
 		statusCounts[string(sub.Status)]++
@@ -300,7 +305,7 @@ func (e *DashboardExtension) ServeSubscriptionsListPage(ctx *router.PageContext)
 	return content, nil
 }
 
-// ServeAddOnsListPage renders the add-ons list page
+// ServeAddOnsListPage renders the add-ons list page.
 func (e *DashboardExtension) ServeAddOnsListPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -352,7 +357,7 @@ func (e *DashboardExtension) ServeAddOnsListPage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// ServeInvoicesListPage renders the invoices list page
+// ServeInvoicesListPage renders the invoices list page.
 func (e *DashboardExtension) ServeInvoicesListPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -379,7 +384,9 @@ func (e *DashboardExtension) ServeInvoicesListPage(ctx *router.PageContext) (g.N
 	// Count by status
 	allInvoices, _, _ := e.plugin.invoiceSvc.List(reqCtx, nil, nil, "", 1, 10000)
 	statusCounts := make(map[string]int)
+
 	var totalRevenue int64
+
 	for _, inv := range allInvoices {
 		statusCounts[string(inv.Status)]++
 		if inv.Status == core.InvoiceStatusPaid {
@@ -451,7 +458,7 @@ func (e *DashboardExtension) ServeInvoicesListPage(ctx *router.PageContext) (g.N
 	return content, nil
 }
 
-// ServeUsageDashboardPage renders the usage dashboard page
+// ServeUsageDashboardPage renders the usage dashboard page.
 func (e *DashboardExtension) ServeUsageDashboardPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -468,6 +475,7 @@ func (e *DashboardExtension) ServeUsageDashboardPage(ctx *router.PageContext) (g
 	if dateRange == "" {
 		dateRange = "30d"
 	}
+
 	startDate, endDate := calculateDateRange(dateRange)
 
 	// Get real usage data
@@ -518,6 +526,7 @@ func (e *DashboardExtension) ServeUsageDashboardPage(ctx *router.PageContext) (g
 						}
 
 						used := fmt.Sprintf("%s %s", formatNumber(u.CurrentUsage), u.Unit)
+
 						limit := formatLimit(u.Limit)
 						if u.Limit > 0 {
 							limit = fmt.Sprintf("%s %s", formatNumber(u.Limit), u.Unit)
@@ -612,6 +621,7 @@ func (e *DashboardExtension) ServeUsageDashboardPage(ctx *router.PageContext) (g
 										g.Text(formatNumber(st.TotalUsage))),
 								))
 							}
+
 							return nodes
 						}()),
 					),
@@ -645,7 +655,7 @@ func (e *DashboardExtension) ServeUsageDashboardPage(ctx *router.PageContext) (g
 	return content, nil
 }
 
-// ServeCouponsListPage renders the coupons list page
+// ServeCouponsListPage renders the coupons list page.
 func (e *DashboardExtension) ServeCouponsListPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
 	reqCtx := ctx.Request.Context()
@@ -661,8 +671,11 @@ func (e *DashboardExtension) ServeCouponsListPage(ctx *router.PageContext) (g.No
 	pageSize := queryIntDefault(ctx, "pageSize", 20)
 
 	// TODO: Add couponSvc to Plugin - for now return empty list
-	var coupons []*core.Coupon
-	var total int64 = 0
+	var (
+		coupons []*core.Coupon
+		total   int64 = 0
+	)
+
 	_ = reqCtx // suppress unused warning
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
 
@@ -700,7 +713,7 @@ func (e *DashboardExtension) ServeCouponsListPage(ctx *router.PageContext) (g.No
 	return content, nil
 }
 
-// ServeAnalyticsDashboardPage renders the analytics dashboard
+// ServeAnalyticsDashboardPage renders the analytics dashboard.
 func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -717,6 +730,7 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext
 	if dateRange == "" {
 		dateRange = "30d"
 	}
+
 	startDate, endDate := calculateDateRange(dateRange)
 	currentPath := basePath + "/app/" + currentApp.ID.String() + "/billing/analytics"
 
@@ -828,6 +842,7 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext
 												if breakdown.NetNewMRR > 0 {
 													return "text-green-600 dark:text-green-400"
 												}
+
 												return "text-red-600 dark:text-red-400"
 											}(),
 										)),
@@ -914,10 +929,9 @@ func (e *DashboardExtension) ServeAnalyticsDashboardPage(ctx *router.PageContext
 	return content, nil
 }
 
-// ServeAlertsListPage renders the alerts list page
+// ServeAlertsListPage renders the alerts list page.
 func (e *DashboardExtension) ServeAlertsListPage(ctx *router.PageContext) (g.Node, error) {
 	// basePath := e.baseUIPath
-
 	currentApp, err := e.extractAppFromURL(ctx)
 	if err != nil {
 		return nil, errs.BadRequest("Invalid app context")
@@ -972,24 +986,28 @@ func (e *DashboardExtension) ServeAlertsListPage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// Helper functions for counting plans
+// Helper functions for counting plans.
 func countActivePlans(plans []*core.Plan) int {
 	count := 0
+
 	for _, p := range plans {
 		if p.IsActive {
 			count++
 		}
 	}
+
 	return count
 }
 
 func countPublicPlans(plans []*core.Plan) int {
 	count := 0
+
 	for _, p := range plans {
 		if p.IsPublic {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -997,6 +1015,7 @@ func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -1171,6 +1190,7 @@ func (e *DashboardExtension) renderSubscriptionsTable(ctx context.Context, subs 
 		if sub.Plan != nil {
 			planName = sub.Plan.Name
 		}
+
 		rows = append(rows, Tr(
 			Class("hover:bg-slate-50 dark:hover:bg-gray-800/50"),
 			Td(Class("px-6 py-4"),
@@ -1342,13 +1362,14 @@ func (e *DashboardExtension) renderCouponsTable(ctx context.Context, coupons []*
 	rows := make([]g.Node, 0, len(coupons))
 	for _, coupon := range coupons {
 		discountText := ""
-		if coupon.Type == core.CouponTypePercentage {
+		switch coupon.Type {
+		case core.CouponTypePercentage:
 			discountText = fmt.Sprintf("%.0f%% off", coupon.PercentOff)
-		} else if coupon.Type == core.CouponTypeFixedAmount {
+		case core.CouponTypeFixedAmount:
 			discountText = formatMoney(coupon.AmountOff, coupon.Currency) + " off"
-		} else if coupon.Type == core.CouponTypeTrialExtension {
+		case core.CouponTypeTrialExtension:
 			discountText = fmt.Sprintf("+%d trial days", coupon.TrialDays)
-		} else if coupon.Type == core.CouponTypeFreeMonths {
+		case core.CouponTypeFreeMonths:
 			discountText = fmt.Sprintf("%d free months", coupon.FreeMonths)
 		}
 
@@ -1415,6 +1436,7 @@ func (e *DashboardExtension) renderStatusFilterTabs(currentStatus string, counts
 	tabs := make([]g.Node, 0, len(statuses))
 	for _, s := range statuses {
 		isActive := currentStatus == s.value
+
 		count := counts[s.value]
 		if s.value == "" {
 			count = 0
@@ -1480,6 +1502,7 @@ func (e *DashboardExtension) renderUsageCard(title, current, limit string, perce
 func (e *DashboardExtension) renderMetricCard(title, value string, change float64, icon g.Node) g.Node {
 	changeColor := "text-green-600 dark:text-green-400"
 	changePrefix := "+"
+
 	if change < 0 {
 		changeColor = "text-red-600 dark:text-red-400"
 		changePrefix = ""
@@ -1505,7 +1528,7 @@ func (e *DashboardExtension) renderMetricCard(title, value string, change float6
 	)
 }
 
-// renderPaymentMethodsOverviewWidget renders the payment methods widget for billing overview
+// renderPaymentMethodsOverviewWidget renders the payment methods widget for billing overview.
 func (e *DashboardExtension) renderPaymentMethodsOverviewWidget(ctx context.Context, currentApp *app.App, basePath string) g.Node {
 	// Get payment methods for this organization
 	paymentMethods, err := e.plugin.paymentSvc.ListPaymentMethods(ctx, currentApp.ID)
@@ -1525,9 +1548,11 @@ func (e *DashboardExtension) renderPaymentMethodsOverviewWidget(ctx context.Cont
 
 	// Find default payment method
 	var defaultPM *core.PaymentMethod
+
 	for _, pm := range paymentMethods {
 		if pm.IsDefault {
 			defaultPM = pm
+
 			break
 		}
 	}

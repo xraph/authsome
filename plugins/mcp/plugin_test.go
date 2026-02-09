@@ -15,7 +15,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// mockAuth implements the required interfaces for testing
+// mockAuth implements the required interfaces for testing.
 type mockAuth struct {
 	db              *bun.DB
 	serviceRegistry *registry.ServiceRegistry
@@ -84,7 +84,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, TransportStdio, config.Transport)
 	assert.Equal(t, 9090, config.Port)
 	assert.True(t, config.Authorization.RequireAPIKey)
-	assert.Greater(t, len(config.Authorization.AllowedOperations), 0)
+	assert.NotEmpty(t, config.Authorization.AllowedOperations)
 	assert.Equal(t, 60, config.RateLimit.RequestsPerMinute)
 }
 
@@ -179,7 +179,7 @@ func TestSanitizeUser(t *testing.T) {
 	config := DefaultConfig()
 	security := NewSecurityLayer(config, nil)
 
-	userData := map[string]interface{}{
+	userData := map[string]any{
 		"id":            "user-123",
 		"email":         "test@example.com",
 		"password_hash": "secret-hash",
@@ -188,7 +188,7 @@ func TestSanitizeUser(t *testing.T) {
 	}
 
 	sanitized := security.sanitizeUser(userData)
-	sanitizedMap, ok := sanitized.(map[string]interface{})
+	sanitizedMap, ok := sanitized.(map[string]any)
 	require.True(t, ok)
 
 	// Sensitive fields removed
@@ -204,7 +204,7 @@ func TestSanitizeConfig(t *testing.T) {
 	config := DefaultConfig()
 	security := NewSecurityLayer(config, nil)
 
-	configData := map[string]interface{}{
+	configData := map[string]any{
 		"database_url": "postgres://localhost/db",
 		"secret_key":   "very-secret",
 		"api_token":    "token-123",
@@ -213,7 +213,7 @@ func TestSanitizeConfig(t *testing.T) {
 	}
 
 	sanitized := security.sanitizeConfig(configData)
-	sanitizedMap, ok := sanitized.(map[string]interface{})
+	sanitizedMap, ok := sanitized.(map[string]any)
 	require.True(t, ok)
 
 	// Secrets redacted
@@ -235,7 +235,7 @@ func TestResourceRegistry(t *testing.T) {
 
 	// List resources
 	resources := registry.List()
-	assert.Equal(t, 1, len(resources))
+	assert.Len(t, resources, 1)
 	assert.Equal(t, "authsome://config", resources[0].URI)
 }
 
@@ -249,15 +249,18 @@ func TestToolRegistry(t *testing.T) {
 
 	// List tools in readonly mode
 	tools := registry.List(ModeReadOnly)
-	assert.Greater(t, len(tools), 0)
+	assert.NotEmpty(t, tools)
 
 	found := false
+
 	for _, t := range tools {
 		if t.Name == "query_user" {
 			found = true
+
 			break
 		}
 	}
+
 	assert.True(t, found)
 }
 
@@ -448,12 +451,12 @@ func TestServerHandleResourcesList(t *testing.T) {
 	assert.Equal(t, "2.0", resp.JSONRPC)
 	assert.Nil(t, resp.Error)
 
-	result, ok := resp.Result.(map[string]interface{})
+	result, ok := resp.Result.(map[string]any)
 	require.True(t, ok)
 
 	resources, ok := result["resources"].([]ResourceDescription)
 	require.True(t, ok)
-	assert.Greater(t, len(resources), 0) // Should have registered resources
+	assert.NotEmpty(t, resources) // Should have registered resources
 }
 
 func TestServerHandleToolsList(t *testing.T) {
@@ -473,12 +476,12 @@ func TestServerHandleToolsList(t *testing.T) {
 	assert.Equal(t, "2.0", resp.JSONRPC)
 	assert.Nil(t, resp.Error)
 
-	result, ok := resp.Result.(map[string]interface{})
+	result, ok := resp.Result.(map[string]any)
 	require.True(t, ok)
 
 	tools, ok := result["tools"].([]ToolDescription)
 	require.True(t, ok)
-	assert.Greater(t, len(tools), 0) // Should have registered tools
+	assert.NotEmpty(t, tools) // Should have registered tools
 }
 
 func TestServerHandleUnknownMethod(t *testing.T) {

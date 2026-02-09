@@ -12,25 +12,27 @@ import (
 )
 
 // APIKeyRepository handles API key database operations
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type APIKeyRepository struct {
 	db *bun.DB
 }
 
-// NewAPIKeyRepository creates a new API key repository
+// NewAPIKeyRepository creates a new API key repository.
 func NewAPIKeyRepository(db *bun.DB) *APIKeyRepository {
 	return &APIKeyRepository{db: db}
 }
 
-// CreateAPIKey creates a new API key
+// CreateAPIKey creates a new API key.
 func (r *APIKeyRepository) CreateAPIKey(ctx context.Context, apiKey *schema.APIKey) error {
 	_, err := r.db.NewInsert().Model(apiKey).Exec(ctx)
+
 	return err
 }
 
-// FindAPIKeyByID finds an API key by ID
+// FindAPIKeyByID finds an API key by ID.
 func (r *APIKeyRepository) FindAPIKeyByID(ctx context.Context, id xid.ID) (*schema.APIKey, error) {
 	apiKey := &schema.APIKey{}
+
 	err := r.db.NewSelect().
 		Model(apiKey).
 		Where("id = ?", id).
@@ -39,12 +41,14 @@ func (r *APIKeyRepository) FindAPIKeyByID(ctx context.Context, id xid.ID) (*sche
 	if err != nil {
 		return nil, err
 	}
+
 	return apiKey, nil
 }
 
-// FindAPIKeyByPrefix finds an API key by prefix
+// FindAPIKeyByPrefix finds an API key by prefix.
 func (r *APIKeyRepository) FindAPIKeyByPrefix(ctx context.Context, prefix string) (*schema.APIKey, error) {
 	apiKey := &schema.APIKey{}
+
 	err := r.db.NewSelect().
 		Model(apiKey).
 		Where("prefix = ?", prefix).
@@ -54,10 +58,11 @@ func (r *APIKeyRepository) FindAPIKeyByPrefix(ctx context.Context, prefix string
 	if err != nil {
 		return nil, err
 	}
+
 	return apiKey, nil
 }
 
-// ListAPIKeys lists API keys with filtering and pagination
+// ListAPIKeys lists API keys with filtering and pagination.
 func (r *APIKeyRepository) ListAPIKeys(ctx context.Context, filter *apikey.ListAPIKeysFilter) (*pagination.PageResponse[*schema.APIKey], error) {
 	var keys []*schema.APIKey
 
@@ -68,12 +73,15 @@ func (r *APIKeyRepository) ListAPIKeys(ctx context.Context, filter *apikey.ListA
 	if filter.EnvironmentID != nil {
 		query = query.Where("environment_id = ?", *filter.EnvironmentID)
 	}
+
 	if filter.OrganizationID != nil {
 		query = query.Where("organization_id = ?", *filter.OrganizationID)
 	}
+
 	if filter.UserID != nil {
 		query = query.Where("user_id = ?", *filter.UserID)
 	}
+
 	if filter.Active != nil {
 		query = query.Where("active = ?", *filter.Active)
 	}
@@ -85,12 +93,15 @@ func (r *APIKeyRepository) ListAPIKeys(ctx context.Context, filter *apikey.ListA
 	if filter.EnvironmentID != nil {
 		countQuery = countQuery.Where("environment_id = ?", *filter.EnvironmentID)
 	}
+
 	if filter.OrganizationID != nil {
 		countQuery = countQuery.Where("organization_id = ?", *filter.OrganizationID)
 	}
+
 	if filter.UserID != nil {
 		countQuery = countQuery.Where("user_id = ?", *filter.UserID)
 	}
+
 	if filter.Active != nil {
 		countQuery = countQuery.Where("active = ?", *filter.Active)
 	}
@@ -111,7 +122,7 @@ func (r *APIKeyRepository) ListAPIKeys(ctx context.Context, filter *apikey.ListA
 	return pagination.NewPageResponse(keys, int64(total), &filter.PaginationParams), nil
 }
 
-// UpdateAPIKey updates an API key
+// UpdateAPIKey updates an API key.
 func (r *APIKeyRepository) UpdateAPIKey(ctx context.Context, apiKey *schema.APIKey) error {
 	apiKey.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
@@ -119,10 +130,11 @@ func (r *APIKeyRepository) UpdateAPIKey(ctx context.Context, apiKey *schema.APIK
 		Where("id = ?", apiKey.ID).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// UpdateAPIKeyUsage updates the usage statistics for an API key
+// UpdateAPIKeyUsage updates the usage statistics for an API key.
 func (r *APIKeyRepository) UpdateAPIKeyUsage(ctx context.Context, id xid.ID, ip, userAgent string) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -135,10 +147,11 @@ func (r *APIKeyRepository) UpdateAPIKeyUsage(ctx context.Context, id xid.ID, ip,
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteAPIKey soft deletes an API key
+// DeleteAPIKey soft deletes an API key.
 func (r *APIKeyRepository) DeleteAPIKey(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -148,10 +161,11 @@ func (r *APIKeyRepository) DeleteAPIKey(ctx context.Context, id xid.ID) error {
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// DeactivateAPIKey deactivates an API key without deleting it
+// DeactivateAPIKey deactivates an API key without deleting it.
 func (r *APIKeyRepository) DeactivateAPIKey(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -161,10 +175,11 @@ func (r *APIKeyRepository) DeactivateAPIKey(ctx context.Context, id xid.ID) erro
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// CountAPIKeys counts API keys with flexible filtering
+// CountAPIKeys counts API keys with flexible filtering.
 func (r *APIKeyRepository) CountAPIKeys(ctx context.Context, appID xid.ID, envID *xid.ID, orgID *xid.ID, userID *xid.ID) (int, error) {
 	query := r.db.NewSelect().
 		Model((*schema.APIKey)(nil)).
@@ -174,20 +189,24 @@ func (r *APIKeyRepository) CountAPIKeys(ctx context.Context, appID xid.ID, envID
 	if envID != nil {
 		query = query.Where("environment_id = ?", *envID)
 	}
+
 	if orgID != nil {
 		query = query.Where("organization_id = ?", *orgID)
 	}
+
 	if userID != nil {
 		query = query.Where("user_id = ?", *userID)
 	}
 
 	count, err := query.Count(ctx)
+
 	return count, err
 }
 
-// CleanupExpiredAPIKeys removes expired API keys
+// CleanupExpiredAPIKeys removes expired API keys.
 func (r *APIKeyRepository) CleanupExpiredAPIKeys(ctx context.Context) (int, error) {
 	now := time.Now()
+
 	result, err := r.db.NewUpdate().
 		Model((*schema.APIKey)(nil)).
 		Set("deleted_at = ?", now).
@@ -201,5 +220,6 @@ func (r *APIKeyRepository) CleanupExpiredAPIKeys(ctx context.Context) (int, erro
 	}
 
 	rowsAffected, err := result.RowsAffected()
+
 	return int(rowsAffected), err
 }

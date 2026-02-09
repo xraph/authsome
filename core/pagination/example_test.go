@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// User represents a sample user model
+// User represents a sample user model.
 type User struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -16,7 +16,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Example demonstrates basic offset-based pagination
+// Example demonstrates basic offset-based pagination.
 func Example_offsetPagination() {
 	// Simulate request parameters
 	params := &pagination.PaginationParams{
@@ -31,6 +31,7 @@ func Example_offsetPagination() {
 	// Validate parameters
 	if err := params.Validate(); err != nil {
 		fmt.Printf("Validation error: %v\n", err)
+
 		return
 	}
 
@@ -55,7 +56,7 @@ func Example_offsetPagination() {
 	// Total items: 25
 }
 
-// Example demonstrates cursor-based pagination
+// Example demonstrates cursor-based pagination.
 func Example_cursorPagination() {
 	params := &pagination.CursorParams{
 		BaseRequestParams: pagination.BaseRequestParams{
@@ -66,6 +67,7 @@ func Example_cursorPagination() {
 
 	if err := params.Validate(); err != nil {
 		fmt.Printf("Validation error: %v\n", err)
+
 		return
 	}
 
@@ -90,13 +92,14 @@ func Example_cursorPagination() {
 	// Has cursor: true
 }
 
-// Example demonstrates parameter validation with defaults
+// Example demonstrates parameter validation with defaults.
 func Example_parameterValidation() {
 	// Parameters with defaults
 	params := &pagination.PaginationParams{}
 
 	if err := params.Validate(); err != nil {
 		fmt.Printf("Error: %v\n", err)
+
 		return
 	}
 
@@ -109,7 +112,7 @@ func Example_parameterValidation() {
 	// Order: desc
 }
 
-// Example demonstrates field selection
+// Example demonstrates field selection.
 func Example_fieldSelection() {
 	params := &pagination.PaginationParams{
 		BaseRequestParams: pagination.BaseRequestParams{
@@ -126,7 +129,7 @@ func Example_fieldSelection() {
 	// Has fields: true
 }
 
-// Example demonstrates SQL ORDER BY clause generation
+// Example demonstrates SQL ORDER BY clause generation.
 func Example_sqlOrderClause() {
 	params := &pagination.PaginationParams{
 		BaseRequestParams: pagination.BaseRequestParams{
@@ -141,7 +144,7 @@ func Example_sqlOrderClause() {
 	// ORDER BY name ASC
 }
 
-// Example demonstrates cursor encoding and decoding
+// Example demonstrates cursor encoding and decoding.
 func Example_cursorEncoding() {
 	// Encode cursor
 	id := "user_123"
@@ -151,6 +154,7 @@ func Example_cursorEncoding() {
 	encoded, err := pagination.EncodeCursor(id, timestamp, value)
 	if err != nil {
 		fmt.Printf("Encoding error: %v\n", err)
+
 		return
 	}
 
@@ -158,6 +162,7 @@ func Example_cursorEncoding() {
 	decoded, err := pagination.DecodeCursor(encoded)
 	if err != nil {
 		fmt.Printf("Decoding error: %v\n", err)
+
 		return
 	}
 
@@ -168,7 +173,7 @@ func Example_cursorEncoding() {
 	// Value: alice
 }
 
-// Example demonstrates empty response handling
+// Example demonstrates empty response handling.
 func Example_emptyResponse() {
 	response := pagination.NewEmptyPageResponse[User]()
 
@@ -181,7 +186,7 @@ func Example_emptyResponse() {
 	// Has next: false
 }
 
-// ExamplePaginationParams_GetOffset demonstrates offset calculation
+// ExamplePaginationParams_GetOffset demonstrates offset calculation.
 func ExamplePaginationParams_GetOffset() {
 	// Using page number
 	params := &pagination.PaginationParams{
@@ -195,7 +200,7 @@ func ExamplePaginationParams_GetOffset() {
 	// Page 3 offset: 20
 }
 
-// ExamplePaginationParams_GetPage demonstrates page calculation
+// ExamplePaginationParams_GetPage demonstrates page calculation.
 func ExamplePaginationParams_GetPage() {
 	// Using offset
 	params := &pagination.PaginationParams{
@@ -209,7 +214,7 @@ func ExamplePaginationParams_GetPage() {
 	// Offset 50 page: 6
 }
 
-// Example_handlerIntegration demonstrates integration with a handler
+// Example_handlerIntegration demonstrates integration with a handler.
 func Example_handlerIntegration() {
 	// This example shows typical handler usage
 
@@ -226,6 +231,7 @@ func Example_handlerIntegration() {
 	// 2. Validate
 	if err := params.Validate(); err != nil {
 		fmt.Printf("Validation failed: %v\n", err)
+
 		return
 	}
 
@@ -247,11 +253,10 @@ func Example_handlerIntegration() {
 	// Items: 21-40 of 50
 }
 
-// queryUsers simulates a database query
+// queryUsers simulates a database query.
 func queryUsers(ctx context.Context, params *pagination.PaginationParams) ([]User, int64) {
 	// In real code, this would query your database
 	// using params.GetLimit(), params.GetOffset(), etc.
-
 	users := make([]User, 20) // Simulate 20 results
 	for i := range users {
 		users[i] = User{

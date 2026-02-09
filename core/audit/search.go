@@ -8,11 +8,12 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// max returns the maximum of two integers
+// max returns the maximum of two integers.
 func max(a, b int) int {
 	if a > b {
 		return a
 	}
+
 	return b
 }
 
@@ -20,7 +21,7 @@ func max(a, b int) int {
 // FULL-TEXT SEARCH - Database-native search capabilities
 // =============================================================================
 
-// SearchQuery represents a full-text search query with filters
+// SearchQuery represents a full-text search query with filters.
 type SearchQuery struct {
 	// Search query string (supports natural language and operators)
 	Query string `json:"query"`
@@ -45,13 +46,13 @@ type SearchQuery struct {
 	Until          *time.Time `json:"until,omitempty"`
 }
 
-// SearchResult represents a single search result
+// SearchResult represents a single search result.
 type SearchResult struct {
 	Event *Event  `json:"event"`
 	Rank  float64 `json:"rank"` // Relevance score (0-1)
 }
 
-// SearchResponse represents paginated search results
+// SearchResponse represents paginated search results.
 type SearchResponse struct {
 	Results    []*SearchResult      `json:"results"`
 	Pagination *pagination.PageMeta `json:"pagination"`
@@ -59,7 +60,7 @@ type SearchResponse struct {
 	TookMs     int64                `json:"tookMs"` // Query execution time in milliseconds
 }
 
-// SearchRepository defines database-specific search implementation
+// SearchRepository defines database-specific search implementation.
 type SearchRepository interface {
 	// Search performs full-text search on audit events
 	Search(ctx context.Context, query *SearchQuery) (*SearchResponse, error)
@@ -71,7 +72,7 @@ type SearchRepository interface {
 	SearchSQLite(ctx context.Context, query *SearchQuery) (*SearchResponse, error)
 }
 
-// Search performs full-text search on audit events
+// Search performs full-text search on audit events.
 func (s *Service) Search(ctx context.Context, query *SearchQuery) (*SearchResponse, error) {
 	// Validate query
 	if query == nil {
@@ -86,6 +87,7 @@ func (s *Service) Search(ctx context.Context, query *SearchQuery) (*SearchRespon
 	if query.Limit < 0 {
 		return nil, InvalidPagination("limit cannot be negative")
 	}
+
 	if query.Offset < 0 {
 		return nil, InvalidPagination("offset cannot be negative")
 	}
@@ -109,6 +111,7 @@ func (s *Service) Search(ctx context.Context, query *SearchQuery) (*SearchRespon
 
 	// Execute search
 	startTime := time.Now()
+
 	results, err := searchRepo.Search(ctx, query)
 	if err != nil {
 		return nil, QueryFailed("search", err)
@@ -120,7 +123,7 @@ func (s *Service) Search(ctx context.Context, query *SearchQuery) (*SearchRespon
 }
 
 // searchFallback performs search using basic filtering (when FTS not available)
-// This is a fallback for repositories that don't implement SearchRepository
+// This is a fallback for repositories that don't implement SearchRepository.
 func (s *Service) searchFallback(ctx context.Context, query *SearchQuery) (*SearchResponse, error) {
 	// Convert search to basic filters
 	action := query.Action
@@ -162,12 +165,12 @@ func (s *Service) searchFallback(ctx context.Context, query *SearchQuery) (*Sear
 // SEARCH QUERY BUILDER - Helper for constructing search queries
 // =============================================================================
 
-// SearchQueryBuilder provides fluent API for building search queries
+// SearchQueryBuilder provides fluent API for building search queries.
 type SearchQueryBuilder struct {
 	query *SearchQuery
 }
 
-// NewSearchQuery creates a new search query builder
+// NewSearchQuery creates a new search query builder.
 func NewSearchQuery(searchText string) *SearchQueryBuilder {
 	return &SearchQueryBuilder{
 		query: &SearchQuery{
@@ -178,73 +181,84 @@ func NewSearchQuery(searchText string) *SearchQueryBuilder {
 	}
 }
 
-// InFields restricts search to specific fields
+// InFields restricts search to specific fields.
 func (b *SearchQueryBuilder) InFields(fields ...string) *SearchQueryBuilder {
 	b.query.Fields = fields
+
 	return b
 }
 
-// Fuzzy enables fuzzy matching
+// Fuzzy enables fuzzy matching.
 func (b *SearchQueryBuilder) Fuzzy() *SearchQueryBuilder {
 	b.query.FuzzyMatch = true
+
 	return b
 }
 
-// ForApp filters by app ID
+// ForApp filters by app ID.
 func (b *SearchQueryBuilder) ForApp(appID xid.ID) *SearchQueryBuilder {
 	b.query.AppID = &appID
+
 	return b
 }
 
-// ForOrganization filters by organization ID (optional)
+// ForOrganization filters by organization ID (optional).
 func (b *SearchQueryBuilder) ForOrganization(orgID xid.ID) *SearchQueryBuilder {
 	b.query.OrganizationID = &orgID
+
 	return b
 }
 
-// ForEnvironment filters by environment ID
+// ForEnvironment filters by environment ID.
 func (b *SearchQueryBuilder) ForEnvironment(envID xid.ID) *SearchQueryBuilder {
 	b.query.EnvironmentID = &envID
+
 	return b
 }
 
-// ForUser filters by user ID
+// ForUser filters by user ID.
 func (b *SearchQueryBuilder) ForUser(userID xid.ID) *SearchQueryBuilder {
 	b.query.UserID = &userID
+
 	return b
 }
 
-// WithAction filters by action
+// WithAction filters by action.
 func (b *SearchQueryBuilder) WithAction(action string) *SearchQueryBuilder {
 	b.query.Action = action
+
 	return b
 }
 
-// Since filters events after timestamp
+// Since filters events after timestamp.
 func (b *SearchQueryBuilder) Since(t time.Time) *SearchQueryBuilder {
 	b.query.Since = &t
+
 	return b
 }
 
-// Until filters events before timestamp
+// Until filters events before timestamp.
 func (b *SearchQueryBuilder) Until(t time.Time) *SearchQueryBuilder {
 	b.query.Until = &t
+
 	return b
 }
 
-// Limit sets result limit
+// Limit sets result limit.
 func (b *SearchQueryBuilder) Limit(limit int) *SearchQueryBuilder {
 	b.query.Limit = limit
+
 	return b
 }
 
-// Offset sets result offset
+// Offset sets result offset.
 func (b *SearchQueryBuilder) Offset(offset int) *SearchQueryBuilder {
 	b.query.Offset = offset
+
 	return b
 }
 
-// Build returns the constructed query
+// Build returns the constructed query.
 func (b *SearchQueryBuilder) Build() *SearchQuery {
 	return b.query
 }

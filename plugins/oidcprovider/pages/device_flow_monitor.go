@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DeviceFlowMonitorPage shows active device authorization codes
+// DeviceFlowMonitorPage shows active device authorization codes.
 func (p *PagesManager) DeviceFlowMonitorPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

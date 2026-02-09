@@ -1,6 +1,6 @@
 package notification
 
-// TemplateDefault represents a default template
+// TemplateDefault represents a default template.
 type TemplateDefault struct {
 	TemplateKey string
 	Type        string
@@ -11,7 +11,7 @@ type TemplateDefault struct {
 	Description string
 }
 
-// DefaultTemplates returns the default notification templates
+// DefaultTemplates returns the default notification templates.
 func DefaultTemplates() []TemplateDefault {
 	return []TemplateDefault{
 		// Welcome Email

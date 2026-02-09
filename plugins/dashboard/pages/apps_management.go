@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// AppsManagementPage shows platform-level apps management (admin only)
+// AppsManagementPage shows platform-level apps management (admin only).
 func (p *PagesManager) AppsManagementPage(ctx *router.PageContext) (g.Node, error) {
 	return primitives.Container(
 		Div(

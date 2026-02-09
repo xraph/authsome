@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// AddOnService handles add-on business logic
+// AddOnService handles add-on business logic.
 type AddOnService struct {
 	repo      repository.AddOnRepository
 	subRepo   repository.SubscriptionRepository
@@ -22,7 +22,7 @@ type AddOnService struct {
 	eventRepo repository.EventRepository
 }
 
-// NewAddOnService creates a new add-on service
+// NewAddOnService creates a new add-on service.
 func NewAddOnService(
 	repo repository.AddOnRepository,
 	subRepo repository.SubscriptionRepository,
@@ -37,7 +37,7 @@ func NewAddOnService(
 	}
 }
 
-// Create creates a new add-on
+// Create creates a new add-on.
 func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.CreateAddOnRequest) (*core.AddOn, error) {
 	// Validate billing pattern
 	if !req.BillingPattern.IsValid() {
@@ -74,7 +74,7 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 	if req.Metadata != nil {
 		addon.Metadata = req.Metadata
 	} else {
-		addon.Metadata = make(map[string]interface{})
+		addon.Metadata = make(map[string]any)
 	}
 
 	if req.Currency == "" {
@@ -87,6 +87,7 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 		for i, id := range req.RequiresPlanIDs {
 			ids[i] = id.String()
 		}
+
 		addon.RequiresPlanIDs = ids
 	}
 
@@ -95,6 +96,7 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 		for i, id := range req.ExcludesPlanIDs {
 			ids[i] = id.String()
 		}
+
 		addon.ExcludesPlanIDs = ids
 	}
 
@@ -106,6 +108,7 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 	// Create features
 	for _, f := range req.Features {
 		valueJSON, _ := json.Marshal(f.Value)
+
 		feature := &schema.SubscriptionAddOnFeature{
 			ID:          xid.New(),
 			AddOnID:     addon.ID,
@@ -155,7 +158,7 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 	return coreAddOn, nil
 }
 
-// Update updates an existing add-on
+// Update updates an existing add-on.
 func (s *AddOnService) Update(ctx context.Context, id xid.ID, req *core.UpdateAddOnRequest) (*core.AddOn, error) {
 	addon, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -166,27 +169,35 @@ func (s *AddOnService) Update(ctx context.Context, id xid.ID, req *core.UpdateAd
 	if req.Name != nil {
 		addon.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		addon.Description = *req.Description
 	}
+
 	if req.Price != nil {
 		addon.Price = *req.Price
 	}
+
 	if req.TierMode != nil {
 		addon.TierMode = string(*req.TierMode)
 	}
+
 	if req.IsActive != nil {
 		addon.IsActive = *req.IsActive
 	}
+
 	if req.IsPublic != nil {
 		addon.IsPublic = *req.IsPublic
 	}
+
 	if req.DisplayOrder != nil {
 		addon.DisplayOrder = *req.DisplayOrder
 	}
+
 	if req.MaxQuantity != nil {
 		addon.MaxQuantity = *req.MaxQuantity
 	}
+
 	if req.Metadata != nil {
 		addon.Metadata = req.Metadata
 	}
@@ -205,6 +216,7 @@ func (s *AddOnService) Update(ctx context.Context, id xid.ID, req *core.UpdateAd
 
 		for _, f := range req.Features {
 			valueJSON, _ := json.Marshal(f.Value)
+
 			feature := &schema.SubscriptionAddOnFeature{
 				ID:          xid.New(),
 				AddOnID:     addon.ID,
@@ -245,10 +257,11 @@ func (s *AddOnService) Update(ctx context.Context, id xid.ID, req *core.UpdateAd
 
 	// Reload
 	addon, _ = s.repo.FindByID(ctx, id)
+
 	return s.schemaToCoreAddOn(addon), nil
 }
 
-// Delete deletes an add-on
+// Delete deletes an add-on.
 func (s *AddOnService) Delete(ctx context.Context, id xid.ID) error {
 	if err := s.repo.DeleteFeatures(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete features: %w", err)
@@ -261,25 +274,27 @@ func (s *AddOnService) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// GetByID retrieves an add-on by ID
+// GetByID retrieves an add-on by ID.
 func (s *AddOnService) GetByID(ctx context.Context, id xid.ID) (*core.AddOn, error) {
 	addon, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, suberrors.ErrAddOnNotFound
 	}
+
 	return s.schemaToCoreAddOn(addon), nil
 }
 
-// GetBySlug retrieves an add-on by slug
+// GetBySlug retrieves an add-on by slug.
 func (s *AddOnService) GetBySlug(ctx context.Context, appID xid.ID, slug string) (*core.AddOn, error) {
 	addon, err := s.repo.FindBySlug(ctx, appID, slug)
 	if err != nil {
 		return nil, suberrors.ErrAddOnNotFound
 	}
+
 	return s.schemaToCoreAddOn(addon), nil
 }
 
-// List retrieves add-ons with filtering
+// List retrieves add-ons with filtering.
 func (s *AddOnService) List(ctx context.Context, appID xid.ID, activeOnly, publicOnly bool, page, pageSize int) ([]*core.AddOn, int, error) {
 	filter := &repository.AddOnFilter{
 		AppID:    &appID,
@@ -291,6 +306,7 @@ func (s *AddOnService) List(ctx context.Context, appID xid.ID, activeOnly, publi
 		active := true
 		filter.IsActive = &active
 	}
+
 	if publicOnly {
 		public := true
 		filter.IsPublic = &public
@@ -309,7 +325,7 @@ func (s *AddOnService) List(ctx context.Context, appID xid.ID, activeOnly, publi
 	return result, count, nil
 }
 
-// GetAvailableForPlan retrieves add-ons available for a specific plan
+// GetAvailableForPlan retrieves add-ons available for a specific plan.
 func (s *AddOnService) GetAvailableForPlan(ctx context.Context, planID xid.ID) ([]*core.AddOn, error) {
 	// Get all active add-ons
 	active := true
@@ -324,6 +340,7 @@ func (s *AddOnService) GetAvailableForPlan(ctx context.Context, planID xid.ID) (
 
 	// Filter by plan availability
 	result := make([]*core.AddOn, 0)
+
 	for _, addon := range addons {
 		coreAddon := s.schemaToCoreAddOn(addon)
 		if coreAddon.IsAvailableForPlan(planID) {
@@ -378,7 +395,7 @@ func (s *AddOnService) schemaToCore(addon *schema.SubscriptionAddOn, features []
 func (s *AddOnService) schemaToCoreAddOn(addon *schema.SubscriptionAddOn) *core.AddOn {
 	features := make([]core.PlanFeature, len(addon.Features))
 	for i, f := range addon.Features {
-		var value interface{}
+		var value any
 		json.Unmarshal([]byte(f.Value), &value)
 		features[i] = core.PlanFeature{
 			Key:         f.Key,

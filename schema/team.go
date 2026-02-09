@@ -5,22 +5,22 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Team represents the team table (belongs to App)
+// Team represents the team table (belongs to App).
 type Team struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:teams,alias:t"`
 
-	ID          xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	AppID       xid.ID                 `json:"appID" bun:"app_id,notnull,type:varchar(20)"` // App context
-	Name        string                 `json:"name" bun:"name,notnull"`
-	Description string                 `json:"description" bun:"description"`
-	Metadata    map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
+	ID          xid.ID         `bun:"id,pk,type:varchar(20)"          json:"id"`
+	AppID       xid.ID         `bun:"app_id,notnull,type:varchar(20)" json:"appID"` // App context
+	Name        string         `bun:"name,notnull"                    json:"name"`
+	Description string         `bun:"description"                     json:"description"`
+	Metadata    map[string]any `bun:"metadata,type:jsonb"             json:"metadata"`
 
 	// Provisioning tracking
-	ProvisionedBy *string `json:"provisionedBy,omitempty" bun:"provisioned_by,type:varchar(50)"` // e.g., "scim"
-	ExternalID    *string `json:"externalID,omitempty" bun:"external_id,type:varchar(255)"`      // External system ID
+	ProvisionedBy *string `bun:"provisioned_by,type:varchar(50)" json:"provisionedBy,omitempty"` // e.g., "scim"
+	ExternalID    *string `bun:"external_id,type:varchar(255)"   json:"externalID,omitempty"`    // External system ID
 
 	// Relations
-	App     *App     `json:"app,omitempty" bun:"rel:belongs-to,join:app_id=id"`
-	Members []Member `json:"members,omitempty" bun:"m2m:team_members,join:Team=Member"`
+	App     *App     `bun:"rel:belongs-to,join:app_id=id"     json:"app,omitempty"`
+	Members []Member `bun:"m2m:team_members,join:Team=Member" json:"members,omitempty"`
 }

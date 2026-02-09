@@ -12,7 +12,7 @@ import (
 // =============================================================================
 
 // PermissionPolicy represents a permission policy in the database
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type PermissionPolicy struct {
 	bun.BaseModel `bun:"table:permission_policies,alias:pp"`
 
@@ -20,28 +20,28 @@ type PermissionPolicy struct {
 	ID xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
 
 	// V2 Multi-tenant context
-	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"         json:"appId"`
 	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
-	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"   json:"userOrganizationId,omitempty"`
 
 	// Policy details
 	NamespaceID  xid.ID   `bun:"namespace_id,notnull,type:varchar(20)" json:"namespaceId"`
-	Name         string   `bun:"name,notnull" json:"name"`
-	Description  string   `bun:"description" json:"description"`
-	Expression   string   `bun:"expression,notnull" json:"expression"`
-	ResourceType string   `bun:"resource_type,notnull" json:"resourceType"`
-	Actions      []string `bun:"actions,array" json:"actions"`
-	Priority     int      `bun:"priority,default:0" json:"priority"`
-	Enabled      bool     `bun:"enabled,default:true" json:"enabled"`
-	Version      int      `bun:"version,default:1" json:"version"`
+	Name         string   `bun:"name,notnull"                          json:"name"`
+	Description  string   `bun:"description"                           json:"description"`
+	Expression   string   `bun:"expression,notnull"                    json:"expression"`
+	ResourceType string   `bun:"resource_type,notnull"                 json:"resourceType"`
+	Actions      []string `bun:"actions,array"                         json:"actions"`
+	Priority     int      `bun:"priority,default:0"                    json:"priority"`
+	Enabled      bool     `bun:"enabled,default:true"                  json:"enabled"`
+	Version      int      `bun:"version,default:1"                     json:"version"`
 
 	// Audit fields
-	CreatedBy xid.ID    `bun:"created_by,type:varchar(20)" json:"createdBy"`
+	CreatedBy xid.ID    `bun:"created_by,type:varchar(20)"                  json:"createdBy"`
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
 	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// TableName returns the table name for PermissionPolicy
+// TableName returns the table name for PermissionPolicy.
 func (PermissionPolicy) TableName() string {
 	return "permission_policies"
 }
@@ -51,7 +51,7 @@ func (PermissionPolicy) TableName() string {
 // =============================================================================
 
 // PermissionNamespace represents a permission namespace in the database
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type PermissionNamespace struct {
 	bun.BaseModel `bun:"table:permission_namespaces,alias:pn"`
 
@@ -59,14 +59,14 @@ type PermissionNamespace struct {
 	ID xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
 
 	// V2 Multi-tenant context
-	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"         json:"appId"`
 	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
-	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"   json:"userOrganizationId,omitempty"`
 
 	// Namespace details
-	Name            string  `bun:"name,notnull" json:"name"`
-	Description     string  `bun:"description" json:"description"`
-	TemplateID      *xid.ID `bun:"template_id,type:varchar(20)" json:"templateId,omitempty"`
+	Name            string  `bun:"name,notnull"                   json:"name"`
+	Description     string  `bun:"description"                    json:"description"`
+	TemplateID      *xid.ID `bun:"template_id,type:varchar(20)"   json:"templateId,omitempty"`
 	InheritPlatform bool    `bun:"inherit_platform,default:false" json:"inheritPlatform"`
 
 	// Audit fields
@@ -74,7 +74,7 @@ type PermissionNamespace struct {
 	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// TableName returns the table name for PermissionNamespace
+// TableName returns the table name for PermissionNamespace.
 func (PermissionNamespace) TableName() string {
 	return "permission_namespaces"
 }
@@ -83,16 +83,16 @@ func (PermissionNamespace) TableName() string {
 // PERMISSION RESOURCE
 // =============================================================================
 
-// ResourceAttribute represents an attribute definition for a resource type
+// ResourceAttribute represents an attribute definition for a resource type.
 type ResourceAttribute struct {
-	Name        string      `json:"name"`
-	Type        string      `json:"type"`
-	Required    bool        `json:"required"`
-	Default     interface{} `json:"default,omitempty"`
-	Description string      `json:"description,omitempty"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Required    bool   `json:"required"`
+	Default     any    `json:"default,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
-// PermissionResource represents a resource type definition in the database
+// PermissionResource represents a resource type definition in the database.
 type PermissionResource struct {
 	bun.BaseModel `bun:"table:permission_resources,alias:pr"`
 
@@ -103,15 +103,15 @@ type PermissionResource struct {
 	NamespaceID xid.ID `bun:"namespace_id,notnull,type:varchar(20)" json:"namespaceId"`
 
 	// Resource details
-	Type        string              `bun:"type,notnull" json:"type"`
-	Description string              `bun:"description" json:"description"`
+	Type        string              `bun:"type,notnull"          json:"type"`
+	Description string              `bun:"description"           json:"description"`
 	Attributes  []ResourceAttribute `bun:"attributes,type:jsonb" json:"attributes"`
 
 	// Audit fields
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
 }
 
-// TableName returns the table name for PermissionResource
+// TableName returns the table name for PermissionResource.
 func (PermissionResource) TableName() string {
 	return "permission_resources"
 }
@@ -120,7 +120,7 @@ func (PermissionResource) TableName() string {
 // PERMISSION ACTION
 // =============================================================================
 
-// PermissionAction represents an action definition in the database
+// PermissionAction represents an action definition in the database.
 type PermissionAction struct {
 	bun.BaseModel `bun:"table:permission_actions,alias:pa"`
 
@@ -132,13 +132,13 @@ type PermissionAction struct {
 
 	// Action details
 	Name        string `bun:"name,notnull" json:"name"`
-	Description string `bun:"description" json:"description"`
+	Description string `bun:"description"  json:"description"`
 
 	// Audit fields
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
 }
 
-// TableName returns the table name for PermissionAction
+// TableName returns the table name for PermissionAction.
 func (PermissionAction) TableName() string {
 	return "permission_actions"
 }
@@ -148,7 +148,7 @@ func (PermissionAction) TableName() string {
 // =============================================================================
 
 // PermissionAuditLog represents an audit log entry in the database
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type PermissionAuditLog struct {
 	bun.BaseModel `bun:"table:permission_audit_logs,alias:pal"`
 
@@ -156,17 +156,17 @@ type PermissionAuditLog struct {
 	ID xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
 
 	// V2 Multi-tenant context
-	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"         json:"appId"`
 	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
-	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"   json:"userOrganizationId,omitempty"`
 
 	// Audit details
-	ActorID      xid.ID                 `bun:"actor_id,notnull,type:varchar(20)" json:"actorId"`
-	Action       string                 `bun:"action,notnull" json:"action"`
-	ResourceType string                 `bun:"resource_type" json:"resourceType"`
-	ResourceID   xid.ID                 `bun:"resource_id,type:varchar(20)" json:"resourceId"`
-	OldValue     map[string]interface{} `bun:"old_value,type:jsonb" json:"oldValue,omitempty"`
-	NewValue     map[string]interface{} `bun:"new_value,type:jsonb" json:"newValue,omitempty"`
+	ActorID      xid.ID         `bun:"actor_id,notnull,type:varchar(20)" json:"actorId"`
+	Action       string         `bun:"action,notnull"                    json:"action"`
+	ResourceType string         `bun:"resource_type"                     json:"resourceType"`
+	ResourceID   xid.ID         `bun:"resource_id,type:varchar(20)"      json:"resourceId"`
+	OldValue     map[string]any `bun:"old_value,type:jsonb"              json:"oldValue,omitempty"`
+	NewValue     map[string]any `bun:"new_value,type:jsonb"              json:"newValue,omitempty"`
 
 	// Request metadata
 	IPAddress string `bun:"ip_address" json:"ipAddress"`
@@ -176,7 +176,7 @@ type PermissionAuditLog struct {
 	Timestamp time.Time `bun:"timestamp,notnull,default:current_timestamp" json:"timestamp"`
 }
 
-// TableName returns the table name for PermissionAuditLog
+// TableName returns the table name for PermissionAuditLog.
 func (PermissionAuditLog) TableName() string {
 	return "permission_audit_logs"
 }
@@ -186,7 +186,7 @@ func (PermissionAuditLog) TableName() string {
 // =============================================================================
 
 // PermissionEvaluationStats tracks policy evaluation statistics
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type PermissionEvaluationStats struct {
 	bun.BaseModel `bun:"table:permission_evaluation_stats,alias:pes"`
 
@@ -194,30 +194,30 @@ type PermissionEvaluationStats struct {
 	ID xid.ID `bun:"id,pk,type:varchar(20)" json:"id"`
 
 	// V2 Multi-tenant context
-	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)" json:"appId"`
+	AppID              xid.ID  `bun:"app_id,notnull,type:varchar(20)"         json:"appId"`
 	EnvironmentID      xid.ID  `bun:"environment_id,notnull,type:varchar(20)" json:"environmentId"`
-	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)" json:"userOrganizationId,omitempty"`
+	UserOrganizationID *xid.ID `bun:"user_organization_id,type:varchar(20)"   json:"userOrganizationId,omitempty"`
 
 	// Policy reference
 	PolicyID xid.ID `bun:"policy_id,notnull,type:varchar(20)" json:"policyId"`
 
 	// Statistics
 	EvaluationCount int64     `bun:"evaluation_count,default:0" json:"evaluationCount"`
-	AllowCount      int64     `bun:"allow_count,default:0" json:"allowCount"`
-	DenyCount       int64     `bun:"deny_count,default:0" json:"denyCount"`
-	ErrorCount      int64     `bun:"error_count,default:0" json:"errorCount"`
+	AllowCount      int64     `bun:"allow_count,default:0"      json:"allowCount"`
+	DenyCount       int64     `bun:"deny_count,default:0"       json:"denyCount"`
+	ErrorCount      int64     `bun:"error_count,default:0"      json:"errorCount"`
 	TotalLatencyMs  float64   `bun:"total_latency_ms,default:0" json:"totalLatencyMs"`
-	AvgLatencyMs    float64   `bun:"avg_latency_ms,default:0" json:"avgLatencyMs"`
-	P50LatencyMs    float64   `bun:"p50_latency_ms,default:0" json:"p50LatencyMs"`
-	P99LatencyMs    float64   `bun:"p99_latency_ms,default:0" json:"p99LatencyMs"`
-	LastEvaluated   time.Time `bun:"last_evaluated" json:"lastEvaluated"`
+	AvgLatencyMs    float64   `bun:"avg_latency_ms,default:0"   json:"avgLatencyMs"`
+	P50LatencyMs    float64   `bun:"p50_latency_ms,default:0"   json:"p50LatencyMs"`
+	P99LatencyMs    float64   `bun:"p99_latency_ms,default:0"   json:"p99LatencyMs"`
+	LastEvaluated   time.Time `bun:"last_evaluated"             json:"lastEvaluated"`
 
 	// Audit fields
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
 	UpdatedAt time.Time `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// TableName returns the table name for PermissionEvaluationStats
+// TableName returns the table name for PermissionEvaluationStats.
 func (PermissionEvaluationStats) TableName() string {
 	return "permission_evaluation_stats"
 }

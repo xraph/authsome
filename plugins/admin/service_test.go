@@ -21,7 +21,6 @@ func TestCheckAdminPermission_InvalidAdminID(t *testing.T) {
 	// This test verifies that checkAdminPermission properly validates admin IDs
 	// In a real scenario, this would be tested with actual service dependencies
 	// For now, we're testing the ID parsing logic
-
 	invalidID := "invalid-xid"
 	_, err := xid.FromString(invalidID)
 	assert.Error(t, err, "Invalid XID should produce an error")
@@ -116,12 +115,14 @@ func TestListUsersRequest_Defaults(t *testing.T) {
 	if page <= 0 {
 		page = 1
 	}
+
 	assert.Equal(t, 1, page)
 
 	limit := req.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
+
 	assert.Equal(t, 20, limit)
 }
 
@@ -144,12 +145,14 @@ func TestListSessionsRequest_Defaults(t *testing.T) {
 	if page <= 0 {
 		page = 1
 	}
+
 	assert.Equal(t, 1, page)
 
 	limit := req.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
+
 	assert.Equal(t, 20, limit)
 }
 

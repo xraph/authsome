@@ -6,28 +6,28 @@ import (
 	"strings"
 )
 
-// Path validation constants
+// Path validation constants.
 const (
-	// MinPathLength is the minimum length for a secret path
+	// MinPathLength is the minimum length for a secret path.
 	MinPathLength = 1
-	// MaxPathLength is the maximum length for a secret path
+	// MaxPathLength is the maximum length for a secret path.
 	MaxPathLength = 512
-	// MaxPathSegments is the maximum number of path segments
+	// MaxPathSegments is the maximum number of path segments.
 	MaxPathSegments = 20
-	// PathSeparator is the separator used in secret paths
+	// PathSeparator is the separator used in secret paths.
 	PathSeparator = "/"
 )
 
 // pathRegex validates path format: alphanumeric with underscores, hyphens, and forward slashes
 // Must start and end with alphanumeric character
-// Examples: "database/postgres/password", "api-keys/stripe", "config_v2/settings"
+// Examples: "database/postgres/password", "api-keys/stripe", "config_v2/settings".
 var pathRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_\-/]*[a-zA-Z0-9])?$`)
 
-// segmentRegex validates individual path segments
+// segmentRegex validates individual path segments.
 var segmentRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_\-]*[a-zA-Z0-9])?$`)
 
 // ParsePath parses a secret path into segments and extracts the key (leaf node)
-// Returns the parent segments, the key name, and any error
+// Returns the parent segments, the key name, and any error.
 func ParsePath(path string) (segments []string, key string, err error) {
 	// Check for double slashes before normalization
 	if strings.Contains(path, "//") {
@@ -66,6 +66,7 @@ func ParsePath(path string) (segments []string, key string, err error) {
 		if segment == "" {
 			return nil, "", ErrInvalidPath(path, "path contains empty segments")
 		}
+
 		if !segmentRegex.MatchString(segment) {
 			return nil, "", ErrInvalidPath(path, "segment '"+segment+"' contains invalid characters")
 		}
@@ -85,7 +86,7 @@ func ParsePath(path string) (segments []string, key string, err error) {
 // NormalizePath normalizes a secret path by:
 // - Trimming leading/trailing slashes and whitespace
 // - Converting to lowercase
-// - Removing consecutive slashes
+// - Removing consecutive slashes.
 func NormalizePath(path string) string {
 	// Trim whitespace
 	path = strings.TrimSpace(path)
@@ -98,6 +99,7 @@ func NormalizePath(path string) string {
 
 	// Remove consecutive slashes by splitting and rejoining
 	parts := strings.Split(path, PathSeparator)
+
 	cleanParts := make([]string, 0, len(parts))
 	for _, part := range parts {
 		if part != "" {
@@ -109,7 +111,7 @@ func NormalizePath(path string) string {
 }
 
 // GetParentPath returns the parent path (everything except the last segment)
-// Returns empty string if the path has no parent
+// Returns empty string if the path has no parent.
 func GetParentPath(path string) string {
 	path = NormalizePath(path)
 	if path == "" {
@@ -124,7 +126,7 @@ func GetParentPath(path string) string {
 	return path[:idx]
 }
 
-// GetKey returns the key (last segment) from a path
+// GetKey returns the key (last segment) from a path.
 func GetKey(path string) string {
 	path = NormalizePath(path)
 	if path == "" {
@@ -139,7 +141,7 @@ func GetKey(path string) string {
 	return path[idx+1:]
 }
 
-// JoinPath joins path segments into a single path
+// JoinPath joins path segments into a single path.
 func JoinPath(segments ...string) string {
 	nonEmpty := make([]string, 0, len(segments))
 	for _, s := range segments {
@@ -148,11 +150,12 @@ func JoinPath(segments ...string) string {
 			nonEmpty = append(nonEmpty, s)
 		}
 	}
+
 	return NormalizePath(strings.Join(nonEmpty, PathSeparator))
 }
 
 // MatchesPrefix checks if a path matches a given prefix
-// Both paths are normalized before comparison
+// Both paths are normalized before comparison.
 func MatchesPrefix(path, prefix string) bool {
 	path = NormalizePath(path)
 	prefix = NormalizePath(prefix)
@@ -169,23 +172,25 @@ func MatchesPrefix(path, prefix string) bool {
 	return strings.HasPrefix(path, prefix+PathSeparator)
 }
 
-// IsValidPath checks if a path is valid without returning detailed errors
+// IsValidPath checks if a path is valid without returning detailed errors.
 func IsValidPath(path string) bool {
 	_, _, err := ParsePath(path)
+
 	return err == nil
 }
 
-// GetDepth returns the depth (number of segments) of a path
+// GetDepth returns the depth (number of segments) of a path.
 func GetDepth(path string) int {
 	path = NormalizePath(path)
 	if path == "" {
 		return 0
 	}
+
 	return strings.Count(path, PathSeparator) + 1
 }
 
 // GetAncestorPaths returns all ancestor paths for a given path
-// Example: "a/b/c/d" returns ["a", "a/b", "a/b/c"]
+// Example: "a/b/c/d" returns ["a", "a/b", "a/b/c"].
 func GetAncestorPaths(path string) []string {
 	path = NormalizePath(path)
 	if path == "" {
@@ -206,29 +211,32 @@ func GetAncestorPaths(path string) []string {
 }
 
 // PathToConfigKey converts a secret path to a config key format
-// Example: "database/postgres/password" -> "database.postgres.password"
+// Example: "database/postgres/password" -> "database.postgres.password".
 func PathToConfigKey(path string) string {
 	path = NormalizePath(path)
+
 	return strings.ReplaceAll(path, PathSeparator, ".")
 }
 
 // ConfigKeyToPath converts a config key to a secret path format
-// Example: "database.postgres.password" -> "database/postgres/password"
+// Example: "database.postgres.password" -> "database/postgres/password".
 func ConfigKeyToPath(configKey string) string {
 	return NormalizePath(strings.ReplaceAll(configKey, ".", PathSeparator))
 }
 
 // BuildTree builds a tree structure from a list of paths
-// Returns a map where keys are folder paths and values are lists of secret paths
+// Returns a map where keys are folder paths and values are lists of secret paths.
 func BuildTree(paths []string) map[string][]string {
 	tree := make(map[string][]string)
 
 	for _, path := range paths {
 		path = NormalizePath(path)
+
 		parent := GetParentPath(path)
 		if parent == "" {
 			parent = "/" // Root level
 		}
+
 		tree[parent] = append(tree[parent], path)
 	}
 
@@ -240,7 +248,7 @@ func BuildTree(paths []string) map[string][]string {
 	return tree
 }
 
-// ExtractFolders extracts unique folder paths from a list of secret paths
+// ExtractFolders extracts unique folder paths from a list of secret paths.
 func ExtractFolders(paths []string) []string {
 	folderSet := make(map[string]struct{})
 
@@ -258,10 +266,11 @@ func ExtractFolders(paths []string) []string {
 	}
 
 	sort.Strings(folders)
+
 	return folders
 }
 
-// SortByPath sorts a slice of paths in natural order (folders before files at each level)
+// SortByPath sorts a slice of paths in natural order (folders before files at each level).
 func SortByPath(paths []string) {
 	sort.Slice(paths, func(i, j int) bool {
 		pi := NormalizePath(paths[i])
@@ -272,12 +281,9 @@ func SortByPath(paths []string) {
 		sj := strings.Split(pj, PathSeparator)
 
 		// Compare segment by segment
-		minLen := len(si)
-		if len(sj) < minLen {
-			minLen = len(sj)
-		}
+		minLen := min(len(sj), len(si))
 
-		for k := 0; k < minLen; k++ {
+		for k := range minLen {
 			if si[k] != sj[k] {
 				return si[k] < sj[k]
 			}

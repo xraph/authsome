@@ -14,7 +14,7 @@ import (
 // TestEndToEnd_WithAttributeResolution tests the complete flow:
 // 1. Compile policy
 // 2. Set up attribute providers
-// 3. Evaluate with automatic attribute enrichment
+// 3. Evaluate with automatic attribute enrichment.
 func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 	// Step 1: Create compiler and evaluator
 	compiler, err := NewCompiler(DefaultCompilerConfig())
@@ -78,21 +78,24 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "admin_can_access_any_document",
 			policy: &core.Policy{
-				ID:                 xid.New(),
-				AppID:              xid.New(),
-				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
-				NamespaceID:        xid.New(),
-				Name:               "Admin Access",
-				Expression:         `principal.roles.exists(r, r == "admin")`,
-				ResourceType:       "document",
-				Actions:            []string{"read"},
+				ID:    xid.New(),
+				AppID: xid.New(),
+				UserOrganizationID: func() *xid.ID {
+					id := xid.New()
+					return &id
+				}(),
+				NamespaceID:  xid.New(),
+				Name:         "Admin Access",
+				Expression:   `principal.roles.exists(r, r == "admin")`,
+				ResourceType: "document",
+				Actions:      []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
 				// Only provide minimal info - resolver will fetch the rest
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": "user_alice", // Resolver will fetch roles, email, etc.
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": "document",
 					"id":   "doc_123", // Resolver will fetch owner, visibility, etc.
 				},
@@ -104,20 +107,23 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "non_admin_cannot_access",
 			policy: &core.Policy{
-				ID:                 xid.New(),
-				AppID:              xid.New(),
-				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
-				NamespaceID:        xid.New(),
-				Name:               "Admin Only",
-				Expression:         `principal.roles.exists(r, r == "admin")`,
-				ResourceType:       "document",
-				Actions:            []string{"read"},
+				ID:    xid.New(),
+				AppID: xid.New(),
+				UserOrganizationID: func() *xid.ID {
+					id := xid.New()
+					return &id
+				}(),
+				NamespaceID:  xid.New(),
+				Name:         "Admin Only",
+				Expression:   `principal.roles.exists(r, r == "admin")`,
+				ResourceType: "document",
+				Actions:      []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": "user_bob", // Bob is viewer, not admin
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": "document",
 					"id":   "doc_123",
 				},
@@ -129,20 +135,23 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "owner_can_access_their_document",
 			policy: &core.Policy{
-				ID:                 xid.New(),
-				AppID:              xid.New(),
-				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
-				NamespaceID:        xid.New(),
-				Name:               "Owner Access",
-				Expression:         `resource.owner == principal.id`,
-				ResourceType:       "document",
-				Actions:            []string{"read", "write"},
+				ID:    xid.New(),
+				AppID: xid.New(),
+				UserOrganizationID: func() *xid.ID {
+					id := xid.New()
+					return &id
+				}(),
+				NamespaceID:  xid.New(),
+				Name:         "Owner Access",
+				Expression:   `resource.owner == principal.id`,
+				ResourceType: "document",
+				Actions:      []string{"read", "write"},
 			},
 			evalCtx: &EvaluationContext{
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": "user_alice",
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": "document",
 					"id":   "doc_123", // Owner is user_alice (fetched from resource service)
 				},
@@ -154,20 +163,23 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "non_owner_cannot_access",
 			policy: &core.Policy{
-				ID:                 xid.New(),
-				AppID:              xid.New(),
-				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
-				NamespaceID:        xid.New(),
-				Name:               "Owner Only",
-				Expression:         `resource.owner == principal.id`,
-				ResourceType:       "document",
-				Actions:            []string{"read"},
+				ID:    xid.New(),
+				AppID: xid.New(),
+				UserOrganizationID: func() *xid.ID {
+					id := xid.New()
+					return &id
+				}(),
+				NamespaceID:  xid.New(),
+				Name:         "Owner Only",
+				Expression:   `resource.owner == principal.id`,
+				ResourceType: "document",
+				Actions:      []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": "user_bob",
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": "document",
 					"id":   "doc_123", // Owner is user_alice, not bob
 				},
@@ -179,20 +191,23 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "same_org_members_can_view_internal_docs",
 			policy: &core.Policy{
-				ID:                 xid.New(),
-				AppID:              xid.New(),
-				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
-				NamespaceID:        xid.New(),
-				Name:               "Org Internal Access",
-				Expression:         `resource.confidential == "internal" && principal.org_id == resource.org_id`,
-				ResourceType:       "document",
-				Actions:            []string{"read"},
+				ID:    xid.New(),
+				AppID: xid.New(),
+				UserOrganizationID: func() *xid.ID {
+					id := xid.New()
+					return &id
+				}(),
+				NamespaceID:  xid.New(),
+				Name:         "Org Internal Access",
+				Expression:   `resource.confidential == "internal" && principal.org_id == resource.org_id`,
+				ResourceType: "document",
+				Actions:      []string{"read"},
 			},
 			evalCtx: &EvaluationContext{
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": "user_bob", // Bob is in org_acme
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": "document",
 					"id":   "doc_123", // Doc is internal and in org_acme
 				},
@@ -204,20 +219,23 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 		{
 			name: "admin_or_owner_can_write",
 			policy: &core.Policy{
-				ID:                 xid.New(),
-				AppID:              xid.New(),
-				UserOrganizationID: func() *xid.ID { id := xid.New(); return &id }(),
-				NamespaceID:        xid.New(),
-				Name:               "Admin or Owner Write",
-				Expression:         `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
-				ResourceType:       "document",
-				Actions:            []string{"write"},
+				ID:    xid.New(),
+				AppID: xid.New(),
+				UserOrganizationID: func() *xid.ID {
+					id := xid.New()
+					return &id
+				}(),
+				NamespaceID:  xid.New(),
+				Name:         "Admin or Owner Write",
+				Expression:   `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,
+				ResourceType: "document",
+				Actions:      []string{"write"},
 			},
 			evalCtx: &EvaluationContext{
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": "user_bob", // Bob is not admin and not owner
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": "document",
 					"id":   "doc_123", // Owned by alice
 				},
@@ -247,18 +265,18 @@ func TestEndToEnd_WithAttributeResolution(t *testing.T) {
 			// Verify that attributes were enriched
 			if tt.expectAllowed {
 				// If allowed, at least one policy should have matched
-				assert.Greater(t, len(decision.MatchedPolicies), 0, "should have matched policies")
+				assert.NotEmpty(t, decision.MatchedPolicies, "should have matched policies")
 			}
 
 			// Verify evaluation metrics
-			assert.Greater(t, decision.EvaluatedPolicies, 0, "should have evaluated at least one policy")
-			assert.Greater(t, decision.EvaluationTime, int64(0), "evaluation time should be recorded")
+			assert.Positive(t, decision.EvaluatedPolicies, "should have evaluated at least one policy")
+			assert.Positive(t, decision.EvaluationTime, "evaluation time should be recorded")
 		})
 	}
 }
 
 // TestAttributeEnrichment_OnlyWhenNeeded verifies that attribute enrichment
-// only fetches missing attributes, not overwriting existing ones
+// only fetches missing attributes, not overwriting existing ones.
 func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 	// Setup
 	cache := NewSimpleAttributeCache()
@@ -282,11 +300,11 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 
 	// Test 1: Principal has ID but no roles - should fetch from service
 	evalCtx1 := &EvaluationContext{
-		Principal: map[string]interface{}{
+		Principal: map[string]any{
 			"id": "user_123",
 			// No roles - should be fetched
 		},
-		Resource: map[string]interface{}{},
+		Resource: map[string]any{},
 		Action:   "read",
 	}
 
@@ -297,13 +315,13 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 
 	// Test 2: Principal has ID and roles - should NOT overwrite
 	evalCtx2 := &EvaluationContext{
-		Principal: map[string]interface{}{
+		Principal: map[string]any{
 			"id":    "user_123",
 			"name":  "Pre-existing Name",
 			"roles": []string{"pre-existing-role"},
 			// Already has roles - should NOT fetch
 		},
-		Resource: map[string]interface{}{},
+		Resource: map[string]any{},
 		Action:   "read",
 	}
 
@@ -314,7 +332,7 @@ func TestAttributeEnrichment_OnlyWhenNeeded(t *testing.T) {
 	assert.Equal(t, []string{"pre-existing-role"}, evalCtx2.Principal["roles"])
 }
 
-// TestAttributeCaching verifies that attribute resolution uses caching
+// TestAttributeCaching verifies that attribute resolution uses caching.
 func TestAttributeCaching(t *testing.T) {
 	// Setup
 	cache := NewSimpleAttributeCache()
@@ -337,8 +355,8 @@ func TestAttributeCaching(t *testing.T) {
 
 	// First evaluation - should fetch from service
 	evalCtx1 := &EvaluationContext{
-		Principal: map[string]interface{}{"id": "user_123"},
-		Resource:  map[string]interface{}{},
+		Principal: map[string]any{"id": "user_123"},
+		Resource:  map[string]any{},
 		Action:    "read",
 	}
 
@@ -348,8 +366,8 @@ func TestAttributeCaching(t *testing.T) {
 
 	// Second evaluation - should use cache (verify by checking cache directly)
 	evalCtx2 := &EvaluationContext{
-		Principal: map[string]interface{}{"id": "user_123"},
-		Resource:  map[string]interface{}{},
+		Principal: map[string]any{"id": "user_123"},
+		Resource:  map[string]any{},
 		Action:    "read",
 	}
 

@@ -9,13 +9,13 @@ import (
 	"github.com/xraph/authsome/plugins/cms/service"
 )
 
-// ContentTypeHandler handles content type HTTP requests
+// ContentTypeHandler handles content type HTTP requests.
 type ContentTypeHandler struct {
 	service      *service.ContentTypeService
 	fieldService *service.ContentFieldService
 }
 
-// NewContentTypeHandler creates a new content type handler
+// NewContentTypeHandler creates a new content type handler.
 func NewContentTypeHandler(
 	svc *service.ContentTypeService,
 	fieldSvc *service.ContentFieldService,
@@ -31,7 +31,7 @@ func NewContentTypeHandler(
 // =============================================================================
 
 // ListContentTypes lists all content types
-// GET /cms/types
+// GET /cms/types.
 func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -44,6 +44,7 @@ func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
 	if req.Page < 1 {
 		req.Page = 1
 	}
+
 	if req.PageSize < 1 {
 		req.PageSize = 20
 	}
@@ -65,7 +66,7 @@ func (h *ContentTypeHandler) ListContentTypes(c forge.Context) error {
 }
 
 // CreateContentType creates a new content type
-// POST /cms/types
+// POST /cms/types.
 func (h *ContentTypeHandler) CreateContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -83,7 +84,7 @@ func (h *ContentTypeHandler) CreateContentType(c forge.Context) error {
 }
 
 // GetContentType retrieves a content type by slug
-// GET /cms/types/:slug
+// GET /cms/types/:slug.
 func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -101,7 +102,7 @@ func (h *ContentTypeHandler) GetContentType(c forge.Context) error {
 }
 
 // UpdateContentType updates a content type
-// PUT /cms/types/:slug
+// PUT /cms/types/:slug.
 func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -137,7 +138,7 @@ func (h *ContentTypeHandler) UpdateContentType(c forge.Context) error {
 }
 
 // DeleteContentType deletes a content type
-// DELETE /cms/types/:slug
+// DELETE /cms/types/:slug.
 func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -170,7 +171,7 @@ func (h *ContentTypeHandler) DeleteContentType(c forge.Context) error {
 // =============================================================================
 
 // ListFields lists all fields for a content type
-// GET /cms/types/:slug/fields
+// GET /cms/types/:slug/fields.
 func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -196,13 +197,13 @@ func (h *ContentTypeHandler) ListFields(c forge.Context) error {
 		return handleError(c, err)
 	}
 
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"fields": fields,
 	})
 }
 
 // AddField adds a new field to a content type
-// POST /cms/types/:slug/fields
+// POST /cms/types/:slug/fields.
 func (h *ContentTypeHandler) AddField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -210,6 +211,7 @@ func (h *ContentTypeHandler) AddField(c forge.Context) error {
 	if err := c.BindRequest(&pathReq); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+
 	slug := pathReq.Slug
 
 	// Get the content type first
@@ -239,7 +241,7 @@ func (h *ContentTypeHandler) AddField(c forge.Context) error {
 }
 
 // GetField retrieves a field by slug
-// GET /cms/types/:slug/fields/:fieldSlug
+// GET /cms/types/:slug/fields/:fieldSlug.
 func (h *ContentTypeHandler) GetField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -269,7 +271,7 @@ func (h *ContentTypeHandler) GetField(c forge.Context) error {
 }
 
 // UpdateField updates a field
-// PUT /cms/types/:slug/fields/:fieldSlug
+// PUT /cms/types/:slug/fields/:fieldSlug.
 func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -317,7 +319,7 @@ func (h *ContentTypeHandler) UpdateField(c forge.Context) error {
 }
 
 // DeleteField deletes a field
-// DELETE /cms/types/:slug/fields/:fieldSlug
+// DELETE /cms/types/:slug/fields/:fieldSlug.
 func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -358,7 +360,7 @@ func (h *ContentTypeHandler) DeleteField(c forge.Context) error {
 }
 
 // ReorderFields reorders fields in a content type
-// POST /cms/types/:slug/fields/reorder
+// POST /cms/types/:slug/fields/reorder.
 func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
 	ctx := getContextWithHeaders(c)
 
@@ -366,6 +368,7 @@ func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
 	if err := c.BindRequest(&pathReq); err != nil {
 		return c.JSON(400, map[string]string{"error": "invalid request"})
 	}
+
 	slug := pathReq.Slug
 
 	// Get the content type first
@@ -394,9 +397,9 @@ func (h *ContentTypeHandler) ReorderFields(c forge.Context) error {
 }
 
 // GetFieldTypes returns all available field types
-// GET /cms/field-types
+// GET /cms/field-types.
 func (h *ContentTypeHandler) GetFieldTypes(c forge.Context) error {
-	return c.JSON(200, map[string]interface{}{
+	return c.JSON(200, map[string]any{
 		"fieldTypes": core.GetAllFieldTypes(),
 	})
 }

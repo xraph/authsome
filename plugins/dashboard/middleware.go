@@ -25,7 +25,7 @@ const (
 	environmentCookieName = "authsome_environment"
 )
 
-// rateLimiter implements a simple in-memory rate limiter
+// rateLimiter implements a simple in-memory rate limiter.
 type rateLimiter struct {
 	mu      sync.RWMutex
 	clients map[string]*clientLimit
@@ -49,6 +49,7 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 	go func() {
 		ticker := time.NewTicker(window)
 		defer ticker.Stop()
+
 		for range ticker.C {
 			rl.cleanup()
 		}
@@ -60,6 +61,7 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 func (rl *rateLimiter) cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+
 	now := time.Now()
 	for key, limit := range rl.clients {
 		if now.After(limit.resetTime) {
@@ -80,6 +82,7 @@ func (rl *rateLimiter) allow(clientID string) bool {
 			count:     1,
 			resetTime: now.Add(rl.window),
 		}
+
 		return true
 	}
 
@@ -88,21 +91,22 @@ func (rl *rateLimiter) allow(clientID string) bool {
 	}
 
 	limit.count++
+
 	return true
 }
 
 var globalRateLimiter = newRateLimiter(100, time.Minute)
 
-// RequireAuth middleware ensures the user is authenticated
+// RequireAuth middleware ensures the user is authenticated.
 func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-
 			// Extract session token from cookie
 			cookie, err := c.Request().Cookie(sessionCookieName)
 			if err != nil || cookie == nil || cookie.Value == "" {
 				// No session cookie, redirect to dashboard login
 				loginURL := p.basePath + "/login?redirect=" + c.Request().URL.Path
+
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -120,6 +124,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					HttpOnly: true,
 				})
 				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
+
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -133,6 +138,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					HttpOnly: true,
 				})
 				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
+
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -147,6 +153,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					HttpOnly: true,
 				})
 				loginURL := p.basePath + "/login?error=session_expired&redirect=" + c.Request().URL.Path
+
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -170,6 +177,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					HttpOnly: true,
 				})
 				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
+
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -183,6 +191,7 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 					HttpOnly: true,
 				})
 				loginURL := p.basePath + "/login?error=invalid_session&redirect=" + c.Request().URL.Path
+
 				return c.Redirect(http.StatusFound, loginURL)
 			}
 
@@ -200,19 +209,19 @@ func (p *Plugin) RequireAuth() func(func(forge.Context) error) func(forge.Contex
 	}
 }
 
-// Helper function for min
+// Helper function for min.
 func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
-// RequireAdmin middleware ensures the user has admin role
+// RequireAdmin middleware ensures the user has admin role.
 func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
-
 			// Get user from context (set by RequireAuth)
 			userVal := c.Request().Context().Value("user")
 			if userVal == nil {
@@ -249,7 +258,9 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 				// Render ForgeUI forbidden page
 				loginURL := p.basePath + "/login"
 				forbiddenPage := p.pagesManager.ForbiddenPage(loginURL)
+
 				c.Response().WriteHeader(http.StatusForbidden)
+
 				return p.renderForgeUINode(c, forbiddenPage)
 			}
 
@@ -258,7 +269,7 @@ func (p *Plugin) RequireAdmin() func(func(forge.Context) error) func(forge.Conte
 	}
 }
 
-// CSRF middleware provides CSRF protection
+// CSRF middleware provides CSRF protection.
 func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -275,6 +286,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 
 			// Generate or retrieve CSRF token
 			var token string
+
 			cookie, err := c.Request().Cookie(csrfCookieName)
 
 			if err != nil || cookie == nil || cookie.Value == "" {
@@ -303,9 +315,8 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 			*c.Request() = *c.Request().WithContext(ctx)
 
 			// Validate CSRF token for mutating requests
-			if c.Request().Method == "POST" || c.Request().Method == "PUT" ||
-				c.Request().Method == "DELETE" || c.Request().Method == "PATCH" {
-
+			if c.Request().Method == http.MethodPost || c.Request().Method == http.MethodPut ||
+				c.Request().Method == http.MethodDelete || c.Request().Method == http.MethodPatch {
 				// Get token from form or header
 				submittedToken := c.Request().FormValue("csrf_token")
 				if submittedToken == "" {
@@ -315,6 +326,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 				// Validate token using CSRF protector
 				if !p.csrfProtector.ValidateToken(submittedToken, sessionID) {
 					c.SetHeader("Content-Type", "text/html; charset=utf-8")
+
 					htmlContent := `<!DOCTYPE html>
 <html>
 <head>
@@ -342,6 +354,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 	</div>
 </body>
 </html>`
+
 					return c.String(http.StatusForbidden, htmlContent)
 				}
 			}
@@ -351,7 +364,7 @@ func (p *Plugin) CSRF() func(func(forge.Context) error) func(forge.Context) erro
 	}
 }
 
-// RateLimit middleware implements rate limiting
+// RateLimit middleware implements rate limiting.
 func (p *Plugin) RateLimit() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -373,7 +386,7 @@ func (p *Plugin) RateLimit() func(func(forge.Context) error) func(forge.Context)
 	}
 }
 
-// AuditLog middleware logs all dashboard access
+// AuditLog middleware logs all dashboard access.
 func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -421,7 +434,7 @@ func (p *Plugin) AuditLog() func(func(forge.Context) error) func(forge.Context) 
 // 5. Update cookie for future requests (30-day expiry)
 //
 // Routes without :appId parameter are skipped (e.g., /dashboard/login)
-// Gracefully handles missing environment service for backward compatibility
+// Gracefully handles missing environment service for backward compatibility.
 func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -449,6 +462,7 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 				// No environment service available, skip environment context
 				// This maintains backward compatibility with configurations without multiapp plugin
 				*c.Request() = *c.Request().WithContext(ctx)
+
 				return next(c)
 			}
 
@@ -457,6 +471,7 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 			// Step 3: Try to get environment ID from cookie
 			// The cookie persists the user's selected environment across requests
 			var envID xid.ID
+
 			if cookie, err := c.Request().Cookie(environmentCookieName); err == nil && cookie != nil && cookie.Value != "" {
 				if id, err := xid.FromString(cookie.Value); err == nil {
 					envID = id
@@ -503,7 +518,7 @@ func (p *Plugin) EnvironmentContext() func(func(forge.Context) error) func(forge
 
 // renderForgeUINode renders a ForgeUI gomponent node with full HTML layout
 // This helper method is used in middleware to render ForgeUI components outside of page handlers
-// It includes all necessary styles (Tailwind CSS), theme support, and Alpine.js
+// It includes all necessary styles (Tailwind CSS), theme support, and Alpine.js.
 func (p *Plugin) renderForgeUINode(c forge.Context, content g.Node) error {
 	// Get light and dark themes from ForgeUI app
 	lightTheme := p.fuiApp.LightTheme()
@@ -577,5 +592,6 @@ func (p *Plugin) renderForgeUINode(c forge.Context, content g.Node) error {
 	)
 
 	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+
 	return page.Render(c.Response())
 }

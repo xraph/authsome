@@ -285,6 +285,7 @@ func TestResolveOperator(t *testing.T) {
 			if valid != tt.valid {
 				t.Errorf("ResolveOperator(%q) valid = %v, expected %v", tt.input, valid, tt.valid)
 			}
+
 			if tt.valid && result != tt.expected {
 				t.Errorf("ResolveOperator(%q) = %s, expected %s", tt.input, result, tt.expected)
 			}
@@ -298,6 +299,7 @@ func TestSortField(t *testing.T) {
 		if sf.Field != "title" {
 			t.Errorf("expected field 'title', got '%s'", sf.Field)
 		}
+
 		if sf.Descending {
 			t.Error("expected Descending to be false")
 		}
@@ -308,6 +310,7 @@ func TestSortField(t *testing.T) {
 		if sf.Field != "createdAt" {
 			t.Errorf("expected field 'createdAt', got '%s'", sf.Field)
 		}
+
 		if !sf.Descending {
 			t.Error("expected Descending to be true")
 		}
@@ -324,9 +327,11 @@ func TestFilterCondition(t *testing.T) {
 	if cond.Field != "status" {
 		t.Errorf("expected field 'status', got '%s'", cond.Field)
 	}
+
 	if cond.Operator != OpEqual {
 		t.Errorf("expected operator OpEqual, got '%s'", cond.Operator)
 	}
+
 	if cond.Value != "published" {
 		t.Errorf("expected value 'published', got '%v'", cond.Value)
 	}
@@ -345,6 +350,7 @@ func TestFilterGroup(t *testing.T) {
 		if group.Operator != LogicalAnd {
 			t.Errorf("expected LogicalAnd, got %s", group.Operator)
 		}
+
 		if len(group.Conditions) != 2 {
 			t.Errorf("expected 2 conditions, got %d", len(group.Conditions))
 		}
@@ -381,6 +387,7 @@ func TestFilterGroup(t *testing.T) {
 		if len(group.Groups) != 1 {
 			t.Errorf("expected 1 nested group, got %d", len(group.Groups))
 		}
+
 		if group.Groups[0].Operator != LogicalOr {
 			t.Errorf("expected nested group to be LogicalOr, got %s", group.Groups[0].Operator)
 		}
@@ -404,6 +411,7 @@ func TestPopulateOption(t *testing.T) {
 		if pop.Path != "author" {
 			t.Errorf("expected path 'author', got '%s'", pop.Path)
 		}
+
 		if len(pop.Select) != 2 {
 			t.Errorf("expected 2 select fields, got %d", len(pop.Select))
 		}
@@ -420,6 +428,7 @@ func TestPopulateOption(t *testing.T) {
 		if len(pop.Populate) != 1 {
 			t.Errorf("expected 1 nested populate, got %d", len(pop.Populate))
 		}
+
 		if pop.Populate[0].Path != "company" {
 			t.Errorf("expected nested path 'company', got '%s'", pop.Populate[0].Path)
 		}

@@ -13,6 +13,7 @@ func TestCSRFProtector_GenerateToken(t *testing.T) {
 	}
 
 	sessionID := "test-session-123"
+
 	token, err := protector.GenerateToken(sessionID)
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
@@ -85,6 +86,7 @@ func TestCSRFProtector_TokenExpiration(t *testing.T) {
 	protector.tokenStore.ttl = 100 * time.Millisecond
 
 	sessionID := "test-session-123"
+
 	token, err := protector.GenerateToken(sessionID)
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
@@ -111,6 +113,7 @@ func TestCSRFProtector_InvalidateToken(t *testing.T) {
 	}
 
 	sessionID := "test-session-123"
+
 	token, err := protector.GenerateToken(sessionID)
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
@@ -181,7 +184,7 @@ func TestCSRFProtector_Stats(t *testing.T) {
 
 	// Generate some tokens
 	sessionID := "test-session-123"
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, err := protector.GenerateToken(sessionID)
 		if err != nil {
 			t.Fatalf("Failed to generate token: %v", err)
@@ -193,6 +196,7 @@ func TestCSRFProtector_Stats(t *testing.T) {
 	if stats["total_tokens"].(int) != 5 {
 		t.Errorf("Expected 5 tokens, got %d", stats["total_tokens"].(int))
 	}
+
 	if stats["valid_tokens"].(int) != 5 {
 		t.Errorf("Expected 5 valid tokens, got %d", stats["valid_tokens"].(int))
 	}
@@ -210,7 +214,7 @@ func TestCSRFProtector_CleanupExpiredTokens(t *testing.T) {
 	sessionID := "test-session-123"
 
 	// Generate tokens
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, err := protector.GenerateToken(sessionID)
 		if err != nil {
 			t.Fatalf("Failed to generate token: %v", err)
@@ -221,7 +225,7 @@ func TestCSRFProtector_CleanupExpiredTokens(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Generate fresh tokens
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_, err := protector.GenerateToken(sessionID)
 		if err != nil {
 			t.Fatalf("Failed to generate token: %v", err)
@@ -233,6 +237,7 @@ func TestCSRFProtector_CleanupExpiredTokens(t *testing.T) {
 	if stats["total_tokens"].(int) != 5 {
 		t.Errorf("Expected 5 total tokens, got %d", stats["total_tokens"].(int))
 	}
+
 	if stats["valid_tokens"].(int) != 2 {
 		t.Errorf("Expected 2 valid tokens, got %d", stats["valid_tokens"].(int))
 	}
@@ -245,6 +250,7 @@ func TestCSRFProtector_CleanupExpiredTokens(t *testing.T) {
 	if stats["total_tokens"].(int) != 2 {
 		t.Errorf("Expected 2 total tokens after cleanup, got %d", stats["total_tokens"].(int))
 	}
+
 	if stats["valid_tokens"].(int) != 2 {
 		t.Errorf("Expected 2 valid tokens after cleanup, got %d", stats["valid_tokens"].(int))
 	}
@@ -286,14 +292,16 @@ func TestCSRFProtector_ConcurrentAccess(t *testing.T) {
 	errors := make(chan error, 100)
 
 	// Spawn 10 goroutines generating tokens concurrently
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(id int) {
 			defer func() { done <- true }()
 
 			sessionID := "session-" + string(rune(id))
+
 			token, err := protector.GenerateToken(sessionID)
 			if err != nil {
 				errors <- err
+
 				return
 			}
 
@@ -305,9 +313,10 @@ func TestCSRFProtector_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
+
 	close(errors)
 
 	// Check for errors
@@ -326,7 +335,7 @@ func TestCSRFProtector_TokenUniqueness(t *testing.T) {
 	tokens := make(map[string]bool)
 
 	// Generate 100 tokens
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		token, err := protector.GenerateToken(sessionID)
 		if err != nil {
 			t.Fatalf("Failed to generate token: %v", err)
@@ -336,6 +345,7 @@ func TestCSRFProtector_TokenUniqueness(t *testing.T) {
 		if tokens[token] {
 			t.Error("Generated duplicate token")
 		}
+
 		tokens[token] = true
 	}
 
@@ -353,8 +363,7 @@ func BenchmarkCSRFProtector_Generate(b *testing.B) {
 
 	sessionID := "test-session-123"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := protector.GenerateToken(sessionID)
 		if err != nil {
 			b.Fatalf("Failed to generate token: %v", err)
@@ -369,13 +378,13 @@ func BenchmarkCSRFProtector_Validate(b *testing.B) {
 	}
 
 	sessionID := "test-session-123"
+
 	token, err := protector.GenerateToken(sessionID)
 	if err != nil {
 		b.Fatalf("Failed to generate token: %v", err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		protector.ValidateToken(token, sessionID)
 	}
 }
@@ -388,12 +397,12 @@ func BenchmarkCSRFProtector_GenerateAndValidate(b *testing.B) {
 
 	sessionID := "test-session-123"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		token, err := protector.GenerateToken(sessionID)
 		if err != nil {
 			b.Fatalf("Failed to generate token: %v", err)
 		}
+
 		protector.ValidateToken(token, sessionID)
 	}
 }

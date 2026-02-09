@@ -7,7 +7,7 @@ import (
 	g "maragu.dev/gomponents"
 )
 
-// ExtensionNavItemData holds raw data for extension navigation items
+// ExtensionNavItemData holds raw data for extension navigation items.
 type ExtensionNavItemData struct {
 	Label    string
 	Icon     g.Node
@@ -15,14 +15,14 @@ type ExtensionNavItemData struct {
 	IsActive bool
 }
 
-// PageData represents common data for all pages
+// PageData represents common data for all pages.
 type PageData struct {
 	Title              string
 	User               *user.User
 	CSRFToken          string
 	ActivePage         string
 	BasePath           string
-	Data               interface{}
+	Data               any
 	Error              string
 	Success            string
 	Year               int

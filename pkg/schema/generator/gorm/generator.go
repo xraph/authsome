@@ -10,25 +10,25 @@ import (
 	"github.com/xraph/authsome/pkg/schema/generator"
 )
 
-// Generator generates GORM migration files
+// Generator generates GORM migration files.
 type Generator struct{}
 
-// NewGenerator creates a new GORM generator
+// NewGenerator creates a new GORM generator.
 func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-// Name returns the generator name
+// Name returns the generator name.
 func (g *Generator) Name() string {
 	return "gorm"
 }
 
-// Description returns the generator description
+// Description returns the generator description.
 func (g *Generator) Description() string {
 	return "GORM migration generator (Go)"
 }
 
-// Generate generates GORM migration files
+// Generate generates GORM migration files.
 func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) error {
 	// Create output directory
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
@@ -58,7 +58,7 @@ func (g *Generator) Generate(schema *definition.Schema, opts generator.Options) 
 	return nil
 }
 
-// generateModels generates GORM model structs
+// generateModels generates GORM model structs.
 func (g *Generator) generateModels(schema *definition.Schema, opts generator.Options) string {
 	var b strings.Builder
 
@@ -93,7 +93,7 @@ func (g *Generator) generateModels(schema *definition.Schema, opts generator.Opt
 	return b.String()
 }
 
-// generateMigration generates the GORM AutoMigrate code
+// generateMigration generates the GORM AutoMigrate code.
 func (g *Generator) generateMigration(schema *definition.Schema, opts generator.Options) string {
 	var b strings.Builder
 
@@ -118,9 +118,9 @@ func (g *Generator) generateMigration(schema *definition.Schema, opts generator.
 	return b.String()
 }
 
-// buildGORMTag builds a GORM struct tag
+// buildGORMTag builds a GORM struct tag.
 func (g *Generator) buildGORMTag(field definition.Field) string {
-	parts := []string{fmt.Sprintf("column:%s", field.Column)}
+	parts := []string{"column:" + field.Column}
 
 	if field.Primary {
 		parts = append(parts, "primaryKey")
@@ -144,16 +144,16 @@ func (g *Generator) buildGORMTag(field definition.Field) string {
 		if defaultVal == "current_timestamp" {
 			parts = append(parts, "autoCreateTime")
 		} else if field.Type == definition.FieldTypeBoolean {
-			parts = append(parts, fmt.Sprintf("default:%s", defaultVal))
+			parts = append(parts, "default:"+defaultVal)
 		} else if field.Type != definition.FieldTypeString {
-			parts = append(parts, fmt.Sprintf("default:%s", defaultVal))
+			parts = append(parts, "default:"+defaultVal)
 		}
 	}
 
 	return strings.Join(parts, ";")
 }
 
-// mapToGoType maps a field type to a Go type
+// mapToGoType maps a field type to a Go type.
 func (g *Generator) mapToGoType(field definition.Field) string {
 	var goType string
 
@@ -185,5 +185,6 @@ func toJSONName(name string) string {
 	if len(name) == 0 {
 		return name
 	}
+
 	return strings.ToLower(name[:1]) + name[1:]
 }

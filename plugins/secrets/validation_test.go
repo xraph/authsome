@@ -11,7 +11,7 @@ func TestSchemaValidator_ValidateType(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		value     interface{}
+		value     any
 		valueType core.SecretValueType
 		wantErr   bool
 	}{
@@ -21,8 +21,8 @@ func TestSchemaValidator_ValidateType(t *testing.T) {
 
 		// JSON tests
 		{"json string", `{"key": "value"}`, core.SecretValueTypeJSON, false},
-		{"json object", map[string]interface{}{"key": "value"}, core.SecretValueTypeJSON, false},
-		{"json array", []interface{}{1, 2, 3}, core.SecretValueTypeJSON, false},
+		{"json object", map[string]any{"key": "value"}, core.SecretValueTypeJSON, false},
+		{"json array", []any{1, 2, 3}, core.SecretValueTypeJSON, false},
 
 		// YAML tests
 		{"yaml string", "key: value\nother: data", core.SecretValueTypeYAML, false},
@@ -49,21 +49,21 @@ func TestSchemaValidator_ValidateWithSchema(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		value     interface{}
+		value     any
 		valueType core.SecretValueType
 		schema    string
 		wantErr   bool
 	}{
 		{
 			name:      "object with required fields - valid",
-			value:     map[string]interface{}{"host": "localhost", "port": 5432},
+			value:     map[string]any{"host": "localhost", "port": 5432},
 			valueType: core.SecretValueTypeJSON,
 			schema:    `{"type": "object", "required": ["host", "port"]}`,
 			wantErr:   false,
 		},
 		{
 			name:      "object with required fields - missing",
-			value:     map[string]interface{}{"host": "localhost"},
+			value:     map[string]any{"host": "localhost"},
 			valueType: core.SecretValueTypeJSON,
 			schema:    `{"type": "object", "required": ["host", "port"]}`,
 			wantErr:   true,
@@ -148,16 +148,16 @@ func TestSchemaValidator_SerializeValue(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		value     interface{}
+		value     any
 		valueType core.SecretValueType
 		wantErr   bool
 	}{
 		{"plain string", "hello world", core.SecretValueTypePlain, false},
 		{"plain non-string", 123, core.SecretValueTypePlain, true},
-		{"json object", map[string]interface{}{"key": "value"}, core.SecretValueTypeJSON, false},
-		{"json array", []interface{}{1, 2, 3}, core.SecretValueTypeJSON, false},
+		{"json object", map[string]any{"key": "value"}, core.SecretValueTypeJSON, false},
+		{"json array", []any{1, 2, 3}, core.SecretValueTypeJSON, false},
 		{"yaml string", "key: value", core.SecretValueTypeYAML, false},
-		{"yaml object", map[string]interface{}{"key": "value"}, core.SecretValueTypeYAML, false},
+		{"yaml object", map[string]any{"key": "value"}, core.SecretValueTypeYAML, false},
 		{"binary string", "aGVsbG8gd29ybGQ=", core.SecretValueTypeBinary, false},
 		{"binary non-string", 123, core.SecretValueTypeBinary, true},
 	}
@@ -177,15 +177,15 @@ func TestSchemaValidator_DetectValueType(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		value interface{}
+		value any
 		want  core.SecretValueType
 	}{
 		{"plain string", "hello world", core.SecretValueTypePlain},
 		{"json object string", `{"key": "value"}`, core.SecretValueTypeJSON},
 		{"json array string", `[1, 2, 3]`, core.SecretValueTypeJSON},
 		{"yaml string", "key: value\nother: data", core.SecretValueTypeYAML},
-		{"map value", map[string]interface{}{"key": "value"}, core.SecretValueTypeJSON},
-		{"slice value", []interface{}{1, 2, 3}, core.SecretValueTypeJSON},
+		{"map value", map[string]any{"key": "value"}, core.SecretValueTypeJSON},
+		{"slice value", []any{1, 2, 3}, core.SecretValueTypeJSON},
 	}
 
 	for _, tt := range tests {
@@ -228,12 +228,12 @@ func TestSchemaValidator_RoundTrip(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		value     interface{}
+		value     any
 		valueType core.SecretValueType
 	}{
 		{"plain text", "hello world", core.SecretValueTypePlain},
-		{"json object", map[string]interface{}{"key": "value", "nested": map[string]interface{}{"a": 1}}, core.SecretValueTypeJSON},
-		{"json array", []interface{}{1, "two", 3.0}, core.SecretValueTypeJSON},
+		{"json object", map[string]any{"key": "value", "nested": map[string]any{"a": 1}}, core.SecretValueTypeJSON},
+		{"json array", []any{1, "two", 3.0}, core.SecretValueTypeJSON},
 		{"yaml", "database:\n  host: localhost\n  port: 5432", core.SecretValueTypeYAML},
 		{"binary", "aGVsbG8gd29ybGQ=", core.SecretValueTypeBinary},
 	}
@@ -265,13 +265,13 @@ func TestSchemaValidator_RoundTrip(t *testing.T) {
 func TestFormatValue(t *testing.T) {
 	tests := []struct {
 		name      string
-		value     interface{}
+		value     any
 		valueType core.SecretValueType
 		wantLen   int // Check that output is reasonable length
 	}{
 		{"plain", "hello", core.SecretValueTypePlain, 5},
-		{"json", map[string]interface{}{"key": "value"}, core.SecretValueTypeJSON, 10},
-		{"yaml", map[string]interface{}{"key": "value"}, core.SecretValueTypeYAML, 10},
+		{"json", map[string]any{"key": "value"}, core.SecretValueTypeJSON, 10},
+		{"yaml", map[string]any{"key": "value"}, core.SecretValueTypeYAML, 10},
 		{"binary", "YmluYXJ5", core.SecretValueTypeBinary, 8},
 	}
 
@@ -285,14 +285,13 @@ func TestFormatValue(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkValidateValue(b *testing.B) {
 	v := NewSchemaValidator()
-	value := map[string]interface{}{"host": "localhost", "port": 5432}
+	value := map[string]any{"host": "localhost", "port": 5432}
 	schema := `{"type": "object", "required": ["host", "port"]}`
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		v.ValidateValue(value, core.SecretValueTypeJSON, schema)
 	}
 }
@@ -301,8 +300,7 @@ func BenchmarkParseJSON(b *testing.B) {
 	v := NewSchemaValidator()
 	raw := `{"key": "value", "nested": {"a": 1, "b": 2}}`
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		v.ParseValue(raw, core.SecretValueTypeJSON)
 	}
 }
@@ -311,8 +309,7 @@ func BenchmarkParseYAML(b *testing.B) {
 	v := NewSchemaValidator()
 	raw := "key: value\nnested:\n  a: 1\n  b: 2"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		v.ParseValue(raw, core.SecretValueTypeYAML)
 	}
 }

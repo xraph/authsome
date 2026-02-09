@@ -23,16 +23,19 @@ type MockRoleRepository struct {
 
 func (m *MockRoleRepository) Create(ctx context.Context, role *schema.Role) error {
 	args := m.Called(ctx, role)
+
 	return args.Error(0)
 }
 
 func (m *MockRoleRepository) Update(ctx context.Context, role *schema.Role) error {
 	args := m.Called(ctx, role)
+
 	return args.Error(0)
 }
 
 func (m *MockRoleRepository) Delete(ctx context.Context, roleID xid.ID) error {
 	args := m.Called(ctx, roleID)
+
 	return args.Error(0)
 }
 
@@ -41,6 +44,7 @@ func (m *MockRoleRepository) FindByID(ctx context.Context, roleID xid.ID) (*sche
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
@@ -49,11 +53,13 @@ func (m *MockRoleRepository) FindByNameAndApp(ctx context.Context, name string, 
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
 func (m *MockRoleRepository) ListByOrg(ctx context.Context, orgID *string) ([]schema.Role, error) {
 	args := m.Called(ctx, orgID)
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
@@ -62,6 +68,7 @@ func (m *MockRoleRepository) GetRoleTemplates(ctx context.Context, appID, envID 
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*schema.Role), args.Error(1)
 }
 
@@ -70,6 +77,7 @@ func (m *MockRoleRepository) GetOwnerRole(ctx context.Context, appID, envID xid.
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
@@ -78,6 +86,7 @@ func (m *MockRoleRepository) GetOrgRoles(ctx context.Context, orgID, envID xid.I
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*schema.Role), args.Error(1)
 }
 
@@ -86,11 +95,13 @@ func (m *MockRoleRepository) FindByNameAppEnv(ctx context.Context, name string, 
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
 func (m *MockRoleRepository) FindDuplicateRoles(ctx context.Context) ([]schema.Role, error) {
 	args := m.Called(ctx)
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
@@ -99,6 +110,7 @@ func (m *MockRoleRepository) GetOrgRoleWithPermissions(ctx context.Context, role
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
@@ -107,6 +119,7 @@ func (m *MockRoleRepository) CloneRole(ctx context.Context, templateID xid.ID, o
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Role), args.Error(1)
 }
 
@@ -116,11 +129,13 @@ type MockUserRoleRepository struct {
 
 func (m *MockUserRoleRepository) Assign(ctx context.Context, userID, roleID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleID, orgID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) Unassign(ctx context.Context, userID, roleID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleID, orgID)
+
 	return args.Error(0)
 }
 
@@ -129,11 +144,13 @@ func (m *MockUserRoleRepository) ListRolesForUser(ctx context.Context, userID xi
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) AssignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleIDs, orgID)
+
 	return args.Error(0)
 }
 
@@ -142,16 +159,19 @@ func (m *MockUserRoleRepository) AssignBulk(ctx context.Context, userIDs []xid.I
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(map[xid.ID]error), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) AssignAppLevel(ctx context.Context, userID, roleID, appID xid.ID) error {
 	args := m.Called(ctx, userID, roleID, appID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) UnassignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleIDs, orgID)
+
 	return args.Error(0)
 }
 
@@ -160,31 +180,37 @@ func (m *MockUserRoleRepository) UnassignBulk(ctx context.Context, userIDs []xid
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(map[xid.ID]error), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, orgID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error {
 	args := m.Called(ctx, userID, appID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) TransferRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
 	args := m.Called(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) CopyRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
 	args := m.Called(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error {
 	args := m.Called(ctx, userID, orgID, newRoleIDs)
+
 	return args.Error(0)
 }
 
@@ -193,6 +219,7 @@ func (m *MockUserRoleRepository) ListRolesForUserInOrg(ctx context.Context, user
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
@@ -201,6 +228,7 @@ func (m *MockUserRoleRepository) ListRolesForUserInApp(ctx context.Context, user
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
@@ -209,6 +237,7 @@ func (m *MockUserRoleRepository) ListAllUserRolesInOrg(ctx context.Context, orgI
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]schema.UserRole), args.Error(1)
 }
 
@@ -217,6 +246,7 @@ func (m *MockUserRoleRepository) ListAllUserRolesInApp(ctx context.Context, appI
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]schema.UserRole), args.Error(1)
 }
 
@@ -226,6 +256,7 @@ type MockMemberRepository struct {
 
 func (m *MockMemberRepository) CreateMember(ctx context.Context, member *schema.Member) error {
 	args := m.Called(ctx, member)
+
 	return args.Error(0)
 }
 
@@ -234,6 +265,7 @@ func (m *MockMemberRepository) FindMemberByID(ctx context.Context, id xid.ID) (*
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Member), args.Error(1)
 }
 
@@ -242,31 +274,37 @@ func (m *MockMemberRepository) FindMember(ctx context.Context, appID, userID xid
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Member), args.Error(1)
 }
 
 func (m *MockMemberRepository) UpdateMember(ctx context.Context, member *schema.Member) error {
 	args := m.Called(ctx, member)
+
 	return args.Error(0)
 }
 
 func (m *MockMemberRepository) DeleteMember(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *MockMemberRepository) ListMembers(ctx context.Context, filter *ListMembersFilter) (*pagination.PageResponse[*schema.Member], error) {
 	args := m.Called(ctx, filter)
+
 	return nil, args.Error(1)
 }
 
 func (m *MockMemberRepository) ListMembersByUser(ctx context.Context, userID xid.ID) ([]*schema.Member, error) {
 	args := m.Called(ctx, userID)
+
 	return args.Get(0).([]*schema.Member), args.Error(1)
 }
 
 func (m *MockMemberRepository) CountMembers(ctx context.Context, appID xid.ID) (int, error) {
 	args := m.Called(ctx, appID)
+
 	return args.Int(0), args.Error(1)
 }
 
@@ -276,6 +314,7 @@ type MockAppRepository struct {
 
 func (m *MockAppRepository) CreateApp(ctx context.Context, app *schema.App) error {
 	args := m.Called(ctx, app)
+
 	return args.Error(0)
 }
 
@@ -284,6 +323,7 @@ func (m *MockAppRepository) GetPlatformApp(ctx context.Context) (*schema.App, er
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.App), args.Error(1)
 }
 
@@ -292,6 +332,7 @@ func (m *MockAppRepository) FindAppByID(ctx context.Context, id xid.ID) (*schema
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.App), args.Error(1)
 }
 
@@ -300,26 +341,31 @@ func (m *MockAppRepository) FindAppBySlug(ctx context.Context, slug string) (*sc
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.App), args.Error(1)
 }
 
 func (m *MockAppRepository) UpdateApp(ctx context.Context, app *schema.App) error {
 	args := m.Called(ctx, app)
+
 	return args.Error(0)
 }
 
 func (m *MockAppRepository) DeleteApp(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *MockAppRepository) ListApps(ctx context.Context, filter *ListAppsFilter) (*pagination.PageResponse[*schema.App], error) {
 	args := m.Called(ctx, filter)
+
 	return nil, args.Error(1)
 }
 
 func (m *MockAppRepository) CountApps(ctx context.Context) (int, error) {
 	args := m.Called(ctx)
+
 	return args.Int(0), args.Error(1)
 }
 

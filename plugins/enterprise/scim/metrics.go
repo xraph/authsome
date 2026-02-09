@@ -8,7 +8,7 @@ import (
 )
 
 // Metrics collects SCIM plugin metrics using Go's built-in expvar
-// These metrics are automatically exposed via the /debug/vars endpoint
+// These metrics are automatically exposed via the /debug/vars endpoint.
 type Metrics struct {
 	// Operations counter by type and status
 	operations *expvar.Map // scim_operations_total{operation,status,org_id}
@@ -58,7 +58,7 @@ var (
 	metricsOnce sync.Once
 )
 
-// GetMetrics returns the singleton metrics instance
+// GetMetrics returns the singleton metrics instance.
 func GetMetrics() *Metrics {
 	metricsOnce.Do(func() {
 		metrics = &Metrics{
@@ -86,26 +86,27 @@ func GetMetrics() *Metrics {
 		}
 
 		// Register custom functions for percentile calculations
-		expvar.Publish("scim_request_duration_p50", expvar.Func(func() interface{} {
+		expvar.Publish("scim_request_duration_p50", expvar.Func(func() any {
 			return metrics.getPercentile(50)
 		}))
-		expvar.Publish("scim_request_duration_p95", expvar.Func(func() interface{} {
+		expvar.Publish("scim_request_duration_p95", expvar.Func(func() any {
 			return metrics.getPercentile(95)
 		}))
-		expvar.Publish("scim_request_duration_p99", expvar.Func(func() interface{} {
+		expvar.Publish("scim_request_duration_p99", expvar.Func(func() any {
 			return metrics.getPercentile(99)
 		}))
 	})
+
 	return metrics
 }
 
-// RecordOperation records a SCIM operation
+// RecordOperation records a SCIM operation.
 func (m *Metrics) RecordOperation(operation, status, orgID string) {
 	key := fmt.Sprintf("%s.%s.%s", operation, status, orgID)
 	m.operations.Add(key, 1)
 }
 
-// RecordRequestDuration records the duration of a SCIM request
+// RecordRequestDuration records the duration of a SCIM request.
 func (m *Metrics) RecordRequestDuration(endpoint string, duration time.Duration) {
 	durationMs := float64(duration.Milliseconds())
 
@@ -124,30 +125,31 @@ func (m *Metrics) RecordRequestDuration(endpoint string, duration time.Duration)
 	}
 }
 
-// RecordRateLimitHit records a rate limit hit
+// RecordRateLimitHit records a rate limit hit.
 func (m *Metrics) RecordRateLimitHit() {
 	m.rateLimitHits.Add(1)
 }
 
-// RecordTokenValidation records a token validation attempt
+// RecordTokenValidation records a token validation attempt.
 func (m *Metrics) RecordTokenValidation(success bool) {
 	m.tokenValidations.Add(1)
+
 	if !success {
 		m.tokenFailures.Add(1)
 	}
 }
 
-// RecordTokenCreation records a token creation
+// RecordTokenCreation records a token creation.
 func (m *Metrics) RecordTokenCreation() {
 	m.tokenCreations.Add(1)
 }
 
-// RecordTokenRevocation records a token revocation
+// RecordTokenRevocation records a token revocation.
 func (m *Metrics) RecordTokenRevocation() {
 	m.tokenRevocations.Add(1)
 }
 
-// RecordUserOperation records a user provisioning operation
+// RecordUserOperation records a user provisioning operation.
 func (m *Metrics) RecordUserOperation(operation string) {
 	switch operation {
 	case "create":
@@ -159,10 +161,11 @@ func (m *Metrics) RecordUserOperation(operation string) {
 	case "read":
 		m.userReads.Add(1)
 	}
-	m.RecordOperation(fmt.Sprintf("user_%s", operation), "success", "all")
+
+	m.RecordOperation("user_"+operation, "success", "all")
 }
 
-// RecordGroupOperation records a group operation
+// RecordGroupOperation records a group operation.
 func (m *Metrics) RecordGroupOperation(operation string) {
 	switch operation {
 	case "create":
@@ -172,42 +175,45 @@ func (m *Metrics) RecordGroupOperation(operation string) {
 	case "delete":
 		m.groupDeletions.Add(1)
 	}
-	m.RecordOperation(fmt.Sprintf("group_%s", operation), "success", "all")
+
+	m.RecordOperation("group_"+operation, "success", "all")
 }
 
-// RecordBulkOperation records a bulk operation
+// RecordBulkOperation records a bulk operation.
 func (m *Metrics) RecordBulkOperation(operationCount int) {
 	m.bulkOperations.Add(1)
 	m.RecordOperation("bulk", "success", "all")
 }
 
-// RecordError records an error by type
+// RecordError records an error by type.
 func (m *Metrics) RecordError(errorType string) {
 	m.errors.Add(errorType, 1)
 }
 
-// IncrementActiveRequests increments the active request counter
+// IncrementActiveRequests increments the active request counter.
 func (m *Metrics) IncrementActiveRequests() {
 	m.activeRequests.Add(1)
 }
 
-// DecrementActiveRequests decrements the active request counter
+// DecrementActiveRequests decrements the active request counter.
 func (m *Metrics) DecrementActiveRequests() {
 	m.activeRequests.Add(-1)
 }
 
-// RecordWebhook records a webhook operation
+// RecordWebhook records a webhook operation.
 func (m *Metrics) RecordWebhook(success bool, retried bool) {
 	m.webhooksSent.Add(1)
+
 	if !success {
 		m.webhooksFailed.Add(1)
 	}
+
 	if retried {
 		m.webhooksRetried.Add(1)
 	}
 }
 
-// getPercentile calculates the percentile across all endpoints
+// getPercentile calculates the percentile across all endpoints.
 func (m *Metrics) getPercentile(percentile int) map[string]float64 {
 	m.latencyMu.RLock()
 	defer m.latencyMu.RUnlock()
@@ -224,7 +230,7 @@ func (m *Metrics) getPercentile(percentile int) map[string]float64 {
 		copy(sorted, latencies)
 
 		// Bubble sort (good enough for 1000 elements)
-		for i := 0; i < len(sorted); i++ {
+		for i := range sorted {
 			for j := i + 1; j < len(sorted); j++ {
 				if sorted[i] > sorted[j] {
 					sorted[i], sorted[j] = sorted[j], sorted[i]
@@ -243,8 +249,8 @@ func (m *Metrics) getPercentile(percentile int) map[string]float64 {
 	return result
 }
 
-// GetStats returns current statistics
-func (m *Metrics) GetStats() map[string]interface{} {
+// GetStats returns current statistics.
+func (m *Metrics) GetStats() map[string]any {
 	m.latencyMu.RLock()
 	defer m.latencyMu.RUnlock()
 
@@ -253,7 +259,7 @@ func (m *Metrics) GetStats() map[string]interface{} {
 		totalLatencies += len(latencies)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"token_validations":     m.tokenValidations.Value(),
 		"token_failures":        m.tokenFailures.Value(),
 		"token_creations":       m.tokenCreations.Value(),
@@ -278,7 +284,7 @@ func (m *Metrics) GetStats() map[string]interface{} {
 	}
 }
 
-// Reset resets all metrics (useful for testing)
+// Reset resets all metrics (useful for testing).
 func (m *Metrics) Reset() {
 	m.operations = expvar.NewMap("scim_operations_total")
 	m.rateLimitHits.Set(0)

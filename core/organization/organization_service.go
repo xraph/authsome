@@ -12,25 +12,28 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// OrganizationService handles organization aggregate operations
+// OrganizationService handles organization aggregate operations.
 type OrganizationService struct {
 	repo    OrganizationRepository
 	config  Config
 	rbacSvc *rbac.Service
 }
 
-// NewOrganizationService creates a new organization service
+// NewOrganizationService creates a new organization service.
 func NewOrganizationService(repo OrganizationRepository, cfg Config, rbacSvc *rbac.Service) *OrganizationService {
 	// Apply defaults for any zero-valued config fields
 	if cfg.MaxMembersPerOrganization == 0 {
 		cfg.MaxMembersPerOrganization = DefaultConfig().MaxMembersPerOrganization
 	}
+
 	if cfg.MaxOrganizationsPerUser == 0 {
 		cfg.MaxOrganizationsPerUser = DefaultConfig().MaxOrganizationsPerUser
 	}
+
 	if cfg.MaxTeamsPerOrganization == 0 {
 		cfg.MaxTeamsPerOrganization = DefaultConfig().MaxTeamsPerOrganization
 	}
+
 	if cfg.InvitationExpiryHours == 0 {
 		cfg.InvitationExpiryHours = DefaultConfig().InvitationExpiryHours
 	}
@@ -42,7 +45,7 @@ func NewOrganizationService(repo OrganizationRepository, cfg Config, rbacSvc *rb
 	}
 }
 
-// CreateOrganization creates a new user-created organization
+// CreateOrganization creates a new user-created organization.
 func (s *OrganizationService) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest, creatorUserID, appID, environmentID xid.ID) (*Organization, error) {
 	// Check if user creation is enabled
 	if !s.config.EnableUserCreation {
@@ -54,6 +57,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 		if err != nil {
 			return nil, errs.InternalServerError("failed to get environment ID", err)
 		}
+
 		environmentID = envId
 	}
 
@@ -62,6 +66,7 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 	if err != nil {
 		return nil, fmt.Errorf("failed to count user organizations: %w", err)
 	}
+
 	if count >= s.config.MaxOrganizationsPerUser {
 		return nil, MaxOrganizationsReached(s.config.MaxOrganizationsPerUser)
 	}
@@ -118,25 +123,27 @@ func (s *OrganizationService) CreateOrganization(ctx context.Context, req *Creat
 	return org, nil
 }
 
-// FindOrganizationByID retrieves an organization by ID
+// FindOrganizationByID retrieves an organization by ID.
 func (s *OrganizationService) FindOrganizationByID(ctx context.Context, id xid.ID) (*Organization, error) {
 	org, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, OrganizationNotFound()
 	}
+
 	return org, nil
 }
 
-// FindOrganizationBySlug retrieves an organization by slug
+// FindOrganizationBySlug retrieves an organization by slug.
 func (s *OrganizationService) FindOrganizationBySlug(ctx context.Context, appID, environmentID xid.ID, slug string) (*Organization, error) {
 	org, err := s.repo.FindBySlug(ctx, appID, environmentID, slug)
 	if err != nil {
 		return nil, OrganizationNotFound()
 	}
+
 	return org, nil
 }
 
-// ListOrganizations lists organizations with pagination and filtering
+// ListOrganizations lists organizations with pagination and filtering.
 func (s *OrganizationService) ListOrganizations(ctx context.Context, filter *ListOrganizationsFilter) (*pagination.PageResponse[*Organization], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -146,7 +153,7 @@ func (s *OrganizationService) ListOrganizations(ctx context.Context, filter *Lis
 	return s.repo.ListByApp(ctx, filter)
 }
 
-// ListUserOrganizations lists organizations a user is a member of
+// ListUserOrganizations lists organizations a user is a member of.
 func (s *OrganizationService) ListUserOrganizations(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*Organization], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -156,7 +163,7 @@ func (s *OrganizationService) ListUserOrganizations(ctx context.Context, userID 
 	return s.repo.ListByUser(ctx, userID, filter)
 }
 
-// UpdateOrganization updates an organization
+// UpdateOrganization updates an organization.
 func (s *OrganizationService) UpdateOrganization(ctx context.Context, id xid.ID, req *UpdateOrganizationRequest) (*Organization, error) {
 	org, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -167,12 +174,15 @@ func (s *OrganizationService) UpdateOrganization(ctx context.Context, id xid.ID,
 	if req.Name != nil {
 		org.Name = *req.Name
 	}
+
 	if req.Logo != nil {
 		org.Logo = *req.Logo
 	}
+
 	if req.Metadata != nil {
 		org.Metadata = req.Metadata
 	}
+
 	org.UpdatedAt = time.Now().UTC()
 
 	if err := s.repo.Update(ctx, org); err != nil {
@@ -182,7 +192,7 @@ func (s *OrganizationService) UpdateOrganization(ctx context.Context, id xid.ID,
 	return org, nil
 }
 
-// DeleteOrganization deletes an organization (owner only - authorization check should be done before calling)
+// DeleteOrganization deletes an organization (owner only - authorization check should be done before calling).
 func (s *OrganizationService) DeleteOrganization(ctx context.Context, id, userID xid.ID) error {
 	// Verify organization exists
 	_, err := s.repo.FindByID(ctx, id)
@@ -213,5 +223,5 @@ func (s *OrganizationService) ForceDeleteOrganization(ctx context.Context, id xi
 	return s.repo.Delete(ctx, id)
 }
 
-// Type assertion to ensure OrganizationService implements OrganizationOperations
+// Type assertion to ensure OrganizationService implements OrganizationOperations.
 var _ OrganizationOperations = (*OrganizationService)(nil)

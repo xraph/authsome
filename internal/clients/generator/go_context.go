@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-// generateContextFile generates context management utilities for the Go client
+// generateContextFile generates context management utilities for the Go client.
 func (g *GoGenerator) generateContextFile() error {
 	var sb strings.Builder
 

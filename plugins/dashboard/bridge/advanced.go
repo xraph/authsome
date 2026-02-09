@@ -10,17 +10,17 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// PluginsListInput represents plugins list request
+// PluginsListInput represents plugins list request.
 type PluginsListInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// PluginsListOutput represents plugins list response
+// PluginsListOutput represents plugins list response.
 type PluginsListOutput struct {
 	Plugins []PluginItem `json:"plugins"`
 }
 
-// PluginItem represents a plugin
+// PluginItem represents a plugin.
 type PluginItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -30,25 +30,25 @@ type PluginItem struct {
 	Enabled     bool   `json:"enabled"`
 }
 
-// TogglePluginInput represents plugin toggle request
+// TogglePluginInput represents plugin toggle request.
 type TogglePluginInput struct {
-	AppID    string `json:"appId" validate:"required"`
+	AppID    string `json:"appId"    validate:"required"`
 	PluginID string `json:"pluginId" validate:"required"`
 	Enabled  bool   `json:"enabled"`
 }
 
-// EnvironmentsListInput represents environments list request
+// EnvironmentsListInput represents environments list request.
 type EnvironmentsListInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// EnvironmentsListOutput represents environments list response
+// EnvironmentsListOutput represents environments list response.
 type EnvironmentsListOutput struct {
 	Environments []EnvironmentItem `json:"environments"`
 	Current      *EnvironmentItem  `json:"current,omitempty"`
 }
 
-// EnvironmentItem represents an environment
+// EnvironmentItem represents an environment.
 type EnvironmentItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -57,34 +57,34 @@ type EnvironmentItem struct {
 	CreatedAt   string `json:"createdAt"`
 }
 
-// SwitchEnvironmentInput represents environment switch request
+// SwitchEnvironmentInput represents environment switch request.
 type SwitchEnvironmentInput struct {
 	AppID string `json:"appId" validate:"required"`
 	EnvID string `json:"envId" validate:"required"`
 }
 
-// EnvironmentDetailInput represents environment detail request
+// EnvironmentDetailInput represents environment detail request.
 type EnvironmentDetailInput struct {
 	AppID string `json:"appId" validate:"required"`
 	EnvID string `json:"envId" validate:"required"`
 }
 
-// EnvironmentDetailOutput represents environment detail response
+// EnvironmentDetailOutput represents environment detail response.
 type EnvironmentDetailOutput struct {
-	ID         string                 `json:"id"`
-	AppID      string                 `json:"appId"`
-	Name       string                 `json:"name"`
-	Slug       string                 `json:"slug"`
-	Type       string                 `json:"type"`
-	Status     string                 `json:"status"`
-	Config     map[string]interface{} `json:"config"`
-	IsDefault  bool                   `json:"isDefault"`
-	CreatedAt  string                 `json:"createdAt"`
-	UpdatedAt  string                 `json:"updatedAt"`
-	Promotions []PromotionItem        `json:"promotions"`
+	ID         string          `json:"id"`
+	AppID      string          `json:"appId"`
+	Name       string          `json:"name"`
+	Slug       string          `json:"slug"`
+	Type       string          `json:"type"`
+	Status     string          `json:"status"`
+	Config     map[string]any  `json:"config"`
+	IsDefault  bool            `json:"isDefault"`
+	CreatedAt  string          `json:"createdAt"`
+	UpdatedAt  string          `json:"updatedAt"`
+	Promotions []PromotionItem `json:"promotions"`
 }
 
-// PromotionItem represents a promotion history item
+// PromotionItem represents a promotion history item.
 type PromotionItem struct {
 	ID          string `json:"id"`
 	FromEnvID   string `json:"fromEnvId"`
@@ -95,56 +95,56 @@ type PromotionItem struct {
 	CreatedAt   string `json:"createdAt"`
 }
 
-// CreateEnvironmentInput represents environment creation request
+// CreateEnvironmentInput represents environment creation request.
 type CreateEnvironmentInput struct {
-	AppID       string `json:"appId" validate:"required"`
-	Name        string `json:"name" validate:"required"`
+	AppID       string `json:"appId"       validate:"required"`
+	Name        string `json:"name"        validate:"required"`
 	Slug        string `json:"slug"`
 	Type        string `json:"type"` // development, staging, production
 	Description string `json:"description"`
 }
 
-// DeleteEnvironmentInput represents environment delete request
+// DeleteEnvironmentInput represents environment delete request.
 type DeleteEnvironmentInput struct {
 	AppID string `json:"appId" validate:"required"`
 	EnvID string `json:"envId" validate:"required"`
 }
 
-// PromoteEnvironmentInput represents environment promotion request
+// PromoteEnvironmentInput represents environment promotion request.
 type PromoteEnvironmentInput struct {
-	AppID       string `json:"appId" validate:"required"`
+	AppID       string `json:"appId"       validate:"required"`
 	SourceEnvID string `json:"sourceEnvId" validate:"required"`
 	TargetEnvID string `json:"targetEnvId" validate:"required"`
 }
 
-// SystemConfigInput represents system config request
+// SystemConfigInput represents system config request.
 type SystemConfigInput struct {
 	// Empty struct - no parameters needed but required for bridge signature
 }
 
-// SystemConfigOutput represents system config
+// SystemConfigOutput represents system config.
 type SystemConfigOutput struct {
-	Version     string                 `json:"version"`
-	Environment string                 `json:"environment"`
-	Features    map[string]bool        `json:"features"`
-	Settings    map[string]interface{} `json:"settings"`
+	Version     string          `json:"version"`
+	Environment string          `json:"environment"`
+	Features    map[string]bool `json:"features"`
+	Settings    map[string]any  `json:"settings"`
 }
 
-// AuditLogsInput represents audit logs request
+// AuditLogsInput represents audit logs request.
 type AuditLogsInput struct {
-	AppID     string `json:"appId" validate:"required"`
+	AppID     string `json:"appId"               validate:"required"`
 	Action    string `json:"action,omitempty"`
 	User      string `json:"user,omitempty"`
 	StartDate string `json:"startDate,omitempty"`
 	EndDate   string `json:"endDate,omitempty"`
 }
 
-// AuditLogsOutput represents audit logs response
+// AuditLogsOutput represents audit logs response.
 type AuditLogsOutput struct {
 	Logs []AuditLogItem `json:"logs"`
 }
 
-// AuditLogItem represents an audit log entry
+// AuditLogItem represents an audit log entry.
 type AuditLogItem struct {
 	ID        string `json:"id"`
 	Timestamp string `json:"timestamp"`
@@ -155,7 +155,7 @@ type AuditLogItem struct {
 	Details   string `json:"details,omitempty"`
 }
 
-// registerAdvancedFunctions registers advanced feature bridge functions
+// registerAdvancedFunctions registers advanced feature bridge functions.
 func (bm *BridgeManager) registerAdvancedFunctions() error {
 	// Plugins management
 	if err := bm.bridge.Register("getPluginsList", bm.getPluginsList,
@@ -222,10 +222,11 @@ func (bm *BridgeManager) registerAdvancedFunctions() error {
 	}
 
 	bm.log.Info("advanced feature bridge functions registered")
+
 	return nil
 }
 
-// getPluginsList retrieves list of plugins
+// getPluginsList retrieves list of plugins.
 func (bm *BridgeManager) getPluginsList(ctx bridge.Context, input PluginsListInput) (*PluginsListOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -295,15 +296,16 @@ func (bm *BridgeManager) getPluginsList(ctx bridge.Context, input PluginsListInp
 	}, nil
 }
 
-// isPluginEnabled checks if a plugin is in the enabled plugins map
+// isPluginEnabled checks if a plugin is in the enabled plugins map.
 func isPluginEnabled(pluginID string, enabledPlugins map[string]bool) bool {
 	if enabledPlugins == nil {
 		return false
 	}
+
 	return enabledPlugins[pluginID]
 }
 
-// togglePlugin enables or disables a plugin
+// togglePlugin enables or disables a plugin.
 func (bm *BridgeManager) togglePlugin(ctx bridge.Context, input TogglePluginInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" || input.PluginID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId and pluginId are required")
@@ -316,7 +318,7 @@ func (bm *BridgeManager) togglePlugin(ctx bridge.Context, input TogglePluginInpu
 	}, nil
 }
 
-// getEnvironmentsList retrieves list of environments
+// getEnvironmentsList retrieves list of environments.
 func (bm *BridgeManager) getEnvironmentsList(ctx bridge.Context, input EnvironmentsListInput) (*EnvironmentsListOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -331,6 +333,7 @@ func (bm *BridgeManager) getEnvironmentsList(ctx bridge.Context, input Environme
 	// If environment service is not available, return empty list
 	if bm.envSvc == nil {
 		bm.log.Warn("environment service not available")
+
 		return &EnvironmentsListOutput{
 			Environments: []EnvironmentItem{},
 			Current:      nil,
@@ -348,6 +351,7 @@ func (bm *BridgeManager) getEnvironmentsList(ctx bridge.Context, input Environme
 	response, err := bm.envSvc.ListEnvironments(goCtx, filter)
 	if err != nil {
 		bm.log.Error("failed to list environments", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to fetch environments")
 	}
 
@@ -364,6 +368,7 @@ func (bm *BridgeManager) getEnvironmentsList(ctx bridge.Context, input Environme
 
 	// Get current/default environment
 	var current *EnvironmentItem
+
 	defaultEnv, err := bm.envSvc.GetDefaultEnvironment(goCtx, appID)
 	if err == nil && defaultEnv != nil {
 		current = &EnvironmentItem{
@@ -380,7 +385,7 @@ func (bm *BridgeManager) getEnvironmentsList(ctx bridge.Context, input Environme
 	}, nil
 }
 
-// switchEnvironment switches to a different environment
+// switchEnvironment switches to a different environment.
 func (bm *BridgeManager) switchEnvironment(ctx bridge.Context, input SwitchEnvironmentInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" || input.EnvID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId and envId are required")
@@ -409,6 +414,7 @@ func (bm *BridgeManager) switchEnvironment(ctx bridge.Context, input SwitchEnvir
 	env, err := bm.envSvc.GetEnvironment(goCtx, envID)
 	if err != nil {
 		bm.log.Error("failed to get environment", forge.F("error", err.Error()), forge.F("envId", input.EnvID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "environment not found")
 	}
 
@@ -427,7 +433,7 @@ func (bm *BridgeManager) switchEnvironment(ctx bridge.Context, input SwitchEnvir
 	}, nil
 }
 
-// getEnvironmentDetail retrieves detailed information about an environment
+// getEnvironmentDetail retrieves detailed information about an environment.
 func (bm *BridgeManager) getEnvironmentDetail(ctx bridge.Context, input EnvironmentDetailInput) (*EnvironmentDetailOutput, error) {
 	if input.AppID == "" || input.EnvID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId and envId are required")
@@ -456,6 +462,7 @@ func (bm *BridgeManager) getEnvironmentDetail(ctx bridge.Context, input Environm
 	env, err := bm.envSvc.GetEnvironment(goCtx, envID)
 	if err != nil {
 		bm.log.Error("failed to get environment", forge.F("error", err.Error()), forge.F("envId", input.EnvID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "environment not found")
 	}
 
@@ -466,10 +473,12 @@ func (bm *BridgeManager) getEnvironmentDetail(ctx bridge.Context, input Environm
 
 	// Get promotion history for this environment
 	var promotions []PromotionItem
+
 	promotionsFilter := &environment.ListPromotionsFilter{
 		AppID:       appID,
 		SourceEnvID: &envID,
 	}
+
 	promotionsResp, err := bm.envSvc.ListPromotions(goCtx, promotionsFilter)
 	if err == nil && promotionsResp != nil && len(promotionsResp.Data) > 0 {
 		// Transform promotions
@@ -480,9 +489,11 @@ func (bm *BridgeManager) getEnvironmentDetail(ctx bridge.Context, input Environm
 
 			sourceName := "Unknown"
 			targetName := "Unknown"
+
 			if sourceEnv != nil {
 				sourceName = sourceEnv.Name
 			}
+
 			if targetEnv != nil {
 				targetName = targetEnv.Name
 			}
@@ -514,7 +525,7 @@ func (bm *BridgeManager) getEnvironmentDetail(ctx bridge.Context, input Environm
 	}, nil
 }
 
-// createEnvironment creates a new environment
+// createEnvironment creates a new environment.
 func (bm *BridgeManager) createEnvironment(ctx bridge.Context, input CreateEnvironmentInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" || input.Name == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId and name are required")
@@ -551,6 +562,7 @@ func (bm *BridgeManager) createEnvironment(ctx bridge.Context, input CreateEnvir
 	_, err = bm.envSvc.CreateEnvironment(goCtx, req)
 	if err != nil {
 		bm.log.Error("failed to create environment", forge.F("error", err.Error()), forge.F("appId", input.AppID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to create environment: "+err.Error())
 	}
 
@@ -560,7 +572,7 @@ func (bm *BridgeManager) createEnvironment(ctx bridge.Context, input CreateEnvir
 	}, nil
 }
 
-// deleteEnvironment deletes an environment
+// deleteEnvironment deletes an environment.
 func (bm *BridgeManager) deleteEnvironment(ctx bridge.Context, input DeleteEnvironmentInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" || input.EnvID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId and envId are required")
@@ -589,6 +601,7 @@ func (bm *BridgeManager) deleteEnvironment(ctx bridge.Context, input DeleteEnvir
 	env, err := bm.envSvc.GetEnvironment(goCtx, envID)
 	if err != nil {
 		bm.log.Error("failed to get environment", forge.F("error", err.Error()), forge.F("envId", input.EnvID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "environment not found")
 	}
 
@@ -605,6 +618,7 @@ func (bm *BridgeManager) deleteEnvironment(ctx bridge.Context, input DeleteEnvir
 	err = bm.envSvc.DeleteEnvironment(goCtx, envID)
 	if err != nil {
 		bm.log.Error("failed to delete environment", forge.F("error", err.Error()), forge.F("envId", input.EnvID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to delete environment: "+err.Error())
 	}
 
@@ -614,7 +628,7 @@ func (bm *BridgeManager) deleteEnvironment(ctx bridge.Context, input DeleteEnvir
 	}, nil
 }
 
-// promoteEnvironment promotes configuration from one environment to another
+// promoteEnvironment promotes configuration from one environment to another.
 func (bm *BridgeManager) promoteEnvironment(ctx bridge.Context, input PromoteEnvironmentInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" || input.SourceEnvID == "" || input.TargetEnvID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId, sourceEnvId, and targetEnvId are required")
@@ -648,6 +662,7 @@ func (bm *BridgeManager) promoteEnvironment(ctx bridge.Context, input PromoteEnv
 	targetEnv, err := bm.envSvc.GetEnvironment(goCtx, targetEnvID)
 	if err != nil {
 		bm.log.Error("failed to get target environment", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "target environment not found")
 	}
 
@@ -665,6 +680,7 @@ func (bm *BridgeManager) promoteEnvironment(ctx bridge.Context, input PromoteEnv
 	_, err = bm.envSvc.PromoteEnvironment(goCtx, req)
 	if err != nil {
 		bm.log.Error("failed to promote environment", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to promote environment: "+err.Error())
 	}
 
@@ -674,7 +690,7 @@ func (bm *BridgeManager) promoteEnvironment(ctx bridge.Context, input PromoteEnv
 	}, nil
 }
 
-// getSystemConfig retrieves system configuration
+// getSystemConfig retrieves system configuration.
 func (bm *BridgeManager) getSystemConfig(ctx bridge.Context, input SystemConfigInput) (*SystemConfigOutput, error) {
 	// TODO: Implement actual config retrieval
 	return &SystemConfigOutput{
@@ -686,7 +702,7 @@ func (bm *BridgeManager) getSystemConfig(ctx bridge.Context, input SystemConfigI
 			"multiapp":     true,
 			"environments": true,
 		},
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"sessionDuration":   24,
 			"maxLoginAttempts":  5,
 			"passwordMinLength": 8,
@@ -694,7 +710,7 @@ func (bm *BridgeManager) getSystemConfig(ctx bridge.Context, input SystemConfigI
 	}, nil
 }
 
-// getAuditLogs retrieves audit logs
+// getAuditLogs retrieves audit logs.
 func (bm *BridgeManager) getAuditLogs(ctx bridge.Context, input AuditLogsInput) (*AuditLogsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")

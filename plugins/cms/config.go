@@ -2,7 +2,7 @@ package cms
 
 import "time"
 
-// Config holds the CMS plugin configuration
+// Config holds the CMS plugin configuration.
 type Config struct {
 	// Features
 	Features FeaturesConfig `json:"features" yaml:"features"`
@@ -23,7 +23,7 @@ type Config struct {
 	Dashboard DashboardConfig `json:"dashboard" yaml:"dashboard"`
 }
 
-// FeaturesConfig holds feature toggles
+// FeaturesConfig holds feature toggles.
 type FeaturesConfig struct {
 	// EnableRevisions enables content versioning
 	// Default: true
@@ -54,7 +54,7 @@ type FeaturesConfig struct {
 	EnableSoftDelete bool `json:"enableSoftDelete" yaml:"enableSoftDelete"`
 }
 
-// LimitsConfig holds resource limits
+// LimitsConfig holds resource limits.
 type LimitsConfig struct {
 	// MaxContentTypes is the maximum number of content types per app/environment
 	// 0 means unlimited
@@ -84,7 +84,7 @@ type LimitsConfig struct {
 	MaxComponentSchemas int `json:"maxComponentSchemas" yaml:"maxComponentSchemas"`
 }
 
-// RevisionsConfig holds revision settings
+// RevisionsConfig holds revision settings.
 type RevisionsConfig struct {
 	// MaxRevisionsPerEntry is the maximum number of revisions to keep per entry
 	// When exceeded, oldest revisions are automatically deleted
@@ -105,7 +105,7 @@ type RevisionsConfig struct {
 	CleanupInterval time.Duration `json:"cleanupInterval" yaml:"cleanupInterval"`
 }
 
-// SearchConfig holds search settings
+// SearchConfig holds search settings.
 type SearchConfig struct {
 	// Language is the PostgreSQL text search configuration
 	// Default: "english"
@@ -124,7 +124,7 @@ type SearchConfig struct {
 	EnableHighlighting bool `json:"enableHighlighting" yaml:"enableHighlighting"`
 }
 
-// APIConfig holds API settings
+// APIConfig holds API settings.
 type APIConfig struct {
 	// EnablePublicAPI allows unauthenticated read access to published content
 	// Default: false
@@ -148,7 +148,7 @@ type APIConfig struct {
 	EnableGraphQL bool `json:"enableGraphql" yaml:"enableGraphql"`
 }
 
-// DashboardConfig holds dashboard-specific settings
+// DashboardConfig holds dashboard-specific settings.
 type DashboardConfig struct {
 	// EnableFieldDragDrop enables drag and drop field reordering
 	// Default: true
@@ -175,7 +175,7 @@ type DashboardConfig struct {
 	ShowRelatedEntries bool `json:"showRelatedEntries" yaml:"showRelatedEntries"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Features: FeaturesConfig{
@@ -225,7 +225,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Validate validates the configuration
+// Validate validates the configuration.
 func (c *Config) Validate() error {
 	// Set minimum values
 	if c.Limits.MaxFieldsPerType < 1 {
@@ -267,7 +267,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Merge merges another config into this one (non-zero values override)
+// Merge merges another config into this one (non-zero values override).
 func (c *Config) Merge(other *Config) {
 	if other == nil {
 		return
@@ -281,18 +281,23 @@ func (c *Config) Merge(other *Config) {
 	if other.Limits.MaxContentTypes > 0 {
 		c.Limits.MaxContentTypes = other.Limits.MaxContentTypes
 	}
+
 	if other.Limits.MaxFieldsPerType > 0 {
 		c.Limits.MaxFieldsPerType = other.Limits.MaxFieldsPerType
 	}
+
 	if other.Limits.MaxEntriesPerType > 0 {
 		c.Limits.MaxEntriesPerType = other.Limits.MaxEntriesPerType
 	}
+
 	if other.Limits.MaxEntryDataSize > 0 {
 		c.Limits.MaxEntryDataSize = other.Limits.MaxEntryDataSize
 	}
+
 	if other.Limits.MaxRelationsPerEntry > 0 {
 		c.Limits.MaxRelationsPerEntry = other.Limits.MaxRelationsPerEntry
 	}
+
 	if other.Limits.MaxComponentSchemas > 0 {
 		c.Limits.MaxComponentSchemas = other.Limits.MaxComponentSchemas
 	}
@@ -301,9 +306,11 @@ func (c *Config) Merge(other *Config) {
 	if other.Revisions.MaxRevisionsPerEntry > 0 {
 		c.Revisions.MaxRevisionsPerEntry = other.Revisions.MaxRevisionsPerEntry
 	}
+
 	if other.Revisions.RetentionDays > 0 {
 		c.Revisions.RetentionDays = other.Revisions.RetentionDays
 	}
+
 	if other.Revisions.CleanupInterval > 0 {
 		c.Revisions.CleanupInterval = other.Revisions.CleanupInterval
 	}
@@ -312,9 +319,11 @@ func (c *Config) Merge(other *Config) {
 	if other.Search.Language != "" {
 		c.Search.Language = other.Search.Language
 	}
+
 	if other.Search.MinSearchLength > 0 {
 		c.Search.MinSearchLength = other.Search.MinSearchLength
 	}
+
 	if other.Search.MaxSearchResults > 0 {
 		c.Search.MaxSearchResults = other.Search.MaxSearchResults
 	}
@@ -323,9 +332,11 @@ func (c *Config) Merge(other *Config) {
 	if other.API.DefaultPageSize > 0 {
 		c.API.DefaultPageSize = other.API.DefaultPageSize
 	}
+
 	if other.API.MaxPageSize > 0 {
 		c.API.MaxPageSize = other.API.MaxPageSize
 	}
+
 	if other.API.RateLimitPerMinute > 0 {
 		c.API.RateLimitPerMinute = other.API.RateLimitPerMinute
 	}

@@ -9,44 +9,44 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// Request types
+// Request types.
 type SendRequest struct {
-	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
 
 type SendResponse struct {
-	Status   string `json:"status" example:"sent"`
-	DevToken string `json:"devToken,omitempty" example:"abc123xyz789"`
+	Status   string `example:"sent"         json:"status"`
+	DevToken string `example:"abc123xyz789" json:"devToken,omitempty"`
 }
 
 type VerifyRequest struct {
-	Token string `query:"token" validate:"required" example:"abc123xyz789"`
+	Token string `example:"abc123xyz789" query:"token" validate:"required"`
 }
 
 type VerifyResponse struct {
-	Success bool             `json:"success" example:"true"`
+	Success bool             `example:"true"                 json:"success"`
 	User    *user.User       `json:"user"`
 	Session *session.Session `json:"session,omitempty"`
-	Token   string           `json:"token,omitempty" example:"session_token_abc123"`
+	Token   string           `example:"session_token_abc123" json:"token,omitempty"`
 }
 
 type ResendRequest struct {
-	Email string `json:"email" validate:"required,email" example:"user@example.com"`
+	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
 
 type ResendResponse struct {
-	Status string `json:"status" example:"sent"`
+	Status string `example:"sent" json:"status"`
 }
 
 type StatusResponse struct {
-	EmailVerified   bool       `json:"emailVerified" example:"true"`
-	EmailVerifiedAt *time.Time `json:"emailVerifiedAt,omitempty" example:"2024-12-13T15:45:00Z"`
+	EmailVerified   bool       `example:"true"                 json:"emailVerified"`
+	EmailVerifiedAt *time.Time `example:"2024-12-13T15:45:00Z" json:"emailVerifiedAt,omitempty"`
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 
-// Error definitions
+// Error definitions.
 var (
 	ErrTokenNotFound     = errs.New("TOKEN_NOT_FOUND", "Verification token not found or invalid", 404)
 	ErrTokenExpired      = errs.New("TOKEN_EXPIRED", "Verification token has expired", 410)

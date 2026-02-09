@@ -20,12 +20,14 @@ import (
 
 // Monitoring Handlers
 
-// ServeMonitoringPage renders the main SCIM monitoring dashboard
+// ServeMonitoringPage renders the main SCIM monitoring dashboard.
 func (e *DashboardExtension) ServeMonitoringPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
+
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -43,7 +45,7 @@ func (e *DashboardExtension) ServeMonitoringPage(ctx *router.PageContext) (g.Nod
 	return content, nil
 }
 
-// renderMonitoringPageContent renders the monitoring page content
+// renderMonitoringPageContent renders the monitoring page content.
 func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
@@ -71,7 +73,7 @@ func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context,
 			Class("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"),
 			statsCard(
 				"Total Syncs",
-				fmt.Sprintf("%d", stats.TotalSyncs),
+				strconv.Itoa(stats.TotalSyncs),
 				"All time",
 				lucide.Activity(Class("size-5 text-violet-600 dark:text-violet-400")),
 			),
@@ -83,7 +85,7 @@ func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context,
 			),
 			statsCard(
 				"Failed Syncs",
-				fmt.Sprintf("%d", stats.FailedSyncs),
+				strconv.Itoa(stats.FailedSyncs),
 				"Requires attention",
 				lucide.Info(Class("size-5 text-red-600 dark:text-red-400")),
 			),
@@ -128,7 +130,7 @@ func (e *DashboardExtension) renderMonitoringPageContent(reqCtx context.Context,
 	)
 }
 
-// renderRecentActivitySection renders the recent activity section
+// renderRecentActivitySection renders the recent activity section.
 func (e *DashboardExtension) renderRecentActivitySection(ctx context.Context, appID *xid.ID, orgID *xid.ID) g.Node {
 	// Fetch recent events
 	events, err := e.plugin.service.GetRecentActivity(ctx, *appID, orgID, 10)
@@ -180,7 +182,7 @@ func (e *DashboardExtension) renderRecentActivitySection(ctx context.Context, ap
 	)
 }
 
-// renderFailedOperationsSection renders the failed operations section
+// renderFailedOperationsSection renders the failed operations section.
 func (e *DashboardExtension) renderFailedOperationsSection(ctx context.Context, appID *xid.ID, orgID *xid.ID) g.Node {
 	// Fetch failed events
 	failedEvents, err := e.plugin.service.GetFailedEvents(ctx, *appID, orgID, 5)
@@ -208,16 +210,17 @@ func (e *DashboardExtension) renderFailedOperationsSection(ctx context.Context, 
 	)
 }
 
-// renderEventRows renders event table rows
+// renderEventRows renders event table rows.
 func (e *DashboardExtension) renderEventRows(events []*SCIMSyncEvent) []g.Node {
 	rows := make([]g.Node, len(events))
 	for i, event := range events {
 		rows[i] = syncEventRow(event)
 	}
+
 	return rows
 }
 
-// renderFailedEventCards renders failed event cards
+// renderFailedEventCards renders failed event cards.
 func (e *DashboardExtension) renderFailedEventCards(events []*SCIMSyncEvent) []g.Node {
 	cards := make([]g.Node, len(events))
 	for i, event := range events {
@@ -247,15 +250,18 @@ func (e *DashboardExtension) renderFailedEventCards(events []*SCIMSyncEvent) []g
 			),
 		)
 	}
+
 	return cards
 }
 
-// ServeLogsPage renders the SCIM event logs page
+// ServeLogsPage renders the SCIM event logs page.
 func (e *DashboardExtension) ServeLogsPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
+
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -269,6 +275,7 @@ func (e *DashboardExtension) ServeLogsPage(ctx *router.PageContext) (g.Node, err
 
 	// Parse query parameters
 	page := 1
+
 	if pageStr := ctx.Request.URL.Query().Get("page"); pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
@@ -284,7 +291,7 @@ func (e *DashboardExtension) ServeLogsPage(ctx *router.PageContext) (g.Node, err
 	return content, nil
 }
 
-// renderLogsPageContent renders the logs page content
+// renderLogsPageContent renders the logs page content.
 func (e *DashboardExtension) renderLogsPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID, page int, statusFilter, eventTypeFilter string) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
@@ -292,6 +299,7 @@ func (e *DashboardExtension) renderLogsPageContent(reqCtx context.Context, curre
 
 	// Fetch logs
 	perPage := 50
+
 	events, total, err := e.plugin.service.GetSyncLogs(reqCtx, appID, orgID, page, perPage, statusFilter, eventTypeFilter)
 	if err != nil {
 		return alertBox("error", "Error", "Failed to load logs: "+err.Error())
@@ -417,12 +425,14 @@ func (e *DashboardExtension) renderLogsPageContent(reqCtx context.Context, curre
 	)
 }
 
-// ServeStatsPage renders the SCIM statistics page
+// ServeStatsPage renders the SCIM statistics page.
 func (e *DashboardExtension) ServeStatsPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
+
 	currentUser := e.getUserFromContext(ctx)
 	if currentUser == nil {
 		http.Redirect(ctx.ResponseWriter, ctx.Request, e.baseUIPath+"/login", http.StatusFound)
+
 		return nil, nil
 	}
 
@@ -440,7 +450,7 @@ func (e *DashboardExtension) ServeStatsPage(ctx *router.PageContext) (g.Node, er
 	return content, nil
 }
 
-// renderStatsPageContent renders the statistics page content
+// renderStatsPageContent renders the statistics page content.
 func (e *DashboardExtension) renderStatsPageContent(reqCtx context.Context, currentApp interface{}, orgID *xid.ID) g.Node {
 	basePath := e.getBasePath()
 	app := currentApp.(*app.App)
@@ -475,10 +485,10 @@ func (e *DashboardExtension) renderStatsPageContent(reqCtx context.Context, curr
 		// Summary Stats
 		Div(
 			Class("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"),
-			statsCard("Total Operations", fmt.Sprintf("%d", stats.TotalOperations), "All time", lucide.Activity(Class("size-5"))),
+			statsCard("Total Operations", strconv.Itoa(stats.TotalOperations), "All time", lucide.Activity(Class("size-5"))),
 			statsCard("Success Rate", fmt.Sprintf("%.1f%%", stats.SuccessRate), "", lucide.TrendingUp(Class("size-5"))),
 			statsCard("Avg Duration", fmt.Sprintf("%dms", stats.AvgDuration), "Per operation", lucide.Clock(Class("size-5"))),
-			statsCard("Total Errors", fmt.Sprintf("%d", stats.TotalErrors), "", lucide.X(Class("size-5"))),
+			statsCard("Total Errors", strconv.Itoa(stats.TotalErrors), "", lucide.X(Class("size-5"))),
 		),
 
 		// Operations by Type
@@ -505,9 +515,10 @@ func (e *DashboardExtension) renderStatsPageContent(reqCtx context.Context, curr
 	)
 }
 
-// renderOperationTypeStats renders operation type statistics
+// renderOperationTypeStats renders operation type statistics.
 func (e *DashboardExtension) renderOperationTypeStats(stats map[string]int) []g.Node {
 	items := make([]g.Node, 0, len(stats))
+
 	total := 0
 	for _, count := range stats {
 		total += count
@@ -518,6 +529,7 @@ func (e *DashboardExtension) renderOperationTypeStats(stats map[string]int) []g.
 		if total > 0 {
 			percentage = float64(count) / float64(total) * 100
 		}
+
 		items = append(items, Div(
 			Class("flex items-center justify-between"),
 			Span(Class("text-sm text-slate-700 dark:text-gray-300"), g.Text(opType)),
@@ -535,12 +547,14 @@ func (e *DashboardExtension) renderOperationTypeStats(stats map[string]int) []g.
 			),
 		))
 	}
+
 	return items
 }
 
-// renderStatusStats renders status statistics
+// renderStatusStats renders status statistics.
 func (e *DashboardExtension) renderStatusStats(stats map[string]int) []g.Node {
 	items := make([]g.Node, 0, len(stats))
+
 	total := 0
 	for _, count := range stats {
 		total += count
@@ -553,6 +567,7 @@ func (e *DashboardExtension) renderStatusStats(stats map[string]int) []g.Node {
 		}
 
 		colorClass := "bg-gray-600"
+
 		switch status {
 		case "success":
 			colorClass = "bg-green-600"
@@ -579,10 +594,11 @@ func (e *DashboardExtension) renderStatusStats(stats map[string]int) []g.Node {
 			),
 		))
 	}
+
 	return items
 }
 
-// HandleExportLogs handles log export
+// HandleExportLogs handles log export.
 func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	_ = reqCtx // Unused in this handler
@@ -593,6 +609,7 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 	}
 
 	orgID, _ := e.getOrgFromContext(ctx)
+
 	format := ctx.Request.URL.Query().Get("format")
 	if format == "" {
 		format = "csv"
@@ -608,6 +625,7 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 		ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
 		ctx.ResponseWriter.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=scim-logs-%s.json", time.Now().Format("2006-01-02")))
 		json.NewEncoder(ctx.ResponseWriter).Encode(events)
+
 		return nil, nil
 	}
 
@@ -627,13 +645,14 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 		if event.ErrorMessage != nil {
 			errorMsg = *event.ErrorMessage
 		}
+
 		writer.Write([]string{
 			event.CreatedAt.Format(time.RFC3339),
 			event.EventType,
 			event.ResourceType,
 			event.Status,
 			event.Direction,
-			fmt.Sprintf("%d", event.Duration),
+			strconv.FormatInt(event.Duration, 10),
 			errorMsg,
 		})
 	}
@@ -641,10 +660,11 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 	return nil, nil
 }
 
-// Helper function
+// Helper function.
 func min(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }

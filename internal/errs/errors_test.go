@@ -40,7 +40,7 @@ func TestWrap(t *testing.T) {
 	original := errors.New("database connection failed")
 	err := Wrap(original, CodeDatabaseError, "Failed to query users", http.StatusInternalServerError)
 
-	if err.Err != original {
+	if !errors.Is(err.Err, original) {
 		t.Error("expected underlying error to be preserved")
 	}
 
@@ -125,7 +125,7 @@ func TestAuthsomeError_WithError(t *testing.T) {
 	original := errors.New("original error")
 	err := UserNotFound().WithError(original)
 
-	if err.Err != original {
+	if !errors.Is(err.Err, original) {
 		t.Error("expected underlying error to be set")
 	}
 }
@@ -185,7 +185,7 @@ func TestAuthsomeError_Unwrap(t *testing.T) {
 	wrapped := Wrap(original, CodeDatabaseError, "Query failed", http.StatusInternalServerError)
 
 	unwrapped := errors.Unwrap(wrapped)
-	if unwrapped != original {
+	if !errors.Is(unwrapped, original) {
 		t.Error("expected unwrap to return original error")
 	}
 
@@ -587,6 +587,7 @@ func assertContext(t *testing.T, err *AuthsomeError, key string, expected any) {
 	actual, ok := err.Context[key]
 	if !ok {
 		t.Errorf("expected context key %s to exist", key)
+
 		return
 	}
 

@@ -12,7 +12,7 @@ import (
 // =============================================================================
 
 // SocialAccount represents a social account connection DTO
-// This is separate from schema.SocialAccount to maintain proper separation of concerns
+// This is separate from schema.SocialAccount to maintain proper separation of concerns.
 type SocialAccount struct {
 	ID        xid.ID    `json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -41,7 +41,7 @@ type SocialAccount struct {
 	RevokedAt *time.Time `json:"revokedAt,omitempty"`
 }
 
-// FromSchemaSocialAccount converts a schema.SocialAccount to a SocialAccount DTO
+// FromSchemaSocialAccount converts a schema.SocialAccount to a SocialAccount DTO.
 func FromSchemaSocialAccount(sa *schema.SocialAccount) *SocialAccount {
 	if sa == nil {
 		return nil
@@ -68,7 +68,7 @@ func FromSchemaSocialAccount(sa *schema.SocialAccount) *SocialAccount {
 	}
 }
 
-// FromSchemaSocialAccounts converts a slice of schema.SocialAccount to SocialAccount DTOs
+// FromSchemaSocialAccounts converts a slice of schema.SocialAccount to SocialAccount DTOs.
 func FromSchemaSocialAccounts(accounts []*schema.SocialAccount) []*SocialAccount {
 	if accounts == nil {
 		return nil
@@ -78,10 +78,11 @@ func FromSchemaSocialAccounts(accounts []*schema.SocialAccount) []*SocialAccount
 	for i, sa := range accounts {
 		result[i] = FromSchemaSocialAccount(sa)
 	}
+
 	return result
 }
 
-// ToSchema converts the SocialAccount DTO to a schema.SocialAccount model
+// ToSchema converts the SocialAccount DTO to a schema.SocialAccount model.
 func (sa *SocialAccount) ToSchema() *schema.SocialAccount {
 	return &schema.SocialAccount{
 		ID:                 sa.ID,

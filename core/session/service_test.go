@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// MockRepository is a mock implementation of the Repository interface
+// MockRepository is a mock implementation of the Repository interface.
 type MockRepository struct {
 	mock.Mock
 }
@@ -24,23 +24,27 @@ func (m *MockRepository) FindSessionByRefreshToken(ctx context.Context, refreshT
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Session), args.Error(1)
 }
 
 // RefreshSessionTokens implements Repository.
 func (m *MockRepository) RefreshSessionTokens(ctx context.Context, id xid.ID, newAccessToken string, accessTokenExpiresAt time.Time, newRefreshToken string, refreshTokenExpiresAt time.Time) error {
 	args := m.Called(ctx, id, newAccessToken, accessTokenExpiresAt, newRefreshToken, refreshTokenExpiresAt)
+
 	return args.Error(0)
 }
 
 // UpdateSessionExpiry implements Repository.
 func (m *MockRepository) UpdateSessionExpiry(ctx context.Context, id xid.ID, expiresAt time.Time) error {
 	args := m.Called(ctx, id, expiresAt)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) CreateSession(ctx context.Context, session *schema.Session) error {
 	args := m.Called(ctx, session)
+
 	return args.Error(0)
 }
 
@@ -49,6 +53,7 @@ func (m *MockRepository) FindSessionByToken(ctx context.Context, token string) (
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Session), args.Error(1)
 }
 
@@ -57,6 +62,7 @@ func (m *MockRepository) FindSessionByID(ctx context.Context, id xid.ID) (*schem
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.Session), args.Error(1)
 }
 
@@ -65,35 +71,41 @@ func (m *MockRepository) ListSessions(ctx context.Context, filter *ListSessionsF
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*pagination.PageResponse[*schema.Session]), args.Error(1)
 }
 
 func (m *MockRepository) RevokeSession(ctx context.Context, token string) error {
 	args := m.Called(ctx, token)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) RevokeSessionByID(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) CountSessions(ctx context.Context, appID xid.ID, userID *xid.ID) (int, error) {
 	args := m.Called(ctx, appID, userID)
+
 	return args.Int(0), args.Error(1)
 }
 
 func (m *MockRepository) CleanupExpiredSessions(ctx context.Context) (int, error) {
 	args := m.Called(ctx)
+
 	return args.Int(0), args.Error(1)
 }
 
-// Helper function to create a test service
+// Helper function to create a test service.
 func newTestService(repo Repository, cfg ...Config) *Service {
 	config := Config{}
 	if len(cfg) > 0 {
 		config = cfg[0]
 	}
+
 	return NewService(repo, config, nil, nil)
 }
 
@@ -232,6 +244,7 @@ func TestService_Create(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, session)
+
 				if tt.check != nil {
 					tt.check(t, session)
 				}
@@ -416,7 +429,8 @@ func TestService_TokenGeneration(t *testing.T) {
 
 	// Create multiple sessions and verify tokens are unique
 	tokens := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+
+	for range 100 {
 		session, err := svc.Create(context.Background(), &CreateSessionRequest{
 			AppID:     appID,
 			UserID:    userID,

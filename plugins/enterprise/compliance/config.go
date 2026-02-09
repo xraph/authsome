@@ -2,7 +2,7 @@ package compliance
 
 import "time"
 
-// Config holds the compliance plugin configuration
+// Config holds the compliance plugin configuration.
 type Config struct {
 	// Enable compliance plugin
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -29,22 +29,22 @@ type Config struct {
 	Dashboard DashboardConfig `json:"dashboard" yaml:"dashboard"`
 }
 
-// AutomatedChecksConfig configures automated compliance checks
+// AutomatedChecksConfig configures automated compliance checks.
 type AutomatedChecksConfig struct {
-	Enabled       bool          `json:"enabled" yaml:"enabled"`
+	Enabled       bool          `json:"enabled"       yaml:"enabled"`
 	CheckInterval time.Duration `json:"checkInterval" yaml:"checkInterval"` // e.g., 24h
 
 	// Specific checks
-	MFACoverage        bool `json:"mfaCoverage" yaml:"mfaCoverage"`
-	PasswordPolicy     bool `json:"passwordPolicy" yaml:"passwordPolicy"`
-	SessionPolicy      bool `json:"sessionPolicy" yaml:"sessionPolicy"`
-	AccessReview       bool `json:"accessReview" yaml:"accessReview"`
-	InactiveUsers      bool `json:"inactiveUsers" yaml:"inactiveUsers"`
+	MFACoverage        bool `json:"mfaCoverage"        yaml:"mfaCoverage"`
+	PasswordPolicy     bool `json:"passwordPolicy"     yaml:"passwordPolicy"`
+	SessionPolicy      bool `json:"sessionPolicy"      yaml:"sessionPolicy"`
+	AccessReview       bool `json:"accessReview"       yaml:"accessReview"`
+	InactiveUsers      bool `json:"inactiveUsers"      yaml:"inactiveUsers"`
 	SuspiciousActivity bool `json:"suspiciousActivity" yaml:"suspiciousActivity"`
-	DataRetention      bool `json:"dataRetention" yaml:"dataRetention"`
+	DataRetention      bool `json:"dataRetention"      yaml:"dataRetention"`
 }
 
-// AuditConfig configures audit trail settings
+// AuditConfig configures audit trail settings.
 type AuditConfig struct {
 	// Minimum retention days (enforced for all orgs)
 	MinRetentionDays int `json:"minRetentionDays" yaml:"minRetentionDays"`
@@ -65,7 +65,7 @@ type AuditConfig struct {
 	SignLogs bool `json:"signLogs" yaml:"signLogs"`
 }
 
-// ReportsConfig configures compliance reporting
+// ReportsConfig configures compliance reporting.
 type ReportsConfig struct {
 	// Enable automated report generation
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -86,7 +86,7 @@ type ReportsConfig struct {
 	IncludeEvidence bool `json:"includeEvidence" yaml:"includeEvidence"`
 }
 
-// RetentionConfig configures data retention policies
+// RetentionConfig configures data retention policies.
 type RetentionConfig struct {
 	// Enable automated data retention
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -104,7 +104,7 @@ type RetentionConfig struct {
 	ArchivePath string `json:"archivePath" yaml:"archivePath"`
 }
 
-// NotificationsConfig configures compliance notifications
+// NotificationsConfig configures compliance notifications.
 type NotificationsConfig struct {
 	// Enable notifications
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -128,14 +128,14 @@ type NotificationsConfig struct {
 	Channels NotificationChannels `json:"channels" yaml:"channels"`
 }
 
-// NotificationChannels defines notification delivery channels
+// NotificationChannels defines notification delivery channels.
 type NotificationChannels struct {
-	Email   bool `json:"email" yaml:"email"`
-	Slack   bool `json:"slack" yaml:"slack"`
+	Email   bool `json:"email"   yaml:"email"`
+	Slack   bool `json:"slack"   yaml:"slack"`
 	Webhook bool `json:"webhook" yaml:"webhook"`
 }
 
-// DashboardConfig configures the compliance dashboard
+// DashboardConfig configures the compliance dashboard.
 type DashboardConfig struct {
 	// Enable compliance dashboard
 	Enabled bool `json:"enabled" yaml:"enabled"`
@@ -156,7 +156,7 @@ type DashboardConfig struct {
 	ShowReports bool `json:"showReports" yaml:"showReports"`
 }
 
-// DefaultConfig returns the default configuration
+// DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled:         true,
@@ -219,24 +219,29 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Validate ensures the configuration has sensible defaults
+// Validate ensures the configuration has sensible defaults.
 func (c *Config) Validate() {
 	// Set defaults if not configured
 	if c.AutomatedChecks.CheckInterval == 0 {
 		c.AutomatedChecks.CheckInterval = 24 * time.Hour
 	}
+
 	if c.Audit.MinRetentionDays == 0 {
 		c.Audit.MinRetentionDays = 90
 	}
+
 	if c.Audit.MaxRetentionDays == 0 {
 		c.Audit.MaxRetentionDays = 2555
 	}
+
 	if c.Dashboard.Path == "" {
 		c.Dashboard.Path = "/auth/compliance"
 	}
+
 	if c.Reports.StoragePath == "" {
 		c.Reports.StoragePath = "/var/lib/authsome/compliance/reports"
 	}
+
 	if c.Retention.ArchivePath == "" {
 		c.Retention.ArchivePath = "/var/lib/authsome/compliance/archive"
 	}

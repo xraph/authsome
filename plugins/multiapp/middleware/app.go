@@ -9,7 +9,7 @@ import (
 )
 
 // AppContext is middleware that extracts app ID from the request
-// and injects it into the context for multi-tenant operations
+// and injects it into the context for multi-tenant operations.
 func AppContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		appIDStr := extractAppID(r)
@@ -30,10 +30,10 @@ func AppContext(next http.Handler) http.Handler {
 // 1. X-App-ID header (explicit app selection)
 // 2. Subdomain extraction (e.g., acme.authsome.dev -> acme)
 // 3. JWT token claims (when implemented)
-// 4. Default to empty (standalone mode)
+// 4. Default to empty (standalone mode).
 func extractAppID(r *http.Request) string {
 	// 1. Check for explicit app header
-	if appID := r.Header.Get("X-App-ID"); appID != "" {
+	if appID := r.Header.Get("X-App-Id"); appID != "" {
 		return appID
 	}
 
@@ -66,7 +66,7 @@ func extractAppID(r *http.Request) string {
 	return ""
 }
 
-// ForgeMiddleware wraps AppContext for use with Forge framework
+// ForgeMiddleware wraps AppContext for use with Forge framework.
 func ForgeMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return AppContext(next)

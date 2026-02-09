@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestAllTemplatesRender verifies all 39 templates can be rendered
+// TestAllTemplatesRender verifies all 39 templates can be rendered.
 func TestAllTemplatesRender(t *testing.T) {
 	expectedTemplates := []string{
 		// Existing 8 templates
@@ -30,8 +30,8 @@ func TestAllTemplatesRender(t *testing.T) {
 		"privacy_update", "maintenance_scheduled", "security_breach",
 	}
 
-	assert.Equal(t, 39, len(expectedTemplates), "Should have 39 total templates")
-	assert.Equal(t, 39, len(SampleTemplates), "SampleTemplates should contain all 39 templates")
+	assert.Len(t, expectedTemplates, 39, "Should have 39 total templates")
+	assert.Len(t, SampleTemplates, 39, "SampleTemplates should contain all 39 templates")
 
 	for _, templateName := range expectedTemplates {
 		t.Run(templateName, func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestAllTemplatesRender(t *testing.T) {
 			assert.NotEmpty(t, html, "Template %s should produce non-empty HTML", templateName)
 
 			// Verify HTML contains basic structure (case-insensitive for doctype)
-			assert.True(t, len(html) > 100, "Template %s should produce substantial HTML", templateName)
+			assert.Greater(t, len(html), 100, "Template %s should produce substantial HTML", templateName)
 			assert.Contains(t, html, "<body", "Template %s should have body tag", templateName)
 			assert.Contains(t, html, "</html>", "Template %s should close html tag", templateName)
 
@@ -55,16 +55,16 @@ func TestAllTemplatesRender(t *testing.T) {
 	}
 }
 
-// TestTemplateVariableSubstitution verifies variables can be substituted
+// TestTemplateVariableSubstitution verifies variables can be substituted.
 func TestTemplateVariableSubstitution(t *testing.T) {
 	testCases := []struct {
 		templateName  string
-		variables     map[string]interface{}
+		variables     map[string]any
 		shouldContain []string
 	}{
 		{
 			templateName: "org_invite",
-			variables: map[string]interface{}{
+			variables: map[string]any{
 				"userName":    "John Doe",
 				"inviterName": "Jane Smith",
 				"orgName":     "Acme Corp",
@@ -76,7 +76,7 @@ func TestTemplateVariableSubstitution(t *testing.T) {
 		},
 		{
 			templateName: "email_change_request",
-			variables: map[string]interface{}{
+			variables: map[string]any{
 				"userName":   "John Doe",
 				"oldEmail":   "old@example.com",
 				"newEmail":   "new@example.com",
@@ -86,7 +86,7 @@ func TestTemplateVariableSubstitution(t *testing.T) {
 		},
 		{
 			templateName: "new_device_login",
-			variables: map[string]interface{}{
+			variables: map[string]any{
 				"userName":    "John Doe",
 				"deviceName":  "iPhone 15",
 				"location":    "San Francisco, CA",
@@ -111,7 +111,7 @@ func TestTemplateVariableSubstitution(t *testing.T) {
 	}
 }
 
-// TestTemplateCategories verifies templates are organized correctly
+// TestTemplateCategories verifies templates are organized correctly.
 func TestTemplateCategories(t *testing.T) {
 	orgTemplates := []string{"org_invite", "org_member_added", "org_member_removed", "org_role_changed", "org_transfer", "org_deleted", "org_member_left"}
 	accountTemplates := []string{"email_change_request", "email_changed", "password_changed", "username_changed", "account_deleted", "account_suspended", "account_reactivated", "data_export_ready"}
@@ -119,11 +119,11 @@ func TestTemplateCategories(t *testing.T) {
 	reminderTemplates := []string{"verification_reminder", "inactive_account", "trial_expiring", "subscription_expiring", "password_expiring"}
 	adminTemplates := []string{"account_locked", "account_unlocked", "terms_update", "privacy_update", "maintenance_scheduled", "security_breach"}
 
-	assert.Equal(t, 7, len(orgTemplates), "Should have 7 org templates")
-	assert.Equal(t, 8, len(accountTemplates), "Should have 8 account templates")
-	assert.Equal(t, 5, len(sessionTemplates), "Should have 5 session templates")
-	assert.Equal(t, 5, len(reminderTemplates), "Should have 5 reminder templates")
-	assert.Equal(t, 6, len(adminTemplates), "Should have 6 admin templates")
+	assert.Len(t, orgTemplates, 7, "Should have 7 org templates")
+	assert.Len(t, accountTemplates, 8, "Should have 8 account templates")
+	assert.Len(t, sessionTemplates, 5, "Should have 5 session templates")
+	assert.Len(t, reminderTemplates, 5, "Should have 5 reminder templates")
+	assert.Len(t, adminTemplates, 6, "Should have 6 admin templates")
 
 	// Verify all exist in SampleTemplates
 	allNewTemplates := append(append(append(append(orgTemplates, accountTemplates...), sessionTemplates...), reminderTemplates...), adminTemplates...)

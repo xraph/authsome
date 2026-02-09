@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/input"
 )
 
-// UpdateOrganizationPage renders the update organization form page
+// UpdateOrganizationPage renders the update organization form page.
 func UpdateOrganizationPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -176,7 +176,7 @@ func UpdateOrganizationPage(currentApp *app.App, orgID, basePath string) g.Node 
 	)
 }
 
-// updateOrganizationData returns the Alpine.js data object for update organization
+// updateOrganizationData returns the Alpine.js data object for update organization.
 func updateOrganizationData(appID, orgID string) string {
 	return fmt.Sprintf(`{
 		organization: null,

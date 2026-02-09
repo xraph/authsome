@@ -12,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// TokensListPage renders the SCIM tokens management page
+// TokensListPage renders the SCIM tokens management page.
 func TokensListPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 
@@ -102,7 +102,7 @@ func TokensListPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// tokenCard renders a single token card
+// tokenCard renders a single token card.
 func tokenCard() g.Node {
 	return card.Card(
 		card.Content(
@@ -164,7 +164,7 @@ func tokenCard() g.Node {
 	)
 }
 
-// createTokenModal renders the create token modal
+// createTokenModal renders the create token modal.
 func createTokenModal(appID string) g.Node {
 	return g.El("template",
 		g.Attr("x-if", "showCreateModal"),
@@ -279,7 +279,7 @@ func createTokenModal(appID string) g.Node {
 	)
 }
 
-// newTokenDisplayModal renders the modal showing the newly created token
+// newTokenDisplayModal renders the modal showing the newly created token.
 func newTokenDisplayModal() g.Node {
 	return g.El("template",
 		g.Attr("x-if", "createdTokenPlainText"),
@@ -334,7 +334,7 @@ func newTokenDisplayModal() g.Node {
 	)
 }
 
-// tokensListData returns the Alpine.js data for the tokens list
+// tokensListData returns the Alpine.js data for the tokens list.
 func tokensListData(appID string) string {
 	return fmt.Sprintf(`{
 		tokens: [],

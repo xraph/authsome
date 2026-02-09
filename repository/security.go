@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// SecurityRepository implements core security repository using Bun
+// SecurityRepository implements core security repository using Bun.
 type SecurityRepository struct{ db *bun.DB }
 
 func NewSecurityRepository(db *bun.DB) *SecurityRepository { return &SecurityRepository{db: db} }
@@ -29,6 +29,7 @@ func (r *SecurityRepository) fromSchema(se *schema.SecurityEvent) *core.Security
 	if se == nil {
 		return nil
 	}
+
 	return &core.SecurityEvent{
 		ID:        se.ID,
 		AppID:     se.AppID,
@@ -45,5 +46,6 @@ func (r *SecurityRepository) fromSchema(se *schema.SecurityEvent) *core.Security
 func (r *SecurityRepository) Create(ctx context.Context, e *core.SecurityEvent) error {
 	se := r.toSchema(e)
 	_, err := r.db.NewInsert().Model(se).Exec(ctx)
+
 	return err
 }

@@ -11,6 +11,7 @@ func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Check if audit_events table exists
 		var tableExists bool
+
 		err := db.NewSelect().
 			ColumnExpr("to_regclass(?) IS NOT NULL", "public.audit_events").
 			Scan(ctx, &tableExists)
@@ -123,6 +124,7 @@ func init() {
 
 		// Check if audit_events table exists
 		var tableExists bool
+
 		err := db.NewSelect().
 			ColumnExpr("to_regclass(?) IS NOT NULL", "public.audit_events").
 			Scan(ctx, &tableExists)
@@ -145,7 +147,7 @@ func init() {
 		}
 
 		for _, index := range indexes {
-			_, _ = db.ExecContext(ctx, fmt.Sprintf("DROP INDEX IF EXISTS %s", index))
+			_, _ = db.ExecContext(ctx, "DROP INDEX IF EXISTS "+index)
 		}
 
 		return nil

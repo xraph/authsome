@@ -10,7 +10,7 @@ import (
 )
 
 // Repository defines session persistence operations
-// Following ISP - works with schema types
+// Following ISP - works with schema types.
 type Repository interface {
 	// Create/Read operations
 	CreateSession(ctx context.Context, s *schema.Session) error

@@ -8,7 +8,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// DispatcherConfig holds configuration for the notification dispatcher
+// DispatcherConfig holds configuration for the notification dispatcher.
 type DispatcherConfig struct {
 	// AsyncEnabled enables async processing for non-critical notifications
 	AsyncEnabled bool `json:"asyncEnabled"`
@@ -20,7 +20,7 @@ type DispatcherConfig struct {
 	ShutdownTimeout time.Duration `json:"shutdownTimeout"`
 }
 
-// DefaultDispatcherConfig returns sensible defaults
+// DefaultDispatcherConfig returns sensible defaults.
 func DefaultDispatcherConfig() DispatcherConfig {
 	return DispatcherConfig{
 		AsyncEnabled:    true,
@@ -30,7 +30,7 @@ func DefaultDispatcherConfig() DispatcherConfig {
 	}
 }
 
-// DispatchRequest represents a notification dispatch request
+// DispatchRequest represents a notification dispatch request.
 type DispatchRequest struct {
 	AppID       xid.ID
 	Type        NotificationType
@@ -39,11 +39,11 @@ type DispatchRequest struct {
 	Subject     string
 	Body        string
 	TemplateKey string
-	Variables   map[string]interface{}
-	Metadata    map[string]interface{}
+	Variables   map[string]any
+	Metadata    map[string]any
 }
 
-// DispatchResult represents the result of a dispatch operation
+// DispatchResult represents the result of a dispatch operation.
 type DispatchResult struct {
 	NotificationID xid.ID
 	Status         NotificationStatus
@@ -51,12 +51,12 @@ type DispatchResult struct {
 	Queued         bool // true if queued for async processing
 }
 
-// NotificationSender is the interface for sending notifications
+// NotificationSender is the interface for sending notifications.
 type NotificationSender interface {
 	Send(ctx context.Context, req *SendRequest) (*Notification, error)
 }
 
-// Dispatcher handles async notification dispatching with priority-based queuing
+// Dispatcher handles async notification dispatching with priority-based queuing.
 type Dispatcher struct {
 	config  DispatcherConfig
 	sender  NotificationSender
@@ -68,21 +68,23 @@ type Dispatcher struct {
 	stopCh  chan struct{}
 }
 
-// dispatchJob represents a job in the queue
+// dispatchJob represents a job in the queue.
 type dispatchJob struct {
 	ctx     context.Context
 	request *DispatchRequest
 	result  chan *DispatchResult
 }
 
-// NewDispatcher creates a new notification dispatcher
+// NewDispatcher creates a new notification dispatcher.
 func NewDispatcher(config DispatcherConfig, sender NotificationSender, retry *RetryService) *Dispatcher {
 	if config.WorkerPoolSize <= 0 {
 		config.WorkerPoolSize = 5
 	}
+
 	if config.QueueSize <= 0 {
 		config.QueueSize = 1000
 	}
+
 	if config.ShutdownTimeout <= 0 {
 		config.ShutdownTimeout = 30 * time.Second
 	}
@@ -104,7 +106,7 @@ func NewDispatcher(config DispatcherConfig, sender NotificationSender, retry *Re
 	return d
 }
 
-// Start starts the dispatcher workers
+// Start starts the dispatcher workers.
 func (d *Dispatcher) Start() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -112,6 +114,7 @@ func (d *Dispatcher) Start() {
 	if d.running {
 		return
 	}
+
 	d.running = true
 
 	// Start workers for each priority level
@@ -127,20 +130,25 @@ func (d *Dispatcher) Start() {
 		if count < 1 {
 			count = 1
 		}
-		for i := 0; i < count; i++ {
+
+		for range count {
 			d.wg.Add(1)
+
 			go d.worker(priority)
 		}
 	}
 }
 
-// Stop gracefully stops the dispatcher
+// Stop gracefully stops the dispatcher.
 func (d *Dispatcher) Stop() {
 	d.mu.Lock()
+
 	if !d.running {
 		d.mu.Unlock()
+
 		return
 	}
+
 	d.running = false
 	d.mu.Unlock()
 
@@ -148,6 +156,7 @@ func (d *Dispatcher) Stop() {
 
 	// Wait for workers to finish with timeout
 	done := make(chan struct{})
+
 	go func() {
 		d.wg.Wait()
 		close(done)
@@ -159,11 +168,12 @@ func (d *Dispatcher) Stop() {
 	}
 }
 
-// worker processes jobs from a specific priority queue
+// worker processes jobs from a specific priority queue.
 func (d *Dispatcher) worker(priority NotificationPriority) {
 	defer d.wg.Done()
 
 	queue := d.queues[priority]
+
 	for {
 		select {
 		case <-d.stopCh:
@@ -172,12 +182,13 @@ func (d *Dispatcher) worker(priority NotificationPriority) {
 			if !ok {
 				return
 			}
+
 			d.processJob(job)
 		}
 	}
 }
 
-// processJob processes a single dispatch job
+// processJob processes a single dispatch job.
 func (d *Dispatcher) processJob(job *dispatchJob) {
 	ctx := job.ctx
 	req := job.request
@@ -223,7 +234,7 @@ func (d *Dispatcher) processJob(job *dispatchJob) {
 
 // Dispatch dispatches a notification with the specified priority
 // Critical notifications are processed synchronously
-// Non-critical notifications are queued for async processing
+// Non-critical notifications are queued for async processing.
 func (d *Dispatcher) Dispatch(ctx context.Context, req *DispatchRequest) *DispatchResult {
 	d.mu.RLock()
 	running := d.running
@@ -243,7 +254,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req *DispatchRequest) *Dispat
 	return d.dispatchAsync(ctx, req)
 }
 
-// dispatchSync sends notification synchronously and waits for result
+// dispatchSync sends notification synchronously and waits for result.
 func (d *Dispatcher) dispatchSync(ctx context.Context, req *DispatchRequest) *DispatchResult {
 	resultCh := make(chan *DispatchResult, 1)
 	job := &dispatchJob{
@@ -266,7 +277,7 @@ func (d *Dispatcher) dispatchSync(ctx context.Context, req *DispatchRequest) *Di
 	}
 }
 
-// dispatchAsync queues notification for async processing
+// dispatchAsync queues notification for async processing.
 func (d *Dispatcher) dispatchAsync(ctx context.Context, req *DispatchRequest) *DispatchResult {
 	queue, ok := d.queues[req.Priority]
 	if !ok {
@@ -291,7 +302,7 @@ func (d *Dispatcher) dispatchAsync(ctx context.Context, req *DispatchRequest) *D
 	}
 }
 
-// DispatchWithPriority is a convenience method for dispatching with a specific priority
+// DispatchWithPriority is a convenience method for dispatching with a specific priority.
 func (d *Dispatcher) DispatchWithPriority(ctx context.Context, req *SendRequest, priority NotificationPriority) *DispatchResult {
 	dispatchReq := &DispatchRequest{
 		AppID:       req.AppID,
@@ -304,21 +315,24 @@ func (d *Dispatcher) DispatchWithPriority(ctx context.Context, req *SendRequest,
 		Variables:   req.Variables,
 		Metadata:    req.Metadata,
 	}
+
 	return d.Dispatch(ctx, dispatchReq)
 }
 
-// QueueLength returns the current queue length for a priority
+// QueueLength returns the current queue length for a priority.
 func (d *Dispatcher) QueueLength(priority NotificationPriority) int {
 	queue, ok := d.queues[priority]
 	if !ok {
 		return 0
 	}
+
 	return len(queue)
 }
 
-// IsRunning returns whether the dispatcher is running
+// IsRunning returns whether the dispatcher is running.
 func (d *Dispatcher) IsRunning() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.running
 }

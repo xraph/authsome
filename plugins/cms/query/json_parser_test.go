@@ -33,9 +33,11 @@ func TestJSONParser_Parse_FilterSingular(t *testing.T) {
 	if cond.Field != "status" {
 		t.Errorf("expected field 'status', got '%s'", cond.Field)
 	}
+
 	if cond.Operator != OpEqual {
 		t.Errorf("expected operator OpEqual, got '%s'", cond.Operator)
 	}
+
 	if cond.Value != "draft" {
 		t.Errorf("expected value 'draft', got '%v'", cond.Value)
 	}
@@ -70,6 +72,7 @@ func TestJSONParser_Parse_FiltersPlural(t *testing.T) {
 	if cond.Field != "status" {
 		t.Errorf("expected field 'status', got '%s'", cond.Field)
 	}
+
 	if cond.Value != "published" {
 		t.Errorf("expected value 'published', got '%v'", cond.Value)
 	}
@@ -102,6 +105,7 @@ func TestJSONParser_Parse_WhereAlternative(t *testing.T) {
 	if cond.Field != "title" {
 		t.Errorf("expected field 'title', got '%s'", cond.Field)
 	}
+
 	if cond.Operator != OpContains {
 		t.Errorf("expected operator OpContains, got '%s'", cond.Operator)
 	}
@@ -204,9 +208,11 @@ func TestJSONParser_Parse_DirectValueFilter(t *testing.T) {
 	if cond.Field != "status" {
 		t.Errorf("expected field 'status', got '%s'", cond.Field)
 	}
+
 	if cond.Operator != OpEqual {
 		t.Errorf("expected operator OpEqual (implicit), got '%s'", cond.Operator)
 	}
+
 	if cond.Value != "published" {
 		t.Errorf("expected value 'published', got '%v'", cond.Value)
 	}
@@ -305,6 +311,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 
 	t.Run("sort string with minus prefix", func(t *testing.T) {
 		input := []byte(`{"sort": "-createdAt"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -317,6 +324,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "createdAt" {
 			t.Errorf("expected field 'createdAt', got '%s'", q.Sort[0].Field)
 		}
+
 		if !q.Sort[0].Descending {
 			t.Error("expected descending to be true")
 		}
@@ -324,6 +332,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 
 	t.Run("sort string with plus prefix", func(t *testing.T) {
 		input := []byte(`{"sort": "+updatedAt"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -336,6 +345,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "updatedAt" {
 			t.Errorf("expected field 'updatedAt', got '%s'", q.Sort[0].Field)
 		}
+
 		if q.Sort[0].Descending {
 			t.Error("expected descending to be false")
 		}
@@ -343,6 +353,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 
 	t.Run("sort string with colon suffix", func(t *testing.T) {
 		input := []byte(`{"sort": "title:desc"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -355,6 +366,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "title" {
 			t.Errorf("expected field 'title', got '%s'", q.Sort[0].Field)
 		}
+
 		if !q.Sort[0].Descending {
 			t.Error("expected descending to be true")
 		}
@@ -362,6 +374,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 
 	t.Run("sort array of strings", func(t *testing.T) {
 		input := []byte(`{"sort": ["-updatedAt", "title"]}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -374,6 +387,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "updatedAt" || !q.Sort[0].Descending {
 			t.Errorf("expected updatedAt desc, got %s %v", q.Sort[0].Field, q.Sort[0].Descending)
 		}
+
 		if q.Sort[1].Field != "title" || q.Sort[1].Descending {
 			t.Errorf("expected title asc, got %s %v", q.Sort[1].Field, q.Sort[1].Descending)
 		}
@@ -381,6 +395,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 
 	t.Run("sort array of objects", func(t *testing.T) {
 		input := []byte(`{"sort": [{"field": "createdAt", "order": "desc"}]}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -393,6 +408,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 		if q.Sort[0].Field != "createdAt" {
 			t.Errorf("expected field 'createdAt', got '%s'", q.Sort[0].Field)
 		}
+
 		if !q.Sort[0].Descending {
 			t.Error("expected descending to be true")
 		}
@@ -400,6 +416,7 @@ func TestJSONParser_Parse_Sort(t *testing.T) {
 
 	t.Run("sort object map", func(t *testing.T) {
 		input := []byte(`{"sort": {"createdAt": "desc", "title": "asc"}}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -416,6 +433,7 @@ func TestJSONParser_Parse_Pagination(t *testing.T) {
 
 	t.Run("page and pageSize", func(t *testing.T) {
 		input := []byte(`{"page": 2, "pageSize": 25}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -424,6 +442,7 @@ func TestJSONParser_Parse_Pagination(t *testing.T) {
 		if q.Page != 2 {
 			t.Errorf("expected page 2, got %d", q.Page)
 		}
+
 		if q.PageSize != 25 {
 			t.Errorf("expected pageSize 25, got %d", q.PageSize)
 		}
@@ -431,6 +450,7 @@ func TestJSONParser_Parse_Pagination(t *testing.T) {
 
 	t.Run("perPage alias", func(t *testing.T) {
 		input := []byte(`{"page": 1, "perPage": 50}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -443,6 +463,7 @@ func TestJSONParser_Parse_Pagination(t *testing.T) {
 
 	t.Run("offset and limit", func(t *testing.T) {
 		input := []byte(`{"offset": 20, "limit": 10}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -451,6 +472,7 @@ func TestJSONParser_Parse_Pagination(t *testing.T) {
 		if q.Offset != 20 {
 			t.Errorf("expected offset 20, got %d", q.Offset)
 		}
+
 		if q.Limit != 10 {
 			t.Errorf("expected limit 10, got %d", q.Limit)
 		}
@@ -462,6 +484,7 @@ func TestJSONParser_Parse_Search(t *testing.T) {
 
 	t.Run("search field", func(t *testing.T) {
 		input := []byte(`{"search": "hello world"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -474,6 +497,7 @@ func TestJSONParser_Parse_Search(t *testing.T) {
 
 	t.Run("q alias", func(t *testing.T) {
 		input := []byte(`{"q": "search term"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -489,6 +513,7 @@ func TestJSONParser_Parse_StatusShorthand(t *testing.T) {
 	parser := NewJSONParser()
 
 	input := []byte(`{"status": "published"}`)
+
 	q, err := parser.Parse(input)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -504,6 +529,7 @@ func TestJSONParser_Parse_Select(t *testing.T) {
 
 	t.Run("select field", func(t *testing.T) {
 		input := []byte(`{"select": ["id", "title", "status"]}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -516,6 +542,7 @@ func TestJSONParser_Parse_Select(t *testing.T) {
 
 	t.Run("fields alias", func(t *testing.T) {
 		input := []byte(`{"fields": ["id", "title"]}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -532,6 +559,7 @@ func TestJSONParser_Parse_Populate(t *testing.T) {
 
 	t.Run("populate string", func(t *testing.T) {
 		input := []byte(`{"populate": "author"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -540,6 +568,7 @@ func TestJSONParser_Parse_Populate(t *testing.T) {
 		if len(q.Populate) != 1 {
 			t.Fatalf("expected 1 populate option, got %d", len(q.Populate))
 		}
+
 		if q.Populate[0].Path != "author" {
 			t.Errorf("expected path 'author', got '%s'", q.Populate[0].Path)
 		}
@@ -547,6 +576,7 @@ func TestJSONParser_Parse_Populate(t *testing.T) {
 
 	t.Run("populate array", func(t *testing.T) {
 		input := []byte(`{"populate": ["author", "category"]}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -559,6 +589,7 @@ func TestJSONParser_Parse_Populate(t *testing.T) {
 
 	t.Run("populate object", func(t *testing.T) {
 		input := []byte(`{"populate": {"path": "author", "select": ["name", "email"]}}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -567,9 +598,11 @@ func TestJSONParser_Parse_Populate(t *testing.T) {
 		if len(q.Populate) != 1 {
 			t.Fatalf("expected 1 populate option, got %d", len(q.Populate))
 		}
+
 		if q.Populate[0].Path != "author" {
 			t.Errorf("expected path 'author', got '%s'", q.Populate[0].Path)
 		}
+
 		if len(q.Populate[0].Select) != 2 {
 			t.Errorf("expected 2 select fields, got %d", len(q.Populate[0].Select))
 		}
@@ -577,6 +610,7 @@ func TestJSONParser_Parse_Populate(t *testing.T) {
 
 	t.Run("include alias", func(t *testing.T) {
 		input := []byte(`{"include": "category"}`)
+
 		q, err := parser.Parse(input)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -614,6 +648,7 @@ func TestJSONParser_Parse_CompleteQuery(t *testing.T) {
 	if q.Filters == nil {
 		t.Fatal("expected filters")
 	}
+
 	if len(q.Filters.Conditions) != 2 {
 		t.Errorf("expected 2 filter conditions, got %d", len(q.Filters.Conditions))
 	}
@@ -622,6 +657,7 @@ func TestJSONParser_Parse_CompleteQuery(t *testing.T) {
 	if len(q.Sort) != 1 {
 		t.Errorf("expected 1 sort field, got %d", len(q.Sort))
 	}
+
 	if q.Sort[0].Field != "updatedAt" || !q.Sort[0].Descending {
 		t.Errorf("expected updatedAt desc")
 	}
@@ -630,6 +666,7 @@ func TestJSONParser_Parse_CompleteQuery(t *testing.T) {
 	if q.Page != 1 {
 		t.Errorf("expected page 1, got %d", q.Page)
 	}
+
 	if q.PageSize != 10 {
 		t.Errorf("expected pageSize 10, got %d", q.PageSize)
 	}
@@ -654,6 +691,7 @@ func TestJSONParser_Parse_InvalidJSON(t *testing.T) {
 	parser := NewJSONParser()
 
 	input := []byte(`{invalid json}`)
+
 	_, err := parser.Parse(input)
 	if err == nil {
 		t.Error("expected error for invalid JSON")
@@ -665,6 +703,7 @@ func TestJSONParser_Parse_InvalidFilterType(t *testing.T) {
 
 	// Filters must be object or array, not string
 	input := []byte(`{"filter": "invalid"}`)
+
 	_, err := parser.Parse(input)
 	if err == nil {
 		t.Error("expected error for invalid filter type")
@@ -675,6 +714,7 @@ func TestJSONParser_Parse_InvalidOperator(t *testing.T) {
 	parser := NewJSONParser()
 
 	input := []byte(`{"filter": {"field": {"$invalidOp": "value"}}}`)
+
 	_, err := parser.Parse(input)
 	if err == nil {
 		t.Error("expected error for invalid operator")
@@ -686,6 +726,7 @@ func TestJSONParser_Parse_InvalidLogicalOperatorValue(t *testing.T) {
 
 	// $and must be an array
 	input := []byte(`{"filter": {"$and": "not an array"}}`)
+
 	_, err := parser.Parse(input)
 	if err == nil {
 		t.Error("expected error for invalid $and value")
@@ -693,6 +734,7 @@ func TestJSONParser_Parse_InvalidLogicalOperatorValue(t *testing.T) {
 
 	// $or must be an array
 	input = []byte(`{"filter": {"$or": "not an array"}}`)
+
 	_, err = parser.Parse(input)
 	if err == nil {
 		t.Error("expected error for invalid $or value")
@@ -700,6 +742,7 @@ func TestJSONParser_Parse_InvalidLogicalOperatorValue(t *testing.T) {
 
 	// $not must be an object
 	input = []byte(`{"filter": {"$not": "not an object"}}`)
+
 	_, err = parser.Parse(input)
 	if err == nil {
 		t.Error("expected error for invalid $not value")
@@ -710,6 +753,7 @@ func TestJSONParser_Parse_EmptyFilter(t *testing.T) {
 	parser := NewJSONParser()
 
 	input := []byte(`{"filter": {}}`)
+
 	q, err := parser.Parse(input)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -755,13 +799,12 @@ func TestJSONParser_Parse_MultipleConditionsOnSameField(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkJSONParser_Parse_Simple(b *testing.B) {
 	parser := NewJSONParser()
 	input := []byte(`{"filter": {"status": "published"}, "page": 1, "pageSize": 10}`)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(input)
 	}
 }
@@ -785,8 +828,7 @@ func BenchmarkJSONParser_Parse_Complex(b *testing.B) {
 		"populate": ["author", "category"]
 	}`)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = parser.Parse(input)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ClientTypeBadge renders a badge for client application type
+// ClientTypeBadge renders a badge for client application type.
 func ClientTypeBadge(appType string) g.Node {
 	return Span(
 		Class("inline-flex items-center rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs font-medium capitalize"),
@@ -13,7 +13,7 @@ func ClientTypeBadge(appType string) g.Node {
 	)
 }
 
-// GrantTypeBadges renders badges for grant types
+// GrantTypeBadges renders badges for grant types.
 func GrantTypeBadges(grantTypes []string) []g.Node {
 	badges := make([]g.Node, len(grantTypes))
 	for i, grant := range grantTypes {
@@ -22,10 +22,11 @@ func GrantTypeBadges(grantTypes []string) []g.Node {
 			g.Text(grant),
 		)
 	}
+
 	return badges
 }
 
-// ScopeBadges renders badges for scopes
+// ScopeBadges renders badges for scopes.
 func ScopeBadges(scopes []string) []g.Node {
 	badges := make([]g.Node, len(scopes))
 	for i, scope := range scopes {
@@ -34,10 +35,11 @@ func ScopeBadges(scopes []string) []g.Node {
 			g.Text(scope),
 		)
 	}
+
 	return badges
 }
 
-// StatusBadge renders a status badge
+// StatusBadge renders a status badge.
 func StatusBadge(status string) g.Node {
 	var bgClass, textClass, text string
 

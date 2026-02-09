@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Test helper to generate test certificates
+// Test helper to generate test certificates.
 func generateTestCA(t *testing.T) (*x509.Certificate, *rsa.PrivateKey) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestCertificateValidator_parseCertificate_InvalidPEM(t *testing.T) {
 		t.Fatal("expected error for invalid PEM, got nil")
 	}
 
-	if err != ErrInvalidPEM {
+	if !errors.Is(err, ErrInvalidPEM) {
 		t.Errorf("expected ErrInvalidPEM, got %v", err)
 	}
 }
@@ -128,7 +128,7 @@ func TestCertificateValidator_validateBasic(t *testing.T) {
 
 	cert, _ := validator.parseCertificate(certPEM)
 	result := &ValidationResult{
-		ValidationSteps: make(map[string]interface{}),
+		ValidationSteps: make(map[string]any),
 	}
 
 	err := validator.validateBasic(cert, result)
@@ -167,7 +167,7 @@ func TestCertificateValidator_validateBasic_Expired(t *testing.T) {
 	validator := NewCertificateValidator(config, nil, nil)
 
 	result := &ValidationResult{
-		ValidationSteps: make(map[string]interface{}),
+		ValidationSteps: make(map[string]any),
 	}
 
 	err := validator.validateBasic(cert, result)
@@ -175,7 +175,7 @@ func TestCertificateValidator_validateBasic_Expired(t *testing.T) {
 		t.Fatal("expected error for expired certificate")
 	}
 
-	if err != ErrCertificateExpired {
+	if !errors.Is(err, ErrCertificateExpired) {
 		t.Errorf("expected ErrCertificateExpired, got %v", err)
 	}
 }
@@ -189,7 +189,7 @@ func TestCertificateValidator_validateKey(t *testing.T) {
 
 	cert, _ := validator.parseCertificate(certPEM)
 	result := &ValidationResult{
-		ValidationSteps: make(map[string]interface{}),
+		ValidationSteps: make(map[string]any),
 	}
 
 	err := validator.validateKey(cert, result)
@@ -225,7 +225,7 @@ func TestCertificateValidator_validateKey_WeakKey(t *testing.T) {
 	validator := NewCertificateValidator(config, nil, nil)
 
 	result := &ValidationResult{
-		ValidationSteps: make(map[string]interface{}),
+		ValidationSteps: make(map[string]any),
 	}
 
 	err := validator.validateKey(cert, result)
@@ -247,7 +247,7 @@ func TestCertificateValidator_validateKeyUsage(t *testing.T) {
 
 	cert, _ := validator.parseCertificate(certPEM)
 	result := &ValidationResult{
-		ValidationSteps: make(map[string]interface{}),
+		ValidationSteps: make(map[string]any),
 	}
 
 	err := validator.validateKeyUsage(cert, result)
@@ -263,37 +263,41 @@ func TestCertificateValidator_validateKeyUsage(t *testing.T) {
 func TestGetKeySize(t *testing.T) {
 	tests := []struct {
 		name     string
-		keyGen   func() interface{}
+		keyGen   func() any
 		expected int
 	}{
 		{
 			name: "RSA 2048",
-			keyGen: func() interface{} {
+			keyGen: func() any {
 				key, _ := rsa.GenerateKey(rand.Reader, 2048)
+
 				return &key.PublicKey
 			},
 			expected: 2048,
 		},
 		{
 			name: "RSA 4096",
-			keyGen: func() interface{} {
+			keyGen: func() any {
 				key, _ := rsa.GenerateKey(rand.Reader, 4096)
+
 				return &key.PublicKey
 			},
 			expected: 4096,
 		},
 		{
 			name: "ECDSA P256",
-			keyGen: func() interface{} {
+			keyGen: func() any {
 				key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+
 				return &key.PublicKey
 			},
 			expected: 256,
 		},
 		{
 			name: "ECDSA P384",
-			keyGen: func() interface{} {
+			keyGen: func() any {
 				key, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+
 				return &key.PublicKey
 			},
 			expected: 384,
@@ -303,6 +307,7 @@ func TestGetKeySize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			key := tt.keyGen()
+
 			size := getKeySize(key)
 			if size != tt.expected {
 				t.Errorf("expected key size %d, got %d", tt.expected, size)
@@ -386,7 +391,7 @@ func TestHasExtendedKeyUsage(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkCertificateParsing(b *testing.B) {
 	caCert, caKey := generateTestCA(&testing.T{})
 	_, _, certPEM := generateTestClientCert(&testing.T{}, caCert, caKey)
@@ -394,8 +399,7 @@ func BenchmarkCertificateParsing(b *testing.B) {
 	config := DefaultConfig()
 	validator := NewCertificateValidator(config, nil, nil)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = validator.parseCertificate(certPEM)
 	}
 }
@@ -406,8 +410,7 @@ func BenchmarkFingerprintCalculation(b *testing.B) {
 
 	block, _ := pem.Decode(certPEM)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = calculateFingerprint(block.Bytes)
 	}
 }

@@ -5,5 +5,5 @@ import (
 )
 
 // Migrations is the global migration registry
-// Now using Forge's database extension migration registry for better integration
+// Now using Forge's database extension migration registry for better integration.
 var Migrations = forgemigrate.Migrations

@@ -14,18 +14,20 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// setup TestDB initializes an in-memory database with necessary tables
+// setup TestDB initializes an in-memory database with necessary tables.
 func setupTestDB(t *testing.T) *bun.DB {
 	t.Helper()
+
 	sqldb, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 
 	ctx := context.Background()
 	// Create necessary tables
-	models := []interface{}{
+	models := []any{
 		(*schema.User)(nil),
 		(*schema.Session)(nil),
 		(*schema.Device)(nil),
@@ -35,10 +37,11 @@ func setupTestDB(t *testing.T) *bun.DB {
 			t.Fatalf("create table: %v", err)
 		}
 	}
+
 	return db
 }
 
-// mockSessionService implements session.ServiceInterface for testing
+// mockSessionService implements session.ServiceInterface for testing.
 type mockSessionService struct {
 	db *bun.DB
 }
@@ -49,6 +52,7 @@ func (m *mockSessionService) Create(ctx context.Context, req *session.CreateSess
 
 func (m *mockSessionService) FindByToken(ctx context.Context, token string) (*session.Session, error) {
 	var s schema.Session
+
 	err := m.db.NewSelect().
 		Model(&s).
 		Where("token = ?", token).
@@ -56,11 +60,13 @@ func (m *mockSessionService) FindByToken(ctx context.Context, token string) (*se
 	if err != nil {
 		return nil, err
 	}
+
 	return session.FromSchemaSession(&s), nil
 }
 
 func (m *mockSessionService) FindByID(ctx context.Context, id xid.ID) (*session.Session, error) {
 	var s schema.Session
+
 	err := m.db.NewSelect().
 		Model(&s).
 		Where("id = ?", id).
@@ -68,11 +74,13 @@ func (m *mockSessionService) FindByID(ctx context.Context, id xid.ID) (*session.
 	if err != nil {
 		return nil, err
 	}
+
 	return session.FromSchemaSession(&s), nil
 }
 
 func (m *mockSessionService) ListSessions(ctx context.Context, filter *session.ListSessionsFilter) (*session.ListSessionsResponse, error) {
 	var sessions []*schema.Session
+
 	query := m.db.NewSelect().Model(&sessions)
 
 	if filter.UserID != nil {
@@ -94,6 +102,7 @@ func (m *mockSessionService) Revoke(ctx context.Context, token string) error {
 		Model((*schema.Session)(nil)).
 		Where("token = ?", token).
 		Exec(ctx)
+
 	return err
 }
 
@@ -102,6 +111,7 @@ func (m *mockSessionService) RevokeByID(ctx context.Context, id xid.ID) error {
 		Model((*schema.Session)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
+
 	return err
 }
 
@@ -113,7 +123,7 @@ func (m *mockSessionService) TouchSession(ctx context.Context, sess *session.Ses
 	return sess, false, nil
 }
 
-// TestService_ListSessions tests the List method
+// TestService_ListSessions tests the List method.
 func TestService_ListSessions(t *testing.T) {
 	db := setupTestDB(t)
 	ctx := context.Background()
@@ -129,6 +139,7 @@ func TestService_ListSessions(t *testing.T) {
 		PasswordHash: "$2a$10$example.hash",
 	}
 	user.CreatedBy = systemID
+
 	user.UpdatedBy = systemID
 	if _, err := db.NewInsert().Model(user).Exec(ctx); err != nil {
 		t.Fatalf("create user: %v", err)
@@ -162,6 +173,7 @@ func TestService_ListSessions(t *testing.T) {
 	if _, err := db.NewInsert().Model(sess1).Exec(ctx); err != nil {
 		t.Fatalf("create session1: %v", err)
 	}
+
 	if _, err := db.NewInsert().Model(sess2).Exec(ctx); err != nil {
 		t.Fatalf("create session2: %v", err)
 	}
@@ -180,16 +192,18 @@ func TestService_ListSessions(t *testing.T) {
 		Limit:  100,
 		Offset: 0,
 	}
+
 	result, err := svc.List(ctx, user.ID, req)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
+
 	if len(result.Data) != 2 {
 		t.Errorf("expected 2 sessions, got %d", len(result.Data))
 	}
 }
 
-// TestService_FindSession tests the Find method
+// TestService_FindSession tests the Find method.
 func TestService_FindSession(t *testing.T) {
 	db := setupTestDB(t)
 	ctx := context.Background()
@@ -205,6 +219,7 @@ func TestService_FindSession(t *testing.T) {
 		PasswordHash: "$2a$10$example.hash",
 	}
 	user.CreatedBy = systemID
+
 	user.UpdatedBy = systemID
 	if _, err := db.NewInsert().Model(user).Exec(ctx); err != nil {
 		t.Fatalf("create user: %v", err)
@@ -221,6 +236,7 @@ func TestService_FindSession(t *testing.T) {
 		UserAgent: "ua-1",
 	}
 	sess.CreatedBy = systemID
+
 	sess.UpdatedBy = systemID
 	if _, err := db.NewInsert().Model(sess).Exec(ctx); err != nil {
 		t.Fatalf("create session: %v", err)
@@ -238,6 +254,7 @@ func TestService_FindSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Find failed: %v", err)
 		}
+
 		if found.ID != sess.ID {
 			t.Errorf("expected session %s, got %s", sess.ID, found.ID)
 		}
@@ -246,17 +263,19 @@ func TestService_FindSession(t *testing.T) {
 	// Test Find - wrong user
 	t.Run("Find with wrong user", func(t *testing.T) {
 		otherUserID := xid.New()
+
 		_, err := svc.Find(ctx, otherUserID, sess.ID)
 		if err == nil {
 			t.Error("expected error when finding session for wrong user")
 		}
+
 		if err.Error() != "unauthorized" {
 			t.Errorf("expected 'unauthorized' error, got %v", err)
 		}
 	})
 }
 
-// TestService_DeleteSession tests the Delete method
+// TestService_DeleteSession tests the Delete method.
 func TestService_DeleteSession(t *testing.T) {
 	db := setupTestDB(t)
 	ctx := context.Background()
@@ -272,6 +291,7 @@ func TestService_DeleteSession(t *testing.T) {
 		PasswordHash: "$2a$10$example.hash",
 	}
 	user.CreatedBy = systemID
+
 	user.UpdatedBy = systemID
 	if _, err := db.NewInsert().Model(user).Exec(ctx); err != nil {
 		t.Fatalf("create user: %v", err)
@@ -305,6 +325,7 @@ func TestService_DeleteSession(t *testing.T) {
 	if _, err := db.NewInsert().Model(sess1).Exec(ctx); err != nil {
 		t.Fatalf("create session1: %v", err)
 	}
+
 	if _, err := db.NewInsert().Model(sess2).Exec(ctx); err != nil {
 		t.Fatalf("create session2: %v", err)
 	}
@@ -332,10 +353,12 @@ func TestService_DeleteSession(t *testing.T) {
 	// Test Delete - wrong user
 	t.Run("Delete with wrong user", func(t *testing.T) {
 		otherUserID := xid.New()
+
 		err := svc.Delete(ctx, otherUserID, sess2.ID)
 		if err == nil {
 			t.Error("expected error when deleting session for wrong user")
 		}
+
 		if err.Error() != "unauthorized" {
 			t.Errorf("expected 'unauthorized' error, got %v", err)
 		}

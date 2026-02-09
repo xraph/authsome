@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Repository defines the interface for API key storage operations
-// Following Interface Segregation Principle (ISP) - works with schema types
+// Following Interface Segregation Principle (ISP) - works with schema types.
 type Repository interface {
 	// Create/Read operations
 	CreateAPIKey(ctx context.Context, key *schema.APIKey) error
@@ -41,7 +41,7 @@ type Repository interface {
 // =============================================================================
 
 // EnvironmentRepository provides environment lookup for prefix generation
-// This is a minimal interface to avoid tight coupling with the environment service
+// This is a minimal interface to avoid tight coupling with the environment service.
 type EnvironmentRepository interface {
 	FindByID(ctx context.Context, id xid.ID) (*schema.Environment, error)
 }

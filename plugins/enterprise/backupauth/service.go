@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,14 +17,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Service provides backup authentication operations
+// Service provides backup authentication operations.
 type Service struct {
 	repo      Repository
 	config    *Config
 	providers ProviderRegistry
 }
 
-// NewService creates a new backup authentication service
+// NewService creates a new backup authentication service.
 func NewService(repo Repository, config *Config, providers ProviderRegistry) *Service {
 	return &Service{
 		repo:      repo,
@@ -34,7 +35,7 @@ func NewService(repo Repository, config *Config, providers ProviderRegistry) *Se
 
 // ===== Recovery Session Management =====
 
-// StartRecovery initiates a new recovery session
+// StartRecovery initiates a new recovery session.
 func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) (*StartRecoveryResponse, error) {
 	if !s.config.Enabled {
 		return nil, ErrRecoveryNotConfigured
@@ -54,6 +55,7 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing session: %w", err)
 	}
+
 	if existing != nil {
 		return nil, ErrRecoverySessionInProgress
 	}
@@ -111,7 +113,7 @@ func (s *Service) StartRecovery(ctx context.Context, req *StartRecoveryRequest) 
 	}, nil
 }
 
-// ContinueRecovery continues a recovery session with a chosen method
+// ContinueRecovery continues a recovery session with a chosen method.
 func (s *Service) ContinueRecovery(ctx context.Context, req *ContinueRecoveryRequest) (*ContinueRecoveryResponse, error) {
 	// Get session
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
@@ -131,6 +133,7 @@ func (s *Service) ContinueRecovery(ctx context.Context, req *ContinueRecoveryReq
 
 	// Update session method
 	session.Method = req.Method
+
 	session.Status = RecoveryStatusInProgress
 	if err := s.repo.UpdateRecoverySession(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to update session: %w", err)
@@ -150,7 +153,7 @@ func (s *Service) ContinueRecovery(ctx context.Context, req *ContinueRecoveryReq
 	}, nil
 }
 
-// CompleteRecovery finalizes a recovery session
+// CompleteRecovery finalizes a recovery session.
 func (s *Service) CompleteRecovery(ctx context.Context, req *CompleteRecoveryRequest) (*CompleteRecoveryResponse, error) {
 	// Get session
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
@@ -200,7 +203,7 @@ func (s *Service) CompleteRecovery(ctx context.Context, req *CompleteRecoveryReq
 	}, nil
 }
 
-// CancelRecovery cancels a recovery session
+// CancelRecovery cancels a recovery session.
 func (s *Service) CancelRecovery(ctx context.Context, req *CancelRecoveryRequest) error {
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
 	if err != nil {
@@ -223,7 +226,7 @@ func (s *Service) CancelRecovery(ctx context.Context, req *CancelRecoveryRequest
 
 // ===== Recovery Codes =====
 
-// GenerateRecoveryCodes generates new recovery codes for a user
+// GenerateRecoveryCodes generates new recovery codes for a user.
 func (s *Service) GenerateRecoveryCodes(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *GenerateRecoveryCodesRequest) (*GenerateRecoveryCodesResponse, error) {
 	if !s.config.RecoveryCodes.Enabled {
 		return nil, ErrRecoveryMethodNotEnabled
@@ -241,11 +244,12 @@ func (s *Service) GenerateRecoveryCodes(ctx context.Context, userID xid.ID, appI
 
 	// Generate codes
 	codes := make([]string, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		code, err := s.generateRecoveryCode(format, s.config.RecoveryCodes.CodeLength)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate code: %w", err)
 		}
+
 		codes[i] = code
 	}
 
@@ -257,7 +261,7 @@ func (s *Service) GenerateRecoveryCodes(ctx context.Context, userID xid.ID, appI
 	}, nil
 }
 
-// VerifyRecoveryCode verifies a recovery code
+// VerifyRecoveryCode verifies a recovery code.
 func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCodeRequest) (*VerifyRecoveryCodeResponse, error) {
 	// Get session
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
@@ -278,6 +282,7 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCod
 	if err != nil {
 		return nil, fmt.Errorf("failed to check code usage: %w", err)
 	}
+
 	if usage != nil {
 		return &VerifyRecoveryCodeResponse{Valid: false, Message: "Recovery code already used"}, nil
 	}
@@ -325,7 +330,7 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCod
 
 // ===== Security Questions =====
 
-// SetupSecurityQuestions sets up security questions for a user
+// SetupSecurityQuestions sets up security questions for a user.
 func (s *Service) SetupSecurityQuestions(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *SetupSecurityQuestionsRequest) (*SetupSecurityQuestionsResponse, error) {
 	if !s.config.SecurityQuestions.Enabled {
 		return nil, ErrRecoveryMethodNotEnabled
@@ -341,6 +346,7 @@ func (s *Service) SetupSecurityQuestions(ctx context.Context, userID xid.ID, app
 		if len(q.Answer) < s.config.SecurityQuestions.RequireMinLength {
 			return nil, ErrAnswerTooShort
 		}
+
 		if len(q.Answer) > s.config.SecurityQuestions.MaxAnswerLength {
 			return nil, ErrAnswerTooLong
 		}
@@ -380,7 +386,7 @@ func (s *Service) SetupSecurityQuestions(ctx context.Context, userID xid.ID, app
 	}, nil
 }
 
-// GetSecurityQuestions retrieves security questions for verification
+// GetSecurityQuestions retrieves security questions for verification.
 func (s *Service) GetSecurityQuestions(ctx context.Context, req *GetSecurityQuestionsRequest) (*GetSecurityQuestionsResponse, error) {
 	// Get session
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
@@ -419,7 +425,7 @@ func (s *Service) GetSecurityQuestions(ctx context.Context, req *GetSecurityQues
 	}, nil
 }
 
-// VerifySecurityAnswers verifies security question answers
+// VerifySecurityAnswers verifies security question answers.
 func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurityAnswersRequest) (*VerifySecurityAnswersResponse, error) {
 	// Get session
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
@@ -440,8 +446,10 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 
 	// Verify answers
 	correctAnswers := 0
+
 	for _, q := range questions {
 		questionIDStr := q.ID.String()
+
 		answer, exists := req.Answers[questionIDStr]
 		if !exists {
 			continue
@@ -481,6 +489,7 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 	s.repo.IncrementSessionAttempts(ctx, session.ID)
 
 	attemptsLeft := session.MaxAttempts - session.Attempts - 1
+
 	return &VerifySecurityAnswersResponse{
 		Valid:           false,
 		CorrectAnswers:  correctAnswers,
@@ -492,7 +501,7 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 
 // ===== Trusted Contacts =====
 
-// AddTrustedContact adds a trusted contact for account recovery
+// AddTrustedContact adds a trusted contact for account recovery.
 func (s *Service) AddTrustedContact(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *AddTrustedContactRequest) (*AddTrustedContactResponse, error) {
 	if !s.config.TrustedContacts.Enabled {
 		return nil, ErrRecoveryMethodNotEnabled
@@ -503,6 +512,7 @@ func (s *Service) AddTrustedContact(ctx context.Context, userID xid.ID, appID xi
 	if err != nil {
 		return nil, fmt.Errorf("failed to count contacts: %w", err)
 	}
+
 	if count >= s.config.TrustedContacts.MaximumContacts {
 		return nil, ErrTrustedContactLimitExceeded
 	}
@@ -548,7 +558,7 @@ func (s *Service) AddTrustedContact(ctx context.Context, userID xid.ID, appID xi
 	}, nil
 }
 
-// VerifyTrustedContact verifies a trusted contact
+// VerifyTrustedContact verifies a trusted contact.
 func (s *Service) VerifyTrustedContact(ctx context.Context, req *VerifyTrustedContactRequest) (*VerifyTrustedContactResponse, error) {
 	// Get contact by token
 	contact, err := s.repo.GetTrustedContactByToken(ctx, req.Token)
@@ -573,7 +583,7 @@ func (s *Service) VerifyTrustedContact(ctx context.Context, req *VerifyTrustedCo
 	}, nil
 }
 
-// RequestTrustedContactVerification requests verification from a trusted contact
+// RequestTrustedContactVerification requests verification from a trusted contact.
 func (s *Service) RequestTrustedContactVerification(ctx context.Context, req *RequestTrustedContactVerificationRequest) (*RequestTrustedContactVerificationResponse, error) {
 	// Get session
 	session, err := s.repo.GetRecoverySession(ctx, req.SessionID)
@@ -596,9 +606,11 @@ func (s *Service) RequestTrustedContactVerification(ctx context.Context, req *Re
 	if contact.UserID != session.UserID {
 		return nil, ErrUnauthorized
 	}
+
 	if !contact.IsActive {
 		return nil, ErrTrustedContactNotFound
 	}
+
 	if contact.VerifiedAt == nil {
 		return nil, ErrTrustedContactNotVerified
 	}
@@ -616,12 +628,14 @@ func (s *Service) RequestTrustedContactVerification(ctx context.Context, req *Re
 
 	// Update last notified time
 	now := time.Now()
+
 	contact.LastNotifiedAt = &now
 	if err := s.repo.UpdateTrustedContact(ctx, contact); err != nil {
 		return nil, fmt.Errorf("failed to update contact: %w", err)
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour)
+
 	return &RequestTrustedContactVerificationResponse{
 		ContactID:   contact.ID,
 		ContactName: contact.ContactName,
@@ -631,7 +645,7 @@ func (s *Service) RequestTrustedContactVerification(ctx context.Context, req *Re
 	}, nil
 }
 
-// ListTrustedContacts lists user's trusted contacts
+// ListTrustedContacts lists user's trusted contacts.
 func (s *Service) ListTrustedContacts(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID) (*ListTrustedContactsResponse, error) {
 	contacts, err := s.repo.GetTrustedContactsByUser(ctx, userID, appID, userOrganizationID)
 	if err != nil {
@@ -658,7 +672,7 @@ func (s *Service) ListTrustedContacts(ctx context.Context, userID xid.ID, appID 
 	}, nil
 }
 
-// RemoveTrustedContact removes a trusted contact
+// RemoveTrustedContact removes a trusted contact.
 func (s *Service) RemoveTrustedContact(ctx context.Context, userID xid.ID, appID xid.ID, userOrganizationID *xid.ID, req *RemoveTrustedContactRequest) error {
 	// Get contact
 	contact, err := s.repo.GetTrustedContact(ctx, req.ContactID)
@@ -670,6 +684,7 @@ func (s *Service) RemoveTrustedContact(ctx context.Context, userID xid.ID, appID
 	if contact.UserID != userID || contact.AppID != appID {
 		return ErrUnauthorized
 	}
+
 	if (contact.UserOrganizationID == nil) != (userOrganizationID == nil) ||
 		(contact.UserOrganizationID != nil && userOrganizationID != nil && *contact.UserOrganizationID != *userOrganizationID) {
 		return ErrUnauthorized
@@ -684,15 +699,19 @@ func (s *Service) validateSession(session *RecoverySession) error {
 	if session.Status == RecoveryStatusExpired || time.Now().After(session.ExpiresAt) {
 		return ErrRecoverySessionExpired
 	}
+
 	if session.Status == RecoveryStatusCancelled {
 		return ErrRecoverySessionCancelled
 	}
+
 	if session.Status == RecoveryStatusCompleted {
 		return ErrRecoverySessionCompleted
 	}
+
 	if session.Attempts >= session.MaxAttempts {
 		return ErrRecoverySessionLocked
 	}
+
 	return nil
 }
 
@@ -703,6 +722,7 @@ func (s *Service) checkRateLimit(ctx context.Context, userID xid.ID, appID xid.I
 
 	// Check hourly limit
 	since := time.Now().Add(-1 * time.Hour)
+
 	attempts, err := s.repo.GetRecentRecoveryAttempts(ctx, userID, appID, userOrganizationID, since)
 	if err != nil {
 		return fmt.Errorf("failed to check rate limit: %w", err)
@@ -714,6 +734,7 @@ func (s *Service) checkRateLimit(ctx context.Context, userID xid.ID, appID xid.I
 
 	// Check daily limit
 	since = time.Now().Add(-24 * time.Hour)
+
 	attempts, err = s.repo.GetRecentRecoveryAttempts(ctx, userID, appID, userOrganizationID, since)
 	if err != nil {
 		return fmt.Errorf("failed to check rate limit: %w", err)
@@ -785,6 +806,7 @@ func (s *Service) getAvailableMethods(ctx context.Context, userID xid.ID, appID 
 	if s.config.RecoveryCodes.Enabled {
 		methods = append(methods, RecoveryMethodCodes)
 	}
+
 	if s.config.SecurityQuestions.Enabled {
 		// Check if user has questions setup
 		questions, _ := s.repo.GetSecurityQuestionsByUser(ctx, userID, appID, userOrganizationID)
@@ -792,6 +814,7 @@ func (s *Service) getAvailableMethods(ctx context.Context, userID xid.ID, appID 
 			methods = append(methods, RecoveryMethodSecurityQ)
 		}
 	}
+
 	if s.config.TrustedContacts.Enabled {
 		// Check if user has trusted contacts
 		count, _ := s.repo.CountActiveTrustedContacts(ctx, userID, appID, userOrganizationID)
@@ -799,15 +822,19 @@ func (s *Service) getAvailableMethods(ctx context.Context, userID xid.ID, appID 
 			methods = append(methods, RecoveryMethodTrustedContact)
 		}
 	}
+
 	if s.config.EmailVerification.Enabled {
 		methods = append(methods, RecoveryMethodEmail)
 	}
+
 	if s.config.SMSVerification.Enabled {
 		methods = append(methods, RecoveryMethodSMS)
 	}
+
 	if s.config.VideoVerification.Enabled {
 		methods = append(methods, RecoveryMethodVideo)
 	}
+
 	if s.config.DocumentVerification.Enabled {
 		methods = append(methods, RecoveryMethodDocument)
 	}
@@ -836,8 +863,8 @@ func (s *Service) isMethodEnabled(method RecoveryMethod) bool {
 	}
 }
 
-func (s *Service) getMethodInstructions(ctx context.Context, session *RecoverySession, method RecoveryMethod) (string, map[string]interface{}) {
-	data := make(map[string]interface{})
+func (s *Service) getMethodInstructions(ctx context.Context, session *RecoverySession, method RecoveryMethod) (string, map[string]any) {
+	data := make(map[string]any)
 
 	switch method {
 	case RecoveryMethodCodes:
@@ -864,8 +891,10 @@ func (s *Service) markStepCompleted(ctx context.Context, session *RecoverySessio
 	if !contains(session.CompletedSteps, methodStr) {
 		session.CompletedSteps = append(session.CompletedSteps, methodStr)
 		session.CurrentStep = len(session.CompletedSteps)
+
 		return s.repo.UpdateRecoverySession(ctx, session)
 	}
+
 	return nil
 }
 
@@ -889,6 +918,7 @@ func (s *Service) logRecoveryAttempt(ctx context.Context, recoveryID, userID xid
 
 func (s *Service) generateRecoveryCode(format string, length int) (string, error) {
 	var charset string
+
 	switch format {
 	case "alphanumeric":
 		charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -906,6 +936,7 @@ func (s *Service) generateRecoveryCode(format string, length int) (string, error
 		if err != nil {
 			return "", err
 		}
+
 		code[i] = charset[num.Int64()]
 	}
 
@@ -914,6 +945,7 @@ func (s *Service) generateRecoveryCode(format string, length int) (string, error
 
 func (s *Service) hashCode(code string) string {
 	hash := sha256.Sum256([]byte(code))
+
 	return hex.EncodeToString(hash[:])
 }
 
@@ -926,10 +958,12 @@ func (s *Service) hashAnswer(answer string) (string, string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", "", err
 	}
+
 	saltStr := base64.StdEncoding.EncodeToString(salt)
 
 	// Hash with bcrypt
 	salted := answer + saltStr
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(salted), bcrypt.DefaultCost)
 	if err != nil {
 		return "", "", err
@@ -943,6 +977,7 @@ func (s *Service) verifyAnswer(answer, answerHash, salt string) bool {
 	answer = strings.ToLower(strings.TrimSpace(answer))
 	salted := answer + salt
 	err := bcrypt.CompareHashAndPassword([]byte(answerHash), []byte(salted))
+
 	return err == nil
 }
 
@@ -951,28 +986,29 @@ func (s *Service) generateVerificationToken() (string, error) {
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
+
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
 func (s *Service) generateRecoveryToken(userID, sessionID xid.ID) (string, error) {
 	data := fmt.Sprintf("%s:%s:%d", userID.String(), sessionID.String(), time.Now().Unix())
+
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
+
 	token := base64.URLEncoding.EncodeToString(append([]byte(data), bytes...))
+
 	return token, nil
 }
 
 func (s *Service) isCommonAnswer(answer string) bool {
 	commonAnswers := []string{"password", "123456", "admin", "test", "abc123"}
+
 	normalized := strings.ToLower(strings.TrimSpace(answer))
-	for _, common := range commonAnswers {
-		if normalized == common {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(commonAnswers, normalized)
 }
 
 // ===== Context Helpers =====
@@ -984,6 +1020,7 @@ func (s *Service) getAppAndOrgFromContext(ctx context.Context) (xid.ID, *xid.ID)
 	if orgID == xid.NilID() {
 		return appID, nil
 	}
+
 	return appID, &orgID
 }
 
@@ -992,6 +1029,7 @@ func (s *Service) getIPFromContext(ctx context.Context) string {
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
 		return authCtx.IPAddress
 	}
+
 	return ""
 }
 
@@ -1000,6 +1038,7 @@ func (s *Service) getUserAgentFromContext(ctx context.Context) string {
 	if authCtx, ok := contexts.GetAuthContext(ctx); ok && authCtx != nil {
 		return authCtx.UserAgent
 	}
+
 	return ""
 }
 
@@ -1010,23 +1049,16 @@ func convertMethodsToStrings(methods []RecoveryMethod) []string {
 	for i, m := range methods {
 		result[i] = string(m)
 	}
+
 	return result
 }
 
 func containsMethod(slice []RecoveryMethod, item RecoveryMethod) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(slice, item)
 }
 
 func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(slice, item)
 }

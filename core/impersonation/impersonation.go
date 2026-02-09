@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // ImpersonationSession represents an impersonation session DTO
-// This is separate from schema.ImpersonationSession to maintain proper separation of concerns
+// This is separate from schema.ImpersonationSession to maintain proper separation of concerns.
 type ImpersonationSession struct {
 	ID             xid.ID     `json:"id"`
 	AppID          xid.ID     `json:"appId"`
@@ -37,7 +37,7 @@ type ImpersonationSession struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the ImpersonationSession DTO to a schema.ImpersonationSession model
+// ToSchema converts the ImpersonationSession DTO to a schema.ImpersonationSession model.
 func (s *ImpersonationSession) ToSchema() *schema.ImpersonationSession {
 	return &schema.ImpersonationSession{
 		AppID:          s.AppID,
@@ -63,7 +63,7 @@ func (s *ImpersonationSession) ToSchema() *schema.ImpersonationSession {
 	}
 }
 
-// FromSchemaImpersonationSession converts a schema.ImpersonationSession model to ImpersonationSession DTO
+// FromSchemaImpersonationSession converts a schema.ImpersonationSession model to ImpersonationSession DTO.
 func FromSchemaImpersonationSession(ss *schema.ImpersonationSession) *ImpersonationSession {
 	if ss == nil {
 		return nil
@@ -91,12 +91,13 @@ func FromSchemaImpersonationSession(ss *schema.ImpersonationSession) *Impersonat
 	}
 }
 
-// FromSchemaImpersonationSessions converts a slice of schema.ImpersonationSession to ImpersonationSession DTOs
+// FromSchemaImpersonationSessions converts a slice of schema.ImpersonationSession to ImpersonationSession DTOs.
 func FromSchemaImpersonationSessions(sessions []*schema.ImpersonationSession) []*ImpersonationSession {
 	result := make([]*ImpersonationSession, len(sessions))
 	for i, s := range sessions {
 		result[i] = FromSchemaImpersonationSession(s)
 	}
+
 	return result
 }
 
@@ -104,17 +105,17 @@ func FromSchemaImpersonationSessions(sessions []*schema.ImpersonationSession) []
 // IMPERSONATION SESSION METHODS
 // =============================================================================
 
-// IsActive checks if the impersonation session is active
+// IsActive checks if the impersonation session is active.
 func (s *ImpersonationSession) IsActive() bool {
 	return s.Active && time.Now().UTC().Before(s.ExpiresAt) && s.EndedAt == nil
 }
 
-// IsExpired checks if the session has expired
+// IsExpired checks if the session has expired.
 func (s *ImpersonationSession) IsExpired() bool {
 	return time.Now().UTC().After(s.ExpiresAt)
 }
 
-// IsEnded checks if the session has been manually ended
+// IsEnded checks if the session has been manually ended.
 func (s *ImpersonationSession) IsEnded() bool {
 	return s.EndedAt != nil
 }
@@ -123,7 +124,7 @@ func (s *ImpersonationSession) IsEnded() bool {
 // AUDIT EVENT DTO
 // =============================================================================
 
-// AuditEvent represents an impersonation audit event DTO
+// AuditEvent represents an impersonation audit event DTO.
 type AuditEvent struct {
 	ID              xid.ID            `json:"id"`
 	ImpersonationID xid.ID            `json:"impersonationId"`
@@ -139,7 +140,7 @@ type AuditEvent struct {
 	CreatedAt       time.Time         `json:"createdAt"`
 }
 
-// ToSchema converts the AuditEvent DTO to a schema.ImpersonationAuditEvent model
+// ToSchema converts the AuditEvent DTO to a schema.ImpersonationAuditEvent model.
 func (e *AuditEvent) ToSchema() *schema.ImpersonationAuditEvent {
 	return &schema.ImpersonationAuditEvent{
 		ID:              e.ID,
@@ -157,7 +158,7 @@ func (e *AuditEvent) ToSchema() *schema.ImpersonationAuditEvent {
 	}
 }
 
-// FromSchemaAuditEvent converts a schema.ImpersonationAuditEvent model to AuditEvent DTO
+// FromSchemaAuditEvent converts a schema.ImpersonationAuditEvent model to AuditEvent DTO.
 func FromSchemaAuditEvent(se *schema.ImpersonationAuditEvent) *AuditEvent {
 	if se == nil {
 		return nil
@@ -179,12 +180,13 @@ func FromSchemaAuditEvent(se *schema.ImpersonationAuditEvent) *AuditEvent {
 	}
 }
 
-// FromSchemaAuditEvents converts a slice of schema.ImpersonationAuditEvent to AuditEvent DTOs
+// FromSchemaAuditEvents converts a slice of schema.ImpersonationAuditEvent to AuditEvent DTOs.
 func FromSchemaAuditEvents(events []*schema.ImpersonationAuditEvent) []*AuditEvent {
 	result := make([]*AuditEvent, len(events))
 	for i, e := range events {
 		result[i] = FromSchemaAuditEvent(e)
 	}
+
 	return result
 }
 
@@ -192,7 +194,7 @@ func FromSchemaAuditEvents(events []*schema.ImpersonationAuditEvent) []*AuditEve
 // SESSION INFO DTO (Enriched with user data)
 // =============================================================================
 
-// SessionInfo represents enriched impersonation session information
+// SessionInfo represents enriched impersonation session information.
 type SessionInfo struct {
 	ID             xid.ID     `json:"id"`
 	AppID          xid.ID     `json:"appId"`
@@ -220,21 +222,21 @@ type SessionInfo struct {
 // REQUEST/RESPONSE TYPES
 // =============================================================================
 
-// StartRequest represents a request to start impersonation
+// StartRequest represents a request to start impersonation.
 type StartRequest struct {
-	AppID           xid.ID  `json:"appId" validate:"required"`
+	AppID           xid.ID  `json:"appId"                     validate:"required"`
 	EnvironmentID   *xid.ID `json:"environmentId,omitempty"`
 	OrganizationID  *xid.ID `json:"organizationId,omitempty"`
-	ImpersonatorID  xid.ID  `json:"impersonatorId" validate:"required"`
-	TargetUserID    xid.ID  `json:"targetUserId" validate:"required"`
-	Reason          string  `json:"reason" validate:"required,min=10,max=500"`
-	TicketNumber    string  `json:"ticketNumber,omitempty" validate:"max=100"`
+	ImpersonatorID  xid.ID  `json:"impersonatorId"            validate:"required"`
+	TargetUserID    xid.ID  `json:"targetUserId"              validate:"required"`
+	Reason          string  `json:"reason"                    validate:"required,min=10,max=500"`
+	TicketNumber    string  `json:"ticketNumber,omitempty"    validate:"max=100"`
 	IPAddress       string  `json:"ipAddress,omitempty"`
 	UserAgent       string  `json:"userAgent,omitempty"`
 	DurationMinutes int     `json:"durationMinutes,omitempty"`
 }
 
-// StartResponse represents the response after starting impersonation
+// StartResponse represents the response after starting impersonation.
 type StartResponse struct {
 	ImpersonationID xid.ID    `json:"impersonationId"`
 	SessionID       xid.ID    `json:"sessionId"`
@@ -243,17 +245,17 @@ type StartResponse struct {
 	Message         string    `json:"message"`
 }
 
-// EndRequest represents a request to end impersonation
+// EndRequest represents a request to end impersonation.
 type EndRequest struct {
-	ImpersonationID xid.ID  `json:"impersonationId" validate:"required"`
-	AppID           xid.ID  `json:"appId" validate:"required"`
+	ImpersonationID xid.ID  `json:"impersonationId"          validate:"required"`
+	AppID           xid.ID  `json:"appId"                    validate:"required"`
 	EnvironmentID   *xid.ID `json:"environmentId,omitempty"`
 	OrganizationID  *xid.ID `json:"organizationId,omitempty"`
-	ImpersonatorID  xid.ID  `json:"impersonatorId" validate:"required"`
+	ImpersonatorID  xid.ID  `json:"impersonatorId"           validate:"required"`
 	Reason          string  `json:"reason,omitempty"`
 }
 
-// EndResponse represents the response after ending impersonation
+// EndResponse represents the response after ending impersonation.
 type EndResponse struct {
 	Success         bool      `json:"success"`
 	ImpersonationID xid.ID    `json:"impersonationId"`
@@ -261,20 +263,20 @@ type EndResponse struct {
 	Message         string    `json:"message"`
 }
 
-// GetRequest represents a request to get an impersonation session
+// GetRequest represents a request to get an impersonation session.
 type GetRequest struct {
-	ImpersonationID xid.ID  `json:"impersonationId" validate:"required"`
-	AppID           xid.ID  `json:"appId" validate:"required"`
+	ImpersonationID xid.ID  `json:"impersonationId"          validate:"required"`
+	AppID           xid.ID  `json:"appId"                    validate:"required"`
 	EnvironmentID   *xid.ID `json:"environmentId,omitempty"`
 	OrganizationID  *xid.ID `json:"organizationId,omitempty"`
 }
 
-// VerifyRequest represents a request to verify if a session is impersonating
+// VerifyRequest represents a request to verify if a session is impersonating.
 type VerifyRequest struct {
 	SessionID xid.ID `json:"sessionId" validate:"required"`
 }
 
-// VerifyResponse represents the response for verification
+// VerifyResponse represents the response for verification.
 type VerifyResponse struct {
 	IsImpersonating bool       `json:"isImpersonating"`
 	ImpersonationID *xid.ID    `json:"impersonationId,omitempty"`
@@ -286,8 +288,8 @@ type VerifyResponse struct {
 	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
 }
 
-// ListSessionsResponse represents paginated session response
+// ListSessionsResponse represents paginated session response.
 type ListSessionsResponse = pagination.PageResponse[*ImpersonationSession]
 
-// ListAuditEventsResponse represents paginated audit events response
+// ListAuditEventsResponse represents paginated audit events response.
 type ListAuditEventsResponse = pagination.PageResponse[*AuditEvent]

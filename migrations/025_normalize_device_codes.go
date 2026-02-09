@@ -19,6 +19,7 @@ func init() {
 		}
 
 		var codes []DeviceCode
+
 		err := db.NewSelect().
 			Model((*DeviceCode)(nil)).
 			Column("id", "user_code").
@@ -43,10 +44,12 @@ func init() {
 		}
 
 		fmt.Println(" [OK]")
+
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Down migration - no-op since we can't reverse normalization
 		fmt.Println(" [down migration] skipping device code normalization reversal")
+
 		return nil
 	})
 }

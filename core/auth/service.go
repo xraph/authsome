@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/types"
 )
 
-// Service provides authentication operations
+// Service provides authentication operations.
 type Service struct {
 	users        user.ServiceInterface
 	session      session.ServiceInterface
@@ -21,12 +21,12 @@ type Service struct {
 	hookExecutor HookExecutor
 }
 
-// NewService creates a new auth service
+// NewService creates a new auth service.
 func NewService(users user.ServiceInterface, session session.ServiceInterface, cfg Config, hookExecutor HookExecutor) *Service {
 	return &Service{users: users, session: session, config: cfg, hookExecutor: hookExecutor}
 }
 
-// SignUp registers a new user and returns a session
+// SignUp registers a new user and returns a session.
 func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.AuthResponse, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -46,12 +46,14 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	if err == nil && existing != nil {
 		return nil, types.ErrEmailAlreadyExists
 	}
+
 	userReq := &user.CreateUserRequest{
 		AppID:    appID,
 		Email:    req.Email,
 		Password: req.Password,
 		Name:     req.Name,
 	}
+
 	u, err := s.users.Create(ctx, userReq)
 	if err != nil {
 		return nil, err
@@ -72,6 +74,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 				// TODO: Add proper logging
 			}
 		}
+
 		return response, nil
 	}
 
@@ -117,7 +120,7 @@ func (s *Service) SignUp(ctx context.Context, req *SignUpRequest) (*responses.Au
 	return response, nil
 }
 
-// SignIn authenticates a user and returns a session
+// SignIn authenticates a user and returns a session.
 func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.AuthResponse, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -136,6 +139,7 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	if err != nil || u == nil {
 		return nil, types.ErrInvalidCredentials
 	}
+
 	if ok := crypto.CheckPassword(req.Password, u.PasswordHash); !ok {
 		return nil, types.ErrInvalidCredentials
 	}
@@ -187,12 +191,13 @@ func (s *Service) SignIn(ctx context.Context, req *SignInRequest) (*responses.Au
 	return response, nil
 }
 
-// CheckCredentials validates a user's credentials and returns the user without creating a session
+// CheckCredentials validates a user's credentials and returns the user without creating a session.
 func (s *Service) CheckCredentials(ctx context.Context, email, password string) (*user.User, error) {
 	u, err := s.users.FindByEmail(ctx, email)
 	if err != nil || u == nil {
 		return nil, types.ErrInvalidCredentials
 	}
+
 	if ok := crypto.CheckPassword(password, u.PasswordHash); !ok {
 		return nil, types.ErrInvalidCredentials
 	}
@@ -206,7 +211,7 @@ func (s *Service) CheckCredentials(ctx context.Context, email, password string) 
 }
 
 // CreateSessionForUser creates a session for a given user and returns auth response
-// This is typically used after credentials are already validated (e.g., after 2FA verification)
+// This is typically used after credentials are already validated (e.g., after 2FA verification).
 func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, remember bool, ip, ua string) (*responses.AuthResponse, error) {
 	// Extract AppID from context
 	appID, ok := contexts.GetAppID(ctx)
@@ -258,7 +263,7 @@ func (s *Service) CreateSessionForUser(ctx context.Context, u *user.User, rememb
 	return response, nil
 }
 
-// SignOut revokes a session
+// SignOut revokes a session.
 func (s *Service) SignOut(ctx context.Context, req *SignOutRequest) error {
 	// Execute before sign out hooks
 	if s.hookExecutor != nil {
@@ -283,32 +288,36 @@ func (s *Service) SignOut(ctx context.Context, req *SignOutRequest) error {
 	return nil
 }
 
-// GetSession validates and returns session details
+// GetSession validates and returns session details.
 func (s *Service) GetSession(ctx context.Context, token string) (*responses.AuthResponse, error) {
 	sess, err := s.session.FindByToken(ctx, token)
 	if err != nil || sess == nil {
 		return nil, types.ErrSessionNotFound
 	}
+
 	if time.Now().UTC().After(sess.ExpiresAt) {
 		return nil, types.ErrSessionExpired
 	}
+
 	u, err := s.users.FindByID(ctx, sess.UserID)
 	if err != nil || u == nil {
 		return nil, types.ErrUserNotFound
 	}
+
 	return &responses.AuthResponse{User: u, Session: sess, Token: sess.Token}, nil
 }
 
-// UpdateUser updates the current user's fields via user service
+// UpdateUser updates the current user's fields via user service.
 func (s *Service) UpdateUser(ctx context.Context, userID xid.ID, req *user.UpdateUserRequest) (*user.User, error) {
 	u, err := s.users.FindByID(ctx, userID)
 	if err != nil || u == nil {
 		return nil, types.ErrUserNotFound
 	}
+
 	return s.users.Update(ctx, u, req)
 }
 
-// RefreshSession refreshes an access token using a refresh token
+// RefreshSession refreshes an access token using a refresh token.
 func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*responses.RefreshSessionResponse, error) {
 	// Delegate to session service
 	refreshResp, err := s.session.RefreshSession(ctx, refreshToken)
@@ -348,7 +357,7 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (*res
 }
 
 // buildAuthContextFromResponse constructs an AuthContext from auth operation result
-// This ensures hooks receive complete authentication context
+// This ensures hooks receive complete authentication context.
 func (s *Service) buildAuthContextFromResponse(ctx context.Context, response *responses.AuthResponse, ipAddress, userAgent string) *contexts.AuthContext {
 	// Extract app/env from existing context or response
 	appID, _ := contexts.GetAppID(ctx)
@@ -359,6 +368,7 @@ func (s *Service) buildAuthContextFromResponse(ctx context.Context, response *re
 		if !response.Session.AppID.IsNil() {
 			appID = response.Session.AppID
 		}
+
 		if response.Session.EnvironmentID != nil && !response.Session.EnvironmentID.IsNil() {
 			envID = *response.Session.EnvironmentID
 		}

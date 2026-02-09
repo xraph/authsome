@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Device represents a user device (DTO)
+// Device represents a user device (DTO).
 type Device struct {
 	ID          xid.ID    `json:"id"`
 	UserID      xid.ID    `json:"userId"`
@@ -20,7 +20,7 @@ type Device struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
-// ToSchema converts the Device DTO to schema.Device
+// ToSchema converts the Device DTO to schema.Device.
 func (d *Device) ToSchema() *schema.Device {
 	return &schema.Device{
 		ID:          d.ID,
@@ -36,11 +36,12 @@ func (d *Device) ToSchema() *schema.Device {
 	}
 }
 
-// FromSchemaDevice converts a schema.Device to Device DTO
+// FromSchemaDevice converts a schema.Device to Device DTO.
 func FromSchemaDevice(s *schema.Device) *Device {
 	if s == nil {
 		return nil
 	}
+
 	return &Device{
 		ID:          s.ID,
 		UserID:      s.UserID,
@@ -53,14 +54,15 @@ func FromSchemaDevice(s *schema.Device) *Device {
 	}
 }
 
-// FromSchemaDevices converts multiple schema.Device to Device DTOs
+// FromSchemaDevices converts multiple schema.Device to Device DTOs.
 func FromSchemaDevices(devices []*schema.Device) []*Device {
 	result := make([]*Device, len(devices))
 	for i, device := range devices {
 		result[i] = FromSchemaDevice(device)
 	}
+
 	return result
 }
 
-// ListDevicesResponse is a type alias for the paginated response
+// ListDevicesResponse is a type alias for the paginated response.
 type ListDevicesResponse = pagination.PageResponse[*Device]

@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// MetricPeriod represents the time period for metrics
+// MetricPeriod represents the time period for metrics.
 type MetricPeriod string
 
 const (
@@ -16,7 +16,7 @@ const (
 	MetricPeriodYearly  MetricPeriod = "yearly"
 )
 
-// MetricType represents the type of billing metric
+// MetricType represents the type of billing metric.
 type MetricType string
 
 const (
@@ -34,7 +34,7 @@ const (
 	MetricTypeNetRevenue      MetricType = "net_revenue"      // Net revenue retention
 )
 
-// BillingMetric represents a point-in-time billing metric
+// BillingMetric represents a point-in-time billing metric.
 type BillingMetric struct {
 	ID        xid.ID       `json:"id"`
 	AppID     xid.ID       `json:"appId"`
@@ -46,7 +46,7 @@ type BillingMetric struct {
 	CreatedAt time.Time    `json:"createdAt"`
 }
 
-// MRRBreakdown provides a detailed breakdown of MRR
+// MRRBreakdown provides a detailed breakdown of MRR.
 type MRRBreakdown struct {
 	Date            time.Time `json:"date"`
 	Currency        string    `json:"currency"`
@@ -59,7 +59,7 @@ type MRRBreakdown struct {
 	NetNewMRR       int64     `json:"netNewMrr"`       // Total change
 }
 
-// ChurnAnalysis provides detailed churn analysis
+// ChurnAnalysis provides detailed churn analysis.
 type ChurnAnalysis struct {
 	Period    MetricPeriod `json:"period"`
 	StartDate time.Time    `json:"startDate"`
@@ -85,7 +85,7 @@ type ChurnAnalysis struct {
 	Currency string `json:"currency"`
 }
 
-// CohortAnalysis represents a cohort analysis for retention
+// CohortAnalysis represents a cohort analysis for retention.
 type CohortAnalysis struct {
 	CohortMonth    time.Time `json:"cohortMonth"` // The month customers signed up
 	TotalCustomers int       `json:"totalCustomers"`
@@ -94,7 +94,7 @@ type CohortAnalysis struct {
 	Currency       string    `json:"currency"`
 }
 
-// RevenueByPlan shows revenue breakdown by plan
+// RevenueByPlan shows revenue breakdown by plan.
 type RevenueByPlan struct {
 	PlanID            xid.ID  `json:"planId"`
 	PlanName          string  `json:"planName"`
@@ -106,7 +106,7 @@ type RevenueByPlan struct {
 	Currency          string  `json:"currency"`
 }
 
-// RevenueBySegment shows revenue by customer segment
+// RevenueBySegment shows revenue by customer segment.
 type RevenueBySegment struct {
 	Segment     string  `json:"segment"`
 	Subscribers int     `json:"subscribers"`
@@ -117,7 +117,7 @@ type RevenueBySegment struct {
 	Currency    string  `json:"currency"`
 }
 
-// SubscriptionMovement tracks subscription changes
+// SubscriptionMovement tracks subscription changes.
 type SubscriptionMovement struct {
 	ID             xid.ID `json:"id"`
 	AppID          xid.ID `json:"appId"`
@@ -142,7 +142,7 @@ type SubscriptionMovement struct {
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
-// TrialMetrics provides trial conversion metrics
+// TrialMetrics provides trial conversion metrics.
 type TrialMetrics struct {
 	Period             MetricPeriod `json:"period"`
 	TrialsStarted      int          `json:"trialsStarted"`
@@ -156,7 +156,7 @@ type TrialMetrics struct {
 	ConversionByPlan map[string]float64 `json:"conversionByPlan"` // Plan slug -> rate
 }
 
-// InvoiceMetrics provides invoice and payment metrics
+// InvoiceMetrics provides invoice and payment metrics.
 type InvoiceMetrics struct {
 	Period               MetricPeriod `json:"period"`
 	TotalInvoiced        int64        `json:"totalInvoiced"`
@@ -168,7 +168,7 @@ type InvoiceMetrics struct {
 	Currency             string       `json:"currency"`
 }
 
-// DashboardMetrics provides overview metrics for the dashboard
+// DashboardMetrics provides overview metrics for the dashboard.
 type DashboardMetrics struct {
 	// Current state
 	TotalMRR              int64 `json:"totalMrr"`
@@ -194,7 +194,7 @@ type DashboardMetrics struct {
 	AsOf     time.Time `json:"asOf"`
 }
 
-// GetMetricsRequest is used to request billing metrics
+// GetMetricsRequest is used to request billing metrics.
 type GetMetricsRequest struct {
 	MetricTypes []MetricType `json:"metricTypes"`
 	Period      MetricPeriod `json:"period"`
@@ -204,7 +204,7 @@ type GetMetricsRequest struct {
 	GroupBy     string       `json:"groupBy"` // plan, segment, etc.
 }
 
-// MetricsResponse contains the metrics response
+// MetricsResponse contains the metrics response.
 type MetricsResponse struct {
 	Metrics    []BillingMetric   `json:"metrics"`
 	MRRHistory []MRRBreakdown    `json:"mrrHistory,omitempty"`
@@ -215,20 +215,20 @@ type MetricsResponse struct {
 	Currency   string            `json:"currency"`
 }
 
-// GetCohortAnalysisRequest is used to request cohort analysis
+// GetCohortAnalysisRequest is used to request cohort analysis.
 type GetCohortAnalysisRequest struct {
 	StartMonth time.Time `json:"startMonth"`
 	NumMonths  int       `json:"numMonths"`
 	Currency   string    `json:"currency"`
 }
 
-// CohortAnalysisResponse contains cohort analysis results
+// CohortAnalysisResponse contains cohort analysis results.
 type CohortAnalysisResponse struct {
 	Cohorts  []CohortAnalysis `json:"cohorts"`
 	Currency string           `json:"currency"`
 }
 
-// ExportMetricsRequest is used to export metrics
+// ExportMetricsRequest is used to export metrics.
 type ExportMetricsRequest struct {
 	MetricTypes []MetricType `json:"metricTypes"`
 	Period      MetricPeriod `json:"period"`
@@ -237,13 +237,14 @@ type ExportMetricsRequest struct {
 	Format      string       `json:"format"` // csv, json, xlsx
 }
 
-// CalculateMRR calculates MRR from a subscription
+// CalculateMRR calculates MRR from a subscription.
 func CalculateMRR(subscription *Subscription, plan *Plan) int64 {
 	if subscription == nil || plan == nil {
 		return 0
 	}
 
 	baseAmount := plan.BasePrice
+
 	quantity := subscription.Quantity
 	if quantity == 0 {
 		quantity = 1
@@ -260,47 +261,53 @@ func CalculateMRR(subscription *Subscription, plan *Plan) int64 {
 	}
 }
 
-// CalculateARR calculates ARR from MRR
+// CalculateARR calculates ARR from MRR.
 func CalculateARR(mrr int64) int64 {
 	return mrr * 12
 }
 
-// CalculateChurnRate calculates the churn rate
+// CalculateChurnRate calculates the churn rate.
 func CalculateChurnRate(customersChurned, customersAtStart int) float64 {
 	if customersAtStart == 0 {
 		return 0
 	}
+
 	return float64(customersChurned) / float64(customersAtStart) * 100
 }
 
-// CalculateNetRevenueRetention calculates NRR
+// CalculateNetRevenueRetention calculates NRR.
 func CalculateNetRevenueRetention(mrrAtStart, newMRR, expansionMRR, contractionMRR, churnedMRR int64) float64 {
 	if mrrAtStart == 0 {
 		return 100
 	}
+
 	endingMRRFromExisting := mrrAtStart + expansionMRR - contractionMRR - churnedMRR
+
 	return float64(endingMRRFromExisting) / float64(mrrAtStart) * 100
 }
 
-// CalculateARPU calculates Average Revenue Per User
+// CalculateARPU calculates Average Revenue Per User.
 func CalculateARPU(totalMRR int64, totalCustomers int) int64 {
 	if totalCustomers == 0 {
 		return 0
 	}
+
 	return totalMRR / int64(totalCustomers)
 }
 
-// CalculateLTV calculates Customer Lifetime Value
+// CalculateLTV calculates Customer Lifetime Value.
 func CalculateLTV(arpu int64, churnRate float64) int64 {
 	if churnRate == 0 {
 		// If no churn, cap at some reasonable multiple
 		return arpu * 60 // 5 years
 	}
+
 	monthsUntilChurn := 100 / churnRate
+
 	return int64(float64(arpu) * monthsUntilChurn)
 }
 
-// OrgUsageStats represents usage statistics per organization
+// OrgUsageStats represents usage statistics per organization.
 type OrgUsageStats struct {
 	OrgID       xid.ID      `json:"orgId"`
 	OrgName     string      `json:"orgName"`
@@ -313,14 +320,14 @@ type OrgUsageStats struct {
 	PercentUsed float64     `json:"percentUsed"`
 }
 
-// UsageTrend represents usage trends over time
+// UsageTrend represents usage trends over time.
 type UsageTrend struct {
 	Date   time.Time `json:"date"`
 	Usage  int64     `json:"usage"`
 	Action string    `json:"action"`
 }
 
-// CurrentUsage represents current feature usage state
+// CurrentUsage represents current feature usage state.
 type CurrentUsage struct {
 	OrganizationID   xid.ID  `json:"organizationId"`
 	OrganizationName string  `json:"organizationName"`
@@ -333,7 +340,7 @@ type CurrentUsage struct {
 	PercentUsed      float64 `json:"percentUsed"`
 }
 
-// OrgRevenue represents revenue per organization
+// OrgRevenue represents revenue per organization.
 type OrgRevenue struct {
 	OrgID    xid.ID `json:"orgId"`
 	OrgName  string `json:"orgName"`
@@ -344,7 +351,7 @@ type OrgRevenue struct {
 	Status   string `json:"status"`
 }
 
-// GrowthPoint represents subscription growth at a point in time
+// GrowthPoint represents subscription growth at a point in time.
 type GrowthPoint struct {
 	Date        time.Time `json:"date"`
 	NewSubs     int       `json:"newSubs"`
@@ -353,7 +360,7 @@ type GrowthPoint struct {
 	NetGrowth   int       `json:"netGrowth"`
 }
 
-// UsageStats aggregates usage statistics
+// UsageStats aggregates usage statistics.
 type UsageStats struct {
 	TotalUsage   int64   `json:"totalUsage"`
 	TotalOrgs    int     `json:"totalOrgs"`

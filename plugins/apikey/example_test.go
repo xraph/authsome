@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Example: Basic plugin registration
+// Example: Basic plugin registration.
 func ExamplePlugin_basic() {
 	// Initialize database (example)
 	var db *bun.DB // Your database connection
@@ -41,7 +41,7 @@ func ExamplePlugin_basic() {
 	// Now API key authentication is available
 }
 
-// Example: Protect routes with API key middleware
+// Example: Protect routes with API key middleware.
 func ExamplePlugin_protectRoutes() {
 	// This example demonstrates how to extract API key context from requests
 	// For actual middleware setup, see the plugin documentation
@@ -80,9 +80,10 @@ func ExamplePlugin_protectRoutes() {
 	// See plugin documentation for setup details
 }
 
-// Example: Create and use API keys programmatically
+// Example: Create and use API keys programmatically.
 func ExamplePlugin_createKey() {
 	var ctx context.Context
+
 	var service *apikey.Service // From plugin.Service()
 
 	// V2 Architecture: App → Environment → Organization (optional)
@@ -115,16 +116,17 @@ func ExamplePlugin_createKey() {
 	_ = key
 }
 
-// TestAPIKeyAuthentication tests the full authentication flow
+// TestAPIKeyAuthentication tests the full authentication flow.
 func TestAPIKeyAuthentication(t *testing.T) {
 	// This is a placeholder test showing the structure
 	// Actual implementation would need database setup
-
 	t.Skip("Integration test - requires database setup")
 
 	// Setup
-	var db *bun.DB
-	var ctx = context.Background()
+	var (
+		db  *bun.DB
+		ctx = context.Background()
+	)
 
 	// Create Forge app
 	app := forge.New()
@@ -175,7 +177,7 @@ func TestAPIKeyAuthentication(t *testing.T) {
 	assert.Equal(t, orgID, *resp.APIKey.OrganizationID, "OrgID should match")
 }
 
-// TestRateLimiting tests rate limit enforcement
+// TestRateLimiting tests rate limit enforcement.
 func TestRateLimiting(t *testing.T) {
 	t.Skip("Integration test - requires rate limiter setup")
 
@@ -184,7 +186,7 @@ func TestRateLimiting(t *testing.T) {
 	// Rate limits are per-key and tracked per API key ID
 }
 
-// TestMultiTenancy tests the V2 architecture: App → Environment → Organization
+// TestMultiTenancy tests the V2 architecture: App → Environment → Organization.
 func TestMultiTenancy(t *testing.T) {
 	t.Skip("Integration test - requires multi-tenancy setup")
 

@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// PlanRepository defines the interface for plan persistence operations
+// PlanRepository defines the interface for plan persistence operations.
 type PlanRepository interface {
 	// Create creates a new plan
 	Create(ctx context.Context, plan *schema.SubscriptionPlan) error
@@ -46,7 +46,7 @@ type PlanRepository interface {
 	DeleteTiers(ctx context.Context, planID xid.ID) error
 }
 
-// PlanFilter defines filters for listing plans
+// PlanFilter defines filters for listing plans.
 type PlanFilter struct {
 	AppID    *xid.ID
 	IsActive *bool
@@ -55,7 +55,7 @@ type PlanFilter struct {
 	PageSize int
 }
 
-// SubscriptionRepository defines the interface for subscription persistence operations
+// SubscriptionRepository defines the interface for subscription persistence operations.
 type SubscriptionRepository interface {
 	// Create creates a new subscription
 	Create(ctx context.Context, sub *schema.Subscription) error
@@ -88,7 +88,7 @@ type SubscriptionRepository interface {
 	GetAddOnItems(ctx context.Context, subscriptionID xid.ID) ([]*schema.SubscriptionAddOnItem, error)
 }
 
-// SubscriptionFilter defines filters for listing subscriptions
+// SubscriptionFilter defines filters for listing subscriptions.
 type SubscriptionFilter struct {
 	AppID          *xid.ID
 	OrganizationID *xid.ID
@@ -98,7 +98,7 @@ type SubscriptionFilter struct {
 	PageSize       int
 }
 
-// AddOnRepository defines the interface for add-on persistence operations
+// AddOnRepository defines the interface for add-on persistence operations.
 type AddOnRepository interface {
 	// Create creates a new add-on
 	Create(ctx context.Context, addon *schema.SubscriptionAddOn) error
@@ -131,7 +131,7 @@ type AddOnRepository interface {
 	DeleteTiers(ctx context.Context, addOnID xid.ID) error
 }
 
-// AddOnFilter defines filters for listing add-ons
+// AddOnFilter defines filters for listing add-ons.
 type AddOnFilter struct {
 	AppID    *xid.ID
 	IsActive *bool
@@ -140,7 +140,7 @@ type AddOnFilter struct {
 	PageSize int
 }
 
-// InvoiceRepository defines the interface for invoice persistence operations
+// InvoiceRepository defines the interface for invoice persistence operations.
 type InvoiceRepository interface {
 	// Create creates a new invoice
 	Create(ctx context.Context, invoice *schema.SubscriptionInvoice) error
@@ -170,7 +170,7 @@ type InvoiceRepository interface {
 	GetNextInvoiceNumber(ctx context.Context, appID xid.ID) (string, error)
 }
 
-// InvoiceFilter defines filters for listing invoices
+// InvoiceFilter defines filters for listing invoices.
 type InvoiceFilter struct {
 	OrganizationID *xid.ID
 	SubscriptionID *xid.ID
@@ -179,7 +179,7 @@ type InvoiceFilter struct {
 	PageSize       int
 }
 
-// UsageRepository defines the interface for usage record persistence operations
+// UsageRepository defines the interface for usage record persistence operations.
 type UsageRepository interface {
 	// Create creates a new usage record
 	Create(ctx context.Context, record *schema.SubscriptionUsageRecord) error
@@ -194,7 +194,7 @@ type UsageRepository interface {
 	List(ctx context.Context, filter *UsageFilter) ([]*schema.SubscriptionUsageRecord, int, error)
 
 	// GetSummary calculates usage summary for a subscription and metric
-	GetSummary(ctx context.Context, subscriptionID xid.ID, metricKey string, periodStart, periodEnd interface{}) (*UsageSummary, error)
+	GetSummary(ctx context.Context, subscriptionID xid.ID, metricKey string, periodStart, periodEnd any) (*UsageSummary, error)
 
 	// GetUnreported retrieves usage records not yet reported to provider
 	GetUnreported(ctx context.Context, limit int) ([]*schema.SubscriptionUsageRecord, error)
@@ -203,7 +203,7 @@ type UsageRepository interface {
 	MarkReported(ctx context.Context, id xid.ID, providerRecordID string) error
 }
 
-// UsageFilter defines filters for listing usage records
+// UsageFilter defines filters for listing usage records.
 type UsageFilter struct {
 	SubscriptionID *xid.ID
 	OrganizationID *xid.ID
@@ -213,14 +213,14 @@ type UsageFilter struct {
 	PageSize       int
 }
 
-// UsageSummary represents aggregated usage data
+// UsageSummary represents aggregated usage data.
 type UsageSummary struct {
 	MetricKey     string
 	TotalQuantity int64
 	RecordCount   int64
 }
 
-// PaymentMethodRepository defines the interface for payment method persistence operations
+// PaymentMethodRepository defines the interface for payment method persistence operations.
 type PaymentMethodRepository interface {
 	// Create creates a new payment method
 	Create(ctx context.Context, pm *schema.SubscriptionPaymentMethod) error
@@ -250,7 +250,7 @@ type PaymentMethodRepository interface {
 	ClearDefault(ctx context.Context, orgID xid.ID) error
 }
 
-// CustomerRepository defines the interface for customer persistence operations
+// CustomerRepository defines the interface for customer persistence operations.
 type CustomerRepository interface {
 	// Create creates a new customer
 	Create(ctx context.Context, customer *schema.SubscriptionCustomer) error
@@ -271,7 +271,7 @@ type CustomerRepository interface {
 	FindByProviderID(ctx context.Context, providerCustomerID string) (*schema.SubscriptionCustomer, error)
 }
 
-// EventRepository defines the interface for subscription event persistence operations
+// EventRepository defines the interface for subscription event persistence operations.
 type EventRepository interface {
 	// Create creates a new event
 	Create(ctx context.Context, event *schema.SubscriptionEvent) error
@@ -283,7 +283,7 @@ type EventRepository interface {
 	List(ctx context.Context, filter *EventFilter) ([]*schema.SubscriptionEvent, int, error)
 }
 
-// EventFilter defines filters for listing events
+// EventFilter defines filters for listing events.
 type EventFilter struct {
 	SubscriptionID *xid.ID
 	OrganizationID *xid.ID
@@ -292,7 +292,7 @@ type EventFilter struct {
 	PageSize       int
 }
 
-// FeatureRepository defines the interface for feature persistence operations
+// FeatureRepository defines the interface for feature persistence operations.
 type FeatureRepository interface {
 	// Create creates a new feature
 	Create(ctx context.Context, feature *schema.Feature) error
@@ -340,7 +340,7 @@ type FeatureRepository interface {
 	GetFeaturePlans(ctx context.Context, featureID xid.ID) ([]*schema.PlanFeatureLink, error)
 }
 
-// FeatureFilter defines filters for listing features
+// FeatureFilter defines filters for listing features.
 type FeatureFilter struct {
 	AppID    *xid.ID
 	Type     string
@@ -349,7 +349,7 @@ type FeatureFilter struct {
 	PageSize int
 }
 
-// FeatureUsageRepository defines the interface for feature usage persistence operations
+// FeatureUsageRepository defines the interface for feature usage persistence operations.
 type FeatureUsageRepository interface {
 	// CreateUsage creates or updates feature usage for an organization
 	CreateUsage(ctx context.Context, usage *schema.OrganizationFeatureUsage) error
@@ -428,7 +428,7 @@ type FeatureUsageRepository interface {
 	GetUsageNeedingReset(ctx context.Context, resetPeriod string) ([]*schema.OrganizationFeatureUsage, error)
 }
 
-// FeatureUsageLogFilter defines filters for listing usage logs
+// FeatureUsageLogFilter defines filters for listing usage logs.
 type FeatureUsageLogFilter struct {
 	OrganizationID *xid.ID
 	FeatureID      *xid.ID

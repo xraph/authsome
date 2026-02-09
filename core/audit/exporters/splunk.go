@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // SPLUNK HEC EXPORTER - Exports audit events to Splunk via HTTP Event Collector
 // =============================================================================
 
-// SplunkExporter exports audit events to Splunk HEC
+// SplunkExporter exports audit events to Splunk HEC.
 type SplunkExporter struct {
 	config *SplunkConfig
 	client *http.Client
 }
 
-// SplunkConfig contains Splunk HEC configuration
+// SplunkConfig contains Splunk HEC configuration.
 type SplunkConfig struct {
 	Endpoint   string        `json:"endpoint"`   // Splunk HEC endpoint (e.g., https://splunk:8088/services/collector)
 	Token      string        `json:"token"`      // HEC token
@@ -32,7 +33,7 @@ type SplunkConfig struct {
 	Timeout    time.Duration `json:"timeout"`
 }
 
-// DefaultSplunkConfig returns default Splunk configuration
+// DefaultSplunkConfig returns default Splunk configuration.
 func DefaultSplunkConfig() *SplunkConfig {
 	return &SplunkConfig{
 		Source:     "authsome",
@@ -42,13 +43,14 @@ func DefaultSplunkConfig() *SplunkConfig {
 	}
 }
 
-// NewSplunkExporter creates a new Splunk HEC exporter
+// NewSplunkExporter creates a new Splunk HEC exporter.
 func NewSplunkExporter(config *SplunkConfig) (*SplunkExporter, error) {
 	if config.Endpoint == "" {
-		return nil, fmt.Errorf("splunk endpoint is required")
+		return nil, errs.New(errs.CodeInvalidInput, "splunk endpoint is required", http.StatusBadRequest)
 	}
+
 	if config.Token == "" {
-		return nil, fmt.Errorf("splunk token is required")
+		return nil, errs.New(errs.CodeInvalidInput, "splunk token is required", http.StatusBadRequest)
 	}
 
 	client := &http.Client{
@@ -62,12 +64,12 @@ func NewSplunkExporter(config *SplunkConfig) (*SplunkExporter, error) {
 	}, nil
 }
 
-// Name returns the exporter name
+// Name returns the exporter name.
 func (e *SplunkExporter) Name() string {
 	return "splunk"
 }
 
-// Export exports a batch of events to Splunk HEC
+// Export exports a batch of events to Splunk HEC.
 func (e *SplunkExporter) Export(ctx context.Context, events []*audit.Event) error {
 	if len(events) == 0 {
 		return nil
@@ -83,7 +85,7 @@ func (e *SplunkExporter) Export(ctx context.Context, events []*audit.Event) erro
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, "POST", e.config.Endpoint, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.config.Endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -106,18 +108,18 @@ func (e *SplunkExporter) Export(ctx context.Context, events []*audit.Event) erro
 	return nil
 }
 
-// convertToHECFormat converts audit events to Splunk HEC format
-func (e *SplunkExporter) convertToHECFormat(events []*audit.Event) []map[string]interface{} {
-	hecEvents := make([]map[string]interface{}, len(events))
+// convertToHECFormat converts audit events to Splunk HEC format.
+func (e *SplunkExporter) convertToHECFormat(events []*audit.Event) []map[string]any {
+	hecEvents := make([]map[string]any, len(events))
 
 	for i, event := range events {
-		hecEvents[i] = map[string]interface{}{
+		hecEvents[i] = map[string]any{
 			"time":       event.CreatedAt.Unix(),
 			"host":       event.IPAddress,
 			"source":     e.config.Source,
 			"sourcetype": e.config.SourceType,
 			"index":      e.config.Index,
-			"event": map[string]interface{}{
+			"event": map[string]any{
 				"id":         event.ID.String(),
 				"app_id":     event.AppID.String(),
 				"user_id":    e.getUserID(event),
@@ -138,13 +140,14 @@ func (e *SplunkExporter) getUserID(event *audit.Event) string {
 	if event.UserID != nil {
 		return event.UserID.String()
 	}
+
 	return ""
 }
 
-// HealthCheck checks if Splunk HEC is reachable
+// HealthCheck checks if Splunk HEC is reachable.
 func (e *SplunkExporter) HealthCheck(ctx context.Context) error {
 	// Send a test request to Splunk HEC health endpoint
-	req, err := http.NewRequestWithContext(ctx, "GET", e.config.Endpoint+"/health", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.config.Endpoint+"/health", nil)
 	if err != nil {
 		return err
 	}
@@ -164,9 +167,10 @@ func (e *SplunkExporter) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the exporter
+// Close closes the exporter.
 func (e *SplunkExporter) Close() error {
 	// Close HTTP client connections
 	e.client.CloseIdleConnections()
+
 	return nil
 }

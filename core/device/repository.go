@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Repository defines device persistence operations
-// Following Interface Segregation Principle (ISP) - works with schema types
+// Following Interface Segregation Principle (ISP) - works with schema types.
 type Repository interface {
 	// Create/Read operations
 	CreateDevice(ctx context.Context, d *schema.Device) error

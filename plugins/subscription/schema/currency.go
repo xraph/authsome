@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SubscriptionCurrency represents a supported currency in the database
+// SubscriptionCurrency represents a supported currency in the database.
 type SubscriptionCurrency struct {
 	bun.BaseModel `bun:"table:subscription_currencies,alias:sc"`
 
@@ -22,7 +22,7 @@ type SubscriptionCurrency struct {
 	UpdatedAt     time.Time `bun:"updated_at,notnull,default:current_timestamp"`
 }
 
-// SubscriptionExchangeRate represents an exchange rate in the database
+// SubscriptionExchangeRate represents an exchange rate in the database.
 type SubscriptionExchangeRate struct {
 	bun.BaseModel `bun:"table:subscription_exchange_rates,alias:ser"`
 

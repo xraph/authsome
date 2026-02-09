@@ -6,7 +6,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// LoginPageData holds data for the login page
+// LoginPageData holds data for the login page.
 type LoginPageData struct {
 	Title     string
 	CSRFToken string
@@ -15,14 +15,14 @@ type LoginPageData struct {
 	Data      LoginData
 }
 
-// LoginData holds form/data for login
+// LoginData holds form/data for login.
 type LoginData struct {
 	Redirect    string
 	ShowSignup  bool
 	IsFirstUser bool
 }
 
-// SignupPageData holds data for the signup page
+// SignupPageData holds data for the signup page.
 type SignupPageData struct {
 	Title     string
 	CSRFToken string
@@ -31,13 +31,13 @@ type SignupPageData struct {
 	Data      SignupData
 }
 
-// SignupData holds form/data for signup
+// SignupData holds form/data for signup.
 type SignupData struct {
 	Redirect    string
 	IsFirstUser bool
 }
 
-// ErrorPage renders an error page content (used within base layout)
+// ErrorPage renders an error page content (used within base layout).
 func ErrorPage(errorMessage string, basePath string) g.Node {
 	return Div(
 		Class("min-h-[400px] flex items-center justify-center"),

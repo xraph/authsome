@@ -13,7 +13,7 @@ import (
 
 // BearerStrategy implements authentication via Bearer tokens in Authorization header
 // This strategy extracts session tokens from "Authorization: Bearer <token>" headers
-// and validates them as session tokens (not JWT tokens)
+// and validates them as session tokens (not JWT tokens).
 type BearerStrategy struct {
 	sessionSvc session.ServiceInterface
 	userSvc    user.ServiceInterface
@@ -21,7 +21,7 @@ type BearerStrategy struct {
 	logger     forge.Logger
 }
 
-// NewBearerStrategy creates a new bearer token authentication strategy
+// NewBearerStrategy creates a new bearer token authentication strategy.
 func NewBearerStrategy(
 	sessionSvc session.ServiceInterface,
 	userSvc user.ServiceInterface,
@@ -36,19 +36,19 @@ func NewBearerStrategy(
 	}
 }
 
-// ID returns the strategy identifier
+// ID returns the strategy identifier.
 func (s *BearerStrategy) ID() string {
 	return "bearer"
 }
 
 // Priority returns the strategy priority (20 = medium-high priority for bearer tokens)
-// This runs after API keys (10) but before cookies (30)
+// This runs after API keys (10) but before cookies (30).
 func (s *BearerStrategy) Priority() int {
 	return 20
 }
 
-// Extract attempts to extract a bearer token from the Authorization header
-func (s *BearerStrategy) Extract(c forge.Context) (interface{}, bool) {
+// Extract attempts to extract a bearer token from the Authorization header.
+func (s *BearerStrategy) Extract(c forge.Context) (any, bool) {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, false
@@ -94,8 +94,8 @@ func (s *BearerStrategy) Extract(c forge.Context) (interface{}, bool) {
 	return token, true
 }
 
-// Authenticate validates the bearer token and builds auth context
-func (s *BearerStrategy) Authenticate(ctx context.Context, credentials interface{}) (*contexts.AuthContext, error) {
+// Authenticate validates the bearer token and builds auth context.
+func (s *BearerStrategy) Authenticate(ctx context.Context, credentials any) (*contexts.AuthContext, error) {
 	token, ok := credentials.(string)
 	if !ok {
 		return nil, &BearerAuthError{
@@ -108,6 +108,7 @@ func (s *BearerStrategy) Authenticate(ctx context.Context, credentials interface
 	if err != nil {
 		s.logger.Debug("failed to find session by bearer token",
 			forge.F("error", err.Error()))
+
 		return nil, &BearerAuthError{
 			Message: "invalid or expired bearer token",
 			Err:     err,
@@ -126,6 +127,7 @@ func (s *BearerStrategy) Authenticate(ctx context.Context, credentials interface
 		s.logger.Debug("bearer token session expired",
 			forge.F("session_id", sess.ID.String()),
 			forge.F("expires_at", sess.ExpiresAt))
+
 		return nil, &BearerAuthError{
 			Message: "session expired",
 		}
@@ -137,6 +139,7 @@ func (s *BearerStrategy) Authenticate(ctx context.Context, credentials interface
 		s.logger.Warn("failed to find user for bearer token session",
 			forge.F("user_id", sess.UserID.String()),
 			forge.F("error", err.Error()))
+
 		return nil, &BearerAuthError{
 			Message: "user not found",
 			Err:     err,
@@ -146,6 +149,7 @@ func (s *BearerStrategy) Authenticate(ctx context.Context, credentials interface
 	if usr == nil {
 		s.logger.Warn("user not found for valid bearer token session",
 			forge.F("user_id", sess.UserID.String()))
+
 		return nil, &BearerAuthError{
 			Message: "user not found",
 		}
@@ -175,7 +179,7 @@ func (s *BearerStrategy) Authenticate(ctx context.Context, credentials interface
 	return authCtx, nil
 }
 
-// BearerAuthError represents a bearer authentication error
+// BearerAuthError represents a bearer authentication error.
 type BearerAuthError struct {
 	Message string
 	Err     error
@@ -185,6 +189,7 @@ func (e *BearerAuthError) Error() string {
 	if e.Err != nil {
 		return "bearer auth: " + e.Message + ": " + e.Err.Error()
 	}
+
 	return "bearer auth: " + e.Message
 }
 

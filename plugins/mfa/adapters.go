@@ -8,7 +8,7 @@ import (
 )
 
 // FactorAdapter defines the interface for integrating authentication factors
-// Each adapter wraps an existing plugin (twofa, emailotp, phone, passkey)
+// Each adapter wraps an existing plugin (twofa, emailotp, phone, passkey).
 type FactorAdapter interface {
 	// Type returns the factor type this adapter handles
 	Type() FactorType
@@ -30,42 +30,44 @@ type FactorAdapter interface {
 	IsAvailable() bool
 }
 
-// FactorAdapterRegistry manages available factor adapters
+// FactorAdapterRegistry manages available factor adapters.
 type FactorAdapterRegistry struct {
 	adapters map[FactorType]FactorAdapter
 }
 
-// NewFactorAdapterRegistry creates a new adapter registry
+// NewFactorAdapterRegistry creates a new adapter registry.
 func NewFactorAdapterRegistry() *FactorAdapterRegistry {
 	return &FactorAdapterRegistry{
 		adapters: make(map[FactorType]FactorAdapter),
 	}
 }
 
-// Register registers a factor adapter
+// Register registers a factor adapter.
 func (r *FactorAdapterRegistry) Register(adapter FactorAdapter) {
 	r.adapters[adapter.Type()] = adapter
 }
 
-// Get retrieves a factor adapter by type
+// Get retrieves a factor adapter by type.
 func (r *FactorAdapterRegistry) Get(factorType FactorType) (FactorAdapter, error) {
 	adapter, ok := r.adapters[factorType]
 	if !ok {
 		return nil, fmt.Errorf("no adapter registered for factor type: %s", factorType)
 	}
+
 	return adapter, nil
 }
 
-// List returns all available factor types
+// List returns all available factor types.
 func (r *FactorAdapterRegistry) List() []FactorType {
 	types := make([]FactorType, 0, len(r.adapters))
 	for t := range r.adapters {
 		types = append(types, t)
 	}
+
 	return types
 }
 
-// GetAvailable returns only available factor types
+// GetAvailable returns only available factor types.
 func (r *FactorAdapterRegistry) GetAvailable() []FactorType {
 	types := make([]FactorType, 0, len(r.adapters))
 	for t, adapter := range r.adapters {
@@ -73,21 +75,22 @@ func (r *FactorAdapterRegistry) GetAvailable() []FactorType {
 			types = append(types, t)
 		}
 	}
+
 	return types
 }
 
-// BaseFactorAdapter provides common functionality for adapters
+// BaseFactorAdapter provides common functionality for adapters.
 type BaseFactorAdapter struct {
 	factorType FactorType
 	available  bool
 }
 
-// Type returns the factor type
+// Type returns the factor type.
 func (b *BaseFactorAdapter) Type() FactorType {
 	return b.factorType
 }
 
-// IsAvailable checks if the factor is available
+// IsAvailable checks if the factor is available.
 func (b *BaseFactorAdapter) IsAvailable() bool {
 	return b.available
 }

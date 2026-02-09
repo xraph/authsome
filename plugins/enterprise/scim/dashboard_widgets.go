@@ -15,7 +15,7 @@ import (
 
 // Widget rendering implementations for dashboard home page
 
-// RenderRecentActivityWidget renders the recent activity widget
+// RenderRecentActivityWidget renders the recent activity widget.
 func (e *DashboardExtension) RenderRecentActivityWidget(basePath string, currentApp *app.App) g.Node {
 	if currentApp == nil {
 		return Div(Class("text-gray-500"), g.Text("No app context"))
@@ -40,7 +40,7 @@ func (e *DashboardExtension) RenderRecentActivityWidget(basePath string, current
 	)
 }
 
-// renderRecentActivityItems renders activity items
+// renderRecentActivityItems renders activity items.
 func (e *DashboardExtension) renderRecentActivityItems(events []*SCIMSyncEvent) []g.Node {
 	items := make([]g.Node, len(events))
 	for i, event := range events {
@@ -54,10 +54,11 @@ func (e *DashboardExtension) renderRecentActivityItems(events []*SCIMSyncEvent) 
 			),
 		)
 	}
+
 	return items
 }
 
-// RenderFailedOperationsWidget renders the failed operations widget
+// RenderFailedOperationsWidget renders the failed operations widget.
 func (e *DashboardExtension) RenderFailedOperationsWidget(basePath string, currentApp *app.App) g.Node {
 	if currentApp == nil {
 		return Div(Class("text-gray-500"), g.Text("No app context"))
@@ -74,6 +75,7 @@ func (e *DashboardExtension) RenderFailedOperationsWidget(basePath string, curre
 
 	statusClass := "text-green-600 dark:text-green-400"
 	statusText := "All Good"
+
 	if failedCount > 0 {
 		statusClass = "text-red-600 dark:text-red-400"
 		statusText = "Needs Attention"
@@ -90,7 +92,7 @@ func (e *DashboardExtension) RenderFailedOperationsWidget(basePath string, curre
 				lucide.Info(Class("size-5 text-red-500")),
 			),
 			Div(
-				Class(fmt.Sprintf("text-2xl font-bold %s", statusClass)),
+				Class("text-2xl font-bold "+statusClass),
 				g.Textf("%d", failedCount),
 			),
 		),
@@ -107,7 +109,7 @@ func (e *DashboardExtension) RenderFailedOperationsWidget(basePath string, curre
 
 // Additional widget helper functions
 
-// renderWidgetCard wraps content in a widget card
+// renderWidgetCard wraps content in a widget card.
 func renderWidgetCard(title string, icon g.Node, content g.Node) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -120,10 +122,11 @@ func renderWidgetCard(title string, icon g.Node, content g.Node) g.Node {
 	)
 }
 
-// renderMetricValue renders a metric value with optional change indicator
+// renderMetricValue renders a metric value with optional change indicator.
 func renderMetricValue(value string, change string, positive bool) g.Node {
 	changeClass := "text-green-600 dark:text-green-400"
 	changeIcon := lucide.TrendingUp(Class("size-3"))
+
 	if !positive {
 		changeClass = "text-red-600 dark:text-red-400"
 		changeIcon = lucide.TrendingDown(Class("size-3"))
@@ -133,7 +136,7 @@ func renderMetricValue(value string, change string, positive bool) g.Node {
 		Div(Class("text-2xl font-bold text-slate-900 dark:text-white"), g.Text(value)),
 		g.If(change != "",
 			Div(
-				Class(fmt.Sprintf("flex items-center gap-1 text-xs %s", changeClass)),
+				Class("flex items-center gap-1 text-xs "+changeClass),
 				changeIcon,
 				g.Text(change),
 			),

@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// TemplatesListPage renders the templates list page
+// TemplatesListPage renders the templates list page.
 func TemplatesListPage(currentApp *app.App, basePath string) g.Node {
 	return primitives.Container(
 		Div(
@@ -212,6 +212,7 @@ func TemplatesListPage(currentApp *app.App, basePath string) g.Node {
 
 func templatesListData(appID string) string {
 	basePath := "/api/identity/ui"
+
 	return fmt.Sprintf(`{
 		templates: [],
 		loading: false,

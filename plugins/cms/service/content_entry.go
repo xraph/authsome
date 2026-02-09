@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/rs/xid"
@@ -14,7 +15,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// ContentEntryService handles content entry business logic
+// ContentEntryService handles content entry business logic.
 type ContentEntryService struct {
 	repo            repository.ContentEntryRepository
 	contentTypeRepo repository.ContentTypeRepository
@@ -23,14 +24,14 @@ type ContentEntryService struct {
 	logger          forge.Logger
 }
 
-// ContentEntryServiceConfig holds configuration for the service
+// ContentEntryServiceConfig holds configuration for the service.
 type ContentEntryServiceConfig struct {
 	EnableRevisions      bool
 	MaxRevisionsPerEntry int
 	Logger               forge.Logger
 }
 
-// NewContentEntryService creates a new content entry service
+// NewContentEntryService creates a new content entry service.
 func NewContentEntryService(
 	repo repository.ContentEntryRepository,
 	contentTypeRepo repository.ContentTypeRepository,
@@ -50,13 +51,14 @@ func NewContentEntryService(
 // CRUD Operations
 // =============================================================================
 
-// Create creates a new content entry
+// Create creates a new content entry.
 func (s *ContentEntryService) Create(ctx context.Context, contentTypeID xid.ID, req *core.CreateEntryRequest) (*core.ContentEntryDTO, error) {
 	// Get app/env context
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
 		return nil, core.ErrAppContextMissing()
 	}
+
 	envID, ok := contexts.GetEnvironmentID(ctx)
 	if !ok {
 		return nil, core.ErrEnvContextMissing()
@@ -74,6 +76,7 @@ func (s *ContentEntryService) Create(ctx context.Context, contentTypeID xid.ID, 
 		if err != nil {
 			return nil, err
 		}
+
 		if count >= contentType.Settings.MaxEntries {
 			return nil, core.ErrEntryLimitReached(contentType.Name, contentType.Settings.MaxEntries)
 		}
@@ -95,7 +98,7 @@ func (s *ContentEntryService) Create(ctx context.Context, contentTypeID xid.ID, 
 	}
 
 	// Validate unique constraints
-	uniqueResult := validator.ValidateUniqueConstraints(data, nil, func(field string, value interface{}, excludeID *xid.ID) (bool, error) {
+	uniqueResult := validator.ValidateUniqueConstraints(data, nil, func(field string, value any, excludeID *xid.ID) (bool, error) {
 		return s.repo.ExistsWithFieldValue(ctx, contentTypeID, field, value, excludeID)
 	})
 	if !uniqueResult.Valid {
@@ -107,6 +110,7 @@ func (s *ContentEntryService) Create(ctx context.Context, contentTypeID xid.ID, 
 
 	// Determine status
 	status := "draft"
+
 	if req.Status != "" {
 		if _, valid := core.ParseEntryStatus(req.Status); valid {
 			status = req.Status
@@ -152,16 +156,17 @@ func (s *ContentEntryService) Create(ctx context.Context, contentTypeID xid.ID, 
 	return s.toDTO(entry, contentType), nil
 }
 
-// GetByID retrieves a content entry by ID
+// GetByID retrieves a content entry by ID.
 func (s *ContentEntryService) GetByID(ctx context.Context, id xid.ID) (*core.ContentEntryDTO, error) {
 	entry, err := s.repo.FindByIDWithType(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return s.toDTO(entry, entry.ContentType), nil
 }
 
-// List lists content entries with filtering and pagination
+// List lists content entries with filtering and pagination.
 func (s *ContentEntryService) List(ctx context.Context, contentTypeID xid.ID, query *core.ListEntriesQuery) (*core.ListEntriesResponse, error) {
 	// Convert to repository query
 	repoQuery := &repository.EntryListQuery{
@@ -183,12 +188,15 @@ func (s *ContentEntryService) List(ctx context.Context, contentTypeID xid.ID, qu
 			if filterMap, ok := value.(map[string]any); ok {
 				operator := "eq" // default
 				filterValue := value
+
 				if op, ok := filterMap["operator"].(string); ok {
 					operator = op
 				}
+
 				if val, ok := filterMap["value"]; ok {
 					filterValue = val
 				}
+
 				repoQuery.Filters[field] = repository.FilterCondition{
 					Operator: operator,
 					Value:    filterValue,
@@ -218,6 +226,7 @@ func (s *ContentEntryService) List(ctx context.Context, contentTypeID xid.ID, qu
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+
 	page := query.Page
 	if page <= 0 {
 		page = 1
@@ -234,7 +243,7 @@ func (s *ContentEntryService) List(ctx context.Context, contentTypeID xid.ID, qu
 	}, nil
 }
 
-// Update updates a content entry
+// Update updates a content entry.
 func (s *ContentEntryService) Update(ctx context.Context, id xid.ID, req *core.UpdateEntryRequest) (*core.ContentEntryDTO, error) {
 	// Get existing entry with content type
 	entry, err := s.repo.FindByIDWithType(ctx, id)
@@ -251,13 +260,10 @@ func (s *ContentEntryService) Update(ctx context.Context, id xid.ID, req *core.U
 	newData := validator.SanitizeData(req.Data)
 
 	// Merge with existing data
-	mergedData := make(map[string]interface{})
-	for k, v := range entry.Data {
-		mergedData[k] = v
-	}
-	for k, v := range newData {
-		mergedData[k] = v
-	}
+	mergedData := make(map[string]any)
+	maps.Copy(mergedData, entry.Data)
+
+	maps.Copy(mergedData, newData)
 
 	// Validate merged data
 	validationResult := validator.ValidateUpdate(mergedData, entry)
@@ -266,7 +272,7 @@ func (s *ContentEntryService) Update(ctx context.Context, id xid.ID, req *core.U
 	}
 
 	// Validate unique constraints
-	uniqueResult := validator.ValidateUniqueConstraints(mergedData, &entry.ID, func(field string, value interface{}, excludeID *xid.ID) (bool, error) {
+	uniqueResult := validator.ValidateUniqueConstraints(mergedData, &entry.ID, func(field string, value any, excludeID *xid.ID) (bool, error) {
 		return s.repo.ExistsWithFieldValue(ctx, entry.ContentTypeID, field, value, excludeID)
 	})
 	if !uniqueResult.Valid {
@@ -314,7 +320,7 @@ func (s *ContentEntryService) Update(ctx context.Context, id xid.ID, req *core.U
 	return s.toDTO(entry, contentType), nil
 }
 
-// Delete deletes a content entry
+// Delete deletes a content entry.
 func (s *ContentEntryService) Delete(ctx context.Context, id xid.ID) error {
 	// Verify entry exists
 	_, err := s.repo.FindByID(ctx, id)
@@ -329,7 +335,7 @@ func (s *ContentEntryService) Delete(ctx context.Context, id xid.ID) error {
 // Status Operations
 // =============================================================================
 
-// Publish publishes a content entry
+// Publish publishes a content entry.
 func (s *ContentEntryService) Publish(ctx context.Context, id xid.ID, req *core.PublishEntryRequest) (*core.ContentEntryDTO, error) {
 	entry, err := s.repo.FindByIDWithType(ctx, id)
 	if err != nil {
@@ -365,7 +371,7 @@ func (s *ContentEntryService) Publish(ctx context.Context, id xid.ID, req *core.
 	return s.toDTO(entry, entry.ContentType), nil
 }
 
-// Unpublish unpublishes a content entry
+// Unpublish unpublishes a content entry.
 func (s *ContentEntryService) Unpublish(ctx context.Context, id xid.ID) (*core.ContentEntryDTO, error) {
 	entry, err := s.repo.FindByIDWithType(ctx, id)
 	if err != nil {
@@ -395,7 +401,7 @@ func (s *ContentEntryService) Unpublish(ctx context.Context, id xid.ID) (*core.C
 	return s.toDTO(entry, entry.ContentType), nil
 }
 
-// Archive archives a content entry
+// Archive archives a content entry.
 func (s *ContentEntryService) Archive(ctx context.Context, id xid.ID) (*core.ContentEntryDTO, error) {
 	entry, err := s.repo.FindByIDWithType(ctx, id)
 	if err != nil {
@@ -419,17 +425,17 @@ func (s *ContentEntryService) Archive(ctx context.Context, id xid.ID) (*core.Con
 // Bulk Operations
 // =============================================================================
 
-// BulkPublish publishes multiple entries
+// BulkPublish publishes multiple entries.
 func (s *ContentEntryService) BulkPublish(ctx context.Context, ids []xid.ID) error {
 	return s.repo.BulkUpdateStatus(ctx, ids, "published")
 }
 
-// BulkUnpublish unpublishes multiple entries
+// BulkUnpublish unpublishes multiple entries.
 func (s *ContentEntryService) BulkUnpublish(ctx context.Context, ids []xid.ID) error {
 	return s.repo.BulkUpdateStatus(ctx, ids, "draft")
 }
 
-// BulkDelete deletes multiple entries
+// BulkDelete deletes multiple entries.
 func (s *ContentEntryService) BulkDelete(ctx context.Context, ids []xid.ID) error {
 	return s.repo.BulkDelete(ctx, ids)
 }
@@ -438,7 +444,7 @@ func (s *ContentEntryService) BulkDelete(ctx context.Context, ids []xid.ID) erro
 // Scheduled Publishing
 // =============================================================================
 
-// ProcessScheduledEntries processes entries scheduled for publishing
+// ProcessScheduledEntries processes entries scheduled for publishing.
 func (s *ContentEntryService) ProcessScheduledEntries(ctx context.Context) (int, error) {
 	entries, err := s.repo.FindScheduledForPublish(ctx, time.Now())
 	if err != nil {
@@ -446,8 +452,10 @@ func (s *ContentEntryService) ProcessScheduledEntries(ctx context.Context) (int,
 	}
 
 	published := 0
+
 	for _, entry := range entries {
 		entry.Publish()
+
 		entry.Version++
 		if err := s.repo.Update(ctx, entry); err != nil {
 			if s.logger != nil {
@@ -455,8 +463,10 @@ func (s *ContentEntryService) ProcessScheduledEntries(ctx context.Context) (int,
 					forge.F("entryId", entry.ID.String()),
 					forge.F("error", err.Error()))
 			}
+
 			continue
 		}
+
 		published++
 	}
 
@@ -467,7 +477,7 @@ func (s *ContentEntryService) ProcessScheduledEntries(ctx context.Context) (int,
 // Helper Methods
 // =============================================================================
 
-// toDTO converts a content entry to its DTO representation
+// toDTO converts a content entry to its DTO representation.
 func (s *ContentEntryService) toDTO(entry *schema.ContentEntry, contentType *schema.ContentType) *core.ContentEntryDTO {
 	if entry == nil {
 		return nil
@@ -490,6 +500,7 @@ func (s *ContentEntryService) toDTO(entry *schema.ContentEntry, contentType *sch
 	if !entry.CreatedBy.IsNil() {
 		dto.CreatedBy = entry.CreatedBy.String()
 	}
+
 	if !entry.UpdatedBy.IsNil() {
 		dto.UpdatedBy = entry.UpdatedBy.String()
 	}
@@ -512,7 +523,7 @@ func (s *ContentEntryService) toDTO(entry *schema.ContentEntry, contentType *sch
 // Revision Operations
 // =============================================================================
 
-// Restore restores an entry to a specific revision version
+// Restore restores an entry to a specific revision version.
 func (s *ContentEntryService) Restore(ctx context.Context, id xid.ID, version int) (*core.ContentEntryDTO, error) {
 	// Get the current entry
 	entry, err := s.repo.FindByIDWithType(ctx, id)
@@ -561,7 +572,7 @@ func (s *ContentEntryService) Restore(ctx context.Context, id xid.ID, version in
 // Stats Operations
 // =============================================================================
 
-// GetStats returns statistics for entries
+// GetStats returns statistics for entries.
 func (s *ContentEntryService) GetStats(ctx context.Context, contentTypeID xid.ID) (*core.ContentTypeStatsDTO, error) {
 	total, err := s.repo.Count(ctx, contentTypeID)
 	if err != nil {

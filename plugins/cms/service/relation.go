@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// RelationServiceConfig holds configuration for the relation service
+// RelationServiceConfig holds configuration for the relation service.
 type RelationServiceConfig struct {
 	// MaxRelationsPerField limits relations per field (0 = unlimited)
 	MaxRelationsPerField int
@@ -22,7 +22,7 @@ type RelationServiceConfig struct {
 	Logger forge.Logger
 }
 
-// RelationService handles content relations
+// RelationService handles content relations.
 type RelationService struct {
 	repo            repository.RelationRepository
 	entryRepo       repository.ContentEntryRepository
@@ -31,7 +31,7 @@ type RelationService struct {
 	logger          forge.Logger
 }
 
-// NewRelationService creates a new relation service
+// NewRelationService creates a new relation service.
 func NewRelationService(
 	repo repository.RelationRepository,
 	entryRepo repository.ContentEntryRepository,
@@ -47,6 +47,7 @@ func NewRelationService(
 	if config.Logger != nil {
 		svc.logger = config.Logger.Named("relation")
 	}
+
 	return svc
 }
 
@@ -54,7 +55,7 @@ func NewRelationService(
 // Content Relations (entry-to-entry)
 // =============================================================================
 
-// SetRelation sets a single relation (for one-to-one or many-to-one)
+// SetRelation sets a single relation (for one-to-one or many-to-one).
 func (s *RelationService) SetRelation(ctx context.Context, sourceID xid.ID, fieldSlug string, targetID xid.ID) error {
 	// Verify target entry exists
 	if _, err := s.entryRepo.FindByID(ctx, targetID); err != nil {
@@ -75,10 +76,11 @@ func (s *RelationService) SetRelation(ctx context.Context, sourceID xid.ID, fiel
 
 	// Create new relation
 	relation := schema.NewRelation(sourceID, targetID, fieldSlug)
+
 	return s.repo.CreateRelation(ctx, relation)
 }
 
-// SetRelations sets multiple relations (for one-to-many or many-to-many)
+// SetRelations sets multiple relations (for one-to-many or many-to-many).
 func (s *RelationService) SetRelations(ctx context.Context, sourceID xid.ID, fieldSlug string, targetIDs []xid.ID) error {
 	// Check limit
 	if s.config.MaxRelationsPerField > 0 && len(targetIDs) > s.config.MaxRelationsPerField {
@@ -115,7 +117,7 @@ func (s *RelationService) SetRelations(ctx context.Context, sourceID xid.ID, fie
 	return s.repo.BulkCreateRelations(ctx, relations)
 }
 
-// AddRelation adds a single relation to existing relations
+// AddRelation adds a single relation to existing relations.
 func (s *RelationService) AddRelation(ctx context.Context, sourceID xid.ID, fieldSlug string, targetID xid.ID) error {
 	// Verify target entry exists
 	if _, err := s.entryRepo.FindByID(ctx, targetID); err != nil {
@@ -149,15 +151,16 @@ func (s *RelationService) AddRelation(ctx context.Context, sourceID xid.ID, fiel
 
 	// Create new relation at end
 	relation := schema.NewOrderedRelation(sourceID, targetID, fieldSlug, len(existing))
+
 	return s.repo.CreateRelation(ctx, relation)
 }
 
-// RemoveRelation removes a single relation
+// RemoveRelation removes a single relation.
 func (s *RelationService) RemoveRelation(ctx context.Context, sourceID xid.ID, fieldSlug string, targetID xid.ID) error {
 	return s.repo.DeleteRelationByEntries(ctx, sourceID, targetID, fieldSlug)
 }
 
-// GetRelations returns all related entries for a field
+// GetRelations returns all related entries for a field.
 func (s *RelationService) GetRelations(ctx context.Context, sourceID xid.ID, fieldSlug string) ([]*core.RelatedEntryDTO, error) {
 	relations, err := s.repo.FindRelations(ctx, sourceID, fieldSlug)
 	if err != nil {
@@ -174,10 +177,11 @@ func (s *RelationService) GetRelations(ctx context.Context, sourceID xid.ID, fie
 			result[i].Entry = s.entryToSummaryDTO(rel.TargetEntry)
 		}
 	}
+
 	return result, nil
 }
 
-// GetRelatedIDs returns just the IDs of related entries
+// GetRelatedIDs returns just the IDs of related entries.
 func (s *RelationService) GetRelatedIDs(ctx context.Context, sourceID xid.ID, fieldSlug string) ([]xid.ID, error) {
 	relations, err := s.repo.FindRelations(ctx, sourceID, fieldSlug)
 	if err != nil {
@@ -188,10 +192,11 @@ func (s *RelationService) GetRelatedIDs(ctx context.Context, sourceID xid.ID, fi
 	for i, rel := range relations {
 		ids[i] = rel.TargetEntryID
 	}
+
 	return ids, nil
 }
 
-// GetReverseRelations returns all entries that reference this entry
+// GetReverseRelations returns all entries that reference this entry.
 func (s *RelationService) GetReverseRelations(ctx context.Context, targetID xid.ID, fieldSlug string) ([]*core.RelatedEntryDTO, error) {
 	relations, err := s.repo.FindReverseRelations(ctx, targetID, fieldSlug)
 	if err != nil {
@@ -208,20 +213,21 @@ func (s *RelationService) GetReverseRelations(ctx context.Context, targetID xid.
 			result[i].Entry = s.entryToSummaryDTO(rel.SourceEntry)
 		}
 	}
+
 	return result, nil
 }
 
-// ReorderRelations reorders the relations for a field
+// ReorderRelations reorders the relations for a field.
 func (s *RelationService) ReorderRelations(ctx context.Context, sourceID xid.ID, fieldSlug string, orderedTargetIDs []xid.ID) error {
 	return s.repo.BulkUpdateOrder(ctx, sourceID, fieldSlug, orderedTargetIDs)
 }
 
-// ClearRelations removes all relations for a field
+// ClearRelations removes all relations for a field.
 func (s *RelationService) ClearRelations(ctx context.Context, sourceID xid.ID, fieldSlug string) error {
 	return s.repo.DeleteAllForField(ctx, sourceID, fieldSlug)
 }
 
-// DeleteAllEntryRelations removes all relations for an entry (when deleting entry)
+// DeleteAllEntryRelations removes all relations for an entry (when deleting entry).
 func (s *RelationService) DeleteAllEntryRelations(ctx context.Context, entryID xid.ID) error {
 	return s.repo.DeleteAllForEntry(ctx, entryID)
 }
@@ -230,7 +236,7 @@ func (s *RelationService) DeleteAllEntryRelations(ctx context.Context, entryID x
 // Content Type Relations (type-to-type definitions)
 // =============================================================================
 
-// CreateTypeRelation creates a new type relation definition
+// CreateTypeRelation creates a new type relation definition.
 func (s *RelationService) CreateTypeRelation(ctx context.Context, req *core.CreateTypeRelationRequest) (*core.TypeRelationDTO, error) {
 	// Validate relation type
 	relationType := core.RelationType(req.RelationType)
@@ -255,6 +261,7 @@ func (s *RelationService) CreateTypeRelation(ctx context.Context, req *core.Crea
 	if req.OnDelete != "" && !onDelete.IsValid() {
 		return nil, core.ErrInvalidRelation("invalid on-delete action: " + req.OnDelete)
 	}
+
 	if req.OnDelete == "" {
 		onDelete = core.OnDeleteSetNull
 	}
@@ -276,7 +283,7 @@ func (s *RelationService) CreateTypeRelation(ctx context.Context, req *core.Crea
 	return s.typeRelationToDTO(relation, sourceType, targetType), nil
 }
 
-// UpdateTypeRelation updates a type relation definition
+// UpdateTypeRelation updates a type relation definition.
 func (s *RelationService) UpdateTypeRelation(ctx context.Context, id xid.ID, req *core.UpdateTypeRelationRequest) (*core.TypeRelationDTO, error) {
 	relation, err := s.repo.FindTypeRelationByID(ctx, id)
 	if err != nil {
@@ -287,11 +294,13 @@ func (s *RelationService) UpdateTypeRelation(ctx context.Context, id xid.ID, req
 	if req.TargetFieldName != nil {
 		relation.TargetFieldName = *req.TargetFieldName
 	}
+
 	if req.OnDelete != nil {
 		onDelete := core.OnDeleteAction(*req.OnDelete)
 		if !onDelete.IsValid() {
 			return nil, core.ErrInvalidRelation("invalid on-delete action: " + *req.OnDelete)
 		}
+
 		relation.OnDelete = *req.OnDelete
 	}
 
@@ -302,33 +311,36 @@ func (s *RelationService) UpdateTypeRelation(ctx context.Context, id xid.ID, req
 	return s.typeRelationToDTO(relation, relation.SourceContentType, relation.TargetContentType), nil
 }
 
-// DeleteTypeRelation deletes a type relation definition
+// DeleteTypeRelation deletes a type relation definition.
 func (s *RelationService) DeleteTypeRelation(ctx context.Context, id xid.ID) error {
 	return s.repo.DeleteTypeRelation(ctx, id)
 }
 
-// GetTypeRelation gets a type relation by ID
+// GetTypeRelation gets a type relation by ID.
 func (s *RelationService) GetTypeRelation(ctx context.Context, id xid.ID) (*core.TypeRelationDTO, error) {
 	relation, err := s.repo.FindTypeRelationByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return s.typeRelationToDTO(relation, relation.SourceContentType, relation.TargetContentType), nil
 }
 
-// GetTypeRelationByField gets a type relation by content type and field
+// GetTypeRelationByField gets a type relation by content type and field.
 func (s *RelationService) GetTypeRelationByField(ctx context.Context, contentTypeID xid.ID, fieldSlug string) (*core.TypeRelationDTO, error) {
 	relation, err := s.repo.FindTypeRelationByField(ctx, contentTypeID, fieldSlug)
 	if err != nil {
 		return nil, err
 	}
+
 	if relation == nil {
 		return nil, nil
 	}
+
 	return s.typeRelationToDTO(relation, relation.SourceContentType, relation.TargetContentType), nil
 }
 
-// GetTypeRelationsForType gets all type relations for a content type
+// GetTypeRelationsForType gets all type relations for a content type.
 func (s *RelationService) GetTypeRelationsForType(ctx context.Context, contentTypeID xid.ID) ([]*core.TypeRelationDTO, error) {
 	relations, err := s.repo.FindTypeRelationsForType(ctx, contentTypeID)
 	if err != nil {
@@ -339,6 +351,7 @@ func (s *RelationService) GetTypeRelationsForType(ctx context.Context, contentTy
 	for i, rel := range relations {
 		result[i] = s.typeRelationToDTO(rel, rel.SourceContentType, rel.TargetContentType)
 	}
+
 	return result, nil
 }
 
@@ -346,7 +359,7 @@ func (s *RelationService) GetTypeRelationsForType(ctx context.Context, contentTy
 // Populate Support (for query builder)
 // =============================================================================
 
-// PopulateRelations populates relation fields on entries
+// PopulateRelations populates relation fields on entries.
 func (s *RelationService) PopulateRelations(ctx context.Context, entries []*schema.ContentEntry, fieldSlugs []string) error {
 	if len(entries) == 0 || len(fieldSlugs) == 0 {
 		return nil
@@ -366,6 +379,7 @@ func (s *RelationService) PopulateRelations(ctx context.Context, entries []*sche
 						forge.F("field", fieldSlug),
 						forge.F("error", err.Error()))
 				}
+
 				continue
 			}
 
@@ -375,6 +389,7 @@ func (s *RelationService) PopulateRelations(ctx context.Context, entries []*sche
 					relatedEntries = append(relatedEntries, rel.TargetEntry)
 				}
 			}
+
 			entry.PopulatedRelations[fieldSlug] = relatedEntries
 		}
 	}
@@ -382,7 +397,7 @@ func (s *RelationService) PopulateRelations(ctx context.Context, entries []*sche
 	return nil
 }
 
-// PopulateRelationsMap returns populated relations as a map of field -> entries
+// PopulateRelationsMap returns populated relations as a map of field -> entries.
 func (s *RelationService) PopulateRelationsMap(ctx context.Context, entryID xid.ID, fieldSlugs []string) (map[string][]*core.ContentEntrySummaryDTO, error) {
 	result := make(map[string][]*core.ContentEntrySummaryDTO)
 
@@ -398,6 +413,7 @@ func (s *RelationService) PopulateRelationsMap(ctx context.Context, entryID xid.
 				entries = append(entries, s.entryToSummaryDTO(rel.TargetEntry))
 			}
 		}
+
 		result[fieldSlug] = entries
 	}
 
@@ -408,7 +424,7 @@ func (s *RelationService) PopulateRelationsMap(ctx context.Context, entryID xid.
 // Helper Methods
 // =============================================================================
 
-// checkCircularRelation checks for circular relations
+// checkCircularRelation checks for circular relations.
 func (s *RelationService) checkCircularRelation(ctx context.Context, sourceID, targetID xid.ID, fieldSlug string, visited map[xid.ID]bool) error {
 	if visited == nil {
 		visited = make(map[xid.ID]bool)
@@ -442,11 +458,12 @@ func (s *RelationService) checkCircularRelation(ctx context.Context, sourceID, t
 	return nil
 }
 
-// entryToSummaryDTO converts a schema entry to summary DTO
+// entryToSummaryDTO converts a schema entry to summary DTO.
 func (s *RelationService) entryToSummaryDTO(entry *schema.ContentEntry) *core.ContentEntrySummaryDTO {
 	if entry == nil {
 		return nil
 	}
+
 	return &core.ContentEntrySummaryDTO{
 		ID:        entry.ID.String(),
 		Status:    entry.Status,
@@ -456,7 +473,7 @@ func (s *RelationService) entryToSummaryDTO(entry *schema.ContentEntry) *core.Co
 	}
 }
 
-// typeRelationToDTO converts a schema type relation to DTO
+// typeRelationToDTO converts a schema type relation to DTO.
 func (s *RelationService) typeRelationToDTO(rel *schema.ContentTypeRelation, source, target *schema.ContentType) *core.TypeRelationDTO {
 	if rel == nil {
 		return nil
@@ -477,6 +494,7 @@ func (s *RelationService) typeRelationToDTO(rel *schema.ContentTypeRelation, sou
 		dto.SourceContentTypeName = source.Name
 		dto.SourceContentTypeName = source.Name
 	}
+
 	if target != nil {
 		dto.TargetContentTypeName = target.Name
 		dto.TargetContentTypeName = target.Name

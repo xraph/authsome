@@ -8,7 +8,7 @@ import (
 )
 
 // ContentTypesListDynamic renders a dynamic content types list using bridge functions
-// This demonstrates how to use the CMS bridge functions from the frontend
+// This demonstrates how to use the CMS bridge functions from the frontend.
 func ContentTypesListDynamic(currentApp *app.App, basePath string) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 
@@ -171,7 +171,7 @@ func ContentTypesListDynamic(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// EntriesListDynamic renders a dynamic entries list using bridge functions
+// EntriesListDynamic renders a dynamic entries list using bridge functions.
 func EntriesListDynamic(currentApp *app.App, basePath string, typeName string) g.Node {
 	appBase := basePath + "/app/" + currentApp.ID.String()
 	typeBase := appBase + "/cms/types/" + typeName

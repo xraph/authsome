@@ -22,18 +22,21 @@ func main() {
 
 	// Get test data
 	var userID xid.ID
+
 	err := db.NewSelect().Table("users").Column("id").Limit(1).Scan(ctx, &userID)
 	if err != nil {
 		log.Fatalf("Failed to get user: %v", err)
 	}
 
 	var roleID xid.ID
+
 	err = db.NewSelect().Table("roles").Column("id").Where("name = ?", "superadmin").Limit(1).Scan(ctx, &roleID)
 	if err != nil {
 		log.Fatalf("Failed to get role: %v", err)
 	}
 
 	var orgID xid.ID
+
 	err = db.NewSelect().Table("organizations").Column("id").Where("is_platform = true").Limit(1).Scan(ctx, &orgID)
 	if err != nil {
 		log.Fatalf("Failed to get org: %v", err)
@@ -49,9 +52,9 @@ func main() {
 
 	// Verify
 	var count int
+
 	err = db.NewSelect().Table("user_roles").ColumnExpr("COUNT(*)").Scan(ctx, &count)
 	if err != nil {
 		log.Fatalf("Failed to count user_roles: %v", err)
 	}
-
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/table"
 )
 
-// InvitationsPage renders the organization invitations management page
+// InvitationsPage renders the organization invitations management page.
 func InvitationsPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -133,7 +133,7 @@ func InvitationsPage(currentApp *app.App, orgID, basePath string) g.Node {
 	)
 }
 
-// invitationsPageData returns the Alpine.js data object
+// invitationsPageData returns the Alpine.js data object.
 func invitationsPageData(appID, orgID string) string {
 	return fmt.Sprintf(`{
 		invitations: [],
@@ -214,7 +214,7 @@ func invitationsPageData(appID, orgID string) string {
 	}`, appID, orgID, appID, orgID)
 }
 
-// invitationsTable renders the invitations table
+// invitationsTable renders the invitations table.
 func invitationsTable() g.Node {
 	return table.Table()(
 		table.TableHeader()(
@@ -308,7 +308,7 @@ func invitationsTable() g.Node {
 	)
 }
 
-// cancelInvitationModal renders the cancel invitation confirmation modal
+// cancelInvitationModal renders the cancel invitation confirmation modal.
 func cancelInvitationModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showCancelModal"),

@@ -10,14 +10,14 @@ import (
 	"github.com/xraph/forge"
 )
 
-// PermissionMiddleware provides middleware for automatic permission checking on routes
+// PermissionMiddleware provides middleware for automatic permission checking on routes.
 type PermissionMiddleware struct {
 	service *Service
 	config  PermissionMiddlewareConfig
 	logger  forge.Logger
 }
 
-// PermissionMiddlewareConfig configures the permission middleware behavior
+// PermissionMiddlewareConfig configures the permission middleware behavior.
 type PermissionMiddlewareConfig struct {
 	// ResourceType is the type of resource being protected (e.g., "document", "project")
 	ResourceType string
@@ -40,10 +40,10 @@ type PermissionMiddlewareConfig struct {
 	SkipIfNoUser bool
 
 	// CustomContext provides additional context for the permission check
-	CustomContext map[string]interface{}
+	CustomContext map[string]any
 }
 
-// NewPermissionMiddleware creates a new permission middleware
+// NewPermissionMiddleware creates a new permission middleware.
 func NewPermissionMiddleware(service *Service, config PermissionMiddlewareConfig, logger forge.Logger) *PermissionMiddleware {
 	return &PermissionMiddleware{
 		service: service,
@@ -52,7 +52,7 @@ func NewPermissionMiddleware(service *Service, config PermissionMiddlewareConfig
 	}
 }
 
-// Middleware returns the forge middleware function
+// Middleware returns the forge middleware function.
 func (m *PermissionMiddleware) Middleware() func(next forge.Handler) forge.Handler {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
@@ -82,6 +82,7 @@ func (m *PermissionMiddleware) Middleware() func(next forge.Handler) forge.Handl
 				if m.config.SkipIfNoUser {
 					return next(c)
 				}
+
 				if !m.config.AllowAnonymous {
 					return c.JSON(http.StatusUnauthorized, errs.New("USER_REQUIRED", "Authentication required", http.StatusUnauthorized))
 				}
@@ -98,10 +99,10 @@ func (m *PermissionMiddleware) Middleware() func(next forge.Handler) forge.Handl
 				ResourceType: m.config.ResourceType,
 				ResourceID:   resourceID,
 				Action:       m.config.Action,
-				Principal: map[string]interface{}{
+				Principal: map[string]any{
 					"id": userID.String(),
 				},
-				Resource: map[string]interface{}{
+				Resource: map[string]any{
 					"type": m.config.ResourceType,
 					"id":   resourceID,
 				},
@@ -120,6 +121,7 @@ func (m *PermissionMiddleware) Middleware() func(next forge.Handler) forge.Handl
 					forge.F("resource_type", m.config.ResourceType),
 					forge.F("action", m.config.Action),
 				)
+
 				return c.JSON(http.StatusInternalServerError, errs.InternalError(err))
 			}
 
@@ -128,6 +130,7 @@ func (m *PermissionMiddleware) Middleware() func(next forge.Handler) forge.Handl
 				if m.config.DenyHandler != nil {
 					return m.config.DenyHandler(c)
 				}
+
 				return c.JSON(http.StatusForbidden, errs.PermissionDenied(m.config.Action, m.config.ResourceType))
 			}
 
@@ -137,11 +140,11 @@ func (m *PermissionMiddleware) Middleware() func(next forge.Handler) forge.Handl
 	}
 }
 
-// PermissionMiddlewareFunc is the middleware function type
+// PermissionMiddlewareFunc is the middleware function type.
 type PermissionMiddlewareFunc func(next forge.Handler) forge.Handler
 
 // RequirePermission creates a permission-checking middleware for specific resource type and action
-// This is a convenience function for common use cases
+// This is a convenience function for common use cases.
 func (p *Plugin) RequirePermission(resourceType, action string) PermissionMiddlewareFunc {
 	return NewPermissionMiddleware(p.service, PermissionMiddlewareConfig{
 		ResourceType: resourceType,
@@ -149,7 +152,7 @@ func (p *Plugin) RequirePermission(resourceType, action string) PermissionMiddle
 	}, p.logger).Middleware()
 }
 
-// RequirePermissionWithID creates a middleware that checks permission for a specific resource instance
+// RequirePermissionWithID creates a middleware that checks permission for a specific resource instance.
 func (p *Plugin) RequirePermissionWithID(resourceType, action, resourceIDParam string) PermissionMiddlewareFunc {
 	return NewPermissionMiddleware(p.service, PermissionMiddlewareConfig{
 		ResourceType:    resourceType,
@@ -158,13 +161,13 @@ func (p *Plugin) RequirePermissionWithID(resourceType, action, resourceIDParam s
 	}, p.logger).Middleware()
 }
 
-// RequirePermissionWithConfig creates a middleware with full configuration
+// RequirePermissionWithConfig creates a middleware with full configuration.
 func (p *Plugin) RequirePermissionWithConfig(config PermissionMiddlewareConfig) PermissionMiddlewareFunc {
 	return NewPermissionMiddleware(p.service, config, p.logger).Middleware()
 }
 
 // RequireOwnership creates a middleware that requires the user to own the resource
-// This is a common pattern for user-owned resources
+// This is a common pattern for user-owned resources.
 func (p *Plugin) RequireOwnership(resourceType, resourceIDParam string) PermissionMiddlewareFunc {
 	return NewPermissionMiddleware(p.service, PermissionMiddlewareConfig{
 		ResourceType:    resourceType,
@@ -173,28 +176,28 @@ func (p *Plugin) RequireOwnership(resourceType, resourceIDParam string) Permissi
 	}, p.logger).Middleware()
 }
 
-// RequireRead creates a middleware that requires read permission
+// RequireRead creates a middleware that requires read permission.
 func (p *Plugin) RequireRead(resourceType string) PermissionMiddlewareFunc {
 	return p.RequirePermission(resourceType, "read")
 }
 
-// RequireWrite creates a middleware that requires write permission
+// RequireWrite creates a middleware that requires write permission.
 func (p *Plugin) RequireWrite(resourceType string) PermissionMiddlewareFunc {
 	return p.RequirePermission(resourceType, "write")
 }
 
-// RequireDelete creates a middleware that requires delete permission
+// RequireDelete creates a middleware that requires delete permission.
 func (p *Plugin) RequireDelete(resourceType string) PermissionMiddlewareFunc {
 	return p.RequirePermission(resourceType, "delete")
 }
 
-// RequireAdmin creates a middleware that requires admin permission on a resource type
+// RequireAdmin creates a middleware that requires admin permission on a resource type.
 func (p *Plugin) RequireAdmin(resourceType string) PermissionMiddlewareFunc {
 	return p.RequirePermission(resourceType, "admin")
 }
 
 // CheckPermission is a helper that evaluates a permission check inline without middleware
-// Useful for conditional permission checks within handlers
+// Useful for conditional permission checks within handlers.
 func (p *Plugin) CheckPermission(c forge.Context, resourceType, action, resourceID string) (bool, error) {
 	ctx := c.Request().Context()
 
@@ -213,10 +216,10 @@ func (p *Plugin) CheckPermission(c forge.Context, resourceType, action, resource
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		Action:       action,
-		Principal: map[string]interface{}{
+		Principal: map[string]any{
 			"id": userID.String(),
 		},
-		Resource: map[string]interface{}{
+		Resource: map[string]any{
 			"type": resourceType,
 			"id":   resourceID,
 		},

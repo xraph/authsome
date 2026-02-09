@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/table"
 )
 
-// OrganizationsListPage renders the organizations list page with dynamic data loading
+// OrganizationsListPage renders the organizations list page with dynamic data loading.
 func OrganizationsListPage(currentApp *app.App, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 
@@ -105,7 +105,7 @@ func OrganizationsListPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// organizationsListData returns the Alpine.js data object for organizations list
+// organizationsListData returns the Alpine.js data object for organizations list.
 func organizationsListData(appID string) string {
 	return fmt.Sprintf(`{
 		organizations: [],
@@ -158,7 +158,7 @@ func organizationsListData(appID string) string {
 	}`, appID)
 }
 
-// organizationsTable renders the organizations table with Alpine.js templating using ForgeUI
+// organizationsTable renders the organizations table with Alpine.js templating using ForgeUI.
 func organizationsTable(appBase string) g.Node {
 	return table.Table()(
 		table.TableHeader()(

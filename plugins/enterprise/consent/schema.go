@@ -7,184 +7,184 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// ConsentRecord tracks user consent for various purposes
+// ConsentRecord tracks user consent for various purposes.
 type ConsentRecord struct {
 	bun.BaseModel `bun:"table:consent_records,alias:cr"`
 
-	ID             xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID         string     `json:"userId" bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string     `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	ConsentType    string     `json:"consentType" bun:"consent_type,notnull"` // cookies, marketing, analytics, terms, privacy, data_processing
-	Purpose        string     `json:"purpose" bun:"purpose,notnull"`          // specific purpose description
-	Granted        bool       `json:"granted" bun:"granted,notnull"`
-	Version        string     `json:"version" bun:"version,notnull"` // version of policy/terms
-	IPAddress      string     `json:"ipAddress" bun:"ip_address"`
-	UserAgent      string     `json:"userAgent" bun:"user_agent"`
-	Metadata       JSONBMap   `json:"metadata" bun:"metadata,type:jsonb"`
-	ExpiresAt      *time.Time `json:"expiresAt,omitempty" bun:"expires_at"` // consent expiry
-	GrantedAt      time.Time  `json:"grantedAt" bun:"granted_at,notnull"`
-	RevokedAt      *time.Time `json:"revokedAt,omitempty" bun:"revoked_at"`
-	CreatedAt      time.Time  `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt      time.Time  `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID             xid.ID     `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	UserID         string     `bun:"user_id,notnull,type:varchar(20)"             json:"userId"`
+	OrganizationID string     `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	ConsentType    string     `bun:"consent_type,notnull"                         json:"consentType"` // cookies, marketing, analytics, terms, privacy, data_processing
+	Purpose        string     `bun:"purpose,notnull"                              json:"purpose"`     // specific purpose description
+	Granted        bool       `bun:"granted,notnull"                              json:"granted"`
+	Version        string     `bun:"version,notnull"                              json:"version"` // version of policy/terms
+	IPAddress      string     `bun:"ip_address"                                   json:"ipAddress"`
+	UserAgent      string     `bun:"user_agent"                                   json:"userAgent"`
+	Metadata       JSONBMap   `bun:"metadata,type:jsonb"                          json:"metadata"`
+	ExpiresAt      *time.Time `bun:"expires_at"                                   json:"expiresAt,omitempty"` // consent expiry
+	GrantedAt      time.Time  `bun:"granted_at,notnull"                           json:"grantedAt"`
+	RevokedAt      *time.Time `bun:"revoked_at"                                   json:"revokedAt,omitempty"`
+	CreatedAt      time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt      time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// ConsentPolicy defines consent policies per organization
+// ConsentPolicy defines consent policies per organization.
 type ConsentPolicy struct {
 	bun.BaseModel `bun:"table:consent_policies,alias:cp"`
 
-	ID             xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID string     `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	ConsentType    string     `json:"consentType" bun:"consent_type,notnull"`
-	Name           string     `json:"name" bun:"name,notnull"`
-	Description    string     `json:"description" bun:"description"`
-	Version        string     `json:"version" bun:"version,notnull"`
-	Content        string     `json:"content" bun:"content,type:text"`                // Full policy text
-	Required       bool       `json:"required" bun:"required"`                        // Block access if not granted
-	Renewable      bool       `json:"renewable" bun:"renewable"`                      // Allow re-consent
-	ValidityPeriod *int       `json:"validityPeriod,omitempty" bun:"validity_period"` // Days until re-consent required
-	Active         bool       `json:"active" bun:"active,notnull,default:true"`
-	PublishedAt    *time.Time `json:"publishedAt,omitempty" bun:"published_at"`
-	Metadata       JSONBMap   `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedBy      string     `json:"createdBy" bun:"created_by,type:varchar(20)"`
-	CreatedAt      time.Time  `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt      time.Time  `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID             xid.ID     `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	OrganizationID string     `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	ConsentType    string     `bun:"consent_type,notnull"                         json:"consentType"`
+	Name           string     `bun:"name,notnull"                                 json:"name"`
+	Description    string     `bun:"description"                                  json:"description"`
+	Version        string     `bun:"version,notnull"                              json:"version"`
+	Content        string     `bun:"content,type:text"                            json:"content"`                  // Full policy text
+	Required       bool       `bun:"required"                                     json:"required"`                 // Block access if not granted
+	Renewable      bool       `bun:"renewable"                                    json:"renewable"`                // Allow re-consent
+	ValidityPeriod *int       `bun:"validity_period"                              json:"validityPeriod,omitempty"` // Days until re-consent required
+	Active         bool       `bun:"active,notnull,default:true"                  json:"active"`
+	PublishedAt    *time.Time `bun:"published_at"                                 json:"publishedAt,omitempty"`
+	Metadata       JSONBMap   `bun:"metadata,type:jsonb"                          json:"metadata"`
+	CreatedBy      string     `bun:"created_by,type:varchar(20)"                  json:"createdBy"`
+	CreatedAt      time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt      time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// DataProcessingAgreement tracks DPA acceptance
+// DataProcessingAgreement tracks DPA acceptance.
 type DataProcessingAgreement struct {
 	bun.BaseModel `bun:"table:data_processing_agreements,alias:dpa"`
 
-	ID               xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID   string     `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	AgreementType    string     `json:"agreementType" bun:"agreement_type,notnull"` // dpa, baa, ccpa, gdpr
-	Version          string     `json:"version" bun:"version,notnull"`
-	Content          string     `json:"content" bun:"content,type:text"`
-	SignedBy         string     `json:"signedBy" bun:"signed_by,type:varchar(20)"` // User ID who signed
-	SignedByName     string     `json:"signedByName" bun:"signed_by_name"`
-	SignedByTitle    string     `json:"signedByTitle" bun:"signed_by_title"`
-	SignedByEmail    string     `json:"signedByEmail" bun:"signed_by_email"`
-	IPAddress        string     `json:"ipAddress" bun:"ip_address"`
-	DigitalSignature string     `json:"digitalSignature" bun:"digital_signature,type:text"` // Cryptographic signature
-	EffectiveDate    time.Time  `json:"effectiveDate" bun:"effective_date,notnull"`
-	ExpiryDate       *time.Time `json:"expiryDate,omitempty" bun:"expiry_date"`
-	Status           string     `json:"status" bun:"status,notnull"` // active, expired, revoked
-	Metadata         JSONBMap   `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt        time.Time  `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt        time.Time  `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID               xid.ID     `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	OrganizationID   string     `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	AgreementType    string     `bun:"agreement_type,notnull"                       json:"agreementType"` // dpa, baa, ccpa, gdpr
+	Version          string     `bun:"version,notnull"                              json:"version"`
+	Content          string     `bun:"content,type:text"                            json:"content"`
+	SignedBy         string     `bun:"signed_by,type:varchar(20)"                   json:"signedBy"` // User ID who signed
+	SignedByName     string     `bun:"signed_by_name"                               json:"signedByName"`
+	SignedByTitle    string     `bun:"signed_by_title"                              json:"signedByTitle"`
+	SignedByEmail    string     `bun:"signed_by_email"                              json:"signedByEmail"`
+	IPAddress        string     `bun:"ip_address"                                   json:"ipAddress"`
+	DigitalSignature string     `bun:"digital_signature,type:text"                  json:"digitalSignature"` // Cryptographic signature
+	EffectiveDate    time.Time  `bun:"effective_date,notnull"                       json:"effectiveDate"`
+	ExpiryDate       *time.Time `bun:"expiry_date"                                  json:"expiryDate,omitempty"`
+	Status           string     `bun:"status,notnull"                               json:"status"` // active, expired, revoked
+	Metadata         JSONBMap   `bun:"metadata,type:jsonb"                          json:"metadata"`
+	CreatedAt        time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt        time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// ConsentAuditLog provides immutable audit trail for consent changes
+// ConsentAuditLog provides immutable audit trail for consent changes.
 type ConsentAuditLog struct {
 	bun.BaseModel `bun:"table:consent_audit_logs,alias:cal"`
 
-	ID             xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID         string    `json:"userId" bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID string    `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	ConsentID      string    `json:"consentId" bun:"consent_id,type:varchar(20)"` // Reference to consent record
-	Action         string    `json:"action" bun:"action,notnull"`                 // granted, revoked, updated, expired
-	ConsentType    string    `json:"consentType" bun:"consent_type,notnull"`
-	Purpose        string    `json:"purpose" bun:"purpose"`
-	PreviousValue  JSONBMap  `json:"previousValue" bun:"previous_value,type:jsonb"`
-	NewValue       JSONBMap  `json:"newValue" bun:"new_value,type:jsonb"`
-	IPAddress      string    `json:"ipAddress" bun:"ip_address"`
-	UserAgent      string    `json:"userAgent" bun:"user_agent"`
-	Reason         string    `json:"reason" bun:"reason"` // Reason for change
-	CreatedAt      time.Time `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
+	ID             xid.ID    `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	UserID         string    `bun:"user_id,notnull,type:varchar(20)"             json:"userId"`
+	OrganizationID string    `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	ConsentID      string    `bun:"consent_id,type:varchar(20)"                  json:"consentId"` // Reference to consent record
+	Action         string    `bun:"action,notnull"                               json:"action"`    // granted, revoked, updated, expired
+	ConsentType    string    `bun:"consent_type,notnull"                         json:"consentType"`
+	Purpose        string    `bun:"purpose"                                      json:"purpose"`
+	PreviousValue  JSONBMap  `bun:"previous_value,type:jsonb"                    json:"previousValue"`
+	NewValue       JSONBMap  `bun:"new_value,type:jsonb"                         json:"newValue"`
+	IPAddress      string    `bun:"ip_address"                                   json:"ipAddress"`
+	UserAgent      string    `bun:"user_agent"                                   json:"userAgent"`
+	Reason         string    `bun:"reason"                                       json:"reason"` // Reason for change
+	CreatedAt      time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
 }
 
-// CookieConsent tracks cookie consent preferences
+// CookieConsent tracks cookie consent preferences.
 type CookieConsent struct {
 	bun.BaseModel `bun:"table:cookie_consents,alias:cc"`
 
-	ID                   xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID               string    `json:"userId" bun:"user_id,type:varchar(20)"` // Nullable for anonymous users
-	OrganizationID       string    `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	SessionID            string    `json:"sessionId" bun:"session_id"`                     // Track anonymous sessions
-	Essential            bool      `json:"essential" bun:"essential,notnull,default:true"` // Always true
-	Functional           bool      `json:"functional" bun:"functional"`
-	Analytics            bool      `json:"analytics" bun:"analytics"`
-	Marketing            bool      `json:"marketing" bun:"marketing"`
-	Personalization      bool      `json:"personalization" bun:"personalization"`
-	ThirdParty           bool      `json:"thirdParty" bun:"third_party"`
-	IPAddress            string    `json:"ipAddress" bun:"ip_address"`
-	UserAgent            string    `json:"userAgent" bun:"user_agent"`
-	ConsentBannerVersion string    `json:"consentBannerVersion" bun:"consent_banner_version"`
-	ExpiresAt            time.Time `json:"expiresAt" bun:"expires_at,notnull"`
-	CreatedAt            time.Time `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt            time.Time `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID                   xid.ID    `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	UserID               string    `bun:"user_id,type:varchar(20)"                     json:"userId"` // Nullable for anonymous users
+	OrganizationID       string    `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	SessionID            string    `bun:"session_id"                                   json:"sessionId"` // Track anonymous sessions
+	Essential            bool      `bun:"essential,notnull,default:true"               json:"essential"` // Always true
+	Functional           bool      `bun:"functional"                                   json:"functional"`
+	Analytics            bool      `bun:"analytics"                                    json:"analytics"`
+	Marketing            bool      `bun:"marketing"                                    json:"marketing"`
+	Personalization      bool      `bun:"personalization"                              json:"personalization"`
+	ThirdParty           bool      `bun:"third_party"                                  json:"thirdParty"`
+	IPAddress            string    `bun:"ip_address"                                   json:"ipAddress"`
+	UserAgent            string    `bun:"user_agent"                                   json:"userAgent"`
+	ConsentBannerVersion string    `bun:"consent_banner_version"                       json:"consentBannerVersion"`
+	ExpiresAt            time.Time `bun:"expires_at,notnull"                           json:"expiresAt"`
+	CreatedAt            time.Time `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt            time.Time `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// DataExportRequest tracks GDPR data export requests
+// DataExportRequest tracks GDPR data export requests.
 type DataExportRequest struct {
 	bun.BaseModel `bun:"table:data_export_requests,alias:der"`
 
-	ID              xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID          string     `json:"userId" bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID  string     `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	Status          string     `json:"status" bun:"status,notnull"`                        // pending, processing, completed, failed
-	Format          string     `json:"format" bun:"format,notnull"`                        // json, csv, xml
-	IncludeSections []string   `json:"includeSections" bun:"include_sections,type:text[]"` // profile, sessions, consents, audit
-	ExportURL       string     `json:"exportUrl" bun:"export_url"`
-	ExportPath      string     `json:"exportPath" bun:"export_path"`
-	ExportSize      int64      `json:"exportSize" bun:"export_size"`         // bytes
-	ExpiresAt       *time.Time `json:"expiresAt,omitempty" bun:"expires_at"` // URL expiry
-	IPAddress       string     `json:"ipAddress" bun:"ip_address"`
-	CompletedAt     *time.Time `json:"completedAt,omitempty" bun:"completed_at"`
-	ErrorMessage    string     `json:"errorMessage,omitempty" bun:"error_message"`
-	CreatedAt       time.Time  `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt       time.Time  `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID              xid.ID     `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	UserID          string     `bun:"user_id,notnull,type:varchar(20)"             json:"userId"`
+	OrganizationID  string     `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	Status          string     `bun:"status,notnull"                               json:"status"`          // pending, processing, completed, failed
+	Format          string     `bun:"format,notnull"                               json:"format"`          // json, csv, xml
+	IncludeSections []string   `bun:"include_sections,type:text[]"                 json:"includeSections"` // profile, sessions, consents, audit
+	ExportURL       string     `bun:"export_url"                                   json:"exportUrl"`
+	ExportPath      string     `bun:"export_path"                                  json:"exportPath"`
+	ExportSize      int64      `bun:"export_size"                                  json:"exportSize"`          // bytes
+	ExpiresAt       *time.Time `bun:"expires_at"                                   json:"expiresAt,omitempty"` // URL expiry
+	IPAddress       string     `bun:"ip_address"                                   json:"ipAddress"`
+	CompletedAt     *time.Time `bun:"completed_at"                                 json:"completedAt,omitempty"`
+	ErrorMessage    string     `bun:"error_message"                                json:"errorMessage,omitempty"`
+	CreatedAt       time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt       time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// DataDeletionRequest tracks GDPR right to be forgotten requests
+// DataDeletionRequest tracks GDPR right to be forgotten requests.
 type DataDeletionRequest struct {
 	bun.BaseModel `bun:"table:data_deletion_requests,alias:ddr"`
 
-	ID              xid.ID     `json:"id" bun:"id,pk,type:varchar(20)"`
-	UserID          string     `json:"userId" bun:"user_id,notnull,type:varchar(20)"`
-	OrganizationID  string     `json:"organizationId" bun:"organization_id,notnull,type:varchar(20)"`
-	Status          string     `json:"status" bun:"status,notnull"` // pending, approved, processing, completed, rejected
-	RequestReason   string     `json:"requestReason" bun:"request_reason,type:text"`
-	RetentionExempt bool       `json:"retentionExempt" bun:"retention_exempt"` // Legal hold or other exemption
-	ExemptionReason string     `json:"exemptionReason" bun:"exemption_reason"`
-	DeleteSections  []string   `json:"deleteSections" bun:"delete_sections,type:text[]"` // all, profile, sessions, consents
-	IPAddress       string     `json:"ipAddress" bun:"ip_address"`
-	ApprovedBy      string     `json:"approvedBy" bun:"approved_by,type:varchar(20)"` // Admin who approved
-	ApprovedAt      *time.Time `json:"approvedAt,omitempty" bun:"approved_at"`
-	CompletedAt     *time.Time `json:"completedAt,omitempty" bun:"completed_at"`
-	RejectedAt      *time.Time `json:"rejectedAt,omitempty" bun:"rejected_at"`
-	ErrorMessage    string     `json:"errorMessage,omitempty" bun:"error_message"`
-	ArchivePath     string     `json:"archivePath" bun:"archive_path"` // Backup before deletion
-	CreatedAt       time.Time  `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt       time.Time  `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID              xid.ID     `bun:"id,pk,type:varchar(20)"                       json:"id"`
+	UserID          string     `bun:"user_id,notnull,type:varchar(20)"             json:"userId"`
+	OrganizationID  string     `bun:"organization_id,notnull,type:varchar(20)"     json:"organizationId"`
+	Status          string     `bun:"status,notnull"                               json:"status"` // pending, approved, processing, completed, rejected
+	RequestReason   string     `bun:"request_reason,type:text"                     json:"requestReason"`
+	RetentionExempt bool       `bun:"retention_exempt"                             json:"retentionExempt"` // Legal hold or other exemption
+	ExemptionReason string     `bun:"exemption_reason"                             json:"exemptionReason"`
+	DeleteSections  []string   `bun:"delete_sections,type:text[]"                  json:"deleteSections"` // all, profile, sessions, consents
+	IPAddress       string     `bun:"ip_address"                                   json:"ipAddress"`
+	ApprovedBy      string     `bun:"approved_by,type:varchar(20)"                 json:"approvedBy"` // Admin who approved
+	ApprovedAt      *time.Time `bun:"approved_at"                                  json:"approvedAt,omitempty"`
+	CompletedAt     *time.Time `bun:"completed_at"                                 json:"completedAt,omitempty"`
+	RejectedAt      *time.Time `bun:"rejected_at"                                  json:"rejectedAt,omitempty"`
+	ErrorMessage    string     `bun:"error_message"                                json:"errorMessage,omitempty"`
+	ArchivePath     string     `bun:"archive_path"                                 json:"archivePath"` // Backup before deletion
+	CreatedAt       time.Time  `bun:"created_at,notnull,default:current_timestamp" json:"createdAt"`
+	UpdatedAt       time.Time  `bun:"updated_at,notnull,default:current_timestamp" json:"updatedAt"`
 }
 
-// PrivacySettings stores per-organization privacy configurations
+// PrivacySettings stores per-organization privacy configurations.
 type PrivacySettings struct {
 	bun.BaseModel `bun:"table:privacy_settings,alias:ps"`
 
-	ID                              xid.ID    `json:"id" bun:"id,pk,type:varchar(20)"`
-	OrganizationID                  string    `json:"organizationId" bun:"organization_id,notnull,unique,type:varchar(20)"`
-	ConsentRequired                 bool      `json:"consentRequired" bun:"consent_required,notnull,default:true"`
-	CookieConsentEnabled            bool      `json:"cookieConsentEnabled" bun:"cookie_consent_enabled,notnull,default:true"`
-	CookieConsentStyle              string    `json:"cookieConsentStyle" bun:"cookie_consent_style"` // banner, modal, popup
-	DataRetentionDays               int       `json:"dataRetentionDays" bun:"data_retention_days"`
-	AnonymousConsentEnabled         bool      `json:"anonymousConsentEnabled" bun:"anonymous_consent_enabled"`
-	GDPRMode                        bool      `json:"gdprMode" bun:"gdpr_mode,notnull,default:false"`
-	CCPAMode                        bool      `json:"ccpaMode" bun:"ccpa_mode,notnull,default:false"`
-	AutoDeleteAfterDays             int       `json:"autoDeleteAfterDays" bun:"auto_delete_after_days"`
-	RequireExplicitConsent          bool      `json:"requireExplicitConsent" bun:"require_explicit_consent"` // No implied consent
-	AllowDataPortability            bool      `json:"allowDataPortability" bun:"allow_data_portability,notnull,default:true"`
-	ExportFormat                    []string  `json:"exportFormat" bun:"export_format,type:text[]"` // json, csv, xml
-	DataExportExpiryHours           int       `json:"dataExportExpiryHours" bun:"data_export_expiry_hours"`
-	RequireAdminApprovalForDeletion bool      `json:"requireAdminApprovalForDeletion" bun:"require_admin_approval_for_deletion"`
-	DeletionGracePeriodDays         int       `json:"deletionGracePeriodDays" bun:"deletion_grace_period_days"`
-	ContactEmail                    string    `json:"contactEmail" bun:"contact_email"`
-	ContactPhone                    string    `json:"contactPhone" bun:"contact_phone"`
-	DPOEmail                        string    `json:"dpoEmail" bun:"dpo_email"` // Data Protection Officer
-	Metadata                        JSONBMap  `json:"metadata" bun:"metadata,type:jsonb"`
-	CreatedAt                       time.Time `json:"createdAt" bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt                       time.Time `json:"updatedAt" bun:"updated_at,notnull,default:current_timestamp"`
+	ID                              xid.ID    `bun:"id,pk,type:varchar(20)"                          json:"id"`
+	OrganizationID                  string    `bun:"organization_id,notnull,unique,type:varchar(20)" json:"organizationId"`
+	ConsentRequired                 bool      `bun:"consent_required,notnull,default:true"           json:"consentRequired"`
+	CookieConsentEnabled            bool      `bun:"cookie_consent_enabled,notnull,default:true"     json:"cookieConsentEnabled"`
+	CookieConsentStyle              string    `bun:"cookie_consent_style"                            json:"cookieConsentStyle"` // banner, modal, popup
+	DataRetentionDays               int       `bun:"data_retention_days"                             json:"dataRetentionDays"`
+	AnonymousConsentEnabled         bool      `bun:"anonymous_consent_enabled"                       json:"anonymousConsentEnabled"`
+	GDPRMode                        bool      `bun:"gdpr_mode,notnull,default:false"                 json:"gdprMode"`
+	CCPAMode                        bool      `bun:"ccpa_mode,notnull,default:false"                 json:"ccpaMode"`
+	AutoDeleteAfterDays             int       `bun:"auto_delete_after_days"                          json:"autoDeleteAfterDays"`
+	RequireExplicitConsent          bool      `bun:"require_explicit_consent"                        json:"requireExplicitConsent"` // No implied consent
+	AllowDataPortability            bool      `bun:"allow_data_portability,notnull,default:true"     json:"allowDataPortability"`
+	ExportFormat                    []string  `bun:"export_format,type:text[]"                       json:"exportFormat"` // json, csv, xml
+	DataExportExpiryHours           int       `bun:"data_export_expiry_hours"                        json:"dataExportExpiryHours"`
+	RequireAdminApprovalForDeletion bool      `bun:"require_admin_approval_for_deletion"             json:"requireAdminApprovalForDeletion"`
+	DeletionGracePeriodDays         int       `bun:"deletion_grace_period_days"                      json:"deletionGracePeriodDays"`
+	ContactEmail                    string    `bun:"contact_email"                                   json:"contactEmail"`
+	ContactPhone                    string    `bun:"contact_phone"                                   json:"contactPhone"`
+	DPOEmail                        string    `bun:"dpo_email"                                       json:"dpoEmail"` // Data Protection Officer
+	Metadata                        JSONBMap  `bun:"metadata,type:jsonb"                             json:"metadata"`
+	CreatedAt                       time.Time `bun:"created_at,notnull,default:current_timestamp"    json:"createdAt"`
+	UpdatedAt                       time.Time `bun:"updated_at,notnull,default:current_timestamp"    json:"updatedAt"`
 }
 
-// JSONBMap is a helper type for JSONB fields
-type JSONBMap map[string]interface{}
+// JSONBMap is a helper type for JSONB fields.
+type JSONBMap map[string]any

@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-// GeoProvider defines the interface for geolocation providers
+// GeoProvider defines the interface for geolocation providers.
 type GeoProvider interface {
 	Lookup(ctx context.Context, ip string) (*GeoData, error)
 	Name() string
 }
 
-// GeoData represents geolocation information
+// GeoData represents geolocation information.
 type GeoData struct {
 	IPAddress    string
 	Country      string
@@ -31,14 +31,14 @@ type GeoData struct {
 	Provider     string
 }
 
-// MaxMindProvider implements GeoProvider using MaxMind GeoIP2
+// MaxMindProvider implements GeoProvider using MaxMind GeoIP2.
 type MaxMindProvider struct {
 	licenseKey   string
 	databasePath string
 	client       *http.Client
 }
 
-// NewMaxMindProvider creates a new MaxMind provider
+// NewMaxMindProvider creates a new MaxMind provider.
 func NewMaxMindProvider(licenseKey, databasePath string) *MaxMindProvider {
 	return &MaxMindProvider{
 		licenseKey:   licenseKey,
@@ -59,12 +59,14 @@ func (p *MaxMindProvider) Lookup(ctx context.Context, ip string) (*GeoData, erro
 	if p.databasePath != "" {
 		return p.lookupLocal(ctx, ip)
 	}
+
 	return p.lookupAPI(ctx, ip)
 }
 
 func (p *MaxMindProvider) lookupAPI(ctx context.Context, ip string) (*GeoData, error) {
-	url := fmt.Sprintf("https://geoip.maxmind.com/geoip/v2.1/city/%s", ip)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	url := "https://geoip.maxmind.com/geoip/v2.1/city/" + ip
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -140,13 +142,13 @@ func (p *MaxMindProvider) lookupLocal(ctx context.Context, ip string) (*GeoData,
 	return p.lookupAPI(ctx, ip)
 }
 
-// IPAPIProvider implements GeoProvider using ipapi.com
+// IPAPIProvider implements GeoProvider using ipapi.com.
 type IPAPIProvider struct {
 	apiKey string
 	client *http.Client
 }
 
-// NewIPAPIProvider creates a new ipapi.com provider
+// NewIPAPIProvider creates a new ipapi.com provider.
 func NewIPAPIProvider(apiKey string) *IPAPIProvider {
 	return &IPAPIProvider{
 		apiKey: apiKey,
@@ -163,7 +165,7 @@ func (p *IPAPIProvider) Name() string {
 func (p *IPAPIProvider) Lookup(ctx context.Context, ip string) (*GeoData, error) {
 	url := fmt.Sprintf("https://api.ipapi.com/%s?access_key=%s", ip, p.apiKey)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -176,6 +178,7 @@ func (p *IPAPIProvider) Lookup(ctx context.Context, ip string) (*GeoData, error)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("ipapi returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -214,13 +217,13 @@ func (p *IPAPIProvider) Lookup(ctx context.Context, ip string) (*GeoData, error)
 	}, nil
 }
 
-// IPInfoProvider implements GeoProvider using ipinfo.io
+// IPInfoProvider implements GeoProvider using ipinfo.io.
 type IPInfoProvider struct {
 	token  string
 	client *http.Client
 }
 
-// NewIPInfoProvider creates a new ipinfo.io provider
+// NewIPInfoProvider creates a new ipinfo.io provider.
 func NewIPInfoProvider(token string) *IPInfoProvider {
 	return &IPInfoProvider{
 		token: token,
@@ -237,7 +240,7 @@ func (p *IPInfoProvider) Name() string {
 func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error) {
 	url := fmt.Sprintf("https://ipinfo.io/%s?token=%s", ip, p.token)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -250,6 +253,7 @@ func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("ipinfo returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -270,8 +274,11 @@ func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error
 	fmt.Sscanf(result.Loc, "%f,%f", &lat, &lon)
 
 	// Parse ASN and org
-	var asn string
-	var org string
+	var (
+		asn string
+		org string
+	)
+
 	fmt.Sscanf(result.Org, "%s %s", &asn, &org)
 
 	return &GeoData{
@@ -289,13 +296,13 @@ func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error
 	}, nil
 }
 
-// IPGeolocationProvider implements GeoProvider using ipgeolocation.io
+// IPGeolocationProvider implements GeoProvider using ipgeolocation.io.
 type IPGeolocationProvider struct {
 	apiKey string
 	client *http.Client
 }
 
-// NewIPGeolocationProvider creates a new ipgeolocation.io provider
+// NewIPGeolocationProvider creates a new ipgeolocation.io provider.
 func NewIPGeolocationProvider(apiKey string) *IPGeolocationProvider {
 	return &IPGeolocationProvider{
 		apiKey: apiKey,
@@ -312,7 +319,7 @@ func (p *IPGeolocationProvider) Name() string {
 func (p *IPGeolocationProvider) Lookup(ctx context.Context, ip string) (*GeoData, error) {
 	url := fmt.Sprintf("https://api.ipgeolocation.io/ipgeo?apiKey=%s&ip=%s", p.apiKey, ip)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -325,6 +332,7 @@ func (p *IPGeolocationProvider) Lookup(ctx context.Context, ip string) (*GeoData
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("ipgeolocation returned status %d: %s", resp.StatusCode, string(body))
 	}
 

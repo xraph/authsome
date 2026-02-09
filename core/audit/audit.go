@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Event represents an audit trail record DTO
-// This is separate from schema.AuditEvent to maintain proper separation of concerns
+// This is separate from schema.AuditEvent to maintain proper separation of concerns.
 type Event struct {
 	ID             xid.ID      `json:"id"`
 	AppID          xid.ID      `json:"appId"`
@@ -30,7 +30,7 @@ type Event struct {
 	UpdatedAt      time.Time   `json:"updatedAt"`
 }
 
-// ToSchema converts the Event DTO to a schema.AuditEvent model
+// ToSchema converts the Event DTO to a schema.AuditEvent model.
 func (e *Event) ToSchema() *schema.AuditEvent {
 	// Ensure auditable fields satisfy NOT NULL constraints
 	createdBy := e.ID
@@ -59,7 +59,7 @@ func (e *Event) ToSchema() *schema.AuditEvent {
 	}
 }
 
-// FromSchemaEvent converts a schema.AuditEvent model to Event DTO
+// FromSchemaEvent converts a schema.AuditEvent model to Event DTO.
 func FromSchemaEvent(ae *schema.AuditEvent) *Event {
 	if ae == nil {
 		return nil
@@ -82,12 +82,13 @@ func FromSchemaEvent(ae *schema.AuditEvent) *Event {
 	}
 }
 
-// FromSchemaEvents converts a slice of schema.AuditEvent to Event DTOs
+// FromSchemaEvents converts a slice of schema.AuditEvent to Event DTOs.
 func FromSchemaEvents(events []*schema.AuditEvent) []*Event {
 	result := make([]*Event, len(events))
 	for i, e := range events {
 		result[i] = FromSchemaEvent(e)
 	}
+
 	return result
 }
 
@@ -95,48 +96,48 @@ func FromSchemaEvents(events []*schema.AuditEvent) []*Event {
 // REQUEST/RESPONSE TYPES
 // =============================================================================
 
-// CreateEventRequest represents a request to create an audit event
+// CreateEventRequest represents a request to create an audit event.
 type CreateEventRequest struct {
 	AppID          xid.ID       `json:"appId,omitempty"`          // Optional - will be read from context if not provided
 	OrganizationID *xid.ID      `json:"organizationId,omitempty"` // Optional - user-created organization
 	EnvironmentID  *xid.ID      `json:"environmentId,omitempty"`  // Optional - will be read from context if not provided
 	UserID         *xid.ID      `json:"userId,omitempty"`
-	Action         string       `json:"action" validate:"required"`
-	Resource       string       `json:"resource" validate:"required"`
+	Action         string       `json:"action"                   validate:"required"`
+	Resource       string       `json:"resource"                 validate:"required"`
 	Source         *AuditSource `json:"source,omitempty"` // Optional - defaults to 'application' if not provided
 	IPAddress      string       `json:"ipAddress,omitempty"`
 	UserAgent      string       `json:"userAgent,omitempty"`
 	Metadata       string       `json:"metadata,omitempty"`
 }
 
-// CreateEventResponse represents the response after creating an audit event
+// CreateEventResponse represents the response after creating an audit event.
 type CreateEventResponse struct {
 	Event *Event `json:"event"`
 }
 
-// GetEventRequest represents a request to get an audit event by ID
+// GetEventRequest represents a request to get an audit event by ID.
 type GetEventRequest struct {
 	ID xid.ID `json:"id" validate:"required"`
 }
 
-// GetEventResponse represents the response for getting an audit event
+// GetEventResponse represents the response for getting an audit event.
 type GetEventResponse struct {
 	Event *Event `json:"event"`
 }
 
-// ListEventsResponse represents a paginated list of audit events
+// ListEventsResponse represents a paginated list of audit events.
 type ListEventsResponse = pagination.PageResponse[*Event]
 
 // =============================================================================
 // COUNT REQUEST/RESPONSE
 // =============================================================================
 
-// CountEventsRequest represents a request to count audit events
+// CountEventsRequest represents a request to count audit events.
 type CountEventsRequest struct {
 	Filter *ListEventsFilter `json:"filter,omitempty"`
 }
 
-// CountEventsResponse represents the response for counting audit events
+// CountEventsResponse represents the response for counting audit events.
 type CountEventsResponse struct {
 	Count int64 `json:"count"`
 }
@@ -145,13 +146,13 @@ type CountEventsResponse struct {
 // DELETE REQUEST/RESPONSE
 // =============================================================================
 
-// DeleteOlderThanRequest represents a request to delete old audit events
+// DeleteOlderThanRequest represents a request to delete old audit events.
 type DeleteOlderThanRequest struct {
-	Before time.Time     `json:"before" validate:"required"`
+	Before time.Time     `json:"before"           validate:"required"`
 	Filter *DeleteFilter `json:"filter,omitempty"`
 }
 
-// DeleteOlderThanResponse represents the response for deleting audit events
+// DeleteOlderThanResponse represents the response for deleting audit events.
 type DeleteOlderThanResponse struct {
 	DeletedCount int64 `json:"deletedCount"`
 }
@@ -160,34 +161,34 @@ type DeleteOlderThanResponse struct {
 // STATISTICS REQUEST/RESPONSE
 // =============================================================================
 
-// GetStatisticsByActionRequest represents a request to get action statistics
+// GetStatisticsByActionRequest represents a request to get action statistics.
 type GetStatisticsByActionRequest struct {
 	Filter *StatisticsFilter `json:"filter,omitempty"`
 }
 
-// GetStatisticsByActionResponse represents the response for action statistics
+// GetStatisticsByActionResponse represents the response for action statistics.
 type GetStatisticsByActionResponse struct {
 	Statistics []*ActionStatistic `json:"statistics"`
 	Total      int64              `json:"total"`
 }
 
-// GetStatisticsByResourceRequest represents a request to get resource statistics
+// GetStatisticsByResourceRequest represents a request to get resource statistics.
 type GetStatisticsByResourceRequest struct {
 	Filter *StatisticsFilter `json:"filter,omitempty"`
 }
 
-// GetStatisticsByResourceResponse represents the response for resource statistics
+// GetStatisticsByResourceResponse represents the response for resource statistics.
 type GetStatisticsByResourceResponse struct {
 	Statistics []*ResourceStatistic `json:"statistics"`
 	Total      int64                `json:"total"`
 }
 
-// GetStatisticsByUserRequest represents a request to get user statistics
+// GetStatisticsByUserRequest represents a request to get user statistics.
 type GetStatisticsByUserRequest struct {
 	Filter *StatisticsFilter `json:"filter,omitempty"`
 }
 
-// GetStatisticsByUserResponse represents the response for user statistics
+// GetStatisticsByUserResponse represents the response for user statistics.
 type GetStatisticsByUserResponse struct {
 	Statistics []*UserStatistic `json:"statistics"`
 	Total      int64            `json:"total"`
@@ -197,12 +198,12 @@ type GetStatisticsByUserResponse struct {
 // OLDEST EVENT REQUEST/RESPONSE
 // =============================================================================
 
-// GetOldestEventRequest represents a request to get the oldest event
+// GetOldestEventRequest represents a request to get the oldest event.
 type GetOldestEventRequest struct {
 	Filter *ListEventsFilter `json:"filter,omitempty"`
 }
 
-// GetOldestEventResponse represents the response for the oldest event
+// GetOldestEventResponse represents the response for the oldest event.
 type GetOldestEventResponse struct {
 	Event *Event `json:"event,omitempty"`
 }

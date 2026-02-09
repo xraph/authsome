@@ -10,12 +10,12 @@ import (
 	repo "github.com/xraph/authsome/repository"
 )
 
-// RevokeTokenService handles RFC 7009 token revocation operations
+// RevokeTokenService handles RFC 7009 token revocation operations.
 type RevokeTokenService struct {
 	tokenRepo *repo.OAuthTokenRepository
 }
 
-// NewRevokeTokenService creates a new token revocation service
+// NewRevokeTokenService creates a new token revocation service.
 func NewRevokeTokenService(tokenRepo *repo.OAuthTokenRepository) *RevokeTokenService {
 	return &RevokeTokenService{
 		tokenRepo: tokenRepo,
@@ -23,7 +23,7 @@ func NewRevokeTokenService(tokenRepo *repo.OAuthTokenRepository) *RevokeTokenSer
 }
 
 // RevokeToken implements RFC 7009 token revocation
-// Returns nil even if token doesn't exist (per RFC 7009 spec)
+// Returns nil even if token doesn't exist (per RFC 7009 spec).
 func (s *RevokeTokenService) RevokeToken(ctx context.Context, req *TokenRevocationRequest) error {
 	if req.Token == "" {
 		return errs.BadRequest("token parameter is required")
@@ -59,7 +59,7 @@ func (s *RevokeTokenService) RevokeToken(ctx context.Context, req *TokenRevocati
 	return nil
 }
 
-// RevokeByJTI revokes a token by its JWT ID
+// RevokeByJTI revokes a token by its JWT ID.
 func (s *RevokeTokenService) RevokeByJTI(ctx context.Context, jti string) error {
 	if jti == "" {
 		return errs.BadRequest("jti parameter is required")
@@ -69,14 +69,15 @@ func (s *RevokeTokenService) RevokeByJTI(ctx context.Context, jti string) error 
 }
 
 // AuthenticateClient performs client authentication for the revocation endpoint
-// Supports client_secret_basic and client_secret_post methods
+// Supports client_secret_basic and client_secret_post methods.
 func (s *RevokeTokenService) AuthenticateClient(r *http.Request, clientRepo *repo.OAuthClientRepository) (*ClientAuthResult, error) {
 	ctx := r.Context()
 
 	// Try HTTP Basic Authentication first (client_secret_basic)
 	if auth := r.Header.Get("Authorization"); auth != "" {
-		if strings.HasPrefix(auth, "Basic ") {
-			encoded := strings.TrimPrefix(auth, "Basic ")
+		if after, ok := strings.CutPrefix(auth, "Basic "); ok {
+			encoded := after
+
 			decoded, err := base64.StdEncoding.DecodeString(encoded)
 			if err != nil {
 				return nil, errs.Unauthorized()
@@ -94,6 +95,7 @@ func (s *RevokeTokenService) AuthenticateClient(r *http.Request, clientRepo *rep
 			if err != nil {
 				return nil, errs.InternalError(err)
 			}
+
 			if client == nil || client.ClientSecret != clientSecret {
 				return nil, errs.Unauthorized()
 			}
@@ -124,6 +126,7 @@ func (s *RevokeTokenService) AuthenticateClient(r *http.Request, clientRepo *rep
 		if err != nil {
 			return nil, errs.InternalError(err)
 		}
+
 		if client == nil {
 			return nil, errs.Unauthorized()
 		}
@@ -145,6 +148,7 @@ func (s *RevokeTokenService) AuthenticateClient(r *http.Request, clientRepo *rep
 	if err != nil {
 		return nil, errs.InternalError(err)
 	}
+
 	if client == nil || client.ClientSecret != clientSecret {
 		return nil, errs.Unauthorized()
 	}

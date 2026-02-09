@@ -10,13 +10,15 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ForgotPasswordPage renders the forgot password page
+// ForgotPasswordPage renders the forgot password page.
 func (p *PagesManager) ForgotPasswordPage(ctx *router.PageContext) (g.Node, error) {
 	errorParam := ctx.Query("error")
 	successParam := ctx.Query("success")
 
-	var errorMessage string
-	var successMessage string
+	var (
+		errorMessage   string
+		successMessage string
+	)
 
 	switch errorParam {
 	case "invalid_email":

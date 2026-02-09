@@ -12,18 +12,18 @@ import (
 // Input/Output Types
 // =============================================================================
 
-// GetStatsInput is the input for getting overall statistics
+// GetStatsInput is the input for getting overall statistics.
 type GetStatsInput struct {
 	AppID  string `json:"appId"`
 	Period string `json:"period,omitempty"` // today, week, month, year, all
 }
 
-// GetStatsOutput is the output for getting overall statistics
+// GetStatsOutput is the output for getting overall statistics.
 type GetStatsOutput struct {
 	Data OverallStatsDTO `json:"data"`
 }
 
-// OverallStatsDTO represents overall OAuth/OIDC statistics
+// OverallStatsDTO represents overall OAuth/OIDC statistics.
 type OverallStatsDTO struct {
 	ClientCount          int64           `json:"clientCount"`
 	ActiveTokens         int64           `json:"activeTokens"`
@@ -35,20 +35,20 @@ type OverallStatsDTO struct {
 	TopClients           []TopClientDTO  `json:"topClients"`
 }
 
-// TokensByTypeDTO represents token counts by type
+// TokensByTypeDTO represents token counts by type.
 type TokensByTypeDTO struct {
 	AccessTokens  int64 `json:"accessTokens"`
 	RefreshTokens int64 `json:"refreshTokens"`
 	IDTokens      int64 `json:"idTokens"`
 }
 
-// TimeSeriesDTO represents a time series data point
+// TimeSeriesDTO represents a time series data point.
 type TimeSeriesDTO struct {
 	Timestamp time.Time `json:"timestamp"`
 	Count     int64     `json:"count"`
 }
 
-// TopClientDTO represents a client with token count
+// TopClientDTO represents a client with token count.
 type TopClientDTO struct {
 	ClientID   string `json:"clientId"`
 	ClientName string `json:"clientName"`
@@ -59,7 +59,7 @@ type TopClientDTO struct {
 // Bridge Functions
 // =============================================================================
 
-// GetStats retrieves overall OAuth/OIDC statistics
+// GetStats retrieves overall OAuth/OIDC statistics.
 func (bm *BridgeManager) GetStats(ctx bridge.Context, input GetStatsInput) (*GetStatsOutput, error) {
 	goCtx, _, appID, err := bm.buildContextWithAppID(ctx, input.AppID)
 	if err != nil {
@@ -71,7 +71,9 @@ func (bm *BridgeManager) GetStats(ctx bridge.Context, input GetStatsInput) (*Get
 
 	// Determine time range based on period
 	var since time.Time
+
 	now := time.Now()
+
 	switch input.Period {
 	case "today":
 		since = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -134,6 +136,7 @@ func (bm *BridgeManager) GetStats(ctx bridge.Context, input GetStatsInput) (*Get
 
 	// Get tokens issued over time (last 30 days, daily)
 	tokensOverTime := make([]TimeSeriesDTO, 0)
+
 	if input.Period == "month" || input.Period == "all" || input.Period == "" {
 		for i := 29; i >= 0; i-- {
 			day := now.AddDate(0, 0, -i)
@@ -150,6 +153,7 @@ func (bm *BridgeManager) GetStats(ctx bridge.Context, input GetStatsInput) (*Get
 
 	// Get top clients by token count
 	topClients := make([]TopClientDTO, 0)
+
 	clients, _ := bm.clientRepo.ListByAppAndEnv(goCtx, appID, envID, 1, 5) // Top 5
 	for _, client := range clients {
 		tokenCount, _ := bm.tokenRepo.CountByClientID(goCtx, client.ClientID)

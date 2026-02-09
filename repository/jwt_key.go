@@ -11,25 +11,27 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// JWTKeyRepository handles JWT key database operations
+// JWTKeyRepository handles JWT key database operations.
 type JWTKeyRepository struct {
 	db *bun.DB
 }
 
-// NewJWTKeyRepository creates a new JWT key repository
+// NewJWTKeyRepository creates a new JWT key repository.
 func NewJWTKeyRepository(db *bun.DB) *JWTKeyRepository {
 	return &JWTKeyRepository{db: db}
 }
 
-// CreateJWTKey creates a new JWT key
+// CreateJWTKey creates a new JWT key.
 func (r *JWTKeyRepository) CreateJWTKey(ctx context.Context, key *schema.JWTKey) error {
 	_, err := r.db.NewInsert().Model(key).Exec(ctx)
+
 	return err
 }
 
-// FindJWTKeyByID finds a JWT key by ID
+// FindJWTKeyByID finds a JWT key by ID.
 func (r *JWTKeyRepository) FindJWTKeyByID(ctx context.Context, id xid.ID) (*schema.JWTKey, error) {
 	key := &schema.JWTKey{}
+
 	err := r.db.NewSelect().
 		Model(key).
 		Where("id = ?", id).
@@ -38,12 +40,14 @@ func (r *JWTKeyRepository) FindJWTKeyByID(ctx context.Context, id xid.ID) (*sche
 	if err != nil {
 		return nil, err
 	}
+
 	return key, nil
 }
 
-// FindJWTKeyByKeyID finds a JWT key by key ID and app ID
+// FindJWTKeyByKeyID finds a JWT key by key ID and app ID.
 func (r *JWTKeyRepository) FindJWTKeyByKeyID(ctx context.Context, keyID string, appID xid.ID) (*schema.JWTKey, error) {
 	key := &schema.JWTKey{}
+
 	err := r.db.NewSelect().
 		Model(key).
 		Where("key_id = ?", keyID).
@@ -54,12 +58,14 @@ func (r *JWTKeyRepository) FindJWTKeyByKeyID(ctx context.Context, keyID string, 
 	if err != nil {
 		return nil, err
 	}
+
 	return key, nil
 }
 
-// FindPlatformJWTKeyByKeyID finds a platform JWT key by key ID
+// FindPlatformJWTKeyByKeyID finds a platform JWT key by key ID.
 func (r *JWTKeyRepository) FindPlatformJWTKeyByKeyID(ctx context.Context, keyID string) (*schema.JWTKey, error) {
 	key := &schema.JWTKey{}
+
 	err := r.db.NewSelect().
 		Model(key).
 		Where("key_id = ?", keyID).
@@ -70,10 +76,11 @@ func (r *JWTKeyRepository) FindPlatformJWTKeyByKeyID(ctx context.Context, keyID 
 	if err != nil {
 		return nil, err
 	}
+
 	return key, nil
 }
 
-// ListJWTKeys lists JWT keys with pagination and filtering
+// ListJWTKeys lists JWT keys with pagination and filtering.
 func (r *JWTKeyRepository) ListJWTKeys(ctx context.Context, filter *jwt.ListJWTKeysFilter) (*pagination.PageResponse[*schema.JWTKey], error) {
 	var keys []*schema.JWTKey
 
@@ -100,12 +107,15 @@ func (r *JWTKeyRepository) ListJWTKeys(ctx context.Context, filter *jwt.ListJWTK
 	if !filter.AppID.IsNil() {
 		countQuery = countQuery.Where("app_id = ?", filter.AppID)
 	}
+
 	if filter.IsPlatformKey != nil {
 		countQuery = countQuery.Where("is_platform_key = ?", *filter.IsPlatformKey)
 	}
+
 	if filter.Active != nil {
 		countQuery = countQuery.Where("active = ?", *filter.Active)
 	}
+
 	total, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, err
@@ -127,7 +137,7 @@ func (r *JWTKeyRepository) ListJWTKeys(ctx context.Context, filter *jwt.ListJWTK
 	return pagination.NewPageResponse(keys, int64(total), &filter.PaginationParams), nil
 }
 
-// ListPlatformJWTKeys lists platform JWT keys with pagination
+// ListPlatformJWTKeys lists platform JWT keys with pagination.
 func (r *JWTKeyRepository) ListPlatformJWTKeys(ctx context.Context, filter *jwt.ListJWTKeysFilter) (*pagination.PageResponse[*schema.JWTKey], error) {
 	var keys []*schema.JWTKey
 
@@ -150,6 +160,7 @@ func (r *JWTKeyRepository) ListPlatformJWTKeys(ctx context.Context, filter *jwt.
 	if filter.Active != nil {
 		countQuery = countQuery.Where("active = ?", *filter.Active)
 	}
+
 	total, err := countQuery.Count(ctx)
 	if err != nil {
 		return nil, err
@@ -171,7 +182,7 @@ func (r *JWTKeyRepository) ListPlatformJWTKeys(ctx context.Context, filter *jwt.
 	return pagination.NewPageResponse(keys, int64(total), &filter.PaginationParams), nil
 }
 
-// UpdateJWTKey updates a JWT key
+// UpdateJWTKey updates a JWT key.
 func (r *JWTKeyRepository) UpdateJWTKey(ctx context.Context, key *schema.JWTKey) error {
 	key.UpdatedAt = time.Now()
 	_, err := r.db.NewUpdate().
@@ -179,10 +190,11 @@ func (r *JWTKeyRepository) UpdateJWTKey(ctx context.Context, key *schema.JWTKey)
 		Where("id = ?", key.ID).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// UpdateJWTKeyUsage updates the usage statistics for a JWT key
+// UpdateJWTKeyUsage updates the usage statistics for a JWT key.
 func (r *JWTKeyRepository) UpdateJWTKeyUsage(ctx context.Context, keyID string) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -192,10 +204,11 @@ func (r *JWTKeyRepository) UpdateJWTKeyUsage(ctx context.Context, keyID string) 
 		Where("key_id = ?", keyID).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// DeactivateJWTKey deactivates a JWT key
+// DeactivateJWTKey deactivates a JWT key.
 func (r *JWTKeyRepository) DeactivateJWTKey(ctx context.Context, id xid.ID) error {
 	_, err := r.db.NewUpdate().
 		Model((*schema.JWTKey)(nil)).
@@ -204,10 +217,11 @@ func (r *JWTKeyRepository) DeactivateJWTKey(ctx context.Context, id xid.ID) erro
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// DeleteJWTKey soft deletes a JWT key
+// DeleteJWTKey soft deletes a JWT key.
 func (r *JWTKeyRepository) DeleteJWTKey(ctx context.Context, id xid.ID) error {
 	now := time.Now()
 	_, err := r.db.NewUpdate().
@@ -217,12 +231,14 @@ func (r *JWTKeyRepository) DeleteJWTKey(ctx context.Context, id xid.ID) error {
 		Where("id = ?", id).
 		Where("deleted_at IS NULL").
 		Exec(ctx)
+
 	return err
 }
 
-// CleanupExpiredJWTKeys removes expired JWT keys
+// CleanupExpiredJWTKeys removes expired JWT keys.
 func (r *JWTKeyRepository) CleanupExpiredJWTKeys(ctx context.Context) (int64, error) {
 	now := time.Now()
+
 	result, err := r.db.NewDelete().
 		Model((*schema.JWTKey)(nil)).
 		Where("expires_at IS NOT NULL").
@@ -232,16 +248,19 @@ func (r *JWTKeyRepository) CleanupExpiredJWTKeys(ctx context.Context) (int64, er
 	if err != nil {
 		return 0, err
 	}
+
 	count, err := result.RowsAffected()
+
 	return count, err
 }
 
-// CountJWTKeys counts JWT keys for an app
+// CountJWTKeys counts JWT keys for an app.
 func (r *JWTKeyRepository) CountJWTKeys(ctx context.Context, appID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.JWTKey)(nil)).
 		Where("app_id = ?", appID).
 		Where("deleted_at IS NULL").
 		Count(ctx)
+
 	return count, err
 }

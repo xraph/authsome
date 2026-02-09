@@ -8,23 +8,23 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Service manages user devices
+// Service manages user devices.
 type Service struct {
 	repo         Repository
-	hookRegistry interface{} // Hook registry for lifecycle events
+	hookRegistry any // Hook registry for lifecycle events
 }
 
-// NewService creates a new device service
+// NewService creates a new device service.
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
-// SetHookRegistry sets the hook registry for executing lifecycle hooks
-func (s *Service) SetHookRegistry(registry interface{}) {
+// SetHookRegistry sets the hook registry for executing lifecycle hooks.
+func (s *Service) SetHookRegistry(registry any) {
 	s.hookRegistry = registry
 }
 
-// TrackDevice creates or updates a device record
+// TrackDevice creates or updates a device record.
 func (s *Service) TrackDevice(ctx context.Context, appID, userID xid.ID, fingerprint, userAgent, ip string) (*Device, error) {
 	// Validate fingerprint
 	if fingerprint == "" {
@@ -89,7 +89,7 @@ func (s *Service) TrackDevice(ctx context.Context, appID, userID xid.ID, fingerp
 	return device, nil
 }
 
-// ListDevices returns devices for a user with pagination
+// ListDevices returns devices for a user with pagination.
 func (s *Service) ListDevices(ctx context.Context, filter *ListDevicesFilter) (*ListDevicesResponse, error) {
 	// Get paginated results from repository (returns schema types)
 	pageResp, err := s.repo.ListDevices(ctx, filter)
@@ -107,7 +107,7 @@ func (s *Service) ListDevices(ctx context.Context, filter *ListDevicesFilter) (*
 	}, nil
 }
 
-// GetDevice retrieves a device by ID
+// GetDevice retrieves a device by ID.
 func (s *Service) GetDevice(ctx context.Context, id xid.ID) (*Device, error) {
 	deviceSchema, err := s.repo.FindDeviceByID(ctx, id)
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *Service) GetDevice(ctx context.Context, id xid.ID) (*Device, error) {
 	return FromSchemaDevice(deviceSchema), nil
 }
 
-// GetDeviceByFingerprint retrieves a device by user ID and fingerprint
+// GetDeviceByFingerprint retrieves a device by user ID and fingerprint.
 func (s *Service) GetDeviceByFingerprint(ctx context.Context, userID xid.ID, fingerprint string) (*Device, error) {
 	if fingerprint == "" {
 		return nil, InvalidFingerprint()
@@ -131,7 +131,7 @@ func (s *Service) GetDeviceByFingerprint(ctx context.Context, userID xid.ID, fin
 	return FromSchemaDevice(deviceSchema), nil
 }
 
-// RevokeDevice deletes a device record for a user by fingerprint
+// RevokeDevice deletes a device record for a user by fingerprint.
 func (s *Service) RevokeDevice(ctx context.Context, userID xid.ID, fingerprint string) error {
 	if fingerprint == "" {
 		return InvalidFingerprint()
@@ -144,7 +144,7 @@ func (s *Service) RevokeDevice(ctx context.Context, userID xid.ID, fingerprint s
 	return nil
 }
 
-// RevokeDeviceByID deletes a device record by ID
+// RevokeDeviceByID deletes a device record by ID.
 func (s *Service) RevokeDeviceByID(ctx context.Context, id xid.ID) error {
 	// Get device details before deletion for hook
 	deviceSchema, err := s.repo.FindDeviceByID(ctx, id)
@@ -153,6 +153,7 @@ func (s *Service) RevokeDeviceByID(ctx context.Context, id xid.ID) error {
 	}
 
 	userID := deviceSchema.UserID
+
 	deviceName := deviceSchema.UserAgent
 	if len(deviceName) > 50 {
 		deviceName = deviceName[:50] + "..."
@@ -174,7 +175,7 @@ func (s *Service) RevokeDeviceByID(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// CountUserDevices returns the count of devices for a user
+// CountUserDevices returns the count of devices for a user.
 func (s *Service) CountUserDevices(ctx context.Context, userID xid.ID) (int, error) {
 	return s.repo.CountDevices(ctx, userID)
 }

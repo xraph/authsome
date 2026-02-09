@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/rs/xid"
 
@@ -9,47 +10,46 @@ import (
 	"github.com/xraph/authsome/plugins/cms/schema"
 )
 
-// EntryValidator validates content entry data against content type schema
+// EntryValidator validates content entry data against content type schema.
 type EntryValidator struct {
 	contentType *schema.ContentType
 	fields      map[string]*schema.ContentField
 }
 
-// NewEntryValidator creates a new entry validator for a content type
+// NewEntryValidator creates a new entry validator for a content type.
 func NewEntryValidator(contentType *schema.ContentType) *EntryValidator {
 	fields := make(map[string]*schema.ContentField)
 	for _, f := range contentType.Fields {
 		fields[f.Name] = f
 	}
+
 	return &EntryValidator{
 		contentType: contentType,
 		fields:      fields,
 	}
 }
 
-// ValidateCreate validates entry data for creation
-func (v *EntryValidator) ValidateCreate(data map[string]interface{}) *core.ValidationResult {
+// ValidateCreate validates entry data for creation.
+func (v *EntryValidator) ValidateCreate(data map[string]any) *core.ValidationResult {
 	return v.validateData(data, nil)
 }
 
-// ValidateUpdate validates entry data for update
-func (v *EntryValidator) ValidateUpdate(data map[string]interface{}, existingEntry *schema.ContentEntry) *core.ValidationResult {
+// ValidateUpdate validates entry data for update.
+func (v *EntryValidator) ValidateUpdate(data map[string]any, existingEntry *schema.ContentEntry) *core.ValidationResult {
 	// Merge existing data with new data
-	mergedData := make(map[string]interface{})
+	mergedData := make(map[string]any)
+
 	if existingEntry != nil {
-		for k, v := range existingEntry.Data {
-			mergedData[k] = v
-		}
+		maps.Copy(mergedData, existingEntry.Data)
 	}
-	for k, v := range data {
-		mergedData[k] = v
-	}
+
+	maps.Copy(mergedData, data)
 
 	return v.validateData(mergedData, existingEntry)
 }
 
-// validateData validates data against all fields
-func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry *schema.ContentEntry) *core.ValidationResult {
+// validateData validates data against all fields.
+func (v *EntryValidator) validateData(data map[string]any, existingEntry *schema.ContentEntry) *core.ValidationResult {
 	result := &core.ValidationResult{Valid: true}
 
 	// Validate each field defined in the content type
@@ -68,6 +68,7 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 		if field.Type == "oneOf" {
 			// Get the discriminator field value from data
 			discriminatorValue := ""
+
 			if options.DiscriminatorField != "" {
 				if discVal, ok := data[options.DiscriminatorField]; ok {
 					discriminatorValue = fmt.Sprint(discVal)
@@ -76,7 +77,7 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 
 			// Validate oneOf with discriminator
 			if value != nil {
-				objValue, ok := value.(map[string]interface{})
+				objValue, ok := value.(map[string]any)
 				if !ok {
 					result.Valid = false
 					result.Errors = append(result.Errors, core.ValidationError{
@@ -84,12 +85,14 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 						Message: "must be an object",
 						Code:    "invalid_type",
 					})
+
 					continue
 				}
 
 				oneOfResult := core.ValidateOneOfWithDiscriminator(objValue, discriminatorValue, options)
 				if !oneOfResult.Valid {
 					result.Valid = false
+
 					for _, err := range oneOfResult.Errors {
 						err.Field = slug
 						result.Errors = append(result.Errors, err)
@@ -103,6 +106,7 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 					Code:    "required",
 				})
 			}
+
 			continue
 		}
 
@@ -119,6 +123,7 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 		fieldResult := fieldValidator.Validate(value)
 		if !fieldResult.Valid {
 			result.Valid = false
+
 			for _, err := range fieldResult.Errors {
 				err.Field = slug
 				result.Errors = append(result.Errors, err)
@@ -137,11 +142,11 @@ func (v *EntryValidator) validateData(data map[string]interface{}, existingEntry
 	return result
 }
 
-// ValidateUniqueConstraints validates unique constraints (needs to be called separately with DB access)
+// ValidateUniqueConstraints validates unique constraints (needs to be called separately with DB access).
 func (v *EntryValidator) ValidateUniqueConstraints(
-	data map[string]interface{},
+	data map[string]any,
 	existingID *xid.ID,
-	checkUnique func(field string, value interface{}, excludeID *xid.ID) (bool, error),
+	checkUnique func(field string, value any, excludeID *xid.ID) (bool, error),
 ) *core.ValidationResult {
 	result := &core.ValidationResult{Valid: true}
 
@@ -163,6 +168,7 @@ func (v *EntryValidator) ValidateUniqueConstraints(
 				Message: "failed to check uniqueness: " + err.Error(),
 				Code:    "unique_check_failed",
 			})
+
 			continue
 		}
 
@@ -179,10 +185,10 @@ func (v *EntryValidator) ValidateUniqueConstraints(
 	return result
 }
 
-// ApplyDefaults applies default values to entry data
-func (v *EntryValidator) ApplyDefaults(data map[string]interface{}) map[string]interface{} {
+// ApplyDefaults applies default values to entry data.
+func (v *EntryValidator) ApplyDefaults(data map[string]any) map[string]any {
 	if data == nil {
-		data = make(map[string]interface{})
+		data = make(map[string]any)
 	}
 
 	for slug, field := range v.fields {
@@ -201,15 +207,16 @@ func (v *EntryValidator) ApplyDefaults(data map[string]interface{}) map[string]i
 	return data
 }
 
-// SanitizeData removes hidden and read-only fields from input data
-func (v *EntryValidator) SanitizeData(data map[string]interface{}) map[string]interface{} {
-	sanitized := make(map[string]interface{})
+// SanitizeData removes hidden and read-only fields from input data.
+func (v *EntryValidator) SanitizeData(data map[string]any) map[string]any {
+	sanitized := make(map[string]any)
 
 	for slug, value := range data {
 		field, exists := v.fields[slug]
 		if !exists {
 			// Allow unknown fields to pass through
 			sanitized[slug] = value
+
 			continue
 		}
 
@@ -224,51 +231,59 @@ func (v *EntryValidator) SanitizeData(data map[string]interface{}) map[string]in
 	return sanitized
 }
 
-// GetFieldsForDisplay returns fields that should be displayed (non-hidden)
+// GetFieldsForDisplay returns fields that should be displayed (non-hidden).
 func (v *EntryValidator) GetFieldsForDisplay() []*schema.ContentField {
 	var visible []*schema.ContentField
+
 	for _, field := range v.contentType.Fields {
 		if !field.Hidden {
 			visible = append(visible, field)
 		}
 	}
+
 	return visible
 }
 
-// GetRequiredFields returns all required fields
+// GetRequiredFields returns all required fields.
 func (v *EntryValidator) GetRequiredFields() []*schema.ContentField {
 	var required []*schema.ContentField
+
 	for _, field := range v.contentType.Fields {
 		if field.Required {
 			required = append(required, field)
 		}
 	}
+
 	return required
 }
 
-// GetSearchableFields returns all fields that can be searched
+// GetSearchableFields returns all fields that can be searched.
 func (v *EntryValidator) GetSearchableFields() []*schema.ContentField {
 	var searchable []*schema.ContentField
+
 	for _, field := range v.contentType.Fields {
 		if field.IsSearchable() {
 			searchable = append(searchable, field)
 		}
 	}
+
 	return searchable
 }
 
-// GetRelationFields returns all relation fields
+// GetRelationFields returns all relation fields.
 func (v *EntryValidator) GetRelationFields() []*schema.ContentField {
 	var relations []*schema.ContentField
+
 	for _, field := range v.contentType.Fields {
 		if field.IsRelation() {
 			relations = append(relations, field)
 		}
 	}
+
 	return relations
 }
 
-// buildOptionsDTO builds a FieldOptionsDTO from schema.FieldOptions
+// buildOptionsDTO builds a FieldOptionsDTO from schema.FieldOptions.
 func (v *EntryValidator) buildOptionsDTO(field *schema.ContentField) *core.FieldOptionsDTO {
 	opts := &core.FieldOptionsDTO{
 		MinLength:        field.Options.MinLength,
@@ -310,7 +325,7 @@ func (v *EntryValidator) buildOptionsDTO(field *schema.ContentField) *core.Field
 	return opts
 }
 
-// ValidationResultToMap converts validation result to error map for API responses
+// ValidationResultToMap converts validation result to error map for API responses.
 func ValidationResultToMap(result *core.ValidationResult) map[string]string {
 	if result.Valid {
 		return nil
@@ -323,5 +338,6 @@ func ValidationResultToMap(result *core.ValidationResult) map[string]string {
 			errors[err.Field] = err.Message
 		}
 	}
+
 	return errors
 }

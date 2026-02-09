@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// MemberService handles member aggregate operations
+// MemberService handles member aggregate operations.
 type MemberService struct {
 	repo         MemberRepository
 	appRepo      AppRepository           // For validation (app exists)
@@ -22,7 +22,7 @@ type MemberService struct {
 	rbacSvc      *rbac.Service
 }
 
-// NewMemberService creates a new member service
+// NewMemberService creates a new member service.
 func NewMemberService(
 	repo MemberRepository,
 	appRepo AppRepository,
@@ -45,7 +45,7 @@ func NewMemberService(
 // RBAC Synchronization Helpers
 // =============================================================================
 
-// getRoleIDByName looks up the Role ID from the roles table
+// getRoleIDByName looks up the Role ID from the roles table.
 func (s *MemberService) getRoleIDByName(ctx context.Context, appID xid.ID, roleName string) (xid.ID, error) {
 	// Map member role names to RBAC role names
 	rbacRoleName := s.mapMemberRoleToRBAC(roleName)
@@ -59,6 +59,7 @@ func (s *MemberService) getRoleIDByName(ctx context.Context, appID xid.ID, roleN
 		if err != nil {
 			return xid.NilID(), fmt.Errorf("role %s not found for app %s: %w", rbacRoleName, appID, err)
 		}
+
 		return role.ID, nil
 	}
 
@@ -67,10 +68,11 @@ func (s *MemberService) getRoleIDByName(ctx context.Context, appID xid.ID, roleN
 	if err != nil {
 		return xid.NilID(), fmt.Errorf("role %s not found for app %s env %s: %w", rbacRoleName, appID, envID, err)
 	}
+
 	return role.ID, nil
 }
 
-// mapMemberRoleToRBAC maps member role strings to RBAC role constants
+// mapMemberRoleToRBAC maps member role strings to RBAC role constants.
 func (s *MemberService) mapMemberRoleToRBAC(memberRole string) string {
 	switch memberRole {
 	case string(MemberRoleOwner):
@@ -84,7 +86,7 @@ func (s *MemberService) mapMemberRoleToRBAC(memberRole string) string {
 	}
 }
 
-// syncRoleToRBAC creates/updates UserRole entry to match member role
+// syncRoleToRBAC creates/updates UserRole entry to match member role.
 func (s *MemberService) syncRoleToRBAC(ctx context.Context, userID, appID xid.ID, roleName string) error {
 	// Get RBAC role ID
 	roleID, err := s.getRoleIDByName(ctx, appID, roleName)
@@ -110,7 +112,7 @@ func (s *MemberService) syncRoleToRBAC(ctx context.Context, userID, appID xid.ID
 }
 
 // assignSuperAdminRole assigns the superadmin role to a user in addition to their member role
-// This gives them full system access as the platform owner
+// This gives them full system access as the platform owner.
 func (s *MemberService) assignSuperAdminRole(ctx context.Context, userID, appID xid.ID) error {
 	// Get environment ID from context
 	envID, ok := contexts.GetEnvironmentID(ctx)
@@ -120,9 +122,11 @@ func (s *MemberService) assignSuperAdminRole(ctx context.Context, userID, appID 
 		if err != nil {
 			return fmt.Errorf("superadmin role not found: %w", err)
 		}
+
 		if err := s.userRoleRepo.Assign(ctx, userID, superAdminRole.ID, appID); err != nil {
 			return fmt.Errorf("failed to assign superadmin role: %w", err)
 		}
+
 		return nil
 	}
 
@@ -145,7 +149,7 @@ func (s *MemberService) assignSuperAdminRole(ctx context.Context, userID, appID 
 // =============================================================================
 
 // CreateMember adds a new member to an app
-// This operation is idempotent - if the member already exists, returns the existing member
+// This operation is idempotent - if the member already exists, returns the existing member.
 func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Member, error) {
 	// 🔥 IDEMPOTENCY CHECK: First check if member already exists
 	existingMember, err := s.repo.FindMember(ctx, member.AppID, member.UserID)
@@ -157,9 +161,11 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 	if member.ID.IsNil() {
 		member.ID = xid.New()
 	}
+
 	if member.Status == "" {
 		member.Status = MemberStatusActive
 	}
+
 	member.CreatedAt = time.Now()
 	member.UpdatedAt = time.Now()
 
@@ -185,6 +191,7 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 	if err := s.syncRoleToRBAC(ctx, member.UserID, member.AppID, string(member.Role)); err != nil {
 		// Rollback member creation on failure
 		s.repo.DeleteMember(ctx, member.ID)
+
 		return nil, fmt.Errorf("failed to sync role to RBAC: %w", err)
 	}
 
@@ -205,28 +212,31 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaMember(memberSchema), nil
 }
 
-// FindMemberByID finds a member by ID
+// FindMemberByID finds a member by ID.
 func (s *MemberService) FindMemberByID(ctx context.Context, id xid.ID) (*Member, error) {
 	memberSchema, err := s.repo.FindMemberByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaMember(memberSchema), nil
 }
 
-// FindMember finds a member by appID and userID
+// FindMember finds a member by appID and userID.
 func (s *MemberService) FindMember(ctx context.Context, appID, userID xid.ID) (*Member, error) {
 	memberSchema, err := s.repo.FindMember(ctx, appID, userID)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaMember(memberSchema), nil
 }
 
-// ListMembers lists members in an app with pagination and filtering
+// ListMembers lists members in an app with pagination and filtering.
 func (s *MemberService) ListMembers(ctx context.Context, filter *ListMembersFilter) (*pagination.PageResponse[*Member], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -240,22 +250,24 @@ func (s *MemberService) ListMembers(ctx context.Context, filter *ListMembersFilt
 
 	// Convert schema members to DTOs
 	members := FromSchemaMembers(response.Data)
+
 	return &pagination.PageResponse[*Member]{
 		Data:       members,
 		Pagination: response.Pagination,
 	}, nil
 }
 
-// GetUserMemberships retrieves all apps where the user is a member
+// GetUserMemberships retrieves all apps where the user is a member.
 func (s *MemberService) GetUserMemberships(ctx context.Context, userID xid.ID) ([]*Member, error) {
 	schemaMembers, err := s.repo.ListMembersByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
+
 	return FromSchemaMembers(schemaMembers), nil
 }
 
-// UpdateMember updates a member
+// UpdateMember updates a member.
 func (s *MemberService) UpdateMember(ctx context.Context, member *Member) error {
 	member.UpdatedAt = time.Now()
 
@@ -280,7 +292,7 @@ func (s *MemberService) UpdateMember(ctx context.Context, member *Member) error 
 	return nil
 }
 
-// DeleteMember deletes a member by ID
+// DeleteMember deletes a member by ID.
 func (s *MemberService) DeleteMember(ctx context.Context, id xid.ID) error {
 	// Get member info before deletion
 	member, err := s.repo.FindMemberByID(ctx, id)
@@ -307,70 +319,79 @@ func (s *MemberService) DeleteMember(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// CountMembers returns total number of members in an app
+// CountMembers returns total number of members in an app.
 func (s *MemberService) CountMembers(ctx context.Context, appID xid.ID) (int, error) {
 	return s.repo.CountMembers(ctx, appID)
 }
 
-// IsUserMember checks if a user is an active member of an app
+// IsUserMember checks if a user is an active member of an app.
 func (s *MemberService) IsUserMember(ctx context.Context, appID, userID xid.ID) (bool, error) {
 	member, err := s.repo.FindMember(ctx, appID, userID)
 	if err != nil {
 		return false, nil // User is not a member (or error occurred)
 	}
+
 	return member != nil && member.Status == MemberStatusActive, nil
 }
 
 // IsOwner checks if a user is the owner of an app
-// This is a convenience method that checks the member role directly
+// This is a convenience method that checks the member role directly.
 func (s *MemberService) IsOwner(ctx context.Context, appID, userID xid.ID) (bool, error) {
 	member, err := s.repo.FindMember(ctx, appID, userID)
 	if err != nil {
 		return false, nil // User is not a member
 	}
+
 	return member != nil && member.Role == schema.MemberRoleOwner && member.Status == schema.MemberStatusActive, nil
 }
 
 // IsAdmin checks if a user is an admin or owner of an app
-// This is a convenience method that checks the member role directly
+// This is a convenience method that checks the member role directly.
 func (s *MemberService) IsAdmin(ctx context.Context, appID, userID xid.ID) (bool, error) {
 	member, err := s.repo.FindMember(ctx, appID, userID)
 	if err != nil {
 		return false, nil // User is not a member
 	}
+
 	if member == nil {
 		return false, nil
 	}
+
 	isAdminOrOwner := (member.Role == schema.MemberRoleOwner || member.Role == schema.MemberRoleAdmin) &&
 		member.Status == schema.MemberStatusActive
+
 	return isAdminOrOwner, nil
 }
 
 // RequireOwner checks if a user is the owner of an app and returns an error if not
-// For RBAC-based checks, use CheckPermission/RequirePermission from rbac.go instead with specific actions
+// For RBAC-based checks, use CheckPermission/RequirePermission from rbac.go instead with specific actions.
 func (s *MemberService) RequireOwner(ctx context.Context, appID, userID xid.ID) error {
 	isOwner, err := s.IsOwner(ctx, appID, userID)
 	if err != nil {
 		return err
 	}
+
 	if !isOwner {
 		return NotOwner()
 	}
+
 	return nil
 }
 
 // RequireAdmin checks if a user is an admin or owner of an app and returns an error if not
-// For RBAC-based checks, use CheckPermission/RequirePermission from rbac.go instead with specific actions
+// For RBAC-based checks, use CheckPermission/RequirePermission from rbac.go instead with specific actions.
 func (s *MemberService) RequireAdmin(ctx context.Context, appID, userID xid.ID) error {
 	isAdmin, err := s.IsAdmin(ctx, appID, userID)
 	if err != nil {
 		return err
 	}
+
 	if !isAdmin {
 		return NotAdmin()
 	}
+
 	return nil
 }
 
-// Type assertion to ensure MemberService implements MemberOperations
+// Type assertion to ensure MemberService implements MemberOperations.
 var _ MemberOperations = (*MemberService)(nil)

@@ -96,12 +96,15 @@ func TestParsePath(t *testing.T) {
 			segments, key, err := ParsePath(tt.path)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParsePath() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if !tt.wantErr {
 				if !reflect.DeepEqual(segments, tt.wantSegments) {
 					t.Errorf("ParsePath() segments = %v, want %v", segments, tt.wantSegments)
 				}
+
 				if key != tt.wantKey {
 					t.Errorf("ParsePath() key = %v, want %v", key, tt.wantKey)
 				}
@@ -367,14 +370,14 @@ func TestExtractFolders(t *testing.T) {
 
 func BenchmarkParsePath(b *testing.B) {
 	path := "database/postgres/credentials/password"
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ParsePath(path)
 	}
 }
 
 func BenchmarkNormalizePath(b *testing.B) {
 	path := "  /DATABASE//PASSWORD/  "
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		NormalizePath(path)
 	}
 }

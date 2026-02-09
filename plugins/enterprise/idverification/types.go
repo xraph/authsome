@@ -12,7 +12,7 @@ import (
 // REQUEST DTOs - V2 Architecture (App → Environment → Organization)
 // =============================================================================
 
-// CreateSessionRequest represents a request to create a verification session
+// CreateSessionRequest represents a request to create a verification session.
 type CreateSessionRequest struct {
 	// V2 Context
 	AppID          xid.ID
@@ -25,15 +25,15 @@ type CreateSessionRequest struct {
 	RequiredChecks []string // document, liveness, age, aml
 	SuccessURL     string
 	CancelURL      string
-	Config         map[string]interface{}
-	Metadata       map[string]interface{}
+	Config         map[string]any
+	Metadata       map[string]any
 
 	// Tracking
 	IPAddress string
 	UserAgent string
 }
 
-// CreateVerificationRequest represents a request to create a verification
+// CreateVerificationRequest represents a request to create a verification.
 type CreateVerificationRequest struct {
 	// V2 Context
 	AppID          xid.ID
@@ -46,39 +46,39 @@ type CreateVerificationRequest struct {
 	ProviderCheckID  string
 	VerificationType string
 	DocumentType     string
-	Metadata         map[string]interface{}
+	Metadata         map[string]any
 
 	// Tracking
 	IPAddress string
 	UserAgent string
 }
 
-// ReverifyRequest represents a request for re-verification
+// ReverifyRequest represents a request for re-verification.
 type ReverifyRequest struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// BlockUserRequest represents admin request to block a user
+// BlockUserRequest represents admin request to block a user.
 type BlockUserRequest struct {
 	Reason string `json:"reason"`
 }
 
-// UnblockUserRequest represents admin request to unblock a user
+// UnblockUserRequest represents admin request to unblock a user.
 type UnblockUserRequest struct {
 	// No fields needed, user ID comes from URL
 }
 
-// CreateSessionHTTPRequest represents the HTTP request body for session creation
+// CreateSessionHTTPRequest represents the HTTP request body for session creation.
 type CreateSessionHTTPRequest struct {
-	Provider       string                 `json:"provider"`
-	RequiredChecks []string               `json:"requiredChecks,omitempty"`
-	SuccessURL     string                 `json:"successUrl,omitempty"`
-	CancelURL      string                 `json:"cancelUrl,omitempty"`
-	Config         map[string]interface{} `json:"config,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Provider       string         `json:"provider"`
+	RequiredChecks []string       `json:"requiredChecks,omitempty"`
+	SuccessURL     string         `json:"successUrl,omitempty"`
+	CancelURL      string         `json:"cancelUrl,omitempty"`
+	Config         map[string]any `json:"config,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
 }
 
-// VerificationResult represents the result from a provider
+// VerificationResult represents the result from a provider.
 type VerificationResult struct {
 	Status           string
 	IsVerified       bool
@@ -87,7 +87,7 @@ type VerificationResult struct {
 	ConfidenceScore  int
 	RejectionReasons []string
 	FailureReason    string
-	ProviderData     map[string]interface{}
+	ProviderData     map[string]any
 
 	// Personal information
 	FirstName       string
@@ -112,17 +112,17 @@ type VerificationResult struct {
 // RESPONSE DTOs - Structured responses replacing map[string]interface{}
 // =============================================================================
 
-// VerificationSessionResponse represents a single verification session response
+// VerificationSessionResponse represents a single verification session response.
 type VerificationSessionResponse struct {
 	Session *base.IdentityVerificationSession `json:"session"`
 }
 
-// VerificationResponse represents a single verification response
+// VerificationResponse represents a single verification response.
 type VerificationResponse struct {
 	Verification *base.IdentityVerification `json:"verification"`
 }
 
-// VerificationListResponse represents a list of verifications with pagination
+// VerificationListResponse represents a list of verifications with pagination.
 type VerificationListResponse struct {
 	Verifications []*base.IdentityVerification `json:"verifications"`
 	Limit         int                          `json:"limit"`
@@ -130,18 +130,18 @@ type VerificationListResponse struct {
 	Total         int                          `json:"total,omitempty"`
 }
 
-// UserVerificationStatusResponse represents a user's verification status
+// UserVerificationStatusResponse represents a user's verification status.
 type UserVerificationStatusResponse struct {
 	Status *base.UserVerificationStatus `json:"status"`
 }
 
-// WebhookResponse represents a webhook processing response
+// WebhookResponse represents a webhook processing response.
 type WebhookResponse struct {
 	Received        bool   `json:"received"`
 	ProcessedStatus string `json:"status,omitempty"`
 }
 
-// Provider interface for KYC providers
+// Provider interface for KYC providers.
 type Provider interface {
 	// CreateSession creates a verification session with the provider
 	CreateSession(ctx context.Context, req *ProviderSessionRequest) (*ProviderSession, error)
@@ -162,7 +162,7 @@ type Provider interface {
 	GetProviderName() string
 }
 
-// ProviderSessionRequest represents a provider session creation request
+// ProviderSessionRequest represents a provider session creation request.
 type ProviderSessionRequest struct {
 	// V2 Context
 	AppID          xid.ID
@@ -174,10 +174,10 @@ type ProviderSessionRequest struct {
 	RequiredChecks []string
 	SuccessURL     string
 	CancelURL      string
-	Metadata       map[string]interface{}
+	Metadata       map[string]any
 }
 
-// ProviderSession represents a provider verification session
+// ProviderSession represents a provider verification session.
 type ProviderSession struct {
 	ID        string
 	URL       string // URL for the user to complete verification
@@ -187,14 +187,14 @@ type ProviderSession struct {
 	CreatedAt time.Time
 }
 
-// ProviderCheckResult represents the result of a provider check
+// ProviderCheckResult represents the result of a provider check.
 type ProviderCheckResult struct {
 	ID              string
 	Type            string // document, liveness, aml
 	Status          string
 	Result          string // clear, consider, rejected
 	SubResults      []CheckSubResult
-	Properties      map[string]interface{}
+	Properties      map[string]any
 	RiskScore       int
 	ConfidenceScore int
 
@@ -225,14 +225,14 @@ type ProviderCheckResult struct {
 	CompletedAt *time.Time
 }
 
-// CheckSubResult represents a sub-result within a check
+// CheckSubResult represents a sub-result within a check.
 type CheckSubResult struct {
 	Name   string
 	Result string
 	Reason string
 }
 
-// AMLMatch represents a sanctions/PEP match
+// AMLMatch represents a sanctions/PEP match.
 type AMLMatch struct {
 	MatchType   string // sanction, pep, adverse_media
 	Name        string
@@ -241,7 +241,7 @@ type AMLMatch struct {
 	Description string
 }
 
-// WebhookPayload represents a parsed webhook from a provider
+// WebhookPayload represents a parsed webhook from a provider.
 type WebhookPayload struct {
 	EventType  string
 	CheckID    string
@@ -249,5 +249,5 @@ type WebhookPayload struct {
 	Status     string
 	Result     *ProviderCheckResult
 	Timestamp  time.Time
-	RawPayload map[string]interface{}
+	RawPayload map[string]any
 }

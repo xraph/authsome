@@ -7,7 +7,7 @@ import (
 )
 
 // ServiceInterface defines the contract for session service operations
-// This allows plugins to decorate the service with additional behavior
+// This allows plugins to decorate the service with additional behavior.
 type ServiceInterface interface {
 	Create(ctx context.Context, req *CreateSessionRequest) (*Session, error)
 	FindByToken(ctx context.Context, token string) (*Session, error)
@@ -23,5 +23,5 @@ type ServiceInterface interface {
 	RefreshSession(ctx context.Context, refreshToken string) (*RefreshResponse, error)
 }
 
-// Ensure Service implements ServiceInterface
+// Ensure Service implements ServiceInterface.
 var _ ServiceInterface = (*Service)(nil)

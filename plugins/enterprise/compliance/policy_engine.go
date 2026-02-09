@@ -4,23 +4,24 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"time"
 	"unicode"
 )
 
-// PolicyEngine enforces compliance policies at runtime
+// PolicyEngine enforces compliance policies at runtime.
 type PolicyEngine struct {
 	service *Service
 }
 
-// NewPolicyEngine creates a new policy engine
+// NewPolicyEngine creates a new policy engine.
 func NewPolicyEngine(service *Service) *PolicyEngine {
 	return &PolicyEngine{
 		service: service,
 	}
 }
 
-// EnforcePasswordPolicy validates password against compliance requirements
+// EnforcePasswordPolicy validates password against compliance requirements.
 func (e *PolicyEngine) EnforcePasswordPolicy(ctx context.Context, appID, password string) error {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -61,7 +62,7 @@ func (e *PolicyEngine) EnforcePasswordPolicy(ctx context.Context, appID, passwor
 	return nil
 }
 
-// EnforceMFA checks if MFA is required and enabled
+// EnforceMFA checks if MFA is required and enabled.
 func (e *PolicyEngine) EnforceMFA(ctx context.Context, appID, userID string, mfaEnabled bool) error {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -87,7 +88,7 @@ func (e *PolicyEngine) EnforceMFA(ctx context.Context, appID, userID string, mfa
 	return nil
 }
 
-// EnforceSessionPolicy validates session against compliance requirements
+// EnforceSessionPolicy validates session against compliance requirements.
 func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, appID string, session *Session) error {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -121,7 +122,7 @@ func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, appID string, s
 			Severity:      "critical",
 			Description:   fmt.Sprintf("Session IP changed from %s to %s", session.CreatedIP, session.CurrentIP),
 			Status:        "open",
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"session_id": session.ID,
 				"created_ip": session.CreatedIP,
 				"current_ip": session.CurrentIP,
@@ -135,7 +136,7 @@ func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, appID string, s
 	return nil
 }
 
-// EnforceAccessControl checks if user has proper access
+// EnforceAccessControl checks if user has proper access.
 func (e *PolicyEngine) EnforceAccessControl(ctx context.Context, appID, userID string, resource string, action string) error {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -156,7 +157,7 @@ func (e *PolicyEngine) EnforceAccessControl(ctx context.Context, appID, userID s
 	return nil
 }
 
-// EnforceTraining checks if user has completed required training
+// EnforceTraining checks if user has completed required training.
 func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string) error {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -174,6 +175,7 @@ func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string
 
 	// Check if all required training is completed
 	completedTraining := make(map[string]bool)
+
 	for _, training := range userTraining {
 		if training.Status == "completed" {
 			// Check if not expired
@@ -185,6 +187,7 @@ func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string
 
 	// Find missing or expired training
 	var missingTraining []string
+
 	for _, required := range requiredTraining {
 		if !completedTraining[required] {
 			missingTraining = append(missingTraining, required)
@@ -201,7 +204,7 @@ func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string
 			Severity:      "medium",
 			Description:   fmt.Sprintf("User has not completed required training: %v", missingTraining),
 			Status:        "open",
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"missing_training": missingTraining,
 			},
 		}
@@ -213,7 +216,7 @@ func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string
 	return nil
 }
 
-// EnforceDataResidency checks if data access complies with residency requirements
+// EnforceDataResidency checks if data access complies with residency requirements.
 func (e *PolicyEngine) EnforceDataResidency(ctx context.Context, appID, region string) error {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -228,7 +231,7 @@ func (e *PolicyEngine) EnforceDataResidency(ctx context.Context, appID, region s
 	return nil
 }
 
-// CheckPasswordExpiry checks if user's password has expired
+// CheckPasswordExpiry checks if user's password has expired.
 func (e *PolicyEngine) CheckPasswordExpiry(ctx context.Context, appID string, passwordChangedAt time.Time) (bool, error) {
 	profile, err := e.service.GetProfileByApp(ctx, appID)
 	if err != nil {
@@ -248,7 +251,7 @@ func (e *PolicyEngine) CheckPasswordExpiry(ctx context.Context, appID string, pa
 	return false, nil
 }
 
-// getRequiredTraining returns required training for given standards
+// getRequiredTraining returns required training for given standards.
 func (e *PolicyEngine) getRequiredTraining(standards []ComplianceStandard) []string {
 	trainingSet := make(map[string]bool)
 
@@ -277,6 +280,7 @@ func containsUppercase(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -286,6 +290,7 @@ func containsLowercase(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -295,11 +300,13 @@ func containsNumber(s string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 func containsSymbol(s string) bool {
 	symbols := regexp.MustCompile(`[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]`)
+
 	return symbols.MatchString(s)
 }
 
@@ -317,18 +324,13 @@ func isCommonPassword(password string) bool {
 	for i, b := range lowerPassword {
 		lowerPassword[i] = byte(unicode.ToLower(rune(b)))
 	}
+
 	lowerPasswordStr := string(lowerPassword)
 
-	for _, common := range commonPasswords {
-		if lowerPasswordStr == common {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(commonPasswords, lowerPasswordStr)
 }
 
-// Session represents a user session
+// Session represents a user session.
 type Session struct {
 	ID             string
 	UserID         string

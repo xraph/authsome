@@ -15,7 +15,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// mockImpersonationRepository is a mock implementation of the impersonation repository
+// mockImpersonationRepository is a mock implementation of the impersonation repository.
 type mockImpersonationRepository struct {
 	sessions    map[string]*schema.ImpersonationSession
 	auditEvents map[string]*schema.ImpersonationAuditEvent
@@ -30,6 +30,7 @@ func newMockImpersonationRepository() *mockImpersonationRepository {
 
 func (r *mockImpersonationRepository) Create(ctx context.Context, session *schema.ImpersonationSession) error {
 	r.sessions[session.ID.String()] = session
+
 	return nil
 }
 
@@ -38,6 +39,7 @@ func (r *mockImpersonationRepository) Get(ctx context.Context, id xid.ID, orgID 
 	if !ok || session.AppID != orgID {
 		return nil, impersonation.ErrImpersonationNotFound
 	}
+
 	return session, nil
 }
 
@@ -47,11 +49,13 @@ func (r *mockImpersonationRepository) GetBySessionID(ctx context.Context, sessio
 			return session, nil
 		}
 	}
+
 	return nil, impersonation.ErrImpersonationNotFound
 }
 
 func (r *mockImpersonationRepository) Update(ctx context.Context, session *schema.ImpersonationSession) error {
 	r.sessions[session.ID.String()] = session
+
 	return nil
 }
 
@@ -61,15 +65,19 @@ func (r *mockImpersonationRepository) ListSessions(ctx context.Context, filter *
 		if session.AppID != filter.AppID {
 			continue
 		}
+
 		if filter.ActiveOnly != nil && *filter.ActiveOnly && (!session.Active || session.IsExpired()) {
 			continue
 		}
+
 		if filter.ImpersonatorID != nil && session.ImpersonatorID != *filter.ImpersonatorID {
 			continue
 		}
+
 		if filter.TargetUserID != nil && session.TargetUserID != *filter.TargetUserID {
 			continue
 		}
+
 		sessions = append(sessions, session)
 	}
 
@@ -96,11 +104,13 @@ func (r *mockImpersonationRepository) GetActive(ctx context.Context, impersonato
 			return session, nil
 		}
 	}
+
 	return nil, impersonation.ErrImpersonationNotFound
 }
 
 func (r *mockImpersonationRepository) ExpireOldSessions(ctx context.Context) (int, error) {
 	count := 0
+
 	now := time.Now().UTC()
 	for _, session := range r.sessions {
 		if session.Active && now.After(session.ExpiresAt) {
@@ -110,23 +120,28 @@ func (r *mockImpersonationRepository) ExpireOldSessions(ctx context.Context) (in
 			count++
 		}
 	}
+
 	return count, nil
 }
 
 func (r *mockImpersonationRepository) CreateAuditEvent(ctx context.Context, event *schema.ImpersonationAuditEvent) error {
 	r.auditEvents[event.ID.String()] = event
+
 	return nil
 }
 
 func (r *mockImpersonationRepository) ListAuditEvents(ctx context.Context, filter *impersonation.ListAuditEventsFilter) (*pagination.PageResponse[*schema.ImpersonationAuditEvent], error) {
 	var events []*schema.ImpersonationAuditEvent
+
 	for _, event := range r.auditEvents {
 		if event.AppID != filter.AppID {
 			continue
 		}
+
 		if filter.ImpersonationID != nil && event.ImpersonationID != *filter.ImpersonationID {
 			continue
 		}
+
 		events = append(events, event)
 	}
 
@@ -144,7 +159,7 @@ func (r *mockImpersonationRepository) ListAuditEvents(ctx context.Context, filte
 	}, nil
 }
 
-// mockUserService is a simple mock for testing
+// mockUserService is a simple mock for testing.
 type mockUserService struct {
 	users map[string]*schema.User
 }
@@ -160,6 +175,7 @@ func (s *mockUserService) FindByID(ctx context.Context, id xid.ID) (*coreuser.Us
 	if !ok {
 		return nil, impersonation.ErrUserNotFound
 	}
+
 	return coreuser.FromSchemaUser(user), nil
 }
 
@@ -199,23 +215,23 @@ func (s *mockUserService) ListUsers(ctx context.Context, filter *coreuser.ListUs
 	return nil, nil
 }
 
-func (s *mockUserService) GetHookRegistry() interface{} {
+func (s *mockUserService) GetHookRegistry() any {
 	return nil
 }
 
-func (s *mockUserService) SetHookRegistry(registry interface{}) {}
+func (s *mockUserService) SetHookRegistry(registry any) {}
 
-func (s *mockUserService) GetVerificationRepo() interface{} {
+func (s *mockUserService) GetVerificationRepo() any {
 	return nil
 }
 
-func (s *mockUserService) SetVerificationRepo(repo interface{}) {}
+func (s *mockUserService) SetVerificationRepo(repo any) {}
 
 func (s *mockUserService) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
 	return nil
 }
 
-// mockSessionService is a simple mock for testing
+// mockSessionService is a simple mock for testing.
 type mockSessionService struct {
 	sessions map[string]*schema.Session
 }
@@ -234,6 +250,7 @@ func (s *mockSessionService) Create(ctx context.Context, req *session.CreateSess
 		UserID:    req.UserID,
 	}
 	s.sessions[schemaSession.ID.String()] = schemaSession
+
 	return session.FromSchemaSession(schemaSession), nil
 }
 
@@ -243,6 +260,7 @@ func (s *mockSessionService) FindByToken(ctx context.Context, token string) (*se
 			return session.FromSchemaSession(sess), nil
 		}
 	}
+
 	return nil, impersonation.ErrSessionNotFound
 }
 
@@ -250,9 +268,11 @@ func (s *mockSessionService) Revoke(ctx context.Context, token string) error {
 	for id, sess := range s.sessions {
 		if sess.Token == token {
 			delete(s.sessions, id)
+
 			return nil
 		}
 	}
+
 	return nil
 }
 
@@ -276,7 +296,7 @@ func (s *mockSessionService) ListSessions(ctx context.Context, filter *session.L
 	return nil, nil
 }
 
-// Test helpers
+// Test helpers.
 func setupTestService(t *testing.T) (*impersonation.Service, *mockImpersonationRepository, *mockUserService, *mockSessionService) {
 	repo := newMockImpersonationRepository()
 	userSvc := newMockUserService()
@@ -310,6 +330,7 @@ func createTestUsers(userSvc *mockUserService) (admin, target *schema.User) {
 	}
 	userSvc.users[admin.ID.String()] = admin
 	userSvc.users[target.ID.String()] = target
+
 	return admin, target
 }
 
@@ -528,7 +549,7 @@ func TestService_List_Success(t *testing.T) {
 	orgID := xid.New()
 
 	// Create multiple impersonation sessions
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		session := &schema.ImpersonationSession{
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
@@ -618,7 +639,7 @@ func TestService_ExpireSessions(t *testing.T) {
 	orgID := xid.New()
 
 	// Create expired sessions
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		session := &schema.ImpersonationSession{
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,

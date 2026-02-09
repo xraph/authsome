@@ -14,7 +14,7 @@ import (
 )
 
 // JWTValidationStrategy validates OAuth/OIDC JWT access tokens
-// This allows any AuthSome endpoint to accept JWT tokens from the OIDC provider
+// This allows any AuthSome endpoint to accept JWT tokens from the OIDC provider.
 type JWTValidationStrategy struct {
 	oidcJWTSvc *JWTService // OIDC provider's JWT service (has the JWKS keys!)
 	userSvc    user.ServiceInterface
@@ -23,10 +23,10 @@ type JWTValidationStrategy struct {
 	logger     forge.Logger
 }
 
-// Ensure JWTValidationStrategy implements AuthStrategy
+// Ensure JWTValidationStrategy implements AuthStrategy.
 var _ middleware.AuthStrategy = (*JWTValidationStrategy)(nil)
 
-// NewJWTValidationStrategy creates a new JWT validation strategy
+// NewJWTValidationStrategy creates a new JWT validation strategy.
 func NewJWTValidationStrategy(
 	oidcJWTSvc *JWTService, // Use OIDC provider's JWT service, not core JWT service!
 	userSvc user.ServiceInterface,
@@ -43,18 +43,18 @@ func NewJWTValidationStrategy(
 	}
 }
 
-// ID returns the strategy identifier
+// ID returns the strategy identifier.
 func (s *JWTValidationStrategy) ID() string {
 	return "oidc-jwt"
 }
 
-// Priority returns 15 (after API keys 10, before bearer session tokens 20)
+// Priority returns 15 (after API keys 10, before bearer session tokens 20).
 func (s *JWTValidationStrategy) Priority() int {
 	return 15
 }
 
-// Extract attempts to extract a JWT from Authorization header
-func (s *JWTValidationStrategy) Extract(c forge.Context) (interface{}, bool) {
+// Extract attempts to extract a JWT from Authorization header.
+func (s *JWTValidationStrategy) Extract(c forge.Context) (any, bool) {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
 		return nil, false
@@ -87,8 +87,8 @@ func (s *JWTValidationStrategy) Extract(c forge.Context) (interface{}, bool) {
 	return token, true
 }
 
-// Authenticate validates the JWT and builds auth context
-func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials interface{}) (*contexts.AuthContext, error) {
+// Authenticate validates the JWT and builds auth context.
+func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials any) (*contexts.AuthContext, error) {
 	token, ok := credentials.(string)
 	if !ok {
 		return nil, &JWTAuthError{Message: "invalid credentials type"}
@@ -99,6 +99,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 	jwtToken, err := s.oidcJWTSvc.VerifyToken(token)
 	if err != nil {
 		s.logger.Warn("JWT verification failed", forge.F("error", err.Error()))
+
 		return nil, &JWTAuthError{
 			Message: "JWT verification failed",
 			Err:     err,
@@ -107,6 +108,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 
 	if !jwtToken.Valid {
 		s.logger.Warn("JWT token invalid")
+
 		return nil, &JWTAuthError{
 			Message: "invalid JWT token",
 		}
@@ -116,6 +118,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 	claims, ok := jwtToken.Claims.(jwt2.MapClaims)
 	if !ok {
 		s.logger.Warn("failed to parse JWT claims")
+
 		return nil, &JWTAuthError{
 			Message: "failed to parse JWT claims",
 		}
@@ -132,20 +135,23 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 	// Verify audience if configured
 	if s.audience != "" {
 		audValid := false
+
 		switch aud := claims["aud"].(type) {
 		case string:
 			audValid = aud == s.audience
-		case []interface{}:
+		case []any:
 			for _, a := range aud {
 				if audStr, ok := a.(string); ok && audStr == s.audience {
 					audValid = true
+
 					break
 				}
 			}
 		}
+
 		if !audValid {
 			return nil, &JWTAuthError{
-				Message: fmt.Sprintf("invalid audience: expected %s", s.audience),
+				Message: "invalid audience: expected " + s.audience,
 			}
 		}
 	}
@@ -161,6 +167,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 	userID, err := xid.FromString(subject)
 	if err != nil {
 		s.logger.Warn("invalid user ID in JWT", forge.F("subject", subject), forge.F("error", err.Error()))
+
 		return nil, &JWTAuthError{
 			Message: "invalid user ID in token",
 			Err:     err,
@@ -171,6 +178,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 	usr, err := s.userSvc.FindByID(ctx, userID)
 	if err != nil {
 		s.logger.Warn("failed to load user from JWT", forge.F("user_id", userID.String()), forge.F("error", err.Error()))
+
 		return nil, &JWTAuthError{
 			Message: "user not found",
 			Err:     err,
@@ -179,6 +187,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 
 	if usr == nil {
 		s.logger.Warn("user not found", forge.F("user_id", userID.String()))
+
 		return nil, &JWTAuthError{
 			Message: "user not found",
 		}
@@ -198,7 +207,7 @@ func (s *JWTValidationStrategy) Authenticate(ctx context.Context, credentials in
 	return authCtx, nil
 }
 
-// JWTAuthError represents a JWT authentication error
+// JWTAuthError represents a JWT authentication error.
 type JWTAuthError struct {
 	Message string
 	Err     error
@@ -208,6 +217,7 @@ func (e *JWTAuthError) Error() string {
 	if e.Err != nil {
 		return "jwt auth: " + e.Message + ": " + e.Err.Error()
 	}
+
 	return "jwt auth: " + e.Message
 }
 

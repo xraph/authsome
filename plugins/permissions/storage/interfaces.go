@@ -10,7 +10,7 @@ import (
 )
 
 // Repository defines the data access interface for permissions
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type Repository interface {
 	// Policy operations
 	CreatePolicy(ctx context.Context, policy *core.Policy) error
@@ -46,10 +46,10 @@ type Repository interface {
 	ListAuditEvents(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, filters AuditFilters) ([]*core.AuditEvent, error)
 
 	// Analytics operations
-	GetEvaluationStats(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, timeRange map[string]interface{}) (*EvaluationStats, error)
+	GetEvaluationStats(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, timeRange map[string]any) (*EvaluationStats, error)
 }
 
-// EvaluationStats represents aggregated evaluation statistics
+// EvaluationStats represents aggregated evaluation statistics.
 type EvaluationStats struct {
 	TotalEvaluations int64
 	AllowedCount     int64
@@ -59,7 +59,7 @@ type EvaluationStats struct {
 	CacheMisses      int64
 }
 
-// PolicyFilters defines filtering options for policy queries
+// PolicyFilters defines filtering options for policy queries.
 type PolicyFilters struct {
 	ResourceType *string
 	Actions      []string
@@ -69,7 +69,7 @@ type PolicyFilters struct {
 	Offset       int
 }
 
-// AuditFilters defines filtering options for audit queries
+// AuditFilters defines filtering options for audit queries.
 type AuditFilters struct {
 	ActorID      *xid.ID
 	Action       *string
@@ -81,7 +81,7 @@ type AuditFilters struct {
 }
 
 // Cache defines the caching interface for compiled policies
-// V2 Architecture: App → Environment → Organization
+// V2 Architecture: App → Environment → Organization.
 type Cache interface {
 	// Get retrieves a compiled policy from cache
 	Get(ctx context.Context, key string) (*engine.CompiledPolicy, error)
@@ -111,7 +111,7 @@ type Cache interface {
 	Stats() CacheStats
 }
 
-// CacheStats provides cache performance metrics
+// CacheStats provides cache performance metrics.
 type CacheStats struct {
 	Hits        int64
 	Misses      int64
@@ -122,14 +122,14 @@ type CacheStats struct {
 }
 
 // AttributeProvider fetches attributes for ABAC evaluation
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type AttributeProvider interface {
 	// GetUserAttributes fetches user attributes (roles, department, metadata)
-	GetUserAttributes(ctx context.Context, userID xid.ID) (map[string]interface{}, error)
+	GetUserAttributes(ctx context.Context, userID xid.ID) (map[string]any, error)
 
 	// GetResourceAttributes fetches resource attributes (owner, tags, metadata)
-	GetResourceAttributes(ctx context.Context, resourceType string, resourceID xid.ID) (map[string]interface{}, error)
+	GetResourceAttributes(ctx context.Context, resourceType string, resourceID xid.ID) (map[string]any, error)
 
 	// GetRequestAttributes fetches request context (IP, time, geo)
-	GetRequestAttributes(ctx context.Context) (map[string]interface{}, error)
+	GetRequestAttributes(ctx context.Context) (map[string]any, error)
 }

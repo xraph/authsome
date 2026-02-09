@@ -8,9 +8,9 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// CreateSubscriptionTables creates all subscription-related tables
+// CreateSubscriptionTables creates all subscription-related tables.
 func CreateSubscriptionTables(ctx context.Context, db *bun.DB) error {
-	models := []interface{}{
+	models := []any{
 		(*schema.SubscriptionPlan)(nil),
 		(*schema.SubscriptionPlanFeature)(nil),
 		(*schema.SubscriptionPlanTier)(nil),
@@ -99,10 +99,10 @@ func CreateSubscriptionTables(ctx context.Context, db *bun.DB) error {
 	return nil
 }
 
-// DropSubscriptionTables drops all subscription-related tables (for rollback)
+// DropSubscriptionTables drops all subscription-related tables (for rollback).
 func DropSubscriptionTables(ctx context.Context, db *bun.DB) error {
 	// Drop in reverse order of creation (respecting foreign keys)
-	models := []interface{}{
+	models := []any{
 		(*schema.SubscriptionEvent)(nil),
 		(*schema.SubscriptionCustomer)(nil),
 		(*schema.SubscriptionPaymentMethod)(nil),

@@ -93,34 +93,34 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 	return nil
 }
 
-// Action constants for app resources
+// Action constants for app resources.
 const (
-	// Generic actions
+	// Generic actions.
 	ActionRead   = "read"
 	ActionCreate = "create"
 	ActionUpdate = "update"
 	ActionDelete = "delete"
 
-	// Member-specific actions
+	// Member-specific actions.
 	ActionUpdateRole = "update_role"
 	ActionInvite     = "invite"
 
-	// Team-specific actions
+	// Team-specific actions.
 	ActionAddMember    = "add_member"
 	ActionRemoveMember = "remove_member"
 
-	// Invitation-specific actions
+	// Invitation-specific actions.
 	ActionAccept  = "accept"
 	ActionDecline = "decline"
 	ActionCancel  = "cancel"
 	ActionResend  = "resend"
 
-	// App-specific actions
+	// App-specific actions.
 	ActionConfigure = "configure"
 	ActionTransfer  = "transfer"
 )
 
-// Resource type constants for app resources
+// Resource type constants for app resources.
 const (
 	ResourceTypeApp        = "app"
 	ResourceTypeMember     = "member"
@@ -128,12 +128,12 @@ const (
 	ResourceTypeInvitation = "invitation"
 )
 
-// BuildAppResource builds a resource identifier for app-scoped resources
+// BuildAppResource builds a resource identifier for app-scoped resources.
 func BuildAppResource(resourceType, resourceID string) string {
 	return resourceType + ":app/" + resourceID
 }
 
-// BuildAppWildcard builds a wildcard resource identifier for all app resources of a type
+// BuildAppWildcard builds a wildcard resource identifier for all app resources of a type.
 func BuildAppWildcard(resourceType string) string {
 	return resourceType + ":app/*"
 }

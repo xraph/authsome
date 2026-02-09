@@ -2,7 +2,7 @@ package types
 
 import "context"
 
-// Context keys
+// Context keys.
 type contextKey string
 
 const (
@@ -11,7 +11,7 @@ const (
 	ContextKeyOrganization contextKey = "organization"
 )
 
-// AuthContext contains authentication context
+// AuthContext contains authentication context.
 type AuthContext struct {
 	UserID         string
 	SessionID      string
@@ -19,13 +19,14 @@ type AuthContext struct {
 	Roles          []string
 }
 
-// GetAuthContext retrieves auth context from context
+// GetAuthContext retrieves auth context from context.
 func GetAuthContext(ctx context.Context) (*AuthContext, bool) {
 	authCtx, ok := ctx.Value(ContextKeyUser).(*AuthContext)
+
 	return authCtx, ok
 }
 
-// SetAuthContext sets auth context in context
+// SetAuthContext sets auth context in context.
 func SetAuthContext(ctx context.Context, authCtx *AuthContext) context.Context {
 	return context.WithValue(ctx, ContextKeyUser, authCtx)
 }

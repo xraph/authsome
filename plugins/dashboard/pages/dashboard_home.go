@@ -14,18 +14,20 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// DashboardHomePage shows the main dashboard for an app with all widgets
+// DashboardHomePage shows the main dashboard for an app with all widgets.
 func (p *PagesManager) DashboardHomePage(ctx *router.PageContext) (g.Node, error) {
 	appIDStr := ctx.Param("appId")
 	if appIDStr == "" {
 		// Redirect to index
 		ctx.SetHeader("Location", p.baseUIPath)
 		ctx.ResponseWriter.WriteHeader(302)
+
 		return nil, nil
 	}
 
 	// Parse app ID and get current app for extension widgets
 	var currentApp *app.App
+
 	appID, err := xid.FromString(appIDStr)
 	if err == nil && p.services != nil {
 		appSvc := p.services.AppService()
@@ -37,6 +39,7 @@ func (p *PagesManager) DashboardHomePage(ctx *router.PageContext) (g.Node, error
 
 	// Fetch extension widgets server-side
 	var extensionWidgets []g.Node
+
 	if p.extensionRegistry != nil {
 		widgets := p.extensionRegistry.GetDashboardWidgets()
 		for _, widget := range widgets {
@@ -228,7 +231,7 @@ func (p *PagesManager) DashboardHomePage(ctx *router.PageContext) (g.Node, error
 	), nil
 }
 
-// renderStatsGrid renders the statistics cards grid
+// renderStatsGrid renders the statistics cards grid.
 func (p *PagesManager) renderStatsGrid() g.Node {
 	return Div(
 		Class("grid gap-4 md:grid-cols-3"),
@@ -259,7 +262,7 @@ func (p *PagesManager) renderStatsGrid() g.Node {
 	)
 }
 
-// renderStatCard renders a single statistics card with minimal design
+// renderStatCard renders a single statistics card with minimal design.
 func (p *PagesManager) renderStatCard(title, valueBinding string, icon g.Node, subtitle string) g.Node {
 	return card.Card(
 		card.Header(
@@ -296,7 +299,7 @@ func (p *PagesManager) renderStatCard(title, valueBinding string, icon g.Node, s
 	)
 }
 
-// renderRecentActivity renders the recent activity widget
+// renderRecentActivity renders the recent activity widget.
 func (p *PagesManager) renderRecentActivity() g.Node {
 	return card.Card(
 		card.Header(
@@ -370,7 +373,7 @@ func (p *PagesManager) renderRecentActivity() g.Node {
 	)
 }
 
-// renderSystemStatus renders the system status widget
+// renderSystemStatus renders the system status widget.
 func (p *PagesManager) renderSystemStatus() g.Node {
 	return card.Card(
 		card.Header(
@@ -451,7 +454,7 @@ func (p *PagesManager) renderSystemStatus() g.Node {
 	)
 }
 
-// renderGrowthChart renders the user growth chart widget
+// renderGrowthChart renders the user growth chart widget.
 func (p *PagesManager) renderGrowthChart() g.Node {
 	return card.Card(
 		card.Header(
@@ -481,7 +484,7 @@ func (p *PagesManager) renderGrowthChart() g.Node {
 	)
 }
 
-// renderPluginsOverview renders the plugins overview widget
+// renderPluginsOverview renders the plugins overview widget.
 func (p *PagesManager) renderPluginsOverview() g.Node {
 	return card.Card(
 		card.Header(
@@ -564,7 +567,7 @@ func (p *PagesManager) renderPluginsOverview() g.Node {
 	)
 }
 
-// renderQuickActions renders the quick actions widget
+// renderQuickActions renders the quick actions widget.
 func (p *PagesManager) renderQuickActions(appID string) g.Node {
 	return card.Card(
 		card.Header(
@@ -607,7 +610,7 @@ func (p *PagesManager) renderQuickActions(appID string) g.Node {
 	)
 }
 
-// renderQuickActionCard renders a single quick action card with minimal design
+// renderQuickActionCard renders a single quick action card with minimal design.
 func (p *PagesManager) renderQuickActionCard(title, subtitle string, icon g.Node, href string, disabled bool) g.Node {
 	content := Div(
 		Class("flex flex-col gap-2 p-4 rounded-lg border hover:bg-accent transition-colors"),
@@ -642,7 +645,7 @@ func (p *PagesManager) renderQuickActionCard(title, subtitle string, icon g.Node
 	)
 }
 
-// renderLoadingSkeleton renders a loading skeleton with minimal design
+// renderLoadingSkeleton renders a loading skeleton with minimal design.
 func (p *PagesManager) renderLoadingSkeleton() g.Node {
 	return Div(
 		Class("animate-pulse space-y-2"),
@@ -655,7 +658,7 @@ func (p *PagesManager) renderLoadingSkeleton() g.Node {
 	)
 }
 
-// renderErrorState renders an error state with retry button
+// renderErrorState renders an error state with retry button.
 func (p *PagesManager) renderErrorState(errorBinding, retryFunc string) g.Node {
 	return Div(
 		Class("flex flex-col items-center justify-center"),

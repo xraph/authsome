@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// IntrospectionService handles RFC 7662 token introspection operations
+// IntrospectionService handles RFC 7662 token introspection operations.
 type IntrospectionService struct {
 	tokenRepo  *repo.OAuthTokenRepository
 	clientRepo *repo.OAuthClientRepository
@@ -18,12 +18,12 @@ type IntrospectionService struct {
 }
 
 // UserService interface for getting user information during introspection
-// Note: This uses interface{} for userID to allow xid.ID or string
+// Note: This uses interface{} for userID to allow xid.ID or string.
 type UserService interface {
 	FindByID(ctx context.Context, userID xid.ID) (interface{}, error)
 }
 
-// NewIntrospectionService creates a new token introspection service
+// NewIntrospectionService creates a new token introspection service.
 func NewIntrospectionService(tokenRepo *repo.OAuthTokenRepository, clientRepo *repo.OAuthClientRepository, userSvc UserService) *IntrospectionService {
 	return &IntrospectionService{
 		tokenRepo:  tokenRepo,
@@ -33,15 +33,17 @@ func NewIntrospectionService(tokenRepo *repo.OAuthTokenRepository, clientRepo *r
 }
 
 // IntrospectToken implements RFC 7662 token introspection
-// Returns token metadata if active, or {active: false} if inactive/invalid
+// Returns token metadata if active, or {active: false} if inactive/invalid.
 func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIntrospectionRequest, requestingClientID string) (*TokenIntrospectionResponse, error) {
 	if req.Token == "" {
 		return nil, errs.BadRequest("token parameter is required")
 	}
 
 	// Try to find token based on hint or try both types
-	var token *schema.OAuthToken
-	var err error
+	var (
+		token *schema.OAuthToken
+		err   error
+	)
 
 	switch req.TokenTypeHint {
 	case "access_token", "":
@@ -122,7 +124,7 @@ func (s *IntrospectionService) IntrospectToken(ctx context.Context, req *TokenIn
 	return response, nil
 }
 
-// ValidateIntrospectionRequest validates the introspection request
+// ValidateIntrospectionRequest validates the introspection request.
 func (s *IntrospectionService) ValidateIntrospectionRequest(req *TokenIntrospectionRequest) error {
 	if req.Token == "" {
 		return errs.BadRequest("token parameter is required")
@@ -132,12 +134,15 @@ func (s *IntrospectionService) ValidateIntrospectionRequest(req *TokenIntrospect
 	if req.TokenTypeHint != "" {
 		validHints := []string{"access_token", "refresh_token"}
 		valid := false
+
 		for _, hint := range validHints {
 			if req.TokenTypeHint == hint {
 				valid = true
+
 				break
 			}
 		}
+
 		if !valid {
 			return errs.BadRequest("invalid token_type_hint: must be 'access_token' or 'refresh_token'")
 		}
@@ -146,7 +151,7 @@ func (s *IntrospectionService) ValidateIntrospectionRequest(req *TokenIntrospect
 	return nil
 }
 
-// IntrospectByJTI introspects a token by its JWT ID
+// IntrospectByJTI introspects a token by its JWT ID.
 func (s *IntrospectionService) IntrospectByJTI(ctx context.Context, jti string, requestingClientID string) (*TokenIntrospectionResponse, error) {
 	if jti == "" {
 		return nil, errs.BadRequest("jti parameter is required")
@@ -192,15 +197,16 @@ func (s *IntrospectionService) IntrospectByJTI(ctx context.Context, jti string, 
 	return response, nil
 }
 
-// GetTokenScopes parses and returns the scopes from a token
+// GetTokenScopes parses and returns the scopes from a token.
 func GetTokenScopes(scope string) []string {
 	if scope == "" {
 		return []string{}
 	}
+
 	return strings.Fields(scope)
 }
 
-// HasScope checks if a token has a specific scope
+// HasScope checks if a token has a specific scope.
 func HasScope(tokenScope, requiredScope string) bool {
 	scopes := GetTokenScopes(tokenScope)
 	for _, s := range scopes {
@@ -208,5 +214,6 @@ func HasScope(tokenScope, requiredScope string) bool {
 			return true
 		}
 	}
+
 	return false
 }

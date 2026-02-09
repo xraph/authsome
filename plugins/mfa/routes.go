@@ -5,7 +5,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// RegisterRoutes registers all MFA routes with OpenAPI documentation
+// RegisterRoutes registers all MFA routes with OpenAPI documentation.
 func RegisterRoutes(router forge.Router, handler *Handler) {
 	// ==================== Factor Management ====================
 

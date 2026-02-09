@@ -21,7 +21,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Plugin implements the plugins.Plugin interface for Email OTP
+// Plugin implements the plugins.Plugin interface for Email OTP.
 type Plugin struct {
 	service       *Service
 	notifAdapter  *notificationPlugin.Adapter
@@ -32,7 +32,7 @@ type Plugin struct {
 	authInst      core.Authsome
 }
 
-// Config holds the email OTP plugin configuration
+// Config holds the email OTP plugin configuration.
 type Config struct {
 	// OTPLength is the length of the OTP code
 	OTPLength int `json:"otpLength"`
@@ -48,7 +48,7 @@ type Config struct {
 	DevExposeOTP bool `json:"devExposeOTP"`
 }
 
-// DefaultConfig returns the default email OTP plugin configuration
+// DefaultConfig returns the default email OTP plugin configuration.
 func DefaultConfig() Config {
 	return Config{
 		OTPLength:           6,
@@ -59,52 +59,52 @@ func DefaultConfig() Config {
 	}
 }
 
-// PluginOption is a functional option for configuring the email OTP plugin
+// PluginOption is a functional option for configuring the email OTP plugin.
 type PluginOption func(*Plugin)
 
-// WithDefaultConfig sets the default configuration for the plugin
+// WithDefaultConfig sets the default configuration for the plugin.
 func WithDefaultConfig(cfg Config) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig = cfg
 	}
 }
 
-// WithOTPLength sets the OTP code length
+// WithOTPLength sets the OTP code length.
 func WithOTPLength(length int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.OTPLength = length
 	}
 }
 
-// WithExpiryMinutes sets the OTP expiry time
+// WithExpiryMinutes sets the OTP expiry time.
 func WithExpiryMinutes(minutes int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.ExpiryMinutes = minutes
 	}
 }
 
-// WithMaxAttempts sets the maximum verification attempts
+// WithMaxAttempts sets the maximum verification attempts.
 func WithMaxAttempts(max int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.MaxAttempts = max
 	}
 }
 
-// WithRateLimitPerHour sets the rate limit per hour
+// WithRateLimitPerHour sets the rate limit per hour.
 func WithRateLimitPerHour(limit int) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.RateLimitPerHour = limit
 	}
 }
 
-// WithAllowImplicitSignup sets whether implicit signup is allowed
+// WithAllowImplicitSignup sets whether implicit signup is allowed.
 func WithAllowImplicitSignup(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowImplicitSignup = allow
 	}
 }
 
-// NewPlugin creates a new email OTP plugin instance with optional configuration
+// NewPlugin creates a new email OTP plugin instance with optional configuration.
 func NewPlugin(opts ...PluginOption) *Plugin {
 	p := &Plugin{
 		// Set built-in defaults
@@ -203,6 +203,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		if authMw != nil {
 			return authMw(handler)
 		}
+
 		return handler
 	}
 
@@ -242,7 +243,9 @@ func (p *Plugin) Migrate() error {
 	if p.db == nil {
 		return nil
 	}
+
 	ctx := context.Background()
 	_, err := p.db.NewCreateTable().Model((*schema.EmailOTP)(nil)).IfNotExists().Exec(ctx)
+
 	return err
 }

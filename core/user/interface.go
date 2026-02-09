@@ -12,7 +12,7 @@ import (
 // =============================================================================
 
 // ServiceInterface defines the contract for user service operations
-// This allows plugins to decorate the service with additional behavior
+// This allows plugins to decorate the service with additional behavior.
 type ServiceInterface interface {
 	// Create creates a new user in the specified app
 	Create(ctx context.Context, req *CreateUserRequest) (*User, error)
@@ -45,17 +45,17 @@ type ServiceInterface interface {
 	CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error)
 
 	// SetHookRegistry sets the hook registry for lifecycle events
-	SetHookRegistry(registry interface{})
+	SetHookRegistry(registry any)
 
 	// GetHookRegistry returns the hook registry
-	GetHookRegistry() interface{}
+	GetHookRegistry() any
 
 	// SetVerificationRepo sets the verification repository for password resets
-	SetVerificationRepo(repo interface{})
+	SetVerificationRepo(repo any)
 
 	// GetVerificationRepo returns the verification repository
-	GetVerificationRepo() interface{}
+	GetVerificationRepo() any
 }
 
-// Ensure Service implements ServiceInterface
+// Ensure Service implements ServiceInterface.
 var _ ServiceInterface = (*Service)(nil)

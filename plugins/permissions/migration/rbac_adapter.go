@@ -13,7 +13,7 @@ import (
 // RBAC SERVICE ADAPTER
 // =============================================================================
 
-// RBACServiceAdapter adapts the core rbac.Service to the migration.RBACService interface
+// RBACServiceAdapter adapts the core rbac.Service to the migration.RBACService interface.
 type RBACServiceAdapter struct {
 	rbacService    *rbac.Service
 	roleRepo       rbac.RoleRepository
@@ -26,7 +26,7 @@ type RBACServiceAdapter struct {
 	policies []*RBACPolicy
 }
 
-// RBACAdapterConfig configures the RBAC adapter
+// RBACAdapterConfig configures the RBAC adapter.
 type RBACAdapterConfig struct {
 	RBACService    *rbac.Service
 	RoleRepo       rbac.RoleRepository
@@ -35,7 +35,7 @@ type RBACAdapterConfig struct {
 	PolicyRepo     rbac.PolicyRepository
 }
 
-// NewRBACServiceAdapter creates a new RBAC service adapter
+// NewRBACServiceAdapter creates a new RBAC service adapter.
 func NewRBACServiceAdapter(cfg RBACAdapterConfig) *RBACServiceAdapter {
 	return &RBACServiceAdapter{
 		rbacService:    cfg.RBACService,
@@ -47,7 +47,7 @@ func NewRBACServiceAdapter(cfg RBACAdapterConfig) *RBACServiceAdapter {
 	}
 }
 
-// GetAllPolicies returns all RBAC policies
+// GetAllPolicies returns all RBAC policies.
 func (a *RBACServiceAdapter) GetAllPolicies(ctx context.Context) ([]*RBACPolicy, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -85,7 +85,7 @@ func (a *RBACServiceAdapter) GetAllPolicies(ctx context.Context) ([]*RBACPolicy,
 	return a.policies, nil
 }
 
-// GetRoles returns all roles for an app and environment
+// GetRoles returns all roles for an app and environment.
 func (a *RBACServiceAdapter) GetRoles(ctx context.Context, appID, envID xid.ID) ([]*schema.Role, error) {
 	if a.roleRepo == nil {
 		return nil, nil
@@ -100,7 +100,7 @@ func (a *RBACServiceAdapter) GetRoles(ctx context.Context, appID, envID xid.ID) 
 	return templates, nil
 }
 
-// GetRolePermissions returns permissions for a role
+// GetRolePermissions returns permissions for a role.
 func (a *RBACServiceAdapter) GetRolePermissions(ctx context.Context, roleID xid.ID) ([]*schema.Permission, error) {
 	if a.rolePermRepo == nil {
 		return nil, nil
@@ -113,7 +113,7 @@ func (a *RBACServiceAdapter) GetRolePermissions(ctx context.Context, roleID xid.
 // ADDITIONAL HELPER METHODS
 // =============================================================================
 
-// GetOrgRoles returns all roles for an organization and environment
+// GetOrgRoles returns all roles for an organization and environment.
 func (a *RBACServiceAdapter) GetOrgRoles(ctx context.Context, orgID, envID xid.ID) ([]*schema.Role, error) {
 	if a.roleRepo == nil {
 		return nil, nil
@@ -122,7 +122,7 @@ func (a *RBACServiceAdapter) GetOrgRoles(ctx context.Context, orgID, envID xid.I
 	return a.roleRepo.GetOrgRoles(ctx, orgID, envID)
 }
 
-// GetAllAppPermissions returns all permissions for an app
+// GetAllAppPermissions returns all permissions for an app.
 func (a *RBACServiceAdapter) GetAllAppPermissions(ctx context.Context, appID xid.ID) ([]*schema.Permission, error) {
 	if a.permissionRepo == nil {
 		return nil, nil
@@ -131,17 +131,19 @@ func (a *RBACServiceAdapter) GetAllAppPermissions(ctx context.Context, appID xid
 	return a.permissionRepo.ListByApp(ctx, appID)
 }
 
-// AddPolicy adds a policy to the in-memory list (for testing or manual policies)
+// AddPolicy adds a policy to the in-memory list (for testing or manual policies).
 func (a *RBACServiceAdapter) AddPolicy(policy *RBACPolicy) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	a.policies = append(a.policies, policy)
 }
 
-// ClearPolicies clears the in-memory policy list
+// ClearPolicies clears the in-memory policy list.
 func (a *RBACServiceAdapter) ClearPolicies() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	a.policies = make([]*RBACPolicy, 0)
 }
 
@@ -149,14 +151,14 @@ func (a *RBACServiceAdapter) ClearPolicies() {
 // USER ROLE OPERATIONS
 // =============================================================================
 
-// UserRoleAdapter provides user role operations for attribute resolution
+// UserRoleAdapter provides user role operations for attribute resolution.
 type UserRoleAdapter struct {
 	userRoleRepo rbac.UserRoleRepository
 	roleRepo     rbac.RoleRepository
 	rolePermRepo rbac.RolePermissionRepository
 }
 
-// NewUserRoleAdapter creates a new user role adapter
+// NewUserRoleAdapter creates a new user role adapter.
 func NewUserRoleAdapter(
 	userRoleRepo rbac.UserRoleRepository,
 	roleRepo rbac.RoleRepository,
@@ -169,7 +171,7 @@ func NewUserRoleAdapter(
 	}
 }
 
-// GetUserRoles returns role names for a user in an organization
+// GetUserRoles returns role names for a user in an organization.
 func (a *UserRoleAdapter) GetUserRoles(ctx context.Context, userID, orgID xid.ID) ([]string, error) {
 	if a.userRoleRepo == nil {
 		return nil, nil
@@ -193,7 +195,7 @@ func (a *UserRoleAdapter) GetUserRoles(ctx context.Context, userID, orgID xid.ID
 	return roleNames, nil
 }
 
-// GetUserPermissions returns permission names for a user based on their roles
+// GetUserPermissions returns permission names for a user based on their roles.
 func (a *UserRoleAdapter) GetUserPermissions(ctx context.Context, userID, orgID xid.ID) ([]string, error) {
 	if a.userRoleRepo == nil || a.rolePermRepo == nil {
 		return nil, nil
@@ -237,13 +239,13 @@ func (a *UserRoleAdapter) GetUserPermissions(ctx context.Context, userID, orgID 
 // MIGRATION POLICY REPOSITORY ADAPTER
 // =============================================================================
 
-// MigrationPolicyRepoAdapter adapts the permissions storage.Repository to migration.PolicyRepository
+// MigrationPolicyRepoAdapter adapts the permissions storage.Repository to migration.PolicyRepository.
 type MigrationPolicyRepoAdapter struct {
 	repo interface {
-		CreatePolicy(ctx context.Context, policy interface{}) error
-		GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) (interface{}, error)
+		CreatePolicy(ctx context.Context, policy any) error
+		GetPoliciesByResourceType(ctx context.Context, appID, envID xid.ID, userOrgID *xid.ID, resourceType string) (any, error)
 	}
 }
 
-// Ensure RBACServiceAdapter implements RBACService interface
+// Ensure RBACServiceAdapter implements RBACService interface.
 var _ RBACService = (*RBACServiceAdapter)(nil)

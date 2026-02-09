@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Repository defines persistence operations for impersonation sessions
-// This follows the Interface Segregation Principle from core/app and core/jwt architecture
+// This follows the Interface Segregation Principle from core/app and core/jwt architecture.
 type Repository interface {
 	// Session operations
 	Create(ctx context.Context, session *schema.ImpersonationSession) error

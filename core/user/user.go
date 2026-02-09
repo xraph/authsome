@@ -12,10 +12,10 @@ import (
 // =============================================================================
 
 // User represents a user entity DTO
-// This is separate from schema.User to maintain proper separation of concerns
+// This is separate from schema.User to maintain proper separation of concerns.
 type User = base.User
 
-// FromSchemaUser converts a schema.User model to User DTO
+// FromSchemaUser converts a schema.User model to User DTO.
 func FromSchemaUser(su *schema.User) *User {
 	if su == nil {
 		return nil
@@ -43,12 +43,13 @@ func FromSchemaUser(su *schema.User) *User {
 	}
 }
 
-// FromSchemaUsers converts a slice of schema.User to User DTOs
+// FromSchemaUsers converts a slice of schema.User to User DTOs.
 func FromSchemaUsers(users []*schema.User) []*User {
 	result := make([]*User, len(users))
 	for i, u := range users {
 		result[i] = FromSchemaUser(u)
 	}
+
 	return result
 }
 
@@ -56,18 +57,18 @@ func FromSchemaUsers(users []*schema.User) []*User {
 // REQUEST/RESPONSE TYPES
 // =============================================================================
 
-// CreateUserRequest represents a create user request
+// CreateUserRequest represents a create user request.
 type CreateUserRequest struct {
-	AppID    xid.ID `json:"appId" validate:"required"`
-	Email    string `json:"email" validate:"required,email"`
+	AppID    xid.ID `json:"appId"    validate:"required"`
+	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required"`
 	Name     string `json:"name"`
 }
 
-// UpdateUserRequest represents an update user request
+// UpdateUserRequest represents an update user request.
 type UpdateUserRequest struct {
 	Name            *string `json:"name,omitempty"`
-	Email           *string `json:"email,omitempty" validate:"omitempty,email"`
+	Email           *string `json:"email,omitempty"           validate:"omitempty,email"`
 	EmailVerified   *bool   `json:"emailVerified,omitempty"`
 	Image           *string `json:"image,omitempty"`
 	Username        *string `json:"username,omitempty"`

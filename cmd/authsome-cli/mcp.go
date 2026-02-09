@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/xraph/authsome"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/mcp"
 	"github.com/xraph/forge"
 )
@@ -80,6 +81,7 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 
 	// Verify MCP mode
 	var mode mcp.Mode
+
 	switch mcpMode {
 	case "readonly":
 		mode = mcp.ModeReadOnly
@@ -93,6 +95,7 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 
 	// Verify transport
 	var transport mcp.Transport
+
 	switch mcpTransport {
 	case "stdio":
 		transport = mcp.TransportStdio
@@ -162,9 +165,11 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "🚀 Starting MCP server...\n")
 	fmt.Fprintf(os.Stderr, "   Mode: %s\n", mode)
 	fmt.Fprintf(os.Stderr, "   Transport: %s\n", transport)
+
 	if transport == mcp.TransportHTTP {
 		fmt.Fprintf(os.Stderr, "   Port: %d\n", mcpHTTPPort)
 	}
+
 	fmt.Fprintf(os.Stderr, "\n")
 
 	// Handle graceful shutdown
@@ -182,10 +187,12 @@ func runMCPServe(cmd *cobra.Command, args []string) error {
 
 	// Start server
 	if err := mcpPlugin.Start(ctx); err != nil {
-		if err == context.Canceled {
+		if errs.Is(err, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "✅ MCP server stopped gracefully\n")
+
 			return nil
 		}
+
 		return fmt.Errorf("MCP server error: %w", err)
 	}
 

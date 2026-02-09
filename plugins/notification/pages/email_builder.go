@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// EmailBuilderPage renders the visual email template builder
+// EmailBuilderPage renders the visual email template builder.
 func EmailBuilderPage(currentApp *app.App, basePath string, templateID string, document *builder.Document) g.Node {
 	appID := currentApp.ID.String()
 

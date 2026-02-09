@@ -9,7 +9,7 @@ import (
 )
 
 // Repository defines the interface for identity verification data operations
-// Updated for V2 architecture with App → Environment → Organization hierarchy
+// Updated for V2 architecture with App → Environment → Organization hierarchy.
 type Repository interface {
 	// Identity Verification CRUD
 	CreateVerification(ctx context.Context, verification *schema.IdentityVerification) error
@@ -53,6 +53,6 @@ type Repository interface {
 	GetBlockedUsers(ctx context.Context, appID xid.ID, limit, offset int) ([]*schema.UserVerificationStatus, error)
 
 	// Analytics and reporting - Returns map[string]interface{} for flexibility
-	GetVerificationStats(ctx context.Context, appID xid.ID, orgID xid.ID, from, to time.Time) (map[string]interface{}, error)
-	GetProviderStats(ctx context.Context, appID xid.ID, provider string, from, to time.Time) (map[string]interface{}, error)
+	GetVerificationStats(ctx context.Context, appID xid.ID, orgID xid.ID, from, to time.Time) (map[string]any, error)
+	GetProviderStats(ctx context.Context, appID xid.ID, provider string, from, to time.Time) (map[string]any, error)
 }

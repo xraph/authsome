@@ -12,7 +12,7 @@ func (p *PagesManager) SetBaseUIPath(baseUIPath string) {
 	p.baseUIPath = baseUIPath
 }
 
-// SetExtensionRegistry sets the extension registry for accessing plugin extensions
+// SetExtensionRegistry sets the extension registry for accessing plugin extensions.
 func (p *PagesManager) SetExtensionRegistry(registry ExtensionRegistry) {
 	p.extensionRegistry = registry
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// PaymentMethod represents a stored payment method
+// PaymentMethod represents a stored payment method.
 type PaymentMethod struct {
 	ID                 xid.ID            `json:"id"`
 	OrganizationID     xid.ID            `json:"organizationId"`
@@ -44,9 +44,10 @@ type PaymentMethod struct {
 	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
-// NewPaymentMethod creates a new PaymentMethod with default values
+// NewPaymentMethod creates a new PaymentMethod with default values.
 func NewPaymentMethod(orgID xid.ID, methodType PaymentMethodType) *PaymentMethod {
 	now := time.Now()
+
 	return &PaymentMethod{
 		ID:             xid.New(),
 		OrganizationID: orgID,
@@ -58,17 +59,17 @@ func NewPaymentMethod(orgID xid.ID, methodType PaymentMethodType) *PaymentMethod
 	}
 }
 
-// IsCard returns true if this is a card payment method
+// IsCard returns true if this is a card payment method.
 func (pm *PaymentMethod) IsCard() bool {
 	return pm.Type == PaymentMethodCard
 }
 
-// IsBankAccount returns true if this is a bank account
+// IsBankAccount returns true if this is a bank account.
 func (pm *PaymentMethod) IsBankAccount() bool {
 	return pm.Type == PaymentMethodBankAccount
 }
 
-// DisplayName returns a user-friendly display name for the payment method
+// DisplayName returns a user-friendly display name for the payment method.
 func (pm *PaymentMethod) DisplayName() string {
 	switch pm.Type {
 	case PaymentMethodCard:
@@ -76,12 +77,14 @@ func (pm *PaymentMethod) DisplayName() string {
 		if brand == "" {
 			brand = "Card"
 		}
+
 		return brand + " •••• " + pm.CardLast4
 	case PaymentMethodBankAccount:
 		name := pm.BankName
 		if name == "" {
 			name = "Bank"
 		}
+
 		return name + " •••• " + pm.BankLast4
 	case PaymentMethodSepaDebit:
 		return "SEPA •••• " + pm.BankLast4
@@ -90,56 +93,60 @@ func (pm *PaymentMethod) DisplayName() string {
 	}
 }
 
-// IsExpired returns true if the card is expired
+// IsExpired returns true if the card is expired.
 func (pm *PaymentMethod) IsExpired() bool {
 	if pm.Type != PaymentMethodCard {
 		return false
 	}
+
 	now := time.Now()
 	// Card is expired if we're past the end of the expiration month
 	expirationTime := time.Date(pm.CardExpYear, time.Month(pm.CardExpMonth)+1, 1, 0, 0, 0, 0, time.UTC)
+
 	return now.After(expirationTime)
 }
 
-// WillExpireSoon returns true if the card will expire within the given days
+// WillExpireSoon returns true if the card will expire within the given days.
 func (pm *PaymentMethod) WillExpireSoon(days int) bool {
 	if pm.Type != PaymentMethodCard {
 		return false
 	}
+
 	expirationTime := time.Date(pm.CardExpYear, time.Month(pm.CardExpMonth)+1, 1, 0, 0, 0, 0, time.UTC)
 	warningTime := time.Now().AddDate(0, 0, days)
+
 	return warningTime.After(expirationTime) && !pm.IsExpired()
 }
 
-// SetupIntentResult represents the result of creating a setup intent
+// SetupIntentResult represents the result of creating a setup intent.
 type SetupIntentResult struct {
 	ClientSecret   string `json:"clientSecret"`   // For client-side confirmation
 	SetupIntentID  string `json:"setupIntentId"`  // Stripe SetupIntent ID
 	PublishableKey string `json:"publishableKey"` // Stripe publishable key
 }
 
-// AddPaymentMethodRequest represents a request to add a payment method
+// AddPaymentMethodRequest represents a request to add a payment method.
 type AddPaymentMethodRequest struct {
 	OrganizationID xid.ID            `json:"organizationId" validate:"required"`
-	Type           PaymentMethodType `json:"type" validate:"required"`
+	Type           PaymentMethodType `json:"type"           validate:"required"`
 	SetAsDefault   bool              `json:"setAsDefault"`
 	BillingName    string            `json:"billingName"`
-	BillingEmail   string            `json:"billingEmail" validate:"omitempty,email"`
+	BillingEmail   string            `json:"billingEmail"   validate:"omitempty,email"`
 	BillingPhone   string            `json:"billingPhone"`
 	BillingAddress *BillingAddress   `json:"billingAddress"`
 }
 
-// BillingAddress represents a billing address
+// BillingAddress represents a billing address.
 type BillingAddress struct {
 	Line1      string `json:"line1"`
 	Line2      string `json:"line2"`
 	City       string `json:"city"`
 	State      string `json:"state"`
 	PostalCode string `json:"postalCode"`
-	Country    string `json:"country" validate:"len=2"` // ISO 3166-1 alpha-2
+	Country    string `json:"country"    validate:"len=2"` // ISO 3166-1 alpha-2
 }
 
-// Customer represents the billing customer for an organization
+// Customer represents the billing customer for an organization.
 type Customer struct {
 	ID                 xid.ID          `json:"id"`
 	OrganizationID     xid.ID          `json:"organizationId"`
@@ -158,9 +165,10 @@ type Customer struct {
 	UpdatedAt          time.Time       `json:"updatedAt"`
 }
 
-// NewCustomer creates a new Customer with default values
+// NewCustomer creates a new Customer with default values.
 func NewCustomer(orgID xid.ID, email, name string) *Customer {
 	now := time.Now()
+
 	return &Customer{
 		ID:             xid.New(),
 		OrganizationID: orgID,
@@ -174,11 +182,11 @@ func NewCustomer(orgID xid.ID, email, name string) *Customer {
 	}
 }
 
-// CreateCustomerRequest represents a request to create a customer
+// CreateCustomerRequest represents a request to create a customer.
 type CreateCustomerRequest struct {
 	OrganizationID xid.ID          `json:"organizationId" validate:"required"`
-	Email          string          `json:"email" validate:"required,email"`
-	Name           string          `json:"name" validate:"required"`
+	Email          string          `json:"email"          validate:"required,email"`
+	Name           string          `json:"name"           validate:"required"`
 	Phone          string          `json:"phone"`
 	TaxID          string          `json:"taxId"`
 	TaxExempt      bool            `json:"taxExempt"`
@@ -186,9 +194,9 @@ type CreateCustomerRequest struct {
 	Metadata       map[string]any  `json:"metadata"`
 }
 
-// UpdateCustomerRequest represents a request to update a customer
+// UpdateCustomerRequest represents a request to update a customer.
 type UpdateCustomerRequest struct {
-	Email          *string         `json:"email,omitempty" validate:"omitempty,email"`
+	Email          *string         `json:"email,omitempty"          validate:"omitempty,email"`
 	Name           *string         `json:"name,omitempty"`
 	Phone          *string         `json:"phone,omitempty"`
 	TaxID          *string         `json:"taxId,omitempty"`

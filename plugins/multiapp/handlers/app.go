@@ -10,19 +10,19 @@ import (
 	"github.com/xraph/forge"
 )
 
-// AppHandler handles app-related HTTP requests
+// AppHandler handles app-related HTTP requests.
 type AppHandler struct {
 	appService *coreapp.ServiceImpl
 }
 
-// NewAppHandler creates a new app handler
+// NewAppHandler creates a new app handler.
 func NewAppHandler(appService *coreapp.ServiceImpl) *AppHandler {
 	return &AppHandler{
 		appService: appService,
 	}
 }
 
-// CreateApp handles app creation requests
+// CreateApp handles app creation requests.
 func (h *AppHandler) CreateApp(c forge.Context) error {
 	var req CreateAppRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -40,7 +40,7 @@ func (h *AppHandler) CreateApp(c forge.Context) error {
 	return c.JSON(http.StatusCreated, a)
 }
 
-// GetApp handles get app requests
+// GetApp handles get app requests.
 func (h *AppHandler) GetApp(c forge.Context) error {
 	var req GetAppRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -60,7 +60,7 @@ func (h *AppHandler) GetApp(c forge.Context) error {
 	return c.JSON(http.StatusOK, a)
 }
 
-// UpdateApp handles app update requests
+// UpdateApp handles app update requests.
 func (h *AppHandler) UpdateApp(c forge.Context) error {
 	var req UpdateAppRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -80,7 +80,7 @@ func (h *AppHandler) UpdateApp(c forge.Context) error {
 	return c.JSON(http.StatusOK, a)
 }
 
-// DeleteApp handles app deletion requests
+// DeleteApp handles app deletion requests.
 func (h *AppHandler) DeleteApp(c forge.Context) error {
 	var req DeleteAppRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -100,7 +100,7 @@ func (h *AppHandler) DeleteApp(c forge.Context) error {
 	return c.JSON(http.StatusNoContent, nil)
 }
 
-// ListApps handles list apps requests
+// ListApps handles list apps requests.
 func (h *AppHandler) ListApps(c forge.Context) error {
 	var req ListAppsRequest
 	if err := c.BindRequest(&req); err != nil {
@@ -112,10 +112,8 @@ func (h *AppHandler) ListApps(c forge.Context) error {
 	if limit <= 0 {
 		limit = 10
 	}
-	offset := req.Offset
-	if offset < 0 {
-		offset = 0
-	}
+
+	offset := max(req.Offset, 0)
 
 	filter := &coreapp.ListAppsFilter{
 		PaginationParams: pagination.PaginationParams{
@@ -129,7 +127,7 @@ func (h *AppHandler) ListApps(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, errs.Wrap(err, "INTERNAL_ERROR", "Internal server error", http.StatusInternalServerError))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"data":       response.Data,
 		"pagination": response.Pagination,
 	})

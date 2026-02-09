@@ -32,21 +32,21 @@ type AuthStrategy interface {
 	// Extract attempts to extract credentials from the request
 	// Returns credentials (strategy-specific type) and whether they were found
 	// If no credentials are present for this strategy, return (nil, false)
-	Extract(c forge.Context) (credentials interface{}, found bool)
+	Extract(c forge.Context) (credentials any, found bool)
 
 	// Authenticate validates the credentials and returns an AuthContext
 	// This method is only called if Extract returned found=true
 	// On success, return a fully populated AuthContext
 	// On failure, return an error (auth will try next strategy)
-	Authenticate(ctx context.Context, credentials interface{}) (*contexts.AuthContext, error)
+	Authenticate(ctx context.Context, credentials any) (*contexts.AuthContext, error)
 }
 
-// AuthStrategyRegistry manages registered authentication strategies
+// AuthStrategyRegistry manages registered authentication strategies.
 type AuthStrategyRegistry struct {
 	strategies []AuthStrategy
 }
 
-// NewAuthStrategyRegistry creates a new strategy registry
+// NewAuthStrategyRegistry creates a new strategy registry.
 func NewAuthStrategyRegistry() *AuthStrategyRegistry {
 	return &AuthStrategyRegistry{
 		strategies: make([]AuthStrategy, 0),
@@ -54,7 +54,7 @@ func NewAuthStrategyRegistry() *AuthStrategyRegistry {
 }
 
 // Register adds a new authentication strategy
-// Strategies are automatically sorted by priority after registration
+// Strategies are automatically sorted by priority after registration.
 func (r *AuthStrategyRegistry) Register(strategy AuthStrategy) error {
 	// Check for duplicate IDs
 	for _, s := range r.strategies {
@@ -65,30 +65,32 @@ func (r *AuthStrategyRegistry) Register(strategy AuthStrategy) error {
 
 	r.strategies = append(r.strategies, strategy)
 	r.sortByPriority()
+
 	return nil
 }
 
-// Get retrieves a strategy by ID
+// Get retrieves a strategy by ID.
 func (r *AuthStrategyRegistry) Get(id string) (AuthStrategy, bool) {
 	for _, s := range r.strategies {
 		if s.ID() == id {
 			return s, true
 		}
 	}
+
 	return nil, false
 }
 
-// List returns all registered strategies in priority order
+// List returns all registered strategies in priority order.
 func (r *AuthStrategyRegistry) List() []AuthStrategy {
 	return r.strategies
 }
 
-// sortByPriority sorts strategies by priority (lower first)
+// sortByPriority sorts strategies by priority (lower first).
 func (r *AuthStrategyRegistry) sortByPriority() {
 	// Simple bubble sort - fine for small number of strategies
 	n := len(r.strategies)
-	for i := 0; i < n-1; i++ {
-		for j := 0; j < n-i-1; j++ {
+	for i := range n - 1 {
+		for j := range n - i - 1 {
 			if r.strategies[j].Priority() > r.strategies[j+1].Priority() {
 				r.strategies[j], r.strategies[j+1] = r.strategies[j+1], r.strategies[j]
 			}
@@ -96,7 +98,7 @@ func (r *AuthStrategyRegistry) sortByPriority() {
 	}
 }
 
-// StrategyAlreadyRegisteredError is returned when attempting to register a duplicate strategy
+// StrategyAlreadyRegisteredError is returned when attempting to register a duplicate strategy.
 type StrategyAlreadyRegisteredError struct {
 	ID string
 }

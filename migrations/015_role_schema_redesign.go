@@ -60,6 +60,7 @@ func init() {
 		for _, app := range apps {
 			// Get the default environment for this app
 			var envID string
+
 			err := db.NewSelect().
 				Table("environments").
 				Column("id").
@@ -67,7 +68,6 @@ func init() {
 				Where("is_default = ?", true).
 				Limit(1).
 				Scan(ctx, &envID)
-
 			if err != nil {
 				// If no default environment found, get the first environment
 				err = db.NewSelect().
@@ -77,7 +77,6 @@ func init() {
 					Order("created_at ASC").
 					Limit(1).
 					Scan(ctx, &envID)
-
 				if err != nil {
 					// If no environment exists, check if this app has any roles
 					roleCount, countErr := db.NewSelect().
@@ -90,11 +89,7 @@ func init() {
 						fmt.Printf("Creating default environment for app %s (has %d roles)\n", app.ID, roleCount)
 
 						// Create default environment
-						_, err = db.ExecContext(ctx, `
-							INSERT INTO environments (id, app_id, name, slug, type, status, is_default, created_at, updated_at, created_by, updated_by, version)
-							VALUES (?, ?, 'Default', 'default', 'production', 'active', true, NOW(), NOW(), ?, ?, 1)
-						`, generateXID(), app.ID, app.ID, app.ID)
-
+						_, err = db.ExecContext(ctx, "\n\t\t\t\t\t\t\tINSERT INTO environments (id, app_id, name, slug, type, status, is_default, created_at, updated_at, created_by, updated_by, version)\n\t\t\t\t\t\t\tVALUES (?, ?, 'Default', 'default', 'production', 'active', true, NOW(), ?, 1)\n\t\t\t\t\t\t", generateXID(), app.ID, app.ID, app.ID)
 						if err != nil {
 							return fmt.Errorf("failed to create default environment for app %s: %w", app.ID, err)
 						}
@@ -106,7 +101,6 @@ func init() {
 							Where("app_id = ?", app.ID).
 							Limit(1).
 							Scan(ctx, &envID)
-
 						if err != nil {
 							return fmt.Errorf("failed to retrieve created environment for app %s: %w", app.ID, err)
 						}
@@ -143,10 +137,12 @@ func init() {
 					r1.updated_at < r2.updated_at
 			)
 		`
+
 		result, err := db.ExecContext(ctx, duplicatesQuery)
 		if err != nil {
 			return fmt.Errorf("failed to delete duplicate app-level roles: %w", err)
 		}
+
 		rowsAffected, _ := result.RowsAffected()
 		if rowsAffected > 0 {
 			fmt.Printf("Deleted %d duplicate app-level roles\n", rowsAffected)
@@ -170,10 +166,12 @@ func init() {
 					r1.updated_at < r2.updated_at
 			)
 		`
+
 		result, err = db.ExecContext(ctx, orgDuplicatesQuery)
 		if err != nil {
 			return fmt.Errorf("failed to delete duplicate org-level roles: %w", err)
 		}
+
 		rowsAffected, _ = result.RowsAffected()
 		if rowsAffected > 0 {
 			fmt.Printf("Deleted %d duplicate org-level roles\n", rowsAffected)
@@ -250,7 +248,7 @@ func init() {
 }
 
 // toTitleCase converts a snake_case string to Title Case
-// Example: "workspace_owner" -> "Workspace Owner"
+// Example: "workspace_owner" -> "Workspace Owner".
 func toTitleCase(s string) string {
 	words := strings.Split(s, "_")
 	for i, word := range words {
@@ -258,10 +256,11 @@ func toTitleCase(s string) string {
 			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
 		}
 	}
+
 	return strings.Join(words, " ")
 }
 
-// generateXID generates a new XID and returns it as a string
+// generateXID generates a new XID and returns it as a string.
 func generateXID() string {
 	return xid.New().String()
 }

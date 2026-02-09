@@ -6,7 +6,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// PageHeader renders a page header with title and description
+// PageHeader renders a page header with title and description.
 func PageHeader(title, description string) g.Node {
 	return Div(
 		Class("mb-6"),
@@ -15,7 +15,7 @@ func PageHeader(title, description string) g.Node {
 	)
 }
 
-// LoadingSpinner renders a loading spinner
+// LoadingSpinner renders a loading spinner.
 func LoadingSpinner() g.Node {
 	return Div(
 		Class("flex items-center justify-center py-12"),
@@ -23,7 +23,7 @@ func LoadingSpinner() g.Node {
 	)
 }
 
-// ErrorMessage renders an error message with an x-show condition
+// ErrorMessage renders an error message with an x-show condition.
 func ErrorMessage(condition string) g.Node {
 	return Div(
 		g.Attr("x-show", condition),
@@ -37,7 +37,7 @@ func ErrorMessage(condition string) g.Node {
 	)
 }
 
-// SuccessMessage renders a success message with an x-show condition
+// SuccessMessage renders a success message with an x-show condition.
 func SuccessMessage(condition string) g.Node {
 	return Div(
 		g.Attr("x-show", condition),

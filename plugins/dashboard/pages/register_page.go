@@ -21,9 +21,8 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ModernHomePage - Simple handler returning content only
+// ModernHomePage - Simple handler returning content only.
 func (p *PagesManager) RegisterPage(ctx *router.PageContext) (g.Node, error) {
-
 	// // Check if already authenticated (check session cookie directly since no auth middleware)
 	// if user := p.checkExistingPageSession(ctx); user != nil {
 	// 	// Already logged in, redirect to dashboard
@@ -42,6 +41,7 @@ func (p *PagesManager) RegisterPage(ctx *router.PageContext) (g.Node, error) {
 
 	// Map error codes to user-friendly messages
 	var errorMessage string
+
 	switch errorParam {
 	case "admin_required":
 		errorMessage = "Admin access required to view dashboard"
@@ -67,7 +67,7 @@ func (p *PagesManager) RegisterPage(ctx *router.PageContext) (g.Node, error) {
 	return p.signupPageContent(signupData), nil
 }
 
-// HandleSignup processes the signup form submission
+// HandleSignup processes the signup form submission.
 func (p *PagesManager) HandleSignup(ctx *router.PageContext) (g.Node, error) {
 	// Parse form data
 	if err := ctx.Request.ParseForm(); err != nil {
@@ -101,6 +101,7 @@ func (p *PagesManager) HandleSignup(ctx *router.PageContext) (g.Node, error) {
 
 	// Get platform app context
 	goCtx := ctx.Request.Context()
+
 	platformApp, err := p.services.AppService().GetPlatformApp(goCtx)
 	if err != nil {
 		return p.renderSignupError(ctx, "System configuration error. Please contact administrator.", redirect)
@@ -169,12 +170,14 @@ func (p *PagesManager) HandleSignup(ctx *router.PageContext) (g.Node, error) {
 	if redirect == "" {
 		redirect = p.baseUIPath
 	}
+
 	ctx.SetHeader("Location", redirect)
 	ctx.ResponseWriter.WriteHeader(http.StatusFound)
+
 	return nil, nil
 }
 
-// renderSignupError renders the signup page with an error message
+// renderSignupError renders the signup page with an error message.
 func (p *PagesManager) renderSignupError(ctx *router.PageContext, message string, redirect string) (g.Node, error) {
 	isFirstUser, _ := p.isFirstUser(ctx.Request.Context())
 
@@ -193,7 +196,7 @@ func (p *PagesManager) renderSignupError(ctx *router.PageContext, message string
 	return p.signupPageContent(signupData), nil
 }
 
-// signupPageContent returns the signup page content (extracted for reuse)
+// signupPageContent returns the signup page content (extracted for reuse).
 func (p *PagesManager) signupPageContent(signupData pages.SignupPageData) g.Node {
 	return primitives.Container(
 		primitives.Container(

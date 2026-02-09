@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/xraph/authsome/internal/clients/generator"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 func init() {
@@ -64,6 +66,7 @@ func runGenerateClient(cmd *cobra.Command, args []string) error {
 	if !filepath.IsAbs(outputDir) {
 		outputDir, _ = filepath.Abs(outputDir)
 	}
+
 	if !filepath.IsAbs(manifestDir) {
 		manifestDir, _ = filepath.Abs(manifestDir)
 	}
@@ -77,10 +80,13 @@ func runGenerateClient(cmd *cobra.Command, args []string) error {
 	// List plugins if requested
 	if list {
 		plugins := gen.ListPlugins()
+
 		fmt.Println("Available plugins:")
+
 		for _, plugin := range plugins {
 			fmt.Printf("  - %s\n", plugin)
 		}
+
 		return nil
 	}
 
@@ -89,13 +95,15 @@ func runGenerateClient(cmd *cobra.Command, args []string) error {
 		if err := gen.ValidateManifests(); err != nil {
 			return fmt.Errorf("manifest validation failed: %w", err)
 		}
+
 		fmt.Println("✓ All manifests are valid")
+
 		return nil
 	}
 
 	// Require language flag
 	if lang == "" {
-		return fmt.Errorf("--lang flag is required (go, typescript, rust, or all)")
+		return errs.New(errs.CodeInvalidInput, "--lang flag is required (go, typescript, rust, or all)", http.StatusBadRequest)
 	}
 
 	// Generate clients
@@ -107,13 +115,16 @@ func runGenerateClient(cmd *cobra.Command, args []string) error {
 		languages := []string{"go", "typescript", "rust"}
 		for _, l := range languages {
 			fmt.Printf("\nGenerating %s client...\n", l)
+
 			if err := gen.Generate(generator.Language(l), plugins); err != nil {
 				return fmt.Errorf("failed to generate %s client: %w", l, err)
 			}
+
 			fmt.Printf("✓ %s client generated at %s\n", l, filepath.Join(outputDir, l))
 		}
 
 		fmt.Println("\n✓ All clients generated successfully!")
+
 		return nil
 	}
 

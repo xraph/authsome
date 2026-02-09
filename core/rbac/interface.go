@@ -180,5 +180,5 @@ type ServiceInterface interface {
 	)
 }
 
-// Ensure Service implements ServiceInterface
+// Ensure Service implements ServiceInterface.
 var _ ServiceInterface = (*Service)(nil)

@@ -18,14 +18,14 @@ const (
 	csrfTokenLifetime = 1 * time.Hour
 )
 
-// CSRFProtector provides production-grade CSRF protection
+// CSRFProtector provides production-grade CSRF protection.
 type CSRFProtector struct {
 	secret     []byte
 	mu         sync.RWMutex
 	tokenStore *csrfTokenStore
 }
 
-// NewCSRFProtector creates a new CSRF protector with a random secret
+// NewCSRFProtector creates a new CSRF protector with a random secret.
 func NewCSRFProtector() (*CSRFProtector, error) {
 	secret := make([]byte, csrfSecretLength)
 	if _, err := rand.Read(secret); err != nil {
@@ -38,7 +38,7 @@ func NewCSRFProtector() (*CSRFProtector, error) {
 	}, nil
 }
 
-// csrfTokenStore stores issued tokens with expiration
+// csrfTokenStore stores issued tokens with expiration.
 type csrfTokenStore struct {
 	mu     sync.RWMutex
 	tokens map[string]*csrfTokenEntry
@@ -61,6 +61,7 @@ func newCSRFTokenStore(ttl time.Duration) *csrfTokenStore {
 	go func() {
 		ticker := time.NewTicker(ttl / 2)
 		defer ticker.Stop()
+
 		for range ticker.C {
 			s.cleanup()
 		}
@@ -100,6 +101,7 @@ func (s *csrfTokenStore) get(token string) (*csrfTokenEntry, bool) {
 func (s *csrfTokenStore) remove(token string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	delete(s.tokens, token)
 }
 
@@ -116,7 +118,7 @@ func (s *csrfTokenStore) cleanup() {
 }
 
 // GenerateToken generates a new CSRF token for a session
-// Format: base64(randomBytes) + "." + base64(hmac(randomBytes + sessionID))
+// Format: base64(randomBytes) + "." + base64(hmac(randomBytes + sessionID)).
 func (c *CSRFProtector) GenerateToken(sessionID string) (string, error) {
 	// Generate random bytes
 	randomBytes := make([]byte, csrfTokenLength)
@@ -142,7 +144,7 @@ func (c *CSRFProtector) GenerateToken(sessionID string) (string, error) {
 	return token, nil
 }
 
-// ValidateToken validates a CSRF token against a session
+// ValidateToken validates a CSRF token against a session.
 func (c *CSRFProtector) ValidateToken(token, sessionID string) bool {
 	if token == "" || sessionID == "" {
 		return false
@@ -187,13 +189,13 @@ func (c *CSRFProtector) ValidateToken(token, sessionID string) bool {
 	return true
 }
 
-// InvalidateToken removes a token from the store
+// InvalidateToken removes a token from the store.
 func (c *CSRFProtector) InvalidateToken(token string) {
 	c.tokenStore.remove(token)
 }
 
 // RotateSecret generates a new CSRF secret
-// Should be called periodically for enhanced security
+// Should be called periodically for enhanced security.
 func (c *CSRFProtector) RotateSecret() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -212,8 +214,8 @@ func (c *CSRFProtector) RotateSecret() error {
 	return nil
 }
 
-// Stats returns statistics about the CSRF token store
-func (c *CSRFProtector) Stats() map[string]interface{} {
+// Stats returns statistics about the CSRF token store.
+func (c *CSRFProtector) Stats() map[string]any {
 	c.tokenStore.mu.RLock()
 	defer c.tokenStore.mu.RUnlock()
 
@@ -227,14 +229,14 @@ func (c *CSRFProtector) Stats() map[string]interface{} {
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"total_tokens":   totalTokens,
 		"valid_tokens":   validTokens,
 		"expired_tokens": totalTokens - validTokens,
 	}
 }
 
-// CleanupExpiredTokens manually triggers cleanup of expired tokens
+// CleanupExpiredTokens manually triggers cleanup of expired tokens.
 func (c *CSRFProtector) CleanupExpiredTokens() {
 	c.tokenStore.cleanup()
 }

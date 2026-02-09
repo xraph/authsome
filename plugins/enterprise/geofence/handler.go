@@ -10,24 +10,24 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles HTTP requests for geofencing
+// Handler handles HTTP requests for geofencing.
 type Handler struct {
 	service *Service
 	config  *Config
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
 
 type RulesResponse struct {
-	Rules interface{} `json:"rules"`
-	Count int         `json:"count"`
+	Rules any `json:"rules"`
+	Count int `json:"count"`
 }
 
-// NewHandler creates a new geofencing handler
+// NewHandler creates a new geofencing handler.
 func NewHandler(service *Service, config *Config) *Handler {
 	return &Handler{
 		service: service,
@@ -35,7 +35,7 @@ func NewHandler(service *Service, config *Config) *Handler {
 	}
 }
 
-// CreateRule creates a new geofence rule
+// CreateRule creates a new geofence rule.
 func (h *Handler) CreateRule(c forge.Context) error {
 	var req GeofenceRule
 	if err := c.BindJSON(&req); err != nil {
@@ -57,7 +57,7 @@ func (h *Handler) CreateRule(c forge.Context) error {
 	return c.JSON(http.StatusCreated, req)
 }
 
-// ListRules lists all geofence rules for an organization
+// ListRules lists all geofence rules for an organization.
 func (h *Handler) ListRules(c forge.Context) error {
 	orgID := c.Get("organization_id").(xid.ID)
 
@@ -69,9 +69,10 @@ func (h *Handler) ListRules(c forge.Context) error {
 	return c.JSON(http.StatusOK, rules)
 }
 
-// GetRule gets a specific geofence rule
+// GetRule gets a specific geofence rule.
 func (h *Handler) GetRule(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid rule ID"))
@@ -85,9 +86,10 @@ func (h *Handler) GetRule(c forge.Context) error {
 	return c.JSON(http.StatusOK, rule)
 }
 
-// UpdateRule updates a geofence rule
+// UpdateRule updates a geofence rule.
 func (h *Handler) UpdateRule(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid rule ID"))
@@ -111,9 +113,10 @@ func (h *Handler) UpdateRule(c forge.Context) error {
 	return c.JSON(http.StatusOK, req)
 }
 
-// DeleteRule deletes a geofence rule
+// DeleteRule deletes a geofence rule.
 func (h *Handler) DeleteRule(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid rule ID"))
@@ -126,7 +129,7 @@ func (h *Handler) DeleteRule(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "rule deleted successfully"})
 }
 
-// CheckLocation performs a geofence check
+// CheckLocation performs a geofence check.
 func (h *Handler) CheckLocation(c forge.Context) error {
 	var req struct {
 		IPAddress string   `json:"ipAddress"`
@@ -140,11 +143,13 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	}
 
 	var userID xid.ID
+
 	if req.UserID != "" {
 		id, err := xid.FromString(req.UserID)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid user ID"))
 		}
+
 		userID = id
 	} else {
 		userID = c.Get("user_id").(xid.ID)
@@ -172,7 +177,7 @@ func (h *Handler) CheckLocation(c forge.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// LookupIP performs IP geolocation lookup
+// LookupIP performs IP geolocation lookup.
 func (h *Handler) LookupIP(c forge.Context) error {
 	ip := c.Param("ip")
 
@@ -183,18 +188,19 @@ func (h *Handler) LookupIP(c forge.Context) error {
 
 	detection, _ := h.service.GetDetection(c.Context(), ip)
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"geolocation": geoData,
 		"detection":   detection,
 	})
 }
 
-// ListLocationEvents lists location events for the authenticated user
+// ListLocationEvents lists location events for the authenticated user.
 func (h *Handler) ListLocationEvents(c forge.Context) error {
 	userID := c.Get("user_id").(xid.ID)
 
 	limitStr := c.Query("limit")
 	limit := 50
+
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
@@ -209,9 +215,10 @@ func (h *Handler) ListLocationEvents(c forge.Context) error {
 	return c.JSON(http.StatusOK, events)
 }
 
-// GetLocationEvent gets a specific location event
+// GetLocationEvent gets a specific location event.
 func (h *Handler) GetLocationEvent(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid event ID"))
@@ -225,7 +232,7 @@ func (h *Handler) GetLocationEvent(c forge.Context) error {
 	return c.JSON(http.StatusOK, event)
 }
 
-// ListTravelAlerts lists travel alerts for the authenticated user
+// ListTravelAlerts lists travel alerts for the authenticated user.
 func (h *Handler) ListTravelAlerts(c forge.Context) error {
 	userID := c.Get("user_id").(xid.ID)
 	status := c.Query("status") // Optional filter
@@ -238,9 +245,10 @@ func (h *Handler) ListTravelAlerts(c forge.Context) error {
 	return c.JSON(http.StatusOK, alerts)
 }
 
-// GetTravelAlert gets a specific travel alert
+// GetTravelAlert gets a specific travel alert.
 func (h *Handler) GetTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid alert ID"))
@@ -254,9 +262,10 @@ func (h *Handler) GetTravelAlert(c forge.Context) error {
 	return c.JSON(http.StatusOK, alert)
 }
 
-// ApproveTravelAlert approves a travel alert
+// ApproveTravelAlert approves a travel alert.
 func (h *Handler) ApproveTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid alert ID"))
@@ -271,9 +280,10 @@ func (h *Handler) ApproveTravelAlert(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert approved"})
 }
 
-// DenyTravelAlert denies a travel alert
+// DenyTravelAlert denies a travel alert.
 func (h *Handler) DenyTravelAlert(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid alert ID"))
@@ -288,7 +298,7 @@ func (h *Handler) DenyTravelAlert(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "travel alert denied"})
 }
 
-// CreateTrustedLocation creates a trusted location
+// CreateTrustedLocation creates a trusted location.
 func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 	var req TrustedLocation
 	if err := c.BindJSON(&req); err != nil {
@@ -308,7 +318,7 @@ func (h *Handler) CreateTrustedLocation(c forge.Context) error {
 	return c.JSON(http.StatusCreated, req)
 }
 
-// ListTrustedLocations lists trusted locations for the authenticated user
+// ListTrustedLocations lists trusted locations for the authenticated user.
 func (h *Handler) ListTrustedLocations(c forge.Context) error {
 	userID := c.Get("user_id").(xid.ID)
 
@@ -320,9 +330,10 @@ func (h *Handler) ListTrustedLocations(c forge.Context) error {
 	return c.JSON(http.StatusOK, locations)
 }
 
-// GetTrustedLocation gets a specific trusted location
+// GetTrustedLocation gets a specific trusted location.
 func (h *Handler) GetTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid location ID"))
@@ -336,9 +347,10 @@ func (h *Handler) GetTrustedLocation(c forge.Context) error {
 	return c.JSON(http.StatusOK, location)
 }
 
-// UpdateTrustedLocation updates a trusted location
+// UpdateTrustedLocation updates a trusted location.
 func (h *Handler) UpdateTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid location ID"))
@@ -358,9 +370,10 @@ func (h *Handler) UpdateTrustedLocation(c forge.Context) error {
 	return c.JSON(http.StatusOK, req)
 }
 
-// DeleteTrustedLocation deletes a trusted location
+// DeleteTrustedLocation deletes a trusted location.
 func (h *Handler) DeleteTrustedLocation(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid location ID"))
@@ -373,12 +386,13 @@ func (h *Handler) DeleteTrustedLocation(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "trusted location deleted"})
 }
 
-// ListViolations lists geofence violations
+// ListViolations lists geofence violations.
 func (h *Handler) ListViolations(c forge.Context) error {
 	userID := c.Get("user_id").(xid.ID)
 
 	limitStr := c.Query("limit")
 	limit := 50
+
 	if limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
@@ -393,9 +407,10 @@ func (h *Handler) ListViolations(c forge.Context) error {
 	return c.JSON(http.StatusOK, violations)
 }
 
-// GetViolation gets a specific violation
+// GetViolation gets a specific violation.
 func (h *Handler) GetViolation(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid violation ID"))
@@ -409,9 +424,10 @@ func (h *Handler) GetViolation(c forge.Context) error {
 	return c.JSON(http.StatusOK, violation)
 }
 
-// ResolveViolation resolves a geofence violation
+// ResolveViolation resolves a geofence violation.
 func (h *Handler) ResolveViolation(c forge.Context) error {
 	idStr := c.Param("id")
+
 	id, err := xid.FromString(idStr)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid violation ID"))
@@ -433,19 +449,19 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation resolved"})
 }
 
-// GetMetrics returns geofencing metrics
+// GetMetrics returns geofencing metrics.
 func (h *Handler) GetMetrics(c forge.Context) error {
 	// TODO: Implement metrics aggregation
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "metrics endpoint - to be implemented"})
 }
 
-// GetLocationAnalytics returns location analytics
+// GetLocationAnalytics returns location analytics.
 func (h *Handler) GetLocationAnalytics(c forge.Context) error {
 	// TODO: Implement location analytics
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "location analytics endpoint - to be implemented"})
 }
 
-// GetViolationAnalytics returns violation analytics
+// GetViolationAnalytics returns violation analytics.
 func (h *Handler) GetViolationAnalytics(c forge.Context) error {
 	// TODO: Implement violation analytics
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "violation analytics endpoint - to be implemented"})

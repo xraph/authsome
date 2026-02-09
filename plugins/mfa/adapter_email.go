@@ -12,14 +12,15 @@ import (
 	notificationPlugin "github.com/xraph/authsome/plugins/notification"
 )
 
-// EmailFactorAdapter integrates emailotp plugin as an MFA factor (not primary auth)
+// EmailFactorAdapter integrates emailotp plugin as an MFA factor (not primary auth).
 type EmailFactorAdapter struct {
 	BaseFactorAdapter
+
 	emailOTPService *emailotp.Service
 	notifAdapter    *notificationPlugin.Adapter
 }
 
-// NewEmailFactorAdapter creates a new email factor adapter
+// NewEmailFactorAdapter creates a new email factor adapter.
 func NewEmailFactorAdapter(emailOTPService *emailotp.Service, notifAdapter *notificationPlugin.Adapter, enabled bool) *EmailFactorAdapter {
 	return &EmailFactorAdapter{
 		BaseFactorAdapter: BaseFactorAdapter{
@@ -31,7 +32,7 @@ func NewEmailFactorAdapter(emailOTPService *emailotp.Service, notifAdapter *noti
 	}
 }
 
-// Enroll registers an email address for MFA
+// Enroll registers an email address for MFA.
 func (a *EmailFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata map[string]any) (*FactorEnrollmentResponse, error) {
 	if !a.IsAvailable() {
 		return nil, errs.BadRequest("Email MFA factor not available")
@@ -58,7 +59,7 @@ func (a *EmailFactorAdapter) Enroll(ctx context.Context, userID xid.ID, metadata
 	}, nil
 }
 
-// VerifyEnrollment sends a test code to verify email works
+// VerifyEnrollment sends a test code to verify email works.
 func (a *EmailFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID xid.ID, proof string) error {
 	if !a.IsAvailable() {
 		return errs.BadRequest("Email MFA factor not available")
@@ -72,7 +73,7 @@ func (a *EmailFactorAdapter) VerifyEnrollment(ctx context.Context, enrollmentID 
 	return nil
 }
 
-// Challenge sends an email OTP code for MFA verification
+// Challenge sends an email OTP code for MFA verification.
 func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, metadata map[string]any) (*Challenge, error) {
 	if !a.IsAvailable() {
 		return nil, errs.BadRequest("Email MFA factor not available")
@@ -120,6 +121,7 @@ func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, meta
 				IPAddress:   ip,
 				UserAgent:   ua,
 			}
+
 			return challenge, nil
 		}
 	}
@@ -130,6 +132,7 @@ func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, meta
 		if err != nil {
 			return nil, errs.Wrap(err, "SEND_EMAIL_OTP_FAILED", "Failed to send email OTP", 500)
 		}
+
 		if sentCode != "" {
 			code = sentCode
 		}
@@ -154,7 +157,7 @@ func (a *EmailFactorAdapter) Challenge(ctx context.Context, factor *Factor, meta
 	return challenge, nil
 }
 
-// Verify verifies an email OTP code
+// Verify verifies an email OTP code.
 func (a *EmailFactorAdapter) Verify(ctx context.Context, challenge *Challenge, response string, data map[string]any) (bool, error) {
 	if !a.IsAvailable() {
 		return false, errs.BadRequest("Email MFA factor not available")
@@ -169,16 +172,18 @@ func (a *EmailFactorAdapter) Verify(ctx context.Context, challenge *Challenge, r
 }
 
 // maskEmail masks an email address for display
-// e.g., "user@example.com" -> "u***@example.com"
+// e.g., "user@example.com" -> "u***@example.com".
 func maskEmail(email string) string {
 	if len(email) < 3 {
 		return "***"
 	}
 
 	atIndex := -1
+
 	for i, c := range email {
 		if c == '@' {
 			atIndex = i
+
 			break
 		}
 	}

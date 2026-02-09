@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// Service handles compliance business logic
+// Service handles compliance business logic.
 type Service struct {
 	repo     Repository
 	config   *Config
@@ -18,7 +18,7 @@ type Service struct {
 	emailSvc EmailService
 }
 
-// NewService creates a new compliance service
+// NewService creates a new compliance service.
 func NewService(
 	repo Repository,
 	config *Config,
@@ -39,13 +39,14 @@ func NewService(
 
 // ===== Compliance Profile Management =====
 
-// CreateProfile creates a new compliance profile
+// CreateProfile creates a new compliance profile.
 func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) (*ComplianceProfile, error) {
 	// Check if profile already exists
 	existing, err := s.repo.GetProfileByApp(ctx, req.AppID)
 	if err != nil {
 		return nil, InternalError("check_existing_profile", err)
 	}
+
 	if existing != nil {
 		return nil, ProfileExists(req.AppID)
 	}
@@ -114,7 +115,7 @@ func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) 
 	return profile, nil
 }
 
-// CreateProfileFromTemplate creates a profile from a compliance template
+// CreateProfileFromTemplate creates a profile from a compliance template.
 func (s *Service) CreateProfileFromTemplate(ctx context.Context, appID string, standard ComplianceStandard) (*ComplianceProfile, error) {
 	profile, err := CreateProfileFromTemplate(appID, standard)
 	if err != nil {
@@ -138,36 +139,41 @@ func (s *Service) CreateProfileFromTemplate(ctx context.Context, appID string, s
 	return profile, nil
 }
 
-// GetProfile retrieves a compliance profile
+// GetProfile retrieves a compliance profile.
 func (s *Service) GetProfile(ctx context.Context, id string) (*ComplianceProfile, error) {
 	profile, err := s.repo.GetProfile(ctx, id)
 	if err != nil {
 		return nil, QueryFailed("get_profile", err)
 	}
+
 	if profile == nil {
 		return nil, ProfileNotFound(id)
 	}
+
 	return profile, nil
 }
 
-// GetProfileByApp retrieves a profile by app ID
+// GetProfileByApp retrieves a profile by app ID.
 func (s *Service) GetProfileByApp(ctx context.Context, appID string) (*ComplianceProfile, error) {
 	profile, err := s.repo.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil, QueryFailed("get_profile_by_app", err)
 	}
+
 	if profile == nil {
 		return nil, ProfileNotFound(appID)
 	}
+
 	return profile, nil
 }
 
-// UpdateProfile updates a compliance profile
+// UpdateProfile updates a compliance profile.
 func (s *Service) UpdateProfile(ctx context.Context, id string, req *UpdateProfileRequest) (*ComplianceProfile, error) {
 	profile, err := s.repo.GetProfile(ctx, id)
 	if err != nil {
 		return nil, QueryFailed("get_profile", err)
 	}
+
 	if profile == nil {
 		return nil, ProfileNotFound(id)
 	}
@@ -176,12 +182,15 @@ func (s *Service) UpdateProfile(ctx context.Context, id string, req *UpdateProfi
 	if req.Name != nil {
 		profile.Name = *req.Name
 	}
+
 	if req.Status != nil {
 		profile.Status = *req.Status
 	}
+
 	if req.MFARequired != nil {
 		profile.MFARequired = *req.MFARequired
 	}
+
 	if req.RetentionDays != nil {
 		profile.RetentionDays = *req.RetentionDays
 	}
@@ -205,16 +214,18 @@ func (s *Service) UpdateProfile(ctx context.Context, id string, req *UpdateProfi
 
 // ===== Compliance Checks =====
 
-// RunCheck executes a compliance check
+// RunCheck executes a compliance check.
 func (s *Service) RunCheck(ctx context.Context, profileID, checkType string) (*ComplianceCheck, error) {
 	profile, err := s.repo.GetProfile(ctx, profileID)
 	if err != nil {
 		return nil, err
 	}
 
-	var result map[string]interface{}
-	var status string
-	var evidence []string
+	var (
+		result   map[string]interface{}
+		status   string
+		evidence []string
+	)
 
 	switch checkType {
 	case "mfa_coverage":
@@ -261,7 +272,7 @@ func (s *Service) RunCheck(ctx context.Context, profileID, checkType string) (*C
 	return check, nil
 }
 
-// checkMFACoverage checks MFA adoption rate
+// checkMFACoverage checks MFA adoption rate.
 func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// Get all users in app
 	users, err := s.userSvc.ListByApp(ctx, profile.AppID)
@@ -308,7 +319,7 @@ func (s *Service) checkMFACoverage(ctx context.Context, profile *ComplianceProfi
 	return result, status, evidence
 }
 
-// checkPasswordPolicy verifies password compliance
+// checkPasswordPolicy verifies password compliance.
 func (s *Service) checkPasswordPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// Get users with weak passwords or expired passwords
 	users, _ := s.userSvc.ListByApp(ctx, profile.AppID)
@@ -350,7 +361,7 @@ func (s *Service) checkPasswordPolicy(ctx context.Context, profile *CompliancePr
 	return result, status, evidence
 }
 
-// checkSessionPolicy verifies session compliance
+// checkSessionPolicy verifies session compliance.
 func (s *Service) checkSessionPolicy(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// This would integrate with session service to check active sessions
 	result := map[string]interface{}{
@@ -362,11 +373,10 @@ func (s *Service) checkSessionPolicy(ctx context.Context, profile *CompliancePro
 	return result, "passed", []string{"Session policy configured"}
 }
 
-// checkAccessReview checks if regular access reviews are being performed
+// checkAccessReview checks if regular access reviews are being performed.
 func (s *Service) checkAccessReview(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// Check when last access review was performed
 	// This is a placeholder - would integrate with access review system
-
 	result := map[string]interface{}{
 		"last_review": "2025-10-01",
 		"overdue":     false,
@@ -375,7 +385,7 @@ func (s *Service) checkAccessReview(ctx context.Context, profile *ComplianceProf
 	return result, "passed", []string{"Access review completed"}
 }
 
-// checkInactiveUsers identifies inactive users
+// checkInactiveUsers identifies inactive users.
 func (s *Service) checkInactiveUsers(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	users, _ := s.userSvc.ListByApp(ctx, profile.AppID)
 
@@ -406,7 +416,7 @@ func (s *Service) checkInactiveUsers(ctx context.Context, profile *CompliancePro
 	return result, status, evidence
 }
 
-// checkDataRetention verifies data retention compliance
+// checkDataRetention verifies data retention compliance.
 func (s *Service) checkDataRetention(ctx context.Context, profile *ComplianceProfile) (map[string]interface{}, string, []string) {
 	// Check audit logs retention
 	oldestLog, _ := s.auditSvc.GetOldestLog(ctx, profile.AppID)
@@ -435,7 +445,7 @@ func (s *Service) checkDataRetention(ctx context.Context, profile *CompliancePro
 	return result, status, evidence
 }
 
-// scheduleChecks schedules automated checks for a profile
+// scheduleChecks schedules automated checks for a profile.
 func (s *Service) scheduleChecks(ctx context.Context, profile *ComplianceProfile) {
 	checkTypes := []string{
 		"mfa_coverage",
@@ -455,11 +465,10 @@ func (s *Service) scheduleChecks(ctx context.Context, profile *ComplianceProfile
 	}
 }
 
-// createViolationsFromCheck creates violations based on failed check
+// createViolationsFromCheck creates violations based on failed check.
 func (s *Service) createViolationsFromCheck(ctx context.Context, check *ComplianceCheck) {
 	// Parse check result and create specific violations
 	// This is simplified - real implementation would be more detailed
-
 	violation := &ComplianceViolation{
 		ProfileID:     check.ProfileID,
 		AppID:         check.AppID,
@@ -479,34 +488,35 @@ func (s *Service) createViolationsFromCheck(ctx context.Context, check *Complian
 	}
 }
 
-// notifyFailedCheck sends notification for failed check
+// notifyFailedCheck sends notification for failed check.
 func (s *Service) notifyFailedCheck(ctx context.Context, profile *ComplianceProfile, check *ComplianceCheck) {
 	if profile.ComplianceContact != "" {
 		s.emailSvc.SendEmail(ctx, &Email{
 			To:      profile.ComplianceContact,
-			Subject: fmt.Sprintf("Compliance Check Failed: %s", check.CheckType),
+			Subject: "Compliance Check Failed: " + check.CheckType,
 			Body:    fmt.Sprintf("The compliance check '%s' has failed. Please review and take action.", check.CheckType),
 		})
 	}
 }
 
-// notifyViolation sends notification for compliance violation
+// notifyViolation sends notification for compliance violation.
 func (s *Service) notifyViolation(ctx context.Context, profile *ComplianceProfile, violation *ComplianceViolation) {
 	if profile.ComplianceContact != "" {
 		s.emailSvc.SendEmail(ctx, &Email{
 			To:      profile.ComplianceContact,
-			Subject: fmt.Sprintf("Compliance Violation: %s", violation.ViolationType),
-			Body:    fmt.Sprintf("A compliance violation has been detected: %s", violation.Description),
+			Subject: "Compliance Violation: " + violation.ViolationType,
+			Body:    "A compliance violation has been detected: " + violation.Description,
 		})
 	}
 }
 
-// GetComplianceStatus returns overall compliance status for an app
+// GetComplianceStatus returns overall compliance status for an app.
 func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*ComplianceStatus, error) {
 	profile, err := s.repo.GetProfileByApp(ctx, appID)
 	if err != nil {
 		return nil, QueryFailed("get_profile_by_app", err)
 	}
+
 	if profile == nil {
 		return nil, ProfileNotFound(appID)
 	}
@@ -540,6 +550,7 @@ func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*Compl
 	}
 
 	totalChecks := len(checks)
+
 	score := 0
 	if totalChecks > 0 {
 		score = (checksPassed * 100) / totalChecks
@@ -568,10 +579,10 @@ func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*Compl
 	return status, nil
 }
 
-// Helper structs and interfaces
+// Helper structs and interfaces.
 type CreateProfileRequest struct {
 	AppID                 string                 `json:"appId"`
-	Name                  string                 `json:"name" validate:"required"`
+	Name                  string                 `json:"name"                  validate:"required"`
 	Standards             []ComplianceStandard   `json:"standards"`
 	MFARequired           bool                   `json:"mfaRequired"`
 	PasswordMinLength     int                    `json:"passwordMinLength"`
@@ -621,15 +632,15 @@ type ResolveViolationRequest struct {
 type GenerateReportRequest struct {
 	ReportType string             `json:"reportType" validate:"required"`
 	Standard   ComplianceStandard `json:"standard"`
-	Period     string             `json:"period" validate:"required"`
-	Format     string             `json:"format" validate:"required"`
+	Period     string             `json:"period"     validate:"required"`
+	Format     string             `json:"format"     validate:"required"`
 }
 
 type CreateEvidenceRequest struct {
 	EvidenceType string             `json:"evidenceType" validate:"required"`
 	Standard     ComplianceStandard `json:"standard"`
 	ControlID    string             `json:"controlId"`
-	Title        string             `json:"title" validate:"required"`
+	Title        string             `json:"title"        validate:"required"`
 	Description  string             `json:"description"`
 	FileURL      string             `json:"fileUrl"`
 }
@@ -637,9 +648,9 @@ type CreateEvidenceRequest struct {
 type CreatePolicyRequest struct {
 	PolicyType string             `json:"policyType" validate:"required"`
 	Standard   ComplianceStandard `json:"standard"`
-	Title      string             `json:"title" validate:"required"`
-	Version    string             `json:"version" validate:"required"`
-	Content    string             `json:"content" validate:"required"`
+	Title      string             `json:"title"      validate:"required"`
+	Version    string             `json:"version"    validate:"required"`
+	Content    string             `json:"content"    validate:"required"`
 }
 
 type UpdatePolicyRequest struct {
@@ -650,7 +661,7 @@ type UpdatePolicyRequest struct {
 }
 
 type CreateTrainingRequest struct {
-	UserID       string             `json:"userId" validate:"required"`
+	UserID       string             `json:"userId"       validate:"required"`
 	TrainingType string             `json:"trainingType" validate:"required"`
 	Standard     ComplianceStandard `json:"standard"`
 }
@@ -659,7 +670,7 @@ type CompleteTrainingRequest struct {
 	Score int `json:"score"`
 }
 
-// External service interfaces
+// External service interfaces.
 type AuditService interface {
 	LogEvent(ctx context.Context, event *AuditEvent) error
 	GetOldestLog(ctx context.Context, appID string) (*AuditLog, error)
@@ -677,7 +688,7 @@ type EmailService interface {
 	SendEmail(ctx context.Context, email *Email) error
 }
 
-// Helper types
+// Helper types.
 type AuditEvent struct {
 	Action     string
 	AppID      string
@@ -691,11 +702,12 @@ type AuditLog struct {
 
 // ===== List Methods =====
 
-// ListProfiles lists compliance profiles with pagination
+// ListProfiles lists compliance profiles with pagination.
 func (s *Service) ListProfiles(ctx context.Context, filter *ListProfilesFilter) (*pagination.PageResponse[*ComplianceProfile], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}
@@ -708,11 +720,12 @@ func (s *Service) ListProfiles(ctx context.Context, filter *ListProfilesFilter) 
 	return resp, nil
 }
 
-// ListChecks lists compliance checks with pagination
+// ListChecks lists compliance checks with pagination.
 func (s *Service) ListChecks(ctx context.Context, filter *ListChecksFilter) (*pagination.PageResponse[*ComplianceCheck], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}
@@ -725,11 +738,12 @@ func (s *Service) ListChecks(ctx context.Context, filter *ListChecksFilter) (*pa
 	return resp, nil
 }
 
-// ListViolations lists compliance violations with pagination
+// ListViolations lists compliance violations with pagination.
 func (s *Service) ListViolations(ctx context.Context, filter *ListViolationsFilter) (*pagination.PageResponse[*ComplianceViolation], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}
@@ -742,11 +756,12 @@ func (s *Service) ListViolations(ctx context.Context, filter *ListViolationsFilt
 	return resp, nil
 }
 
-// ListReports lists compliance reports with pagination
+// ListReports lists compliance reports with pagination.
 func (s *Service) ListReports(ctx context.Context, filter *ListReportsFilter) (*pagination.PageResponse[*ComplianceReport], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}
@@ -759,11 +774,12 @@ func (s *Service) ListReports(ctx context.Context, filter *ListReportsFilter) (*
 	return resp, nil
 }
 
-// ListEvidence lists compliance evidence with pagination
+// ListEvidence lists compliance evidence with pagination.
 func (s *Service) ListEvidence(ctx context.Context, filter *ListEvidenceFilter) (*pagination.PageResponse[*ComplianceEvidence], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}
@@ -776,11 +792,12 @@ func (s *Service) ListEvidence(ctx context.Context, filter *ListEvidenceFilter) 
 	return resp, nil
 }
 
-// ListPolicies lists compliance policies with pagination
+// ListPolicies lists compliance policies with pagination.
 func (s *Service) ListPolicies(ctx context.Context, filter *ListPoliciesFilter) (*pagination.PageResponse[*CompliancePolicy], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}
@@ -793,11 +810,12 @@ func (s *Service) ListPolicies(ctx context.Context, filter *ListPoliciesFilter) 
 	return resp, nil
 }
 
-// ListTraining lists compliance training with pagination
+// ListTraining lists compliance training with pagination.
 func (s *Service) ListTraining(ctx context.Context, filter *ListTrainingFilter) (*pagination.PageResponse[*ComplianceTraining], error) {
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
+
 	if filter.Offset < 0 {
 		filter.Offset = 0
 	}

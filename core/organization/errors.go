@@ -40,7 +40,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// Organization errors
+// Organization errors.
 func OrganizationNotFound() *errs.AuthsomeError {
 	return errs.New(CodeOrganizationNotFound, "Organization not found", http.StatusNotFound)
 }
@@ -59,7 +59,7 @@ func OrganizationCreationDisabled() *errs.AuthsomeError {
 	return errs.New(CodeOrganizationCreationDisabled, "Organization creation is disabled", http.StatusForbidden)
 }
 
-// Member errors
+// Member errors.
 func MemberNotFound() *errs.AuthsomeError {
 	return errs.New(CodeMemberNotFound, "Organization member not found", http.StatusNotFound)
 }
@@ -83,7 +83,7 @@ func CannotRemoveOwner() *errs.AuthsomeError {
 	return errs.New(CodeCannotRemoveOwner, "Cannot remove or demote organization owner", http.StatusForbidden)
 }
 
-// Team errors
+// Team errors.
 func TeamNotFound() *errs.AuthsomeError {
 	return errs.New(CodeTeamNotFound, "Organization team not found", http.StatusNotFound)
 }
@@ -102,7 +102,7 @@ func TeamMemberNotFound() *errs.AuthsomeError {
 	return errs.New(CodeTeamMemberNotFound, "Team member not found", http.StatusNotFound)
 }
 
-// Invitation errors
+// Invitation errors.
 func InvitationNotFound() *errs.AuthsomeError {
 	return errs.New(CodeInvitationNotFound, "Organization invitation not found", http.StatusNotFound)
 }
@@ -121,14 +121,14 @@ func InvitationNotPending() *errs.AuthsomeError {
 	return errs.New(CodeInvitationNotPending, "Invitation is not in pending status", http.StatusConflict)
 }
 
-// Validation errors
+// Validation errors.
 func InvalidRole(role string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidRole, "Invalid organization member role", http.StatusBadRequest).
 		WithContext("role", role).
 		WithContext("valid_roles", ValidRoles())
 }
 
-// InvalidRoleWithHint creates an invalid role error with a hint message
+// InvalidRoleWithHint creates an invalid role error with a hint message.
 func InvalidRoleWithHint(role, hint string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidRole, "Invalid organization member role", http.StatusBadRequest).
 		WithContext("role", role).
@@ -142,7 +142,7 @@ func InvalidStatus(status string) *errs.AuthsomeError {
 		WithContext("valid_statuses", ValidStatuses())
 }
 
-// Authorization errors
+// Authorization errors.
 func Unauthorized() *errs.AuthsomeError {
 	return errs.Unauthorized()
 }
@@ -160,7 +160,7 @@ func NotAdmin() *errs.AuthsomeError {
 	return errs.New(CodeNotAdmin, "User is not an organization admin or owner", http.StatusForbidden)
 }
 
-// PermissionDenied creates a permission denied error for RBAC checks
+// PermissionDenied creates a permission denied error for RBAC checks.
 func PermissionDenied(action, resource string) *errs.AuthsomeError {
 	return errs.New(CodePermissionDenied, fmt.Sprintf("Permission denied: %s on %s", action, resource), http.StatusForbidden).
 		WithContext("action", action).

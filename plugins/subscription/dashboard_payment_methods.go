@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ServePaymentMethodsPage renders the payment methods management page
+// ServePaymentMethodsPage renders the payment methods management page.
 func (e *DashboardExtension) ServePaymentMethodsPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -73,7 +73,7 @@ func (e *DashboardExtension) ServePaymentMethodsPage(ctx *router.PageContext) (g
 	return content, nil
 }
 
-// ServeAddPaymentMethodPage renders the add payment method page with Stripe Elements
+// ServeAddPaymentMethodPage renders the add payment method page with Stripe Elements.
 func (e *DashboardExtension) ServeAddPaymentMethodPage(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 	// basePath := e.baseUIPath
@@ -133,7 +133,7 @@ func (e *DashboardExtension) ServeAddPaymentMethodPage(ctx *router.PageContext) 
 	return content, nil
 }
 
-// renderEmptyPaymentMethodsState renders the empty state for payment methods
+// renderEmptyPaymentMethodsState renders the empty state for payment methods.
 func renderEmptyPaymentMethodsState(basePath string, appID string) g.Node {
 	return Div(
 		Class("rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 p-12 text-center dark:border-gray-700 dark:bg-gray-900"),
@@ -154,7 +154,7 @@ func renderEmptyPaymentMethodsState(basePath string, appID string) g.Node {
 	)
 }
 
-// renderPaymentMethodCard renders a payment method card component
+// renderPaymentMethodCard renders a payment method card component.
 func renderPaymentMethodCard(pm *core.PaymentMethod, basePath string, appID string) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -237,7 +237,7 @@ func renderPaymentMethodCard(pm *core.PaymentMethod, basePath string, appID stri
 	)
 }
 
-// renderStripeElementsForm renders the Stripe Elements payment form
+// renderStripeElementsForm renders the Stripe Elements payment form.
 func renderStripeElementsForm(clientSecret, publishableKey, basePath, appID string) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),

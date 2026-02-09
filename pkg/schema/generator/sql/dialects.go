@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/authsome/pkg/schema/definition"
 )
 
-// PostgreSQLDialect implements PostgreSQL dialect
+// PostgreSQLDialect implements PostgreSQL dialect.
 type PostgreSQLDialect struct{}
 
 func (d *PostgreSQLDialect) Name() string {
@@ -32,6 +32,7 @@ func (d *PostgreSQLDialect) MapType(fieldType definition.FieldType, length int, 
 		if length > 0 {
 			return fmt.Sprintf("VARCHAR(%d)", length)
 		}
+
 		return "VARCHAR(255)"
 	case definition.FieldTypeText:
 		return "TEXT"
@@ -45,6 +46,7 @@ func (d *PostgreSQLDialect) MapType(fieldType definition.FieldType, length int, 
 		if precision > 0 && scale > 0 {
 			return fmt.Sprintf("DECIMAL(%d,%d)", precision, scale)
 		}
+
 		return "DECIMAL"
 	case definition.FieldTypeBoolean:
 		return "BOOLEAN"
@@ -67,7 +69,7 @@ func (d *PostgreSQLDialect) MapType(fieldType definition.FieldType, length int, 
 	}
 }
 
-func (d *PostgreSQLDialect) DefaultValue(value interface{}, fieldType definition.FieldType) string {
+func (d *PostgreSQLDialect) DefaultValue(value any, fieldType definition.FieldType) string {
 	if value == nil {
 		return ""
 	}
@@ -83,10 +85,12 @@ func (d *PostgreSQLDialect) DefaultValue(value interface{}, fieldType definition
 			if v == "true" || v == "1" {
 				return "true"
 			}
+
 			if v == "false" || v == "0" {
 				return "false"
 			}
 		}
+
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
 	case int, int32, int64, float32, float64:
 		return fmt.Sprintf("%v", v)
@@ -94,13 +98,14 @@ func (d *PostgreSQLDialect) DefaultValue(value interface{}, fieldType definition
 		if v {
 			return "true"
 		}
+
 		return "false"
 	default:
 		return fmt.Sprintf("'%v'", v)
 	}
 }
 
-// MySQLDialect implements MySQL dialect
+// MySQLDialect implements MySQL dialect.
 type MySQLDialect struct{}
 
 func (d *MySQLDialect) Name() string {
@@ -125,6 +130,7 @@ func (d *MySQLDialect) MapType(fieldType definition.FieldType, length int, preci
 		if length > 0 {
 			return fmt.Sprintf("VARCHAR(%d)", length)
 		}
+
 		return "VARCHAR(255)"
 	case definition.FieldTypeText:
 		return "TEXT"
@@ -138,6 +144,7 @@ func (d *MySQLDialect) MapType(fieldType definition.FieldType, length int, preci
 		if precision > 0 && scale > 0 {
 			return fmt.Sprintf("DECIMAL(%d,%d)", precision, scale)
 		}
+
 		return "DECIMAL(10,2)"
 	case definition.FieldTypeBoolean:
 		return "TINYINT(1)"
@@ -158,7 +165,7 @@ func (d *MySQLDialect) MapType(fieldType definition.FieldType, length int, preci
 	}
 }
 
-func (d *MySQLDialect) DefaultValue(value interface{}, fieldType definition.FieldType) string {
+func (d *MySQLDialect) DefaultValue(value any, fieldType definition.FieldType) string {
 	if value == nil {
 		return ""
 	}
@@ -174,10 +181,12 @@ func (d *MySQLDialect) DefaultValue(value interface{}, fieldType definition.Fiel
 			if v == "true" || v == "1" {
 				return "1"
 			}
+
 			if v == "false" || v == "0" {
 				return "0"
 			}
 		}
+
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
 	case int, int32, int64, float32, float64:
 		return fmt.Sprintf("%v", v)
@@ -185,13 +194,14 @@ func (d *MySQLDialect) DefaultValue(value interface{}, fieldType definition.Fiel
 		if v {
 			return "1"
 		}
+
 		return "0"
 	default:
 		return fmt.Sprintf("'%v'", v)
 	}
 }
 
-// SQLiteDialect implements SQLite dialect
+// SQLiteDialect implements SQLite dialect.
 type SQLiteDialect struct{}
 
 func (d *SQLiteDialect) Name() string {
@@ -231,7 +241,7 @@ func (d *SQLiteDialect) MapType(fieldType definition.FieldType, length int, prec
 	}
 }
 
-func (d *SQLiteDialect) DefaultValue(value interface{}, fieldType definition.FieldType) string {
+func (d *SQLiteDialect) DefaultValue(value any, fieldType definition.FieldType) string {
 	if value == nil {
 		return ""
 	}
@@ -247,10 +257,12 @@ func (d *SQLiteDialect) DefaultValue(value interface{}, fieldType definition.Fie
 			if v == "true" || v == "1" {
 				return "1"
 			}
+
 			if v == "false" || v == "0" {
 				return "0"
 			}
 		}
+
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
 	case int, int32, int64, float32, float64:
 		return fmt.Sprintf("%v", v)
@@ -258,6 +270,7 @@ func (d *SQLiteDialect) DefaultValue(value interface{}, fieldType definition.Fie
 		if v {
 			return "1"
 		}
+
 		return "0"
 	default:
 		return fmt.Sprintf("'%v'", v)

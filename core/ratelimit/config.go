@@ -2,13 +2,13 @@ package ratelimit
 
 import "time"
 
-// Rule defines a rate limit window and maximum allowed requests
+// Rule defines a rate limit window and maximum allowed requests.
 type Rule struct {
 	Window time.Duration `json:"window"`
 	Max    int           `json:"max"`
 }
 
-// Config for the rate limiting service
+// Config for the rate limiting service.
 type Config struct {
 	Enabled     bool
 	DefaultRule Rule

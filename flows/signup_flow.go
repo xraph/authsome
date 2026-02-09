@@ -9,14 +9,15 @@ import (
 	"github.com/xraph/authsome/core/user"
 )
 
-// SignupFlow implements the user registration flow
+// SignupFlow implements the user registration flow.
 type SignupFlow struct {
 	*BaseFlow
+
 	userService    *user.Service
 	sessionService *session.Service
 }
 
-// NewSignupFlow creates a new signup flow
+// NewSignupFlow creates a new signup flow.
 func NewSignupFlow(userService *user.Service, sessionService *session.Service) *SignupFlow {
 	flow := &SignupFlow{
 		BaseFlow:       NewBaseFlow("signup", "User Registration Flow"),
@@ -30,7 +31,7 @@ func NewSignupFlow(userService *user.Service, sessionService *session.Service) *
 	return flow
 }
 
-// addDefaultSteps adds the default signup flow steps
+// addDefaultSteps adds the default signup flow steps.
 func (f *SignupFlow) addDefaultSteps() {
 	// Step 1: Validate input
 	f.AddStep(&Step{
@@ -78,8 +79,8 @@ func (f *SignupFlow) addDefaultSteps() {
 	})
 }
 
-// validateInputHandler validates the signup form data
-func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
+// validateInputHandler validates the signup form data.
+func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data map[string]any) (*StepResult, error) {
 	email, _ := data["email"].(string)
 	password, _ := data["password"].(string)
 	name, _ := data["name"].(string)
@@ -88,7 +89,7 @@ func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data 
 		return &StepResult{
 			Success: false,
 			Error:   "Email is required",
-			Data:    map[string]interface{}{"field": "email"},
+			Data:    map[string]any{"field": "email"},
 		}, nil
 	}
 
@@ -96,7 +97,7 @@ func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data 
 		return &StepResult{
 			Success: false,
 			Error:   "Password is required",
-			Data:    map[string]interface{}{"field": "password"},
+			Data:    map[string]any{"field": "password"},
 		}, nil
 	}
 
@@ -104,7 +105,7 @@ func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data 
 		return &StepResult{
 			Success: false,
 			Error:   "Password must be at least 8 characters",
-			Data:    map[string]interface{}{"field": "password"},
+			Data:    map[string]any{"field": "password"},
 		}, nil
 	}
 
@@ -115,12 +116,12 @@ func (f *SignupFlow) validateInputHandler(ctx context.Context, step *Step, data 
 
 	return &StepResult{
 		Success: true,
-		Data:    map[string]interface{}{"validated": true},
+		Data:    map[string]any{"validated": true},
 	}, nil
 }
 
-// checkUserExistsHandler checks if a user with the given email already exists
-func (f *SignupFlow) checkUserExistsHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
+// checkUserExistsHandler checks if a user with the given email already exists.
+func (f *SignupFlow) checkUserExistsHandler(ctx context.Context, step *Step, data map[string]any) (*StepResult, error) {
 	email, _ := data["validated_email"].(string)
 
 	existingUser, err := f.userService.FindByEmail(ctx, email)
@@ -128,7 +129,7 @@ func (f *SignupFlow) checkUserExistsHandler(ctx context.Context, step *Step, dat
 		return &StepResult{
 			Success: false,
 			Error:   "Failed to check user existence",
-			Data:    map[string]interface{}{"error": err.Error()},
+			Data:    map[string]any{"error": err.Error()},
 		}, err
 	}
 
@@ -136,18 +137,18 @@ func (f *SignupFlow) checkUserExistsHandler(ctx context.Context, step *Step, dat
 		return &StepResult{
 			Success: false,
 			Error:   "User with this email already exists",
-			Data:    map[string]interface{}{"field": "email"},
+			Data:    map[string]any{"field": "email"},
 		}, nil
 	}
 
 	return &StepResult{
 		Success: true,
-		Data:    map[string]interface{}{"user_exists": false},
+		Data:    map[string]any{"user_exists": false},
 	}, nil
 }
 
-// createUserHandler creates a new user account
-func (f *SignupFlow) createUserHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
+// createUserHandler creates a new user account.
+func (f *SignupFlow) createUserHandler(ctx context.Context, step *Step, data map[string]any) (*StepResult, error) {
 	email, _ := data["validated_email"].(string)
 	password, _ := data["validated_password"].(string)
 	name, _ := data["validated_name"].(string)
@@ -163,7 +164,7 @@ func (f *SignupFlow) createUserHandler(ctx context.Context, step *Step, data map
 		return &StepResult{
 			Success: false,
 			Error:   "Failed to create user",
-			Data:    map[string]interface{}{"error": err.Error()},
+			Data:    map[string]any{"error": err.Error()},
 		}, err
 	}
 
@@ -173,15 +174,15 @@ func (f *SignupFlow) createUserHandler(ctx context.Context, step *Step, data map
 
 	return &StepResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"user_id": newUser.ID,
 			"email":   newUser.Email,
 		},
 	}, nil
 }
 
-// createSessionHandler creates a session for the new user
-func (f *SignupFlow) createSessionHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
+// createSessionHandler creates a session for the new user.
+func (f *SignupFlow) createSessionHandler(ctx context.Context, step *Step, data map[string]any) (*StepResult, error) {
 	userIDStr, _ := data["user_id"].(string)
 	if userIDStr == "" {
 		return &StepResult{
@@ -225,7 +226,7 @@ func (f *SignupFlow) createSessionHandler(ctx context.Context, step *Step, data 
 		return &StepResult{
 			Success: false,
 			Error:   "Failed to create session",
-			Data:    map[string]interface{}{"error": err.Error()},
+			Data:    map[string]any{"error": err.Error()},
 		}, err
 	}
 
@@ -235,18 +236,17 @@ func (f *SignupFlow) createSessionHandler(ctx context.Context, step *Step, data 
 
 	return &StepResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"session_id": newSession.ID,
 			"token":      newSession.Token,
 		},
 	}, nil
 }
 
-// sendWelcomeEmailHandler sends a welcome email to the new user
-func (f *SignupFlow) sendWelcomeEmailHandler(ctx context.Context, step *Step, data map[string]interface{}) (*StepResult, error) {
+// sendWelcomeEmailHandler sends a welcome email to the new user.
+func (f *SignupFlow) sendWelcomeEmailHandler(ctx context.Context, step *Step, data map[string]any) (*StepResult, error) {
 	// This is a placeholder implementation
 	// In a real implementation, you would integrate with an email service
-
 	email, _ := data["validated_email"].(string)
 	name, _ := data["validated_name"].(string)
 
@@ -256,7 +256,7 @@ func (f *SignupFlow) sendWelcomeEmailHandler(ctx context.Context, step *Step, da
 
 	return &StepResult{
 		Success: true,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"email_sent": true,
 			"recipient":  email,
 			"name":       name,
@@ -264,32 +264,35 @@ func (f *SignupFlow) sendWelcomeEmailHandler(ctx context.Context, step *Step, da
 	}, nil
 }
 
-// CreateSignupFlow creates a customizable signup flow with hooks
+// CreateSignupFlow creates a customizable signup flow with hooks.
 func CreateSignupFlow(userService *user.Service, sessionService *session.Service) Flow {
 	flow := NewSignupFlow(userService, sessionService)
 
 	// Add before hooks
-	flow.AddBeforeHook("validate_input", func(ctx context.Context, step *Step, data map[string]interface{}) error {
+	flow.AddBeforeHook("validate_input", func(ctx context.Context, step *Step, data map[string]any) error {
 		// Log signup attempt
 		data["signup_started"] = true
+
 		return nil
 	})
 
-	flow.AddBeforeHook("create_user", func(ctx context.Context, step *Step, data map[string]interface{}) error {
+	flow.AddBeforeHook("create_user", func(ctx context.Context, step *Step, data map[string]any) error {
 		// Additional validation or preprocessing
 		return nil
 	})
 
 	// Add after hooks
-	flow.AddAfterHook("create_user", func(ctx context.Context, step *Step, data map[string]interface{}) error {
+	flow.AddAfterHook("create_user", func(ctx context.Context, step *Step, data map[string]any) error {
 		// Log user creation
 		data["user_created"] = true
+
 		return nil
 	})
 
-	flow.AddAfterHook("create_session", func(ctx context.Context, step *Step, data map[string]interface{}) error {
+	flow.AddAfterHook("create_session", func(ctx context.Context, step *Step, data map[string]any) error {
 		// Log session creation
 		data["session_created"] = true
+
 		return nil
 	})
 

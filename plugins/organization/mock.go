@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 )
 
-// MockService provides a mock implementation of organization.Service for testing
+// MockService provides a mock implementation of organization.Service for testing.
 type MockService struct {
 	mu sync.RWMutex
 
@@ -27,7 +27,7 @@ type MockService struct {
 	AcceptInvitationError error
 }
 
-// NewMockService creates a new mock organization service
+// NewMockService creates a new mock organization service.
 func NewMockService() *MockService {
 	return &MockService{
 		organizations: make(map[xid.ID]*organization.Organization),
@@ -37,7 +37,7 @@ func NewMockService() *MockService {
 	}
 }
 
-// CreateOrganization mocks creating an organization
+// CreateOrganization mocks creating an organization.
 func (m *MockService) CreateOrganization(ctx context.Context, req *organization.CreateOrganizationRequest, creatorUserID, appID, environmentID xid.ID) (*organization.Organization, error) {
 	if m.CreateOrgError != nil {
 		return nil, m.CreateOrgError
@@ -57,13 +57,15 @@ func (m *MockService) CreateOrganization(ctx context.Context, req *organization.
 	if req.Logo != nil {
 		org.Logo = *req.Logo
 	}
+
 	org.Metadata = req.Metadata
 
 	m.organizations[org.ID] = org
+
 	return org, nil
 }
 
-// FindOrganizationByID mocks finding an organization by ID
+// FindOrganizationByID mocks finding an organization by ID.
 func (m *MockService) FindOrganizationByID(ctx context.Context, id xid.ID) (*organization.Organization, error) {
 	if m.FindOrgError != nil {
 		return nil, m.FindOrgError
@@ -76,10 +78,11 @@ func (m *MockService) FindOrganizationByID(ctx context.Context, id xid.ID) (*org
 	if !exists {
 		return nil, organization.OrganizationNotFound()
 	}
+
 	return org, nil
 }
 
-// FindOrganizationBySlug mocks finding an organization by slug
+// FindOrganizationBySlug mocks finding an organization by slug.
 func (m *MockService) FindOrganizationBySlug(ctx context.Context, appID, environmentID xid.ID, slug string) (*organization.Organization, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -89,15 +92,17 @@ func (m *MockService) FindOrganizationBySlug(ctx context.Context, appID, environ
 			return org, nil
 		}
 	}
+
 	return nil, organization.OrganizationNotFound()
 }
 
-// ListOrganizations mocks listing organizations
+// ListOrganizations mocks listing organizations.
 func (m *MockService) ListOrganizations(ctx context.Context, filter *organization.ListOrganizationsFilter) (*pagination.PageResponse[*organization.Organization], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var orgs []*organization.Organization
+
 	for _, org := range m.organizations {
 		if org.AppID == filter.AppID && org.EnvironmentID == filter.EnvironmentID {
 			orgs = append(orgs, org)
@@ -107,12 +112,13 @@ func (m *MockService) ListOrganizations(ctx context.Context, filter *organizatio
 	return pagination.NewPageResponse(orgs, int64(len(orgs)), &filter.PaginationParams), nil
 }
 
-// ListUserOrganizations mocks listing user organizations
+// ListUserOrganizations mocks listing user organizations.
 func (m *MockService) ListUserOrganizations(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Organization], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var orgs []*organization.Organization
+
 	for _, member := range m.members {
 		if member.UserID == userID {
 			if org, exists := m.organizations[member.OrganizationID]; exists {
@@ -124,7 +130,7 @@ func (m *MockService) ListUserOrganizations(ctx context.Context, userID xid.ID, 
 	return pagination.NewPageResponse(orgs, int64(len(orgs)), filter), nil
 }
 
-// UpdateOrganization mocks updating an organization
+// UpdateOrganization mocks updating an organization.
 func (m *MockService) UpdateOrganization(ctx context.Context, id xid.ID, req *organization.UpdateOrganizationRequest) (*organization.Organization, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -137,9 +143,11 @@ func (m *MockService) UpdateOrganization(ctx context.Context, id xid.ID, req *or
 	if req.Name != nil {
 		org.Name = *req.Name
 	}
+
 	if req.Logo != nil {
 		org.Logo = *req.Logo
 	}
+
 	if req.Metadata != nil {
 		org.Metadata = req.Metadata
 	}
@@ -147,25 +155,27 @@ func (m *MockService) UpdateOrganization(ctx context.Context, id xid.ID, req *or
 	return org, nil
 }
 
-// DeleteOrganization mocks deleting an organization
+// DeleteOrganization mocks deleting an organization.
 func (m *MockService) DeleteOrganization(ctx context.Context, id, userID xid.ID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.organizations, id)
+
 	return nil
 }
 
-// ForceDeleteOrganization mocks force deleting an organization without permission checks
+// ForceDeleteOrganization mocks force deleting an organization without permission checks.
 func (m *MockService) ForceDeleteOrganization(ctx context.Context, id xid.ID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.organizations, id)
+
 	return nil
 }
 
-// AddMember mocks adding a member
+// AddMember mocks adding a member.
 func (m *MockService) AddMember(ctx context.Context, orgID, userID xid.ID, role string) (*organization.Member, error) {
 	if m.AddMemberError != nil {
 		return nil, m.AddMemberError
@@ -183,10 +193,11 @@ func (m *MockService) AddMember(ctx context.Context, orgID, userID xid.ID, role 
 	}
 
 	m.members[member.ID] = member
+
 	return member, nil
 }
 
-// FindMemberByID mocks finding a member by ID
+// FindMemberByID mocks finding a member by ID.
 func (m *MockService) FindMemberByID(ctx context.Context, id xid.ID) (*organization.Member, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -195,10 +206,11 @@ func (m *MockService) FindMemberByID(ctx context.Context, id xid.ID) (*organizat
 	if !exists {
 		return nil, organization.MemberNotFound()
 	}
+
 	return member, nil
 }
 
-// FindMember mocks finding a member by org and user ID
+// FindMember mocks finding a member by org and user ID.
 func (m *MockService) FindMember(ctx context.Context, orgID, userID xid.ID) (*organization.Member, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -208,10 +220,11 @@ func (m *MockService) FindMember(ctx context.Context, orgID, userID xid.ID) (*or
 			return member, nil
 		}
 	}
+
 	return nil, organization.MemberNotFound()
 }
 
-// ListMembers mocks listing members
+// ListMembers mocks listing members.
 func (m *MockService) ListMembers(ctx context.Context, filter *organization.ListMembersFilter) (*pagination.PageResponse[*organization.Member], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -226,7 +239,7 @@ func (m *MockService) ListMembers(ctx context.Context, filter *organization.List
 	return pagination.NewPageResponse(members, int64(len(members)), &filter.PaginationParams), nil
 }
 
-// UpdateMember mocks updating a member
+// UpdateMember mocks updating a member.
 func (m *MockService) UpdateMember(ctx context.Context, id xid.ID, req *organization.UpdateMemberRequest, updaterUserID xid.ID) (*organization.Member, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -239,6 +252,7 @@ func (m *MockService) UpdateMember(ctx context.Context, id xid.ID, req *organiza
 	if req.Role != nil {
 		member.Role = *req.Role
 	}
+
 	if req.Status != nil {
 		member.Status = *req.Status
 	}
@@ -246,7 +260,7 @@ func (m *MockService) UpdateMember(ctx context.Context, id xid.ID, req *organiza
 	return member, nil
 }
 
-// UpdateMemberRole mocks updating only the role of a member
+// UpdateMemberRole mocks updating only the role of a member.
 func (m *MockService) UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, newRole string, updaterUserID xid.ID) (*organization.Member, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -262,19 +276,21 @@ func (m *MockService) UpdateMemberRole(ctx context.Context, orgID, memberID xid.
 	}
 
 	member.Role = newRole
+
 	return member, nil
 }
 
-// RemoveMember mocks removing a member
+// RemoveMember mocks removing a member.
 func (m *MockService) RemoveMember(ctx context.Context, id, removerUserID xid.ID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.members, id)
+
 	return nil
 }
 
-// GetUserMemberships mocks getting user memberships
+// GetUserMemberships mocks getting user memberships.
 func (m *MockService) GetUserMemberships(ctx context.Context, userID xid.ID, filter *pagination.PaginationParams) (*pagination.PageResponse[*organization.Member], error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -289,7 +305,7 @@ func (m *MockService) GetUserMemberships(ctx context.Context, userID xid.ID, fil
 	return pagination.NewPageResponse(members, int64(len(members)), filter), nil
 }
 
-// RemoveUserFromAllOrganizations mocks removing user from all orgs
+// RemoveUserFromAllOrganizations mocks removing user from all orgs.
 func (m *MockService) RemoveUserFromAllOrganizations(ctx context.Context, userID xid.ID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -299,10 +315,11 @@ func (m *MockService) RemoveUserFromAllOrganizations(ctx context.Context, userID
 			delete(m.members, id)
 		}
 	}
+
 	return nil
 }
 
-// IsMember mocks checking membership
+// IsMember mocks checking membership.
 func (m *MockService) IsMember(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -312,10 +329,11 @@ func (m *MockService) IsMember(ctx context.Context, orgID, userID xid.ID) (bool,
 			return true, nil
 		}
 	}
+
 	return false, nil
 }
 
-// IsOwner mocks checking ownership
+// IsOwner mocks checking ownership.
 func (m *MockService) IsOwner(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -325,10 +343,11 @@ func (m *MockService) IsOwner(ctx context.Context, orgID, userID xid.ID) (bool, 
 			return true, nil
 		}
 	}
+
 	return false, nil
 }
 
-// IsAdmin mocks checking admin status
+// IsAdmin mocks checking admin status.
 func (m *MockService) IsAdmin(ctx context.Context, orgID, userID xid.ID) (bool, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -338,24 +357,27 @@ func (m *MockService) IsAdmin(ctx context.Context, orgID, userID xid.ID) (bool, 
 			return member.Role == organization.RoleOwner || member.Role == organization.RoleAdmin, nil
 		}
 	}
+
 	return false, nil
 }
 
-// RequireOwner mocks requiring owner status
+// RequireOwner mocks requiring owner status.
 func (m *MockService) RequireOwner(ctx context.Context, orgID, userID xid.ID) error {
 	isOwner, _ := m.IsOwner(ctx, orgID, userID)
 	if !isOwner {
 		return organization.NotOwner()
 	}
+
 	return nil
 }
 
-// RequireAdmin mocks requiring admin status
+// RequireAdmin mocks requiring admin status.
 func (m *MockService) RequireAdmin(ctx context.Context, orgID, userID xid.ID) error {
 	isAdmin, _ := m.IsAdmin(ctx, orgID, userID)
 	if !isAdmin {
 		return organization.NotAdmin()
 	}
+
 	return nil
 }
 
@@ -418,6 +440,7 @@ func (m *MockService) InviteMember(ctx context.Context, orgID xid.ID, req *organ
 	if m.InviteMemberError != nil {
 		return nil, m.InviteMemberError
 	}
+
 	return nil, nil
 }
 
@@ -437,6 +460,7 @@ func (m *MockService) AcceptInvitation(ctx context.Context, token string, userID
 	if m.AcceptInvitationError != nil {
 		return nil, m.AcceptInvitationError
 	}
+
 	return nil, nil
 }
 
@@ -456,7 +480,7 @@ func (m *MockService) CleanupExpiredInvitations(ctx context.Context) (int, error
 	return 0, nil
 }
 
-// RBAC Permission methods
+// RBAC Permission methods.
 func (m *MockService) CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error) {
 	return true, nil // Mock always allows
 }
@@ -469,5 +493,5 @@ func (m *MockService) RequirePermission(ctx context.Context, orgID, userID xid.I
 	return nil // Mock never denies
 }
 
-// Type assertion to ensure MockService implements CompositeOrganizationService
+// Type assertion to ensure MockService implements CompositeOrganizationService.
 var _ organization.CompositeOrganizationService = (*MockService)(nil)

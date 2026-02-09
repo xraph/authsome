@@ -10,25 +10,25 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Handler handles HTTP requests for consent management
+// Handler handles HTTP requests for consent management.
 type Handler struct {
 	service *Service
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type MessageResponse = responses.MessageResponse
 
 type ConsentsResponse struct {
-	Consents interface{} `json:"consents"`
-	Count    int         `json:"count"`
+	Consents any `json:"consents"`
+	Count    int `json:"count"`
 }
 
-// NewHandler creates a new consent handler
+// NewHandler creates a new consent handler.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-// CreateConsent handles POST /consent/records
+// CreateConsent handles POST /consent/records.
 func (h *Handler) CreateConsent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -60,7 +60,7 @@ func (h *Handler) CreateConsent(c forge.Context) error {
 	return c.JSON(http.StatusCreated, consent)
 }
 
-// GetConsent handles GET /consent/records/:id
+// GetConsent handles GET /consent/records/:id.
 func (h *Handler) GetConsent(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -75,7 +75,7 @@ func (h *Handler) GetConsent(c forge.Context) error {
 	return c.JSON(http.StatusOK, consent)
 }
 
-// ListConsentsByUser handles GET /consent/records/user
+// ListConsentsByUser handles GET /consent/records/user.
 func (h *Handler) ListConsentsByUser(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -101,7 +101,7 @@ func (h *Handler) ListConsentsByUser(c forge.Context) error {
 	return c.JSON(http.StatusOK, consents)
 }
 
-// UpdateConsent handles PATCH /consent/records/:id
+// UpdateConsent handles PATCH /consent/records/:id.
 func (h *Handler) UpdateConsent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -137,7 +137,7 @@ func (h *Handler) UpdateConsent(c forge.Context) error {
 	return c.JSON(http.StatusOK, consent)
 }
 
-// RevokeConsent handles POST /consent/records/:id/revoke
+// RevokeConsent handles POST /consent/records/:id/revoke.
 func (h *Handler) RevokeConsent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -176,7 +176,7 @@ func (h *Handler) RevokeConsent(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "Consent revoked successfully"})
 }
 
-// CreateConsentPolicy handles POST /consent/policies
+// CreateConsentPolicy handles POST /consent/policies.
 func (h *Handler) CreateConsentPolicy(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -207,7 +207,7 @@ func (h *Handler) CreateConsentPolicy(c forge.Context) error {
 	return c.JSON(http.StatusCreated, policy)
 }
 
-// GetConsentPolicy handles GET /consent/policies/:id
+// GetConsentPolicy handles GET /consent/policies/:id.
 func (h *Handler) GetConsentPolicy(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -222,7 +222,7 @@ func (h *Handler) GetConsentPolicy(c forge.Context) error {
 	return c.JSON(http.StatusOK, policy)
 }
 
-// RecordCookieConsent handles POST /consent/cookies
+// RecordCookieConsent handles POST /consent/cookies.
 func (h *Handler) RecordCookieConsent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -253,7 +253,7 @@ func (h *Handler) RecordCookieConsent(c forge.Context) error {
 	return c.JSON(http.StatusCreated, consent)
 }
 
-// GetCookieConsent handles GET /consent/cookies
+// GetCookieConsent handles GET /consent/cookies.
 func (h *Handler) GetCookieConsent(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -279,7 +279,7 @@ func (h *Handler) GetCookieConsent(c forge.Context) error {
 	return c.JSON(http.StatusOK, consent)
 }
 
-// RequestDataExport handles POST /consent/data-exports
+// RequestDataExport handles POST /consent/data-exports.
 func (h *Handler) RequestDataExport(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -310,7 +310,7 @@ func (h *Handler) RequestDataExport(c forge.Context) error {
 	return c.JSON(http.StatusAccepted, exportReq)
 }
 
-// GetDataExport handles GET /consent/data-exports/:id
+// GetDataExport handles GET /consent/data-exports/:id.
 func (h *Handler) GetDataExport(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -332,7 +332,7 @@ func (h *Handler) GetDataExport(c forge.Context) error {
 	return c.JSON(http.StatusOK, exportReq)
 }
 
-// DownloadDataExport handles GET /consent/data-exports/:id/download
+// DownloadDataExport handles GET /consent/data-exports/:id/download.
 func (h *Handler) DownloadDataExport(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -359,7 +359,7 @@ func (h *Handler) DownloadDataExport(c forge.Context) error {
 	})
 }
 
-// RequestDataDeletion handles POST /consent/data-deletions
+// RequestDataDeletion handles POST /consent/data-deletions.
 func (h *Handler) RequestDataDeletion(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -390,7 +390,7 @@ func (h *Handler) RequestDataDeletion(c forge.Context) error {
 	return c.JSON(http.StatusAccepted, deletionReq)
 }
 
-// GetDataDeletion handles GET /consent/data-deletions/:id
+// GetDataDeletion handles GET /consent/data-deletions/:id.
 func (h *Handler) GetDataDeletion(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -407,7 +407,7 @@ func (h *Handler) GetDataDeletion(c forge.Context) error {
 	return c.JSON(http.StatusOK, deletionReq)
 }
 
-// ApproveDeletionRequest handles POST /consent/data-deletions/:id/approve (Admin only)
+// ApproveDeletionRequest handles POST /consent/data-deletions/:id/approve (Admin only).
 func (h *Handler) ApproveDeletionRequest(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -438,7 +438,7 @@ func (h *Handler) ApproveDeletionRequest(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "Deletion request approved"})
 }
 
-// GetPrivacySettings handles GET /consent/privacy-settings
+// GetPrivacySettings handles GET /consent/privacy-settings.
 func (h *Handler) GetPrivacySettings(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -459,7 +459,7 @@ func (h *Handler) GetPrivacySettings(c forge.Context) error {
 	return c.JSON(http.StatusOK, settings)
 }
 
-// UpdatePrivacySettings handles PATCH /consent/privacy-settings (Admin only)
+// UpdatePrivacySettings handles PATCH /consent/privacy-settings (Admin only).
 func (h *Handler) UpdatePrivacySettings(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -490,7 +490,7 @@ func (h *Handler) UpdatePrivacySettings(c forge.Context) error {
 	return c.JSON(http.StatusOK, settings)
 }
 
-// GetConsentAuditLogs handles GET /consent/audit-logs
+// GetConsentAuditLogs handles GET /consent/audit-logs.
 func (h *Handler) GetConsentAuditLogs(c forge.Context) error {
 	// Get audit logs - simplified for now
 	// TODO: Implement proper repository method for user-filtered audit logs
@@ -499,7 +499,7 @@ func (h *Handler) GetConsentAuditLogs(c forge.Context) error {
 	return c.JSON(http.StatusOK, logs)
 }
 
-// GenerateConsentReport handles GET /consent/reports
+// GenerateConsentReport handles GET /consent/reports.
 func (h *Handler) GenerateConsentReport(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -524,7 +524,7 @@ func (h *Handler) GenerateConsentReport(c forge.Context) error {
 	return c.JSON(http.StatusOK, report)
 }
 
-// ErrorResponse is a generic error response
+// ErrorResponse is a generic error response.
 type ErrorResponse struct {
 	Message string `json:"message"`
 	Error   string `json:"error,omitempty"`

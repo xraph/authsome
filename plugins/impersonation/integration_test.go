@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// TestIntegration_CompleteFlow tests the complete impersonation lifecycle
+// TestIntegration_CompleteFlow tests the complete impersonation lifecycle.
 func TestIntegration_CompleteFlow(t *testing.T) {
 	service, repo, userSvc, _ := setupTestService(t)
 	admin, target := createTestUsers(userSvc)
@@ -157,7 +157,7 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 		activeOnly = true // Reuse the variable from earlier in this scope
 		listFilter.ActiveOnly = &activeOnly
 		listResp, _ = service.List(ctx, listFilter)
-		assert.Len(t, listResp.Data, 0) // No active sessions
+		assert.Empty(t, listResp.Data) // No active sessions
 	})
 
 	// Step 6: Verify audit trail exists
@@ -172,7 +172,7 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 		total := int(auditResp.Pagination.Total)
 
 		require.NoError(t, err)
-		assert.Greater(t, total, 0)
+		assert.Positive(t, total)
 		assert.NotEmpty(t, events)
 
 		// Should have at least "started" and "ended" events
@@ -180,12 +180,13 @@ func TestIntegration_CompleteFlow(t *testing.T) {
 		for _, event := range events {
 			eventTypes[event.EventType] = true
 		}
+
 		assert.True(t, eventTypes["started"])
 		assert.True(t, eventTypes["ended"])
 	})
 }
 
-// TestIntegration_MultipleOrganizations tests multi-tenant isolation
+// TestIntegration_MultipleOrganizations tests multi-tenant isolation.
 func TestIntegration_MultipleOrganizations(t *testing.T) {
 	service, _, userSvc, _ := setupTestService(t)
 	ctx := context.Background()
@@ -274,7 +275,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 	assert.ErrorIs(t, err, impersonation.ErrPermissionDenied)
 }
 
-// TestIntegration_ConcurrentImpersonations tests multiple admins impersonating simultaneously
+// TestIntegration_ConcurrentImpersonations tests multiple admins impersonating simultaneously.
 func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	service, _, userSvc, _ := setupTestService(t)
 	ctx := context.Background()
@@ -283,7 +284,8 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	// Create multiple admins and targets
 	admins := make([]*schema.User, 3)
 	targets := make([]*schema.User, 3)
-	for i := 0; i < 3; i++ {
+
+	for i := range 3 {
 		admin := &schema.User{
 			ID:    xid.New(),
 			Email: "admin" + string(rune('a'+i)) + "@example.com",
@@ -301,7 +303,7 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	}
 
 	// Start impersonations for all admins
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		startReq := &impersonation.StartRequest{
 			AppID:          orgID,
 			ImpersonatorID: admins[i].ID,
@@ -324,12 +326,14 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 	assert.Len(t, listResp.Data, 3)
 
 	// Verify each admin can only end their own session
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		// Find this admin's session
 		var sessionID xid.ID
+
 		for _, session := range listResp.Data {
 			if session.ImpersonatorID == admins[i].ID {
 				sessionID = session.ID
+
 				break
 			}
 		}
@@ -353,10 +357,10 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 
 	// Verify all sessions are ended
 	listResp, _ = service.List(ctx, listFilter)
-	assert.Len(t, listResp.Data, 0)
+	assert.Empty(t, listResp.Data)
 }
 
-// TestIntegration_AutoExpiry tests automatic session expiration
+// TestIntegration_AutoExpiry tests automatic session expiration.
 func TestIntegration_AutoExpiry(t *testing.T) {
 	service, repo, userSvc, _ := setupTestService(t)
 	admin, target := createTestUsers(userSvc)
@@ -364,7 +368,7 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	ctx := context.Background()
 
 	// Create expired sessions
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		session := &schema.ImpersonationSession{
 			AppID:          orgID,
 			ImpersonatorID: admin.ID,
@@ -418,15 +422,17 @@ func TestIntegration_AutoExpiry(t *testing.T) {
 	listFilter.ActiveOnly = &inactiveOnly
 	listResp, _ = service.List(ctx, listFilter)
 	endedCount := 0
+
 	for _, session := range listResp.Data {
 		if !session.Active && session.EndedAt != nil && session.EndReason == "timeout" {
 			endedCount++
 		}
 	}
+
 	assert.Equal(t, 3, endedCount)
 }
 
-// TestIntegration_FilterByUser tests filtering impersonations by specific users
+// TestIntegration_FilterByUser tests filtering impersonations by specific users.
 func TestIntegration_FilterByUser(t *testing.T) {
 	service, _, userSvc, _ := setupTestService(t)
 	ctx := context.Background()
@@ -456,6 +462,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	}
 	resp, err := service.Start(ctx, startReq)
 	require.NoError(t, err)
+
 	sessions["admin1_target1"] = resp
 
 	// admin2 -> target2
@@ -467,6 +474,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	}
 	resp, err = service.Start(ctx, startReq)
 	require.NoError(t, err)
+
 	sessions["admin2_target2"] = resp
 
 	// admin3 -> target1
@@ -478,6 +486,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	}
 	resp, err = service.Start(ctx, startReq)
 	require.NoError(t, err)
+
 	sessions["admin3_target1"] = resp
 
 	// admin4 -> target2
@@ -489,6 +498,7 @@ func TestIntegration_FilterByUser(t *testing.T) {
 	}
 	resp, err = service.Start(ctx, startReq)
 	require.NoError(t, err)
+
 	sessions["admin4_target2"] = resp
 
 	// Filter by impersonator (admin1)

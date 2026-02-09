@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// TaxType represents the type of tax
+// TaxType represents the type of tax.
 type TaxType string
 
 const (
@@ -19,7 +19,7 @@ const (
 	TaxTypeCustom      TaxType = "custom"      // Custom tax type
 )
 
-// TaxBehavior defines how tax is applied to prices
+// TaxBehavior defines how tax is applied to prices.
 type TaxBehavior string
 
 const (
@@ -27,7 +27,7 @@ const (
 	TaxBehaviorInclusive TaxBehavior = "inclusive" // Tax included in price
 )
 
-// TaxRate represents a tax rate configuration
+// TaxRate represents a tax rate configuration.
 type TaxRate struct {
 	ID          xid.ID      `json:"id"`
 	AppID       xid.ID      `json:"appId"`
@@ -53,7 +53,7 @@ type TaxRate struct {
 	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
-// TaxExemption represents a tax exemption for an organization
+// TaxExemption represents a tax exemption for an organization.
 type TaxExemption struct {
 	ID             xid.ID     `json:"id"`
 	AppID          xid.ID     `json:"appId"`
@@ -69,7 +69,7 @@ type TaxExemption struct {
 	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
-// TaxCalculation represents a calculated tax amount
+// TaxCalculation represents a calculated tax amount.
 type TaxCalculation struct {
 	TaxRateID     xid.ID  `json:"taxRateId"`
 	TaxRateName   string  `json:"taxRateName"`
@@ -83,7 +83,7 @@ type TaxCalculation struct {
 	ExemptionID   *xid.ID `json:"exemptionId"`
 }
 
-// TaxSummary represents a summary of taxes on an invoice
+// TaxSummary represents a summary of taxes on an invoice.
 type TaxSummary struct {
 	Calculations []TaxCalculation `json:"calculations"`
 	TotalTax     int64            `json:"totalTax"`
@@ -92,10 +92,10 @@ type TaxSummary struct {
 
 // TaxBillingAddress represents a customer's billing address for tax purposes
 // Note: Uses BillingAddress from payment.go for actual address storage
-// This alias is for documentation purposes
+// This alias is for documentation purposes.
 type TaxBillingAddress = BillingAddress
 
-// TaxIDType represents the type of tax ID
+// TaxIDType represents the type of tax ID.
 type TaxIDType string
 
 const (
@@ -111,7 +111,7 @@ const (
 	TaxIDTypeCustom TaxIDType = "custom"
 )
 
-// CustomerTaxID represents a customer's tax identification
+// CustomerTaxID represents a customer's tax identification.
 type CustomerTaxID struct {
 	ID             xid.ID     `json:"id"`
 	AppID          xid.ID     `json:"appId"`
@@ -125,22 +125,22 @@ type CustomerTaxID struct {
 	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
-// CreateTaxRateRequest is used to create a new tax rate
+// CreateTaxRateRequest is used to create a new tax rate.
 type CreateTaxRateRequest struct {
-	Name        string      `json:"name" validate:"required"`
+	Name        string      `json:"name"        validate:"required"`
 	Description string      `json:"description"`
-	Type        TaxType     `json:"type" validate:"required"`
-	Percentage  float64     `json:"percentage" validate:"required,gte=0,lte=100"`
-	Country     string      `json:"country" validate:"required,len=2"`
+	Type        TaxType     `json:"type"        validate:"required"`
+	Percentage  float64     `json:"percentage"  validate:"required,gte=0,lte=100"`
+	Country     string      `json:"country"     validate:"required,len=2"`
 	State       string      `json:"state"`
 	City        string      `json:"city"`
 	PostalCode  string      `json:"postalCode"`
-	Behavior    TaxBehavior `json:"behavior" validate:"required"`
+	Behavior    TaxBehavior `json:"behavior"    validate:"required"`
 	IsDefault   bool        `json:"isDefault"`
 	ValidFrom   time.Time   `json:"validFrom"`
 }
 
-// UpdateTaxRateRequest is used to update a tax rate
+// UpdateTaxRateRequest is used to update a tax rate.
 type UpdateTaxRateRequest struct {
 	Name        *string      `json:"name"`
 	Description *string      `json:"description"`
@@ -151,34 +151,34 @@ type UpdateTaxRateRequest struct {
 	ValidUntil  *time.Time   `json:"validUntil"`
 }
 
-// CalculateTaxRequest is used to calculate tax for an amount
+// CalculateTaxRequest is used to calculate tax for an amount.
 type CalculateTaxRequest struct {
-	Amount         int64           `json:"amount" validate:"required"`
-	Currency       string          `json:"currency" validate:"required,len=3"`
+	Amount         int64           `json:"amount"         validate:"required"`
+	Currency       string          `json:"currency"       validate:"required,len=3"`
 	BillingAddress *BillingAddress `json:"billingAddress"`
 	OrganizationID *xid.ID         `json:"organizationId"`
 	ProductType    string          `json:"productType"` // For product-specific tax rules
 }
 
-// CreateTaxExemptionRequest is used to create a tax exemption
+// CreateTaxExemptionRequest is used to create a tax exemption.
 type CreateTaxExemptionRequest struct {
 	OrganizationID xid.ID     `json:"organizationId" validate:"required"`
-	Type           string     `json:"type" validate:"required"`
-	Certificate    string     `json:"certificate" validate:"required"`
-	Country        string     `json:"country" validate:"required,len=2"`
+	Type           string     `json:"type"           validate:"required"`
+	Certificate    string     `json:"certificate"    validate:"required"`
+	Country        string     `json:"country"        validate:"required,len=2"`
 	State          string     `json:"state"`
 	ExpiresAt      *time.Time `json:"expiresAt"`
 }
 
-// CreateTaxIDRequest is used to create a customer tax ID
+// CreateTaxIDRequest is used to create a customer tax ID.
 type CreateTaxIDRequest struct {
 	OrganizationID xid.ID    `json:"organizationId" validate:"required"`
-	Type           TaxIDType `json:"type" validate:"required"`
-	Value          string    `json:"value" validate:"required"`
-	Country        string    `json:"country" validate:"required,len=2"`
+	Type           TaxIDType `json:"type"           validate:"required"`
+	Value          string    `json:"value"          validate:"required"`
+	Country        string    `json:"country"        validate:"required,len=2"`
 }
 
-// VATValidationResult represents the result of VAT validation
+// VATValidationResult represents the result of VAT validation.
 type VATValidationResult struct {
 	Valid       bool   `json:"valid"`
 	CountryCode string `json:"countryCode"`

@@ -8,7 +8,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// RecoveryMethod represents different recovery authentication methods
+// RecoveryMethod represents different recovery authentication methods.
 type RecoveryMethod string
 
 const (
@@ -21,7 +21,7 @@ const (
 	RecoveryMethodDocument       RecoveryMethod = "document_upload"
 )
 
-// RecoveryStatus represents the status of a recovery attempt
+// RecoveryStatus represents the status of a recovery attempt.
 type RecoveryStatus string
 
 const (
@@ -34,7 +34,7 @@ const (
 )
 
 // SecurityQuestion stores user's security questions and hashed answers
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type SecurityQuestion struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_security_questions,alias:bsq"`
@@ -55,7 +55,7 @@ type SecurityQuestion struct {
 }
 
 // TrustedContact stores emergency contact information for account recovery
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type TrustedContact struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_trusted_contacts,alias:btc"`
@@ -82,7 +82,7 @@ type TrustedContact struct {
 }
 
 // RecoverySession represents an account recovery attempt
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type RecoverySession struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_recovery_sessions,alias:brs"`
@@ -123,11 +123,11 @@ type RecoverySession struct {
 	ReviewedAt     *time.Time `bun:"reviewed_at"`
 	ReviewNotes    string     `bun:"review_notes"`
 
-	Metadata map[string]interface{} `bun:"metadata,type:jsonb"`
+	Metadata map[string]any `bun:"metadata,type:jsonb"`
 }
 
 // VideoVerificationSession stores video verification details
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type VideoVerificationSession struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_video_sessions,alias:bvs"`
@@ -162,7 +162,7 @@ type VideoVerificationSession struct {
 }
 
 // DocumentVerification stores ID document uploads for verification
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type DocumentVerification struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_document_verifications,alias:bdv"`
@@ -181,7 +181,7 @@ type DocumentVerification struct {
 	SelfieURL      string `bun:"selfie_url"`
 
 	// OCR/Extraction results
-	ExtractedData map[string]interface{} `bun:"extracted_data,type:jsonb"`
+	ExtractedData map[string]any `bun:"extracted_data,type:jsonb"`
 
 	// Verification
 	VerificationStatus string     `bun:"verification_status,notnull"` // pending, verified, rejected
@@ -190,9 +190,9 @@ type DocumentVerification struct {
 	VerifiedBy         *xid.ID    `bun:"verified_by,type:varchar(20)"`
 
 	// Provider integration (Stripe Identity, Onfido, etc.)
-	ProviderName     string                 `bun:"provider_name"`
-	ProviderID       string                 `bun:"provider_id"`
-	ProviderResponse map[string]interface{} `bun:"provider_response,type:jsonb"`
+	ProviderName     string         `bun:"provider_name"`
+	ProviderID       string         `bun:"provider_id"`
+	ProviderResponse map[string]any `bun:"provider_response,type:jsonb"`
 
 	RejectionReason string    `bun:"rejection_reason"`
 	ExpiresAt       time.Time `bun:"expires_at,notnull"`
@@ -201,7 +201,7 @@ type DocumentVerification struct {
 }
 
 // RecoveryAttemptLog provides immutable audit trail of recovery attempts
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type RecoveryAttemptLog struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_recovery_logs,alias:brl"`
@@ -223,11 +223,11 @@ type RecoveryAttemptLog struct {
 	UserAgent string `bun:"user_agent"`
 	DeviceID  string `bun:"device_id"`
 
-	Metadata map[string]interface{} `bun:"metadata,type:jsonb"`
+	Metadata map[string]any `bun:"metadata,type:jsonb"`
 }
 
 // RecoveryConfiguration stores organization-level recovery settings
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type RecoveryConfiguration struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_recovery_configs,alias:brc"`
@@ -255,11 +255,11 @@ type RecoveryConfiguration struct {
 	MaxAttemptsPerDay int           `bun:"max_attempts_per_day,default:3"`
 	LockoutDuration   time.Duration `bun:"lockout_duration,default:24h"`
 
-	Settings map[string]interface{} `bun:"settings,type:jsonb"`
+	Settings map[string]any `bun:"settings,type:jsonb"`
 }
 
 // RecoveryCodeUsage tracks when recovery codes are used (separate from 2FA backup codes)
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type RecoveryCodeUsage struct {
 	schema.AuditableModel
 	bun.BaseModel `bun:"table:backup_code_usage,alias:bcu"`

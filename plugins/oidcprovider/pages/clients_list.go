@@ -14,7 +14,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ClientsListPage shows the list of OAuth2/OIDC clients
+// ClientsListPage shows the list of OAuth2/OIDC clients.
 func (p *PagesManager) ClientsListPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

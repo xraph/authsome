@@ -11,7 +11,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ProfilePage shows the current user's profile and allows editing
+// ProfilePage shows the current user's profile and allows editing.
 func (p *PagesManager) ProfilePage(ctx *router.PageContext) (g.Node, error) {
 	// Get current user from context
 	var currentUser *user.User
@@ -23,6 +23,7 @@ func (p *PagesManager) ProfilePage(ctx *router.PageContext) (g.Node, error) {
 	userID := ""
 	userName := "User"
 	userEmail := ""
+
 	if currentUser != nil {
 		userID = currentUser.ID.String()
 		if currentUser.Name != "" {
@@ -30,6 +31,7 @@ func (p *PagesManager) ProfilePage(ctx *router.PageContext) (g.Node, error) {
 		} else {
 			userName = currentUser.Email
 		}
+
 		userEmail = currentUser.Email
 	}
 

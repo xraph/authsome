@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// UserEditPage allows editing user information
+// UserEditPage allows editing user information.
 func (p *PagesManager) UserEditPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 	userID := ctx.Param("userId")

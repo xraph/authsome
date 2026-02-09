@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/core/session"
 )
 
-// Service provides multi-session operations
+// Service provides multi-session operations.
 type Service struct {
 	sessions   session.Repository
 	sessionSvc session.ServiceInterface
@@ -21,38 +21,39 @@ type Service struct {
 	auth       *auth.Service
 }
 
-func NewService(sr session.Repository, sessionSvc session.ServiceInterface, dr dev.Repository, a *auth.Service, _ interface{}) *Service {
+func NewService(sr session.Repository, sessionSvc session.ServiceInterface, dr dev.Repository, a *auth.Service, _ any) *Service {
 	return &Service{sessions: sr, devices: dr, auth: a, sessionSvc: sessionSvc}
 }
 
-// CurrentUserFromToken validates token and returns userID
+// CurrentUserFromToken validates token and returns userID.
 func (s *Service) CurrentUserFromToken(ctx context.Context, token string) (xid.ID, error) {
 	res, err := s.auth.GetSession(ctx, token)
 	if err != nil || res == nil || res.Session == nil {
 		return xid.ID{}, errors.New("not authenticated")
 	}
+
 	return res.User.ID, nil
 }
 
-// ListSessionsRequest represents filtering and pagination options for listing sessions
+// ListSessionsRequest represents filtering and pagination options for listing sessions.
 type ListSessionsRequest struct {
 	// Filtering
-	Active      *bool   `json:"active" query:"active"`
-	UserAgent   *string `json:"userAgent" query:"user_agent"`
-	IPAddress   *string `json:"ipAddress" query:"ip_address"`
+	Active      *bool   `json:"active"      query:"active"`
+	UserAgent   *string `json:"userAgent"   query:"user_agent"`
+	IPAddress   *string `json:"ipAddress"   query:"ip_address"`
 	CreatedFrom *string `json:"createdFrom" query:"created_from"`
-	CreatedTo   *string `json:"createdTo" query:"created_to"`
+	CreatedTo   *string `json:"createdTo"   query:"created_to"`
 
 	// Sorting
-	SortBy    *string `json:"sortBy" query:"sort_by"`
+	SortBy    *string `json:"sortBy"    query:"sort_by"`
 	SortOrder *string `json:"sortOrder" query:"sort_order"`
 
 	// Pagination
-	Limit  int `json:"limit" query:"limit"`
+	Limit  int `json:"limit"  query:"limit"`
 	Offset int `json:"offset" query:"offset"`
 }
 
-// List returns all sessions for a user with optional filtering
+// List returns all sessions for a user with optional filtering.
 func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequest) (*session.ListSessionsResponse, error) {
 	// Build filter from request
 	filter := &session.ListSessionsFilter{
@@ -80,22 +81,26 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 	// Filter by UserAgent
 	if req.UserAgent != nil && *req.UserAgent != "" {
 		var filtered []*session.Session
+
 		for _, sess := range filteredSessions {
 			if sess.UserAgent == *req.UserAgent {
 				filtered = append(filtered, sess)
 			}
 		}
+
 		filteredSessions = filtered
 	}
 
 	// Filter by IPAddress
 	if req.IPAddress != nil && *req.IPAddress != "" {
 		var filtered []*session.Session
+
 		for _, sess := range filteredSessions {
 			if sess.IPAddress == *req.IPAddress {
 				filtered = append(filtered, sess)
 			}
 		}
+
 		filteredSessions = filtered
 	}
 
@@ -104,11 +109,13 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 		createdFrom, err := time.Parse(time.RFC3339, *req.CreatedFrom)
 		if err == nil {
 			var filtered []*session.Session
+
 			for _, sess := range filteredSessions {
 				if sess.CreatedAt.After(createdFrom) || sess.CreatedAt.Equal(createdFrom) {
 					filtered = append(filtered, sess)
 				}
 			}
+
 			filteredSessions = filtered
 		}
 	}
@@ -118,11 +125,13 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 		createdTo, err := time.Parse(time.RFC3339, *req.CreatedTo)
 		if err == nil {
 			var filtered []*session.Session
+
 			for _, sess := range filteredSessions {
 				if sess.CreatedAt.Before(createdTo) || sess.CreatedAt.Equal(createdTo) {
 					filtered = append(filtered, sess)
 				}
 			}
+
 			filteredSessions = filtered
 		}
 	}
@@ -141,28 +150,32 @@ func (s *Service) List(ctx context.Context, userID xid.ID, req *ListSessionsRequ
 	return listResp, nil
 }
 
-// Find returns a specific session by ID ensuring ownership
+// Find returns a specific session by ID ensuring ownership.
 func (s *Service) Find(ctx context.Context, userID xid.ID, id xid.ID) (*session.Session, error) {
 	sess, err := s.sessionSvc.FindByID(ctx, id)
 	if err != nil || sess == nil {
 		return nil, errors.New("session not found")
 	}
+
 	if sess.UserID != userID {
 		return nil, errors.New("unauthorized")
 	}
+
 	return sess, nil
 }
 
-// Delete revokes a session by id ensuring ownership
+// Delete revokes a session by id ensuring ownership.
 func (s *Service) Delete(ctx context.Context, userID, id xid.ID) error {
 	// Ensure session belongs to user
 	sess, err := s.sessionSvc.FindByID(ctx, id)
 	if err != nil || sess == nil {
 		return errors.New("session not found")
 	}
+
 	if sess.UserID != userID {
 		return errors.New("unauthorized")
 	}
+
 	return s.sessionSvc.RevokeByID(ctx, id)
 }
 
@@ -174,6 +187,7 @@ func (s *Service) GetCurrentSessionID(ctx context.Context, token string) (xid.ID
 	if err != nil || res == nil || res.Session == nil {
 		return xid.ID{}, errors.New("invalid token")
 	}
+
 	return res.Session.ID, nil
 }
 
@@ -194,12 +208,14 @@ func (s *Service) RevokeAll(ctx context.Context, userID xid.ID, includeCurrentSe
 		Limit:  100,
 		Offset: 0,
 	}
+
 	listResp, err := s.List(ctx, userID, req)
 	if err != nil {
 		return 0, err
 	}
 
 	count := 0
+
 	for _, sess := range listResp.Data {
 		// Skip current session if requested
 		if !includeCurrentSession && sess.ID == currentSessionID {
@@ -211,6 +227,7 @@ func (s *Service) RevokeAll(ctx context.Context, userID xid.ID, includeCurrentSe
 			// Log but continue with other sessions
 			continue
 		}
+
 		count++
 	}
 
@@ -267,6 +284,7 @@ func (s *Service) GetStats(ctx context.Context, userID xid.ID) (*SessionStats, e
 		Limit:  100,
 		Offset: 0,
 	}
+
 	listResp, err := s.List(ctx, userID, req)
 	if err != nil {
 		return nil, err
@@ -294,6 +312,7 @@ func (s *Service) GetStats(ctx context.Context, userID xid.ID) (*SessionStats, e
 		if stats.OldestSession == nil || sess.CreatedAt.Before(stats.OldestSession.CreatedAt) {
 			stats.OldestSession = listResp.Data[i]
 		}
+
 		if stats.NewestSession == nil || sess.CreatedAt.After(stats.NewestSession.CreatedAt) {
 			stats.NewestSession = listResp.Data[i]
 		}
@@ -315,7 +334,7 @@ func (s *Service) GetStats(ctx context.Context, userID xid.ID) (*SessionStats, e
 	return stats, nil
 }
 
-// sortSessions sorts sessions based on the specified field and order
+// sortSessions sorts sessions based on the specified field and order.
 func sortSessions(sessions []*session.Session, sortBy string, sortOrder *string) {
 	order := "desc"
 	if sortOrder != nil && *sortOrder != "" {
@@ -324,6 +343,7 @@ func sortSessions(sessions []*session.Session, sortBy string, sortOrder *string)
 
 	sort.Slice(sessions, func(i, j int) bool {
 		var less bool
+
 		switch sortBy {
 		case "created_at":
 			less = sessions[i].CreatedAt.Before(sessions[j].CreatedAt)
@@ -339,6 +359,7 @@ func sortSessions(sessions []*session.Session, sortBy string, sortOrder *string)
 		if order == "asc" {
 			return less
 		}
+
 		return !less
 	})
 }

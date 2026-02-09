@@ -31,7 +31,8 @@ func TestGenerateBackupCode(t *testing.T) {
 func TestGenerateBackupCode_Uniqueness(t *testing.T) {
 	// Generate multiple codes and ensure they're unique
 	codes := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+
+	for range 100 {
 		code, err := generateBackupCode()
 		assert.NoError(t, err)
 		assert.False(t, codes[code], "Generated duplicate code: %s", code)
@@ -94,7 +95,7 @@ func TestBackupCodeSecurity(t *testing.T) {
 
 func TestBackupCodeFormat(t *testing.T) {
 	// Test that generated codes match expected format
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		code, err := generateBackupCode()
 		assert.NoError(t, err)
 
@@ -115,9 +116,10 @@ func TestBackupCodeFormat(t *testing.T) {
 	}
 }
 
-// Helper to validate backup code characters
+// Helper to validate backup code characters.
 func isValidBackupChar(c rune) bool {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
 	return strings.ContainsRune(charset, c)
 }
 
@@ -132,6 +134,7 @@ func TestBackupCodeCountValidation(t *testing.T) {
 	if count <= 0 || count > 20 {
 		count = 10
 	}
+
 	assert.Equal(t, 10, count)
 
 	// Count > 20 should cap at 10
@@ -139,6 +142,7 @@ func TestBackupCodeCountValidation(t *testing.T) {
 	if count <= 0 || count > 20 {
 		count = 10
 	}
+
 	assert.Equal(t, 10, count)
 
 	// Valid count should be preserved
@@ -146,6 +150,7 @@ func TestBackupCodeCountValidation(t *testing.T) {
 	if count <= 0 || count > 20 {
 		count = 10
 	}
+
 	assert.Equal(t, 15, count)
 
 	// Test invalid user ID
@@ -164,7 +169,7 @@ func TestHashConsistency(t *testing.T) {
 
 	// Hash same code multiple times
 	hashes := make([]string, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		hashes[i] = hashBackupCode(code)
 	}
 

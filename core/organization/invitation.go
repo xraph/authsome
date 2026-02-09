@@ -8,7 +8,7 @@ import (
 )
 
 // Invitation represents an organization invitation entity DTO (Data Transfer Object)
-// This is separate from schema.OrganizationInvitation to maintain proper separation of concerns
+// This is separate from schema.OrganizationInvitation to maintain proper separation of concerns.
 type Invitation struct {
 	ID             xid.ID     `json:"id"`
 	OrganizationID xid.ID     `json:"organizationID"`
@@ -25,7 +25,7 @@ type Invitation struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the Invitation DTO to a schema.OrganizationInvitation model
+// ToSchema converts the Invitation DTO to a schema.OrganizationInvitation model.
 func (i *Invitation) ToSchema() *schema.OrganizationInvitation {
 	return &schema.OrganizationInvitation{
 		ID:             i.ID,
@@ -45,11 +45,12 @@ func (i *Invitation) ToSchema() *schema.OrganizationInvitation {
 	}
 }
 
-// FromSchemaInvitation converts a schema.OrganizationInvitation model to Invitation DTO
+// FromSchemaInvitation converts a schema.OrganizationInvitation model to Invitation DTO.
 func FromSchemaInvitation(si *schema.OrganizationInvitation) *Invitation {
 	if si == nil {
 		return nil
 	}
+
 	return &Invitation{
 		ID:             si.ID,
 		OrganizationID: si.OrganizationID,
@@ -66,11 +67,12 @@ func FromSchemaInvitation(si *schema.OrganizationInvitation) *Invitation {
 	}
 }
 
-// FromSchemaInvitations converts a slice of schema.OrganizationInvitation to Invitation DTOs
+// FromSchemaInvitations converts a slice of schema.OrganizationInvitation to Invitation DTOs.
 func FromSchemaInvitations(invitations []*schema.OrganizationInvitation) []*Invitation {
 	result := make([]*Invitation, len(invitations))
 	for i, inv := range invitations {
 		result[i] = FromSchemaInvitation(inv)
 	}
+
 	return result
 }

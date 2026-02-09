@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,13 +15,13 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// RegistrationService handles RFC 7591 dynamic client registration operations
+// RegistrationService handles RFC 7591 dynamic client registration operations.
 type RegistrationService struct {
 	clientRepo *repo.OAuthClientRepository
 	config     Config
 }
 
-// NewRegistrationService creates a new client registration service
+// NewRegistrationService creates a new client registration service.
 func NewRegistrationService(clientRepo *repo.OAuthClientRepository, config Config) *RegistrationService {
 	return &RegistrationService{
 		clientRepo: clientRepo,
@@ -28,7 +29,7 @@ func NewRegistrationService(clientRepo *repo.OAuthClientRepository, config Confi
 	}
 }
 
-// RegisterClient implements RFC 7591 dynamic client registration
+// RegisterClient implements RFC 7591 dynamic client registration.
 func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientRegistrationRequest, appID, envID xid.ID, orgID *xid.ID) (*ClientRegistrationResponse, error) {
 	// Validate the registration request
 	if err := s.ValidateRegistrationRequest(req); err != nil {
@@ -37,6 +38,7 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 
 	// Generate client credentials
 	clientID := "client_" + xid.New().String()
+
 	clientSecret, err := s.generateClientSecret()
 	if err != nil {
 		return nil, errs.InternalError(err)
@@ -46,6 +48,7 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 	if req.ApplicationType == "" {
 		req.ApplicationType = "web"
 	}
+
 	if req.TokenEndpointAuthMethod == "" {
 		if req.ApplicationType == "native" || req.ApplicationType == "spa" {
 			req.TokenEndpointAuthMethod = "none"
@@ -54,9 +57,11 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 			req.TokenEndpointAuthMethod = "client_secret_basic"
 		}
 	}
+
 	if len(req.GrantTypes) == 0 {
 		req.GrantTypes = []string{"authorization_code", "refresh_token"}
 	}
+
 	if len(req.ResponseTypes) == 0 {
 		req.ResponseTypes = []string{"code"}
 	}
@@ -125,7 +130,7 @@ func (s *RegistrationService) RegisterClient(ctx context.Context, req *ClientReg
 	return response, nil
 }
 
-// ValidateRegistrationRequest validates a client registration request per RFC 7591
+// ValidateRegistrationRequest validates a client registration request per RFC 7591.
 func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistrationRequest) error {
 	// Validate required fields
 	if req.ClientName == "" {
@@ -211,11 +216,13 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 			return errs.InvalidInput("logo_uri", "must be a valid URL")
 		}
 	}
+
 	if req.PolicyURI != "" {
 		if _, err := url.Parse(req.PolicyURI); err != nil {
 			return errs.InvalidInput("policy_uri", "must be a valid URL")
 		}
 	}
+
 	if req.TosURI != "" {
 		if _, err := url.Parse(req.TosURI); err != nil {
 			return errs.InvalidInput("tos_uri", "must be a valid URL")
@@ -225,7 +232,7 @@ func (s *RegistrationService) ValidateRegistrationRequest(req *ClientRegistratio
 	return nil
 }
 
-// validateRedirectURI validates a redirect URI based on application type
+// validateRedirectURI validates a redirect URI based on application type.
 func (s *RegistrationService) validateRedirectURI(uri, applicationType string) error {
 	parsedURL, err := url.Parse(uri)
 	if err != nil {
@@ -275,29 +282,27 @@ func (s *RegistrationService) validateRedirectURI(uri, applicationType string) e
 	return nil
 }
 
-// generateClientSecret generates a cryptographically secure client secret
+// generateClientSecret generates a cryptographically secure client secret.
 func (s *RegistrationService) generateClientSecret() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
+
 	return "secret_" + base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(bytes), nil
 }
 
-// parseScopes converts a space-separated scope string to a slice
+// parseScopes converts a space-separated scope string to a slice.
 func (s *RegistrationService) parseScopes(scope string) []string {
 	if scope == "" {
 		return nil
 	}
+
 	return strings.Fields(scope)
 }
 
-// contains checks if a string slice contains a value
+// contains checks if a string slice contains a value.
 func contains(slice []string, value string) bool {
-	for _, item := range slice {
-		if item == value {
-			return true
-		}
-	}
-	return false
+
+	return slices.Contains(slice, value)
 }

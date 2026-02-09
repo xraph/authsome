@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Service provides MFA orchestration and management
+// Service provides MFA orchestration and management.
 type Service struct {
 	repo            *repository.MFARepository
 	adapterRegistry *FactorAdapterRegistry
@@ -24,7 +24,7 @@ type Service struct {
 	config          *Config
 }
 
-// NewService creates a new MFA service
+// NewService creates a new MFA service.
 func NewService(
 	repo *repository.MFARepository,
 	adapterRegistry *FactorAdapterRegistry,
@@ -46,7 +46,7 @@ func NewService(
 
 // ==================== Factor Enrollment ====================
 
-// EnrollFactor initiates factor enrollment for a user
+// EnrollFactor initiates factor enrollment for a user.
 func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEnrollmentRequest) (*FactorEnrollmentResponse, error) {
 	// Check if factor type is allowed
 	if !s.config.IsFactorAllowed(req.Type) {
@@ -74,6 +74,7 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 	if req.Priority == "" {
 		req.Priority = FactorPriorityPrimary
 	}
+
 	if req.Name == "" {
 		req.Name = fmt.Sprintf("%s Factor", req.Type)
 	}
@@ -96,12 +97,13 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 		if err != nil {
 			return nil, errs.Wrap(err, "ENCRYPT_SECRET_FAILED", "Failed to encrypt secret", 500)
 		}
+
 		factor.Secret = encrypted
 	}
 
 	// Set audit fields
-	factor.AuditableModel.CreatedBy = userID
-	factor.AuditableModel.UpdatedBy = userID
+	factor.CreatedBy = userID
+	factor.UpdatedBy = userID
 
 	// Save to database
 	if err := s.repo.CreateFactor(ctx, factor); err != nil {
@@ -111,13 +113,14 @@ func (s *Service) EnrollFactor(ctx context.Context, userID xid.ID, req *FactorEn
 	return resp, nil
 }
 
-// VerifyEnrollment completes factor enrollment verification
+// VerifyEnrollment completes factor enrollment verification.
 func (s *Service) VerifyEnrollment(ctx context.Context, factorID xid.ID, proof string) error {
 	// Get the factor
 	factor, err := s.repo.GetFactor(ctx, factorID)
 	if err != nil {
 		return errs.Wrap(err, "GET_FACTOR_FAILED", "Failed to get factor", 500)
 	}
+
 	if factor == nil {
 		return errs.NotFound("MFA factor not found")
 	}
@@ -142,12 +145,12 @@ func (s *Service) VerifyEnrollment(ctx context.Context, factorID xid.ID, proof s
 	now := time.Now()
 	factor.Status = string(FactorStatusActive)
 	factor.VerifiedAt = &now
-	factor.AuditableModel.UpdatedBy = factor.UserID
+	factor.UpdatedBy = factor.UserID
 
 	return s.repo.UpdateFactor(ctx, factor)
 }
 
-// ListFactors lists all factors for a user
+// ListFactors lists all factors for a user.
 func (s *Service) ListFactors(ctx context.Context, userID xid.ID, activeOnly bool) ([]*Factor, error) {
 	var statusFilter []string
 	if activeOnly {
@@ -168,12 +171,13 @@ func (s *Service) ListFactors(ctx context.Context, userID xid.ID, activeOnly boo
 	return factors, nil
 }
 
-// GetFactor retrieves a specific factor
+// GetFactor retrieves a specific factor.
 func (s *Service) GetFactor(ctx context.Context, factorID xid.ID) (*Factor, error) {
 	schemaFactor, err := s.repo.GetFactor(ctx, factorID)
 	if err != nil {
 		return nil, err
 	}
+
 	if schemaFactor == nil {
 		return nil, errs.NotFound("MFA factor not found")
 	}
@@ -181,12 +185,13 @@ func (s *Service) GetFactor(ctx context.Context, factorID xid.ID) (*Factor, erro
 	return s.convertSchemaFactor(schemaFactor), nil
 }
 
-// UpdateFactor updates factor settings
+// UpdateFactor updates factor settings.
 func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map[string]interface{}) error {
 	factor, err := s.repo.GetFactor(ctx, factorID)
 	if err != nil {
 		return err
 	}
+
 	if factor == nil {
 		return errs.NotFound("MFA factor not found")
 	}
@@ -195,24 +200,28 @@ func (s *Service) UpdateFactor(ctx context.Context, factorID xid.ID, updates map
 	if name, ok := updates["name"].(string); ok {
 		factor.Name = name
 	}
+
 	if priority, ok := updates["priority"].(string); ok {
 		factor.Priority = priority
 	}
+
 	if metadata, ok := updates["metadata"].(map[string]any); ok {
 		factor.Metadata = metadata
 	}
 
-	factor.AuditableModel.UpdatedBy = factor.UserID
+	factor.UpdatedBy = factor.UserID
+
 	return s.repo.UpdateFactor(ctx, factor)
 }
 
-// DeleteFactor removes a factor
+// DeleteFactor removes a factor.
 func (s *Service) DeleteFactor(ctx context.Context, factorID xid.ID) error {
 	// Get factor to check it exists
 	factor, err := s.repo.GetFactor(ctx, factorID)
 	if err != nil {
 		return err
 	}
+
 	if factor == nil {
 		return errs.NotFound("MFA factor not found")
 	}
@@ -232,18 +241,20 @@ func (s *Service) DeleteFactor(ctx context.Context, factorID xid.ID) error {
 
 // ==================== Challenge & Verification ====================
 
-// InitiateChallenge starts an MFA verification challenge
+// InitiateChallenge starts an MFA verification challenge.
 func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) (*ChallengeResponse, error) {
 	// Check rate limits
 	limitResult, err := s.rateLimiter.CheckUserLimit(ctx, req.UserID)
 	if err != nil {
 		return nil, err
 	}
+
 	if !limitResult.Allowed {
 		retryAfter := time.Duration(0)
 		if limitResult.RetryAfter != nil {
 			retryAfter = *limitResult.RetryAfter
 		}
+
 		return nil, errs.RateLimitExceeded(retryAfter)
 	}
 
@@ -273,8 +284,8 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 		UserAgent:   riskCtx.UserAgent,
 		Metadata:    riskAssessment.Metadata,
 	}
-	riskRecord.AuditableModel.CreatedBy = req.UserID
-	riskRecord.AuditableModel.UpdatedBy = req.UserID
+	riskRecord.CreatedBy = req.UserID
+	riskRecord.UpdatedBy = req.UserID
 	_ = s.repo.CreateRiskAssessment(ctx, riskRecord)
 
 	// Determine required factor count based on risk
@@ -298,16 +309,20 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 
 	// Filter by requested factor types if specified
 	var availableFactors []FactorInfo
+
 	for _, f := range factors {
 		// Check if factor type is in requested types (if specified)
 		if len(req.FactorTypes) > 0 {
 			found := false
+
 			for _, ft := range req.FactorTypes {
 				if f.Type == ft {
 					found = true
+
 					break
 				}
 			}
+
 			if !found {
 				continue
 			}
@@ -345,8 +360,8 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 		Metadata:        req.Metadata,
 		ExpiresAt:       time.Now().Add(time.Duration(s.config.SessionExpiryMinutes) * time.Minute),
 	}
-	session.AuditableModel.CreatedBy = req.UserID
-	session.AuditableModel.UpdatedBy = req.UserID
+	session.CreatedBy = req.UserID
+	session.UpdatedBy = req.UserID
 
 	if err := s.repo.CreateSession(ctx, session); err != nil {
 		return nil, errs.Wrap(err, "CREATE_SESSION_FAILED", "Failed to create MFA session", 500)
@@ -361,13 +376,14 @@ func (s *Service) InitiateChallenge(ctx context.Context, req *ChallengeRequest) 
 	}, nil
 }
 
-// VerifyChallenge verifies a challenge response
+// VerifyChallenge verifies a challenge response.
 func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest) (*VerificationResponse, error) {
 	// Get the session
 	session, err := s.repo.GetSession(ctx, req.ChallengeID) // Using challenge ID as session lookup for now
 	if err != nil {
 		return nil, err
 	}
+
 	if session == nil {
 		return nil, errs.SessionInvalid()
 	}
@@ -382,11 +398,13 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	if err != nil {
 		return nil, err
 	}
+
 	if !limitResult.Allowed {
 		retryAfter := time.Duration(0)
 		if limitResult.RetryAfter != nil {
 			retryAfter = *limitResult.RetryAfter
 		}
+
 		return nil, errs.RateLimitExceeded(retryAfter)
 	}
 
@@ -395,6 +413,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	if err != nil {
 		return nil, err
 	}
+
 	if factor == nil {
 		return nil, errs.NotFound("MFA factor not found")
 	}
@@ -426,6 +445,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		_ = s.rateLimiter.RecordAttempt(ctx, session.UserID, &req.FactorID, FactorType(factor.Type), false, map[string]string{
 			"failure_reason": err.Error(),
 		})
+
 		return nil, errs.Wrap(err, "VERIFICATION_FAILED", "Factor verification failed", 400)
 	}
 
@@ -434,6 +454,7 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 		_ = s.rateLimiter.RecordAttempt(ctx, session.UserID, &req.FactorID, FactorType(factor.Type), false, map[string]string{
 			"failure_reason": "invalid code",
 		})
+
 		return &VerificationResponse{
 			Success:          false,
 			SessionComplete:  false,
@@ -481,13 +502,14 @@ func (s *Service) VerifyChallenge(ctx context.Context, req *VerificationRequest)
 	return resp, nil
 }
 
-// GetChallengeStatus retrieves the current status of an MFA challenge/session
+// GetChallengeStatus retrieves the current status of an MFA challenge/session.
 func (s *Service) GetChallengeStatus(ctx context.Context, sessionID xid.ID, userID xid.ID) (*ChallengeStatusResponse, error) {
 	// Get the session
 	session, err := s.repo.GetSession(ctx, sessionID)
 	if err != nil {
 		return nil, errs.Wrap(err, "GET_SESSION_FAILED", "Failed to get MFA session", 500)
 	}
+
 	if session == nil {
 		return nil, errs.NotFound("MFA session not found")
 	}
@@ -518,7 +540,7 @@ func (s *Service) GetChallengeStatus(ctx context.Context, sessionID xid.ID, user
 
 // ==================== Admin Operations ====================
 
-// UpdatePolicy updates the MFA policy for an app/organization
+// UpdatePolicy updates the MFA policy for an app/organization.
 func (s *Service) UpdatePolicy(ctx context.Context, appID xid.ID, orgID *xid.ID, updatedBy xid.ID, req *AdminPolicyRequest) (*MFAPolicyResponse, error) {
 	// Get existing policy or create new one
 	policy, err := s.repo.GetPolicy(ctx, appID, orgID)
@@ -533,10 +555,10 @@ func (s *Service) UpdatePolicy(ctx context.Context, appID xid.ID, orgID *xid.ID,
 			AppID:          appID,
 			OrganizationID: orgID,
 		}
-		policy.AuditableModel.CreatedBy = updatedBy
-		policy.AuditableModel.UpdatedBy = updatedBy
+		policy.CreatedBy = updatedBy
+		policy.UpdatedBy = updatedBy
 	} else {
-		policy.AuditableModel.UpdatedBy = updatedBy
+		policy.UpdatedBy = updatedBy
 	}
 
 	// Update fields
@@ -565,7 +587,7 @@ func (s *Service) UpdatePolicy(ctx context.Context, appID xid.ID, orgID *xid.ID,
 	}, nil
 }
 
-// GrantBypass grants temporary MFA bypass for a user
+// GrantBypass grants temporary MFA bypass for a user.
 func (s *Service) GrantBypass(ctx context.Context, appID, userID, grantedBy xid.ID, durationSeconds int, reason string) (*MFABypassResponse, error) {
 	if reason == "" {
 		return nil, errs.RequiredField("reason")
@@ -583,8 +605,8 @@ func (s *Service) GrantBypass(ctx context.Context, appID, userID, grantedBy xid.
 		Reason:    reason,
 		ExpiresAt: time.Now().Add(time.Duration(durationSeconds) * time.Second),
 	}
-	bypass.AuditableModel.CreatedBy = grantedBy
-	bypass.AuditableModel.UpdatedBy = grantedBy
+	bypass.CreatedBy = grantedBy
+	bypass.UpdatedBy = grantedBy
 
 	if err := s.repo.CreateBypass(ctx, bypass); err != nil {
 		return nil, errs.Wrap(err, "CREATE_BYPASS_FAILED", "Failed to create MFA bypass", 500)
@@ -598,7 +620,7 @@ func (s *Service) GrantBypass(ctx context.Context, appID, userID, grantedBy xid.
 	}, nil
 }
 
-// ResetUserMFA resets all MFA factors and devices for a user
+// ResetUserMFA resets all MFA factors and devices for a user.
 func (s *Service) ResetUserMFA(ctx context.Context, appID, userID, adminID xid.ID) error {
 	// Get all active factors for the user
 	factors, err := s.repo.ListUserFactors(ctx, userID)
@@ -630,7 +652,7 @@ func (s *Service) ResetUserMFA(ctx context.Context, appID, userID, adminID xid.I
 
 // ==================== Trusted Devices ====================
 
-// TrustDevice marks a device as trusted
+// TrustDevice marks a device as trusted.
 func (s *Service) TrustDevice(ctx context.Context, userID xid.ID, deviceInfo *DeviceInfo) error {
 	if !s.config.TrustedDevices.Enabled {
 		return errs.BadRequest("Trusted devices not enabled")
@@ -645,6 +667,7 @@ func (s *Service) TrustDevice(ctx context.Context, userID xid.ID, deviceInfo *De
 	if existing != nil {
 		// Update existing
 		existing.LastUsedAt = ptrTime(time.Now())
+
 		return s.repo.UpdateTrustedDevice(ctx, existing)
 	}
 
@@ -657,13 +680,13 @@ func (s *Service) TrustDevice(ctx context.Context, userID xid.ID, deviceInfo *De
 		Metadata:  deviceInfo.Metadata,
 		ExpiresAt: time.Now().Add(time.Duration(s.config.TrustedDevices.DefaultExpiryDays) * 24 * time.Hour),
 	}
-	device.AuditableModel.CreatedBy = userID
-	device.AuditableModel.UpdatedBy = userID
+	device.CreatedBy = userID
+	device.UpdatedBy = userID
 
 	return s.repo.CreateTrustedDevice(ctx, device)
 }
 
-// IsTrustedDevice checks if a device is trusted
+// IsTrustedDevice checks if a device is trusted.
 func (s *Service) IsTrustedDevice(ctx context.Context, userID xid.ID, deviceID string) (bool, error) {
 	if !s.config.TrustedDevices.Enabled {
 		return false, nil
@@ -677,13 +700,14 @@ func (s *Service) IsTrustedDevice(ctx context.Context, userID xid.ID, deviceID s
 	if device != nil {
 		// Update last used
 		_ = s.repo.UpdateDeviceLastUsed(ctx, device.ID)
+
 		return true, nil
 	}
 
 	return false, nil
 }
 
-// ListTrustedDevices lists all trusted devices for a user
+// ListTrustedDevices lists all trusted devices for a user.
 func (s *Service) ListTrustedDevices(ctx context.Context, userID xid.ID) ([]*TrustedDevice, error) {
 	schemaDevices, err := s.repo.ListTrustedDevices(ctx, userID)
 	if err != nil {
@@ -707,14 +731,14 @@ func (s *Service) ListTrustedDevices(ctx context.Context, userID xid.ID) ([]*Tru
 	return devices, nil
 }
 
-// RevokeTrustedDevice removes trust from a device
+// RevokeTrustedDevice removes trust from a device.
 func (s *Service) RevokeTrustedDevice(ctx context.Context, deviceID xid.ID) error {
 	return s.repo.DeleteTrustedDevice(ctx, deviceID)
 }
 
 // ==================== Status & Policy ====================
 
-// GetMFAStatus returns the MFA status for a user
+// GetMFAStatus returns the MFA status for a user.
 func (s *Service) GetMFAStatus(ctx context.Context, userID xid.ID, deviceID string) (*MFAStatus, error) {
 	factors, err := s.ListFactors(ctx, userID, true)
 	if err != nil {
@@ -766,20 +790,23 @@ func (s *Service) convertSchemaFactor(sf *schema.MFAFactor) *Factor {
 
 func (s *Service) maskSensitiveData(metadata map[string]any) map[string]any {
 	masked := make(map[string]any)
+
 	for k, v := range metadata {
 		// Mask sensitive fields
-		if k == "email" {
+		switch k {
+		case "email":
 			if email, ok := v.(string); ok {
 				masked[k] = maskEmail(email)
 			}
-		} else if k == "phone" {
+		case "phone":
 			if phone, ok := v.(string); ok {
 				masked[k] = maskPhone(phone)
 			}
-		} else {
+		default:
 			masked[k] = v
 		}
 	}
+
 	return masked
 }
 
@@ -794,6 +821,7 @@ func (s *Service) generateSessionToken() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
+
 	return hex.EncodeToString(b), nil
 }
 
@@ -801,6 +829,7 @@ func getString(m map[string]any, key string) string {
 	if v, ok := m[key].(string); ok {
 		return v
 	}
+
 	return ""
 }
 
@@ -809,6 +838,7 @@ func convertFactorTypes(types []FactorType) []string {
 	for i, t := range types {
 		result[i] = string(t)
 	}
+
 	return result
 }
 

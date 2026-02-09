@@ -17,7 +17,7 @@ import (
 // - API key authentication (pk/sk/rk keys)
 // - Session-based authentication (cookies + bearer tokens)
 // - Dual authentication (both API key and user session)
-// - Pluggable authentication strategies
+// - Pluggable authentication strategies.
 type AuthMiddleware struct {
 	apiKeySvc        *apikey.Service
 	sessionSvc       session.ServiceInterface
@@ -27,7 +27,7 @@ type AuthMiddleware struct {
 	strategyRegistry *AuthStrategyRegistry // Pluggable authentication strategies
 }
 
-// AuthMiddlewareConfig configures the authentication middleware behavior
+// AuthMiddlewareConfig configures the authentication middleware behavior.
 type AuthMiddlewareConfig struct {
 	// Cookie name for session token
 	SessionCookieName string
@@ -49,7 +49,7 @@ type AuthMiddlewareConfig struct {
 	Context ContextConfig
 }
 
-// NewAuthMiddleware creates a new authentication middleware
+// NewAuthMiddleware creates a new authentication middleware.
 func NewAuthMiddleware(
 	apiKeySvc *apikey.Service,
 	sessionSvc session.ServiceInterface,
@@ -62,6 +62,7 @@ func NewAuthMiddleware(
 	if config.SessionCookieName == "" {
 		config.SessionCookieName = "authsome_session"
 	}
+
 	if len(config.APIKeyHeaders) == 0 {
 		config.APIKeyHeaders = []string{
 			"Authorization", // Bearer/ApiKey scheme
@@ -73,6 +74,7 @@ func NewAuthMiddleware(
 	if config.Context.AppIDHeader == "" {
 		config.Context.AppIDHeader = "X-App-ID"
 	}
+
 	if config.Context.EnvironmentIDHeader == "" {
 		config.Context.EnvironmentIDHeader = "X-Environment-ID"
 	}
@@ -103,7 +105,7 @@ func NewAuthMiddleware(
 	return middleware
 }
 
-// registerBuiltinStrategies registers the default authentication strategies
+// registerBuiltinStrategies registers the default authentication strategies.
 func (m *AuthMiddleware) registerBuiltinStrategies() {
 	// Register API key strategy (priority 10)
 	apiKeyStrategy := NewAPIKeyStrategy(m.apiKeySvc, m.config.AllowAPIKeyInQuery)
@@ -121,13 +123,13 @@ func (m *AuthMiddleware) registerBuiltinStrategies() {
 
 // Authenticate is the main middleware function that populates auth context
 // This middleware is optional by default - it populates context but doesn't block
-// It tries authentication strategies in priority order
+// It tries authentication strategies in priority order.
 func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 	return m.HandleAuthentication(m.config.Optional)(next)
 }
 
 // Authenticate is the main middleware function that populates auth context
-// It tries authentication strategies in priority order
+// It tries authentication strategies in priority order.
 func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Handler) forge.Handler {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
@@ -192,6 +194,7 @@ func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Han
 						if sessionResult.Session.EnvironmentID != nil {
 							authCtx.EnvironmentID = *sessionResult.Session.EnvironmentID
 						}
+
 						authCtx.OrganizationID = sessionResult.Session.OrganizationID
 					}
 				}
@@ -208,6 +211,7 @@ func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Han
 			if !resolution.AppID.IsNil() {
 				authCtx.AppID = resolution.AppID
 			}
+
 			if !resolution.EnvironmentID.IsNil() {
 				authCtx.EnvironmentID = resolution.EnvironmentID
 			}
@@ -218,14 +222,14 @@ func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Han
 				apiKeyAttempted := m.extractAPIKey(c)
 				if apiKeyAttempted != "" {
 					// API key was provided but invalid/expired
-					return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+					return c.JSON(http.StatusUnauthorized, map[string]any{
 						"error": "Invalid or expired API key",
 						"code":  "INVALID_API_KEY",
 					})
 				}
 
 				// No authentication provided at all
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+				return c.JSON(http.StatusUnauthorized, map[string]any{
 					"error": "API key required for app identification",
 					"code":  "API_KEY_REQUIRED",
 				})
@@ -238,12 +242,15 @@ func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Han
 			if !authCtx.AppID.IsNil() {
 				ctx = contexts.SetAppID(ctx, authCtx.AppID)
 			}
+
 			if !authCtx.EnvironmentID.IsNil() {
 				ctx = contexts.SetEnvironmentID(ctx, authCtx.EnvironmentID)
 			}
+
 			if authCtx.OrganizationID != nil && !authCtx.OrganizationID.IsNil() {
 				ctx = contexts.SetOrganizationID(ctx, *authCtx.OrganizationID)
 			}
+
 			if authCtx.User != nil {
 				ctx = contexts.SetUserID(ctx, authCtx.User.ID)
 			}
@@ -257,7 +264,7 @@ func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Han
 }
 
 // tryStrategies attempts authentication using registered strategies
-// Returns the first successful auth context, or nil if all fail
+// Returns the first successful auth context, or nil if all fail.
 func (m *AuthMiddleware) tryStrategies(c forge.Context) *contexts.AuthContext {
 	if m.strategyRegistry == nil {
 		return nil
@@ -283,6 +290,7 @@ func (m *AuthMiddleware) tryStrategies(c forge.Context) *contexts.AuthContext {
 		if authCtx.IPAddress == "" {
 			authCtx.IPAddress = extractClientIP(c.Request().RemoteAddr)
 		}
+
 		if authCtx.UserAgent == "" {
 			authCtx.UserAgent = c.Request().Header.Get("User-Agent")
 		}
@@ -293,7 +301,7 @@ func (m *AuthMiddleware) tryStrategies(c forge.Context) *contexts.AuthContext {
 	return nil
 }
 
-// mergeAuthContext merges strategy-based auth context into the base context
+// mergeAuthContext merges strategy-based auth context into the base context.
 func (m *AuthMiddleware) mergeAuthContext(base *contexts.AuthContext, strategy *contexts.AuthContext) {
 	base.Method = strategy.Method
 	base.IsAuthenticated = strategy.IsAuthenticated
@@ -322,7 +330,7 @@ func (m *AuthMiddleware) mergeAuthContext(base *contexts.AuthContext, strategy *
 	}
 }
 
-// authResult holds the result of an authentication attempt
+// authResult holds the result of an authentication attempt.
 type authResult struct {
 	Authenticated  bool
 	APIKey         *apikey.APIKey
@@ -336,7 +344,7 @@ type authResult struct {
 	CreatorPermissions []string
 }
 
-// tryAPIKeyAuth attempts to authenticate via API key
+// tryAPIKeyAuth attempts to authenticate via API key.
 func (m *AuthMiddleware) tryAPIKeyAuth(c forge.Context) authResult {
 	ctx := c.Request().Context()
 
@@ -373,6 +381,7 @@ func (m *AuthMiddleware) tryAPIKeyAuth(c forge.Context) authResult {
 		for i, role := range roles {
 			roleNames[i] = role.Name
 		}
+
 		result.Roles = roleNames
 	}
 
@@ -383,6 +392,7 @@ func (m *AuthMiddleware) tryAPIKeyAuth(c forge.Context) authResult {
 		for i, perm := range permissions {
 			permStrings[i] = perm.Action + ":" + perm.Resource
 		}
+
 		result.Permissions = permStrings
 	}
 
@@ -391,11 +401,13 @@ func (m *AuthMiddleware) tryAPIKeyAuth(c forge.Context) authResult {
 		effectivePerms, err := m.apiKeySvc.GetEffectivePermissions(ctx, response.APIKey.ID, orgID)
 		if err == nil && effectivePerms != nil {
 			creatorPerms := []string{}
+
 			for _, perm := range effectivePerms.Permissions {
 				if perm.Source == "creator" {
 					creatorPerms = append(creatorPerms, perm.Action+":"+perm.Resource)
 				}
 			}
+
 			result.CreatorPermissions = creatorPerms
 		}
 	}
@@ -403,7 +415,7 @@ func (m *AuthMiddleware) tryAPIKeyAuth(c forge.Context) authResult {
 	return result
 }
 
-// trySessionAuth attempts to authenticate via session token
+// trySessionAuth attempts to authenticate via session token.
 func (m *AuthMiddleware) trySessionAuth(c forge.Context) authResult {
 	ctx := c.Request().Context()
 
@@ -461,19 +473,19 @@ func (m *AuthMiddleware) trySessionAuth(c forge.Context) authResult {
 	return result
 }
 
-// extractAPIKey extracts API key from request using multiple methods
+// extractAPIKey extracts API key from request using multiple methods.
 func (m *AuthMiddleware) extractAPIKey(c forge.Context) string {
 	// Method 1: Authorization header with ApiKey scheme
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader != "" {
 		// ApiKey pk_test_xxx or ApiKey sk_test_xxx
-		if strings.HasPrefix(authHeader, "ApiKey ") {
-			return strings.TrimPrefix(authHeader, "ApiKey ")
+		if after, ok := strings.CutPrefix(authHeader, "ApiKey "); ok {
+			return after
 		}
 
 		// Bearer pk_test_xxx (if starts with pk_/sk_/rk_)
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
+		if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			token := after
 			if strings.HasPrefix(token, "pk_") ||
 				strings.HasPrefix(token, "sk_") ||
 				strings.HasPrefix(token, "rk_") {
@@ -483,7 +495,7 @@ func (m *AuthMiddleware) extractAPIKey(c forge.Context) string {
 	}
 
 	// Method 2: X-API-Key header
-	if apiKey := c.Request().Header.Get("X-API-Key"); apiKey != "" {
+	if apiKey := c.Request().Header.Get("X-Api-Key"); apiKey != "" {
 		return apiKey
 	}
 
@@ -497,17 +509,18 @@ func (m *AuthMiddleware) extractAPIKey(c forge.Context) string {
 	return ""
 }
 
-// extractSessionFromCookie extracts session token from cookie
+// extractSessionFromCookie extracts session token from cookie.
 func (m *AuthMiddleware) extractSessionFromCookie(c forge.Context) string {
 	cookie, err := c.Request().Cookie(m.config.SessionCookieName)
 	if err != nil || cookie == nil {
 		return ""
 	}
+
 	return cookie.Value
 }
 
 // extractSessionFromBearer extracts session token from Bearer header
-// Only if it doesn't look like an API key
+// Only if it doesn't look like an API key.
 func (m *AuthMiddleware) extractSessionFromBearer(c forge.Context) string {
 	authHeader := c.Request().Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -530,140 +543,149 @@ func (m *AuthMiddleware) extractSessionFromBearer(c forge.Context) string {
 // CONVENIENCE MIDDLEWARE FUNCTIONS
 // =============================================================================
 
-// RequireAuth middleware that rejects unauthenticated requests
+// RequireAuth middleware that rejects unauthenticated requests.
 func (m *AuthMiddleware) RequireAuth(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 		if !ok || !authCtx.IsAuthenticated {
-			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			return c.JSON(http.StatusUnauthorized, map[string]any{
 				"error": "authentication required",
 				"code":  "AUTHENTICATION_REQUIRED",
 			})
 		}
+
 		return next(c)
 	}
 }
 
-// RequireUser middleware that requires a logged-in user (session)
+// RequireUser middleware that requires a logged-in user (session).
 func (m *AuthMiddleware) RequireUser(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 		if !ok || !authCtx.IsUserAuth {
-			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			return c.JSON(http.StatusUnauthorized, map[string]any{
 				"error": "user authentication required",
 				"code":  "USER_AUTH_REQUIRED",
 			})
 		}
+
 		return next(c)
 	}
 }
 
-// RequireAPIKey middleware that requires an API key
+// RequireAPIKey middleware that requires an API key.
 func (m *AuthMiddleware) RequireAPIKey(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 		if !ok || !authCtx.IsAPIKeyAuth {
-			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
+			return c.JSON(http.StatusUnauthorized, map[string]any{
 				"error": "API key required",
 				"code":  "API_KEY_REQUIRED",
 			})
 		}
+
 		return next(c)
 	}
 }
 
-// RequireScope middleware that requires a specific API key scope
+// RequireScope middleware that requires a specific API key scope.
 func (m *AuthMiddleware) RequireScope(scope string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.HasScope(scope) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "insufficient API key scope",
 					"code":     "INSUFFICIENT_SCOPE",
 					"required": scope,
 					"current":  authCtx.APIKeyScopes,
 				})
 			}
+
 			return next(c)
 		}
 	}
 }
 
-// RequireAnyScope middleware that requires any of the specified scopes
+// RequireAnyScope middleware that requires any of the specified scopes.
 func (m *AuthMiddleware) RequireAnyScope(scopes ...string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.HasAnyScopeOf(scopes...) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "insufficient API key scope",
 					"code":     "INSUFFICIENT_SCOPE",
 					"required": "any of: " + strings.Join(scopes, ", "),
 					"current":  authCtx.APIKeyScopes,
 				})
 			}
+
 			return next(c)
 		}
 	}
 }
 
-// RequireAllScopes middleware that requires all of the specified scopes
+// RequireAllScopes middleware that requires all of the specified scopes.
 func (m *AuthMiddleware) RequireAllScopes(scopes ...string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.HasAllScopesOf(scopes...) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "insufficient API key scope",
 					"code":     "INSUFFICIENT_SCOPE",
 					"required": "all of: " + strings.Join(scopes, ", "),
 					"current":  authCtx.APIKeyScopes,
 				})
 			}
+
 			return next(c)
 		}
 	}
 }
 
-// RequireSecretKey middleware that requires a secret (sk_) API key
+// RequireSecretKey middleware that requires a secret (sk_) API key.
 func (m *AuthMiddleware) RequireSecretKey(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 		if !ok || !authCtx.IsSecretKey() {
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error": "secret API key required",
 				"code":  "SECRET_KEY_REQUIRED",
 			})
 		}
+
 		return next(c)
 	}
 }
 
-// RequirePublishableKey middleware that requires a publishable (pk_) API key
+// RequirePublishableKey middleware that requires a publishable (pk_) API key.
 func (m *AuthMiddleware) RequirePublishableKey(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 		if !ok || !authCtx.IsPublishableKey() {
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error": "publishable API key required",
 				"code":  "PUBLISHABLE_KEY_REQUIRED",
 			})
 		}
+
 		return next(c)
 	}
 }
 
-// RequireAdmin middleware that requires admin privileges
+// RequireAdmin middleware that requires admin privileges.
 func (m *AuthMiddleware) RequireAdmin(next forge.Handler) forge.Handler {
 	return func(c forge.Context) error {
 		authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 		if !ok || !authCtx.CanPerformAdminOp() {
-			return c.JSON(http.StatusForbidden, map[string]interface{}{
+			return c.JSON(http.StatusForbidden, map[string]any{
 				"error": "admin privileges required",
 				"code":  "ADMIN_REQUIRED",
 			})
 		}
+
 		return next(c)
 	}
 }
@@ -673,18 +695,19 @@ func (m *AuthMiddleware) RequireAdmin(next forge.Handler) forge.Handler {
 // =============================================================================
 
 // RequireRBACPermission middleware that requires a specific RBAC permission
-// Checks only RBAC permissions (not legacy scopes)
+// Checks only RBAC permissions (not legacy scopes).
 func (m *AuthMiddleware) RequireRBACPermission(action, resource string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.HasRBACPermission(action, resource) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "insufficient RBAC permission",
 					"code":     "INSUFFICIENT_PERMISSION",
 					"required": action + ":" + resource,
 				})
 			}
+
 			return next(c)
 		}
 	}
@@ -692,52 +715,55 @@ func (m *AuthMiddleware) RequireRBACPermission(action, resource string) forge.Mi
 
 // RequireCanAccess middleware that checks if auth context can access a resource
 // This is flexible - accepts EITHER legacy scopes OR RBAC permissions
-// Recommended for backward compatibility
+// Recommended for backward compatibility.
 func (m *AuthMiddleware) RequireCanAccess(action, resource string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.CanAccess(action, resource) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "access denied",
 					"code":     "ACCESS_DENIED",
 					"required": action + ":" + resource,
 				})
 			}
+
 			return next(c)
 		}
 	}
 }
 
-// RequireAnyPermission middleware that requires any of the specified permissions
+// RequireAnyPermission middleware that requires any of the specified permissions.
 func (m *AuthMiddleware) RequireAnyPermission(permissions ...string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.HasAnyPermission(permissions...) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "insufficient permission",
 					"code":     "INSUFFICIENT_PERMISSION",
 					"required": "any of: " + strings.Join(permissions, ", "),
 				})
 			}
+
 			return next(c)
 		}
 	}
 }
 
-// RequireAllPermissions middleware that requires all of the specified permissions
+// RequireAllPermissions middleware that requires all of the specified permissions.
 func (m *AuthMiddleware) RequireAllPermissions(permissions ...string) forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(c forge.Context) error {
 			authCtx, ok := contexts.GetAuthContext(c.Request().Context())
 			if !ok || !authCtx.HasAllPermissions(permissions...) {
-				return c.JSON(http.StatusForbidden, map[string]interface{}{
+				return c.JSON(http.StatusForbidden, map[string]any{
 					"error":    "insufficient permission",
 					"code":     "INSUFFICIENT_PERMISSION",
 					"required": "all of: " + strings.Join(permissions, ", "),
 				})
 			}
+
 			return next(c)
 		}
 	}
@@ -751,7 +777,7 @@ func (m *AuthMiddleware) RequireAllPermissions(permissions ...string) forge.Midd
 // Priority:
 // 1. API key's own permissions
 // 2. If delegation enabled: creator's permissions
-// 3. User session permissions
+// 3. User session permissions.
 func (m *AuthMiddleware) computeEffectivePermissions(authCtx *contexts.AuthContext) []string {
 	permissionSet := make(map[string]bool)
 
@@ -784,7 +810,7 @@ func (m *AuthMiddleware) computeEffectivePermissions(authCtx *contexts.AuthConte
 // 2. Extract from headers (X-App-ID, X-Environment-ID)
 // 3. If API key verified, use API key's app and environment
 // 4. Fallback to default values from config
-// 5. If AutoDetectFromConfig enabled, query AuthSome (future enhancement)
+// 5. If AutoDetectFromConfig enabled, query AuthSome (future enhancement).
 func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthContext) ContextResolution {
 	ctx := c.Request().Context()
 	resolution := ContextResolution{}
@@ -794,6 +820,7 @@ func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthC
 		resolution.AppID = existingAppID
 		resolution.AppIDSource = ContextSourceExisting
 	}
+
 	if existingEnvID, ok := contexts.GetEnvironmentID(ctx); ok && !existingEnvID.IsNil() {
 		resolution.EnvironmentID = existingEnvID
 		resolution.EnvironmentIDSource = ContextSourceExisting
@@ -808,6 +835,7 @@ func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthC
 			}
 		}
 	}
+
 	if resolution.EnvironmentID.IsNil() && m.config.Context.EnvironmentIDHeader != "" {
 		if envIDStr := c.Request().Header.Get(m.config.Context.EnvironmentIDHeader); envIDStr != "" {
 			if envID, err := xid.FromString(envIDStr); err == nil {
@@ -823,6 +851,7 @@ func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthC
 			resolution.AppID = authCtx.AppID
 			resolution.AppIDSource = ContextSourceAPIKey
 		}
+
 		if resolution.EnvironmentID.IsNil() && !authCtx.EnvironmentID.IsNil() {
 			resolution.EnvironmentID = authCtx.EnvironmentID
 			resolution.EnvironmentIDSource = ContextSourceAPIKey
@@ -836,6 +865,7 @@ func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthC
 			resolution.AppIDSource = ContextSourceDefault
 		}
 	}
+
 	if resolution.EnvironmentID.IsNil() && m.config.Context.DefaultEnvironmentID != "" {
 		if defaultEnvID, err := xid.FromString(m.config.Context.DefaultEnvironmentID); err == nil {
 			resolution.EnvironmentID = defaultEnvID
@@ -850,11 +880,12 @@ func (m *AuthMiddleware) resolveContext(c forge.Context, authCtx *contexts.AuthC
 	return resolution
 }
 
-// extractClientIP extracts the real client IP from the request
+// extractClientIP extracts the real client IP from the request.
 func extractClientIP(remoteAddr string) string {
 	// Remove port if present
 	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
 		return remoteAddr[:idx]
 	}
+
 	return remoteAddr
 }

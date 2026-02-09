@@ -13,7 +13,7 @@ import (
 // WEBSOCKET STREAMING - Real-time audit event streaming
 // =============================================================================
 
-// StreamFilter defines filters for streaming audit events
+// StreamFilter defines filters for streaming audit events.
 type StreamFilter struct {
 	AppID      *xid.ID  `json:"appId,omitempty"`
 	UserID     *xid.ID  `json:"userId,omitempty"`
@@ -22,7 +22,7 @@ type StreamFilter struct {
 }
 
 // StreamService manages real-time audit event streaming
-// Note: Requires PostgreSQL LISTEN/NOTIFY support via pgdriver.Listener
+// Note: Requires PostgreSQL LISTEN/NOTIFY support via pgdriver.Listener.
 type StreamService struct {
 	listener  interface{} // pgdriver.Listener interface for PostgreSQL NOTIFY
 	listeners map[string]*clientListener
@@ -31,7 +31,7 @@ type StreamService struct {
 	cancel    context.CancelFunc
 }
 
-// clientListener represents a single WebSocket client's listener
+// clientListener represents a single WebSocket client's listener.
 type clientListener struct {
 	id       string
 	filter   *StreamFilter
@@ -41,7 +41,7 @@ type clientListener struct {
 }
 
 // NewStreamService creates a new stream service
-// listener should be *pgdriver.Listener from github.com/uptrace/bun/driver/pgdriver
+// listener should be *pgdriver.Listener from github.com/uptrace/bun/driver/pgdriver.
 func NewStreamService(listener interface{}) *StreamService {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -61,7 +61,7 @@ func NewStreamService(listener interface{}) *StreamService {
 	return svc
 }
 
-// Subscribe subscribes to audit event stream with optional filters
+// Subscribe subscribes to audit event stream with optional filters.
 func (s *StreamService) Subscribe(ctx context.Context, filter *StreamFilter) (<-chan *Event, string, error) {
 	if filter == nil {
 		filter = &StreamFilter{}
@@ -93,7 +93,7 @@ func (s *StreamService) Subscribe(ctx context.Context, filter *StreamFilter) (<-
 	return client.events, clientID, nil
 }
 
-// Unsubscribe removes a client subscription
+// Unsubscribe removes a client subscription.
 func (s *StreamService) Unsubscribe(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -106,7 +106,7 @@ func (s *StreamService) Unsubscribe(clientID string) {
 }
 
 // listen processes PostgreSQL NOTIFY messages
-// Note: This is a placeholder implementation. In production, would use pgdriver.Listener
+// Note: This is a placeholder implementation. In production, would use pgdriver.Listener.
 func (s *StreamService) listen() {
 	// This method requires pgdriver.Listener from github.com/uptrace/bun/driver/pgdriver
 	// Implementation would be:
@@ -117,7 +117,7 @@ func (s *StreamService) listen() {
 	// For now, this is a stub that external implementations can override
 }
 
-// parseNotification parses PostgreSQL notification payload into Event
+// parseNotification parses PostgreSQL notification payload into Event.
 func (s *StreamService) parseNotification(payload string) (*Event, error) {
 	var data struct {
 		ID        string    `json:"id"`
@@ -145,9 +145,11 @@ func (s *StreamService) parseNotification(payload string) (*Event, error) {
 	if id, err := xid.FromString(data.ID); err == nil {
 		event.ID = id
 	}
+
 	if appID, err := xid.FromString(data.AppID); err == nil {
 		event.AppID = appID
 	}
+
 	if data.UserID != nil {
 		if userID, err := xid.FromString(*data.UserID); err == nil {
 			event.UserID = &userID
@@ -157,7 +159,7 @@ func (s *StreamService) parseNotification(payload string) (*Event, error) {
 	return event, nil
 }
 
-// broadcast sends event to all matching clients
+// broadcast sends event to all matching clients.
 func (s *StreamService) broadcast(event *Event) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -176,7 +178,7 @@ func (s *StreamService) broadcast(event *Event) {
 	}
 }
 
-// matchesFilter checks if event matches client's filter
+// matchesFilter checks if event matches client's filter.
 func (s *StreamService) matchesFilter(event *Event, filter *StreamFilter) bool {
 	if filter == nil {
 		return true
@@ -197,12 +199,15 @@ func (s *StreamService) matchesFilter(event *Event, filter *StreamFilter) bool {
 	// Check Actions filter
 	if len(filter.Actions) > 0 {
 		matched := false
+
 		for _, action := range filter.Actions {
 			if event.Action == action {
 				matched = true
+
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}
@@ -211,7 +216,7 @@ func (s *StreamService) matchesFilter(event *Event, filter *StreamFilter) bool {
 	return true
 }
 
-// monitorClient monitors a client connection and cleans up on disconnect
+// monitorClient monitors a client connection and cleans up on disconnect.
 func (s *StreamService) monitorClient(ctx context.Context, clientID string) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -220,6 +225,7 @@ func (s *StreamService) monitorClient(ctx context.Context, clientID string) {
 		select {
 		case <-ctx.Done():
 			s.Unsubscribe(clientID)
+
 			return
 		case <-ticker.C:
 			s.mu.RLock()
@@ -234,13 +240,14 @@ func (s *StreamService) monitorClient(ctx context.Context, clientID string) {
 			if time.Since(client.lastSeen) > 2*time.Minute {
 				// Client inactive - disconnect
 				s.Unsubscribe(clientID)
+
 				return
 			}
 		}
 	}
 }
 
-// heartbeat sends periodic heartbeats to detect stale clients
+// heartbeat sends periodic heartbeats to detect stale clients.
 func (s *StreamService) heartbeat() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -260,7 +267,7 @@ func (s *StreamService) heartbeat() {
 	}
 }
 
-// UpdateHeartbeat updates client's last seen time (called by WebSocket ping)
+// UpdateHeartbeat updates client's last seen time (called by WebSocket ping).
 func (s *StreamService) UpdateHeartbeat(clientID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -270,7 +277,7 @@ func (s *StreamService) UpdateHeartbeat(clientID string) {
 	}
 }
 
-// Stats returns streaming statistics
+// Stats returns streaming statistics.
 func (s *StreamService) Stats() StreamStats {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -291,7 +298,7 @@ func (s *StreamService) Stats() StreamStats {
 	return stats
 }
 
-// Shutdown gracefully shuts down the stream service
+// Shutdown gracefully shuts down the stream service.
 func (s *StreamService) Shutdown() {
 	s.cancel()
 
@@ -313,13 +320,13 @@ func (s *StreamService) Shutdown() {
 // STREAMING TYPES
 // =============================================================================
 
-// StreamStats contains streaming service statistics
+// StreamStats contains streaming service statistics.
 type StreamStats struct {
 	ActiveClients int           `json:"activeClients"`
 	Clients       []ClientStats `json:"clients"`
 }
 
-// ClientStats contains per-client statistics
+// ClientStats contains per-client statistics.
 type ClientStats struct {
 	ID         string        `json:"id"`
 	BufferSize int           `json:"bufferSize"`
@@ -330,7 +337,7 @@ type ClientStats struct {
 // SQLITE FALLBACK - Polling-based streaming for SQLite
 // =============================================================================
 
-// PollingStreamService provides streaming for SQLite using polling
+// PollingStreamService provides streaming for SQLite using polling.
 type PollingStreamService struct {
 	repo      Repository
 	listeners map[string]*clientListener
@@ -340,7 +347,7 @@ type PollingStreamService struct {
 	lastID    xid.ID
 }
 
-// NewPollingStreamService creates a polling-based stream service (for SQLite)
+// NewPollingStreamService creates a polling-based stream service (for SQLite).
 func NewPollingStreamService(repo Repository) *PollingStreamService {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -358,7 +365,7 @@ func NewPollingStreamService(repo Repository) *PollingStreamService {
 	return svc
 }
 
-// Subscribe creates a subscription (same interface as StreamService)
+// Subscribe creates a subscription (same interface as StreamService).
 func (s *PollingStreamService) Subscribe(ctx context.Context, filter *StreamFilter) (<-chan *Event, string, error) {
 	if filter == nil {
 		filter = &StreamFilter{}
@@ -386,7 +393,7 @@ func (s *PollingStreamService) Subscribe(ctx context.Context, filter *StreamFilt
 	return client.events, clientID, nil
 }
 
-// poll queries for new events periodically
+// poll queries for new events periodically.
 func (s *PollingStreamService) poll() {
 	ticker := time.NewTicker(1 * time.Second) // Poll every second
 	defer ticker.Stop()
@@ -401,7 +408,7 @@ func (s *PollingStreamService) poll() {
 	}
 }
 
-// fetchNewEvents fetches events since last poll
+// fetchNewEvents fetches events since last poll.
 func (s *PollingStreamService) fetchNewEvents() {
 	// Query for events created after lastID
 	// Using pagination to get recent events
@@ -424,7 +431,7 @@ func (s *PollingStreamService) fetchNewEvents() {
 	}
 }
 
-// broadcast and other methods similar to StreamService
+// broadcast and other methods similar to StreamService.
 func (s *PollingStreamService) broadcast(event *Event) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -460,7 +467,7 @@ func (s *PollingStreamService) Shutdown() {
 	s.cancel()
 }
 
-// Helper function for filter matching (same as StreamService)
+// Helper function for filter matching (same as StreamService).
 func matchesFilter(event *Event, filter *StreamFilter) bool {
 	if filter == nil {
 		return true
@@ -478,12 +485,15 @@ func matchesFilter(event *Event, filter *StreamFilter) bool {
 
 	if len(filter.Actions) > 0 {
 		matched := false
+
 		for _, action := range filter.Actions {
 			if event.Action == action {
 				matched = true
+
 				break
 			}
 		}
+
 		if !matched {
 			return false
 		}

@@ -14,19 +14,19 @@ import (
 // AUTHSOME USER ADAPTER
 // =============================================================================
 
-// AuthsomeUserAdapter adapts authsome's user service to the generic UserProvider interface
+// AuthsomeUserAdapter adapts authsome's user service to the generic UserProvider interface.
 type AuthsomeUserAdapter struct {
 	userSvc *user.Service
 }
 
-// NewAuthsomeUserAdapter creates a new adapter for authsome's user service
+// NewAuthsomeUserAdapter creates a new adapter for authsome's user service.
 func NewAuthsomeUserAdapter(userSvc *user.Service) *AuthsomeUserAdapter {
 	return &AuthsomeUserAdapter{
 		userSvc: userSvc,
 	}
 }
 
-// GetUser retrieves a single user by ID
+// GetUser retrieves a single user by ID.
 func (a *AuthsomeUserAdapter) GetUser(ctx context.Context, scope *audit.Scope, userID string) (*audit.GenericUser, error) {
 	// Parse ID
 	uid, err := xid.FromString(userID)
@@ -43,14 +43,14 @@ func (a *AuthsomeUserAdapter) GetUser(ctx context.Context, scope *audit.Scope, u
 	return a.convertUser(u), nil
 }
 
-// ListUsers retrieves users matching filter criteria
+// ListUsers retrieves users matching filter criteria.
 func (a *AuthsomeUserAdapter) ListUsers(ctx context.Context, scope *audit.Scope, filter *audit.UserFilter) ([]*audit.GenericUser, error) {
 	// Note: Simplified implementation
 	// In production, would need to implement user listing with proper filtering
 	return []*audit.GenericUser{}, nil
 }
 
-// QueryUserMetrics retrieves aggregated metrics about users
+// QueryUserMetrics retrieves aggregated metrics about users.
 func (a *AuthsomeUserAdapter) QueryUserMetrics(ctx context.Context, scope *audit.Scope, query *audit.MetricsQuery) (*audit.UserMetrics, error) {
 	// Note: Simplified implementation
 	// In production, would implement proper metrics aggregation
@@ -61,7 +61,7 @@ func (a *AuthsomeUserAdapter) QueryUserMetrics(ctx context.Context, scope *audit
 	}, nil
 }
 
-// convertUser converts authsome User to GenericUser
+// convertUser converts authsome User to GenericUser.
 func (a *AuthsomeUserAdapter) convertUser(u *user.User) *audit.GenericUser {
 	if u == nil {
 		return nil
@@ -81,7 +81,7 @@ func (a *AuthsomeUserAdapter) convertUser(u *user.User) *audit.GenericUser {
 		Status:           "active",
 		Roles:            []string{},
 		Groups:           []string{},
-		Metadata:         make(map[string]interface{}),
+		Metadata:         make(map[string]any),
 		CreatedAt:        u.CreatedAt,
 		UpdatedAt:        u.UpdatedAt,
 	}
@@ -91,19 +91,19 @@ func (a *AuthsomeUserAdapter) convertUser(u *user.User) *audit.GenericUser {
 // AUTHSOME ORGANIZATION ADAPTER
 // =============================================================================
 
-// AuthsomeOrgAdapter adapts authsome's organization service to the generic OrganizationProvider interface
+// AuthsomeOrgAdapter adapts authsome's organization service to the generic OrganizationProvider interface.
 type AuthsomeOrgAdapter struct {
 	orgSvc *organization.Service
 }
 
-// NewAuthsomeOrgAdapter creates a new adapter for authsome's organization service
+// NewAuthsomeOrgAdapter creates a new adapter for authsome's organization service.
 func NewAuthsomeOrgAdapter(orgSvc *organization.Service) *AuthsomeOrgAdapter {
 	return &AuthsomeOrgAdapter{
 		orgSvc: orgSvc,
 	}
 }
 
-// GetOrganization retrieves organization details
+// GetOrganization retrieves organization details.
 func (a *AuthsomeOrgAdapter) GetOrganization(ctx context.Context, orgID string) (*audit.GenericOrganization, error) {
 	// Parse ID
 	oid, err := xid.FromString(orgID)
@@ -120,14 +120,14 @@ func (a *AuthsomeOrgAdapter) GetOrganization(ctx context.Context, orgID string) 
 	return a.convertOrganization(org), nil
 }
 
-// ListOrganizations retrieves organizations matching filter
+// ListOrganizations retrieves organizations matching filter.
 func (a *AuthsomeOrgAdapter) ListOrganizations(ctx context.Context, filter *audit.OrgFilter) ([]*audit.GenericOrganization, error) {
 	// Note: Simplified implementation
 	// In production, would implement proper org listing with filtering
 	return []*audit.GenericOrganization{}, nil
 }
 
-// convertOrganization converts authsome Organization to GenericOrganization
+// convertOrganization converts authsome Organization to GenericOrganization.
 func (a *AuthsomeOrgAdapter) convertOrganization(org *organization.Organization) *audit.GenericOrganization {
 	if org == nil {
 		return nil
@@ -150,25 +150,25 @@ func (a *AuthsomeOrgAdapter) convertOrganization(org *organization.Organization)
 // NULL ADAPTERS - For when providers are not available
 // =============================================================================
 
-// NullUserProvider is a no-op user provider
+// NullUserProvider is a no-op user provider.
 type NullUserProvider struct{}
 
-// NewNullUserProvider creates a null user provider
+// NewNullUserProvider creates a null user provider.
 func NewNullUserProvider() *NullUserProvider {
 	return &NullUserProvider{}
 }
 
-// GetUser returns nil (no user data available)
+// GetUser returns nil (no user data available).
 func (n *NullUserProvider) GetUser(ctx context.Context, scope *audit.Scope, userID string) (*audit.GenericUser, error) {
 	return nil, nil
 }
 
-// ListUsers returns empty list
+// ListUsers returns empty list.
 func (n *NullUserProvider) ListUsers(ctx context.Context, scope *audit.Scope, filter *audit.UserFilter) ([]*audit.GenericUser, error) {
 	return []*audit.GenericUser{}, nil
 }
 
-// QueryUserMetrics returns zero metrics
+// QueryUserMetrics returns zero metrics.
 func (n *NullUserProvider) QueryUserMetrics(ctx context.Context, scope *audit.Scope, query *audit.MetricsQuery) (*audit.UserMetrics, error) {
 	return &audit.UserMetrics{
 		ByRole:   make(map[string]int),
@@ -176,20 +176,20 @@ func (n *NullUserProvider) QueryUserMetrics(ctx context.Context, scope *audit.Sc
 	}, nil
 }
 
-// NullOrgProvider is a no-op organization provider
+// NullOrgProvider is a no-op organization provider.
 type NullOrgProvider struct{}
 
-// NewNullOrgProvider creates a null org provider
+// NewNullOrgProvider creates a null org provider.
 func NewNullOrgProvider() *NullOrgProvider {
 	return &NullOrgProvider{}
 }
 
-// GetOrganization returns nil (no org data available)
+// GetOrganization returns nil (no org data available).
 func (n *NullOrgProvider) GetOrganization(ctx context.Context, orgID string) (*audit.GenericOrganization, error) {
 	return nil, nil
 }
 
-// ListOrganizations returns empty list
+// ListOrganizations returns empty list.
 func (n *NullOrgProvider) ListOrganizations(ctx context.Context, filter *audit.OrgFilter) ([]*audit.GenericOrganization, error) {
 	return []*audit.GenericOrganization{}, nil
 }

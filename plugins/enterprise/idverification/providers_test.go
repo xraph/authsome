@@ -298,8 +298,8 @@ func TestProviderWebhookParsing(t *testing.T) {
 		provider, _ := NewOnfidoProvider(config)
 
 		payload := []byte(`{"event_type":"check.completed","object":{"id":"check_123"}}`)
-		webhook, err := provider.ParseWebhook(payload)
 
+		webhook, err := provider.ParseWebhook(payload)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -321,8 +321,8 @@ func TestProviderWebhookParsing(t *testing.T) {
 		provider, _ := NewJumioProvider(config)
 
 		payload := []byte(`{"status":"COMPLETED","transactionReference":"ref_123"}`)
-		webhook, err := provider.ParseWebhook(payload)
 
+		webhook, err := provider.ParseWebhook(payload)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -350,8 +350,8 @@ func TestProviderWebhookParsing(t *testing.T) {
 				}
 			}
 		}`)
-		webhook, err := provider.ParseWebhook(payload)
 
+		webhook, err := provider.ParseWebhook(payload)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -372,8 +372,8 @@ func TestProviderWebhookParsing(t *testing.T) {
 		provider, _ := NewOnfidoProvider(config)
 
 		payload := []byte(`invalid json`)
-		_, err := provider.ParseWebhook(payload)
 
+		_, err := provider.ParseWebhook(payload)
 		if err == nil {
 			t.Error("Expected error for invalid JSON")
 		}
@@ -390,6 +390,7 @@ func TestProviderNames(t *testing.T) {
 			name: "onfido",
 			providerFunc: func() Provider {
 				p, _ := NewOnfidoProvider(OnfidoConfig{APIToken: "test"})
+
 				return p
 			},
 			expectedName: "onfido",
@@ -398,6 +399,7 @@ func TestProviderNames(t *testing.T) {
 			name: "jumio",
 			providerFunc: func() Provider {
 				p, _ := NewJumioProvider(JumioConfig{APIToken: "test", APISecret: "secret"})
+
 				return p
 			},
 			expectedName: "jumio",
@@ -406,6 +408,7 @@ func TestProviderNames(t *testing.T) {
 			name: "stripe_identity",
 			providerFunc: func() Provider {
 				p, _ := NewStripeIdentityProvider(StripeIdentityConfig{APIKey: "sk_test_123"})
+
 				return p
 			},
 			expectedName: "stripe_identity",

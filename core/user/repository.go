@@ -13,7 +13,7 @@ import (
 // =============================================================================
 
 // Repository defines the interface for user storage operations
-// This follows the Interface Segregation Principle from core/app architecture
+// This follows the Interface Segregation Principle from core/app architecture.
 type Repository interface {
 	// Create creates a new user
 	Create(ctx context.Context, user *schema.User) error

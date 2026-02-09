@@ -7,7 +7,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// ProviderRegistry manages external verification service providers
+// ProviderRegistry manages external verification service providers.
 type ProviderRegistry interface {
 	// Email/SMS providers
 	EmailProvider() EmailProvider
@@ -23,19 +23,19 @@ type ProviderRegistry interface {
 	NotificationProvider() NotificationProvider
 }
 
-// EmailProvider handles email sending
+// EmailProvider handles email sending.
 type EmailProvider interface {
 	SendVerificationEmail(ctx context.Context, to, code string, expiresIn time.Duration) error
 	SendRecoveryNotification(ctx context.Context, to, subject, body string) error
 }
 
-// SMSProvider handles SMS sending
+// SMSProvider handles SMS sending.
 type SMSProvider interface {
 	SendVerificationSMS(ctx context.Context, to, code string, expiresIn time.Duration) error
 	SendRecoveryNotification(ctx context.Context, to, message string) error
 }
 
-// VideoProvider handles video verification sessions
+// VideoProvider handles video verification sessions.
 type VideoProvider interface {
 	CreateSession(ctx context.Context, userID xid.ID, scheduledAt time.Time) (*VideoSessionInfo, error)
 	GetSession(ctx context.Context, sessionID string) (*VideoSessionInfo, error)
@@ -44,7 +44,7 @@ type VideoProvider interface {
 	CancelSession(ctx context.Context, sessionID string) error
 }
 
-// VideoSessionInfo contains video session details
+// VideoSessionInfo contains video session details.
 type VideoSessionInfo struct {
 	SessionID      string
 	JoinURL        string
@@ -57,7 +57,7 @@ type VideoSessionInfo struct {
 	LivenessPassed bool
 }
 
-// VideoSessionResult contains verification result
+// VideoSessionResult contains verification result.
 type VideoSessionResult struct {
 	Approved       bool
 	LivenessPassed bool
@@ -66,13 +66,13 @@ type VideoSessionResult struct {
 	VerifierID     string
 }
 
-// DocumentProvider handles document verification
+// DocumentProvider handles document verification.
 type DocumentProvider interface {
 	VerifyDocument(ctx context.Context, req *DocumentVerificationRequest) (*DocumentVerificationResult, error)
 	GetVerificationStatus(ctx context.Context, verificationID string) (*DocumentVerificationResult, error)
 }
 
-// DocumentVerificationRequest contains document verification request
+// DocumentVerificationRequest contains document verification request.
 type DocumentVerificationRequest struct {
 	UserID       xid.ID
 	DocumentType string
@@ -81,17 +81,17 @@ type DocumentVerificationRequest struct {
 	Selfie       []byte
 }
 
-// DocumentVerificationResult contains verification result
+// DocumentVerificationResult contains verification result.
 type DocumentVerificationResult struct {
 	VerificationID   string
 	Status           string // pending, verified, rejected
 	ConfidenceScore  float64
-	ExtractedData    map[string]interface{}
-	ProviderResponse map[string]interface{}
+	ExtractedData    map[string]any
+	ProviderResponse map[string]any
 	RejectionReason  string
 }
 
-// NotificationProvider handles notifications
+// NotificationProvider handles notifications.
 type NotificationProvider interface {
 	NotifyRecoveryStarted(ctx context.Context, userID xid.ID, sessionID xid.ID, method RecoveryMethod) error
 	NotifyRecoveryCompleted(ctx context.Context, userID xid.ID, sessionID xid.ID) error
@@ -100,7 +100,7 @@ type NotificationProvider interface {
 	NotifyHighRiskAttempt(ctx context.Context, userID xid.ID, riskScore float64) error
 }
 
-// DefaultProviderRegistry provides default implementations
+// DefaultProviderRegistry provides default implementations.
 type DefaultProviderRegistry struct {
 	emailProvider        EmailProvider
 	smsProvider          SMSProvider
@@ -109,7 +109,7 @@ type DefaultProviderRegistry struct {
 	notificationProvider NotificationProvider
 }
 
-// NewDefaultProviderRegistry creates a new provider registry
+// NewDefaultProviderRegistry creates a new provider registry.
 func NewDefaultProviderRegistry() *DefaultProviderRegistry {
 	return &DefaultProviderRegistry{
 		emailProvider:        &NoOpEmailProvider{},
@@ -162,7 +162,7 @@ func (r *DefaultProviderRegistry) SetNotificationProvider(provider NotificationP
 
 // ===== No-Op Implementations =====
 
-// NoOpEmailProvider is a no-op implementation
+// NoOpEmailProvider is a no-op implementation.
 type NoOpEmailProvider struct{}
 
 func (p *NoOpEmailProvider) SendVerificationEmail(ctx context.Context, to, code string, expiresIn time.Duration) error {
@@ -174,7 +174,7 @@ func (p *NoOpEmailProvider) SendRecoveryNotification(ctx context.Context, to, su
 	return nil
 }
 
-// NoOpSMSProvider is a no-op implementation
+// NoOpSMSProvider is a no-op implementation.
 type NoOpSMSProvider struct{}
 
 func (p *NoOpSMSProvider) SendVerificationSMS(ctx context.Context, to, code string, expiresIn time.Duration) error {
@@ -185,7 +185,7 @@ func (p *NoOpSMSProvider) SendRecoveryNotification(ctx context.Context, to, mess
 	return nil
 }
 
-// NoOpVideoProvider is a no-op implementation
+// NoOpVideoProvider is a no-op implementation.
 type NoOpVideoProvider struct{}
 
 func (p *NoOpVideoProvider) CreateSession(ctx context.Context, userID xid.ID, scheduledAt time.Time) (*VideoSessionInfo, error) {
@@ -206,6 +206,7 @@ func (p *NoOpVideoProvider) GetSession(ctx context.Context, sessionID string) (*
 
 func (p *NoOpVideoProvider) StartSession(ctx context.Context, sessionID string) (*VideoSessionInfo, error) {
 	now := time.Now()
+
 	return &VideoSessionInfo{
 		SessionID: sessionID,
 		Status:    "in_progress",
@@ -221,7 +222,7 @@ func (p *NoOpVideoProvider) CancelSession(ctx context.Context, sessionID string)
 	return nil
 }
 
-// NoOpDocumentProvider is a no-op implementation
+// NoOpDocumentProvider is a no-op implementation.
 type NoOpDocumentProvider struct{}
 
 func (p *NoOpDocumentProvider) VerifyDocument(ctx context.Context, req *DocumentVerificationRequest) (*DocumentVerificationResult, error) {
@@ -239,7 +240,7 @@ func (p *NoOpDocumentProvider) GetVerificationStatus(ctx context.Context, verifi
 	}, nil
 }
 
-// NoOpNotificationProvider is a no-op implementation
+// NoOpNotificationProvider is a no-op implementation.
 type NoOpNotificationProvider struct{}
 
 func (p *NoOpNotificationProvider) NotifyRecoveryStarted(ctx context.Context, userID xid.ID, sessionID xid.ID, method RecoveryMethod) error {

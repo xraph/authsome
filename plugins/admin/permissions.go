@@ -1,7 +1,7 @@
 package admin
 
 // Admin Permissions
-// These permission strings are registered with the RBAC system during plugin initialization
+// These permission strings are registered with the RBAC system during plugin initialization.
 const (
 	PermUserCreate      = "admin:user:create"
 	PermUserRead        = "admin:user:read"

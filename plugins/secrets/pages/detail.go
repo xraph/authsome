@@ -12,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SecretDetailPage renders the secret detail page
+// SecretDetailPage renders the secret detail page.
 func SecretDetailPage(
 	currentApp *app.App,
 	basePath string,
@@ -113,7 +113,7 @@ func SecretDetailPage(
 	)
 }
 
-// valueSection renders the secret value with reveal functionality using Alpine.js
+// valueSection renders the secret value with reveal functionality using Alpine.js.
 func valueSection(appID string, appBase string, secret *core.SecretDTO) g.Node {
 	// Alpine.js x-data for the reveal functionality
 	alpineData := fmt.Sprintf(`{
@@ -281,7 +281,7 @@ func valueSection(appID string, appBase string, secret *core.SecretDTO) g.Node {
 	)
 }
 
-// tagsSection renders the tags for a secret
+// tagsSection renders the tags for a secret.
 func tagsSection(secret *core.SecretDTO) g.Node {
 	tags := make([]g.Node, len(secret.Tags))
 	for i, tag := range secret.Tags {
@@ -305,19 +305,22 @@ func tagsSection(secret *core.SecretDTO) g.Node {
 	)
 }
 
-// infoPanel renders the secret metadata panel
+// infoPanel renders the secret metadata panel.
 func infoPanel(secret *core.SecretDTO) g.Node {
 	// Build expiry node only if applicable
 	var expiryNode g.Node
+
 	if secret.HasExpiry && secret.ExpiresAt != nil {
 		expiring := secret.ExpiresAt.Before(time.Now().Add(30 * 24 * time.Hour))
 		expired := secret.ExpiresAt.Before(time.Now())
+
 		var statusClass string
 		if expired {
 			statusClass = "text-red-600 dark:text-red-400"
 		} else if expiring {
 			statusClass = "text-orange-600 dark:text-orange-400"
 		}
+
 		expiryNode = Div(
 			Class("px-4 py-3 flex justify-between"),
 			Dt(Class("text-sm text-slate-500 dark:text-gray-400"), g.Text("Expires")),
@@ -371,7 +374,7 @@ func infoItem(label, value string, mono bool) g.Node {
 	)
 }
 
-// recentVersions renders the recent version history
+// recentVersions renders the recent version history.
 func recentVersions(appBase string, secret *core.SecretDTO, versions []*core.SecretVersionDTO) g.Node {
 	if len(versions) == 0 {
 		return g.Group(nil)
@@ -431,7 +434,7 @@ func recentVersions(appBase string, secret *core.SecretDTO, versions []*core.Sec
 	)
 }
 
-// deleteButton renders the delete confirmation button
+// deleteButton renders the delete confirmation button.
 func deleteButton(secret *core.SecretDTO) g.Node {
 	return Div(
 		Class("relative"),
@@ -496,18 +499,20 @@ func deleteButton(secret *core.SecretDTO) g.Node {
 	)
 }
 
-// PathBreadcrumb renders a breadcrumb from a secret path
+// PathBreadcrumb renders a breadcrumb from a secret path.
 func PathBreadcrumb(path string, appBase string) g.Node {
 	parts := strings.Split(path, "/")
 	items := make([]g.Node, 0, len(parts)*2)
 
-	var currentPath string
+	var currentPath strings.Builder
+
 	for i, part := range parts {
 		if i > 0 {
 			items = append(items, lucide.ChevronRight(Class("size-4 text-slate-400")))
-			currentPath += "/"
+			currentPath.WriteString("/")
 		}
-		currentPath += part
+
+		currentPath.WriteString(part)
 
 		isLast := i == len(parts)-1
 		if isLast {
@@ -517,7 +522,7 @@ func PathBreadcrumb(path string, appBase string) g.Node {
 			))
 		} else {
 			items = append(items, A(
-				Href(appBase+"/secrets?prefix="+currentPath),
+				Href(appBase+"/secrets?prefix="+currentPath.String()),
 				Class("text-slate-500 hover:text-violet-600 dark:text-gray-400 transition-colors"),
 				g.Text(part),
 			))

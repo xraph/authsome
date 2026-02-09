@@ -11,23 +11,24 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// ABTestService handles A/B testing operations
+// ABTestService handles A/B testing operations.
 type ABTestService struct {
 	repo Repository
 }
 
-// NewABTestService creates a new A/B test service
+// NewABTestService creates a new A/B test service.
 func NewABTestService(repo Repository) *ABTestService {
 	return &ABTestService{repo: repo}
 }
 
-// CreateVariant creates a new A/B test variant for a template
+// CreateVariant creates a new A/B test variant for a template.
 func (s *ABTestService) CreateVariant(ctx context.Context, baseTemplateID xid.ID, variantName string, weight int, subject, body string) (*schema.NotificationTemplate, error) {
 	// Get base template
 	baseTemplate, err := s.repo.FindTemplateByID(ctx, baseTemplateID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find base template: %w", err)
 	}
+
 	if baseTemplate == nil {
 		return nil, TemplateNotFound()
 	}
@@ -68,7 +69,7 @@ func (s *ABTestService) CreateVariant(ctx context.Context, baseTemplateID xid.ID
 	return variant, nil
 }
 
-// SelectVariant selects a variant based on weighted distribution
+// SelectVariant selects a variant based on weighted distribution.
 func (s *ABTestService) SelectVariant(ctx context.Context, appID xid.ID, orgID *xid.ID, templateKey, notifType, language string) (*schema.NotificationTemplate, error) {
 	// First, try to find templates with A/B testing enabled
 	filter := &ListTemplatesFilter{
@@ -85,6 +86,7 @@ func (s *ABTestService) SelectVariant(ctx context.Context, appID xid.ID, orgID *
 
 	// Filter for templates matching key and with AB testing enabled
 	var variants []*schema.NotificationTemplate
+
 	for _, tmpl := range response.Data {
 		if tmpl.TemplateKey == templateKey && tmpl.ABTestEnabled && tmpl.Active {
 			// Check org scope
@@ -118,6 +120,7 @@ func (s *ABTestService) SelectVariant(ctx context.Context, appID xid.ID, orgID *
 		// Fall back to first variant on error
 		return variants[0], nil
 	}
+
 	random := int(randomBig.Int64())
 
 	// Select variant based on weight
@@ -133,7 +136,7 @@ func (s *ABTestService) SelectVariant(ctx context.Context, appID xid.ID, orgID *
 	return variants[0], nil
 }
 
-// GetABTestResults gets the performance results for all variants in an AB test
+// GetABTestResults gets the performance results for all variants in an AB test.
 func (s *ABTestService) GetABTestResults(ctx context.Context, abTestGroup string) (*ABTestResults, error) {
 	// This would query analytics data for all variants in the group
 	// For now, return a placeholder
@@ -145,10 +148,11 @@ func (s *ABTestService) GetABTestResults(ctx context.Context, abTestGroup string
 	return results, nil
 }
 
-// DeclareWinner declares a winning variant and deactivates others
+// DeclareWinner declares a winning variant and deactivates others.
 func (s *ABTestService) DeclareWinner(ctx context.Context, winnerID xid.ID, abTestGroup string) error {
 	// Get all variants in the AB test group
 	filter := &ListTemplatesFilter{}
+
 	response, err := s.repo.ListTemplates(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("failed to list templates: %w", err)
@@ -165,6 +169,7 @@ func (s *ABTestService) DeclareWinner(ctx context.Context, winnerID xid.ID, abTe
 			} else {
 				// Loser: disable AB testing
 				active := false
+
 				updateReq := &UpdateTemplateRequest{
 					Active: &active,
 				}
@@ -178,7 +183,7 @@ func (s *ABTestService) DeclareWinner(ctx context.Context, winnerID xid.ID, abTe
 	return nil
 }
 
-// CalculateStatisticalSignificance calculates if one variant is statistically better than another
+// CalculateStatisticalSignificance calculates if one variant is statistically better than another.
 func (s *ABTestService) CalculateStatisticalSignificance(variant1, variant2 VariantPerformance) *StatisticalSignificance {
 	// Simple z-test for proportion difference
 	p1 := variant1.ConversionRate
@@ -216,7 +221,7 @@ func (s *ABTestService) CalculateStatisticalSignificance(variant1, variant2 Vari
 	}
 }
 
-// ABTestResults represents the results of an A/B test
+// ABTestResults represents the results of an A/B test.
 type ABTestResults struct {
 	ABTestGroup  string                   `json:"abTestGroup"`
 	Variants     []VariantPerformance     `json:"variants"`
@@ -224,7 +229,7 @@ type ABTestResults struct {
 	Significance *StatisticalSignificance `json:"significance,omitempty"`
 }
 
-// VariantPerformance represents performance metrics for a variant
+// VariantPerformance represents performance metrics for a variant.
 type VariantPerformance struct {
 	TemplateID     xid.ID  `json:"templateId"`
 	TemplateName   string  `json:"templateName"`
@@ -237,7 +242,7 @@ type VariantPerformance struct {
 	ConversionRate float64 `json:"conversionRate"`
 }
 
-// StatisticalSignificance represents statistical test results
+// StatisticalSignificance represents statistical test results.
 type StatisticalSignificance struct {
 	ZScore            float64 `json:"zScore"`
 	PValue            float64 `json:"pValue"`

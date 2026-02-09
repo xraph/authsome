@@ -10,13 +10,14 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockRepository implements Repository for testing
+// MockRepository implements Repository for testing.
 type MockRepository struct {
 	mock.Mock
 }
 
 func (m *MockRepository) CreateRule(ctx context.Context, rule *GeofenceRule) error {
 	args := m.Called(ctx, rule)
+
 	return args.Error(0)
 }
 
@@ -25,6 +26,7 @@ func (m *MockRepository) GetRule(ctx context.Context, id xid.ID) (*GeofenceRule,
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*GeofenceRule), args.Error(1)
 }
 
@@ -33,6 +35,7 @@ func (m *MockRepository) GetRulesByApp(ctx context.Context, appID xid.ID) ([]*Ge
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*GeofenceRule), args.Error(1)
 }
 
@@ -41,16 +44,19 @@ func (m *MockRepository) GetRulesByUser(ctx context.Context, userID xid.ID) ([]*
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*GeofenceRule), args.Error(1)
 }
 
 func (m *MockRepository) UpdateRule(ctx context.Context, rule *GeofenceRule) error {
 	args := m.Called(ctx, rule)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) DeleteRule(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
@@ -59,11 +65,13 @@ func (m *MockRepository) ListEnabledRules(ctx context.Context, orgID xid.ID, use
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*GeofenceRule), args.Error(1)
 }
 
 func (m *MockRepository) CreateLocationEvent(ctx context.Context, event *LocationEvent) error {
 	args := m.Called(ctx, event)
+
 	return args.Error(0)
 }
 
@@ -72,6 +80,7 @@ func (m *MockRepository) GetLocationEvent(ctx context.Context, id xid.ID) (*Loca
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*LocationEvent), args.Error(1)
 }
 
@@ -80,6 +89,7 @@ func (m *MockRepository) GetUserLocationHistory(ctx context.Context, userID xid.
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*LocationEvent), args.Error(1)
 }
 
@@ -88,6 +98,7 @@ func (m *MockRepository) GetLastLocation(ctx context.Context, userID xid.ID, app
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*GeoData), args.Error(1)
 }
 
@@ -96,16 +107,19 @@ func (m *MockRepository) GetLastLocationEvent(ctx context.Context, userID xid.ID
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*LocationEvent), args.Error(1)
 }
 
 func (m *MockRepository) DeleteOldLocationEvents(ctx context.Context, before time.Time) (int64, error) {
 	args := m.Called(ctx, before)
+
 	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockRepository) CreateTravelAlert(ctx context.Context, alert *TravelAlert) error {
 	args := m.Called(ctx, alert)
+
 	return args.Error(0)
 }
 
@@ -114,6 +128,7 @@ func (m *MockRepository) GetTravelAlert(ctx context.Context, id xid.ID) (*Travel
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*TravelAlert), args.Error(1)
 }
 
@@ -122,6 +137,7 @@ func (m *MockRepository) GetUserTravelAlerts(ctx context.Context, userID xid.ID,
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*TravelAlert), args.Error(1)
 }
 
@@ -130,26 +146,31 @@ func (m *MockRepository) GetPendingTravelAlerts(ctx context.Context, appID xid.I
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*TravelAlert), args.Error(1)
 }
 
 func (m *MockRepository) UpdateTravelAlert(ctx context.Context, alert *TravelAlert) error {
 	args := m.Called(ctx, alert)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) ApproveTravel(ctx context.Context, alertID xid.ID, approvedBy xid.ID) error {
 	args := m.Called(ctx, alertID, approvedBy)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) DenyTravel(ctx context.Context, alertID xid.ID, deniedBy xid.ID) error {
 	args := m.Called(ctx, alertID, deniedBy)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) CreateTrustedLocation(ctx context.Context, location *TrustedLocation) error {
 	args := m.Called(ctx, location)
+
 	return args.Error(0)
 }
 
@@ -158,6 +179,7 @@ func (m *MockRepository) GetTrustedLocation(ctx context.Context, id xid.ID) (*Tr
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*TrustedLocation), args.Error(1)
 }
 
@@ -166,16 +188,19 @@ func (m *MockRepository) GetUserTrustedLocations(ctx context.Context, userID xid
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*TrustedLocation), args.Error(1)
 }
 
 func (m *MockRepository) UpdateTrustedLocation(ctx context.Context, location *TrustedLocation) error {
 	args := m.Called(ctx, location)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) DeleteTrustedLocation(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
@@ -184,11 +209,13 @@ func (m *MockRepository) IsLocationTrusted(ctx context.Context, userID xid.ID, l
 	if args.Get(1) == nil {
 		return args.Bool(0), nil, args.Error(2)
 	}
+
 	return args.Bool(0), args.Get(1).(*TrustedLocation), args.Error(2)
 }
 
 func (m *MockRepository) CreateViolation(ctx context.Context, violation *GeofenceViolation) error {
 	args := m.Called(ctx, violation)
+
 	return args.Error(0)
 }
 
@@ -197,6 +224,7 @@ func (m *MockRepository) GetViolation(ctx context.Context, id xid.ID) (*Geofence
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*GeofenceViolation), args.Error(1)
 }
 
@@ -205,6 +233,7 @@ func (m *MockRepository) GetUserViolations(ctx context.Context, userID xid.ID, l
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*GeofenceViolation), args.Error(1)
 }
 
@@ -213,6 +242,7 @@ func (m *MockRepository) GetAppViolations(ctx context.Context, appID xid.ID, lim
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*GeofenceViolation), args.Error(1)
 }
 
@@ -221,11 +251,13 @@ func (m *MockRepository) GetUnresolvedViolations(ctx context.Context, orgID xid.
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*GeofenceViolation), args.Error(1)
 }
 
 func (m *MockRepository) ResolveViolation(ctx context.Context, id xid.ID, resolvedBy xid.ID, resolution string) error {
 	args := m.Called(ctx, id, resolvedBy, resolution)
+
 	return args.Error(0)
 }
 
@@ -234,20 +266,23 @@ func (m *MockRepository) GetCachedGeoData(ctx context.Context, ip string) (*GeoC
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*GeoCache), args.Error(1)
 }
 
 func (m *MockRepository) SetCachedGeoData(ctx context.Context, cache *GeoCache) error {
 	args := m.Called(ctx, cache)
+
 	return args.Error(0)
 }
 
 func (m *MockRepository) DeleteExpiredCache(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
+
 	return args.Get(0).(int64), args.Error(1)
 }
 
-// MockGeoProvider implements GeoProvider for testing
+// MockGeoProvider implements GeoProvider for testing.
 type MockGeoProvider struct {
 	mock.Mock
 }
@@ -257,6 +292,7 @@ func (m *MockGeoProvider) Lookup(ctx context.Context, ip string) (*GeoData, erro
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*GeoData), args.Error(1)
 }
 
@@ -264,7 +300,7 @@ func (m *MockGeoProvider) Name() string {
 	return "mock"
 }
 
-// MockDetectionProvider implements DetectionProvider for testing
+// MockDetectionProvider implements DetectionProvider for testing.
 type MockDetectionProvider struct {
 	mock.Mock
 }
@@ -274,6 +310,7 @@ func (m *MockDetectionProvider) Check(ctx context.Context, ip string) (*Detectio
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*DetectionResult), args.Error(1)
 }
 
@@ -281,7 +318,7 @@ func (m *MockDetectionProvider) Name() string {
 	return "mock"
 }
 
-// Test Service Creation
+// Test Service Creation.
 func TestNewService(t *testing.T) {
 	config := DefaultConfig()
 	repo := new(MockRepository)
@@ -295,7 +332,7 @@ func TestNewService(t *testing.T) {
 	assert.Equal(t, repo, service.repo)
 }
 
-// Test Country Blocking
+// Test Country Blocking.
 func TestCheckLocation_BlockedCountry(t *testing.T) {
 	config := DefaultConfig()
 	config.Restrictions.BlockedCountries = []string{"KP", "IR"}
@@ -352,7 +389,7 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 	assert.Contains(t, result.Violations, "country_blocked")
 }
 
-// Test Allowed Country
+// Test Allowed Country.
 func TestCheckLocation_AllowedCountry(t *testing.T) {
 	config := DefaultConfig()
 
@@ -377,6 +414,7 @@ func TestCheckLocation_AllowedCountry(t *testing.T) {
 	// Mock no rules
 	userID := xid.New()
 	appID := xid.New()
+
 	repo.On("ListEnabledRules", mock.Anything, mock.Anything, &userID).Return([]*GeofenceRule{}, nil)
 	repo.On("CreateLocationEvent", mock.Anything, mock.Anything).Return(nil)
 	repo.On("GetCachedGeoData", mock.Anything, "8.8.8.8").Return(nil, assert.AnError)
@@ -398,7 +436,7 @@ func TestCheckLocation_AllowedCountry(t *testing.T) {
 	assert.Empty(t, result.Violations)
 }
 
-// Test VPN Detection
+// Test VPN Detection.
 func TestCheckLocation_VPNDetected(t *testing.T) {
 	config := DefaultConfig()
 	config.Detection.BlockVPN = true
@@ -462,7 +500,7 @@ func TestCheckLocation_VPNDetected(t *testing.T) {
 	assert.Equal(t, "vpn_detected", result.Reason)
 }
 
-// Test Geofence Circle
+// Test Geofence Circle.
 func TestIsInsideGeofence_Circle(t *testing.T) {
 	service := &Service{}
 
@@ -486,7 +524,7 @@ func TestIsInsideGeofence_Circle(t *testing.T) {
 	assert.False(t, outside)
 }
 
-// Test Point in Polygon
+// Test Point in Polygon.
 func TestPointInPolygon(t *testing.T) {
 	// Square polygon around San Francisco
 	polygon := [][2]float64{
@@ -505,7 +543,7 @@ func TestPointInPolygon(t *testing.T) {
 	assert.False(t, outside)
 }
 
-// Test Caching
+// Test Caching.
 func TestGetGeolocation_WithCache(t *testing.T) {
 	config := DefaultConfig()
 	repo := new(MockRepository)

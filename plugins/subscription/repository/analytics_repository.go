@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/schema"
 )
 
-// AnalyticsRepository defines the interface for analytics operations
+// AnalyticsRepository defines the interface for analytics operations.
 type AnalyticsRepository interface {
 	// Billing metric operations
 	CreateMetric(ctx context.Context, metric *core.BillingMetric) error
@@ -36,7 +36,7 @@ type AnalyticsRepository interface {
 	GetMRRHistory(ctx context.Context, appID xid.ID, startDate, endDate time.Time, currency string) ([]*core.MRRBreakdown, error)
 }
 
-// MovementSummary represents aggregated movement data
+// MovementSummary represents aggregated movement data.
 type MovementSummary struct {
 	NewMRR          int64 `json:"newMrr"`
 	ExpansionMRR    int64 `json:"expansionMrr"`
@@ -50,26 +50,28 @@ type MovementSummary struct {
 	ReactivateCount int   `json:"reactivateCount"`
 }
 
-// analyticsRepository implements AnalyticsRepository using Bun
+// analyticsRepository implements AnalyticsRepository using Bun.
 type analyticsRepository struct {
 	db *bun.DB
 }
 
-// NewAnalyticsRepository creates a new analytics repository
+// NewAnalyticsRepository creates a new analytics repository.
 func NewAnalyticsRepository(db *bun.DB) AnalyticsRepository {
 	return &analyticsRepository{db: db}
 }
 
-// CreateMetric creates a new billing metric
+// CreateMetric creates a new billing metric.
 func (r *analyticsRepository) CreateMetric(ctx context.Context, metric *core.BillingMetric) error {
 	model := billingMetricToSchema(metric)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// GetMetric returns a specific metric
+// GetMetric returns a specific metric.
 func (r *analyticsRepository) GetMetric(ctx context.Context, appID xid.ID, metricType core.MetricType, date time.Time, period core.MetricPeriod) (*core.BillingMetric, error) {
 	var metric schema.SubscriptionBillingMetric
+
 	err := r.db.NewSelect().
 		Model(&metric).
 		Where("app_id = ?", appID).
@@ -81,14 +83,17 @@ func (r *analyticsRepository) GetMetric(ctx context.Context, appID xid.ID, metri
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
+
 	return schemaToBillingMetric(&metric), nil
 }
 
-// ListMetrics returns metrics for a date range
+// ListMetrics returns metrics for a date range.
 func (r *analyticsRepository) ListMetrics(ctx context.Context, appID xid.ID, metricTypes []core.MetricType, period core.MetricPeriod, startDate, endDate time.Time) ([]*core.BillingMetric, error) {
 	var metrics []schema.SubscriptionBillingMetric
+
 	query := r.db.NewSelect().
 		Model(&metrics).
 		Where("app_id = ?", appID).
@@ -101,6 +106,7 @@ func (r *analyticsRepository) ListMetrics(ctx context.Context, appID xid.ID, met
 		for i, t := range metricTypes {
 			types[i] = string(t)
 		}
+
 		query = query.Where("type IN (?)", bun.In(types))
 	}
 
@@ -113,10 +119,11 @@ func (r *analyticsRepository) ListMetrics(ctx context.Context, appID xid.ID, met
 	for i, m := range metrics {
 		result[i] = schemaToBillingMetric(&m)
 	}
+
 	return result, nil
 }
 
-// UpsertMetric creates or updates a billing metric
+// UpsertMetric creates or updates a billing metric.
 func (r *analyticsRepository) UpsertMetric(ctx context.Context, metric *core.BillingMetric) error {
 	model := billingMetricToSchema(metric)
 	_, err := r.db.NewInsert().
@@ -124,19 +131,22 @@ func (r *analyticsRepository) UpsertMetric(ctx context.Context, metric *core.Bil
 		On("CONFLICT (app_id, type, period, date) DO UPDATE").
 		Set("value = EXCLUDED.value").
 		Exec(ctx)
+
 	return err
 }
 
-// CreateMovement creates a subscription movement record
+// CreateMovement creates a subscription movement record.
 func (r *analyticsRepository) CreateMovement(ctx context.Context, movement *core.SubscriptionMovement) error {
 	model := movementToSchema(movement)
 	_, err := r.db.NewInsert().Model(model).Exec(ctx)
+
 	return err
 }
 
-// ListMovements returns subscription movements
+// ListMovements returns subscription movements.
 func (r *analyticsRepository) ListMovements(ctx context.Context, appID xid.ID, startDate, endDate time.Time, movementType string, page, pageSize int) ([]*core.SubscriptionMovement, int, error) {
 	var movements []schema.SubscriptionMovement
+
 	query := r.db.NewSelect().
 		Model(&movements).
 		Where("app_id = ?", appID).
@@ -165,10 +175,11 @@ func (r *analyticsRepository) ListMovements(ctx context.Context, appID xid.ID, s
 	for i, m := range movements {
 		result[i] = schemaToMovement(&m)
 	}
+
 	return result, count, nil
 }
 
-// GetMovementSummary returns aggregated movement data
+// GetMovementSummary returns aggregated movement data.
 func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.ID, startDate, endDate time.Time, currency string) (*MovementSummary, error) {
 	summary := &MovementSummary{}
 
@@ -177,6 +188,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 		Count    int   `bun:"count"`
 		TotalMRR int64 `bun:"total_mrr"`
 	}
+
 	err := r.db.NewSelect().
 		Model((*schema.SubscriptionMovement)(nil)).
 		ColumnExpr("COUNT(*) AS count").
@@ -190,6 +202,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+
 	summary.NewCount = newResult.Count
 	summary.NewMRR = newResult.TotalMRR
 
@@ -198,6 +211,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 		Count    int   `bun:"count"`
 		TotalMRR int64 `bun:"total_mrr"`
 	}
+
 	err = r.db.NewSelect().
 		Model((*schema.SubscriptionMovement)(nil)).
 		ColumnExpr("COUNT(*) AS count").
@@ -211,6 +225,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+
 	summary.UpgradeCount = upgradeResult.Count
 	summary.ExpansionMRR = upgradeResult.TotalMRR
 
@@ -219,6 +234,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 		Count    int   `bun:"count"`
 		TotalMRR int64 `bun:"total_mrr"`
 	}
+
 	err = r.db.NewSelect().
 		Model((*schema.SubscriptionMovement)(nil)).
 		ColumnExpr("COUNT(*) AS count").
@@ -232,6 +248,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+
 	summary.DowngradeCount = downgradeResult.Count
 	summary.ContractionMRR = downgradeResult.TotalMRR
 
@@ -240,6 +257,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 		Count    int   `bun:"count"`
 		TotalMRR int64 `bun:"total_mrr"`
 	}
+
 	err = r.db.NewSelect().
 		Model((*schema.SubscriptionMovement)(nil)).
 		ColumnExpr("COUNT(*) AS count").
@@ -253,6 +271,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+
 	summary.ChurnCount = churnResult.Count
 	summary.ChurnedMRR = churnResult.TotalMRR
 
@@ -261,6 +280,7 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 		Count    int   `bun:"count"`
 		TotalMRR int64 `bun:"total_mrr"`
 	}
+
 	err = r.db.NewSelect().
 		Model((*schema.SubscriptionMovement)(nil)).
 		ColumnExpr("COUNT(*) AS count").
@@ -274,13 +294,14 @@ func (r *analyticsRepository) GetMovementSummary(ctx context.Context, appID xid.
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
+
 	summary.ReactivateCount = reactivateResult.Count
 	summary.ReactivationMRR = reactivateResult.TotalMRR
 
 	return summary, nil
 }
 
-// CreateCohort creates a cohort record
+// CreateCohort creates a cohort record.
 func (r *analyticsRepository) CreateCohort(ctx context.Context, cohort *core.CohortAnalysis) error {
 	// Store as multiple rows, one per month
 	for monthNum, retention := range cohort.Retention {
@@ -302,17 +323,20 @@ func (r *analyticsRepository) CreateCohort(ctx context.Context, cohort *core.Coh
 			CreatedAt:       time.Now(),
 			UpdatedAt:       time.Now(),
 		}
+
 		_, err := r.db.NewInsert().Model(model).Exec(ctx)
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-// GetCohort returns a cohort by month
+// GetCohort returns a cohort by month.
 func (r *analyticsRepository) GetCohort(ctx context.Context, appID xid.ID, cohortMonth time.Time) (*core.CohortAnalysis, error) {
 	var cohorts []schema.SubscriptionCohort
+
 	err := r.db.NewSelect().
 		Model(&cohorts).
 		Where("app_id = ?", appID).
@@ -343,9 +367,10 @@ func (r *analyticsRepository) GetCohort(ctx context.Context, appID xid.ID, cohor
 	return result, nil
 }
 
-// ListCohorts returns cohorts for analysis
+// ListCohorts returns cohorts for analysis.
 func (r *analyticsRepository) ListCohorts(ctx context.Context, appID xid.ID, startMonth time.Time, numMonths int) ([]*core.CohortAnalysis, error) {
 	var cohorts []schema.SubscriptionCohort
+
 	endMonth := startMonth.AddDate(0, numMonths, 0)
 
 	err := r.db.NewSelect().
@@ -361,6 +386,7 @@ func (r *analyticsRepository) ListCohorts(ctx context.Context, appID xid.ID, sta
 
 	// Group by cohort month
 	cohortMap := make(map[time.Time]*core.CohortAnalysis)
+
 	for _, c := range cohorts {
 		key := c.CohortMonth.Truncate(24 * time.Hour)
 		if _, ok := cohortMap[key]; !ok {
@@ -372,6 +398,7 @@ func (r *analyticsRepository) ListCohorts(ctx context.Context, appID xid.ID, sta
 				Currency:       c.Currency,
 			}
 		}
+
 		cohortMap[key].Retention = append(cohortMap[key].Retention, c.RetentionRate)
 		cohortMap[key].Revenue = append(cohortMap[key].Revenue, c.Revenue)
 	}
@@ -380,10 +407,11 @@ func (r *analyticsRepository) ListCohorts(ctx context.Context, appID xid.ID, sta
 	for _, c := range cohortMap {
 		result = append(result, c)
 	}
+
 	return result, nil
 }
 
-// UpsertCohort creates or updates a cohort data point
+// UpsertCohort creates or updates a cohort data point.
 func (r *analyticsRepository) UpsertCohort(ctx context.Context, appID xid.ID, cohortMonth time.Time, monthNumber int, activeCustomers int, revenue int64, currency string) error {
 	model := &schema.SubscriptionCohort{
 		ID:              xid.New(),
@@ -405,10 +433,11 @@ func (r *analyticsRepository) UpsertCohort(ctx context.Context, appID xid.ID, co
 		Set("revenue = EXCLUDED.revenue").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
+
 	return err
 }
 
-// GetDashboardMetrics returns dashboard metrics (stub - needs actual calculation)
+// GetDashboardMetrics returns dashboard metrics (stub - needs actual calculation).
 func (r *analyticsRepository) GetDashboardMetrics(ctx context.Context, appID xid.ID, currency string) (*core.DashboardMetrics, error) {
 	// This would typically aggregate from multiple sources
 	// For now, return a stub implementation
@@ -430,7 +459,7 @@ func (r *analyticsRepository) GetDashboardMetrics(ctx context.Context, appID xid
 	}, nil
 }
 
-// GetMRRHistory returns MRR breakdown history (stub)
+// GetMRRHistory returns MRR breakdown history (stub).
 func (r *analyticsRepository) GetMRRHistory(ctx context.Context, appID xid.ID, startDate, endDate time.Time, currency string) ([]*core.MRRBreakdown, error) {
 	// Stub implementation - would aggregate movements by date
 	return []*core.MRRBreakdown{}, nil

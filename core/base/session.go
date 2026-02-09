@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Session represents a user session (DTO)
+// Session represents a user session (DTO).
 type Session struct {
 	ID             xid.ID    `json:"id"`
 	Token          string    `json:"token"`
@@ -27,10 +27,10 @@ type Session struct {
 	LastRefreshedAt       *time.Time `json:"lastRefreshedAt,omitempty"`
 
 	// Device info (computed on-demand, not stored in DB)
-	Device interface{} `json:"device,omitempty" bun:"-"`
+	Device any `bun:"-" json:"device,omitempty"`
 }
 
-// ToSchema converts Session DTO to schema.Session
+// ToSchema converts Session DTO to schema.Session.
 func (s *Session) ToSchema() *schema.Session {
 	return &schema.Session{
 		ID:                    s.ID,

@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// BrandingConfig contains branding configuration for consent pages
+// BrandingConfig contains branding configuration for consent pages.
 type BrandingConfig struct {
 	PrimaryColor    string // Main brand color (e.g., "#4F46E5")
 	BackgroundColor string // Page background color (e.g., "#F9FAFB")
@@ -19,7 +19,7 @@ type BrandingConfig struct {
 	AppName         string // Display name (e.g., "Acme Inc")
 }
 
-// DefaultBranding returns the default branding configuration
+// DefaultBranding returns the default branding configuration.
 func DefaultBranding() BrandingConfig {
 	return BrandingConfig{
 		PrimaryColor:    "#4F46E5", // Indigo-600
@@ -31,25 +31,29 @@ func DefaultBranding() BrandingConfig {
 }
 
 // ExtractBranding extracts branding configuration from OAuth client or app metadata
-// Priority: 1. Client metadata, 2. App metadata, 3. Defaults
+// Priority: 1. Client metadata, 2. App metadata, 3. Defaults.
 func ExtractBranding(client *schema.OAuthClient, app *schema.App) BrandingConfig {
 	branding := DefaultBranding()
 
 	// Try client metadata first
 	if client != nil && client.Metadata != nil {
-		if brandingMap, ok := client.Metadata["branding"].(map[string]interface{}); ok {
+		if brandingMap, ok := client.Metadata["branding"].(map[string]any); ok {
 			if primaryColor, ok := brandingMap["primaryColor"].(string); ok && primaryColor != "" {
 				branding.PrimaryColor = primaryColor
 			}
+
 			if backgroundColor, ok := brandingMap["backgroundColor"].(string); ok && backgroundColor != "" {
 				branding.BackgroundColor = backgroundColor
 			}
+
 			if cardBackground, ok := brandingMap["cardBackground"].(string); ok && cardBackground != "" {
 				branding.CardBackground = cardBackground
 			}
+
 			if textColor, ok := brandingMap["textColor"].(string); ok && textColor != "" {
 				branding.TextColor = textColor
 			}
+
 			if appName, ok := brandingMap["appName"].(string); ok && appName != "" {
 				branding.AppName = appName
 			}
@@ -62,27 +66,31 @@ func ExtractBranding(client *schema.OAuthClient, app *schema.App) BrandingConfig
 
 	// Fallback to app metadata
 	if app != nil && app.Metadata != nil {
-		if brandingMap, ok := app.Metadata["branding"].(map[string]interface{}); ok {
+		if brandingMap, ok := app.Metadata["branding"].(map[string]any); ok {
 			if branding.PrimaryColor == "#4F46E5" {
 				if primaryColor, ok := brandingMap["primaryColor"].(string); ok && primaryColor != "" {
 					branding.PrimaryColor = primaryColor
 				}
 			}
+
 			if branding.BackgroundColor == "#F9FAFB" {
 				if backgroundColor, ok := brandingMap["backgroundColor"].(string); ok && backgroundColor != "" {
 					branding.BackgroundColor = backgroundColor
 				}
 			}
+
 			if branding.CardBackground == "#FFFFFF" {
 				if cardBackground, ok := brandingMap["cardBackground"].(string); ok && cardBackground != "" {
 					branding.CardBackground = cardBackground
 				}
 			}
+
 			if branding.TextColor == "#111827" {
 				if textColor, ok := brandingMap["textColor"].(string); ok && textColor != "" {
 					branding.TextColor = textColor
 				}
 			}
+
 			if branding.AppName == "AuthSome" {
 				if appName, ok := brandingMap["appName"].(string); ok && appName != "" {
 					branding.AppName = appName
@@ -98,7 +106,7 @@ func ExtractBranding(client *schema.OAuthClient, app *schema.App) BrandingConfig
 	return branding
 }
 
-// CodeEntryPageData contains data for the device code entry page
+// CodeEntryPageData contains data for the device code entry page.
 type CodeEntryPageData struct {
 	UserCode    string
 	ErrorMsg    string
@@ -107,7 +115,7 @@ type CodeEntryPageData struct {
 	RedirectURL string // Optional redirect URL after authorization
 }
 
-// DeviceCodeEntryPage renders the device code entry page using ForgeUI
+// DeviceCodeEntryPage renders the device code entry page using ForgeUI.
 func DeviceCodeEntryPage(data CodeEntryPageData) g.Node {
 	// Generate custom CSS for brand colors
 	customCSS := g.Raw(fmt.Sprintf(`
@@ -228,7 +236,7 @@ func DeviceCodeEntryPage(data CodeEntryPageData) g.Node {
 	)
 }
 
-// VerificationPageData contains data for the device verification/consent page
+// VerificationPageData contains data for the device verification/consent page.
 type VerificationPageData struct {
 	UserCode          string // Normalized code (stored in DB, used in form field)
 	UserCodeFormatted string // Formatted code (displayed to user)
@@ -240,7 +248,7 @@ type VerificationPageData struct {
 	RedirectURL       string // Optional redirect URL after authorization
 }
 
-// DeviceVerificationPage renders the device verification and consent page using ForgeUI
+// DeviceVerificationPage renders the device verification and consent page using ForgeUI.
 func DeviceVerificationPage(data VerificationPageData) g.Node {
 	// Generate custom CSS for brand colors
 	customCSS := g.Raw(fmt.Sprintf(`
@@ -378,10 +386,12 @@ func DeviceVerificationPage(data VerificationPageData) g.Node {
 	)
 }
 
-// DeviceSuccessPage renders the authorization success/denial page using ForgeUI
+// DeviceSuccessPage renders the authorization success/denial page using ForgeUI.
 func DeviceSuccessPage(approved bool, branding BrandingConfig) g.Node {
-	var icon g.Node
-	var title, message, colorClass, bgClass string
+	var (
+		icon                                g.Node
+		title, message, colorClass, bgClass string
+	)
 
 	if approved {
 		icon = icons.CheckCircle(icons.WithSize(80), icons.WithClass("mx-auto text-green-600 dark:text-green-400"))

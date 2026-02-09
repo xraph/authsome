@@ -12,13 +12,13 @@ import (
 	"github.com/xraph/authsome/internal/clients/manifest"
 )
 
-// Introspector analyzes Go source code to generate manifests
+// Introspector analyzes Go source code to generate manifests.
 type Introspector struct {
 	projectRoot string
 	fset        *token.FileSet
 }
 
-// NewIntrospector creates a new introspector
+// NewIntrospector creates a new introspector.
 func NewIntrospector(projectRoot string) *Introspector {
 	return &Introspector{
 		projectRoot: projectRoot,
@@ -26,7 +26,7 @@ func NewIntrospector(projectRoot string) *Introspector {
 	}
 }
 
-// IntrospectHandlers analyzes handler files to extract route information
+// IntrospectHandlers analyzes handler files to extract route information.
 func (i *Introspector) IntrospectHandlers(handlerPath string) (*RouteInfo, error) {
 	files, err := os.ReadDir(handlerPath)
 	if err != nil {
@@ -53,7 +53,7 @@ func (i *Introspector) IntrospectHandlers(handlerPath string) (*RouteInfo, error
 	return routeInfo, nil
 }
 
-// parseHandlerFile parses a single handler file
+// parseHandlerFile parses a single handler file.
 func (i *Introspector) parseHandlerFile(filePath string, routeInfo *RouteInfo) error {
 	node, err := parser.ParseFile(i.fset, filePath, nil, parser.ParseComments)
 	if err != nil {
@@ -68,13 +68,14 @@ func (i *Introspector) parseHandlerFile(filePath string, routeInfo *RouteInfo) e
 		case *ast.TypeSpec:
 			i.extractTypeInfo(x, routeInfo)
 		}
+
 		return true
 	})
 
 	return nil
 }
 
-// extractHandlerMethod extracts route information from handler methods
+// extractHandlerMethod extracts route information from handler methods.
 func (i *Introspector) extractHandlerMethod(fn *ast.FuncDecl, routeInfo *RouteInfo) {
 	// Check if it's a handler method (has *forge.Context parameter)
 	if !i.isHandlerMethod(fn) {
@@ -104,6 +105,7 @@ func (i *Introspector) extractHandlerMethod(fn *ast.FuncDecl, routeInfo *RouteIn
 								// Has initializer
 								continue
 							}
+
 							if valueSpec.Type != nil {
 								if structType, ok := valueSpec.Type.(*ast.StructType); ok {
 									// Inline struct definition - use handler name to make unique
@@ -151,6 +153,7 @@ func (i *Introspector) extractHandlerMethod(fn *ast.FuncDecl, routeInfo *RouteIn
 				}
 			}
 		}
+
 		return true
 	})
 
@@ -159,7 +162,7 @@ func (i *Introspector) extractHandlerMethod(fn *ast.FuncDecl, routeInfo *RouteIn
 	routeInfo.Routes = append(routeInfo.Routes, route)
 }
 
-// isHandlerMethod checks if a function is a handler method
+// isHandlerMethod checks if a function is a handler method.
 func (i *Introspector) isHandlerMethod(fn *ast.FuncDecl) bool {
 	if fn.Recv == nil || fn.Type.Params == nil {
 		return false
@@ -174,7 +177,7 @@ func (i *Introspector) isHandlerMethod(fn *ast.FuncDecl) bool {
 	return false
 }
 
-// isForgeContext checks if a type is forge.Context or *forge.Context
+// isForgeContext checks if a type is forge.Context or *forge.Context.
 func (i *Introspector) isForgeContext(expr ast.Expr) bool {
 	// Check for *forge.Context (pointer)
 	if star, ok := expr.(*ast.StarExpr); ok {
@@ -195,7 +198,7 @@ func (i *Introspector) isForgeContext(expr ast.Expr) bool {
 	return ident.Name == "forge" && sel.Sel.Name == "Context"
 }
 
-// extractTypeInfo extracts type definitions
+// extractTypeInfo extracts type definitions.
 func (i *Introspector) extractTypeInfo(spec *ast.TypeSpec, routeInfo *RouteInfo) {
 	structType, ok := spec.Type.(*ast.StructType)
 	if !ok {
@@ -232,7 +235,7 @@ func (i *Introspector) extractTypeInfo(spec *ast.TypeSpec, routeInfo *RouteInfo)
 	routeInfo.Types[typeInfo.Name] = typeInfo
 }
 
-// IntrospectRoutes analyzes route registration to extract HTTP methods and paths
+// IntrospectRoutes analyzes route registration to extract HTTP methods and paths.
 func (i *Introspector) IntrospectRoutes(routesPath string) ([]RouteRegistration, error) {
 	files, err := os.ReadDir(routesPath)
 	if err != nil {
@@ -247,6 +250,7 @@ func (i *Introspector) IntrospectRoutes(routesPath string) ([]RouteRegistration,
 		}
 
 		fullPath := filepath.Join(routesPath, file.Name())
+
 		regs, err := i.parseRoutesFile(fullPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse %s: %w", file.Name(), err)
@@ -258,7 +262,7 @@ func (i *Introspector) IntrospectRoutes(routesPath string) ([]RouteRegistration,
 	return registrations, nil
 }
 
-// parseRoutesFile parses route registration code with router group detection
+// parseRoutesFile parses route registration code with router group detection.
 func (i *Introspector) parseRoutesFile(filePath string) ([]RouteRegistration, error) {
 	node, err := parser.ParseFile(i.fset, filePath, nil, parser.ParseComments)
 	if err != nil {
@@ -275,6 +279,7 @@ func (i *Introspector) parseRoutesFile(filePath string) ([]RouteRegistration, er
 				groupMap[group.VarName] = group
 			}
 		}
+
 		return true
 	})
 
@@ -294,13 +299,14 @@ func (i *Introspector) parseRoutesFile(filePath string) ([]RouteRegistration, er
 				registrations = append(registrations, *reg)
 			}
 		}
+
 		return true
 	})
 
 	return registrations, nil
 }
 
-// parseSchemaAnnotation extracts type name from forge.WithXxxSchema() call
+// parseSchemaAnnotation extracts type name from forge.WithXxxSchema() call.
 func (i *Introspector) parseSchemaAnnotation(call *ast.CallExpr) string {
 	// Handle: forge.WithRequestSchema(TypeName{})
 	// or: forge.WithResponseSchema(200, "desc", TypeName{})
@@ -325,13 +331,13 @@ func (i *Introspector) parseSchemaAnnotation(call *ast.CallExpr) string {
 	return ""
 }
 
-// extractRouteRegistration extracts route registration from a call expression
+// extractRouteRegistration extracts route registration from a call expression.
 func (i *Introspector) extractRouteRegistration(call *ast.CallExpr) *RouteRegistration {
 	return i.extractRouteRegistrationWithGroups(call, nil)
 }
 
 // extractRouteRegistrationWithGroups extracts route registration from a call expression
-// and prepends the group path if the receiver is a router group
+// and prepends the group path if the receiver is a router group.
 func (i *Introspector) extractRouteRegistrationWithGroups(call *ast.CallExpr, groupMap map[string]*RouterGroup) *RouteRegistration {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
@@ -340,6 +346,7 @@ func (i *Introspector) extractRouteRegistrationWithGroups(call *ast.CallExpr, gr
 
 	// Check if it's a HTTP method (GET, POST, PUT, PATCH, DELETE)
 	method := sel.Sel.Name
+
 	validMethods := map[string]bool{
 		"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true,
 	}
@@ -377,6 +384,7 @@ func (i *Introspector) extractRouteRegistrationWithGroups(call *ast.CallExpr, gr
 
 	// Extract handler name (second argument)
 	var handlerName string
+
 	switch handler := call.Args[1].(type) {
 	case *ast.SelectorExpr:
 		handlerName = handler.Sel.Name
@@ -419,7 +427,7 @@ func (i *Introspector) extractRouteRegistrationWithGroups(call *ast.CallExpr, gr
 	return reg
 }
 
-// IntrospectPlugin analyzes a plugin directory
+// IntrospectPlugin analyzes a plugin directory.
 func (i *Introspector) IntrospectPlugin(pluginPath string) (*PluginInfo, error) {
 	pluginFile := filepath.Join(pluginPath, "plugin.go")
 	if _, err := os.Stat(pluginFile); os.IsNotExist(err) {
@@ -445,20 +453,23 @@ func (i *Introspector) IntrospectPlugin(pluginPath string) (*PluginInfo, error) 
 					if ret, ok := n2.(*ast.ReturnStmt); ok && len(ret.Results) > 0 {
 						if lit, ok := ret.Results[0].(*ast.BasicLit); ok {
 							pluginInfo.ID = strings.Trim(lit.Value, `"`)
+
 							return false
 						}
 					}
+
 					return true
 				})
 			}
 		}
+
 		return true
 	})
 
 	return pluginInfo, nil
 }
 
-// GenerateManifest creates a manifest from introspection data
+// GenerateManifest creates a manifest from introspection data.
 func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, error) {
 	pluginPath := filepath.Join(i.projectRoot, "plugins", pluginID)
 
@@ -473,6 +484,7 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 	if _, err := os.Stat(handlerPath); os.IsNotExist(err) {
 		handlerPath = pluginPath
 	}
+
 	routeInfo, err := i.IntrospectHandlers(handlerPath)
 	if err != nil {
 		return nil, err
@@ -497,9 +509,11 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 	for _, route := range routeInfo.Routes {
 		// Find matching registration
 		var reg *RouteRegistration
+
 		for _, r := range registrations {
 			if r.HandlerName == route.Name {
 				reg = &r
+
 				break
 			}
 		}
@@ -521,6 +535,7 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 		if reg.RequestType != "" {
 			requestType = reg.RequestType
 		}
+
 		responseType := route.ResponseType
 		if reg.ResponseType != "" {
 			responseType = reg.ResponseType
@@ -553,6 +568,7 @@ func (i *Introspector) GenerateManifest(pluginID string) (*manifest.Manifest, er
 			if field.Required {
 				fieldType += "!"
 			}
+
 			typeDef.Fields[field.JSONTag] = fieldType
 		}
 
@@ -568,6 +584,7 @@ func (i *Introspector) extractComment(doc *ast.CommentGroup) string {
 	if doc == nil {
 		return ""
 	}
+
 	return strings.TrimSpace(doc.Text())
 }
 
@@ -577,13 +594,14 @@ func (i *Introspector) extractJSONTag(tag *ast.BasicLit) string {
 	}
 
 	tagValue := strings.Trim(tag.Value, "`")
-	for _, part := range strings.Fields(tagValue) {
+	for part := range strings.FieldsSeq(tagValue) {
 		if strings.HasPrefix(part, "json:") {
 			jsonTag := strings.Trim(part[5:], `"`)
 			// Remove omitempty and other options
 			if idx := strings.Index(jsonTag, ","); idx > 0 {
 				return jsonTag[:idx]
 			}
+
 			return jsonTag
 		}
 	}
@@ -608,11 +626,13 @@ func (i *Introspector) exprToString(expr ast.Expr) string {
 
 func (i *Introspector) isBindCall(call *ast.CallExpr) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
+
 	return ok && sel.Sel.Name == "BindJSON"
 }
 
 func (i *Introspector) isJSONCall(call *ast.CallExpr) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
+
 	return ok && sel.Sel.Name == "JSON"
 }
 
@@ -628,6 +648,7 @@ func (i *Introspector) isDecodeCall(call *ast.CallExpr) bool {
 			return innerSel.Sel.Name == "NewDecoder"
 		}
 	}
+
 	return false
 }
 
@@ -666,7 +687,7 @@ func (i *Introspector) extractTypeFromJSONCall(call *ast.CallExpr) string {
 	}
 
 	// Check for unary expression (address operator &)
-	var expr ast.Expr = call.Args[1]
+	var expr = call.Args[1]
 	if unary, ok := expr.(*ast.UnaryExpr); ok {
 		expr = unary.X
 	}
@@ -741,11 +762,13 @@ func (i *Introspector) convertTypeToFields(typeName string, routeInfo *RouteInfo
 	}
 
 	fields := make(map[string]string)
+
 	for _, field := range typeInfo.Fields {
 		fieldType := field.Type
 		if field.Required {
 			fieldType += "!"
 		}
+
 		fields[field.JSONTag] = fieldType
 	}
 
@@ -796,7 +819,7 @@ type PluginInfo struct {
 	Description string
 }
 
-// RouterGroup represents a router group declaration for path prefix tracking
+// RouterGroup represents a router group declaration for path prefix tracking.
 type RouterGroup struct {
 	VarName   string // Variable name (e.g., "grp", "deviceGroup")
 	Path      string // Group path (e.g., "/oauth2", "/device")
@@ -805,7 +828,7 @@ type RouterGroup struct {
 }
 
 // extractGroupDeclaration detects router group declarations from assignment statements
-// Pattern: grp := router.Group("/path") or deviceGroup := grp.Group("/device")
+// Pattern: grp := router.Group("/path") or deviceGroup := grp.Group("/device").
 func (i *Introspector) extractGroupDeclaration(stmt *ast.AssignStmt) *RouterGroup {
 	// Must have exactly one LHS variable
 	if len(stmt.Lhs) != 1 || len(stmt.Rhs) != 1 {
@@ -837,6 +860,7 @@ func (i *Introspector) extractGroupDeclaration(stmt *ast.AssignStmt) *RouterGrou
 
 	// Get receiver name (e.g., "router" or "grp")
 	var parentVar string
+
 	switch x := sel.X.(type) {
 	case *ast.Ident:
 		parentVar = x.Name
@@ -865,12 +889,13 @@ func (i *Introspector) extractGroupDeclaration(stmt *ast.AssignStmt) *RouterGrou
 }
 
 // resolveGroupPath recursively builds the full path for a router group
-// by traversing parent groups
+// by traversing parent groups.
 func (i *Introspector) resolveGroupPath(group *RouterGroup, groupMap map[string]*RouterGroup, visited map[string]bool) string {
 	// Prevent infinite loops from circular references
 	if visited[group.VarName] {
 		return group.Path
 	}
+
 	visited[group.VarName] = true
 
 	// If parent is "router" or not in groupMap, this is a top-level group
@@ -886,12 +911,14 @@ func (i *Introspector) resolveGroupPath(group *RouterGroup, groupMap map[string]
 	if parentPath == "" {
 		return group.Path
 	}
+
 	if group.Path == "" {
 		return parentPath
 	}
 
 	// Remove trailing slash from parent and ensure child starts with /
 	parentPath = strings.TrimSuffix(parentPath, "/")
+
 	childPath := group.Path
 	if !strings.HasPrefix(childPath, "/") {
 		childPath = "/" + childPath
@@ -901,10 +928,11 @@ func (i *Introspector) resolveGroupPath(group *RouterGroup, groupMap map[string]
 }
 
 // getReceiverName extracts the receiver variable name from a selector expression
-// e.g., for grp.POST(), returns "grp"
+// e.g., for grp.POST(), returns "grp".
 func (i *Introspector) getReceiverName(sel *ast.SelectorExpr) string {
 	if ident, ok := sel.X.(*ast.Ident); ok {
 		return ident.Name
 	}
+
 	return ""
 }

@@ -19,7 +19,7 @@ import (
 	"github.com/xraph/forge"
 )
 
-// Service implements email OTP flow
+// Service implements email OTP flow.
 type Service struct {
 	repo         *repo.EmailOTPRepository
 	users        user.ServiceInterface
@@ -43,12 +43,15 @@ func NewService(
 	if cfg.OTPLength == 0 {
 		cfg.OTPLength = 6
 	}
+
 	if cfg.ExpiryMinutes == 0 {
 		cfg.ExpiryMinutes = 10
 	}
+
 	if cfg.MaxAttempts == 0 {
 		cfg.MaxAttempts = 5
 	}
+
 	return &Service{
 		repo:         r,
 		users:        userSvc,
@@ -73,10 +76,12 @@ func (s *Service) SendOTP(ctx context.Context, appID xid.ID, email, ip, ua strin
 
 	// Generate numeric OTP
 	rand.Seed(time.Now().UnixNano())
+
 	max := int64(1)
-	for i := 0; i < s.config.OTPLength; i++ {
+	for range s.config.OTPLength {
 		max *= 10
 	}
+
 	code := int64(rand.Intn(int(max)))
 	otp := fmt.Sprintf("%0*d", s.config.OTPLength, code)
 
@@ -106,6 +111,7 @@ func (s *Service) SendOTP(ctx context.Context, appID xid.ID, email, ip, ua strin
 	if s.config.DevExposeOTP {
 		return otp, nil
 	}
+
 	return "", nil
 }
 
@@ -116,6 +122,7 @@ func (s *Service) VerifyOTP(ctx context.Context, appID, envID xid.ID, orgID *xid
 	}
 
 	e := strings.ToLower(strings.TrimSpace(email))
+
 	o := strings.TrimSpace(otp)
 	if e == "" || o == "" {
 		return nil, errs.New("MISSING_FIELDS", "Email and OTP are required", 400)
@@ -125,17 +132,21 @@ func (s *Service) VerifyOTP(ctx context.Context, appID, envID xid.ID, orgID *xid
 	if err != nil {
 		return nil, errs.Wrap(err, "OTP_LOOKUP_FAILED", "Failed to lookup OTP", 500)
 	}
+
 	if rec == nil {
 		return nil, errs.New("OTP_NOT_FOUND", "OTP not found or expired", 404)
 	}
+
 	if rec.Attempts >= s.config.MaxAttempts {
 		return nil, errs.New("TOO_MANY_ATTEMPTS", "Too many verification attempts", 429)
 	}
+
 	if rec.OTP != o {
 		_ = s.repo.IncrementAttempts(ctx, rec)
 		if s.audit != nil {
 			_ = s.audit.Log(ctx, nil, string(audit.ActionEmailOTPVerifyFailed), "email:"+e, ip, ua, "")
 		}
+
 		return nil, errs.New("INVALID_OTP", "Invalid OTP code", 401)
 	}
 
@@ -153,10 +164,12 @@ func (s *Service) VerifyOTP(ctx context.Context, appID, envID xid.ID, orgID *xid
 		if genErr != nil {
 			return nil, errs.Wrap(genErr, "PASSWORD_GENERATION_FAILED", "Failed to generate password", 500)
 		}
+
 		name := "Email OTP User"
 		if at := strings.Index(e, "@"); at > 0 {
 			name = e[:at]
 		}
+
 		u, err = s.users.Create(ctx, &user.CreateUserRequest{
 			AppID:    appID,
 			Email:    e,

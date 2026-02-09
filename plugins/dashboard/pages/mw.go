@@ -23,7 +23,7 @@ func (p *PagesManager) checkExistingPageSession(ctx *router.PageContext) *user.U
 }
 
 // checkExistingSession checks if there's a valid session without middleware
-// Returns user if authenticated, nil otherwise
+// Returns user if authenticated, nil otherwise.
 func (p *PagesManager) checkExistingSession(c forge.Context) *user.User {
 	// Extract session token from cookie
 	cookie, err := c.Request().Cookie(sessionCookieName)
@@ -61,7 +61,7 @@ func (p *PagesManager) checkExistingSession(c forge.Context) *user.User {
 }
 
 // isFirstUser checks if there are any users in the system
-// This is a global check that bypasses organization context for the first system user
+// This is a global check that bypasses organization context for the first system user.
 func (p *PagesManager) isFirstUser(ctx context.Context) (bool, error) {
 	// Check if platform app exists and has any members
 	platformApp, err := p.services.AppService().GetPlatformApp(ctx)
@@ -80,7 +80,7 @@ func (p *PagesManager) isFirstUser(ctx context.Context) (bool, error) {
 	return count == 0, nil
 }
 
-// generateCSRFToken generates a simple CSRF token
+// generateCSRFToken generates a simple CSRF token.
 func (p *PagesManager) generateCSRFToken() string {
 	return xid.New().String()
 }

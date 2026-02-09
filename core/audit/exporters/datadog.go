@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 )
 
 // =============================================================================
 // DATADOG EXPORTER - Exports audit events to Datadog Logs API
 // =============================================================================
 
-// DatadogExporter exports audit events to Datadog
+// DatadogExporter exports audit events to Datadog.
 type DatadogExporter struct {
 	config *DatadogConfig
 	client *http.Client
 }
 
-// DatadogConfig contains Datadog configuration
+// DatadogConfig contains Datadog configuration.
 type DatadogConfig struct {
 	APIKey  string        `json:"apiKey"`  // Datadog API key
 	Site    string        `json:"site"`    // Datadog site (e.g., datadoghq.com, datadoghq.eu)
@@ -31,7 +32,7 @@ type DatadogConfig struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
-// DefaultDatadogConfig returns default Datadog configuration
+// DefaultDatadogConfig returns default Datadog configuration.
 func DefaultDatadogConfig() *DatadogConfig {
 	return &DatadogConfig{
 		Site:    "datadoghq.com",
@@ -42,10 +43,10 @@ func DefaultDatadogConfig() *DatadogConfig {
 	}
 }
 
-// NewDatadogExporter creates a new Datadog exporter
+// NewDatadogExporter creates a new Datadog exporter.
 func NewDatadogExporter(config *DatadogConfig) (*DatadogExporter, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("datadog API key is required")
+		return nil, errs.New(errs.CodeInvalidInput, "datadog API key is required", http.StatusBadRequest)
 	}
 
 	client := &http.Client{
@@ -58,12 +59,12 @@ func NewDatadogExporter(config *DatadogConfig) (*DatadogExporter, error) {
 	}, nil
 }
 
-// Name returns the exporter name
+// Name returns the exporter name.
 func (e *DatadogExporter) Name() string {
 	return "datadog"
 }
 
-// Export exports a batch of events to Datadog
+// Export exports a batch of events to Datadog.
 func (e *DatadogExporter) Export(ctx context.Context, events []*audit.Event) error {
 	if len(events) == 0 {
 		return nil
@@ -80,12 +81,13 @@ func (e *DatadogExporter) Export(ctx context.Context, events []*audit.Event) err
 
 	// Create HTTP request
 	endpoint := fmt.Sprintf("https://http-intake.logs.%s/api/v2/logs", e.config.Site)
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(payload))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("DD-API-KEY", e.config.APIKey)
+	req.Header.Set("Dd-Api-Key", e.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send request
@@ -103,23 +105,23 @@ func (e *DatadogExporter) Export(ctx context.Context, events []*audit.Event) err
 	return nil
 }
 
-// convertToDatadogFormat converts audit events to Datadog format
-func (e *DatadogExporter) convertToDatadogFormat(events []*audit.Event) []map[string]interface{} {
-	logs := make([]map[string]interface{}, len(events))
+// convertToDatadogFormat converts audit events to Datadog format.
+func (e *DatadogExporter) convertToDatadogFormat(events []*audit.Event) []map[string]any {
+	logs := make([]map[string]any, len(events))
 
 	for i, event := range events {
 		// Build tags
 		tags := append([]string{
-			fmt.Sprintf("action:%s", event.Action),
-			fmt.Sprintf("resource:%s", event.Resource),
-			fmt.Sprintf("app_id:%s", event.AppID.String()),
+			"action:" + event.Action,
+			"resource:" + event.Resource,
+			"app_id:" + event.AppID.String(),
 		}, e.config.Tags...)
 
 		if event.UserID != nil {
-			tags = append(tags, fmt.Sprintf("user_id:%s", event.UserID.String()))
+			tags = append(tags, "user_id:"+event.UserID.String())
 		}
 
-		logs[i] = map[string]interface{}{
+		logs[i] = map[string]any{
 			"ddsource": e.config.Source,
 			"ddtags":   tags,
 			"hostname": event.IPAddress,
@@ -130,7 +132,7 @@ func (e *DatadogExporter) convertToDatadogFormat(events []*audit.Event) []map[st
 				event.Resource,
 			),
 			"timestamp": event.CreatedAt.UnixNano() / 1000000, // Milliseconds
-			"attributes": map[string]interface{}{
+			"attributes": map[string]any{
 				"id":         event.ID.String(),
 				"app_id":     event.AppID.String(),
 				"user_id":    e.getUserID(event),
@@ -150,13 +152,14 @@ func (e *DatadogExporter) getUserID(event *audit.Event) string {
 	if event.UserID != nil {
 		return event.UserID.String()
 	}
+
 	return "system"
 }
 
-// HealthCheck checks if Datadog API is reachable
+// HealthCheck checks if Datadog API is reachable.
 func (e *DatadogExporter) HealthCheck(ctx context.Context) error {
 	// Send a minimal log entry to test connectivity
-	testLog := []map[string]interface{}{
+	testLog := []map[string]any{
 		{
 			"ddsource": e.config.Source,
 			"service":  e.config.Service,
@@ -168,12 +171,12 @@ func (e *DatadogExporter) HealthCheck(ctx context.Context) error {
 	payload, _ := json.Marshal(testLog)
 	endpoint := fmt.Sprintf("https://http-intake.logs.%s/api/v2/logs", e.config.Site)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("DD-API-KEY", e.config.APIKey)
+	req.Header.Set("Dd-Api-Key", e.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := e.client.Do(req)
@@ -189,8 +192,9 @@ func (e *DatadogExporter) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// Close closes the exporter
+// Close closes the exporter.
 func (e *DatadogExporter) Close() error {
 	e.client.CloseIdleConnections()
+
 	return nil
 }

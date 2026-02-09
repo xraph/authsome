@@ -8,7 +8,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// SettingsPageHeader renders a standard settings page header with title and description
+// SettingsPageHeader renders a standard settings page header with title and description.
 func SettingsPageHeader(title, description string) g.Node {
 	return Div(
 		Class("mb-6"),
@@ -17,7 +17,7 @@ func SettingsPageHeader(title, description string) g.Node {
 	)
 }
 
-// SettingsNavItem represents a navigation item in the settings sidebar
+// SettingsNavItem represents a navigation item in the settings sidebar.
 type SettingsNavItem struct {
 	ID            string
 	Label         string
@@ -27,7 +27,7 @@ type SettingsNavItem struct {
 	RequirePlugin string
 }
 
-// SettingsLayoutData contains data for the settings layout
+// SettingsLayoutData contains data for the settings layout.
 type SettingsLayoutData struct {
 	NavItems    []SettingsNavItem
 	ActivePage  string
@@ -36,15 +36,16 @@ type SettingsLayoutData struct {
 	PageContent g.Node
 }
 
-// BuildSettingsURL builds a settings page URL
+// BuildSettingsURL builds a settings page URL.
 func BuildSettingsURL(basePath string, appID, page string) string {
 	if appID == "" {
 		return fmt.Sprintf("%s/settings/%s", basePath, page)
 	}
+
 	return fmt.Sprintf("%s/app/%s/settings/%s", basePath, appID, page)
 }
 
-// SettingsLayout renders a minimal settings page wrapper
+// SettingsLayout renders a minimal settings page wrapper.
 func SettingsLayout(data SettingsLayoutData) g.Node {
 	return Div(
 		Class("settings-layout min-h-screen p-4"),

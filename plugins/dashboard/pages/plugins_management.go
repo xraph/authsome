@@ -10,7 +10,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// PluginsManagementPage shows plugin management
+// PluginsManagementPage shows plugin management.
 func (p *PagesManager) PluginsManagementPage(ctx *router.PageContext) (g.Node, error) {
 	appID := ctx.Param("appId")
 

@@ -191,7 +191,7 @@ func init() {
 		return nil
 	}, func(ctx context.Context, db *bun.DB) error {
 		// Rollback - drop tables in reverse order
-		tables := []interface{}{
+		tables := []any{
 			(*schema.SubscriptionCohort)(nil),
 			(*schema.SubscriptionMovement)(nil),
 			(*schema.SubscriptionBillingMetric)(nil),
@@ -216,5 +216,5 @@ func init() {
 	})
 }
 
-// Migrations is the collection of all subscription plugin migrations
+// Migrations is the collection of all subscription plugin migrations.
 var Migrations = migrate.NewMigrations()

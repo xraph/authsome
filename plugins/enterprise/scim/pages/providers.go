@@ -12,7 +12,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ProvidersListPage renders the SCIM providers list page
+// ProvidersListPage renders the SCIM providers list page.
 func ProvidersListPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -173,7 +173,7 @@ func ProvidersListPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// providerCard renders a single provider card
+// providerCard renders a single provider card.
 func providerCard(appBase string) g.Node {
 	return card.Card(
 		Class("hover:shadow-md transition-shadow"),
@@ -257,7 +257,7 @@ func providerCard(appBase string) g.Node {
 	)
 }
 
-// providersListData returns the Alpine.js data for the providers list
+// providersListData returns the Alpine.js data for the providers list.
 func providersListData(appID string) string {
 	return fmt.Sprintf(`{
 		providers: [],
@@ -351,7 +351,7 @@ func providersListData(appID string) string {
 	}`, appID, appID, appID)
 }
 
-// AddProviderPage renders the add provider form
+// AddProviderPage renders the add provider form.
 func AddProviderPage(currentApp *app.App, basePath string) g.Node {
 	appID := currentApp.ID.String()
 	appBase := fmt.Sprintf("%s/app/%s", basePath, appID)
@@ -518,7 +518,7 @@ func AddProviderPage(currentApp *app.App, basePath string) g.Node {
 	)
 }
 
-// providerTypeOption creates a provider type selection option
+// providerTypeOption creates a provider type selection option.
 func providerTypeOption(value, label string, icon g.Node) g.Node {
 	return Label(
 		Class("flex flex-col items-center gap-2 p-4 border rounded-lg cursor-pointer transition-colors"),
@@ -535,7 +535,7 @@ func providerTypeOption(value, label string, icon g.Node) g.Node {
 	)
 }
 
-// addProviderData returns the Alpine.js data for the add provider form
+// addProviderData returns the Alpine.js data for the add provider form.
 func addProviderData(appID, appBase string) string {
 	return fmt.Sprintf(`{
 		form: {

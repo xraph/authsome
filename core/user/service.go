@@ -20,7 +20,7 @@ import (
 // SERVICE CONFIGURATION
 // =============================================================================
 
-// Config represents user service configuration
+// Config represents user service configuration.
 type Config struct {
 	PasswordRequirements validator.PasswordRequirements
 
@@ -39,17 +39,17 @@ type Config struct {
 // SERVICE IMPLEMENTATION
 // =============================================================================
 
-// Service provides user-related operations
+// Service provides user-related operations.
 type Service struct {
 	repo             Repository
 	config           Config
 	webhookSvc       *webhook.Service
 	hookExecutor     HookExecutor
-	hookRegistry     interface{} // Hook registry for lifecycle events
-	verificationRepo interface{} // Verification repository for password resets
+	hookRegistry     any // Hook registry for lifecycle events
+	verificationRepo any // Verification repository for password resets
 }
 
-// NewService creates a new user service
+// NewService creates a new user service.
 func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookExecutor HookExecutor) *Service {
 	return &Service{
 		repo:         repo,
@@ -59,27 +59,27 @@ func NewService(repo Repository, cfg Config, webhookSvc *webhook.Service, hookEx
 	}
 }
 
-// SetHookRegistry sets the hook registry for executing lifecycle hooks
-func (s *Service) SetHookRegistry(registry interface{}) {
+// SetHookRegistry sets the hook registry for executing lifecycle hooks.
+func (s *Service) SetHookRegistry(registry any) {
 	s.hookRegistry = registry
 }
 
-// GetHookRegistry returns the hook registry
-func (s *Service) GetHookRegistry() interface{} {
+// GetHookRegistry returns the hook registry.
+func (s *Service) GetHookRegistry() any {
 	return s.hookRegistry
 }
 
-// SetVerificationRepo sets the verification repository for password resets
-func (s *Service) SetVerificationRepo(repo interface{}) {
+// SetVerificationRepo sets the verification repository for password resets.
+func (s *Service) SetVerificationRepo(repo any) {
 	s.verificationRepo = repo
 }
 
-// GetVerificationRepo returns the verification repository
-func (s *Service) GetVerificationRepo() interface{} {
+// GetVerificationRepo returns the verification repository.
+func (s *Service) GetVerificationRepo() any {
 	return s.verificationRepo
 }
 
-// UpdatePassword updates a user's password directly
+// UpdatePassword updates a user's password directly.
 func (s *Service) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
 	schemaUser, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *Service) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassw
 // SERVICE METHODS
 // =============================================================================
 
-// Create creates a new user in the specified app
+// Create creates a new user in the specified app.
 func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, error) {
 	// Execute before user create hooks
 	if s.hookExecutor != nil {
@@ -126,12 +126,14 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, er
 	if err == nil && existing != nil {
 		return nil, EmailAlreadyExists(req.Email)
 	}
+
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, UserCreationFailed(err)
 	}
 
 	// Generate ID and hash password
 	id := xid.New()
+
 	hash, err := crypto.HashPassword(req.Password)
 	if err != nil {
 		return nil, UserCreationFailed(fmt.Errorf("failed to hash password: %w", err))
@@ -167,7 +169,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, er
 
 	// Emit webhook event
 	if s.webhookSvc != nil {
-		data := map[string]interface{}{
+		data := map[string]any{
 			"user_id": user.ID.String(),
 			"app_id":  user.AppID.String(),
 			"email":   user.Email,
@@ -179,55 +181,63 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, er
 	return user, nil
 }
 
-// FindByID finds a user by ID
+// FindByID finds a user by ID.
 func (s *Service) FindByID(ctx context.Context, id xid.ID) (*User, error) {
 	schemaUser, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, UserNotFound(id.String())
 		}
+
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
+
 	return FromSchemaUser(schemaUser), nil
 }
 
-// FindByEmail finds a user by email (global search, not app-scoped)
+// FindByEmail finds a user by email (global search, not app-scoped).
 func (s *Service) FindByEmail(ctx context.Context, email string) (*User, error) {
 	schemaUser, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, UserNotFound(email)
 		}
+
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
+
 	return FromSchemaUser(schemaUser), nil
 }
 
-// FindByAppAndEmail finds a user by app ID and email (app-scoped search)
+// FindByAppAndEmail finds a user by app ID and email (app-scoped search).
 func (s *Service) FindByAppAndEmail(ctx context.Context, appID xid.ID, email string) (*User, error) {
 	schemaUser, err := s.repo.FindByAppAndEmail(ctx, appID, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, UserNotFound(email)
 		}
+
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
+
 	return FromSchemaUser(schemaUser), nil
 }
 
-// FindByUsername finds a user by username
+// FindByUsername finds a user by username.
 func (s *Service) FindByUsername(ctx context.Context, username string) (*User, error) {
 	schemaUser, err := s.repo.FindByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, UserNotFound(username)
 		}
+
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
+
 	return FromSchemaUser(schemaUser), nil
 }
 
-// Update updates a user
+// Update updates a user.
 func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (*User, error) {
 	// Execute before user update hooks
 	if s.hookExecutor != nil {
@@ -238,6 +248,7 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 
 	// Track changes for lifecycle notifications
 	var oldEmail, oldUsername string
+
 	emailChanged := false
 	usernameChanged := false
 
@@ -252,13 +263,16 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			if !validator.ValidateEmail(newEmail) {
 				return nil, InvalidEmail(newEmail)
 			}
+
 			existing, err := s.repo.FindByAppAndEmail(ctx, u.AppID, newEmail)
 			if err == nil && existing != nil && existing.ID != u.ID {
 				return nil, EmailTaken(newEmail)
 			}
+
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return nil, UserUpdateFailed(err)
 			}
+
 			oldEmail = u.Email
 			u.Email = newEmail
 			emailChanged = true
@@ -295,13 +309,16 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 		if err == nil && existing != nil && existing.ID != u.ID {
 			return nil, UsernameTaken(canonical)
 		}
+
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, UserUpdateFailed(err)
 		}
+
 		if canonical != u.Username {
 			oldUsername = u.Username
 			usernameChanged = true
 		}
+
 		u.Username = canonical
 		// Set display username if provided; else preserve original casing
 		if req.DisplayUsername != nil {
@@ -309,6 +326,7 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			if disp == "" {
 				disp = raw
 			}
+
 			u.DisplayUsername = disp
 		} else {
 			u.DisplayUsername = raw
@@ -336,6 +354,7 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			if emailChanged {
 				_ = registry.ExecuteOnEmailChanged(ctx, u.ID, oldEmail, u.Email)
 			}
+
 			if usernameChanged {
 				_ = registry.ExecuteOnUsernameChanged(ctx, u.ID, oldUsername, u.Username)
 			}
@@ -344,7 +363,7 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 
 	// Emit webhook event
 	if s.webhookSvc != nil {
-		data := map[string]interface{}{
+		data := map[string]any{
 			"user_id": u.ID.String(),
 			"app_id":  u.AppID.String(),
 			"email":   u.Email,
@@ -356,7 +375,7 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 	return u, nil
 }
 
-// Delete deletes a user by ID
+// Delete deletes a user by ID.
 func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	// Execute before user delete hooks
 	if s.hookExecutor != nil {
@@ -371,6 +390,7 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return UserNotFound(id.String())
 		}
+
 		return UserDeletionFailed(err)
 	}
 
@@ -397,7 +417,8 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	// Emit webhook event
 	if s.webhookSvc != nil && schemaUser != nil {
 		user := FromSchemaUser(schemaUser)
-		data := map[string]interface{}{
+
+		data := map[string]any{
 			"user_id": user.ID.String(),
 			"app_id":  user.AppID.String(),
 			"email":   user.Email,
@@ -409,7 +430,7 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 	return nil
 }
 
-// ListUsers lists users with pagination and filtering
+// ListUsers lists users with pagination and filtering.
 func (s *Service) ListUsers(ctx context.Context, filter *ListUsersFilter) (*pagination.PageResponse[*User], error) {
 	// Validate pagination params
 	if err := filter.Validate(); err != nil {
@@ -433,11 +454,12 @@ func (s *Service) ListUsers(ctx context.Context, filter *ListUsersFilter) (*pagi
 	}, nil
 }
 
-// CountUsers counts users with filtering
+// CountUsers counts users with filtering.
 func (s *Service) CountUsers(ctx context.Context, filter *CountUsersFilter) (int, error) {
 	count, err := s.repo.CountUsers(ctx, filter)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count users: %w", err)
 	}
+
 	return count, nil
 }

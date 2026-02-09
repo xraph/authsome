@@ -12,7 +12,7 @@ import (
 // Focused Repository Interfaces (ISP Compliant)
 // =============================================================================
 
-// AppRepository handles app aggregate operations
+// AppRepository handles app aggregate operations.
 type AppRepository interface {
 	CreateApp(ctx context.Context, app *schema.App) error
 	GetPlatformApp(ctx context.Context) (*schema.App, error)
@@ -24,7 +24,7 @@ type AppRepository interface {
 	CountApps(ctx context.Context) (int, error)
 }
 
-// MemberRepository handles member aggregate operations
+// MemberRepository handles member aggregate operations.
 type MemberRepository interface {
 	CreateMember(ctx context.Context, member *schema.Member) error
 	FindMember(ctx context.Context, appID, userID xid.ID) (*schema.Member, error)
@@ -36,7 +36,7 @@ type MemberRepository interface {
 	CountMembers(ctx context.Context, appID xid.ID) (int, error)
 }
 
-// TeamRepository handles team aggregate operations (including team members)
+// TeamRepository handles team aggregate operations (including team members).
 type TeamRepository interface {
 	CreateTeam(ctx context.Context, team *schema.Team) error
 	FindTeamByID(ctx context.Context, id xid.ID) (*schema.Team, error)
@@ -55,7 +55,7 @@ type TeamRepository interface {
 	ListMemberTeams(ctx context.Context, filter *ListMemberTeamsFilter) (*pagination.PageResponse[*schema.Team], error)
 }
 
-// InvitationRepository handles invitation aggregate operations
+// InvitationRepository handles invitation aggregate operations.
 type InvitationRepository interface {
 	CreateInvitation(ctx context.Context, inv *schema.Invitation) error
 	FindInvitationByID(ctx context.Context, id xid.ID) (*schema.Invitation, error)

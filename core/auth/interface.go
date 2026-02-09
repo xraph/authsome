@@ -9,7 +9,7 @@ import (
 )
 
 // ServiceInterface defines the contract for auth service operations
-// This allows plugins to decorate the service with additional behavior
+// This allows plugins to decorate the service with additional behavior.
 type ServiceInterface interface {
 	SignUp(ctx context.Context, req *SignUpRequest) (*responses.AuthResponse, error)
 	SignIn(ctx context.Context, req *SignInRequest) (*responses.AuthResponse, error)
@@ -34,5 +34,5 @@ type ServiceInterface interface {
 	ValidateEmailChangeToken(ctx context.Context, token string) (bool, error)
 }
 
-// Ensure Service implements ServiceInterface
+// Ensure Service implements ServiceInterface.
 var _ ServiceInterface = (*Service)(nil)

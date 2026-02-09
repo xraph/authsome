@@ -9,17 +9,17 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// VerificationRepository handles database operations for email verification tokens
+// VerificationRepository handles database operations for email verification tokens.
 type VerificationRepository struct {
 	db *bun.DB
 }
 
-// NewVerificationRepository creates a new verification repository
+// NewVerificationRepository creates a new verification repository.
 func NewVerificationRepository(db *bun.DB) *VerificationRepository {
 	return &VerificationRepository{db: db}
 }
 
-// Create creates a new email verification record
+// Create creates a new email verification record.
 func (r *VerificationRepository) Create(ctx context.Context, appID, userID xid.ID, token string, expiresAt time.Time) error {
 	verification := &schema.Verification{
 		ID:        xid.New(),
@@ -38,7 +38,7 @@ func (r *VerificationRepository) Create(ctx context.Context, appID, userID xid.I
 	return err
 }
 
-// FindByToken finds a verification record by token
+// FindByToken finds a verification record by token.
 func (r *VerificationRepository) FindByToken(ctx context.Context, token string) (*schema.Verification, error) {
 	verification := new(schema.Verification)
 
@@ -47,7 +47,6 @@ func (r *VerificationRepository) FindByToken(ctx context.Context, token string) 
 		Where("token = ?", token).
 		Where("type = ?", "email").
 		Scan(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +54,7 @@ func (r *VerificationRepository) FindByToken(ctx context.Context, token string) 
 	return verification, nil
 }
 
-// FindByUserID finds the latest email verification for a user
+// FindByUserID finds the latest email verification for a user.
 func (r *VerificationRepository) FindByUserID(ctx context.Context, userID xid.ID) (*schema.Verification, error) {
 	verification := new(schema.Verification)
 
@@ -66,7 +65,6 @@ func (r *VerificationRepository) FindByUserID(ctx context.Context, userID xid.ID
 		Order("created_at DESC").
 		Limit(1).
 		Scan(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +72,7 @@ func (r *VerificationRepository) FindByUserID(ctx context.Context, userID xid.ID
 	return verification, nil
 }
 
-// MarkAsUsed marks a verification token as used
+// MarkAsUsed marks a verification token as used.
 func (r *VerificationRepository) MarkAsUsed(ctx context.Context, verificationID xid.ID) error {
 	now := time.Now()
 
@@ -89,23 +87,23 @@ func (r *VerificationRepository) MarkAsUsed(ctx context.Context, verificationID 
 	return err
 }
 
-// DeleteExpired deletes expired verification tokens
+// DeleteExpired deletes expired verification tokens.
 func (r *VerificationRepository) DeleteExpired(ctx context.Context, before time.Time) (int64, error) {
 	result, err := r.db.NewDelete().
 		Model((*schema.Verification)(nil)).
 		Where("type = ?", "email").
 		Where("expires_at < ?", before).
 		Exec(ctx)
-
 	if err != nil {
 		return 0, err
 	}
 
 	rowsAffected, _ := result.RowsAffected()
+
 	return rowsAffected, nil
 }
 
-// CountRecentByUser counts recent verification requests by a user (for rate limiting)
+// CountRecentByUser counts recent verification requests by a user (for rate limiting).
 func (r *VerificationRepository) CountRecentByUser(ctx context.Context, userID xid.ID, since time.Time) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.Verification)(nil)).
@@ -117,7 +115,7 @@ func (r *VerificationRepository) CountRecentByUser(ctx context.Context, userID x
 	return count, err
 }
 
-// InvalidateOldTokens marks all unused tokens for a user as used (when sending new verification)
+// InvalidateOldTokens marks all unused tokens for a user as used (when sending new verification).
 func (r *VerificationRepository) InvalidateOldTokens(ctx context.Context, userID xid.ID) error {
 	now := time.Now()
 

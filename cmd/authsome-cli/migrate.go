@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/authsome/migrations"
 )
 
-// migrateCmd represents the migrate command
+// migrateCmd represents the migrate command.
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Database migration commands",
@@ -127,6 +127,7 @@ var migrateResetCmd = &cobra.Command{
 		fmt.Scanln(&response)
 		if response != "y" && response != "Y" {
 			fmt.Println("Operation cancelled")
+
 			return nil
 		}
 
@@ -150,6 +151,7 @@ var migrateResetCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Database reset and migrated to %s\n", group)
+
 		return nil
 	},
 }
@@ -162,7 +164,7 @@ func init() {
 }
 
 // connectDB creates a database connection using configuration
-// Now supports PostgreSQL, MySQL, and SQLite
+// Now supports PostgreSQL, MySQL, and SQLite.
 func connectDB() (*bun.DB, error) {
 	return connectDatabaseMulti()
 }

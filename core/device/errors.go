@@ -24,7 +24,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// Device lookup errors
+// Device lookup errors.
 func DeviceNotFound() *errs.AuthsomeError {
 	return errs.New(CodeDeviceNotFound, "Device not found", http.StatusNotFound)
 }
@@ -34,7 +34,7 @@ func DeviceAlreadyExists(fingerprint string) *errs.AuthsomeError {
 		WithContext("fingerprint", fingerprint)
 }
 
-// CRUD operation errors
+// CRUD operation errors.
 func DeviceCreationFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeDeviceCreationFailed, "Failed to create device", http.StatusInternalServerError)
 }
@@ -47,7 +47,7 @@ func DeviceDeletionFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeDeviceDeletionFailed, "Failed to delete device", http.StatusInternalServerError)
 }
 
-// Validation errors
+// Validation errors.
 func InvalidFingerprint() *errs.AuthsomeError {
 	return errs.New(CodeInvalidFingerprint, "Invalid device fingerprint", http.StatusBadRequest)
 }

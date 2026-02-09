@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestJSONParser_AllFilterOperators tests all filter operators with JSON input
+// TestJSONParser_AllFilterOperators tests all filter operators with JSON input.
 func TestJSONParser_AllFilterOperators(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -14,8 +14,8 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 		json           string
 		expectedField  string
 		expectedOp     FilterOperator
-		expectedValue  interface{}
-		checkValueType func(interface{}) bool
+		expectedValue  any
+		checkValueType func(any) bool
 	}{
 		// Equality operators
 		{
@@ -120,8 +120,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"status": {"$in": ["draft", "published", "archived"]}}}`,
 			expectedField: "status",
 			expectedOp:    OpIn,
-			checkValueType: func(v interface{}) bool {
-				arr, ok := v.([]interface{})
+			checkValueType: func(v any) bool {
+				arr, ok := v.([]any)
+
 				return ok && len(arr) == 3
 			},
 		},
@@ -130,8 +131,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"status": {"$nin": ["deleted", "banned"]}}}`,
 			expectedField: "status",
 			expectedOp:    OpNotIn,
-			checkValueType: func(v interface{}) bool {
-				arr, ok := v.([]interface{})
+			checkValueType: func(v any) bool {
+				arr, ok := v.([]any)
+
 				return ok && len(arr) == 2
 			},
 		},
@@ -140,8 +142,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"category": {"$notIn": ["spam", "junk"]}}}`,
 			expectedField: "category",
 			expectedOp:    OpNotIn,
-			checkValueType: func(v interface{}) bool {
-				arr, ok := v.([]interface{})
+			checkValueType: func(v any) bool {
+				arr, ok := v.([]any)
+
 				return ok && len(arr) == 2
 			},
 		},
@@ -150,8 +153,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"tags": {"$all": ["golang", "testing"]}}}`,
 			expectedField: "tags",
 			expectedOp:    OpAll,
-			checkValueType: func(v interface{}) bool {
-				arr, ok := v.([]interface{})
+			checkValueType: func(v any) bool {
+				arr, ok := v.([]any)
+
 				return ok && len(arr) == 2
 			},
 		},
@@ -160,8 +164,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"tags": {"$any": ["featured", "popular"]}}}`,
 			expectedField: "tags",
 			expectedOp:    OpAny,
-			checkValueType: func(v interface{}) bool {
-				arr, ok := v.([]interface{})
+			checkValueType: func(v any) bool {
+				arr, ok := v.([]any)
+
 				return ok && len(arr) == 2
 			},
 		},
@@ -209,8 +214,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"price": {"$between": [10, 100]}}}`,
 			expectedField: "price",
 			expectedOp:    OpBetween,
-			checkValueType: func(v interface{}) bool {
-				arr, ok := v.([]interface{})
+			checkValueType: func(v any) bool {
+				arr, ok := v.([]any)
+
 				return ok && len(arr) == 2
 			},
 		},
@@ -221,8 +227,9 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 			json:          `{"filter": {"metadata": {"$jsonContains": {"key": "value"}}}}`,
 			expectedField: "metadata",
 			expectedOp:    OpJsonContains,
-			checkValueType: func(v interface{}) bool {
-				m, ok := v.(map[string]interface{})
+			checkValueType: func(v any) bool {
+				m, ok := v.(map[string]any)
+
 				return ok && m["key"] == "value"
 			},
 		},
@@ -274,7 +281,7 @@ func TestJSONParser_AllFilterOperators(t *testing.T) {
 	}
 }
 
-// TestJSONParser_DirectValueEquality tests implicit $eq when no operator specified
+// TestJSONParser_DirectValueEquality tests implicit $eq when no operator specified.
 func TestJSONParser_DirectValueEquality(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -282,7 +289,7 @@ func TestJSONParser_DirectValueEquality(t *testing.T) {
 		name          string
 		json          string
 		expectedField string
-		expectedValue interface{}
+		expectedValue any
 	}{
 		{
 			name:          "direct string value",
@@ -339,7 +346,7 @@ func TestJSONParser_DirectValueEquality(t *testing.T) {
 	}
 }
 
-// TestJSONParser_MultipleOperatorsOnSameField tests range queries
+// TestJSONParser_MultipleOperatorsOnSameField tests range queries.
 func TestJSONParser_MultipleOperatorsOnSameField(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -366,18 +373,23 @@ func TestJSONParser_MultipleOperatorsOnSameField(t *testing.T) {
 	// Both conditions should be for "price"
 	hasGte := false
 	hasLte := false
+
 	for _, cond := range q.Filters.Conditions {
 		if cond.Field != "price" {
 			t.Errorf("expected field 'price', got %q", cond.Field)
 		}
+
 		if cond.Operator == OpGreaterThanEqual {
 			hasGte = true
+
 			if cond.Value != float64(10) {
 				t.Errorf("$gte value: expected 10, got %v", cond.Value)
 			}
 		}
+
 		if cond.Operator == OpLessThanEqual {
 			hasLte = true
+
 			if cond.Value != float64(100) {
 				t.Errorf("$lte value: expected 100, got %v", cond.Value)
 			}
@@ -387,12 +399,13 @@ func TestJSONParser_MultipleOperatorsOnSameField(t *testing.T) {
 	if !hasGte {
 		t.Error("missing $gte condition")
 	}
+
 	if !hasLte {
 		t.Error("missing $lte condition")
 	}
 }
 
-// TestJSONParser_LogicalOperatorsWithFilters tests $and, $or, $not with filters
+// TestJSONParser_LogicalOperatorsWithFilters tests $and, $or, $not with filters.
 func TestJSONParser_LogicalOperatorsWithFilters(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -499,7 +512,7 @@ func TestJSONParser_LogicalOperatorsWithFilters(t *testing.T) {
 	})
 }
 
-// TestJSONParser_ComplexFilterCombinations tests complex filter scenarios
+// TestJSONParser_ComplexFilterCombinations tests complex filter scenarios.
 func TestJSONParser_ComplexFilterCombinations(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -570,13 +583,14 @@ func TestJSONParser_ComplexFilterCombinations(t *testing.T) {
 		if q.Page != 2 {
 			t.Errorf("expected page 2, got %d", q.Page)
 		}
+
 		if q.PageSize != 25 {
 			t.Errorf("expected pageSize 25, got %d", q.PageSize)
 		}
 	})
 }
 
-// TestFilterOperatorToRepositoryOperator ensures filter operators match repository expectations
+// TestFilterOperatorToRepositoryOperator ensures filter operators match repository expectations.
 func TestFilterOperatorToRepositoryOperator(t *testing.T) {
 	// This test verifies that the FilterOperator constants match
 	// what the repository expects
@@ -608,7 +622,7 @@ func TestFilterOperatorToRepositoryOperator(t *testing.T) {
 	}
 }
 
-// TestJSONParser_FilterAliases tests that filter, filters, and where all work
+// TestJSONParser_FilterAliases tests that filter, filters, and where all work.
 func TestJSONParser_FilterAliases(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -649,7 +663,7 @@ func TestJSONParser_FilterAliases(t *testing.T) {
 	}
 }
 
-// TestJSONParser_OperatorCaseInsensitivity tests that operators work in various cases
+// TestJSONParser_OperatorCaseInsensitivity tests that operators work in various cases.
 func TestJSONParser_OperatorVariants(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -682,7 +696,7 @@ func TestJSONParser_OperatorVariants(t *testing.T) {
 	}
 }
 
-// TestJSONParser_EmptyAndNullFilters tests edge cases
+// TestJSONParser_EmptyAndNullFilters tests edge cases.
 func TestJSONParser_EmptyAndNullFilters(t *testing.T) {
 	parser := NewJSONParser()
 
@@ -695,6 +709,7 @@ func TestJSONParser_EmptyAndNullFilters(t *testing.T) {
 		if q.Filters == nil {
 			t.Error("filters should not be nil for empty object")
 		}
+
 		if len(q.Filters.Conditions) != 0 {
 			t.Errorf("expected 0 conditions, got %d", len(q.Filters.Conditions))
 		}
@@ -712,7 +727,7 @@ func TestJSONParser_EmptyAndNullFilters(t *testing.T) {
 	})
 }
 
-// TestFilterConditionSerialization tests that filter conditions can be serialized/deserialized
+// TestFilterConditionSerialization tests that filter conditions can be serialized/deserialized.
 func TestFilterConditionSerialization(t *testing.T) {
 	cond := FilterCondition{
 		Field:    "status",
@@ -735,12 +750,13 @@ func TestFilterConditionSerialization(t *testing.T) {
 	if cond2.Field != cond.Field {
 		t.Errorf("Field mismatch: %s != %s", cond2.Field, cond.Field)
 	}
+
 	if cond2.Operator != cond.Operator {
 		t.Errorf("Operator mismatch: %s != %s", cond2.Operator, cond.Operator)
 	}
 }
 
-// Benchmark parsing filters
+// Benchmark parsing filters.
 func BenchmarkJSONParser_ParseFilters(b *testing.B) {
 	parser := NewJSONParser()
 
@@ -765,8 +781,10 @@ func BenchmarkJSONParser_ParseFilters(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			data := []byte(bm.json)
+
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+
+			for range b.N {
 				_, _ = parser.Parse(data)
 			}
 		})

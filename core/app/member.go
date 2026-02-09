@@ -8,7 +8,7 @@ import (
 )
 
 // Member represents an app member DTO (Data Transfer Object)
-// This is separate from schema.Member to maintain proper separation of concerns
+// This is separate from schema.Member to maintain proper separation of concerns.
 type Member struct {
 	ID       xid.ID       `json:"id"`
 	AppID    xid.ID       `json:"appId"`
@@ -22,7 +22,7 @@ type Member struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 }
 
-// ToSchema converts the Member DTO to a schema.Member model
+// ToSchema converts the Member DTO to a schema.Member model.
 func (m *Member) ToSchema() *schema.Member {
 	return &schema.Member{
 		ID:       m.ID,
@@ -39,11 +39,12 @@ func (m *Member) ToSchema() *schema.Member {
 	}
 }
 
-// FromSchemaMember converts a schema.Member model to Member DTO
+// FromSchemaMember converts a schema.Member model to Member DTO.
 func FromSchemaMember(sm *schema.Member) *Member {
 	if sm == nil {
 		return nil
 	}
+
 	return &Member{
 		ID:        sm.ID,
 		AppID:     sm.AppID,
@@ -57,20 +58,21 @@ func FromSchemaMember(sm *schema.Member) *Member {
 	}
 }
 
-// FromSchemaMembers converts a slice of schema.Member to Member DTOs
+// FromSchemaMembers converts a slice of schema.Member to Member DTOs.
 func FromSchemaMembers(members []*schema.Member) []*Member {
 	result := make([]*Member, len(members))
 	for i, m := range members {
 		result[i] = FromSchemaMember(m)
 	}
+
 	return result
 }
 
-// InviteMemberRequest represents an invite member request
+// InviteMemberRequest represents an invite member request.
 type InviteMemberRequest struct {
-	AppID     xid.ID                 `json:"appId"`
-	Email     string                 `json:"email"`
-	Role      string                 `json:"role"`
-	InviterID xid.ID                 `json:"inviterId"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	AppID     xid.ID         `json:"appId"`
+	Email     string         `json:"email"`
+	Role      string         `json:"role"`
+	InviterID xid.ID         `json:"inviterId"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }

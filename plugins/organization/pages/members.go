@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/forgeui/components/table"
 )
 
-// MembersPage renders the organization members management page
+// MembersPage renders the organization members management page.
 func MembersPage(currentApp *app.App, orgID, basePath string) g.Node {
 	appBase := fmt.Sprintf("%s/app/%s", basePath, currentApp.ID.String())
 	baseURL := fmt.Sprintf("%s/organizations/%s", appBase, orgID)
@@ -113,7 +113,7 @@ func MembersPage(currentApp *app.App, orgID, basePath string) g.Node {
 	)
 }
 
-// membersPageData returns the Alpine.js data object
+// membersPageData returns the Alpine.js data object.
 func membersPageData(appID, orgID string) string {
 	return fmt.Sprintf(`{
 		members: [],
@@ -241,7 +241,7 @@ func membersPageData(appID, orgID string) string {
 	}`, appID, orgID, appID, orgID, appID, orgID, appID, orgID)
 }
 
-// membersTable renders the members table
+// membersTable renders the members table.
 func membersTable() g.Node {
 	return table.Table()(
 		table.TableHeader()(
@@ -338,7 +338,7 @@ func membersTable() g.Node {
 	)
 }
 
-// inviteMemberModal renders the invite member modal
+// inviteMemberModal renders the invite member modal.
 func inviteMemberModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showInviteModal"),
@@ -415,7 +415,7 @@ func inviteMemberModal() g.Node {
 	)
 }
 
-// removeMemberModal renders the remove member confirmation modal
+// removeMemberModal renders the remove member confirmation modal.
 func removeMemberModal() g.Node {
 	return Div(
 		g.Attr("x-show", "showRemoveModal"),

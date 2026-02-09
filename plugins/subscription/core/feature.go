@@ -7,7 +7,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// Feature represents a standalone feature definition that can be linked to plans
+// Feature represents a standalone feature definition that can be linked to plans.
 type Feature struct {
 	ID                xid.ID         `json:"id"`
 	AppID             xid.ID         `json:"appId"`
@@ -28,7 +28,7 @@ type Feature struct {
 	UpdatedAt         time.Time      `json:"updatedAt"`
 }
 
-// FeatureTier represents a tier within a tiered feature type
+// FeatureTier represents a tier within a tiered feature type.
 type FeatureTier struct {
 	ID        xid.ID `json:"id"`
 	FeatureID xid.ID `json:"featureId"`
@@ -38,7 +38,7 @@ type FeatureTier struct {
 	Label     string `json:"label"` // Display label for this tier
 }
 
-// PlanFeatureLink connects features to plans with plan-specific configuration
+// PlanFeatureLink connects features to plans with plan-specific configuration.
 type PlanFeatureLink struct {
 	ID               xid.ID         `json:"id"`
 	PlanID           xid.ID         `json:"planId"`
@@ -50,7 +50,7 @@ type PlanFeatureLink struct {
 	Feature          *Feature       `json:"feature,omitempty"` // Loaded feature
 }
 
-// OrganizationFeatureUsage tracks feature usage per organization
+// OrganizationFeatureUsage tracks feature usage per organization.
 type OrganizationFeatureUsage struct {
 	ID             xid.ID         `json:"id"`
 	OrganizationID xid.ID         `json:"organizationId"`
@@ -63,7 +63,7 @@ type OrganizationFeatureUsage struct {
 	Metadata       map[string]any `json:"metadata,omitempty"`
 }
 
-// FeatureUsageLog represents an audit entry for feature usage changes
+// FeatureUsageLog represents an audit entry for feature usage changes.
 type FeatureUsageLog struct {
 	ID             xid.ID         `json:"id"`
 	OrganizationID xid.ID         `json:"organizationId"`
@@ -80,7 +80,7 @@ type FeatureUsageLog struct {
 	CreatedAt      time.Time      `json:"createdAt"`
 }
 
-// FeatureGrant provides additional feature access beyond the plan
+// FeatureGrant provides additional feature access beyond the plan.
 type FeatureGrant struct {
 	ID             xid.ID           `json:"id"`
 	OrganizationID xid.ID           `json:"organizationId"`
@@ -98,7 +98,7 @@ type FeatureGrant struct {
 	UpdatedAt      time.Time        `json:"updatedAt"`
 }
 
-// FeatureAccess represents the complete access state for a feature
+// FeatureAccess represents the complete access state for a feature.
 type FeatureAccess struct {
 	Feature      *Feature `json:"feature"`
 	HasAccess    bool     `json:"hasAccess"`
@@ -110,9 +110,10 @@ type FeatureAccess struct {
 	PlanValue    string   `json:"planValue"`    // The raw value from plan
 }
 
-// NewFeature creates a new Feature with default values
+// NewFeature creates a new Feature with default values.
 func NewFeature(appID xid.ID, key, name string, featureType FeatureType) *Feature {
 	now := time.Now()
+
 	return &Feature{
 		ID:           xid.New(),
 		AppID:        appID,
@@ -128,44 +129,44 @@ func NewFeature(appID xid.ID, key, name string, featureType FeatureType) *Featur
 	}
 }
 
-// CreateFeatureRequest represents a request to create a new feature
+// CreateFeatureRequest represents a request to create a new feature.
 type CreateFeatureRequest struct {
-	Key          string         `json:"key" validate:"required,min=1,max=100"`
-	Name         string         `json:"name" validate:"required,min=1,max=100"`
-	Description  string         `json:"description" validate:"max=1000"`
-	Type         FeatureType    `json:"type" validate:"required"`
-	Unit         string         `json:"unit" validate:"max=50"`
+	Key          string         `json:"key"                validate:"required,min=1,max=100"`
+	Name         string         `json:"name"               validate:"required,min=1,max=100"`
+	Description  string         `json:"description"        validate:"max=1000"`
+	Type         FeatureType    `json:"type"               validate:"required"`
+	Unit         string         `json:"unit"               validate:"max=50"`
 	ResetPeriod  ResetPeriod    `json:"resetPeriod"`
 	IsPublic     bool           `json:"isPublic"`
 	DisplayOrder int            `json:"displayOrder"`
-	Icon         string         `json:"icon" validate:"max=100"`
+	Icon         string         `json:"icon"               validate:"max=100"`
 	Metadata     map[string]any `json:"metadata,omitempty"`
 	Tiers        []FeatureTier  `json:"tiers,omitempty"` // For tiered features
 }
 
-// UpdateFeatureRequest represents a request to update an existing feature
+// UpdateFeatureRequest represents a request to update an existing feature.
 type UpdateFeatureRequest struct {
-	Name         *string        `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Description  *string        `json:"description,omitempty" validate:"omitempty,max=1000"`
-	Unit         *string        `json:"unit,omitempty" validate:"omitempty,max=50"`
+	Name         *string        `json:"name,omitempty"         validate:"omitempty,min=1,max=100"`
+	Description  *string        `json:"description,omitempty"  validate:"omitempty,max=1000"`
+	Unit         *string        `json:"unit,omitempty"         validate:"omitempty,max=50"`
 	ResetPeriod  *ResetPeriod   `json:"resetPeriod,omitempty"`
 	IsPublic     *bool          `json:"isPublic,omitempty"`
 	DisplayOrder *int           `json:"displayOrder,omitempty"`
-	Icon         *string        `json:"icon,omitempty" validate:"omitempty,max=100"`
+	Icon         *string        `json:"icon,omitempty"         validate:"omitempty,max=100"`
 	Metadata     map[string]any `json:"metadata,omitempty"`
 	Tiers        []FeatureTier  `json:"tiers,omitempty"`
 }
 
-// LinkFeatureRequest represents a request to link a feature to a plan
+// LinkFeatureRequest represents a request to link a feature to a plan.
 type LinkFeatureRequest struct {
-	FeatureID        xid.ID         `json:"featureId" validate:"required"`
+	FeatureID        xid.ID         `json:"featureId"                  validate:"required"`
 	Value            string         `json:"value"`         // The limit/value for this plan
 	IsBlocked        bool           `json:"isBlocked"`     // Explicitly block this feature
 	IsHighlighted    bool           `json:"isHighlighted"` // Highlight in pricing UI
 	OverrideSettings map[string]any `json:"overrideSettings,omitempty"`
 }
 
-// UpdateLinkRequest represents a request to update a feature-plan link
+// UpdateLinkRequest represents a request to update a feature-plan link.
 type UpdateLinkRequest struct {
 	Value            *string        `json:"value,omitempty"`
 	IsBlocked        *bool          `json:"isBlocked,omitempty"`
@@ -173,22 +174,22 @@ type UpdateLinkRequest struct {
 	OverrideSettings map[string]any `json:"overrideSettings,omitempty"`
 }
 
-// ConsumeFeatureRequest represents a request to consume feature quota
+// ConsumeFeatureRequest represents a request to consume feature quota.
 type ConsumeFeatureRequest struct {
-	OrganizationID xid.ID         `json:"organizationId" validate:"required"`
-	FeatureKey     string         `json:"featureKey" validate:"required"`
-	Quantity       int64          `json:"quantity" validate:"required,min=1"`
+	OrganizationID xid.ID         `json:"organizationId"           validate:"required"`
+	FeatureKey     string         `json:"featureKey"               validate:"required"`
+	Quantity       int64          `json:"quantity"                 validate:"required,min=1"`
 	IdempotencyKey string         `json:"idempotencyKey,omitempty"`
 	Reason         string         `json:"reason,omitempty"`
 	Metadata       map[string]any `json:"metadata,omitempty"`
 }
 
-// GrantFeatureRequest represents a request to grant additional feature quota
+// GrantFeatureRequest represents a request to grant additional feature quota.
 type GrantFeatureRequest struct {
-	OrganizationID xid.ID           `json:"organizationId" validate:"required"`
-	FeatureKey     string           `json:"featureKey" validate:"required"`
-	GrantType      FeatureGrantType `json:"grantType" validate:"required"`
-	Value          int64            `json:"value" validate:"required,min=1"`
+	OrganizationID xid.ID           `json:"organizationId"       validate:"required"`
+	FeatureKey     string           `json:"featureKey"           validate:"required"`
+	GrantType      FeatureGrantType `json:"grantType"            validate:"required"`
+	Value          int64            `json:"value"                validate:"required,min=1"`
 	ExpiresAt      *time.Time       `json:"expiresAt,omitempty"`
 	SourceType     string           `json:"sourceType,omitempty"`
 	SourceID       *xid.ID          `json:"sourceId,omitempty"`
@@ -196,7 +197,7 @@ type GrantFeatureRequest struct {
 	Metadata       map[string]any   `json:"metadata,omitempty"`
 }
 
-// FeatureUsageResponse represents the response for feature usage queries
+// FeatureUsageResponse represents the response for feature usage queries.
 type FeatureUsageResponse struct {
 	FeatureKey   string    `json:"featureKey"`
 	FeatureName  string    `json:"featureName"`
@@ -209,7 +210,7 @@ type FeatureUsageResponse struct {
 	GrantedExtra int64     `json:"grantedExtra"` // Extra quota from grants
 }
 
-// PublicFeature represents a feature for public API (pricing pages)
+// PublicFeature represents a feature for public API (pricing pages).
 type PublicFeature struct {
 	Key          string `json:"key"`
 	Name         string `json:"name"`
@@ -220,7 +221,7 @@ type PublicFeature struct {
 	DisplayOrder int    `json:"displayOrder"`
 }
 
-// PublicPlanFeature represents a feature within a plan for public API
+// PublicPlanFeature represents a feature within a plan for public API.
 type PublicPlanFeature struct {
 	Key           string `json:"key"`
 	Name          string `json:"name"`

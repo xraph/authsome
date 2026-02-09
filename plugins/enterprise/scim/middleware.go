@@ -12,7 +12,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// AuthMiddleware validates SCIM bearer tokens
+// AuthMiddleware validates SCIM bearer tokens.
 func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -68,7 +68,7 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 	}
 }
 
-// OrgResolutionMiddleware ensures organization context is set (3-tier architecture)
+// OrgResolutionMiddleware ensures organization context is set (3-tier architecture).
 func (p *Plugin) OrgResolutionMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -92,7 +92,7 @@ func (p *Plugin) OrgResolutionMiddleware() func(func(forge.Context) error) func(
 	}
 }
 
-// RateLimitMiddleware implements rate limiting for SCIM endpoints
+// RateLimitMiddleware implements rate limiting for SCIM endpoints.
 func (p *Plugin) RateLimitMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	if !p.config.RateLimit.Enabled {
 		// Rate limiting disabled, pass through
@@ -108,6 +108,7 @@ func (p *Plugin) RateLimitMiddleware() func(func(forge.Context) error) func(forg
 		return func(c forge.Context) error {
 			// Get organization ID from context
 			ctx := c.Request().Context()
+
 			orgID, ok := contexts.GetOrganizationID(ctx)
 			if !ok || orgID.IsNil() {
 				// No valid org ID, skip rate limiting
@@ -140,7 +141,7 @@ func (p *Plugin) RateLimitMiddleware() func(func(forge.Context) error) func(forg
 	}
 }
 
-// RequireAdminMiddleware ensures the request is from an admin
+// RequireAdminMiddleware ensures the request is from an admin.
 func (p *Plugin) RequireAdminMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -155,9 +156,11 @@ func (p *Plugin) RequireAdminMiddleware() func(func(forge.Context) error) func(f
 
 			scopeList := scopes.([]string)
 			hasAdminScope := false
+
 			for _, scope := range scopeList {
 				if scope == "admin" || scope == "scim:admin" {
 					hasAdminScope = true
+
 					break
 				}
 			}
@@ -173,7 +176,7 @@ func (p *Plugin) RequireAdminMiddleware() func(func(forge.Context) error) func(f
 	}
 }
 
-// LoggingMiddleware logs SCIM operations for audit
+// LoggingMiddleware logs SCIM operations for audit.
 func (p *Plugin) LoggingMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	metrics := GetMetrics()
 
@@ -192,6 +195,7 @@ func (p *Plugin) LoggingMiddleware() func(func(forge.Context) error) func(forge.
 
 			// Log the operation with organization context
 			ctx := c.Request().Context()
+
 			orgID, ok := contexts.GetOrganizationID(ctx)
 			if ok && !orgID.IsNil() {
 				// Record metrics
@@ -207,7 +211,7 @@ func (p *Plugin) LoggingMiddleware() func(func(forge.Context) error) func(forge.
 	}
 }
 
-// SecurityHeadersMiddleware adds security headers to SCIM responses
+// SecurityHeadersMiddleware adds security headers to SCIM responses.
 func (p *Plugin) SecurityHeadersMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -222,7 +226,7 @@ func (p *Plugin) SecurityHeadersMiddleware() func(func(forge.Context) error) fun
 	}
 }
 
-// IPWhitelistMiddleware enforces IP whitelisting if configured
+// IPWhitelistMiddleware enforces IP whitelisting if configured.
 func (p *Plugin) IPWhitelistMiddleware() func(func(forge.Context) error) func(forge.Context) error {
 	if len(p.config.Security.IPWhitelist) == 0 {
 		// No whitelist, pass through
@@ -237,9 +241,11 @@ func (p *Plugin) IPWhitelistMiddleware() func(func(forge.Context) error) func(fo
 
 			// Check if IP is in whitelist
 			allowed := false
+
 			for _, ip := range p.config.Security.IPWhitelist {
 				if ip == clientIP || ip == "*" {
 					allowed = true
+
 					break
 				}
 				// TODO: Add CIDR range matching
@@ -266,6 +272,7 @@ func getClientIP(c forge.Context) string {
 	if forwarded != "" {
 		// Take the first IP in the list
 		ips := strings.Split(forwarded, ",")
+
 		return strings.TrimSpace(ips[0])
 	}
 

@@ -8,12 +8,12 @@ import (
 	"golang.org/x/oauth2/linkedin"
 )
 
-// LinkedInProvider implements OAuth for LinkedIn
+// LinkedInProvider implements OAuth for LinkedIn.
 type LinkedInProvider struct {
 	*BaseProvider
 }
 
-// NewLinkedInProvider creates a new LinkedIn OAuth provider
+// NewLinkedInProvider creates a new LinkedIn OAuth provider.
 func NewLinkedInProvider(config ProviderConfig) *LinkedInProvider {
 	scopes := config.Scopes
 	if len(scopes) == 0 {
@@ -35,11 +35,11 @@ func NewLinkedInProvider(config ProviderConfig) *LinkedInProvider {
 	return &LinkedInProvider{BaseProvider: bp}
 }
 
-// GetUserInfo fetches user information from LinkedIn API
+// GetUserInfo fetches user information from LinkedIn API.
 func (l *LinkedInProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*UserInfo, error) {
 	client := l.oauth2Config.Client(ctx, token)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, client, l.userInfoURL, &raw); err != nil {
 		return nil, fmt.Errorf("failed to fetch LinkedIn user info: %w", err)
 	}
@@ -68,6 +68,7 @@ func (l *LinkedInProvider) GetUserInfo(ctx context.Context, token *oauth2.Token)
 	if id, ok := raw["id"].(string); ok {
 		userInfo.ID = id
 	}
+
 	if email, ok := raw["email"].(string); ok {
 		userInfo.Email = email
 	}
@@ -76,18 +77,20 @@ func (l *LinkedInProvider) GetUserInfo(ctx context.Context, token *oauth2.Token)
 	if localizedFirstName, ok := raw["localizedFirstName"].(string); ok {
 		userInfo.FirstName = localizedFirstName
 	}
+
 	if localizedLastName, ok := raw["localizedLastName"].(string); ok {
 		userInfo.LastName = localizedLastName
 	}
+
 	userInfo.Name = fmt.Sprintf("%s %s", userInfo.FirstName, userInfo.LastName)
 
 	// Profile picture is in a complex nested structure
-	if profilePicture, ok := raw["profilePicture"].(map[string]interface{}); ok {
-		if displayImage, ok := profilePicture["displayImage~"].(map[string]interface{}); ok {
-			if elements, ok := displayImage["elements"].([]interface{}); ok && len(elements) > 0 {
-				if elem, ok := elements[0].(map[string]interface{}); ok {
-					if identifiers, ok := elem["identifiers"].([]interface{}); ok && len(identifiers) > 0 {
-						if identifier, ok := identifiers[0].(map[string]interface{}); ok {
+	if profilePicture, ok := raw["profilePicture"].(map[string]any); ok {
+		if displayImage, ok := profilePicture["displayImage~"].(map[string]any); ok {
+			if elements, ok := displayImage["elements"].([]any); ok && len(elements) > 0 {
+				if elem, ok := elements[0].(map[string]any); ok {
+					if identifiers, ok := elem["identifiers"].([]any); ok && len(identifiers) > 0 {
+						if identifier, ok := identifiers[0].(map[string]any); ok {
 							if url, ok := identifier["identifier"].(string); ok {
 								userInfo.Avatar = url
 							}

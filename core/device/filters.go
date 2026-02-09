@@ -9,8 +9,9 @@ import (
 // FILTER TYPES FOR PAGINATION
 // =============================================================================
 
-// ListDevicesFilter represents filter parameters for listing devices
+// ListDevicesFilter represents filter parameters for listing devices.
 type ListDevicesFilter struct {
 	pagination.PaginationParams
+
 	UserID xid.ID `json:"userId" query:"user_id"`
 }

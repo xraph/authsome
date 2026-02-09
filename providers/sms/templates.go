@@ -7,13 +7,13 @@ import (
 	"text/template"
 )
 
-// Template represents an SMS template
+// Template represents an SMS template.
 type Template struct {
 	Name string
 	Body string
 }
 
-// TemplateData represents data passed to SMS templates
+// TemplateData represents data passed to SMS templates.
 type TemplateData struct {
 	UserName         string
 	UserEmail        string
@@ -30,7 +30,7 @@ type TemplateData struct {
 	SupportPhone     string
 }
 
-// DefaultTemplates contains the default SMS templates
+// DefaultTemplates contains the default SMS templates.
 var DefaultTemplates = map[string]*Template{
 	"verification": {
 		Name: "verification",
@@ -83,7 +83,7 @@ var DefaultTemplates = map[string]*Template{
 	},
 }
 
-// RenderTemplate renders an SMS template with the provided data
+// RenderTemplate renders an SMS template with the provided data.
 func RenderTemplate(templateName string, data *TemplateData) (*RenderedTemplate, error) {
 	tmpl, exists := DefaultTemplates[templateName]
 	if !exists {
@@ -113,27 +113,29 @@ func RenderTemplate(templateName string, data *TemplateData) (*RenderedTemplate,
 	}, nil
 }
 
-// RenderedTemplate represents a rendered SMS template
+// RenderedTemplate represents a rendered SMS template.
 type RenderedTemplate struct {
 	Body string
 }
 
-// GetTemplate returns a template by name
+// GetTemplate returns a template by name.
 func GetTemplate(name string) (*Template, bool) {
 	tmpl, exists := DefaultTemplates[name]
+
 	return tmpl, exists
 }
 
-// ListTemplates returns all available template names
+// ListTemplates returns all available template names.
 func ListTemplates() []string {
 	names := make([]string, 0, len(DefaultTemplates))
 	for name := range DefaultTemplates {
 		names = append(names, name)
 	}
+
 	return names
 }
 
-// ValidateTemplate validates that a template renders correctly with sample data
+// ValidateTemplate validates that a template renders correctly with sample data.
 func ValidateTemplate(templateName string) error {
 	sampleData := &TemplateData{
 		UserName:         "John Doe",
@@ -152,14 +154,16 @@ func ValidateTemplate(templateName string) error {
 	}
 
 	_, err := RenderTemplate(templateName, sampleData)
+
 	return err
 }
 
-// GetCharacterCount returns the character count for a rendered template
+// GetCharacterCount returns the character count for a rendered template.
 func GetCharacterCount(templateName string, data *TemplateData) (int, error) {
 	rendered, err := RenderTemplate(templateName, data)
 	if err != nil {
 		return 0, err
 	}
+
 	return len(rendered.Body), nil
 }

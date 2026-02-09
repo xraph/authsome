@@ -3,10 +3,11 @@ package schema
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"sort"
 )
 
-// Section represents a logical grouping of fields
+// Section represents a logical grouping of fields.
 type Section struct {
 	// ID is the unique identifier for this section
 	ID string `json:"id"`
@@ -27,66 +28,71 @@ type Section struct {
 	// Permissions are the permissions required to view/edit this section
 	Permissions []string `json:"permissions,omitempty"`
 	// Metadata contains additional section-level configuration
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 	// ReadOnly indicates if the entire section is read-only
 	ReadOnly bool `json:"readOnly,omitempty"`
 	// HelpURL is an optional link to documentation
 	HelpURL string `json:"helpUrl,omitempty"`
 }
 
-// NewSection creates a new section with the given ID and title
+// NewSection creates a new section with the given ID and title.
 func NewSection(id, title string) *Section {
 	return &Section{
 		ID:       id,
 		Title:    title,
 		Fields:   make([]*Field, 0),
-		Metadata: make(map[string]interface{}),
+		Metadata: make(map[string]any),
 	}
 }
 
-// AddField adds a field to the section
+// AddField adds a field to the section.
 func (s *Section) AddField(field *Field) *Section {
 	s.Fields = append(s.Fields, field)
+
 	return s
 }
 
-// AddFields adds multiple fields to the section
+// AddFields adds multiple fields to the section.
 func (s *Section) AddFields(fields ...*Field) *Section {
 	s.Fields = append(s.Fields, fields...)
+
 	return s
 }
 
-// GetField returns a field by ID
+// GetField returns a field by ID.
 func (s *Section) GetField(fieldID string) *Field {
 	for _, field := range s.Fields {
 		if field.ID == fieldID {
 			return field
 		}
 	}
+
 	return nil
 }
 
-// GetSortedFields returns fields sorted by order
+// GetSortedFields returns fields sorted by order.
 func (s *Section) GetSortedFields() []*Field {
 	sorted := make([]*Field, len(s.Fields))
 	copy(sorted, s.Fields)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Order < sorted[j].Order
 	})
+
 	return sorted
 }
 
-// GetDefaults returns the default values for all fields in the section
-func (s *Section) GetDefaults() map[string]interface{} {
-	defaults := make(map[string]interface{})
+// GetDefaults returns the default values for all fields in the section.
+func (s *Section) GetDefaults() map[string]any {
+	defaults := make(map[string]any)
 	for _, field := range s.Fields {
 		defaults[field.ID] = field.GetDefaultValue()
 	}
+
 	return defaults
 }
 
-// Validate validates data against the section's field definitions
-func (s *Section) Validate(ctx context.Context, data map[string]interface{}) *ValidationResult {
+// Validate validates data against the section's field definitions.
+func (s *Section) Validate(ctx context.Context, data map[string]any) *ValidationResult {
 	result := NewValidationResult()
 
 	for _, field := range s.Fields {
@@ -94,9 +100,10 @@ func (s *Section) Validate(ctx context.Context, data map[string]interface{}) *Va
 
 		// Check conditional visibility/requirements
 		isRequired := field.Required
+
 		isVisible := !field.Hidden
 		for _, cond := range field.Conditions {
-			condValue, _ := data[cond.Field]
+			condValue := data[cond.Field]
 			if evaluateCondition(cond, condValue) {
 				switch cond.Action {
 				case ActionRequire:
@@ -117,6 +124,7 @@ func (s *Section) Validate(ctx context.Context, data map[string]interface{}) *Va
 		// Check required
 		if isRequired && (!exists || isEmpty(value)) {
 			result.AddFieldError(field.ID, "required", "This field is required")
+
 			continue
 		}
 
@@ -141,8 +149,8 @@ func (s *Section) Validate(ctx context.Context, data map[string]interface{}) *Va
 	return result
 }
 
-// ValidateAsync runs async validators on the section data
-func (s *Section) ValidateAsync(ctx context.Context, data map[string]interface{}) *ValidationResult {
+// ValidateAsync runs async validators on the section data.
+func (s *Section) ValidateAsync(ctx context.Context, data map[string]any) *ValidationResult {
 	result := NewValidationResult()
 
 	for _, field := range s.Fields {
@@ -161,26 +169,29 @@ func (s *Section) ValidateAsync(ctx context.Context, data map[string]interface{}
 	return result
 }
 
-// ValidateFull runs both sync and async validation
-func (s *Section) ValidateFull(ctx context.Context, data map[string]interface{}) *ValidationResult {
+// ValidateFull runs both sync and async validation.
+func (s *Section) ValidateFull(ctx context.Context, data map[string]any) *ValidationResult {
 	result := s.Validate(ctx, data)
 	if result.HasErrors() {
 		return result
 	}
+
 	return s.ValidateAsync(ctx, data)
 }
 
-// validateFieldProperties validates against built-in field properties
-func (s *Section) validateFieldProperties(field *Field, value interface{}) error {
+// validateFieldProperties validates against built-in field properties.
+func (s *Section) validateFieldProperties(field *Field, value any) error {
 	switch field.Type {
 	case FieldTypeText, FieldTypeTextArea, FieldTypeEmail, FieldTypeURL, FieldTypePassword:
 		str, ok := value.(string)
 		if !ok {
 			return nil
 		}
+
 		if field.MinLength != nil && len(str) < *field.MinLength {
 			return NewValidationError(field.ID, "min_length", "Must be at least %d characters", *field.MinLength)
 		}
+
 		if field.MaxLength != nil && len(str) > *field.MaxLength {
 			return NewValidationError(field.ID, "max_length", "Must be at most %d characters", *field.MaxLength)
 		}
@@ -190,9 +201,11 @@ func (s *Section) validateFieldProperties(field *Field, value interface{}) error
 		if !ok {
 			return nil
 		}
+
 		if field.Min != nil && num < *field.Min {
 			return NewValidationError(field.ID, "min_value", "Must be at least %v", *field.Min)
 		}
+
 		if field.Max != nil && num > *field.Max {
 			return NewValidationError(field.ID, "max_value", "Must be at most %v", *field.Max)
 		}
@@ -200,12 +213,15 @@ func (s *Section) validateFieldProperties(field *Field, value interface{}) error
 	case FieldTypeSelect:
 		if len(field.Options) > 0 {
 			valid := false
+
 			for _, opt := range field.Options {
 				if opt.Value == value {
 					valid = true
+
 					break
 				}
 			}
+
 			if !valid {
 				return NewValidationError(field.ID, "invalid_option", "Invalid option selected")
 			}
@@ -215,17 +231,15 @@ func (s *Section) validateFieldProperties(field *Field, value interface{}) error
 	return nil
 }
 
-// Patch merges patch data into existing data for this section
-func (s *Section) Patch(existing, patch map[string]interface{}) (map[string]interface{}, error) {
+// Patch merges patch data into existing data for this section.
+func (s *Section) Patch(existing, patch map[string]any) (map[string]any, error) {
 	if existing == nil {
-		existing = make(map[string]interface{})
+		existing = make(map[string]any)
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 	// Copy existing values
-	for k, v := range existing {
-		result[k] = v
-	}
+	maps.Copy(result, existing)
 
 	// Apply patch values (only for known fields)
 	for _, field := range s.Fields {
@@ -237,112 +251,128 @@ func (s *Section) Patch(existing, patch map[string]interface{}) (map[string]inte
 	return result, nil
 }
 
-// ExtractData extracts only the fields defined in this section from the data
-func (s *Section) ExtractData(data map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+// ExtractData extracts only the fields defined in this section from the data.
+func (s *Section) ExtractData(data map[string]any) map[string]any {
+	result := make(map[string]any)
+
 	for _, field := range s.Fields {
 		if value, ok := data[field.ID]; ok {
 			result[field.ID] = value
 		}
 	}
+
 	return result
 }
 
-// Clone creates a deep copy of the section
+// Clone creates a deep copy of the section.
 func (s *Section) Clone() *Section {
 	data, _ := json.Marshal(s)
+
 	var cloned Section
+
 	_ = json.Unmarshal(data, &cloned)
+
 	return &cloned
 }
 
-// SectionBuilder provides a fluent API for building sections
+// SectionBuilder provides a fluent API for building sections.
 type SectionBuilder struct {
 	section *Section
 }
 
-// NewSectionBuilder creates a new section builder
+// NewSectionBuilder creates a new section builder.
 func NewSectionBuilder(id, title string) *SectionBuilder {
 	return &SectionBuilder{
 		section: NewSection(id, title),
 	}
 }
 
-// Description sets the section description
+// Description sets the section description.
 func (b *SectionBuilder) Description(desc string) *SectionBuilder {
 	b.section.Description = desc
+
 	return b
 }
 
-// Icon sets the section icon
+// Icon sets the section icon.
 func (b *SectionBuilder) Icon(icon string) *SectionBuilder {
 	b.section.Icon = icon
+
 	return b
 }
 
-// Order sets the display order
+// Order sets the display order.
 func (b *SectionBuilder) Order(order int) *SectionBuilder {
 	b.section.Order = order
+
 	return b
 }
 
-// Collapsible makes the section collapsible
+// Collapsible makes the section collapsible.
 func (b *SectionBuilder) Collapsible() *SectionBuilder {
 	b.section.Collapsible = true
+
 	return b
 }
 
-// DefaultCollapsed makes the section collapsed by default
+// DefaultCollapsed makes the section collapsed by default.
 func (b *SectionBuilder) DefaultCollapsed() *SectionBuilder {
 	b.section.DefaultCollapsed = true
 	b.section.Collapsible = true
+
 	return b
 }
 
-// ReadOnly makes the entire section read-only
+// ReadOnly makes the entire section read-only.
 func (b *SectionBuilder) ReadOnly() *SectionBuilder {
 	b.section.ReadOnly = true
+
 	return b
 }
 
-// WithPermissions sets the required permissions
+// WithPermissions sets the required permissions.
 func (b *SectionBuilder) WithPermissions(perms ...string) *SectionBuilder {
 	b.section.Permissions = perms
+
 	return b
 }
 
-// HelpURL sets the help documentation URL
+// HelpURL sets the help documentation URL.
 func (b *SectionBuilder) HelpURL(url string) *SectionBuilder {
 	b.section.HelpURL = url
+
 	return b
 }
 
-// WithMetadata adds metadata to the section
-func (b *SectionBuilder) WithMetadata(key string, value interface{}) *SectionBuilder {
+// WithMetadata adds metadata to the section.
+func (b *SectionBuilder) WithMetadata(key string, value any) *SectionBuilder {
 	b.section.Metadata[key] = value
+
 	return b
 }
 
-// AddField adds a field to the section
+// AddField adds a field to the section.
 func (b *SectionBuilder) AddField(field *Field) *SectionBuilder {
 	b.section.AddField(field)
+
 	return b
 }
 
-// AddFields adds multiple fields
+// AddFields adds multiple fields.
 func (b *SectionBuilder) AddFields(fields ...*Field) *SectionBuilder {
 	b.section.AddFields(fields...)
+
 	return b
 }
 
-// Build finalizes and returns the section
+// Build finalizes and returns the section.
 func (b *SectionBuilder) Build() *Section {
 	return b.section
 }
 
 // Helper functions
 
-func evaluateCondition(cond Condition, value interface{}) bool {
+func evaluateCondition(cond Condition, value any) bool {
 	switch cond.Operator {
 	case ConditionEquals:
 		return value == cond.Value
@@ -358,37 +388,41 @@ func evaluateCondition(cond Condition, value interface{}) bool {
 				return containsString(str, target)
 			}
 		}
+
 		return false
 	case ConditionGreaterThan:
 		v, ok1 := toFloat64(value)
 		t, ok2 := toFloat64(cond.Value)
+
 		return ok1 && ok2 && v > t
 	case ConditionLessThan:
 		v, ok1 := toFloat64(value)
 		t, ok2 := toFloat64(cond.Value)
+
 		return ok1 && ok2 && v < t
 	default:
 		return false
 	}
 }
 
-func isEmpty(value interface{}) bool {
+func isEmpty(value any) bool {
 	if value == nil {
 		return true
 	}
+
 	switch v := value.(type) {
 	case string:
 		return v == ""
-	case []interface{}:
+	case []any:
 		return len(v) == 0
-	case map[string]interface{}:
+	case map[string]any:
 		return len(v) == 0
 	default:
 		return false
 	}
 }
 
-func toFloat64(value interface{}) (float64, bool) {
+func toFloat64(value any) (float64, bool) {
 	switch v := value.(type) {
 	case float64:
 		return v, true
@@ -402,6 +436,7 @@ func toFloat64(value interface{}) (float64, bool) {
 		return float64(v), true
 	case json.Number:
 		f, err := v.Float64()
+
 		return f, err == nil
 	default:
 		return 0, false
@@ -419,5 +454,6 @@ func findSubstring(s, substr string) int {
 			return i
 		}
 	}
+
 	return -1
 }

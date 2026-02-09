@@ -6,16 +6,18 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// Config holds the API key service configuration
+// Config holds the API key service configuration.
 type Config struct {
 	DefaultRateLimit int           `json:"default_rate_limit"`
 	MaxRateLimit     int           `json:"max_rate_limit"`
@@ -26,7 +28,7 @@ type Config struct {
 }
 
 // Service handles API key operations
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type Service struct {
 	repo     Repository
 	roleRepo RoleRepository // RBAC integration
@@ -37,24 +39,29 @@ type Service struct {
 	envMutex sync.RWMutex          // Protects envCache
 }
 
-// NewService creates a new API key service
+// NewService creates a new API key service.
 func NewService(repo Repository, auditSvc *audit.Service, cfg Config) *Service {
 	// Set defaults
 	if cfg.DefaultRateLimit == 0 {
 		cfg.DefaultRateLimit = 1000
 	}
+
 	if cfg.MaxRateLimit == 0 {
 		cfg.MaxRateLimit = 10000
 	}
+
 	if cfg.DefaultExpiry == 0 {
 		cfg.DefaultExpiry = 365 * 24 * time.Hour // 1 year
 	}
+
 	if cfg.MaxKeysPerUser == 0 {
 		cfg.MaxKeysPerUser = 10
 	}
+
 	if cfg.MaxKeysPerOrg == 0 {
 		cfg.MaxKeysPerOrg = 100
 	}
+
 	if cfg.KeyLength == 0 {
 		cfg.KeyLength = 32
 	}
@@ -69,18 +76,18 @@ func NewService(repo Repository, auditSvc *audit.Service, cfg Config) *Service {
 }
 
 // SetRoleRepository sets the role repository (for RBAC integration)
-// This is set after service initialization to avoid circular dependencies
+// This is set after service initialization to avoid circular dependencies.
 func (s *Service) SetRoleRepository(roleRepo RoleRepository) {
 	s.roleRepo = roleRepo
 }
 
 // SetEnvironmentRepository sets the environment repository for prefix generation
-// This is set after service initialization to avoid circular dependencies
+// This is set after service initialization to avoid circular dependencies.
 func (s *Service) SetEnvironmentRepository(envRepo EnvironmentRepository) {
 	s.envRepo = envRepo
 }
 
-// CreateAPIKey creates a new API key
+// CreateAPIKey creates a new API key.
 func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*APIKey, error) {
 	// Validate request
 	if err := s.validateCreateRequest(ctx, req); err != nil {
@@ -97,6 +104,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	if _, err := rand.Read(keyBytes); err != nil {
 		return nil, APIKeyCreationFailed(fmt.Errorf("failed to generate key: %w", err))
 	}
+
 	key := base64.URLEncoding.EncodeToString(keyBytes)
 
 	// Validate key type and scopes
@@ -118,6 +126,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	if rateLimit == 0 {
 		rateLimit = s.config.DefaultRateLimit
 	}
+
 	if rateLimit > s.config.MaxRateLimit {
 		rateLimit = s.config.MaxRateLimit
 	}
@@ -163,14 +172,16 @@ func (s *Service) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*
 	// Convert to DTO and return the full key only once
 	result := FromSchemaAPIKey(apiKey)
 	result.Key = prefix + "." + key
+
 	return result, nil
 }
 
-// VerifyAPIKey verifies an API key and returns the associated key info
+// VerifyAPIKey verifies an API key and returns the associated key info.
 func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*VerifyAPIKeyResponse, error) {
 	parts := strings.Split(req.Key, ".")
 	if len(parts) != 2 {
 		err := InvalidKeyFormat()
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: err.Message,
@@ -184,6 +195,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	apiKey, err := s.repo.FindAPIKeyByPrefix(ctx, prefix)
 	if err != nil {
 		notFoundErr := APIKeyNotFound()
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: notFoundErr.Message,
@@ -193,6 +205,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	// Verify hash
 	if !s.verifyKeyHash(keyPart, apiKey.KeyHash) {
 		invalidErr := InvalidAPIKeyHash()
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: invalidErr.Message,
@@ -202,6 +215,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	// Check if active
 	if !apiKey.Active {
 		inactiveErr := APIKeyInactive()
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: inactiveErr.Message,
@@ -211,6 +225,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	// Check expiration
 	if apiKey.IsExpired() {
 		expiredErr := APIKeyExpired()
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: expiredErr.Message,
@@ -220,6 +235,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	// Check scope if required
 	if req.RequiredScope != "" && !apiKey.HasScope(req.RequiredScope) {
 		scopeErr := InsufficientScope(req.RequiredScope)
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: scopeErr.Message,
@@ -229,6 +245,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	// Check permission if required
 	if req.RequiredPermission != "" && !apiKey.HasPermission(req.RequiredPermission) {
 		permErr := InsufficientPermission(req.RequiredPermission)
+
 		return &VerifyAPIKeyResponse{
 			Valid: false,
 			Error: permErr.Message,
@@ -247,7 +264,7 @@ func (s *Service) VerifyAPIKey(ctx context.Context, req *VerifyAPIKeyRequest) (*
 	}, nil
 }
 
-// GetAPIKey retrieves an API key by ID
+// GetAPIKey retrieves an API key by ID.
 func (s *Service) GetAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID *xid.ID) (*APIKey, error) {
 	apiKey, err := s.repo.FindAPIKeyByID(ctx, id)
 	if err != nil {
@@ -274,7 +291,7 @@ func (s *Service) GetAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID
 	return FromSchemaAPIKey(apiKey), nil
 }
 
-// ListAPIKeys lists API keys with filtering and pagination
+// ListAPIKeys lists API keys with filtering and pagination.
 func (s *Service) ListAPIKeys(ctx context.Context, filter *ListAPIKeysFilter) (*ListAPIKeysResponse, error) {
 	// Get paginated results from repository (returns schema types)
 	pageResp, err := s.repo.ListAPIKeys(ctx, filter)
@@ -292,7 +309,7 @@ func (s *Service) ListAPIKeys(ctx context.Context, filter *ListAPIKeysFilter) (*
 	}, nil
 }
 
-// UpdateAPIKey updates an API key
+// UpdateAPIKey updates an API key.
 func (s *Service) UpdateAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID *xid.ID, req *UpdateAPIKeyRequest) (*APIKey, error) {
 	apiKey, err := s.repo.FindAPIKeyByID(ctx, id)
 	if err != nil {
@@ -303,9 +320,11 @@ func (s *Service) UpdateAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	if apiKey.AppID != appID {
 		return nil, AccessDenied("wrong app")
 	}
+
 	if apiKey.UserID != userID {
 		return nil, AccessDenied("wrong user")
 	}
+
 	if orgID != nil && !orgID.IsNil() {
 		if apiKey.OrganizationID == nil || *apiKey.OrganizationID != *orgID {
 			return nil, AccessDenied("wrong organization")
@@ -316,28 +335,33 @@ func (s *Service) UpdateAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	if req.Name != nil {
 		apiKey.Name = *req.Name
 	}
+
 	if req.Description != nil {
 		apiKey.Description = *req.Description
 	}
+
 	if req.Scopes != nil {
 		apiKey.Scopes = req.Scopes
 	}
+
 	if req.Permissions != nil {
 		apiKey.Permissions = req.Permissions
 	}
+
 	if req.RateLimit != nil {
-		rateLimit := *req.RateLimit
-		if rateLimit > s.config.MaxRateLimit {
-			rateLimit = s.config.MaxRateLimit
-		}
+		rateLimit := min(*req.RateLimit, s.config.MaxRateLimit)
+
 		apiKey.RateLimit = rateLimit
 	}
+
 	if req.ExpiresAt != nil {
 		apiKey.ExpiresAt = req.ExpiresAt
 	}
+
 	if req.Active != nil {
 		apiKey.Active = *req.Active
 	}
+
 	if req.Metadata != nil {
 		apiKey.Metadata = req.Metadata
 	}
@@ -352,7 +376,7 @@ func (s *Service) UpdateAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	return FromSchemaAPIKey(apiKey), nil
 }
 
-// DeleteAPIKey deletes an API key
+// DeleteAPIKey deletes an API key.
 func (s *Service) DeleteAPIKey(ctx context.Context, appID, id, userID xid.ID, orgID *xid.ID) error {
 	apiKey, err := s.repo.FindAPIKeyByID(ctx, id)
 	if err != nil {
@@ -363,9 +387,11 @@ func (s *Service) DeleteAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	if apiKey.AppID != appID {
 		return AccessDenied("wrong app")
 	}
+
 	if apiKey.UserID != userID {
 		return AccessDenied("wrong user")
 	}
+
 	if orgID != nil && !orgID.IsNil() {
 		if apiKey.OrganizationID == nil || *apiKey.OrganizationID != *orgID {
 			return AccessDenied("wrong organization")
@@ -382,7 +408,7 @@ func (s *Service) DeleteAPIKey(ctx context.Context, appID, id, userID xid.ID, or
 	return nil
 }
 
-// RotateAPIKey rotates an API key (creates a new key with same settings)
+// RotateAPIKey rotates an API key (creates a new key with same settings).
 func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*APIKey, error) {
 	// Get existing key
 	existingKey, err := s.repo.FindAPIKeyByID(ctx, req.ID)
@@ -394,9 +420,11 @@ func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*
 	if existingKey.AppID != req.AppID {
 		return nil, AccessDenied("wrong app")
 	}
+
 	if existingKey.UserID != req.UserID {
 		return nil, AccessDenied("wrong user")
 	}
+
 	if req.OrganizationID != nil && !req.OrganizationID.IsNil() {
 		if existingKey.OrganizationID == nil || *existingKey.OrganizationID != *req.OrganizationID {
 			return nil, AccessDenied("wrong organization")
@@ -435,7 +463,7 @@ func (s *Service) RotateAPIKey(ctx context.Context, req *RotateAPIKeyRequest) (*
 	return newKey, nil
 }
 
-// CleanupExpired removes expired API keys
+// CleanupExpired removes expired API keys.
 func (s *Service) CleanupExpired(ctx context.Context) (int, error) {
 	return s.repo.CleanupExpiredAPIKeys(ctx)
 }
@@ -446,18 +474,23 @@ func (s *Service) validateCreateRequest(ctx context.Context, req *CreateAPIKeyRe
 	if req.AppID.IsNil() {
 		return MissingAppContext()
 	}
+
 	if req.EnvironmentID.IsNil() {
 		return MissingEnvContext()
 	}
+
 	if req.UserID.IsNil() {
 		return AccessDenied("user ID required")
 	}
+
 	if req.Name == "" {
 		return AccessDenied("name is required")
 	}
+
 	if req.KeyType == "" {
 		return AccessDenied("key type is required")
 	}
+
 	if !req.KeyType.IsValid() {
 		return AccessDenied("invalid key type: must be pk, sk, or rk")
 	}
@@ -468,10 +501,12 @@ func (s *Service) validateCreateRequest(ctx context.Context, req *CreateAPIKeyRe
 func (s *Service) checkLimits(ctx context.Context, appID, userID xid.ID, orgID *xid.ID) error {
 	// Check user limit (per app)
 	userIDPtr := &userID
+
 	userCount, err := s.repo.CountAPIKeys(ctx, appID, nil, nil, userIDPtr)
 	if err != nil {
 		return err
 	}
+
 	if userCount >= s.config.MaxKeysPerUser {
 		return MaxKeysReached(s.config.MaxKeysPerUser)
 	}
@@ -482,6 +517,7 @@ func (s *Service) checkLimits(ctx context.Context, appID, userID xid.ID, orgID *
 		if err != nil {
 			return err
 		}
+
 		if orgCount >= s.config.MaxKeysPerOrg {
 			return MaxKeysReached(s.config.MaxKeysPerOrg)
 		}
@@ -496,6 +532,7 @@ func (s *Service) generatePrefix(keyType KeyType, envID xid.ID) (string, error) 
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate random suffix: %w", err)
 	}
+
 	suffix := base64.URLEncoding.EncodeToString(bytes)[:8]
 
 	// Get environment prefix (with caching)
@@ -509,24 +546,27 @@ func (s *Service) generatePrefix(keyType KeyType, envID xid.ID) (string, error) 
 	return fmt.Sprintf("%s_%s_%s", keyType, envPrefix, suffix), nil
 }
 
-// getEnvironmentPrefix gets the prefix string for an environment (with caching)
+// getEnvironmentPrefix gets the prefix string for an environment (with caching).
 func (s *Service) getEnvironmentPrefix(ctx context.Context, envID xid.ID) (string, error) {
 	// Check cache first (read lock)
 	s.envMutex.RLock()
+
 	if prefix, ok := s.envCache[envID]; ok {
 		s.envMutex.RUnlock()
+
 		return prefix, nil
 	}
+
 	s.envMutex.RUnlock()
 
 	// Cache miss - lookup environment
 	if s.envRepo == nil {
-		return "", fmt.Errorf("environment repository not configured")
+		return "", errs.New(errs.CodeNotFound, "environment repository not configured", http.StatusNotFound)
 	}
 
 	env, err := s.envRepo.FindByID(ctx, envID)
 	if err != nil {
-		return "", fmt.Errorf("environment not found: %w", err)
+		return "", errs.New(errs.CodeNotFound, "environment not found", http.StatusNotFound)
 	}
 
 	// Map environment type to prefix
@@ -540,7 +580,7 @@ func (s *Service) getEnvironmentPrefix(ctx context.Context, envID xid.ID) (strin
 	return prefix, nil
 }
 
-// mapEnvironmentTypeToPrefix converts environment type to prefix string
+// mapEnvironmentTypeToPrefix converts environment type to prefix string.
 func mapEnvironmentTypeToPrefix(envType string) string {
 	switch envType {
 	case schema.EnvironmentTypeDevelopment:
@@ -558,7 +598,7 @@ func mapEnvironmentTypeToPrefix(envType string) string {
 	}
 }
 
-// validateKeyTypeAndScopes validates that the key type and scopes are compatible
+// validateKeyTypeAndScopes validates that the key type and scopes are compatible.
 func (s *Service) validateKeyTypeAndScopes(keyType KeyType, scopes []string) error {
 	// For restricted keys, require explicit scopes
 	if keyType == KeyTypeRestricted && len(scopes) == 0 {
@@ -585,6 +625,7 @@ func (s *Service) validateKeyTypeAndScopes(keyType KeyType, scopes []string) err
 
 func (s *Service) hashKey(key string) string {
 	hash := sha256.Sum256([]byte(key))
+
 	return base64.URLEncoding.EncodeToString(hash[:])
 }
 
@@ -596,10 +637,10 @@ func (s *Service) verifyKeyHash(key, hash string) bool {
 // RBAC Integration Methods (Hybrid Approach)
 // ============================================================================
 
-// AssignRole assigns a role to an API key
+// AssignRole assigns a role to an API key.
 func (s *Service) AssignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
 	if s.roleRepo == nil {
-		return fmt.Errorf("RBAC not configured")
+		return errs.New(errs.CodeNotFound, "RBAC not configured", http.StatusNotFound)
 	}
 
 	// Verify API key exists
@@ -622,10 +663,10 @@ func (s *Service) AssignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID
 	return nil
 }
 
-// UnassignRole removes a role from an API key
+// UnassignRole removes a role from an API key.
 func (s *Service) UnassignRole(ctx context.Context, apiKeyID, roleID xid.ID, orgID *xid.ID, actorID *xid.ID) error {
 	if s.roleRepo == nil {
-		return fmt.Errorf("RBAC not configured")
+		return errs.New(errs.CodeNotFound, "RBAC not configured", http.StatusNotFound)
 	}
 
 	if err := s.roleRepo.UnassignRole(ctx, apiKeyID, roleID, orgID); err != nil {
@@ -641,7 +682,7 @@ func (s *Service) UnassignRole(ctx context.Context, apiKeyID, roleID xid.ID, org
 	return nil
 }
 
-// GetRoles retrieves all roles assigned to an API key
+// GetRoles retrieves all roles assigned to an API key.
 func (s *Service) GetRoles(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) ([]*Role, error) {
 	if s.roleRepo == nil {
 		return []*Role{}, nil
@@ -665,7 +706,7 @@ func (s *Service) GetRoles(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) 
 	return result, nil
 }
 
-// GetPermissions retrieves all permissions for an API key through its roles
+// GetPermissions retrieves all permissions for an API key through its roles.
 func (s *Service) GetPermissions(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) ([]*Permission, error) {
 	if s.roleRepo == nil {
 		return []*Permission{}, nil
@@ -694,7 +735,7 @@ func (s *Service) GetPermissions(ctx context.Context, apiKeyID xid.ID, orgID *xi
 // This includes:
 // 1. API key's own permissions (scopes + roles)
 // 2. If delegation enabled: creator's permissions
-// 3. If impersonation set: target user's permissions
+// 3. If impersonation set: target user's permissions.
 func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, orgID *xid.ID) (*EffectivePermissions, error) {
 	// Get API key
 	apiKey, err := s.repo.FindAPIKeyByID(ctx, apiKeyID)
@@ -717,6 +758,7 @@ func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key permissions: %w", err)
 	}
+
 	for _, perm := range keyPerms {
 		action, resource := parsePermissionName(perm.Name)
 		result.Permissions = append(result.Permissions, &Permission{
@@ -733,6 +775,7 @@ func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get creator permissions: %w", err)
 		}
+
 		for _, perm := range creatorPerms {
 			action, resource := parsePermissionName(perm.Name)
 			result.Permissions = append(result.Permissions, &Permission{
@@ -742,6 +785,7 @@ func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, 
 				Source:   "creator",
 			})
 		}
+
 		result.DelegatedFromCreator = true
 	}
 
@@ -751,6 +795,7 @@ func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to get impersonation permissions: %w", err)
 		}
+
 		for _, perm := range impersonatePerms {
 			action, resource := parsePermissionName(perm.Name)
 			result.Permissions = append(result.Permissions, &Permission{
@@ -760,6 +805,7 @@ func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, 
 				Source:   "impersonation",
 			})
 		}
+
 		result.ImpersonatingUser = apiKey.ImpersonateUserID
 	}
 
@@ -770,7 +816,7 @@ func (s *Service) GetEffectivePermissions(ctx context.Context, apiKeyID xid.ID, 
 }
 
 // CanAccess checks if an API key can perform a specific action on a resource
-// This checks both scopes (legacy) and RBAC permissions (new)
+// This checks both scopes (legacy) and RBAC permissions (new).
 func (s *Service) CanAccess(ctx context.Context, apiKey *APIKey, action, resource string, orgID *xid.ID) (bool, error) {
 	// Check scopes first (backward compatibility)
 	scopeString := fmt.Sprintf("%s:%s", resource, action)
@@ -801,10 +847,10 @@ func (s *Service) CanAccess(ctx context.Context, apiKey *APIKey, action, resourc
 	return false, nil
 }
 
-// BulkAssignRoles assigns multiple roles to an API key
+// BulkAssignRoles assigns multiple roles to an API key.
 func (s *Service) BulkAssignRoles(ctx context.Context, apiKeyID xid.ID, roleIDs []xid.ID, orgID *xid.ID, createdBy *xid.ID) error {
 	if s.roleRepo == nil {
-		return fmt.Errorf("RBAC not configured")
+		return errs.New(errs.CodeNotFound, "RBAC not configured", http.StatusNotFound)
 	}
 
 	if err := s.roleRepo.BulkAssignRoles(ctx, apiKeyID, roleIDs, orgID, createdBy); err != nil {
@@ -830,6 +876,7 @@ func deduplicatePermissions(permissions []*Permission) []*Permission {
 		key := fmt.Sprintf("%s:%s", perm.Action, perm.Resource)
 		if !seen[key] {
 			seen[key] = true
+
 			result = append(result, perm)
 		}
 	}
@@ -842,21 +889,25 @@ func matchesPermission(perm *Permission, action, resource string) bool {
 	if perm.Action == "*" && perm.Resource == "*" {
 		return true // Full admin
 	}
+
 	if perm.Action == "*" && perm.Resource == resource {
 		return true // All actions on resource
 	}
+
 	if perm.Action == action && perm.Resource == "*" {
 		return true // Specific action on all resources
 	}
+
 	if perm.Action == action && perm.Resource == resource {
 		return true // Exact match
 	}
+
 	return false
 }
 
-// parsePermissionName parses a permission name like "view:users" into action and resource
+// parsePermissionName parses a permission name like "view:users" into action and resource.
 func parsePermissionName(name string) (action, resource string) {
-	for i := 0; i < len(name); i++ {
+	for i := range len(name) {
 		if name[i] == ':' {
 			return name[:i], name[i+1:]
 		}

@@ -11,6 +11,7 @@ func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
 		// Check if audit_events table exists
 		var tableExists bool
+
 		err := db.NewSelect().
 			ColumnExpr("to_regclass(?) IS NOT NULL", "public.audit_events").
 			Scan(ctx, &tableExists)
@@ -22,6 +23,7 @@ func init() {
 
 		// Check if organization_id column already exists
 		var colExists bool
+
 		err = db.NewRaw(`
 			SELECT EXISTS (
 				SELECT 1 
@@ -29,7 +31,6 @@ func init() {
 				WHERE table_name = 'audit_events' AND column_name = 'organization_id'
 			)
 		`).Scan(ctx, &colExists)
-
 		if err != nil {
 			return fmt.Errorf("failed to check if organization_id column exists: %w", err)
 		}
@@ -95,6 +96,7 @@ func init() {
 
 		// Check if audit_events table exists
 		var tableExists bool
+
 		err := db.NewSelect().
 			ColumnExpr("to_regclass(?) IS NOT NULL", "public.audit_events").
 			Scan(ctx, &tableExists)
@@ -105,6 +107,7 @@ func init() {
 
 		// Check if organization_id column exists
 		var colExists bool
+
 		err = db.NewRaw(`
 			SELECT EXISTS (
 				SELECT 1 

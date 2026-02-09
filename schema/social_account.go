@@ -7,7 +7,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// SocialAccount links a user to an OAuth provider account
+// SocialAccount links a user to an OAuth provider account.
 type SocialAccount struct {
 	bun.BaseModel `bun:"table:social_accounts"`
 
@@ -47,26 +47,29 @@ type SocialAccount struct {
 	RevokedAt *time.Time `bun:""`                       // When account was disconnected
 }
 
-// IsTokenExpired checks if the access token has expired
+// IsTokenExpired checks if the access token has expired.
 func (sa *SocialAccount) IsTokenExpired() bool {
 	if sa.ExpiresAt == nil {
 		return false // No expiration
 	}
+
 	return time.Now().After(*sa.ExpiresAt)
 }
 
-// IsRefreshTokenValid checks if refresh token is valid
+// IsRefreshTokenValid checks if refresh token is valid.
 func (sa *SocialAccount) IsRefreshTokenValid() bool {
 	if sa.RefreshToken == "" || sa.Revoked {
 		return false
 	}
+
 	if sa.RefreshExpiresAt != nil {
 		return time.Now().Before(*sa.RefreshExpiresAt)
 	}
+
 	return true // No expiration set
 }
 
-// NeedsRefresh checks if the access token needs refreshing
+// NeedsRefresh checks if the access token needs refreshing.
 func (sa *SocialAccount) NeedsRefresh() bool {
 	return sa.IsTokenExpired() && sa.IsRefreshTokenValid()
 }

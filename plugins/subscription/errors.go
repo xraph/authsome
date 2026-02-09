@@ -4,15 +4,15 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/errors"
 )
 
-// Re-export error types for convenience
+// Re-export error types for convenience.
 type SubscriptionError = errors.SubscriptionError
 
-// NewSubscriptionError creates a new subscription error with context
+// NewSubscriptionError creates a new subscription error with context.
 var NewSubscriptionError = errors.New
 
-// Re-export domain errors
+// Re-export domain errors.
 var (
-	// Plan errors
+	// Plan errors.
 	ErrPlanNotFound           = errors.ErrPlanNotFound
 	ErrPlanAlreadyExists      = errors.ErrPlanAlreadyExists
 	ErrPlanNotActive          = errors.ErrPlanNotActive
@@ -21,7 +21,7 @@ var (
 	ErrInvalidBillingPattern  = errors.ErrInvalidBillingPattern
 	ErrInvalidBillingInterval = errors.ErrInvalidBillingInterval
 
-	// Subscription errors
+	// Subscription errors.
 	ErrSubscriptionNotFound      = errors.ErrSubscriptionNotFound
 	ErrSubscriptionAlreadyExists = errors.ErrSubscriptionAlreadyExists
 	ErrSubscriptionNotActive     = errors.ErrSubscriptionNotActive
@@ -30,7 +30,7 @@ var (
 	ErrCannotDowngrade           = errors.ErrCannotDowngrade
 	ErrInvalidQuantity           = errors.ErrInvalidQuantity
 
-	// Add-on errors
+	// Add-on errors.
 	ErrAddOnNotFound        = errors.ErrAddOnNotFound
 	ErrAddOnAlreadyExists   = errors.ErrAddOnAlreadyExists
 	ErrAddOnNotActive       = errors.ErrAddOnNotActive
@@ -39,48 +39,48 @@ var (
 	ErrAddOnNotAttached     = errors.ErrAddOnNotAttached
 	ErrAddOnMaxQuantity     = errors.ErrAddOnMaxQuantity
 
-	// Invoice errors
+	// Invoice errors.
 	ErrInvoiceNotFound    = errors.ErrInvoiceNotFound
 	ErrInvoiceAlreadyPaid = errors.ErrInvoiceAlreadyPaid
 	ErrInvoiceVoided      = errors.ErrInvoiceVoided
 	ErrInvoiceNotOpen     = errors.ErrInvoiceNotOpen
 
-	// Usage errors
+	// Usage errors.
 	ErrUsageRecordNotFound  = errors.ErrUsageRecordNotFound
 	ErrDuplicateUsageRecord = errors.ErrDuplicateUsageRecord
 	ErrInvalidUsageMetric   = errors.ErrInvalidUsageMetric
 	ErrInvalidUsageAction   = errors.ErrInvalidUsageAction
 
-	// Payment method errors
+	// Payment method errors.
 	ErrPaymentMethodNotFound      = errors.ErrPaymentMethodNotFound
 	ErrPaymentMethodRequired      = errors.ErrPaymentMethodRequired
 	ErrPaymentMethodExpired       = errors.ErrPaymentMethodExpired
 	ErrDefaultPaymentMethodDelete = errors.ErrDefaultPaymentMethodDelete
 
-	// Customer errors
+	// Customer errors.
 	ErrCustomerNotFound      = errors.ErrCustomerNotFound
 	ErrCustomerAlreadyExists = errors.ErrCustomerAlreadyExists
 
-	// Provider errors
+	// Provider errors.
 	ErrProviderNotConfigured   = errors.ErrProviderNotConfigured
 	ErrProviderAPIError        = errors.ErrProviderAPIError
 	ErrWebhookSignatureInvalid = errors.ErrWebhookSignatureInvalid
 	ErrWebhookEventUnhandled   = errors.ErrWebhookEventUnhandled
 
-	// Feature/limit errors
+	// Feature/limit errors.
 	ErrFeatureLimitExceeded = errors.ErrFeatureLimitExceeded
 	ErrSeatLimitExceeded    = errors.ErrSeatLimitExceeded
 	ErrSubscriptionRequired = errors.ErrSubscriptionRequired
 	ErrTrialExpired         = errors.ErrTrialExpired
 
-	// General errors
+	// General errors.
 	ErrInvalidCurrency = errors.ErrInvalidCurrency
 	ErrInvalidAppID    = errors.ErrInvalidAppID
 	ErrInvalidOrgID    = errors.ErrInvalidOrgID
 	ErrUnauthorized    = errors.ErrUnauthorized
 )
 
-// Re-export error helper functions
+// Re-export error helper functions.
 var (
 	IsNotFoundError   = errors.IsNotFoundError
 	IsValidationError = errors.IsValidationError

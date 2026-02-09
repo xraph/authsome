@@ -9,13 +9,13 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Resource defines the interface for MCP resources
+// Resource defines the interface for MCP resources.
 type Resource interface {
 	Read(ctx context.Context, uri string, plugin *Plugin) (string, error)
 	Describe() ResourceDescription
 }
 
-// ResourceDescription describes a resource for MCP clients
+// ResourceDescription describes a resource for MCP clients.
 type ResourceDescription struct {
 	URI         string `json:"uri"`
 	Name        string `json:"name"`
@@ -23,33 +23,34 @@ type ResourceDescription struct {
 	MimeType    string `json:"mimeType"`
 }
 
-// ResourceRegistry manages available resources
+// ResourceRegistry manages available resources.
 type ResourceRegistry struct {
 	resources map[string]Resource
 }
 
-// NewResourceRegistry creates a new resource registry
+// NewResourceRegistry creates a new resource registry.
 func NewResourceRegistry() *ResourceRegistry {
 	return &ResourceRegistry{
 		resources: make(map[string]Resource),
 	}
 }
 
-// Register registers a resource handler
+// Register registers a resource handler.
 func (r *ResourceRegistry) Register(uri string, resource Resource) {
 	r.resources[uri] = resource
 }
 
-// List returns descriptions of all resources
+// List returns descriptions of all resources.
 func (r *ResourceRegistry) List() []ResourceDescription {
 	var descriptions []ResourceDescription
 	for _, resource := range r.resources {
 		descriptions = append(descriptions, resource.Describe())
 	}
+
 	return descriptions
 }
 
-// Read reads a resource by URI
+// Read reads a resource by URI.
 func (r *ResourceRegistry) Read(ctx context.Context, uri string, plugin *Plugin) (string, error) {
 	// Find matching resource (support wildcards)
 	for pattern, resource := range r.resources {
@@ -57,10 +58,11 @@ func (r *ResourceRegistry) Read(ctx context.Context, uri string, plugin *Plugin)
 			return resource.Read(ctx, uri, plugin)
 		}
 	}
+
 	return "", fmt.Errorf("resource not found: %s", uri)
 }
 
-// matchesPattern matches URI patterns (basic implementation)
+// matchesPattern matches URI patterns (basic implementation).
 func matchesPattern(pattern, uri string) bool {
 	// Exact match
 	if pattern == uri {
@@ -70,7 +72,7 @@ func matchesPattern(pattern, uri string) bool {
 	return false
 }
 
-// ConfigResource exposes sanitized configuration
+// ConfigResource exposes sanitized configuration.
 type ConfigResource struct{}
 
 func (r *ConfigResource) Describe() ResourceDescription {
@@ -86,8 +88,8 @@ func (r *ConfigResource) Read(ctx context.Context, uri string, plugin *Plugin) (
 	// Get auth instance config
 	authConfig := plugin.auth.GetConfig()
 
-	config := map[string]interface{}{
-		"authsome": map[string]interface{}{
+	config := map[string]any{
+		"authsome": map[string]any{
 			"base_path":       authConfig.BasePath,
 			"rbac_enforce":    authConfig.RBACEnforce,
 			"database_schema": authConfig.DatabaseSchema,
@@ -105,7 +107,7 @@ func (r *ConfigResource) Read(ctx context.Context, uri string, plugin *Plugin) (
 	return string(data), nil
 }
 
-// SchemaResource exposes database schema information
+// SchemaResource exposes database schema information.
 type SchemaResource struct{}
 
 func (r *SchemaResource) Describe() ResourceDescription {
@@ -120,8 +122,7 @@ func (r *SchemaResource) Describe() ResourceDescription {
 func (r *SchemaResource) Read(ctx context.Context, uri string, plugin *Plugin) (string, error) {
 	// Extract entity type from URI (e.g., authsome://schema/user)
 	// For now, return all schemas
-
-	schemas := map[string]interface{}{
+	schemas := map[string]any{
 		"user":         describeSchema(&schema.User{}),
 		"session":      describeSchema(&schema.Session{}),
 		"organization": describeSchema(&schema.Organization{}),
@@ -142,14 +143,15 @@ func (r *SchemaResource) Read(ctx context.Context, uri string, plugin *Plugin) (
 	return string(data), nil
 }
 
-// describeSchema generates schema description from struct
-func describeSchema(v interface{}) map[string]interface{} {
+// describeSchema generates schema description from struct.
+func describeSchema(v any) map[string]any {
 	t := reflect.TypeOf(v)
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 
-	fields := make(map[string]interface{})
+	fields := make(map[string]any)
+
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
@@ -165,24 +167,25 @@ func describeSchema(v interface{}) map[string]interface{} {
 			for j, c := range jsonTag {
 				if c == ',' {
 					fieldName = jsonTag[:j]
+
 					break
 				}
 			}
 		}
 
-		fields[fieldName] = map[string]interface{}{
+		fields[fieldName] = map[string]any{
 			"type":        field.Type.String(),
 			"description": field.Tag.Get("description"), // If we add these
 		}
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"name":   t.Name(),
 		"fields": fields,
 	}
 }
 
-// RoutesResource exposes registered API routes
+// RoutesResource exposes registered API routes.
 type RoutesResource struct{}
 
 func (r *RoutesResource) Describe() ResourceDescription {
@@ -197,9 +200,8 @@ func (r *RoutesResource) Describe() ResourceDescription {
 func (r *RoutesResource) Read(ctx context.Context, uri string, plugin *Plugin) (string, error) {
 	// TODO: Implement route introspection
 	// This requires enhancing AuthSome to track registered routes
-
-	routes := map[string]interface{}{
-		"routes": []map[string]interface{}{
+	routes := map[string]any{
+		"routes": []map[string]any{
 			{
 				"method":      "POST",
 				"path":        "/api/auth/signup",

@@ -32,6 +32,7 @@ func NewService(r *repo.MagicLinkRepository, users *user.Service, sessionSvc *se
 	if cfg.ExpiryMinutes == 0 {
 		cfg.ExpiryMinutes = 15
 	}
+
 	return &Service{
 		repo:         r,
 		users:        users,
@@ -56,6 +57,7 @@ func (s *Service) Send(ctx context.Context, appID xid.ID, email, ip, ua string) 
 
 	// Organization context is optional for magiclink (can be nil)
 	var userOrgID *xid.ID
+
 	orgID, ok := contexts.GetOrganizationID(ctx)
 	if ok && !orgID.IsNil() {
 		userOrgID = &orgID
@@ -99,10 +101,11 @@ func (s *Service) Send(ctx context.Context, appID xid.ID, email, ip, ua string) 
 	if s.config.DevExposeURL || s.notifAdapter == nil {
 		return magicLink, nil
 	}
+
 	return "", nil
 }
 
-// VerifyResult holds the result of magic link verification
+// VerifyResult holds the result of magic link verification.
 type VerifyResult struct {
 	Email     string     // Email from magic link
 	User      *user.User // Nil for new users, populated for existing users
@@ -128,12 +131,15 @@ func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID
 		if s.audit != nil {
 			_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkVerifyFailed), "token:"+t, ip, ua, "")
 		}
+
 		return nil, errs.Wrap(err, "MAGIC_LINK_LOOKUP_FAILED", "Failed to lookup magic link", 500)
 	}
+
 	if rec == nil {
 		if s.audit != nil {
 			_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkVerifyFailed), "token:"+t, ip, ua, "")
 		}
+
 		return nil, errs.MagicLinkExpired()
 	}
 
@@ -149,6 +155,7 @@ func (s *Service) Verify(ctx context.Context, appID, envID xid.ID, orgID *xid.ID
 		if s.audit != nil {
 			_ = s.audit.Log(ctx, nil, string(audit.ActionMagicLinkVerifySuccessNewUser), "email:"+rec.Email, ip, ua, "")
 		}
+
 		return &VerifyResult{
 			Email:     rec.Email,
 			User:      nil,

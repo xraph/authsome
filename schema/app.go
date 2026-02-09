@@ -5,19 +5,19 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// App represents the app table (formerly Organization - platform-level tenant)
+// App represents the app table (formerly Organization - platform-level tenant).
 type App struct {
 	AuditableModel `bun:",inline"`
 	bun.BaseModel  `bun:"table:apps,alias:a"`
 
-	ID         xid.ID                 `json:"id" bun:"id,pk,type:varchar(20)"`
-	Name       string                 `json:"name" bun:"name,notnull"`
-	Slug       string                 `json:"slug" bun:"slug,notnull,unique"`
-	Logo       string                 `json:"logo" bun:"logo"`
-	Metadata   map[string]interface{} `json:"metadata" bun:"metadata,type:jsonb"`
-	IsPlatform bool                   `json:"isPlatform" bun:"is_platform,default:false"` // Identifies the single platform app
+	ID         xid.ID         `bun:"id,pk,type:varchar(20)"    json:"id"`
+	Name       string         `bun:"name,notnull"              json:"name"`
+	Slug       string         `bun:"slug,notnull,unique"       json:"slug"`
+	Logo       string         `bun:"logo"                      json:"logo"`
+	Metadata   map[string]any `bun:"metadata,type:jsonb"       json:"metadata"`
+	IsPlatform bool           `bun:"is_platform,default:false" json:"isPlatform"` // Identifies the single platform app
 
 	// Relations
-	Members []Member `json:"members,omitempty" bun:"rel:has-many,join:id=app_id"`
-	Teams   []Team   `json:"teams,omitempty" bun:"rel:has-many,join:id=app_id"`
+	Members []Member `bun:"rel:has-many,join:id=app_id" json:"members,omitempty"`
+	Teams   []Team   `bun:"rel:has-many,join:id=app_id" json:"teams,omitempty"`
 }

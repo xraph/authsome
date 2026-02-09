@@ -6,7 +6,7 @@ import (
 	"github.com/rs/xid"
 )
 
-// UsageRecord represents a metered usage record
+// UsageRecord represents a metered usage record.
 type UsageRecord struct {
 	ID               xid.ID         `json:"id"`
 	SubscriptionID   xid.ID         `json:"subscriptionId"`   // Related subscription
@@ -23,33 +23,34 @@ type UsageRecord struct {
 	CreatedAt        time.Time      `json:"createdAt"`
 }
 
-// UsageAction defines the type of usage update
+// UsageAction defines the type of usage update.
 type UsageAction string
 
 const (
-	// UsageActionSet sets the usage to an absolute value
+	// UsageActionSet sets the usage to an absolute value.
 	UsageActionSet UsageAction = "set"
-	// UsageActionIncrement adds to the current usage
+	// UsageActionIncrement adds to the current usage.
 	UsageActionIncrement UsageAction = "increment"
-	// UsageActionDecrement subtracts from the current usage
+	// UsageActionDecrement subtracts from the current usage.
 	UsageActionDecrement UsageAction = "decrement"
 )
 
-// String returns the string representation of usage action
+// String returns the string representation of usage action.
 func (u UsageAction) String() string {
 	return string(u)
 }
 
-// IsValid checks if the usage action is valid
+// IsValid checks if the usage action is valid.
 func (u UsageAction) IsValid() bool {
 	switch u {
 	case UsageActionSet, UsageActionIncrement, UsageActionDecrement:
 		return true
 	}
+
 	return false
 }
 
-// UsageSummary provides aggregated usage data for a metric
+// UsageSummary provides aggregated usage data for a metric.
 type UsageSummary struct {
 	MetricKey     string    `json:"metricKey"`
 	TotalQuantity int64     `json:"totalQuantity"`
@@ -60,7 +61,7 @@ type UsageSummary struct {
 	LastRecordAt  time.Time `json:"lastRecordAt"`
 }
 
-// UsageMetric defines a usage metric for metered billing
+// UsageMetric defines a usage metric for metered billing.
 type UsageMetric struct {
 	Key           string `json:"key"`           // Metric identifier
 	Name          string `json:"name"`          // Display name
@@ -69,7 +70,7 @@ type UsageMetric struct {
 	AggregateType string `json:"aggregateType"` // "sum", "max", "last_during_period"
 }
 
-// Common usage metric keys
+// Common usage metric keys.
 const (
 	UsageMetricAPICalls    = "api_calls"
 	UsageMetricStorageGB   = "storage_gb"
@@ -79,9 +80,10 @@ const (
 	UsageMetricCompute     = "compute_hours"
 )
 
-// NewUsageRecord creates a new UsageRecord
+// NewUsageRecord creates a new UsageRecord.
 func NewUsageRecord(subID, orgID xid.ID, metricKey string, quantity int64, action UsageAction) *UsageRecord {
 	now := time.Now()
+
 	return &UsageRecord{
 		ID:             xid.New(),
 		SubscriptionID: subID,
@@ -96,26 +98,26 @@ func NewUsageRecord(subID, orgID xid.ID, metricKey string, quantity int64, actio
 	}
 }
 
-// RecordUsageRequest represents a request to record usage
+// RecordUsageRequest represents a request to record usage.
 type RecordUsageRequest struct {
 	SubscriptionID xid.ID         `json:"subscriptionId" validate:"required"`
-	MetricKey      string         `json:"metricKey" validate:"required,min=1,max=50"`
-	Quantity       int64          `json:"quantity" validate:"required,min=0"`
-	Action         UsageAction    `json:"action" validate:"required"`
+	MetricKey      string         `json:"metricKey"      validate:"required,min=1,max=50"`
+	Quantity       int64          `json:"quantity"       validate:"required,min=0"`
+	Action         UsageAction    `json:"action"         validate:"required"`
 	Timestamp      *time.Time     `json:"timestamp"` // Optional, defaults to now
 	IdempotencyKey string         `json:"idempotencyKey" validate:"max=100"`
 	Metadata       map[string]any `json:"metadata"`
 }
 
-// GetUsageSummaryRequest represents a request to get usage summary
+// GetUsageSummaryRequest represents a request to get usage summary.
 type GetUsageSummaryRequest struct {
 	SubscriptionID xid.ID    `json:"subscriptionId" validate:"required"`
-	MetricKey      string    `json:"metricKey" validate:"required"`
-	PeriodStart    time.Time `json:"periodStart" validate:"required"`
-	PeriodEnd      time.Time `json:"periodEnd" validate:"required"`
+	MetricKey      string    `json:"metricKey"      validate:"required"`
+	PeriodStart    time.Time `json:"periodStart"    validate:"required"`
+	PeriodEnd      time.Time `json:"periodEnd"      validate:"required"`
 }
 
-// ListUsageRecordsFilter defines filters for listing usage records
+// ListUsageRecordsFilter defines filters for listing usage records.
 type ListUsageRecordsFilter struct {
 	SubscriptionID *xid.ID    `json:"subscriptionId"`
 	OrganizationID *xid.ID    `json:"organizationId"`
@@ -127,7 +129,7 @@ type ListUsageRecordsFilter struct {
 	PageSize       int        `json:"pageSize"`
 }
 
-// UsageLimit tracks current usage against limits
+// UsageLimit tracks current usage against limits.
 type UsageLimit struct {
 	MetricKey      string  `json:"metricKey"`
 	CurrentUsage   int64   `json:"currentUsage"`
@@ -137,7 +139,7 @@ type UsageLimit struct {
 	PercentUsed    float64 `json:"percentUsed"`
 }
 
-// NewUsageLimit creates a UsageLimit with calculated values
+// NewUsageLimit creates a UsageLimit with calculated values.
 func NewUsageLimit(metricKey string, current, limit int64) *UsageLimit {
 	ul := &UsageLimit{
 		MetricKey:    metricKey,
@@ -151,10 +153,8 @@ func NewUsageLimit(metricKey string, current, limit int64) *UsageLimit {
 		ul.IsExceeded = false
 		ul.PercentUsed = 0
 	} else {
-		ul.RemainingUsage = limit - current
-		if ul.RemainingUsage < 0 {
-			ul.RemainingUsage = 0
-		}
+		ul.RemainingUsage = max(limit-current, 0)
+
 		ul.IsExceeded = current > limit
 		if limit > 0 {
 			ul.PercentUsed = float64(current) / float64(limit) * 100

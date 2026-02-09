@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/app"
@@ -12,15 +13,15 @@ import (
 	"github.com/xraph/forgeui/bridge"
 )
 
-// SettingsMetadataKey is the key used in App.Metadata for storing settings
+// SettingsMetadataKey is the key used in App.Metadata for storing settings.
 const SettingsMetadataKey = "settings"
 
-// GeneralSettingsInput represents general settings request
+// GeneralSettingsInput represents general settings request.
 type GeneralSettingsInput struct {
 	AppID string `json:"appId" validate:"required"`
 }
 
-// GeneralSettingsOutput represents general settings response
+// GeneralSettingsOutput represents general settings response.
 type GeneralSettingsOutput struct {
 	AppName      string `json:"appName"`
 	Description  string `json:"description,omitempty"`
@@ -31,9 +32,9 @@ type GeneralSettingsOutput struct {
 	WebsiteUrl   string `json:"websiteUrl,omitempty"`
 }
 
-// UpdateGeneralSettingsInput represents general settings update request
+// UpdateGeneralSettingsInput represents general settings update request.
 type UpdateGeneralSettingsInput struct {
-	AppID        string `json:"appId" validate:"required"`
+	AppID        string `json:"appId"                  validate:"required"`
 	AppName      string `json:"appName,omitempty"`
 	Description  string `json:"description,omitempty"`
 	Timezone     string `json:"timezone,omitempty"`
@@ -43,7 +44,7 @@ type UpdateGeneralSettingsInput struct {
 	WebsiteUrl   string `json:"websiteUrl,omitempty"`
 }
 
-// SecuritySettingsOutput represents security settings response
+// SecuritySettingsOutput represents security settings response.
 type SecuritySettingsOutput struct {
 	PasswordMinLength   int      `json:"passwordMinLength"`
 	RequireUppercase    bool     `json:"requireUppercase"`
@@ -57,9 +58,9 @@ type SecuritySettingsOutput struct {
 	AllowedIPAddresses  []string `json:"allowedIpAddresses,omitempty"`
 }
 
-// UpdateSecuritySettingsInput represents security settings update request
+// UpdateSecuritySettingsInput represents security settings update request.
 type UpdateSecuritySettingsInput struct {
-	AppID               string   `json:"appId" validate:"required"`
+	AppID               string   `json:"appId"                         validate:"required"`
 	PasswordMinLength   *int     `json:"passwordMinLength,omitempty"`
 	RequireUppercase    *bool    `json:"requireUppercase,omitempty"`
 	RequireLowercase    *bool    `json:"requireLowercase,omitempty"`
@@ -72,7 +73,7 @@ type UpdateSecuritySettingsInput struct {
 	AllowedIPAddresses  []string `json:"allowedIpAddresses,omitempty"`
 }
 
-// SessionSettingsOutput represents session settings response
+// SessionSettingsOutput represents session settings response.
 type SessionSettingsOutput struct {
 	SessionDuration       int    `json:"sessionDuration"`
 	RefreshTokenDuration  int    `json:"refreshTokenDuration"`
@@ -85,9 +86,9 @@ type SessionSettingsOutput struct {
 	CookieSecure          bool   `json:"cookieSecure"`
 }
 
-// UpdateSessionSettingsInput represents session settings update request
+// UpdateSessionSettingsInput represents session settings update request.
 type UpdateSessionSettingsInput struct {
-	AppID                 string  `json:"appId" validate:"required"`
+	AppID                 string  `json:"appId"                           validate:"required"`
 	SessionDuration       *int    `json:"sessionDuration,omitempty"`
 	RefreshTokenDuration  *int    `json:"refreshTokenDuration,omitempty"`
 	IdleTimeout           *int    `json:"idleTimeout,omitempty"`
@@ -99,33 +100,33 @@ type UpdateSessionSettingsInput struct {
 	CookieSecure          *bool   `json:"cookieSecure,omitempty"`
 }
 
-// SectionSettingsInput represents a request for any section's settings
+// SectionSettingsInput represents a request for any section's settings.
 type SectionSettingsInput struct {
-	AppID     string `json:"appId" validate:"required"`
+	AppID     string `json:"appId"     validate:"required"`
 	SectionID string `json:"sectionId" validate:"required"`
 }
 
-// SectionSettingsOutput represents any section's settings response
+// SectionSettingsOutput represents any section's settings response.
 type SectionSettingsOutput struct {
-	SectionID string                 `json:"sectionId"`
-	Data      map[string]interface{} `json:"data"`
+	SectionID string         `json:"sectionId"`
+	Data      map[string]any `json:"data"`
 }
 
-// UpdateSectionSettingsInput represents a section settings update request
+// UpdateSectionSettingsInput represents a section settings update request.
 type UpdateSectionSettingsInput struct {
-	AppID     string                 `json:"appId" validate:"required"`
-	SectionID string                 `json:"sectionId" validate:"required"`
-	Data      map[string]interface{} `json:"data" validate:"required"`
+	AppID     string         `json:"appId"     validate:"required"`
+	SectionID string         `json:"sectionId" validate:"required"`
+	Data      map[string]any `json:"data"      validate:"required"`
 }
 
-// SchemaOutput represents the settings schema response
+// SchemaOutput represents the settings schema response.
 type SchemaOutput struct {
 	Schema *schema.Schema `json:"schema"`
 }
 
 // Note: API key types and functions have been moved to apikeys.go
 
-// registerSettingsFunctions registers settings-related bridge functions
+// registerSettingsFunctions registers settings-related bridge functions.
 func (bm *BridgeManager) registerSettingsFunctions() error {
 	// General settings
 	if err := bm.bridge.Register("getGeneralSettings", bm.getGeneralSettings,
@@ -189,29 +190,30 @@ func (bm *BridgeManager) registerSettingsFunctions() error {
 	// Note: API key functions are registered in apikeys.go
 
 	bm.log.Info("settings bridge functions registered")
+
 	return nil
 }
 
-// getAppSettings retrieves settings from app metadata
-func (bm *BridgeManager) getAppSettings(ctx context.Context, appID xid.ID) (map[string]map[string]interface{}, error) {
+// getAppSettings retrieves settings from app metadata.
+func (bm *BridgeManager) getAppSettings(ctx context.Context, appID xid.ID) (map[string]map[string]any, error) {
 	appData, err := bm.appSvc.FindAppByID(ctx, appID)
 	if err != nil {
 		return nil, err
 	}
 
-	settings := make(map[string]map[string]interface{})
+	settings := make(map[string]map[string]any)
 
 	if appData.Metadata != nil {
 		if settingsData, ok := appData.Metadata[SettingsMetadataKey]; ok {
 			// Handle different types that might be in metadata
 			switch v := settingsData.(type) {
-			case map[string]interface{}:
+			case map[string]any:
 				for sectionID, sectionData := range v {
-					if sd, ok := sectionData.(map[string]interface{}); ok {
+					if sd, ok := sectionData.(map[string]any); ok {
 						settings[sectionID] = sd
 					}
 				}
-			case map[string]map[string]interface{}:
+			case map[string]map[string]any:
 				settings = v
 			}
 		}
@@ -220,8 +222,8 @@ func (bm *BridgeManager) getAppSettings(ctx context.Context, appID xid.ID) (map[
 	return settings, nil
 }
 
-// getSectionSettings retrieves settings for a specific section
-func (bm *BridgeManager) getSectionSettingsData(ctx context.Context, appID xid.ID, sectionID string) (map[string]interface{}, error) {
+// getSectionSettings retrieves settings for a specific section.
+func (bm *BridgeManager) getSectionSettingsData(ctx context.Context, appID xid.ID, sectionID string) (map[string]any, error) {
 	allSettings, err := bm.getAppSettings(ctx, appID)
 	if err != nil {
 		return nil, err
@@ -242,15 +244,13 @@ func (bm *BridgeManager) getSectionSettingsData(ctx context.Context, appID xid.I
 	}
 
 	// Overlay stored settings on defaults
-	for k, v := range sectionSettings {
-		defaults[k] = v
-	}
+	maps.Copy(defaults, sectionSettings)
 
 	return defaults, nil
 }
 
-// updateSectionSettingsData updates settings for a specific section with validation
-func (bm *BridgeManager) updateSectionSettingsData(ctx context.Context, appID xid.ID, sectionID string, data map[string]interface{}) error {
+// updateSectionSettingsData updates settings for a specific section with validation.
+func (bm *BridgeManager) updateSectionSettingsData(ctx context.Context, appID xid.ID, sectionID string, data map[string]any) error {
 	// Validate against schema
 	section := schema.GetGlobalSection(sectionID)
 	if section == nil {
@@ -277,7 +277,7 @@ func (bm *BridgeManager) updateSectionSettingsData(ctx context.Context, appID xi
 	// Get existing section data
 	existingSection := allSettings[sectionID]
 	if existingSection == nil {
-		existingSection = make(map[string]interface{})
+		existingSection = make(map[string]any)
 	}
 
 	// Patch the section
@@ -292,8 +292,9 @@ func (bm *BridgeManager) updateSectionSettingsData(ctx context.Context, appID xi
 	// Prepare metadata update
 	metadata := appData.Metadata
 	if metadata == nil {
-		metadata = make(map[string]interface{})
+		metadata = make(map[string]any)
 	}
+
 	metadata[SettingsMetadataKey] = allSettings
 
 	// Update app
@@ -302,10 +303,11 @@ func (bm *BridgeManager) updateSectionSettingsData(ctx context.Context, appID xi
 	}
 
 	_, err = bm.appSvc.UpdateApp(ctx, appID, updateReq)
+
 	return err
 }
 
-// getGeneralSettings retrieves general settings
+// getGeneralSettings retrieves general settings.
 func (bm *BridgeManager) getGeneralSettings(ctx bridge.Context, input GeneralSettingsInput) (*GeneralSettingsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -322,6 +324,7 @@ func (bm *BridgeManager) getGeneralSettings(ctx bridge.Context, input GeneralSet
 	appData, err := bm.appSvc.FindAppByID(goCtx, appID)
 	if err != nil {
 		bm.log.Error("failed to find app", forge.F("error", err.Error()))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to load app")
 	}
 
@@ -348,18 +351,23 @@ func (bm *BridgeManager) getGeneralSettings(ctx bridge.Context, input GeneralSet
 	if v, ok := settings["description"].(string); ok {
 		output.Description = v
 	}
+
 	if v, ok := settings["timezone"].(string); ok {
 		output.Timezone = v
 	}
+
 	if v, ok := settings["language"].(string); ok {
 		output.Language = v
 	}
+
 	if v, ok := settings["dateFormat"].(string); ok {
 		output.DateFormat = v
 	}
+
 	if v, ok := settings["supportEmail"].(string); ok {
 		output.SupportEmail = v
 	}
+
 	if v, ok := settings["websiteUrl"].(string); ok {
 		output.WebsiteUrl = v
 	}
@@ -367,7 +375,7 @@ func (bm *BridgeManager) getGeneralSettings(ctx bridge.Context, input GeneralSet
 	return output, nil
 }
 
-// updateGeneralSettings updates general settings
+// updateGeneralSettings updates general settings.
 func (bm *BridgeManager) updateGeneralSettings(ctx bridge.Context, input UpdateGeneralSettingsInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -387,27 +395,33 @@ func (bm *BridgeManager) updateGeneralSettings(ctx bridge.Context, input UpdateG
 		}
 		if _, err := bm.appSvc.UpdateApp(goCtx, appID, updateReq); err != nil {
 			bm.log.Error("failed to update app name", forge.F("error", err.Error()))
+
 			return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update app name")
 		}
 	}
 
 	// Build settings data
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	if input.Description != "" {
 		data["description"] = input.Description
 	}
+
 	if input.Timezone != "" {
 		data["timezone"] = input.Timezone
 	}
+
 	if input.Language != "" {
 		data["language"] = input.Language
 	}
+
 	if input.DateFormat != "" {
 		data["dateFormat"] = input.DateFormat
 	}
+
 	if input.SupportEmail != "" {
 		data["supportEmail"] = input.SupportEmail
 	}
+
 	if input.WebsiteUrl != "" {
 		data["websiteUrl"] = input.WebsiteUrl
 	}
@@ -416,6 +430,7 @@ func (bm *BridgeManager) updateGeneralSettings(ctx bridge.Context, input UpdateG
 	if len(data) > 0 {
 		if err := bm.updateSectionSettingsData(goCtx, appID, schema.SectionIDGeneral, data); err != nil {
 			bm.log.Error("failed to update settings", forge.F("error", err.Error()))
+
 			return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update settings")
 		}
 	}
@@ -431,7 +446,7 @@ func (bm *BridgeManager) updateGeneralSettings(ctx bridge.Context, input UpdateG
 	}, nil
 }
 
-// getSecuritySettings retrieves security settings
+// getSecuritySettings retrieves security settings.
 func (bm *BridgeManager) getSecuritySettings(ctx bridge.Context, input GeneralSettingsInput) (*SecuritySettingsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -475,38 +490,47 @@ func (bm *BridgeManager) getSecuritySettings(ctx bridge.Context, input GeneralSe
 	if v, ok := toInt(settings["passwordMinLength"]); ok {
 		output.PasswordMinLength = v
 	}
+
 	if v, ok := settings["requireUppercase"].(bool); ok {
 		output.RequireUppercase = v
 	}
+
 	if v, ok := settings["requireLowercase"].(bool); ok {
 		output.RequireLowercase = v
 	}
+
 	if v, ok := settings["requireNumbers"].(bool); ok {
 		output.RequireNumbers = v
 	}
+
 	if v, ok := settings["requireSpecialChars"].(bool); ok {
 		output.RequireSpecialChars = v
 	}
+
 	if v, ok := toInt(settings["maxLoginAttempts"]); ok {
 		output.MaxLoginAttempts = v
 	}
+
 	if v, ok := toInt(settings["lockoutDuration"]); ok {
 		output.LockoutDuration = v
 	}
+
 	if v, ok := settings["requireMFA"].(bool); ok {
 		output.RequireMFA = v
 	}
-	if v, ok := settings["allowedMFAMethods"].([]interface{}); ok {
+
+	if v, ok := settings["allowedMFAMethods"].([]any); ok {
 		output.AllowedMFAMethods = toStringSlice(v)
 	}
-	if v, ok := settings["allowedIPAddresses"].([]interface{}); ok {
+
+	if v, ok := settings["allowedIPAddresses"].([]any); ok {
 		output.AllowedIPAddresses = toStringSlice(v)
 	}
 
 	return output, nil
 }
 
-// updateSecuritySettings updates security settings
+// updateSecuritySettings updates security settings.
 func (bm *BridgeManager) updateSecuritySettings(ctx bridge.Context, input UpdateSecuritySettingsInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -520,34 +544,43 @@ func (bm *BridgeManager) updateSecuritySettings(ctx bridge.Context, input Update
 	goCtx := bm.buildContext(ctx, appID)
 
 	// Build settings data
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	if input.PasswordMinLength != nil {
 		data["passwordMinLength"] = *input.PasswordMinLength
 	}
+
 	if input.RequireUppercase != nil {
 		data["requireUppercase"] = *input.RequireUppercase
 	}
+
 	if input.RequireLowercase != nil {
 		data["requireLowercase"] = *input.RequireLowercase
 	}
+
 	if input.RequireNumbers != nil {
 		data["requireNumbers"] = *input.RequireNumbers
 	}
+
 	if input.RequireSpecialChars != nil {
 		data["requireSpecialChars"] = *input.RequireSpecialChars
 	}
+
 	if input.MaxLoginAttempts != nil {
 		data["maxLoginAttempts"] = *input.MaxLoginAttempts
 	}
+
 	if input.LockoutDuration != nil {
 		data["lockoutDuration"] = *input.LockoutDuration
 	}
+
 	if input.RequireMFA != nil {
 		data["requireMFA"] = *input.RequireMFA
 	}
+
 	if input.AllowedMFAMethods != nil {
 		data["allowedMFAMethods"] = input.AllowedMFAMethods
 	}
+
 	if input.AllowedIPAddresses != nil {
 		data["allowedIPAddresses"] = input.AllowedIPAddresses
 	}
@@ -555,6 +588,7 @@ func (bm *BridgeManager) updateSecuritySettings(ctx bridge.Context, input Update
 	if len(data) > 0 {
 		if err := bm.updateSectionSettingsData(goCtx, appID, schema.SectionIDSecurity, data); err != nil {
 			bm.log.Error("failed to update security settings", forge.F("error", err.Error()))
+
 			return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update settings")
 		}
 	}
@@ -570,7 +604,7 @@ func (bm *BridgeManager) updateSecuritySettings(ctx bridge.Context, input Update
 	}, nil
 }
 
-// getSessionSettings retrieves session settings
+// getSessionSettings retrieves session settings.
 func (bm *BridgeManager) getSessionSettings(ctx bridge.Context, input GeneralSettingsInput) (*SessionSettingsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -616,27 +650,35 @@ func (bm *BridgeManager) getSessionSettings(ctx bridge.Context, input GeneralSet
 	if v, ok := toInt(settings["sessionDuration"]); ok {
 		output.SessionDuration = v
 	}
+
 	if v, ok := toInt(settings["refreshTokenDuration"]); ok {
 		output.RefreshTokenDuration = v
 	}
+
 	if v, ok := toInt(settings["idleTimeout"]); ok {
 		output.IdleTimeout = v
 	}
+
 	if v, ok := settings["allowMultipleSessions"].(bool); ok {
 		output.AllowMultipleSessions = v
 	}
+
 	if v, ok := toInt(settings["maxConcurrentSessions"]); ok {
 		output.MaxConcurrentSessions = v
 	}
+
 	if v, ok := settings["rememberMeEnabled"].(bool); ok {
 		output.RememberMeEnabled = v
 	}
+
 	if v, ok := toInt(settings["rememberMeDuration"]); ok {
 		output.RememberMeDuration = v
 	}
+
 	if v, ok := settings["cookieSameSite"].(string); ok {
 		output.CookieSameSite = v
 	}
+
 	if v, ok := settings["cookieSecure"].(bool); ok {
 		output.CookieSecure = v
 	}
@@ -644,7 +686,7 @@ func (bm *BridgeManager) getSessionSettings(ctx bridge.Context, input GeneralSet
 	return output, nil
 }
 
-// updateSessionSettings updates session settings
+// updateSessionSettings updates session settings.
 func (bm *BridgeManager) updateSessionSettings(ctx bridge.Context, input UpdateSessionSettingsInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -658,31 +700,39 @@ func (bm *BridgeManager) updateSessionSettings(ctx bridge.Context, input UpdateS
 	goCtx := bm.buildContext(ctx, appID)
 
 	// Build settings data
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	if input.SessionDuration != nil {
 		data["sessionDuration"] = *input.SessionDuration
 	}
+
 	if input.RefreshTokenDuration != nil {
 		data["refreshTokenDuration"] = *input.RefreshTokenDuration
 	}
+
 	if input.IdleTimeout != nil {
 		data["idleTimeout"] = *input.IdleTimeout
 	}
+
 	if input.AllowMultipleSessions != nil {
 		data["allowMultipleSessions"] = *input.AllowMultipleSessions
 	}
+
 	if input.MaxConcurrentSessions != nil {
 		data["maxConcurrentSessions"] = *input.MaxConcurrentSessions
 	}
+
 	if input.RememberMeEnabled != nil {
 		data["rememberMeEnabled"] = *input.RememberMeEnabled
 	}
+
 	if input.RememberMeDuration != nil {
 		data["rememberMeDuration"] = *input.RememberMeDuration
 	}
+
 	if input.CookieSameSite != nil {
 		data["cookieSameSite"] = *input.CookieSameSite
 	}
+
 	if input.CookieSecure != nil {
 		data["cookieSecure"] = *input.CookieSecure
 	}
@@ -690,6 +740,7 @@ func (bm *BridgeManager) updateSessionSettings(ctx bridge.Context, input UpdateS
 	if len(data) > 0 {
 		if err := bm.updateSectionSettingsData(goCtx, appID, schema.SectionIDSession, data); err != nil {
 			bm.log.Error("failed to update session settings", forge.F("error", err.Error()))
+
 			return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update settings")
 		}
 	}
@@ -705,11 +756,12 @@ func (bm *BridgeManager) updateSessionSettings(ctx bridge.Context, input UpdateS
 	}, nil
 }
 
-// getSectionSettings retrieves settings for any section
+// getSectionSettings retrieves settings for any section.
 func (bm *BridgeManager) getSectionSettings(ctx bridge.Context, input SectionSettingsInput) (*SectionSettingsOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
 	}
+
 	if input.SectionID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "sectionId is required")
 	}
@@ -724,6 +776,7 @@ func (bm *BridgeManager) getSectionSettings(ctx bridge.Context, input SectionSet
 	settings, err := bm.getSectionSettingsData(goCtx, appID, input.SectionID)
 	if err != nil {
 		bm.log.Error("failed to get section settings", forge.F("error", err.Error()), forge.F("sectionId", input.SectionID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to load settings")
 	}
 
@@ -733,14 +786,16 @@ func (bm *BridgeManager) getSectionSettings(ctx bridge.Context, input SectionSet
 	}, nil
 }
 
-// updateSectionSettings updates settings for any section
+// updateSectionSettings updates settings for any section.
 func (bm *BridgeManager) updateSectionSettings(ctx bridge.Context, input UpdateSectionSettingsInput) (*GenericSuccessOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
 	}
+
 	if input.SectionID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "sectionId is required")
 	}
+
 	if input.Data == nil {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "data is required")
 	}
@@ -754,6 +809,7 @@ func (bm *BridgeManager) updateSectionSettings(ctx bridge.Context, input UpdateS
 
 	if err := bm.updateSectionSettingsData(goCtx, appID, input.SectionID, input.Data); err != nil {
 		bm.log.Error("failed to update section settings", forge.F("error", err.Error()), forge.F("sectionId", input.SectionID))
+
 		return nil, bridge.NewError(bridge.ErrCodeInternal, "failed to update settings: "+err.Error())
 	}
 
@@ -764,11 +820,11 @@ func (bm *BridgeManager) updateSectionSettings(ctx bridge.Context, input UpdateS
 
 	return &GenericSuccessOutput{
 		Success: true,
-		Message: fmt.Sprintf("%s settings updated successfully", input.SectionID),
+		Message: input.SectionID + " settings updated successfully",
 	}, nil
 }
 
-// getSettingsSchema returns the settings schema for rendering forms
+// getSettingsSchema returns the settings schema for rendering forms.
 func (bm *BridgeManager) getSettingsSchema(ctx bridge.Context, input GeneralSettingsInput) (*SchemaOutput, error) {
 	if input.AppID == "" {
 		return nil, bridge.NewError(bridge.ErrCodeBadRequest, "appId is required")
@@ -784,7 +840,7 @@ func (bm *BridgeManager) getSettingsSchema(ctx bridge.Context, input GeneralSett
 
 // Helper functions
 
-func toInt(v interface{}) (int, bool) {
+func toInt(v any) (int, bool) {
 	switch val := v.(type) {
 	case int:
 		return val, true
@@ -798,16 +854,18 @@ func toInt(v interface{}) (int, bool) {
 			return int(i), true
 		}
 	}
+
 	return 0, false
 }
 
-func toStringSlice(v []interface{}) []string {
+func toStringSlice(v []any) []string {
 	result := make([]string, 0, len(v))
 	for _, item := range v {
 		if s, ok := item.(string); ok {
 			result = append(result, s)
 		}
 	}
+
 	return result
 }
 

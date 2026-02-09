@@ -9,16 +9,16 @@ import (
 )
 
 // Service provides access to all organization-related services
-// Internally delegates to focused services for better separation of concerns
+// Internally delegates to focused services for better separation of concerns.
 type Service struct {
 	Organization *OrganizationService
 	Member       *MemberService
 	Team         *TeamService
 	Invitation   *InvitationService
-	hookRegistry interface{} // Hook registry for lifecycle events (interface{} to avoid import cycle)
+	hookRegistry any // Hook registry for lifecycle events (interface{} to avoid import cycle)
 }
 
-// NewService creates a new service with all focused services
+// NewService creates a new service with all focused services.
 func NewService(
 	orgRepo OrganizationRepository,
 	memberRepo MemberRepository,
@@ -36,8 +36,8 @@ func NewService(
 	}
 }
 
-// SetHookRegistry sets the hook registry for executing lifecycle hooks
-func (s *Service) SetHookRegistry(registry interface{}) {
+// SetHookRegistry sets the hook registry for executing lifecycle hooks.
+func (s *Service) SetHookRegistry(registry any) {
 	s.hookRegistry = registry
 }
 
@@ -80,6 +80,7 @@ func (s *Service) DeleteOrganization(ctx context.Context, id, userID xid.ID) err
 	if err != nil {
 		return err
 	}
+
 	orgName := org.Name
 
 	// Delete organization
@@ -101,7 +102,7 @@ func (s *Service) DeleteOrganization(ctx context.Context, id, userID xid.ID) err
 }
 
 // ForceDeleteOrganization deletes an organization without permission checks
-// This should only be called by admin users or in administrative contexts
+// This should only be called by admin users or in administrative contexts.
 func (s *Service) ForceDeleteOrganization(ctx context.Context, id xid.ID) error {
 	return s.Organization.ForceDeleteOrganization(ctx, id)
 }
@@ -119,7 +120,7 @@ func (s *Service) AddMember(ctx context.Context, orgID, userID xid.ID, role stri
 	// Execute after member add hook
 	if s.hookRegistry != nil {
 		if registry, ok := s.hookRegistry.(interface {
-			ExecuteAfterMemberAdd(context.Context, interface{}) error
+			ExecuteAfterMemberAdd(context.Context, any) error
 		}); ok {
 			_ = registry.ExecuteAfterMemberAdd(ctx, member)
 		}
@@ -150,6 +151,7 @@ func (s *Service) UpdateMemberRole(ctx context.Context, orgID, memberID xid.ID, 
 	if err != nil {
 		return nil, err
 	}
+
 	oldRole := member.Role
 
 	// Update role
@@ -179,6 +181,7 @@ func (s *Service) RemoveMember(ctx context.Context, id, removerUserID xid.ID) er
 
 	orgID := member.OrganizationID
 	userID := member.UserID
+
 	memberName := ""
 	if member.User != nil {
 		memberName = member.User.Name
@@ -233,7 +236,7 @@ func (s *Service) RequireAdmin(ctx context.Context, orgID, userID xid.ID) error 
 	return s.Member.RequireAdmin(ctx, orgID, userID)
 }
 
-// RBAC Permission methods delegation
+// RBAC Permission methods delegation.
 func (s *Service) CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error) {
 	return s.Member.CheckPermission(ctx, orgID, userID, action, resource)
 }
@@ -342,5 +345,5 @@ func (s *Service) CleanupExpiredInvitations(ctx context.Context) (int, error) {
 	return s.Invitation.CleanupExpiredInvitations(ctx)
 }
 
-// Type assertion to ensure Service implements CompositeOrganizationService
+// Type assertion to ensure Service implements CompositeOrganizationService.
 var _ CompositeOrganizationService = (*Service)(nil)

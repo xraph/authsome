@@ -11,13 +11,13 @@ import (
 	"github.com/xraph/authsome/pkg/schema/definition"
 )
 
-// Extractor extracts schema definitions from Go source files
+// Extractor extracts schema definitions from Go source files.
 type Extractor struct {
 	packagePath string
 	schema      *definition.Schema
 }
 
-// NewExtractor creates a new schema extractor
+// NewExtractor creates a new schema extractor.
 func NewExtractor(packagePath string) *Extractor {
 	return &Extractor{
 		packagePath: packagePath,
@@ -29,7 +29,7 @@ func NewExtractor(packagePath string) *Extractor {
 	}
 }
 
-// Extract extracts schema from Go files in the package
+// Extract extracts schema from Go files in the package.
 func (e *Extractor) Extract() (*definition.Schema, error) {
 	// Parse all Go files in the directory
 	files, err := filepath.Glob(filepath.Join(e.packagePath, "*.go"))
@@ -51,9 +51,10 @@ func (e *Extractor) Extract() (*definition.Schema, error) {
 	return e.schema, nil
 }
 
-// extractFromFile extracts schema from a single Go file
+// extractFromFile extracts schema from a single Go file.
 func (e *Extractor) extractFromFile(filename string) error {
 	fset := token.NewFileSet()
+
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		return fmt.Errorf("failed to parse file: %w", err)
@@ -92,7 +93,7 @@ func (e *Extractor) extractFromFile(filename string) error {
 	return nil
 }
 
-// extractModel extracts a model from a struct type
+// extractModel extracts a model from a struct type.
 func (e *Extractor) extractModel(name string, structType *ast.StructType, doc *ast.CommentGroup) (*definition.Model, error) {
 	model := definition.Model{
 		Name:   name,
@@ -110,6 +111,7 @@ func (e *Extractor) extractModel(name string, structType *ast.StructType, doc *a
 
 	// First pass: check for embedded models and collect explicit field names
 	explicitFields := make(map[string]bool)
+
 	for _, field := range structType.Fields.List {
 		if len(field.Names) > 0 {
 			for _, fieldName := range field.Names {
@@ -132,6 +134,7 @@ func (e *Extractor) extractModel(name string, structType *ast.StructType, doc *a
 						// Extract table name from tag if present
 						if field.Tag != nil {
 							tagValue := strings.Trim(field.Tag.Value, "`")
+
 							bunTag := extractTag(tagValue, "bun")
 							if strings.HasPrefix(bunTag, "table:") {
 								parts := strings.Split(bunTag, ",")
@@ -156,9 +159,11 @@ func (e *Extractor) extractModel(name string, structType *ast.StructType, doc *a
 							model.Fields = append(model.Fields, auditField)
 						}
 					}
+
 					continue
 				}
 			}
+
 			continue
 		}
 
@@ -187,7 +192,7 @@ func (e *Extractor) extractModel(name string, structType *ast.StructType, doc *a
 	return &model, nil
 }
 
-// extractField extracts a field from an AST field
+// extractField extracts a field from an AST field.
 func (e *Extractor) extractField(name string, astField *ast.Field) (*definition.Field, error) {
 	field := &definition.Field{
 		Name:   name,
@@ -213,7 +218,7 @@ func (e *Extractor) extractField(name string, astField *ast.Field) (*definition.
 	return field, nil
 }
 
-// extractType extracts the field type from an AST expression
+// extractType extracts the field type from an AST expression.
 func (e *Extractor) extractType(expr ast.Expr) (definition.FieldType, bool) {
 	nullable := false
 
@@ -232,6 +237,7 @@ func (e *Extractor) extractType(expr ast.Expr) (definition.FieldType, bool) {
 	if sel, ok := expr.(*ast.SelectorExpr); ok {
 		if x, ok := sel.X.(*ast.Ident); ok {
 			fullType := x.Name + "." + sel.Sel.Name
+
 			return goTypeToFieldType(fullType), nullable
 		}
 	}
@@ -239,7 +245,7 @@ func (e *Extractor) extractType(expr ast.Expr) (definition.FieldType, bool) {
 	return definition.FieldTypeString, nullable
 }
 
-// parseStructTags parses Bun struct tags
+// parseStructTags parses Bun struct tags.
 func (e *Extractor) parseStructTags(field *definition.Field, tag string) {
 	// Extract bun tag
 	bunTag := extractTag(tag, "bun")
@@ -256,6 +262,7 @@ func (e *Extractor) parseStructTags(field *definition.Field, tag string) {
 			if part != "" && part != "-" {
 				field.Column = part
 			}
+
 			continue
 		}
 
@@ -294,14 +301,16 @@ func (e *Extractor) parseStructTags(field *definition.Field, tag string) {
 
 func extractTag(tags, key string) string {
 	// Simple tag extraction (would need a proper parser for production)
-	parts := strings.Split(tags, " ")
-	for _, part := range parts {
-		if strings.HasPrefix(part, key+":") {
-			value := strings.TrimPrefix(part, key+":")
+	parts := strings.SplitSeq(tags, " ")
+	for part := range parts {
+		if after, ok := strings.CutPrefix(part, key+":"); ok {
+			value := after
 			value = strings.Trim(value, "\"")
+
 			return value
 		}
 	}
+
 	return ""
 }
 
@@ -312,6 +321,7 @@ func toTableName(name string) string {
 	if !strings.HasSuffix(snake, "s") {
 		snake += "s"
 	}
+
 	return snake
 }
 
@@ -321,16 +331,19 @@ func toColumnName(name string) string {
 
 func toSnakeCase(s string) string {
 	var result strings.Builder
+
 	for i, c := range s {
 		if c >= 'A' && c <= 'Z' {
 			if i > 0 {
 				result.WriteRune('_')
 			}
+
 			result.WriteRune(c + 32) // Convert to lowercase
 		} else {
 			result.WriteRune(c)
 		}
 	}
+
 	return result.String()
 }
 

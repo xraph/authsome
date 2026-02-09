@@ -13,14 +13,14 @@ import (
 )
 
 // Handler handles admin HTTP requests
-// Updated for V2 architecture: App → Environment → Organization
+// Updated for V2 architecture: App → Environment → Organization.
 type Handler struct {
 	service *Service
 }
 
-// Request types
+// Request types.
 type CreateUserRequestDTO struct {
-	Email         string            `json:"email" validate:"required,email"`
+	Email         string            `json:"email"              validate:"required,email"`
 	Password      string            `json:"password,omitempty"`
 	Name          string            `json:"name,omitempty"`
 	Username      string            `json:"username,omitempty"`
@@ -42,18 +42,18 @@ type DeleteUserRequestDTO struct {
 }
 
 type BanUserRequestDTO struct {
-	ID        string     `path:"id" validate:"required"`
+	ID        string     `path:"id"                   validate:"required"`
 	Reason    string     `json:"reason,omitempty"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 type UnbanUserRequestDTO struct {
-	ID     string `path:"id" validate:"required"`
+	ID     string `path:"id"               validate:"required"`
 	Reason string `json:"reason,omitempty"`
 }
 
 type SetUserRoleRequestDTO struct {
-	ID   string `path:"id" validate:"required"`
+	ID   string `path:"id"   validate:"required"`
 	Role string `json:"role" validate:"required"`
 }
 
@@ -62,7 +62,7 @@ type RevokeSessionRequestDTO struct {
 }
 
 type ImpersonateUserRequestDTO struct {
-	ID       string        `path:"id" validate:"required"`
+	ID       string        `path:"id"                 validate:"required"`
 	Duration time.Duration `json:"duration,omitempty"`
 }
 
@@ -81,7 +81,7 @@ type GetAuditLogsRequestDTO struct {
 	PageSize int `query:"page_size"`
 }
 
-// Response types - use shared responses from core
+// Response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 
@@ -94,14 +94,14 @@ type StatsResponse struct {
 	Timestamp      string `json:"timestamp"`
 }
 
-// NewHandler creates a new admin handler
+// NewHandler creates a new admin handler.
 func NewHandler(service *Service) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
-// CreateUser handles POST /admin/users
+// CreateUser handles POST /admin/users.
 func (h *Handler) CreateUser(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -144,7 +144,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 	return c.JSON(http.StatusCreated, user)
 }
 
-// ListUsers handles GET /admin/users
+// ListUsers handles GET /admin/users.
 func (h *Handler) ListUsers(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -161,10 +161,7 @@ func (h *Handler) ListUsers(c forge.Context) error {
 	}
 
 	// Apply defaults
-	page := reqDTO.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(reqDTO.Page, 1)
 
 	limit := reqDTO.Limit
 	if limit < 1 || limit > 100 {
@@ -196,7 +193,7 @@ func (h *Handler) ListUsers(c forge.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// DeleteUser handles DELETE /admin/users/:id
+// DeleteUser handles DELETE /admin/users/:id.
 func (h *Handler) DeleteUser(c forge.Context) error {
 	// Extract V2 context
 	userID, _ := contexts.GetUserID(c.Request().Context())
@@ -223,7 +220,7 @@ func (h *Handler) DeleteUser(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "User deleted successfully"})
 }
 
-// BanUser handles POST /admin/users/:id/ban
+// BanUser handles POST /admin/users/:id/ban.
 func (h *Handler) BanUser(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -267,7 +264,7 @@ func (h *Handler) BanUser(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "User banned successfully"})
 }
 
-// UnbanUser handles POST /admin/users/:id/unban
+// UnbanUser handles POST /admin/users/:id/unban.
 func (h *Handler) UnbanUser(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -310,7 +307,7 @@ func (h *Handler) UnbanUser(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "User unbanned successfully"})
 }
 
-// ImpersonateUser handles POST /admin/users/:id/impersonate
+// ImpersonateUser handles POST /admin/users/:id/impersonate.
 func (h *Handler) ImpersonateUser(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -355,7 +352,7 @@ func (h *Handler) ImpersonateUser(c forge.Context) error {
 	return c.JSON(http.StatusOK, session)
 }
 
-// SetUserRole handles POST /admin/users/:id/role
+// SetUserRole handles POST /admin/users/:id/role.
 func (h *Handler) SetUserRole(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -398,7 +395,7 @@ func (h *Handler) SetUserRole(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "User role updated successfully"})
 }
 
-// ListSessions handles GET /admin/sessions
+// ListSessions handles GET /admin/sessions.
 func (h *Handler) ListSessions(c forge.Context) error {
 	// Extract V2 context
 	appID, _ := contexts.GetAppID(c.Request().Context())
@@ -414,10 +411,7 @@ func (h *Handler) ListSessions(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	page := reqDTO.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(reqDTO.Page, 1)
 
 	limit := reqDTO.Limit
 	if limit < 1 || limit > 100 {
@@ -426,6 +420,7 @@ func (h *Handler) ListSessions(c forge.Context) error {
 
 	// Optional user ID filter
 	var userIDPtr *xid.ID
+
 	if reqDTO.UserID != "" {
 		if uid, err := xid.FromString(reqDTO.UserID); err == nil {
 			userIDPtr = &uid
@@ -455,7 +450,7 @@ func (h *Handler) ListSessions(c forge.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// RevokeSession handles DELETE /admin/sessions/:id
+// RevokeSession handles DELETE /admin/sessions/:id.
 func (h *Handler) RevokeSession(c forge.Context) error {
 	// Extract V2 context
 	adminID, _ := contexts.GetUserID(c.Request().Context())
@@ -482,7 +477,7 @@ func (h *Handler) RevokeSession(c forge.Context) error {
 	return c.JSON(http.StatusOK, &MessageResponse{Message: "Session revoked successfully"})
 }
 
-// GetStats handles GET /admin/stats
+// GetStats handles GET /admin/stats.
 func (h *Handler) GetStats(c forge.Context) error {
 	// Get admin user from context
 	adminID, _ := contexts.GetUserID(c.Request().Context())
@@ -504,7 +499,7 @@ func (h *Handler) GetStats(c forge.Context) error {
 	return c.JSON(http.StatusOK, stats)
 }
 
-// GetAuditLogs handles GET /admin/audit
+// GetAuditLogs handles GET /admin/audit.
 func (h *Handler) GetAuditLogs(c forge.Context) error {
 	// Get admin user from context
 	adminID, _ := contexts.GetUserID(c.Request().Context())
@@ -517,10 +512,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest(err.Error()))
 	}
 
-	page := reqDTO.Page
-	if page < 1 {
-		page = 1
-	}
+	page := max(reqDTO.Page, 1)
 
 	pageSize := reqDTO.PageSize
 	if pageSize < 1 || pageSize > 100 {
@@ -530,7 +522,7 @@ func (h *Handler) GetAuditLogs(c forge.Context) error {
 	// For now, return empty audit logs
 	// In a real implementation, you would query the audit service
 	result := types.PaginatedResult{
-		Data:       []interface{}{},
+		Data:       []any{},
 		Total:      0,
 		Page:       page,
 		PageSize:   pageSize,

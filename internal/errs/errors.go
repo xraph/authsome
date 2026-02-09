@@ -15,7 +15,7 @@ import (
 
 // Authsome-specific error codes for structured error handling.
 const (
-	// Authentication errors
+	// Authentication errors.
 	CodeInvalidCredentials = "INVALID_CREDENTIALS"
 	CodeEmailNotVerified   = "EMAIL_NOT_VERIFIED"
 	CodeAccountLocked      = "ACCOUNT_LOCKED"
@@ -30,7 +30,7 @@ const (
 	CodeMagicLinkExpired   = "MAGIC_LINK_EXPIRED"
 	CodeMagicLinkInvalid   = "MAGIC_LINK_INVALID"
 
-	// User errors
+	// User errors.
 	CodeUserNotFound          = "USER_NOT_FOUND"
 	CodeUserAlreadyExists     = "USER_ALREADY_EXISTS"
 	CodeEmailAlreadyExists    = "EMAIL_ALREADY_EXISTS"
@@ -41,7 +41,7 @@ const (
 	CodeInvalidUsername       = "INVALID_USERNAME"
 	CodeWeakPassword          = "WEAK_PASSWORD"
 
-	// Session errors
+	// Session errors.
 	CodeSessionNotFound        = "SESSION_NOT_FOUND"
 	CodeSessionExpired         = "SESSION_EXPIRED"
 	CodeSessionInvalid         = "SESSION_INVALID"
@@ -49,7 +49,7 @@ const (
 	CodeConcurrentSessionLimit = "CONCURRENT_SESSION_LIMIT"
 	CodeSessionConflict        = "SESSION_CONFLICT"
 
-	// Organization errors
+	// Organization errors.
 	CodeOrganizationNotFound     = "ORGANIZATION_NOT_FOUND"
 	CodeOrganizationExists       = "ORGANIZATION_EXISTS"
 	CodeNotMember                = "NOT_ORGANIZATION_MEMBER"
@@ -58,81 +58,81 @@ const (
 	CodeSlugAlreadyExists        = "SLUG_ALREADY_EXISTS"
 	CodeOrganizationLimitReached = "ORGANIZATION_LIMIT_REACHED"
 
-	// Team errors
+	// Team errors.
 	CodeTeamNotFound      = "TEAM_NOT_FOUND"
 	CodeTeamAlreadyExists = "TEAM_ALREADY_EXISTS"
 	CodeNotTeamMember     = "NOT_TEAM_MEMBER"
 
-	// Invitation errors
+	// Invitation errors.
 	CodeInvitationNotFound  = "INVITATION_NOT_FOUND"
 	CodeInvitationExpired   = "INVITATION_EXPIRED"
 	CodeInvitationAccepted  = "INVITATION_ACCEPTED"
 	CodeInvitationCancelled = "INVITATION_CANCELLED"
 
-	// RBAC errors
+	// RBAC errors.
 	CodePermissionDenied  = "PERMISSION_DENIED"
 	CodeRoleNotFound      = "ROLE_NOT_FOUND"
 	CodeRoleAlreadyExists = "ROLE_ALREADY_EXISTS"
 	CodePolicyViolation   = "POLICY_VIOLATION"
 	CodeInvalidPolicy     = "INVALID_POLICY"
 
-	// Rate limiting
+	// Rate limiting.
 	CodeRateLimitExceeded = "RATE_LIMIT_EXCEEDED"
 	CodeTooManyAttempts   = "TOO_MANY_ATTEMPTS"
 
-	// Validation errors
+	// Validation errors.
 	CodeValidationFailed = "VALIDATION_FAILED"
 	CodeInvalidInput     = "INVALID_INPUT"
 	CodeRequiredField    = "REQUIRED_FIELD"
 	CodeInvalidFormat    = "INVALID_FORMAT"
 
-	// Plugin errors
+	// Plugin errors.
 	CodePluginNotFound   = "PLUGIN_NOT_FOUND"
 	CodePluginInitFailed = "PLUGIN_INIT_FAILED"
 	CodePluginDisabled   = "PLUGIN_DISABLED"
 
-	// OAuth/SSO errors
+	// OAuth/SSO errors.
 	CodeOAuthFailed        = "OAUTH_FAILED"
 	CodeInvalidOAuthState  = "INVALID_OAUTH_STATE"
 	CodeOAuthProviderError = "OAUTH_PROVIDER_ERROR"
 	CodeSAMLError          = "SAML_ERROR"
 	CodeOIDCError          = "OIDC_ERROR"
 
-	// API Key errors
+	// API Key errors.
 	CodeAPIKeyNotFound = "API_KEY_NOT_FOUND"
 	CodeAPIKeyExpired  = "API_KEY_EXPIRED"
 	CodeAPIKeyRevoked  = "API_KEY_REVOKED"
 	CodeAPIKeyInvalid  = "API_KEY_INVALID"
 
-	// Webhook errors
+	// Webhook errors.
 	CodeWebhookNotFound       = "WEBHOOK_NOT_FOUND"
 	CodeWebhookDeliveryFailed = "WEBHOOK_DELIVERY_FAILED"
 
-	// Notification errors
+	// Notification errors.
 	CodeNotificationFailed   = "NOTIFICATION_FAILED"
 	CodeTemplateNotFound     = "TEMPLATE_NOT_FOUND"
 	CodeTemplateRenderFailed = "TEMPLATE_RENDER_FAILED"
 
-	// Device errors
+	// Device errors.
 	CodeDeviceNotFound   = "DEVICE_NOT_FOUND"
 	CodeDeviceNotTrusted = "DEVICE_NOT_TRUSTED"
 	CodeDeviceBlocked    = "DEVICE_BLOCKED"
 
-	// Passkey errors
+	// Passkey errors.
 	CodePasskeyNotFound           = "PASSKEY_NOT_FOUND"
 	CodePasskeyVerificationFailed = "PASSKEY_VERIFICATION_FAILED"
 	CodePasskeyRegistrationFailed = "PASSKEY_REGISTRATION_FAILED"
 
-	// Compliance errors
+	// Compliance errors.
 	CodeComplianceViolation    = "COMPLIANCE_VIOLATION"
 	CodeDataRetentionViolation = "DATA_RETENTION_VIOLATION"
 
-	// SCIM errors
+	// SCIM errors.
 	CodeSCIMResourceNotFound = "SCIM_RESOURCE_NOT_FOUND"
 	CodeSCIMInvalidFilter    = "SCIM_INVALID_FILTER"
 	CodeSCIMInvalidPath      = "SCIM_INVALID_PATH"
 
-	// General errors
+	// General errors.
 	CodeInternalError  = "INTERNAL_ERROR"
 	CodeNotImplemented = "NOT_IMPLEMENTED"
 	CodeDatabaseError  = "DATABASE_ERROR"
@@ -182,6 +182,7 @@ func (e *AuthsomeError) Error() string {
 	if e.Err != nil {
 		return fmt.Sprintf("%s: %s: %v", e.Code, e.Message, e.Err)
 	}
+
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
@@ -197,6 +198,7 @@ func (e *AuthsomeError) Is(target error) bool {
 	if !ok {
 		return false
 	}
+
 	return e.Code != "" && e.Code == t.Code
 }
 
@@ -205,25 +207,30 @@ func (e *AuthsomeError) WithContext(key string, value any) *AuthsomeError {
 	if e.Context == nil {
 		e.Context = make(map[string]any)
 	}
+
 	e.Context[key] = value
+
 	return e
 }
 
 // WithDetails adds structured details to the error.
 func (e *AuthsomeError) WithDetails(details any) *AuthsomeError {
 	e.Details = details
+
 	return e
 }
 
 // WithTraceID adds a trace ID for distributed tracing.
 func (e *AuthsomeError) WithTraceID(traceID string) *AuthsomeError {
 	e.TraceID = traceID
+
 	return e
 }
 
 // WithError wraps an underlying error.
 func (e *AuthsomeError) WithError(err error) *AuthsomeError {
 	e.Err = err
+
 	return e
 }
 
@@ -287,7 +294,7 @@ func InvalidCredentials() *AuthsomeError {
 	return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized)
 }
 
-// InvalidCredentialsWithAttempts returns invalid credentials error with remaining attempts warning
+// InvalidCredentialsWithAttempts returns invalid credentials error with remaining attempts warning.
 func InvalidCredentialsWithAttempts(attemptsRemaining int) *AuthsomeError {
 	if attemptsRemaining <= 0 {
 		return New(CodeInvalidCredentials, "Invalid email or password", http.StatusUnauthorized)
@@ -308,12 +315,9 @@ func AccountLocked(reason string) *AuthsomeError {
 		WithContext("reason", reason)
 }
 
-// AccountLockedWithTime returns an account locked error with lockout duration info
+// AccountLockedWithTime returns an account locked error with lockout duration info.
 func AccountLockedWithTime(reason string, lockedUntil time.Time) *AuthsomeError {
-	minutesLeft := int(time.Until(lockedUntil).Minutes())
-	if minutesLeft < 0 {
-		minutesLeft = 0
-	}
+	minutesLeft := max(int(time.Until(lockedUntil).Minutes()), 0)
 
 	return New(CodeAccountLocked, "Account is locked", http.StatusForbidden).
 		WithContext("reason", reason).
@@ -843,6 +847,7 @@ func GetErrorCode(err error) string {
 	if errors.As(err, &authErr) {
 		return authErr.Code
 	}
+
 	return CodeInternalError
 }
 

@@ -14,7 +14,7 @@ import (
 	repo "github.com/xraph/authsome/repository"
 )
 
-// Service provides anonymous sign-in by creating a guest user and session
+// Service provides anonymous sign-in by creating a guest user and session.
 type Service struct {
 	users  *repo.UserRepository
 	sess   *session.Service
@@ -25,7 +25,7 @@ func NewService(users *repo.UserRepository, sess *session.Service, config Config
 	return &Service{users: users, sess: sess, config: config}
 }
 
-// SignInGuest creates a guest user and returns a session token
+// SignInGuest creates a guest user and returns a session token.
 func (s *Service) SignInGuest(ctx context.Context, appID, envID xid.ID, orgID *xid.ID, ip, ua string) (*session.Session, error) {
 	// Validate app context
 	if appID.IsNil() {
@@ -70,7 +70,7 @@ func (s *Service) SignInGuest(ctx context.Context, appID, envID xid.ID, orgID *x
 	return sess, nil
 }
 
-// LinkGuest upgrades an anonymous guest account to a real account
+// LinkGuest upgrades an anonymous guest account to a real account.
 func (s *Service) LinkGuest(ctx context.Context, token, email, password, name string) (*coreuser.User, error) {
 	// Validate input
 	email = strings.TrimSpace(strings.ToLower(email))
@@ -79,6 +79,7 @@ func (s *Service) LinkGuest(ctx context.Context, token, email, password, name st
 	if email == "" {
 		return nil, errs.New("EMAIL_REQUIRED", "Email is required", 400)
 	}
+
 	if password == "" {
 		return nil, errs.New("PASSWORD_REQUIRED", "Password is required", 400)
 	}
@@ -88,6 +89,7 @@ func (s *Service) LinkGuest(ctx context.Context, token, email, password, name st
 	if err != nil {
 		return nil, errs.SessionInvalid()
 	}
+
 	if sess == nil {
 		return nil, errs.SessionNotFound()
 	}
@@ -117,10 +119,12 @@ func (s *Service) LinkGuest(ctx context.Context, token, email, password, name st
 	}
 
 	u.Email = email
+
 	u.PasswordHash = hash
 	if strings.TrimSpace(name) != "" {
 		u.Name = name
 	}
+
 	u.UpdatedAt = time.Now().UTC()
 
 	// Convert back to schema and update
@@ -131,11 +135,12 @@ func (s *Service) LinkGuest(ctx context.Context, token, email, password, name st
 	return u, nil
 }
 
-// GetUserByID is a helper to get a user by ID (returns DTO)
+// GetUserByID is a helper to get a user by ID (returns DTO).
 func (s *Service) GetUserByID(ctx context.Context, id xid.ID) (*coreuser.User, error) {
 	schemaUser, err := s.users.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
 	return coreuser.FromSchemaUser(schemaUser), nil
 }

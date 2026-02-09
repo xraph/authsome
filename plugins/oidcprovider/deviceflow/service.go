@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/schema"
 )
 
-// Config holds device flow configuration
+// Config holds device flow configuration.
 type Config struct {
 	Enabled          bool          `json:"enabled"`
 	DeviceCodeExpiry time.Duration `json:"deviceCodeExpiry"` // e.g., 10 minutes
@@ -25,7 +25,7 @@ type Config struct {
 	CleanupInterval  time.Duration `json:"cleanupInterval"`  // how often to clean up expired codes
 }
 
-// DefaultConfig returns the default device flow configuration
+// DefaultConfig returns the default device flow configuration.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:          true,
@@ -40,28 +40,32 @@ func DefaultConfig() Config {
 	}
 }
 
-// Service handles device flow business logic
+// Service handles device flow business logic.
 type Service struct {
 	repo          *repo.DeviceCodeRepository
 	codeGenerator *CodeGenerator
 	config        Config
 }
 
-// NewService creates a new device flow service
+// NewService creates a new device flow service.
 func NewService(repo *repo.DeviceCodeRepository, config Config) *Service {
 	// Set defaults if not provided
 	if config.DeviceCodeExpiry == 0 {
 		config.DeviceCodeExpiry = 10 * time.Minute
 	}
+
 	if config.PollingInterval == 0 {
 		config.PollingInterval = 5
 	}
+
 	if config.UserCodeLength == 0 {
 		config.UserCodeLength = 8
 	}
+
 	if config.UserCodeFormat == "" {
 		config.UserCodeFormat = "XXXX-XXXX"
 	}
+
 	if config.MaxPollAttempts == 0 {
 		config.MaxPollAttempts = 120
 	}
@@ -73,17 +77,20 @@ func NewService(repo *repo.DeviceCodeRepository, config Config) *Service {
 	}
 }
 
-// InitiateDeviceAuthorization generates a new device code and user code
+// InitiateDeviceAuthorization generates a new device code and user code.
 func (s *Service) InitiateDeviceAuthorization(ctx context.Context, clientID string, scope string, appID, envID xid.ID, orgID *xid.ID) (*schema.DeviceCode, error) {
 	// Validate client is allowed (if whitelist is configured)
 	if len(s.config.AllowedClients) > 0 {
 		allowed := false
+
 		for _, allowedClient := range s.config.AllowedClients {
 			if allowedClient == clientID {
 				allowed = true
+
 				break
 			}
 		}
+
 		if !allowed {
 			return nil, errs.PermissionDenied("device_flow", "client")
 		}
@@ -97,9 +104,11 @@ func (s *Service) InitiateDeviceAuthorization(ctx context.Context, clientID stri
 
 	// Generate user code (short, human-typable) with collision detection
 	var userCode string
+
 	var displayUserCode string // User-friendly display version with hyphens
+
 	maxRetries := 5
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		displayUserCode, err = s.codeGenerator.GenerateUserCode()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate user code: %w", err)
@@ -113,6 +122,7 @@ func (s *Service) InitiateDeviceAuthorization(ctx context.Context, clientID stri
 		if err != nil {
 			return nil, fmt.Errorf("failed to check user code uniqueness: %w", err)
 		}
+
 		if existing == nil {
 			break // No collision, we're good
 		}
@@ -149,31 +159,35 @@ func (s *Service) InitiateDeviceAuthorization(ctx context.Context, clientID stri
 	return dc, nil
 }
 
-// GetDeviceCodeByUserCode retrieves a device code by user code
+// GetDeviceCodeByUserCode retrieves a device code by user code.
 func (s *Service) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*schema.DeviceCode, error) {
 	dc, err := s.repo.FindByUserCode(ctx, userCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find device code: %w", err)
 	}
+
 	if dc == nil {
 		return nil, errs.NotFound("device code not found")
 	}
+
 	return dc, nil
 }
 
-// GetDeviceCodeByDeviceCode retrieves a device code by device code
+// GetDeviceCodeByDeviceCode retrieves a device code by device code.
 func (s *Service) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*schema.DeviceCode, error) {
 	dc, err := s.repo.FindByDeviceCode(ctx, deviceCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find device code: %w", err)
 	}
+
 	if dc == nil {
 		return nil, errs.NotFound("device code not found")
 	}
+
 	return dc, nil
 }
 
-// AuthorizeDevice marks a device as authorized by a user
+// AuthorizeDevice marks a device as authorized by a user.
 func (s *Service) AuthorizeDevice(ctx context.Context, userCode string, userID, sessionID xid.ID) error {
 	// Get device code
 	dc, err := s.GetDeviceCodeByUserCode(ctx, userCode)
@@ -186,6 +200,7 @@ func (s *Service) AuthorizeDevice(ctx context.Context, userCode string, userID, 
 		if dc.IsExpired() {
 			return errs.BadRequest("device code has expired")
 		}
+
 		return errs.BadRequest("device code is not pending authorization")
 	}
 
@@ -197,7 +212,7 @@ func (s *Service) AuthorizeDevice(ctx context.Context, userCode string, userID, 
 	return nil
 }
 
-// DenyDevice marks a device authorization as denied
+// DenyDevice marks a device authorization as denied.
 func (s *Service) DenyDevice(ctx context.Context, userCode string) error {
 	// Get device code
 	dc, err := s.GetDeviceCodeByUserCode(ctx, userCode)
@@ -210,6 +225,7 @@ func (s *Service) DenyDevice(ctx context.Context, userCode string) error {
 		if dc.IsExpired() {
 			return errs.BadRequest("device code has expired")
 		}
+
 		return errs.BadRequest("device code is not pending authorization")
 	}
 
@@ -222,13 +238,14 @@ func (s *Service) DenyDevice(ctx context.Context, userCode string) error {
 }
 
 // PollDeviceCode handles device polling for authorization status
-// Returns: dc (*schema.DeviceCode), shouldSlowDown (bool), error
+// Returns: dc (*schema.DeviceCode), shouldSlowDown (bool), error.
 func (s *Service) PollDeviceCode(ctx context.Context, deviceCode string) (*schema.DeviceCode, bool, error) {
 	// Get device code
 	dc, err := s.repo.FindByDeviceCode(ctx, deviceCode)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to find device code: %w", err)
 	}
+
 	if dc == nil {
 		return nil, false, errs.NotFound("device code not found")
 	}
@@ -237,6 +254,7 @@ func (s *Service) PollDeviceCode(ctx context.Context, deviceCode string) (*schem
 	if dc.IsExpired() {
 		// Mark as expired
 		_ = s.repo.UpdateStatus(ctx, deviceCode, schema.DeviceCodeStatusExpired)
+
 		return dc, false, errs.BadRequest("device code has expired")
 	}
 
@@ -272,35 +290,37 @@ func (s *Service) PollDeviceCode(ctx context.Context, deviceCode string) (*schem
 	return dc, shouldSlowDown, nil
 }
 
-// ConsumeDeviceCode marks a device code as consumed after token exchange
+// ConsumeDeviceCode marks a device code as consumed after token exchange.
 func (s *Service) ConsumeDeviceCode(ctx context.Context, deviceCode string) error {
 	return s.repo.MarkAsConsumed(ctx, deviceCode)
 }
 
-// CleanupExpiredCodes removes expired device codes
+// CleanupExpiredCodes removes expired device codes.
 func (s *Service) CleanupExpiredCodes(ctx context.Context) (int, error) {
 	count, err := s.repo.DeleteExpired(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to cleanup expired codes: %w", err)
 	}
+
 	return count, nil
 }
 
-// CleanupOldConsumedCodes removes old consumed device codes
+// CleanupOldConsumedCodes removes old consumed device codes.
 func (s *Service) CleanupOldConsumedCodes(ctx context.Context, olderThan time.Duration) (int, error) {
 	count, err := s.repo.DeleteOldConsumedCodes(ctx, olderThan)
 	if err != nil {
 		return 0, fmt.Errorf("failed to cleanup old consumed codes: %w", err)
 	}
+
 	return count, nil
 }
 
-// GetConfig returns the device flow configuration
+// GetConfig returns the device flow configuration.
 func (s *Service) GetConfig() Config {
 	return s.config
 }
 
-// normalizeUserCode normalizes a user code by removing spaces, hyphens, and converting to uppercase
+// normalizeUserCode normalizes a user code by removing spaces, hyphens, and converting to uppercase.
 func normalizeUserCode(code string) string {
 	// Remove spaces and hyphens
 	code = strings.ReplaceAll(code, " ", "")
@@ -309,7 +329,7 @@ func normalizeUserCode(code string) string {
 	return strings.ToUpper(code)
 }
 
-// formatUserCode formats a normalized user code to display format (e.g., "BCDFGHJK" -> "BCDF-GHJK")
+// formatUserCode formats a normalized user code to display format (e.g., "BCDFGHJK" -> "BCDF-GHJK").
 func formatUserCode(normalized string) string {
 	// Default format is "XXXX-XXXX" (8 characters with hyphen in the middle)
 	if len(normalized) == 8 {
