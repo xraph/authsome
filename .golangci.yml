@@ -14,9 +14,6 @@ output:
     text:
       print-linter-name: true
       print-issued-lines: true
-  # Suppress panic messages from printf analyzer bug in golang.org/x/tools@v0.38.0
-  # This is a known issue in golangci-lint v2.6.1's vendored dependencies
-  print-linter-name: true
 
 linters:
   # Default set of linters.
@@ -163,6 +160,13 @@ linters:
     - contextcheck
     - depguard
 
+  # Linter-specific settings (v2 format: under linters.settings)
+  settings:
+    govet:
+      # Disable printf analyzer to avoid panic bug in golang.org/x/tools@v0.38.0
+      disable:
+        - printf
+
   # Defines a set of rules to ignore issues.
   # It does not skip the analysis, and so does not ignore "typecheck" errors.
   exclusions:
@@ -233,12 +237,6 @@ issues:
   # Fix found issues (if it's supported by the linter)
   fix: false
 
-linters-settings:
-  govet:
-    # Disable printf analyzer to avoid panic bug in golang.org/x/tools@v0.38.0
-    # https://github.com/golang/go/issues/...
-    disable:
-      - printf
 
 formatters:
   settings:
