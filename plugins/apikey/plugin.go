@@ -133,7 +133,7 @@ func (p *Plugin) Init(authInstance core.Authsome) error {
 		p.config = p.defaultConfig
 	}
 
-	p.config.Validate() // Ensure defaults are set
+	_ = p.config.Validate() // Ensure defaults are set
 
 	// Get services from registry
 	auditSvc := serviceRegistry.AuditService()

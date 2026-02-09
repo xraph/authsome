@@ -432,6 +432,7 @@ func TestService_Start_AlreadyImpersonating(t *testing.T) {
 
 func TestService_Start_UserNotFound(t *testing.T) {
 	service, _, _, _ := setupTestService(t)
+	_ = service
 	orgID := xid.New()
 
 	req := &impersonation.StartRequest{
@@ -621,6 +622,7 @@ func TestService_Verify_Active(t *testing.T) {
 
 func TestService_Verify_NotImpersonating(t *testing.T) {
 	service, _, _, _ := setupTestService(t)
+	_ = service
 
 	req := &impersonation.VerifyRequest{
 		SessionID: xid.New(), // Non-existent session

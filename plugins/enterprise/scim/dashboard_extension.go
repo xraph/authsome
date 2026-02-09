@@ -366,8 +366,8 @@ func (e *DashboardExtension) extractAppFromURL(ctx *router.PageContext) (*app.Ap
 		}
 	}
 
-		return nil, errs.BadRequest("app not found in context")
-	}
+	return nil, errs.BadRequest("app not found in context")
+}
 
 // getBasePath returns the dashboard base path.
 func (e *DashboardExtension) getBasePath() string {
@@ -416,8 +416,8 @@ func (e *DashboardExtension) getOrgFromContext(ctx *router.PageContext) (*xid.ID
 		return nil, nil
 	}
 
-		return nil, errs.BadRequest("organization ID required but not found")
-	}
+	return nil, errs.BadRequest("organization ID required but not found")
+}
 
 // Main Dashboard Handlers
 

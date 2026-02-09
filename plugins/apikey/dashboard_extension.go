@@ -272,7 +272,7 @@ func (e *DashboardExtension) CreateAPIKey(ctx *router.PageContext) (g.Node, erro
 	writeJSON := func(status int, data map[string]any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(data)
+		_ = json.NewEncoder(w).Encode(data)
 	}
 
 	// Extract app from URL
@@ -391,7 +391,7 @@ func (e *DashboardExtension) RotateAPIKey(ctx *router.PageContext) (g.Node, erro
 	writeJSON := func(status int, data map[string]any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(data)
+		_ = json.NewEncoder(w).Encode(data)
 	}
 
 	if keyID == "" {
@@ -450,7 +450,7 @@ func (e *DashboardExtension) RevokeAPIKey(ctx *router.PageContext) (g.Node, erro
 	writeJSON := func(status int, data map[string]any) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		json.NewEncoder(w).Encode(data)
+		_ = json.NewEncoder(w).Encode(data)
 	}
 
 	if keyID == "" {

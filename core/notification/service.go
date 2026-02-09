@@ -200,7 +200,7 @@ func (s *Service) CreateTemplate(ctx context.Context, req *CreateTemplateRequest
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateCreated), "template:"+template.ID.String(), "", "", fmt.Sprintf(`{"template_id":"%s","name":"%s"}`, template.ID, template.Name))
+		_ = s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateCreated), "template:"+template.ID.String(), "", "", fmt.Sprintf(`{"template_id":"%s","name":"%s"}`, template.ID, template.Name))
 	}
 
 	return template, nil
@@ -242,7 +242,7 @@ func (s *Service) UpdateTemplate(ctx context.Context, id xid.ID, req *UpdateTemp
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateUpdated), "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
+		_ = s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateUpdated), "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
 	}
 
 	return nil
@@ -257,7 +257,7 @@ func (s *Service) DeleteTemplate(ctx context.Context, id xid.ID) error {
 	// Audit log
 	if s.auditSvc != nil {
 		userID := xid.NilID()
-		s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateDeleted), "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
+		_ = s.auditSvc.Log(ctx, &userID, string(audit.ActionNotificationTemplateDeleted), "template:"+id.String(), "", "", fmt.Sprintf(`{"template_id":"%s"}`, id))
 	}
 
 	return nil
@@ -356,7 +356,7 @@ func (s *Service) Send(ctx context.Context, req *SendRequest) (*Notification, er
 	// Send notification
 	if err := s.sendNotification(ctx, notification); err != nil {
 		// Update status to failed
-		s.repo.UpdateNotificationStatus(ctx, notification.ID, NotificationStatusFailed, err.Error(), "")
+		_ = s.repo.UpdateNotificationStatus(ctx, notification.ID, NotificationStatusFailed, err.Error(), "")
 
 		return notification, NotificationSendFailed(err)
 	}

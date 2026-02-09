@@ -9,28 +9,28 @@ type ExtensionRouter struct {
 	ext forge.Extension
 }
 
-func (r *ExtensionRouter) POST(path string, handler any, opts ...forge.RouteOption) {
+func (r *ExtensionRouter) POST(path string, handler any, opts ...forge.RouteOption) error {
 	// Prepend extension exclusion options
 	allOpts := forge.ExtensionRoutes(r.ext, opts...)
-	r.Router.POST(path, handler, allOpts...)
+	return r.Router.POST(path, handler, allOpts...)
 }
 
-func (r *ExtensionRouter) GET(path string, handler any, opts ...forge.RouteOption) {
+func (r *ExtensionRouter) GET(path string, handler any, opts ...forge.RouteOption) error {
 	allOpts := forge.ExtensionRoutes(r.ext, opts...)
-	r.Router.GET(path, handler, allOpts...)
+	return r.Router.GET(path, handler, allOpts...)
 }
 
-func (r *ExtensionRouter) PUT(path string, handler any, opts ...forge.RouteOption) {
+func (r *ExtensionRouter) PUT(path string, handler any, opts ...forge.RouteOption) error {
 	allOpts := forge.ExtensionRoutes(r.ext, opts...)
-	r.Router.PUT(path, handler, allOpts...)
+	return r.Router.PUT(path, handler, allOpts...)
 }
 
-func (r *ExtensionRouter) DELETE(path string, handler any, opts ...forge.RouteOption) {
+func (r *ExtensionRouter) DELETE(path string, handler any, opts ...forge.RouteOption) error {
 	allOpts := forge.ExtensionRoutes(r.ext, opts...)
-	r.Router.DELETE(path, handler, allOpts...)
+	return r.Router.DELETE(path, handler, allOpts...)
 }
 
-func (r *ExtensionRouter) PATCH(path string, handler any, opts ...forge.RouteOption) {
+func (r *ExtensionRouter) PATCH(path string, handler any, opts ...forge.RouteOption) error {
 	allOpts := forge.ExtensionRoutes(r.ext, opts...)
-	r.Router.PATCH(path, handler, allOpts...)
+	return r.Router.PATCH(path, handler, allOpts...)
 }

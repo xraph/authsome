@@ -232,6 +232,6 @@ func init() {
 	// Diff command flags
 	schemaDiffCmd.Flags().String("from", "", "Original schema file")
 	schemaDiffCmd.Flags().String("to", "", "New schema file")
-	schemaDiffCmd.MarkFlagRequired("from")
-	schemaDiffCmd.MarkFlagRequired("to")
+	_ = schemaDiffCmd.MarkFlagRequired("from")
+	_ = schemaDiffCmd.MarkFlagRequired("to")
 }

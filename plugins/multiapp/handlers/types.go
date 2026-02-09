@@ -15,8 +15,9 @@ type GetAppRequest struct {
 }
 
 type UpdateAppRequest struct {
-	ID string `path:"id" validate:"required"`
 	coreapp.UpdateAppRequest
+
+	ID string `path:"id" validate:"required"`
 }
 
 type DeleteAppRequest struct {

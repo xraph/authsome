@@ -658,11 +658,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Register for all methods that ForgeUI needs
 	// These are registered AFTER /api/bridge so they don't intercept it
-	router.GET("/ui/*", fuiHandler)
-	router.POST("/ui/*", fuiHandler)
-	router.PUT("/ui/*", fuiHandler)
-	router.DELETE("/ui/*", fuiHandler)
-	router.PATCH("/ui/*", fuiHandler)
+	if err := router.GET("/ui/*", fuiHandler); err != nil { return err }
+	if err := router.POST("/ui/*", fuiHandler); err != nil { return err }
+	if err := router.PUT("/ui/*", fuiHandler); err != nil { return err }
+	if err := router.DELETE("/ui/*", fuiHandler); err != nil { return err }
+	if err := router.PATCH("/ui/*", fuiHandler); err != nil { return err }
 
 	if err := p.registerForgeUIRoutes(uiRouter); err != nil {
 		return fmt.Errorf("failed to register ForgeUI routes: %w", err)

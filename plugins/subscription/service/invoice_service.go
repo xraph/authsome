@@ -98,7 +98,7 @@ func (s *InvoiceService) GetPDFURL(ctx context.Context, id xid.ID) (string, erro
 		if err == nil && url != "" {
 			// Update cached URL
 			invoice.ProviderPDFURL = url
-			s.repo.Update(ctx, invoice)
+			_ = s.repo.Update(ctx, invoice)
 
 			return url, nil
 		}

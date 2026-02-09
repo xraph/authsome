@@ -206,7 +206,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 
 		// Return success
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status": "authenticated",
 		})
 	})
@@ -220,6 +220,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Test with invalid token
@@ -228,6 +229,7 @@ func TestBearerTokenAuthentication(t *testing.T) {
 
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 

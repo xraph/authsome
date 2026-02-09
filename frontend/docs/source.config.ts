@@ -28,10 +28,10 @@ export const docs = defineDocs({
   meta: {
     schema: metaSchema,
   },
+  
 });
 
 export default defineConfig({
-  lastModifiedTime: 'git',
   mdxOptions: {
     rehypeCodeOptions: {
       lazy: true,

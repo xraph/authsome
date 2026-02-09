@@ -150,7 +150,7 @@ func (s *AddOnService) Create(ctx context.Context, appID xid.ID, req *core.Creat
 			// Update with provider price ID if sync succeeded
 			if coreAddOn.ProviderPriceID != "" {
 				addon.ProviderPriceID = coreAddOn.ProviderPriceID
-				s.repo.Update(ctx, addon)
+				_ = s.repo.Update(ctx, addon)
 			}
 		}
 	}

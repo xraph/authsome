@@ -132,7 +132,7 @@ func (s *Service) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) 
 	// Audit log
 	if s.auditSvc != nil {
 		userID := (*xid.ID)(nil)
-		s.auditSvc.Log(ctx, userID, string(audit.ActionWebhookCreated), "webhook:"+webhook.ID.String(), "", "",
+		_ = s.auditSvc.Log(ctx, userID, string(audit.ActionWebhookCreated), "webhook:"+webhook.ID.String(), "", "",
 			fmt.Sprintf(`{"webhook_id":"%s","app_id":"%s","environment_id":"%s","url":"%s","events":%s}`,
 				webhook.ID.String(), webhook.AppID.String(), webhook.EnvironmentID.String(), webhook.URL, mustMarshal(webhook.Events)))
 	}
@@ -190,7 +190,7 @@ func (s *Service) UpdateWebhook(ctx context.Context, id xid.ID, req *UpdateWebho
 	// Audit log
 	if s.auditSvc != nil {
 		userID := (*xid.ID)(nil)
-		s.auditSvc.Log(ctx, userID, string(audit.ActionWebhookUpdated), "webhook:"+webhook.ID.String(), "", "",
+		_ = s.auditSvc.Log(ctx, userID, string(audit.ActionWebhookUpdated), "webhook:"+webhook.ID.String(), "", "",
 			fmt.Sprintf(`{"webhook_id":"%s"}`, webhook.ID.String()))
 	}
 
@@ -211,7 +211,7 @@ func (s *Service) DeleteWebhook(ctx context.Context, id xid.ID) error {
 	// Audit log
 	if s.auditSvc != nil {
 		userID := (*xid.ID)(nil)
-		s.auditSvc.Log(ctx, userID, string(audit.ActionWebhookDeleted), "webhook:"+schemaWebhook.ID.String(), "", "",
+		_ = s.auditSvc.Log(ctx, userID, string(audit.ActionWebhookDeleted), "webhook:"+schemaWebhook.ID.String(), "", "",
 			fmt.Sprintf(`{"webhook_id":"%s"}`, schemaWebhook.ID.String()))
 	}
 
@@ -323,7 +323,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		delivery.Status = DeliveryStatusFailed
 		delivery.Error = fmt.Sprintf("failed to marshal event: %v", err)
 		delivery.UpdatedAt = time.Now()
-		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+		_ = s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 
 		return
 	}
@@ -337,7 +337,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		delivery.Status = DeliveryStatusFailed
 		delivery.Error = fmt.Sprintf("failed to create request: %v", err)
 		delivery.UpdatedAt = time.Now()
-		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+		_ = s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 
 		return
 	}
@@ -365,7 +365,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 
 	// Read response
 	var responseBody bytes.Buffer
-	responseBody.ReadFrom(resp.Body)
+	_, _ = responseBody.ReadFrom(resp.Body)
 
 	delivery.StatusCode = resp.StatusCode
 	delivery.Response = responseBody.String()
@@ -378,11 +378,11 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		delivery.DeliveredAt = &now
 
 		// Update webhook last delivery
-		s.repo.UpdateLastDelivery(ctx, webhook.ID, now)
+		_ = s.repo.UpdateLastDelivery(ctx, webhook.ID, now)
 
 		// Reset failure count on success
 		if webhook.FailureCount > 0 {
-			s.repo.UpdateFailureCount(ctx, webhook.ID, 0)
+			_ = s.repo.UpdateFailureCount(ctx, webhook.ID, 0)
 		}
 	} else {
 		// Failure
@@ -391,7 +391,7 @@ func (s *Service) attemptDelivery(ctx context.Context, webhook *Webhook, event *
 		return
 	}
 
-	s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+	_ = s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 }
 
 // handleDeliveryFailure handles a failed delivery attempt.
@@ -403,17 +403,17 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 	if delivery.Attempt >= webhook.MaxRetries {
 		// Max retries reached
 		delivery.Status = DeliveryStatusFailed
-		s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+		_ = s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 
 		// Increment webhook failure count
-		s.repo.UpdateFailureCount(ctx, webhook.ID, webhook.FailureCount+1)
+		_ = s.repo.UpdateFailureCount(ctx, webhook.ID, webhook.FailureCount+1)
 
 		return
 	}
 
 	// Schedule retry
 	delivery.Status = DeliveryStatusRetrying
-	s.repo.UpdateDelivery(ctx, delivery.ToSchema())
+	_ = s.repo.UpdateDelivery(ctx, delivery.ToSchema())
 
 	// Calculate delay
 	delay := s.calculateRetryDelay(webhook.RetryBackoff, delivery.Attempt)
@@ -433,7 +433,7 @@ func (s *Service) handleDeliveryFailure(ctx context.Context, webhook *Webhook, e
 			UpdatedAt: time.Now(),
 		}
 
-		s.repo.CreateDelivery(ctx, newDelivery.ToSchema())
+		_ = s.repo.CreateDelivery(ctx, newDelivery.ToSchema())
 		s.attemptDelivery(ctx, webhook, event, newDelivery)
 	}()
 }

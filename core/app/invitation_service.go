@@ -104,7 +104,7 @@ func (s *InvitationService) AcceptInvitation(ctx context.Context, token string, 
 	if err := validateInvitationExpiry(schemaInv); err != nil {
 		// Update status to expired
 		schemaInv.Status = InvitationStatusExpired
-		s.repo.UpdateInvitation(ctx, schemaInv)
+		_ = s.repo.UpdateInvitation(ctx, schemaInv)
 
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (s *InvitationService) DeclineInvitation(ctx context.Context, token string)
 	if err := validateInvitationExpiry(schemaInv); err != nil {
 		// Update status to expired
 		schemaInv.Status = InvitationStatusExpired
-		s.repo.UpdateInvitation(ctx, schemaInv)
+		_ = s.repo.UpdateInvitation(ctx, schemaInv)
 
 		return err
 	}

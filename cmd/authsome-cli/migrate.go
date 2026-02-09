@@ -124,7 +124,10 @@ var migrateResetCmd = &cobra.Command{
 		// Confirm before proceeding
 		fmt.Print("This will delete all data in the database. Are you sure? (y/N): ")
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			fmt.Println("Error reading input:", err)
+			return err
+		}
 		if response != "y" && response != "Y" {
 			fmt.Println("Operation cancelled")
 

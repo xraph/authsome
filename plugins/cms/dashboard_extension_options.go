@@ -137,7 +137,7 @@ func (e *DashboardExtension) parseFieldOptionsFromRequest(ctx *router.PageContex
 
 	// Parse form if needed
 	if ctx.Request.PostForm == nil {
-		ctx.Request.ParseForm()
+		_ = ctx.Request.ParseForm()
 	}
 
 	// Text options

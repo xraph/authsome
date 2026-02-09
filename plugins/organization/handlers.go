@@ -31,8 +31,9 @@ type ListOrganizationsRequest struct {
 }
 
 type UpdateOrganizationHandlerRequest struct {
-	ID string `path:"id" validate:"required"`
 	organization.UpdateOrganizationRequest
+
+	ID string `path:"id" validate:"required"`
 }
 
 type DeleteOrganizationRequest struct {
@@ -51,14 +52,16 @@ type ListMembersRequest struct {
 }
 
 type InviteMemberHandlerRequest struct {
-	ID string `path:"id" validate:"required"`
 	organization.InviteMemberRequest
+
+	ID string `path:"id" validate:"required"`
 }
 
 type UpdateMemberHandlerRequest struct {
+	organization.UpdateMemberRequest
+
 	ID       string `path:"id"       validate:"required"`
 	MemberID string `path:"memberId" validate:"required"`
-	organization.UpdateMemberRequest
 }
 
 type RemoveMemberRequest struct {
@@ -81,14 +84,16 @@ type ListTeamsRequest struct {
 }
 
 type CreateTeamHandlerRequest struct {
-	ID string `path:"id" validate:"required"`
 	organization.CreateTeamRequest
+
+	ID string `path:"id" validate:"required"`
 }
 
 type UpdateTeamHandlerRequest struct {
+	organization.UpdateTeamRequest
+
 	ID     string `path:"id"     validate:"required"`
 	TeamID string `path:"teamId" validate:"required"`
-	organization.UpdateTeamRequest
 }
 
 type DeleteTeamRequest struct {

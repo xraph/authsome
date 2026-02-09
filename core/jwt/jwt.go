@@ -147,13 +147,14 @@ type TokenClaims struct {
 	Audience    []string         `json:"aud,omitempty"`
 	Subject     string           `json:"sub"`
 	Issuer      string           `json:"iss"`
+	jwt.RegisteredClaims
+
 	IssuedAt    *jwt.NumericDate `json:"iat"`
 	ExpiresAt   *jwt.NumericDate `json:"exp"`
 	NotBefore   *jwt.NumericDate `json:"nbf,omitempty"`
 	JwtID       string           `json:"jti"`
 	KeyID       string           `json:"kid"`
 	Metadata    map[string]any   `json:"metadata,omitempty"`
-	jwt.RegisteredClaims
 }
 
 // =============================================================================

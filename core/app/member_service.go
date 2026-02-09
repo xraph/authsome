@@ -190,7 +190,7 @@ func (s *MemberService) CreateMember(ctx context.Context, member *Member) (*Memb
 	// 🔥 SYNC: Create corresponding UserRole entry in RBAC system
 	if err := s.syncRoleToRBAC(ctx, member.UserID, member.AppID, string(member.Role)); err != nil {
 		// Rollback member creation on failure
-		s.repo.DeleteMember(ctx, member.ID)
+		_ = s.repo.DeleteMember(ctx, member.ID)
 
 		return nil, fmt.Errorf("failed to sync role to RBAC: %w", err)
 	}

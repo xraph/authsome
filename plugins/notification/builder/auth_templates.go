@@ -3,6 +3,16 @@ package builder
 // auth_templates.go contains all authentication, organization, account, session, reminder, and admin templates
 // Generated using the builder's Document/Block API for consistent, UI-editable email templates
 
+// mustAddBlock is a helper that panics if AddBlock returns an error.
+// This is appropriate for template generation code where errors are unrecoverable.
+func mustAddBlock(doc *Document, blockType BlockType, data map[string]any, parentID string) string {
+	id, err := doc.AddBlock(blockType, data, parentID)
+	if err != nil {
+		panic("failed to add block to template: " + err.Error())
+	}
+	return id
+}
+
 // =============================================================================
 // ORGANIZATION TEMPLATES (Green Theme: #059669)
 // =============================================================================
@@ -13,7 +23,7 @@ func createOrgInviteTemplate() *Document {
 	setRootStyle(doc, "#F0FDF4", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Green header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#059669",
 			"padding": map[string]any{
@@ -28,7 +38,7 @@ func createOrgInviteTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  48,
@@ -38,7 +48,7 @@ func createOrgInviteTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -53,13 +63,13 @@ func createOrgInviteTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign":  "center",
 			"color":      "#374151",
@@ -75,7 +85,7 @@ func createOrgInviteTemplate() *Document {
 	}, doc.Root)
 
 	// Organization card
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F0FDF4",
 			"padding": map[string]any{
@@ -91,7 +101,7 @@ func createOrgInviteTemplate() *Document {
 
 	orgCardID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#059669",
@@ -102,7 +112,7 @@ func createOrgInviteTemplate() *Document {
 		},
 	}, orgCardID)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  14,
@@ -117,13 +127,13 @@ func createOrgInviteTemplate() *Document {
 	}, orgCardID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
 
 	// Accept button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 16, "left": 32,
@@ -140,7 +150,7 @@ func createOrgInviteTemplate() *Document {
 	}, doc.Root)
 
 	// Expiry notice
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  13,
@@ -163,7 +173,7 @@ func createOrgMemberAddedTemplate() *Document {
 	setRootStyle(doc, "#F0FDF4", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Green header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#10B981",
 			"padding": map[string]any{
@@ -178,7 +188,7 @@ func createOrgMemberAddedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -188,7 +198,7 @@ func createOrgMemberAddedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -203,13 +213,13 @@ func createOrgMemberAddedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -224,7 +234,7 @@ func createOrgMemberAddedTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#ECFDF5",
 			"padding": map[string]any{
@@ -240,7 +250,7 @@ func createOrgMemberAddedTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#065F46",
@@ -252,7 +262,7 @@ func createOrgMemberAddedTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -266,7 +276,7 @@ func createOrgMemberRemovedTemplate() *Document {
 	setRootStyle(doc, "#FEF2F2", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Red header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#EF4444",
 			"padding": map[string]any{
@@ -281,7 +291,7 @@ func createOrgMemberRemovedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -291,7 +301,7 @@ func createOrgMemberRemovedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -306,13 +316,13 @@ func createOrgMemberRemovedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -327,7 +337,7 @@ func createOrgMemberRemovedTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEE2E2",
 			"padding": map[string]any{
@@ -343,7 +353,7 @@ func createOrgMemberRemovedTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#991B1B",
@@ -355,7 +365,7 @@ func createOrgMemberRemovedTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -369,7 +379,7 @@ func createOrgRoleChangedTemplate() *Document {
 	setRootStyle(doc, "#F0FDF4", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Green header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#059669",
 			"padding": map[string]any{
@@ -384,7 +394,7 @@ func createOrgRoleChangedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -394,7 +404,7 @@ func createOrgRoleChangedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -409,13 +419,13 @@ func createOrgRoleChangedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -430,7 +440,7 @@ func createOrgRoleChangedTemplate() *Document {
 	}, doc.Root)
 
 	// Role change box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F0FDF4",
 			"padding": map[string]any{
@@ -446,7 +456,7 @@ func createOrgRoleChangedTemplate() *Document {
 
 	roleBoxID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign":  "center",
 			"fontSize":   16,
@@ -459,7 +469,7 @@ func createOrgRoleChangedTemplate() *Document {
 	}, roleBoxID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -473,7 +483,7 @@ func createOrgTransferTemplate() *Document {
 	setRootStyle(doc, "#F0FDF4", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Green header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#059669",
 			"padding": map[string]any{
@@ -488,7 +498,7 @@ func createOrgTransferTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -498,7 +508,7 @@ func createOrgTransferTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -513,13 +523,13 @@ func createOrgTransferTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -534,7 +544,7 @@ func createOrgTransferTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F0FDF4",
 			"padding": map[string]any{
@@ -550,7 +560,7 @@ func createOrgTransferTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#065F46",
@@ -562,7 +572,7 @@ func createOrgTransferTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -576,7 +586,7 @@ func createOrgDeletedTemplate() *Document {
 	setRootStyle(doc, "#FEF2F2", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Red header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#DC2626",
 			"padding": map[string]any{
@@ -591,7 +601,7 @@ func createOrgDeletedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -601,7 +611,7 @@ func createOrgDeletedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -616,13 +626,13 @@ func createOrgDeletedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -637,7 +647,7 @@ func createOrgDeletedTemplate() *Document {
 	}, doc.Root)
 
 	// Warning box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEE2E2",
 			"padding": map[string]any{
@@ -653,7 +663,7 @@ func createOrgDeletedTemplate() *Document {
 
 	warningID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#991B1B",
@@ -665,7 +675,7 @@ func createOrgDeletedTemplate() *Document {
 	}, warningID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -679,7 +689,7 @@ func createOrgMemberLeftTemplate() *Document {
 	setRootStyle(doc, "#F9FAFB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Gray header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#6B7280",
 			"padding": map[string]any{
@@ -694,7 +704,7 @@ func createOrgMemberLeftTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -704,7 +714,7 @@ func createOrgMemberLeftTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -719,13 +729,13 @@ func createOrgMemberLeftTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -740,7 +750,7 @@ func createOrgMemberLeftTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F3F4F6",
 			"padding": map[string]any{
@@ -756,7 +766,7 @@ func createOrgMemberLeftTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#374151",
@@ -768,7 +778,7 @@ func createOrgMemberLeftTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -786,7 +796,7 @@ func createEmailChangeRequestTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#0EA5E9",
 			"padding": map[string]any{
@@ -801,7 +811,7 @@ func createEmailChangeRequestTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -811,7 +821,7 @@ func createEmailChangeRequestTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -826,13 +836,13 @@ func createEmailChangeRequestTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -847,7 +857,7 @@ func createEmailChangeRequestTemplate() *Document {
 	}, doc.Root)
 
 	// Confirm button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -864,7 +874,7 @@ func createEmailChangeRequestTemplate() *Document {
 	}, doc.Root)
 
 	// Security notice
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#DBEAFE",
 			"padding": map[string]any{
@@ -880,7 +890,7 @@ func createEmailChangeRequestTemplate() *Document {
 
 	securityID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#1E40AF",
@@ -891,7 +901,7 @@ func createEmailChangeRequestTemplate() *Document {
 	}, securityID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -905,7 +915,7 @@ func createEmailChangedTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#3B82F6",
 			"padding": map[string]any{
@@ -920,7 +930,7 @@ func createEmailChangedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -930,7 +940,7 @@ func createEmailChangedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -945,13 +955,13 @@ func createEmailChangedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -966,7 +976,7 @@ func createEmailChangedTemplate() *Document {
 	}, doc.Root)
 
 	// Change details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#EFF6FF",
 			"padding": map[string]any{
@@ -982,7 +992,7 @@ func createEmailChangedTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#1E40AF",
@@ -994,7 +1004,7 @@ func createEmailChangedTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -1008,7 +1018,7 @@ func createPasswordChangedTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#0EA5E9",
 			"padding": map[string]any{
@@ -1023,7 +1033,7 @@ func createPasswordChangedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1033,7 +1043,7 @@ func createPasswordChangedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1048,13 +1058,13 @@ func createPasswordChangedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1069,7 +1079,7 @@ func createPasswordChangedTemplate() *Document {
 	}, doc.Root)
 
 	// Security warning
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -1085,7 +1095,7 @@ func createPasswordChangedTemplate() *Document {
 
 	warningID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#92400E",
@@ -1097,7 +1107,7 @@ func createPasswordChangedTemplate() *Document {
 	}, warningID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -1111,7 +1121,7 @@ func createUsernameChangedTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#3B82F6",
 			"padding": map[string]any{
@@ -1126,7 +1136,7 @@ func createUsernameChangedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1136,7 +1146,7 @@ func createUsernameChangedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1151,13 +1161,13 @@ func createUsernameChangedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1172,7 +1182,7 @@ func createUsernameChangedTemplate() *Document {
 	}, doc.Root)
 
 	// Username box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#EFF6FF",
 			"padding": map[string]any{
@@ -1188,7 +1198,7 @@ func createUsernameChangedTemplate() *Document {
 
 	usernameBoxID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign":  "center",
 			"fontSize":   18,
@@ -1201,7 +1211,7 @@ func createUsernameChangedTemplate() *Document {
 	}, usernameBoxID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -1215,7 +1225,7 @@ func createAccountDeletedTemplate() *Document {
 	setRootStyle(doc, "#FEF2F2", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Red header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#DC2626",
 			"padding": map[string]any{
@@ -1230,7 +1240,7 @@ func createAccountDeletedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1240,7 +1250,7 @@ func createAccountDeletedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1255,13 +1265,13 @@ func createAccountDeletedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1276,7 +1286,7 @@ func createAccountDeletedTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEE2E2",
 			"padding": map[string]any{
@@ -1292,7 +1302,7 @@ func createAccountDeletedTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#991B1B",
@@ -1304,7 +1314,7 @@ func createAccountDeletedTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -1318,7 +1328,7 @@ func createAccountSuspendedTemplate() *Document {
 	setRootStyle(doc, "#FEF3C7", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Orange/warning header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F59E0B",
 			"padding": map[string]any{
@@ -1333,7 +1343,7 @@ func createAccountSuspendedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1343,7 +1353,7 @@ func createAccountSuspendedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1358,13 +1368,13 @@ func createAccountSuspendedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1379,7 +1389,7 @@ func createAccountSuspendedTemplate() *Document {
 	}, doc.Root)
 
 	// Suspension details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -1395,7 +1405,7 @@ func createAccountSuspendedTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#92400E",
@@ -1407,13 +1417,13 @@ func createAccountSuspendedTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 16},
 	}, doc.Root)
 
 	// Contact support text
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  14,
@@ -1436,7 +1446,7 @@ func createAccountReactivatedTemplate() *Document {
 	setRootStyle(doc, "#ECFDF5", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Green header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#10B981",
 			"padding": map[string]any{
@@ -1451,7 +1461,7 @@ func createAccountReactivatedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1461,7 +1471,7 @@ func createAccountReactivatedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1476,13 +1486,13 @@ func createAccountReactivatedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1497,7 +1507,7 @@ func createAccountReactivatedTemplate() *Document {
 	}, doc.Root)
 
 	// Login button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 32, "left": 32,
@@ -1522,7 +1532,7 @@ func createDataExportReadyTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#0EA5E9",
 			"padding": map[string]any{
@@ -1537,7 +1547,7 @@ func createDataExportReadyTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1547,7 +1557,7 @@ func createDataExportReadyTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1562,13 +1572,13 @@ func createDataExportReadyTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1583,7 +1593,7 @@ func createDataExportReadyTemplate() *Document {
 	}, doc.Root)
 
 	// Download button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -1600,7 +1610,7 @@ func createDataExportReadyTemplate() *Document {
 	}, doc.Root)
 
 	// Expiry notice
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#DBEAFE",
 			"padding": map[string]any{
@@ -1616,7 +1626,7 @@ func createDataExportReadyTemplate() *Document {
 
 	expiryID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#1E40AF",
@@ -1627,7 +1637,7 @@ func createDataExportReadyTemplate() *Document {
 	}, expiryID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -1645,7 +1655,7 @@ func createNewDeviceLoginTemplate() *Document {
 	setRootStyle(doc, "#F5F3FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Purple header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#7C3AED",
 			"padding": map[string]any{
@@ -1660,7 +1670,7 @@ func createNewDeviceLoginTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1670,7 +1680,7 @@ func createNewDeviceLoginTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1685,13 +1695,13 @@ func createNewDeviceLoginTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1706,7 +1716,7 @@ func createNewDeviceLoginTemplate() *Document {
 	}, doc.Root)
 
 	// Device details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F5F3FF",
 			"padding": map[string]any{
@@ -1722,7 +1732,7 @@ func createNewDeviceLoginTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#5B21B6",
@@ -1734,13 +1744,13 @@ func createNewDeviceLoginTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
 
 	// Action buttons
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 0, "right": 32, "bottom": 12, "left": 32,
@@ -1756,7 +1766,7 @@ func createNewDeviceLoginTemplate() *Document {
 		},
 	}, doc.Root)
 
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 0, "right": 32, "bottom": 24, "left": 32,
@@ -1781,7 +1791,7 @@ func createNewLocationLoginTemplate() *Document {
 	setRootStyle(doc, "#F5F3FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Purple header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#8B5CF6",
 			"padding": map[string]any{
@@ -1796,7 +1806,7 @@ func createNewLocationLoginTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1806,7 +1816,7 @@ func createNewLocationLoginTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1821,13 +1831,13 @@ func createNewLocationLoginTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1842,7 +1852,7 @@ func createNewLocationLoginTemplate() *Document {
 	}, doc.Root)
 
 	// Location details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F5F3FF",
 			"padding": map[string]any{
@@ -1858,7 +1868,7 @@ func createNewLocationLoginTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#5B21B6",
@@ -1870,13 +1880,13 @@ func createNewLocationLoginTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 16},
 	}, doc.Root)
 
 	// Help text
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  14,
@@ -1899,7 +1909,7 @@ func createSuspiciousLoginTemplate() *Document {
 	setRootStyle(doc, "#FEF2F2", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Red/warning header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#EF4444",
 			"padding": map[string]any{
@@ -1914,7 +1924,7 @@ func createSuspiciousLoginTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -1924,7 +1934,7 @@ func createSuspiciousLoginTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -1939,13 +1949,13 @@ func createSuspiciousLoginTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -1960,7 +1970,7 @@ func createSuspiciousLoginTemplate() *Document {
 	}, doc.Root)
 
 	// Suspicious activity details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEE2E2",
 			"padding": map[string]any{
@@ -1976,7 +1986,7 @@ func createSuspiciousLoginTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#991B1B",
@@ -1988,13 +1998,13 @@ func createSuspiciousLoginTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
 
 	// Action button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 0, "right": 32, "bottom": 16, "left": 32,
@@ -2011,7 +2021,7 @@ func createSuspiciousLoginTemplate() *Document {
 	}, doc.Root)
 
 	// Urgent notice
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign":  "center",
 			"fontSize":   14,
@@ -2035,7 +2045,7 @@ func createDeviceRemovedTemplate() *Document {
 	setRootStyle(doc, "#F5F3FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Purple header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#7C3AED",
 			"padding": map[string]any{
@@ -2050,7 +2060,7 @@ func createDeviceRemovedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2060,7 +2070,7 @@ func createDeviceRemovedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2075,13 +2085,13 @@ func createDeviceRemovedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2096,7 +2106,7 @@ func createDeviceRemovedTemplate() *Document {
 	}, doc.Root)
 
 	// Device details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F5F3FF",
 			"padding": map[string]any{
@@ -2112,7 +2122,7 @@ func createDeviceRemovedTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#5B21B6",
@@ -2124,13 +2134,13 @@ func createDeviceRemovedTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 16},
 	}, doc.Root)
 
 	// Security text
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  14,
@@ -2153,7 +2163,7 @@ func createAllSessionsRevokedTemplate() *Document {
 	setRootStyle(doc, "#FEF3C7", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Orange/warning header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F59E0B",
 			"padding": map[string]any{
@@ -2168,7 +2178,7 @@ func createAllSessionsRevokedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2178,7 +2188,7 @@ func createAllSessionsRevokedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2193,13 +2203,13 @@ func createAllSessionsRevokedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2214,7 +2224,7 @@ func createAllSessionsRevokedTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -2230,7 +2240,7 @@ func createAllSessionsRevokedTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#92400E",
@@ -2242,13 +2252,13 @@ func createAllSessionsRevokedTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
 
 	// Sign in button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 0, "right": 32, "bottom": 24, "left": 32,
@@ -2277,7 +2287,7 @@ func createVerificationReminderTemplate() *Document {
 	setRootStyle(doc, "#FFFBEB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Amber header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F59E0B",
 			"padding": map[string]any{
@@ -2292,7 +2302,7 @@ func createVerificationReminderTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2302,7 +2312,7 @@ func createVerificationReminderTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2317,13 +2327,13 @@ func createVerificationReminderTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2338,7 +2348,7 @@ func createVerificationReminderTemplate() *Document {
 	}, doc.Root)
 
 	// Verify button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -2355,7 +2365,7 @@ func createVerificationReminderTemplate() *Document {
 	}, doc.Root)
 
 	// Reminder box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -2371,7 +2381,7 @@ func createVerificationReminderTemplate() *Document {
 
 	reminderID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#92400E",
@@ -2382,7 +2392,7 @@ func createVerificationReminderTemplate() *Document {
 	}, reminderID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -2396,7 +2406,7 @@ func createInactiveAccountTemplate() *Document {
 	setRootStyle(doc, "#FFFBEB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Amber header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#D97706",
 			"padding": map[string]any{
@@ -2411,7 +2421,7 @@ func createInactiveAccountTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2421,7 +2431,7 @@ func createInactiveAccountTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2436,13 +2446,13 @@ func createInactiveAccountTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2457,7 +2467,7 @@ func createInactiveAccountTemplate() *Document {
 	}, doc.Root)
 
 	// Return button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -2474,7 +2484,7 @@ func createInactiveAccountTemplate() *Document {
 	}, doc.Root)
 
 	// Info text
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  13,
@@ -2497,7 +2507,7 @@ func createTrialExpiringTemplate() *Document {
 	setRootStyle(doc, "#FFFBEB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Amber header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F59E0B",
 			"padding": map[string]any{
@@ -2512,7 +2522,7 @@ func createTrialExpiringTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2522,7 +2532,7 @@ func createTrialExpiringTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2537,13 +2547,13 @@ func createTrialExpiringTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2558,7 +2568,7 @@ func createTrialExpiringTemplate() *Document {
 	}, doc.Root)
 
 	// Upgrade button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -2575,7 +2585,7 @@ func createTrialExpiringTemplate() *Document {
 	}, doc.Root)
 
 	// Trial info
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -2591,7 +2601,7 @@ func createTrialExpiringTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#92400E",
@@ -2603,7 +2613,7 @@ func createTrialExpiringTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -2617,7 +2627,7 @@ func createSubscriptionExpiringTemplate() *Document {
 	setRootStyle(doc, "#FFFBEB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Amber header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#D97706",
 			"padding": map[string]any{
@@ -2632,7 +2642,7 @@ func createSubscriptionExpiringTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2642,7 +2652,7 @@ func createSubscriptionExpiringTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2657,13 +2667,13 @@ func createSubscriptionExpiringTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2678,7 +2688,7 @@ func createSubscriptionExpiringTemplate() *Document {
 	}, doc.Root)
 
 	// Renew button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -2695,7 +2705,7 @@ func createSubscriptionExpiringTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -2711,7 +2721,7 @@ func createSubscriptionExpiringTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#92400E",
@@ -2722,7 +2732,7 @@ func createSubscriptionExpiringTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -2736,7 +2746,7 @@ func createPasswordExpiringTemplate() *Document {
 	setRootStyle(doc, "#FFFBEB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Amber header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F59E0B",
 			"padding": map[string]any{
@@ -2751,7 +2761,7 @@ func createPasswordExpiringTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2761,7 +2771,7 @@ func createPasswordExpiringTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2776,13 +2786,13 @@ func createPasswordExpiringTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2797,7 +2807,7 @@ func createPasswordExpiringTemplate() *Document {
 	}, doc.Root)
 
 	// Change password button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -2814,7 +2824,7 @@ func createPasswordExpiringTemplate() *Document {
 	}, doc.Root)
 
 	// Security tip
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -2830,7 +2840,7 @@ func createPasswordExpiringTemplate() *Document {
 
 	tipID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#92400E",
@@ -2841,7 +2851,7 @@ func createPasswordExpiringTemplate() *Document {
 	}, tipID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -2859,7 +2869,7 @@ func createAccountLockedTemplate() *Document {
 	setRootStyle(doc, "#FEF2F2", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Red header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#DC2626",
 			"padding": map[string]any{
@@ -2874,7 +2884,7 @@ func createAccountLockedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -2884,7 +2894,7 @@ func createAccountLockedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -2899,13 +2909,13 @@ func createAccountLockedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -2920,7 +2930,7 @@ func createAccountLockedTemplate() *Document {
 	}, doc.Root)
 
 	// Lock details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEE2E2",
 			"padding": map[string]any{
@@ -2936,7 +2946,7 @@ func createAccountLockedTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#991B1B",
@@ -2948,13 +2958,13 @@ func createAccountLockedTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 16},
 	}, doc.Root)
 
 	// Contact support
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  14,
@@ -2977,7 +2987,7 @@ func createAccountUnlockedTemplate() *Document {
 	setRootStyle(doc, "#ECFDF5", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Green header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#10B981",
 			"padding": map[string]any{
@@ -2992,7 +3002,7 @@ func createAccountUnlockedTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -3002,7 +3012,7 @@ func createAccountUnlockedTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -3017,13 +3027,13 @@ func createAccountUnlockedTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -3038,7 +3048,7 @@ func createAccountUnlockedTemplate() *Document {
 	}, doc.Root)
 
 	// Sign in button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 32, "left": 32,
@@ -3063,7 +3073,7 @@ func createTermsUpdateTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#3B82F6",
 			"padding": map[string]any{
@@ -3078,7 +3088,7 @@ func createTermsUpdateTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -3088,7 +3098,7 @@ func createTermsUpdateTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -3103,13 +3113,13 @@ func createTermsUpdateTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -3124,7 +3134,7 @@ func createTermsUpdateTemplate() *Document {
 	}, doc.Root)
 
 	// Review button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -3141,7 +3151,7 @@ func createTermsUpdateTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#EFF6FF",
 			"padding": map[string]any{
@@ -3157,7 +3167,7 @@ func createTermsUpdateTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#1E40AF",
@@ -3168,7 +3178,7 @@ func createTermsUpdateTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -3182,7 +3192,7 @@ func createPrivacyUpdateTemplate() *Document {
 	setRootStyle(doc, "#F0F9FF", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Blue header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#0EA5E9",
 			"padding": map[string]any{
@@ -3197,7 +3207,7 @@ func createPrivacyUpdateTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -3207,7 +3217,7 @@ func createPrivacyUpdateTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -3222,13 +3232,13 @@ func createPrivacyUpdateTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -3243,7 +3253,7 @@ func createPrivacyUpdateTemplate() *Document {
 	}, doc.Root)
 
 	// Review button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 8, "right": 32, "bottom": 24, "left": 32,
@@ -3260,7 +3270,7 @@ func createPrivacyUpdateTemplate() *Document {
 	}, doc.Root)
 
 	// Info box
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#DBEAFE",
 			"padding": map[string]any{
@@ -3276,7 +3286,7 @@ func createPrivacyUpdateTemplate() *Document {
 
 	infoID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize": 13,
 			"color":    "#1E40AF",
@@ -3287,7 +3297,7 @@ func createPrivacyUpdateTemplate() *Document {
 	}, infoID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
@@ -3301,7 +3311,7 @@ func createMaintenanceScheduledTemplate() *Document {
 	setRootStyle(doc, "#FFFBEB", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Amber header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#F59E0B",
 			"padding": map[string]any{
@@ -3316,7 +3326,7 @@ func createMaintenanceScheduledTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -3326,7 +3336,7 @@ func createMaintenanceScheduledTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -3341,13 +3351,13 @@ func createMaintenanceScheduledTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -3362,7 +3372,7 @@ func createMaintenanceScheduledTemplate() *Document {
 	}, doc.Root)
 
 	// Maintenance details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEF3C7",
 			"padding": map[string]any{
@@ -3378,7 +3388,7 @@ func createMaintenanceScheduledTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#92400E",
@@ -3390,13 +3400,13 @@ func createMaintenanceScheduledTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 16},
 	}, doc.Root)
 
 	// Info text
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  14,
@@ -3419,7 +3429,7 @@ func createSecurityBreachTemplate() *Document {
 	setRootStyle(doc, "#FEF2F2", "#FFFFFF", "#1F2937", "MODERN_SANS")
 
 	// Red/critical header
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#991B1B",
 			"padding": map[string]any{
@@ -3434,7 +3444,7 @@ func createSecurityBreachTemplate() *Document {
 
 	headerID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"fontSize":  40,
@@ -3444,7 +3454,7 @@ func createSecurityBreachTemplate() *Document {
 		},
 	}, headerID)
 
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	mustAddBlock(doc, BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#FFFFFF",
@@ -3459,13 +3469,13 @@ func createSecurityBreachTemplate() *Document {
 	}, headerID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 32},
 	}, doc.Root)
 
 	// Message
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"color":      "#374151",
 			"fontSize":   16,
@@ -3480,7 +3490,7 @@ func createSecurityBreachTemplate() *Document {
 	}, doc.Root)
 
 	// Breach details
-	doc.AddBlock(BlockTypeContainer, map[string]any{
+	mustAddBlock(doc, BlockTypeContainer, map[string]any{
 		"style": map[string]any{
 			"backgroundColor": "#FEE2E2",
 			"padding": map[string]any{
@@ -3496,7 +3506,7 @@ func createSecurityBreachTemplate() *Document {
 
 	detailsID := getLastBlockID(doc)
 
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":   14,
 			"color":      "#991B1B",
@@ -3508,13 +3518,13 @@ func createSecurityBreachTemplate() *Document {
 	}, detailsID)
 
 	// Spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	mustAddBlock(doc, BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{"height": 24},
 	}, doc.Root)
 
 	// Secure account button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	mustAddBlock(doc, BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 0, "right": 32, "bottom": 16, "left": 32,
@@ -3531,7 +3541,7 @@ func createSecurityBreachTemplate() *Document {
 	}, doc.Root)
 
 	// Urgent notice
-	doc.AddBlock(BlockTypeText, map[string]any{
+	mustAddBlock(doc, BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"textAlign":  "center",
 			"fontSize":   14,

@@ -173,7 +173,7 @@ func (s *InvitationService) FindInvitationByToken(ctx context.Context, token str
 	if err := validateInvitationExpiry(invitation.ExpiresAt); err != nil {
 		invitation.Status = InvitationStatusExpired
 		invitation.UpdatedAt = time.Now().UTC()
-		s.repo.Update(ctx, invitation)
+		_ = s.repo.Update(ctx, invitation)
 
 		return nil, err
 	}

@@ -397,6 +397,7 @@ func setupMemberServiceForTest() (*MemberService, *MockMemberRepository, *MockAp
 
 func TestMemberService_mapMemberRoleToRBAC(t *testing.T) {
 	service, _, _, _, _ := setupMemberServiceForTest()
+	_ = service
 
 	tests := []struct {
 		name       string
@@ -827,6 +828,7 @@ func TestMemberService_DeleteMember_ContinuesOnRBACCleanupFailure(t *testing.T) 
 
 func TestMemberService_getRoleIDByName(t *testing.T) {
 	service, _, _, roleRepo, _ := setupMemberServiceForTest()
+	_ = service
 	ctx := context.Background()
 
 	appID := xid.New()
@@ -849,6 +851,7 @@ func TestMemberService_getRoleIDByName(t *testing.T) {
 
 func TestMemberService_getRoleIDByName_RoleNotFound(t *testing.T) {
 	service, _, _, roleRepo, _ := setupMemberServiceForTest()
+	_ = service
 	ctx := context.Background()
 
 	appID := xid.New()

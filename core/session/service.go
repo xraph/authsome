@@ -158,7 +158,7 @@ func (s *Service) Create(ctx context.Context, req *CreateSessionRequest) (*Sessi
 			"ip_address": sess.IPAddress,
 			"user_agent": sess.UserAgent,
 		}
-		go s.webhookSvc.EmitEvent(ctx, sess.AppID, envID, "user.login", data)
+		go func() { _ = s.webhookSvc.EmitEvent(ctx, sess.AppID, envID, "user.login", data) }()
 	}
 
 	return sess, nil
@@ -295,7 +295,7 @@ func (s *Service) RevokeByID(ctx context.Context, id xid.ID) error {
 			"ip_address": schemaSession.IPAddress,
 			"user_agent": schemaSession.UserAgent,
 		}
-		go s.webhookSvc.EmitEvent(ctx, schemaSession.AppID, envID, "session.revoked", data)
+		go func() { _ = s.webhookSvc.EmitEvent(ctx, schemaSession.AppID, envID, "session.revoked", data) }()
 	}
 
 	return nil
@@ -345,7 +345,7 @@ func (s *Service) Revoke(ctx context.Context, token string) error {
 			"ip_address": schemaSession.IPAddress,
 			"user_agent": schemaSession.UserAgent,
 		}
-		go s.webhookSvc.EmitEvent(ctx, schemaSession.AppID, envID, "user.logout", data)
+		go func() { _ = s.webhookSvc.EmitEvent(ctx, schemaSession.AppID, envID, "user.logout", data) }()
 	}
 
 	return nil

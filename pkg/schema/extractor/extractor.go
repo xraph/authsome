@@ -282,7 +282,7 @@ func (e *Extractor) parseStructTags(field *definition.Field, tag string) {
 				field.Type = definition.FieldTypeString
 				// Extract length
 				if strings.Contains(typeStr, "(") {
-					fmt.Sscanf(typeStr, "varchar(%d)", &field.Length)
+					_, _ = fmt.Sscanf(typeStr, "varchar(%d)", &field.Length)
 				}
 			}
 		case strings.HasPrefix(part, "default:"):

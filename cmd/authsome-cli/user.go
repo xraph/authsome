@@ -95,7 +95,10 @@ var userDeleteCmd = &cobra.Command{
 		if !force {
 			fmt.Printf("Are you sure you want to delete user %s? (y/N): ", userID)
 			var confirm string
-			fmt.Scanln(&confirm)
+			if _, err := fmt.Scanln(&confirm); err != nil {
+				fmt.Println("Error reading input:", err)
+				return err
+			}
 			if confirm != "y" && confirm != "Y" {
 				fmt.Println("Cancelled")
 

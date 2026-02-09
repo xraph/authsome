@@ -624,7 +624,7 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 	if format == "json" {
 		ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
 		ctx.ResponseWriter.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=scim-logs-%s.json", time.Now().Format("2006-01-02")))
-		json.NewEncoder(ctx.ResponseWriter).Encode(events)
+		_ = json.NewEncoder(ctx.ResponseWriter).Encode(events)
 
 		return nil, nil
 	}

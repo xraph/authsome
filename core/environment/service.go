@@ -299,7 +299,7 @@ func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmen
 	if err := s.executePromotion(ctx, promotion.ToSchema(), sourceEnv, targetEnv); err != nil {
 		promotion.Status = schema.PromotionStatusFailed
 		promotion.ErrorMessage = err.Error()
-		s.repo.UpdatePromotion(ctx, promotion.ToSchema())
+		_ = s.repo.UpdatePromotion(ctx, promotion.ToSchema())
 
 		return nil, PromotionFailed(err.Error())
 	}
@@ -308,7 +308,7 @@ func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmen
 	promotion.Status = schema.PromotionStatusCompleted
 	completedAt := time.Now().UTC()
 	promotion.CompletedAt = &completedAt
-	s.repo.UpdatePromotion(ctx, promotion.ToSchema())
+	_ = s.repo.UpdatePromotion(ctx, promotion.ToSchema())
 
 	return promotion, nil
 }

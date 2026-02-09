@@ -485,6 +485,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signup request error: %v", err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp map[string]any
@@ -509,6 +510,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signin request error: %v", err)
 	}
+	defer resp2.Body.Close()
 
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 signin, got %d", resp2.StatusCode)
@@ -531,6 +533,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get session error: %v", err)
 	}
+	defer resp3.Body.Close()
 
 	if resp3.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 session, got %d", resp3.StatusCode)
@@ -544,6 +547,7 @@ func TestAuthRoutes_SignUpSignInSessionSignOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signout request error: %v", err)
 	}
+	defer resp4.Body.Close()
 
 	if resp4.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 signout, got %d", resp4.StatusCode)

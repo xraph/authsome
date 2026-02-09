@@ -175,7 +175,7 @@ func (s *Service) Create(ctx context.Context, req *CreateUserRequest) (*User, er
 			"email":   user.Email,
 			"name":    user.Name,
 		}
-		go s.webhookSvc.EmitEvent(ctx, req.AppID, xid.NilID(), "user.created", data)
+		go func() { _ = s.webhookSvc.EmitEvent(ctx, req.AppID, xid.NilID(), "user.created", data) }()
 	}
 
 	return user, nil
@@ -369,7 +369,7 @@ func (s *Service) Update(ctx context.Context, u *User, req *UpdateUserRequest) (
 			"email":   u.Email,
 			"name":    u.Name,
 		}
-		go s.webhookSvc.EmitEvent(ctx, u.AppID, xid.NilID(), "user.updated", data)
+		go func() { _ = s.webhookSvc.EmitEvent(ctx, u.AppID, xid.NilID(), "user.updated", data) }()
 	}
 
 	return u, nil
@@ -424,7 +424,7 @@ func (s *Service) Delete(ctx context.Context, id xid.ID) error {
 			"email":   user.Email,
 			"name":    user.Name,
 		}
-		go s.webhookSvc.EmitEvent(ctx, user.AppID, xid.NilID(), "user.deleted", data)
+		go func() { _ = s.webhookSvc.EmitEvent(ctx, user.AppID, xid.NilID(), "user.deleted", data) }()
 	}
 
 	return nil
