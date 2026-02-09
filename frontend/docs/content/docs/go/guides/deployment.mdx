@@ -423,7 +423,7 @@ http {
 ### AWS Deployment
 
 <Tabs>
-<Tab title="ECS Fargate">
+<Tab title="ECS Fargate" value="ecs">
 ```yaml
 # aws-ecs-task-definition.json
 {
@@ -480,7 +480,7 @@ http {
 }
 ```
 </Tab>
-<Tab title="Terraform">
+<Tab title="Terraform" value="terraform">
 ```hcl
 # terraform/main.tf - AWS infrastructure
 terraform {
@@ -629,7 +629,7 @@ data "aws_availability_zones" "available" {
 ### Google Cloud Platform
 
 <Tabs>
-<Tab title="Cloud Run">
+<Tab title="Cloud Run" value="cloudrun">
 ```yaml
 # cloudbuild.yaml - Google Cloud Build
 steps:
@@ -664,7 +664,7 @@ images:
   - 'gcr.io/$PROJECT_ID/authsome:$COMMIT_SHA'
 ```
 </Tab>
-<Tab title="GKE">
+<Tab title="GKE" value="gke">
 ```yaml
 # k8s/deployment.yaml - Kubernetes deployment
 apiVersion: apps/v1

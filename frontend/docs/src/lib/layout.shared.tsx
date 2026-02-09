@@ -37,14 +37,6 @@ export const linkItems: LinkItemType[] = [
 
 export const logo = (
   <>
-    <Image
-      alt="Authsome"
-      // src={Logo}
-      sizes="100px"
-      className="hidden w-20 md:w-24 [.uwu_&]:block"
-      aria-label="Authsome"
-    />
-
     Authsome
   </>
 );

@@ -1,7 +1,7 @@
 import { type Page } from '@/lib/source';
 
 export async function getLLMText(page: Page) {
-  if (page.data.type === 'openapi') return '';
+  if ('type' in page.data && (page.data as any).type === 'openapi') return '';
 
   const category =
     {

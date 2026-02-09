@@ -24,7 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     ...source.getPages().flatMap((page) => {
-      if (page.data.type === 'openapi') return [];
+      if ('type' in page.data && (page.data as any).type === 'openapi') return [];
       const { lastModified } = page.data;
 
       return {
