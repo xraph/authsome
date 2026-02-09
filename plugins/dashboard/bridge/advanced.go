@@ -50,11 +50,12 @@ type EnvironmentsListOutput struct {
 
 // EnvironmentItem represents an environment.
 type EnvironmentItem struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
-	CreatedAt   string `json:"createdAt"`
+	ID          string                        `json:"id"`
+	Name        string                        `json:"name"`
+	Description string                        `json:"description,omitempty"`
+	Type        environment.EnvironmentType   `json:"type"`
+	Status      environment.EnvironmentStatus `json:"status"`
+	CreatedAt   string                        `json:"createdAt"`
 }
 
 // SwitchEnvironmentInput represents environment switch request.
@@ -71,17 +72,17 @@ type EnvironmentDetailInput struct {
 
 // EnvironmentDetailOutput represents environment detail response.
 type EnvironmentDetailOutput struct {
-	ID         string          `json:"id"`
-	AppID      string          `json:"appId"`
-	Name       string          `json:"name"`
-	Slug       string          `json:"slug"`
-	Type       string          `json:"type"`
-	Status     string          `json:"status"`
-	Config     map[string]any  `json:"config"`
-	IsDefault  bool            `json:"isDefault"`
-	CreatedAt  string          `json:"createdAt"`
-	UpdatedAt  string          `json:"updatedAt"`
-	Promotions []PromotionItem `json:"promotions"`
+	ID         string                        `json:"id"`
+	AppID      string                        `json:"appId"`
+	Name       string                        `json:"name"`
+	Slug       string                        `json:"slug"`
+	Type       environment.EnvironmentType   `json:"type"`
+	Status     environment.EnvironmentStatus `json:"status"`
+	Config     map[string]any                `json:"config"`
+	IsDefault  bool                          `json:"isDefault"`
+	CreatedAt  string                        `json:"createdAt"`
+	UpdatedAt  string                        `json:"updatedAt"`
+	Promotions []PromotionItem               `json:"promotions"`
 }
 
 // PromotionItem represents a promotion history item.
@@ -556,7 +557,7 @@ func (bm *BridgeManager) createEnvironment(ctx bridge.Context, input CreateEnvir
 		AppID: appID,
 		Name:  input.Name,
 		Slug:  input.Slug,
-		Type:  envType,
+		Type:  environment.EnvironmentType(envType),
 	}
 
 	_, err = bm.envSvc.CreateEnvironment(goCtx, req)

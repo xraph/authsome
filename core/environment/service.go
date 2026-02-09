@@ -18,12 +18,12 @@ type Service struct {
 
 // Config holds the environment service configuration.
 type Config struct {
-	AutoCreateDev                  bool     `json:"autoCreateDev"`
-	DefaultDevName                 string   `json:"defaultDevName"`
-	AllowPromotion                 bool     `json:"allowPromotion"`
-	RequireConfirmationForDataCopy bool     `json:"requireConfirmationForDataCopy"`
-	MaxEnvironmentsPerApp          int      `json:"maxEnvironmentsPerApp"`
-	AllowedTypes                   []string `json:"allowedTypes"`
+	AutoCreateDev                  bool              `json:"autoCreateDev"`
+	DefaultDevName                 string            `json:"defaultDevName"`
+	AllowPromotion                 bool              `json:"allowPromotion"`
+	RequireConfirmationForDataCopy bool              `json:"requireConfirmationForDataCopy"`
+	MaxEnvironmentsPerApp          int               `json:"maxEnvironmentsPerApp"`
+	AllowedTypes                   []EnvironmentType `json:"allowedTypes"`
 }
 
 // NewService creates a new environment service.
@@ -38,7 +38,7 @@ func NewService(repo Repository, config Config) *Service {
 	}
 
 	if len(config.AllowedTypes) == 0 {
-		config.AllowedTypes = []string{
+		config.AllowedTypes = []EnvironmentType{
 			schema.EnvironmentTypeDevelopment,
 			schema.EnvironmentTypeProduction,
 			schema.EnvironmentTypeStaging,
@@ -195,7 +195,7 @@ func (s *Service) UpdateEnvironment(ctx context.Context, id xid.ID, req *UpdateE
 	}
 
 	if req.Status != nil {
-		schemaEnv.Status = *req.Status
+		schemaEnv.Status = string(*req.Status)
 	}
 
 	if req.Config != nil {
@@ -262,7 +262,7 @@ func (s *Service) PromoteEnvironment(ctx context.Context, req *PromoteEnvironmen
 			AppID:     sourceEnv.AppID,
 			Name:      req.TargetName,
 			Slug:      req.TargetSlug,
-			Type:      req.TargetType,
+			Type:      string(req.TargetType),
 			Status:    schema.EnvironmentStatusActive,
 			Config:    make(map[string]any),
 			IsDefault: false,
@@ -380,6 +380,6 @@ func (s *Service) ListPromotions(ctx context.Context, filter *ListPromotionsFilt
 // HELPER METHODS
 // =============================================================================
 
-func (s *Service) isAllowedType(envType string) bool {
+func (s *Service) isAllowedType(envType EnvironmentType) bool {
 	return slices.Contains(s.config.AllowedTypes, envType)
 }

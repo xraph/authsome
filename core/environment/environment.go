@@ -219,30 +219,30 @@ func (p *Promotion) IsFailed() bool {
 
 // CreateEnvironmentRequest represents the request to create an environment.
 type CreateEnvironmentRequest struct {
-	AppID  xid.ID         `json:"appId"            validate:"required"`
-	Name   string         `json:"name"             validate:"required,min=1,max=100"`
-	Slug   string         `json:"slug"             validate:"required,min=1,max=50,alphanum"`
-	Type   string         `json:"type"             validate:"required,oneof=development staging production preview test"`
-	Config map[string]any `json:"config,omitempty"`
+	AppID  xid.ID          `json:"appId"            validate:"required"`
+	Name   string          `json:"name"             validate:"required,min=1,max=100"`
+	Slug   string          `json:"slug"             validate:"required,min=1,max=50,alphanum"`
+	Type   EnvironmentType `json:"type"             validate:"required,oneof=development staging production preview test"`
+	Config map[string]any  `json:"config,omitempty"`
 }
 
 // UpdateEnvironmentRequest represents the request to update an environment.
 type UpdateEnvironmentRequest struct {
-	Name   *string        `json:"name,omitempty"   validate:"omitempty,min=1,max=100"`
-	Status *string        `json:"status,omitempty" validate:"omitempty,oneof=active inactive maintenance"`
-	Config map[string]any `json:"config,omitempty"`
-	Type   *string        `json:"type,omitempty"   validate:"omitempty,oneof=development staging production preview test"`
+	Name   *string            `json:"name,omitempty"   validate:"omitempty,min=1,max=100"`
+	Status *EnvironmentStatus `json:"status,omitempty" validate:"omitempty,oneof=active inactive maintenance"`
+	Config map[string]any     `json:"config,omitempty"`
+	Type   *EnvironmentType   `json:"type,omitempty"   validate:"omitempty,oneof=development staging production preview test"`
 }
 
 // PromoteEnvironmentRequest represents the request to promote an environment.
 type PromoteEnvironmentRequest struct {
-	SourceEnvID xid.ID         `json:"sourceEnvId"      validate:"required"`
-	TargetName  string         `json:"targetName"       validate:"required,min=1,max=100"`
-	TargetSlug  string         `json:"targetSlug"       validate:"required,min=1,max=50,alphanum"`
-	TargetType  string         `json:"targetType"       validate:"required,oneof=development staging production preview test"`
-	IncludeData bool           `json:"includeData"`
-	PromotedBy  xid.ID         `json:"promotedBy"       validate:"required"`
-	Config      map[string]any `json:"config,omitempty"`
+	SourceEnvID xid.ID          `json:"sourceEnvId"      validate:"required"`
+	TargetName  string          `json:"targetName"       validate:"required,min=1,max=100"`
+	TargetSlug  string          `json:"targetSlug"       validate:"required,min=1,max=50,alphanum"`
+	TargetType  EnvironmentType `json:"targetType"       validate:"required,oneof=development staging production preview test"`
+	IncludeData bool            `json:"includeData"`
+	PromotedBy  xid.ID          `json:"promotedBy"       validate:"required"`
+	Config      map[string]any  `json:"config,omitempty"`
 }
 
 // ListEnvironmentsResponse represents paginated environment response.

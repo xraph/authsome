@@ -71,7 +71,7 @@ func CannotModifyDefaultEnvironmentType() *errs.AuthsomeError {
 	return errs.New(CodeCannotModifyDefaultEnvironmentType, "Cannot change default environment type", http.StatusForbidden)
 }
 
-func EnvironmentTypeForbidden(envType string) *errs.AuthsomeError {
+func EnvironmentTypeForbidden(envType EnvironmentType) *errs.AuthsomeError {
 	return errs.New(CodeEnvironmentTypeForbidden, "Environment type is not allowed", http.StatusForbidden).
 		WithContext("type", envType)
 }
