@@ -290,12 +290,9 @@ func (h *Handler) ListUsers(c forge.Context) error {
 	// Parse query parameters
 	filter := c.Query("filter")
 	startIndex := parseIntParam(c.Query("startIndex"), 1)
-	count := parseIntParam(c.Query("count"), h.config.Search.DefaultResults)
-
-	// Enforce max results
-	if count > h.config.Search.MaxResults {
-		count = h.config.Search.MaxResults
-	}
+	count := min(
+		// Enforce max results
+		parseIntParam(c.Query("count"), h.config.Search.DefaultResults), h.config.Search.MaxResults)
 
 	// List users via service
 	listResponse, err := h.service.ListUsers(ctx, orgID, filter, startIndex, count)
@@ -530,12 +527,9 @@ func (h *Handler) ListGroups(c forge.Context) error {
 	// Parse query parameters
 	filter := c.Query("filter")
 	startIndex := parseIntParam(c.Query("startIndex"), 1)
-	count := parseIntParam(c.Query("count"), h.config.Search.DefaultResults)
-
-	// Enforce max results
-	if count > h.config.Search.MaxResults {
-		count = h.config.Search.MaxResults
-	}
+	count := min(
+		// Enforce max results
+		parseIntParam(c.Query("count"), h.config.Search.DefaultResults), h.config.Search.MaxResults)
 
 	// List groups via service
 	result, err := h.service.ListGroups(ctx, orgID, filter, startIndex, count)

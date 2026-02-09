@@ -202,5 +202,6 @@ func GetTokenScopes(scope string) []string {
 // HasScope checks if a token has a specific scope.
 func HasScope(tokenScope, requiredScope string) bool {
 	scopes := GetTokenScopes(tokenScope)
+
 	return slices.Contains(scopes, requiredScope)
 }

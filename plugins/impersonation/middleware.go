@@ -81,8 +81,8 @@ func (m *ImpersonationMiddleware) Handle() func(forge.Context) error {
 		// Add response header if impersonating (for UI to show banner)
 		if verifyResp.IsImpersonating && m.config.ShowIndicator {
 			c.Response().Header().Set("X-Impersonating", "true")
-			c.Response().Header().Set("X-Impersonator-ID", verifyResp.ImpersonatorID.String())
-			c.Response().Header().Set("X-Target-User-ID", verifyResp.TargetUserID.String())
+			c.Response().Header().Set("X-Impersonator-Id", verifyResp.ImpersonatorID.String())
+			c.Response().Header().Set("X-Target-User-Id", verifyResp.TargetUserID.String())
 		}
 
 		return nil

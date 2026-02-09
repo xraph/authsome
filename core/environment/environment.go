@@ -12,17 +12,34 @@ import (
 // ENVIRONMENT DTO (Data Transfer Object)
 // =============================================================================
 
+type EnvironmentType string
+
+const (
+	EnvironmentTypeDevelopment EnvironmentType = "development"
+	EnvironmentTypeProduction  EnvironmentType = "production"
+	EnvironmentTypeStaging     EnvironmentType = "staging"
+	EnvironmentTypePreview     EnvironmentType = "preview"
+	EnvironmentTypeTest        EnvironmentType = "test"
+)
+
+type EnvironmentStatus string
+
+const (
+	EnvironmentStatusActive   EnvironmentStatus = "active"
+	EnvironmentStatusInactive EnvironmentStatus = "inactive"
+)
+
 // Environment represents an environment DTO
 // This is separate from schema.Environment to maintain proper separation of concerns.
 type Environment struct {
-	ID        xid.ID         `json:"id"`
-	AppID     xid.ID         `json:"appId"`
-	Name      string         `json:"name"`
-	Slug      string         `json:"slug"`
-	Type      string         `json:"type"`
-	Status    string         `json:"status"`
-	Config    map[string]any `json:"config,omitempty"`
-	IsDefault bool           `json:"isDefault"`
+	ID        xid.ID            `json:"id"`
+	AppID     xid.ID            `json:"appId"`
+	Name      string            `json:"name"`
+	Slug      string            `json:"slug"`
+	Type      EnvironmentType   `json:"type"`
+	Status    EnvironmentStatus `json:"status"`
+	Config    map[string]any    `json:"config,omitempty"`
+	IsDefault bool              `json:"isDefault"`
 	// Audit fields
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
@@ -36,8 +53,8 @@ func (e *Environment) ToSchema() *schema.Environment {
 		AppID:     e.AppID,
 		Name:      e.Name,
 		Slug:      e.Slug,
-		Type:      e.Type,
-		Status:    e.Status,
+		Type:      string(e.Type),
+		Status:    string(e.Status),
 		Config:    e.Config,
 		IsDefault: e.IsDefault,
 		AuditableModel: schema.AuditableModel{
@@ -59,8 +76,8 @@ func FromSchemaEnvironment(se *schema.Environment) *Environment {
 		AppID:     se.AppID,
 		Name:      se.Name,
 		Slug:      se.Slug,
-		Type:      se.Type,
-		Status:    se.Status,
+		Type:      EnvironmentType(se.Type),
+		Status:    EnvironmentStatus(se.Status),
 		Config:    se.Config,
 		IsDefault: se.IsDefault,
 		CreatedAt: se.CreatedAt,

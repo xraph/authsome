@@ -648,7 +648,7 @@ func (e *DashboardExtension) buildContextFromBridge(bridgeCtx bridge.Context, ap
 				if envResp, err := envSvc.ListEnvironments(goCtx, filter); err == nil && envResp != nil && len(envResp.Data) > 0 {
 					// Look for production or default environment first
 					for _, environment := range envResp.Data {
-						if environment.Name == "production" || environment.Name == "default" {
+						if environment.Type == env.EnvironmentTypeProduction || environment.Name == "default" {
 							goCtx = contexts.SetEnvironmentID(goCtx, environment.ID)
 							envIDSet = true
 
@@ -2420,10 +2420,12 @@ func (e *DashboardExtension) HandleCreateEntry(ctx *router.PageContext) (g.Node,
 			if cmsErr.Code == core.ErrCodeEntryValidationFailed {
 				if details, ok := cmsErr.Details.(map[string]string); ok && len(details) > 0 {
 					errorMsg = "Validation failed:\n"
+
 					var errorMsgSb2377 strings.Builder
 					for field, msg := range details {
 						errorMsgSb2377.WriteString(fmt.Sprintf("• %s: %s\n", field, msg))
 					}
+
 					errorMsg += errorMsgSb2377.String()
 				}
 			}
@@ -2617,10 +2619,12 @@ func (e *DashboardExtension) HandleUpdateEntry(ctx *router.PageContext) (g.Node,
 			if cmsErr.Code == core.ErrCodeEntryValidationFailed {
 				if details, ok := cmsErr.Details.(map[string]string); ok && len(details) > 0 {
 					errorMsg = "Validation failed:\n"
+
 					var errorMsgSb2567 strings.Builder
 					for field, msg := range details {
 						errorMsgSb2567.WriteString(fmt.Sprintf("• %s: %s\n", field, msg))
 					}
+
 					errorMsg += errorMsgSb2567.String()
 				}
 			}
