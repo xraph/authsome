@@ -2,7 +2,7 @@ package social
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -10,17 +10,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/xraph/authsome/core/audit"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/social/providers"
 	"github.com/xraph/authsome/schema"
 )
 
-// MockSocialAccountRepository is a mock implementation of SocialAccountRepository
+// MockSocialAccountRepository is a mock implementation of SocialAccountRepository.
 type MockSocialAccountRepository struct {
 	mock.Mock
 }
 
 func (m *MockSocialAccountRepository) Create(ctx context.Context, account *schema.SocialAccount) error {
 	args := m.Called(ctx, account)
+
 	return args.Error(0)
 }
 
@@ -29,6 +31,7 @@ func (m *MockSocialAccountRepository) FindByProviderUserID(ctx context.Context, 
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.SocialAccount), args.Error(1)
 }
 
@@ -37,6 +40,7 @@ func (m *MockSocialAccountRepository) FindByUserID(ctx context.Context, userID x
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*schema.SocialAccount), args.Error(1)
 }
 
@@ -45,21 +49,25 @@ func (m *MockSocialAccountRepository) FindByUserAndProvider(ctx context.Context,
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.SocialAccount), args.Error(1)
 }
 
 func (m *MockSocialAccountRepository) Update(ctx context.Context, account *schema.SocialAccount) error {
 	args := m.Called(ctx, account)
+
 	return args.Error(0)
 }
 
 func (m *MockSocialAccountRepository) Delete(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
 func (m *MockSocialAccountRepository) DeleteByUserAndProvider(ctx context.Context, userID xid.ID, provider string) error {
 	args := m.Called(ctx, userID, provider)
+
 	return args.Error(0)
 }
 
@@ -68,6 +76,7 @@ func (m *MockSocialAccountRepository) FindByID(ctx context.Context, id xid.ID) (
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.SocialAccount), args.Error(1)
 }
 
@@ -76,6 +85,7 @@ func (m *MockSocialAccountRepository) FindByProviderAndProviderID(ctx context.Co
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.SocialAccount), args.Error(1)
 }
 
@@ -84,21 +94,24 @@ func (m *MockSocialAccountRepository) FindByUser(ctx context.Context, userID xid
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*schema.SocialAccount), args.Error(1)
 }
 
 func (m *MockSocialAccountRepository) Unlink(ctx context.Context, userID xid.ID, provider string) error {
 	args := m.Called(ctx, userID, provider)
+
 	return args.Error(0)
 }
 
-// MockUserRepository is a mock implementation of UserRepository
+// MockUserRepository is a mock implementation of UserRepository.
 type MockUserRepository struct {
 	mock.Mock
 }
 
 func (m *MockUserRepository) Create(ctx context.Context, user *schema.User) error {
 	args := m.Called(ctx, user)
+
 	return args.Error(0)
 }
 
@@ -107,6 +120,7 @@ func (m *MockUserRepository) FindByID(ctx context.Context, id xid.ID) (*schema.U
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
@@ -115,16 +129,19 @@ func (m *MockUserRepository) FindByEmail(ctx context.Context, email string) (*sc
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
 func (m *MockUserRepository) Update(ctx context.Context, user *schema.User) error {
 	args := m.Called(ctx, user)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRepository) Delete(ctx context.Context, id xid.ID) error {
 	args := m.Called(ctx, id)
+
 	return args.Error(0)
 }
 
@@ -133,6 +150,7 @@ func (m *MockUserRepository) FindByUsername(ctx context.Context, username string
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(*schema.User), args.Error(1)
 }
 
@@ -141,15 +159,17 @@ func (m *MockUserRepository) ListUsers(ctx context.Context, limit, offset int) (
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*schema.User), args.Error(1)
 }
 
 func (m *MockUserRepository) CountUsers(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
+
 	return args.Get(0).(int64), args.Error(1)
 }
 
-// MockStateStore is a mock implementation of StateStore
+// MockStateStore is a mock implementation of StateStore.
 type MockStateStore struct {
 	store map[string]*OAuthState
 }
@@ -162,19 +182,22 @@ func NewMockStateStore() *MockStateStore {
 
 func (m *MockStateStore) Set(ctx context.Context, key string, state *OAuthState, ttl time.Duration) error {
 	m.store[key] = state
+
 	return nil
 }
 
 func (m *MockStateStore) Get(ctx context.Context, key string) (*OAuthState, error) {
 	state, ok := m.store[key]
 	if !ok {
-		return nil, fmt.Errorf("state not found")
+		return nil, errs.New(errs.CodeNotFound, "state not found", http.StatusNotFound)
 	}
+
 	return state, nil
 }
 
 func (m *MockStateStore) Delete(ctx context.Context, key string) error {
 	delete(m.store, key)
+
 	return nil
 }
 
@@ -229,7 +252,7 @@ func TestStateStore_SetGetDelete(t *testing.T) {
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, "google", retrieved.Provider)
 	assert.Equal(t, appID, retrieved.AppID)
-	assert.Equal(t, 2, len(retrieved.ExtraScopes))
+	assert.Len(t, retrieved.ExtraScopes, 2)
 
 	// Test Delete
 	err = store.Delete(ctx, "test-state-key")
@@ -268,6 +291,7 @@ func TestMemoryStateStore_Expiration(t *testing.T) {
 	// Try to get - should fail due to expiration
 	_, err = store.Get(ctx, "test-key")
 	assert.Error(t, err)
+
 	if err != nil {
 		assert.Contains(t, err.Error(), "expired")
 	}

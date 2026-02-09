@@ -3,6 +3,8 @@ package idverification
 import (
 	"testing"
 	"time"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -62,7 +64,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.StripeIdentity.Enabled = false
 
 		err := config.Validate()
-		if err != ErrNoProviderEnabled {
+		if !errs.Is(err, ErrNoProviderEnabled) {
 			t.Errorf("Expected ErrNoProviderEnabled, got %v", err)
 		}
 	})
@@ -74,7 +76,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidDefaultProvider {
+		if !errs.Is(err, ErrInvalidDefaultProvider) {
 			t.Errorf("Expected ErrInvalidDefaultProvider, got %v", err)
 		}
 	})
@@ -88,7 +90,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Jumio.APISecret = "secret"
 
 		err := config.Validate()
-		if err != ErrProviderNotEnabled {
+		if !errs.Is(err, ErrProviderNotEnabled) {
 			t.Errorf("Expected ErrProviderNotEnabled, got %v", err)
 		}
 	})
@@ -100,7 +102,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = ""
 
 		err := config.Validate()
-		if err != ErrMissingAPIToken {
+		if !errs.Is(err, ErrMissingAPIToken) {
 			t.Errorf("Expected ErrMissingAPIToken, got %v", err)
 		}
 	})
@@ -113,7 +115,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Jumio.APISecret = ""
 
 		err := config.Validate()
-		if err != ErrMissingAPICredentials {
+		if !errs.Is(err, ErrMissingAPICredentials) {
 			t.Errorf("Expected ErrMissingAPICredentials, got %v", err)
 		}
 	})
@@ -125,7 +127,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.StripeIdentity.APIKey = ""
 
 		err := config.Validate()
-		if err != ErrMissingAPIKey {
+		if !errs.Is(err, ErrMissingAPIKey) {
 			t.Errorf("Expected ErrMissingAPIKey, got %v", err)
 		}
 	})
@@ -137,7 +139,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrUnsupportedProvider {
+		if !errs.Is(err, ErrUnsupportedProvider) {
 			t.Errorf("Expected ErrUnsupportedProvider, got %v", err)
 		}
 	})
@@ -149,7 +151,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidRiskScore {
+		if !errs.Is(err, ErrInvalidRiskScore) {
 			t.Errorf("Expected ErrInvalidRiskScore, got %v", err)
 		}
 	})
@@ -161,7 +163,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidRiskScore {
+		if !errs.Is(err, ErrInvalidRiskScore) {
 			t.Errorf("Expected ErrInvalidRiskScore, got %v", err)
 		}
 	})
@@ -173,7 +175,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidConfidenceScore {
+		if !errs.Is(err, ErrInvalidConfidenceScore) {
 			t.Errorf("Expected ErrInvalidConfidenceScore, got %v", err)
 		}
 	})
@@ -186,7 +188,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidMinimumAge {
+		if !errs.Is(err, ErrInvalidMinimumAge) {
 			t.Errorf("Expected ErrInvalidMinimumAge, got %v", err)
 		}
 	})
@@ -199,7 +201,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidRateLimit {
+		if !errs.Is(err, ErrInvalidRateLimit) {
 			t.Errorf("Expected ErrInvalidRateLimit, got %v", err)
 		}
 	})
@@ -211,7 +213,7 @@ func TestConfig_Validate(t *testing.T) {
 		config.Onfido.APIToken = "test"
 
 		err := config.Validate()
-		if err != ErrInvalidMaxAttempts {
+		if !errs.Is(err, ErrInvalidMaxAttempts) {
 			t.Errorf("Expected ErrInvalidMaxAttempts, got %v", err)
 		}
 	})

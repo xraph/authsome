@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
 func generateTestPIVCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.PrivateKey) *x509.Certificate {
@@ -27,9 +29,11 @@ func generateTestPIVCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 	type policyInformation struct {
 		PolicyIdentifier asn1.ObjectIdentifier
 	}
+
 	policies := []policyInformation{
 		{PolicyIdentifier: pivAuthOID},
 	}
+
 	policiesBytes, err := asn1.Marshal(policies)
 	if err != nil {
 		t.Fatalf("failed to marshal policies: %v", err)
@@ -85,9 +89,11 @@ func generateTestCACCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 	type policyInformation struct {
 		PolicyIdentifier asn1.ObjectIdentifier
 	}
+
 	policies := []policyInformation{
 		{PolicyIdentifier: cacAuthOID},
 	}
+
 	policiesBytes, err := asn1.Marshal(policies)
 	if err != nil {
 		t.Fatalf("failed to marshal policies: %v", err)
@@ -196,7 +202,7 @@ func TestSmartCardProvider_ValidatePIVCard_NotPIV(t *testing.T) {
 		t.Fatal("expected error for non-PIV certificate")
 	}
 
-	if err != ErrNotPIVCertificate {
+	if !errs.Is(err, ErrNotPIVCertificate) {
 		t.Errorf("expected ErrNotPIVCertificate, got %v", err)
 	}
 }
@@ -248,7 +254,7 @@ func TestSmartCardProvider_ValidateCACCard_NotCAC(t *testing.T) {
 		t.Fatal("expected error for non-CAC certificate")
 	}
 
-	if err != ErrNotCACCertificate {
+	if !errs.Is(err, ErrNotCACCertificate) {
 		t.Errorf("expected ErrNotCACCertificate, got %v", err)
 	}
 }
@@ -265,6 +271,7 @@ func TestIsPIVCertificate(t *testing.T) {
 	// Test non-PIV certificate
 	_, _, certPEM := generateTestClientCert(t, caCert, caKey)
 	block, _ := pem.Decode(certPEM)
+
 	regularCert, _ := x509.ParseCertificate(block.Bytes)
 	if isPIVCertificate(regularCert) {
 		t.Error("expected isPIVCertificate to return false for regular cert")
@@ -283,6 +290,7 @@ func TestIsCACCertificate(t *testing.T) {
 	// Test non-CAC certificate
 	_, _, certPEM := generateTestClientCert(t, caCert, caKey)
 	block, _ := pem.Decode(certPEM)
+
 	regularCert, _ := x509.ParseCertificate(block.Bytes)
 	if isCACCertificate(regularCert) {
 		t.Error("expected isCACCertificate to return false for regular cert")
@@ -317,6 +325,7 @@ func TestDeterminePIVSlot(t *testing.T) {
 	if slotID != "9A" {
 		t.Errorf("expected slot 9A, got %s", slotID)
 	}
+
 	if slotName != "PIV Authentication" {
 		t.Errorf("expected PIV Authentication, got %s", slotName)
 	}
@@ -346,12 +355,15 @@ func TestGetCACCertificateTypes(t *testing.T) {
 	}
 
 	found := false
+
 	for _, ct := range certTypes {
 		if ct == "ID Certificate" {
 			found = true
+
 			break
 		}
 	}
+
 	if !found {
 		t.Error("expected to find ID Certificate in types")
 	}
@@ -367,6 +379,7 @@ func BenchmarkValidatePIVCard(b *testing.B) {
 	provider := NewSmartCardProvider(config, repo)
 
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		_, _ = provider.ValidatePIVCard(context.Background(), pivCert)
 	}

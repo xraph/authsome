@@ -2,37 +2,42 @@ package rbac
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
 
-// Mock repositories
+// Mock repositories.
 type MockUserRoleRepository struct {
 	mock.Mock
 }
 
 func (m *MockUserRoleRepository) Assign(ctx context.Context, userID, roleID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleID, orgID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) Unassign(ctx context.Context, userID, roleID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleID, orgID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) ListRolesForUser(ctx context.Context, userID xid.ID, orgID *xid.ID) ([]schema.Role, error) {
 	args := m.Called(ctx, userID, orgID)
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) AssignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleIDs, orgID)
+
 	return args.Error(0)
 }
 
@@ -41,16 +46,19 @@ func (m *MockUserRoleRepository) AssignBulk(ctx context.Context, userIDs []xid.I
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(map[xid.ID]error), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) AssignAppLevel(ctx context.Context, userID, roleID, appID xid.ID) error {
 	args := m.Called(ctx, userID, roleID, appID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) UnassignBatch(ctx context.Context, userID xid.ID, roleIDs []xid.ID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, roleIDs, orgID)
+
 	return args.Error(0)
 }
 
@@ -59,51 +67,61 @@ func (m *MockUserRoleRepository) UnassignBulk(ctx context.Context, userIDs []xid
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).(map[xid.ID]error), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) ClearUserRolesInOrg(ctx context.Context, userID, orgID xid.ID) error {
 	args := m.Called(ctx, userID, orgID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) ClearUserRolesInApp(ctx context.Context, userID, appID xid.ID) error {
 	args := m.Called(ctx, userID, appID)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) TransferRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
 	args := m.Called(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) CopyRoles(ctx context.Context, userID, sourceOrgID, targetOrgID xid.ID, roleIDs []xid.ID) error {
 	args := m.Called(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) ReplaceUserRoles(ctx context.Context, userID, orgID xid.ID, newRoleIDs []xid.ID) error {
 	args := m.Called(ctx, userID, orgID, newRoleIDs)
+
 	return args.Error(0)
 }
 
 func (m *MockUserRoleRepository) ListRolesForUserInOrg(ctx context.Context, userID, orgID, envID xid.ID) ([]schema.Role, error) {
 	args := m.Called(ctx, userID, orgID, envID)
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) ListRolesForUserInApp(ctx context.Context, userID, appID, envID xid.ID) ([]schema.Role, error) {
 	args := m.Called(ctx, userID, appID, envID)
+
 	return args.Get(0).([]schema.Role), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) ListAllUserRolesInOrg(ctx context.Context, orgID, envID xid.ID) ([]schema.UserRole, error) {
 	args := m.Called(ctx, orgID, envID)
+
 	return args.Get(0).([]schema.UserRole), args.Error(1)
 }
 
 func (m *MockUserRoleRepository) ListAllUserRolesInApp(ctx context.Context, appID, envID xid.ID) ([]schema.UserRole, error) {
 	args := m.Called(ctx, appID, envID)
+
 	return args.Get(0).([]schema.UserRole), args.Error(1)
 }
 
@@ -113,11 +131,13 @@ type MockRolePermissionRepository struct {
 
 func (m *MockRolePermissionRepository) AssignPermission(ctx context.Context, roleID, permissionID xid.ID) error {
 	args := m.Called(ctx, roleID, permissionID)
+
 	return args.Error(0)
 }
 
 func (m *MockRolePermissionRepository) UnassignPermission(ctx context.Context, roleID, permissionID xid.ID) error {
 	args := m.Called(ctx, roleID, permissionID)
+
 	return args.Error(0)
 }
 
@@ -126,16 +146,19 @@ func (m *MockRolePermissionRepository) GetRolePermissions(ctx context.Context, r
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+
 	return args.Get(0).([]*schema.Permission), args.Error(1)
 }
 
 func (m *MockRolePermissionRepository) GetPermissionRoles(ctx context.Context, permissionID xid.ID) ([]*schema.Role, error) {
 	args := m.Called(ctx, permissionID)
+
 	return args.Get(0).([]*schema.Role), args.Error(1)
 }
 
 func (m *MockRolePermissionRepository) ReplaceRolePermissions(ctx context.Context, roleID xid.ID, permissionIDs []xid.ID) error {
 	args := m.Called(ctx, roleID, permissionIDs)
+
 	return args.Error(0)
 }
 
@@ -252,7 +275,7 @@ func TestService_AssignRoleToUsers(t *testing.T) {
 		orgID := xid.New()
 
 		errors := map[xid.ID]error{
-			userIDs[1]: fmt.Errorf("duplicate assignment"),
+			userIDs[1]: errs.New(errs.CodeBadRequest, "duplicate assignment", http.StatusBadRequest),
 		}
 		mockUserRoleRepo.On("AssignBulk", ctx, userIDs, roleID, orgID).Return(errors, nil)
 
@@ -377,7 +400,7 @@ func TestService_UnassignRoleFromUsers(t *testing.T) {
 		orgID := xid.New()
 
 		errors := map[xid.ID]error{
-			userIDs[0]: fmt.Errorf("not found"),
+			userIDs[0]: errs.New(errs.CodeNotFound, "not found", http.StatusNotFound),
 		}
 		mockUserRoleRepo.On("UnassignBulk", ctx, userIDs, roleID, orgID).Return(errors, nil)
 
@@ -777,10 +800,12 @@ func TestService_ListAllUserRolesInOrg(t *testing.T) {
 
 		// Verify grouping by user
 		var user1Assignment, user2Assignment *UserRoleAssignment
+
 		for _, assignment := range result {
-			if assignment.UserID == user1ID {
+			switch assignment.UserID {
+			case user1ID:
 				user1Assignment = assignment
-			} else if assignment.UserID == user2ID {
+			case user2ID:
 				user2Assignment = assignment
 			}
 		}
@@ -809,7 +834,7 @@ func TestService_ListAllUserRolesInOrg(t *testing.T) {
 
 		result, err := service.ListAllUserRolesInOrg(ctx, orgID, envID)
 		assert.NoError(t, err)
-		assert.Len(t, result, 0)
+		assert.Empty(t, result)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }

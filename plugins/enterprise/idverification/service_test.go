@@ -8,9 +8,11 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/schema"
+
+	"github.com/xraph/authsome/internal/errs"
 )
 
-// Mock repository for testing
+// Mock repository for testing.
 type mockRepository struct {
 	verifications map[string]*schema.IdentityVerification
 	sessions      map[string]*schema.IdentityVerificationSession
@@ -35,7 +37,9 @@ func (m *mockRepository) CreateVerification(ctx context.Context, v *schema.Ident
 	if m.createVerificationError != nil {
 		return m.createVerificationError
 	}
+
 	m.verifications[v.ID] = v
+
 	return nil
 }
 
@@ -43,26 +47,31 @@ func (m *mockRepository) GetVerificationByID(ctx context.Context, appID xid.ID, 
 	if m.getVerificationError != nil {
 		return nil, m.getVerificationError
 	}
+
 	return m.verifications[id], nil
 }
 
 func (m *mockRepository) GetVerificationsByUserID(ctx context.Context, appID xid.ID, userID xid.ID, limit, offset int) ([]*schema.IdentityVerification, error) {
 	var result []*schema.IdentityVerification
+
 	for _, v := range m.verifications {
 		if v.UserID == userID.String() {
 			result = append(result, v)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) GetVerificationsByOrgID(ctx context.Context, appID xid.ID, orgID xid.ID, limit, offset int) ([]*schema.IdentityVerification, error) {
 	var result []*schema.IdentityVerification
+
 	for _, v := range m.verifications {
 		if v.OrganizationID == orgID.String() {
 			result = append(result, v)
 		}
 	}
+
 	return result, nil
 }
 
@@ -70,17 +79,21 @@ func (m *mockRepository) UpdateVerification(ctx context.Context, v *schema.Ident
 	if m.updateVerificationError != nil {
 		return m.updateVerificationError
 	}
+
 	m.verifications[v.ID] = v
+
 	return nil
 }
 
 func (m *mockRepository) DeleteVerification(ctx context.Context, appID xid.ID, id string) error {
 	delete(m.verifications, id)
+
 	return nil
 }
 
 func (m *mockRepository) GetLatestVerificationByUser(ctx context.Context, appID xid.ID, userID xid.ID) (*schema.IdentityVerification, error) {
 	var latest *schema.IdentityVerification
+
 	for _, v := range m.verifications {
 		if v.UserID == userID.String() {
 			if latest == nil {
@@ -88,6 +101,7 @@ func (m *mockRepository) GetLatestVerificationByUser(ctx context.Context, appID 
 			}
 		}
 	}
+
 	return latest, nil
 }
 
@@ -97,51 +111,61 @@ func (m *mockRepository) GetVerificationByProviderCheckID(ctx context.Context, a
 			return v, nil
 		}
 	}
+
 	return nil, nil
 }
 
 func (m *mockRepository) GetVerificationsByStatus(ctx context.Context, appID xid.ID, status string, limit, offset int) ([]*schema.IdentityVerification, error) {
 	var result []*schema.IdentityVerification
+
 	for _, v := range m.verifications {
 		if v.Status == status {
 			result = append(result, v)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) GetVerificationsByType(ctx context.Context, appID xid.ID, verificationType string, limit, offset int) ([]*schema.IdentityVerification, error) {
 	var result []*schema.IdentityVerification
+
 	for _, v := range m.verifications {
 		if v.VerificationType == verificationType {
 			result = append(result, v)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) CountVerificationsByUser(ctx context.Context, appID xid.ID, userID xid.ID, since time.Time) (int, error) {
 	count := 0
+
 	for _, v := range m.verifications {
 		if v.UserID == userID.String() {
 			count++
 		}
 	}
+
 	return count, nil
 }
 
 func (m *mockRepository) GetExpiredVerifications(ctx context.Context, appID xid.ID, before time.Time, limit int) ([]*schema.IdentityVerification, error) {
 	var result []*schema.IdentityVerification
+
 	for _, v := range m.verifications {
 		if v.ExpiresAt != nil && v.ExpiresAt.Before(before) && v.Status != "expired" {
 			result = append(result, v)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) CreateDocument(ctx context.Context, d *schema.IdentityVerificationDocument) error {
 	m.documents[d.ID] = d
+
 	return nil
 }
 
@@ -151,36 +175,43 @@ func (m *mockRepository) GetDocumentByID(ctx context.Context, appID xid.ID, id s
 
 func (m *mockRepository) GetDocumentsByVerificationID(ctx context.Context, appID xid.ID, verificationID string) ([]*schema.IdentityVerificationDocument, error) {
 	var result []*schema.IdentityVerificationDocument
+
 	for _, d := range m.documents {
 		if d.VerificationID == verificationID {
 			result = append(result, d)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) UpdateDocument(ctx context.Context, d *schema.IdentityVerificationDocument) error {
 	m.documents[d.ID] = d
+
 	return nil
 }
 
 func (m *mockRepository) DeleteDocument(ctx context.Context, appID xid.ID, id string) error {
 	delete(m.documents, id)
+
 	return nil
 }
 
 func (m *mockRepository) GetDocumentsForDeletion(ctx context.Context, appID xid.ID, before time.Time, limit int) ([]*schema.IdentityVerificationDocument, error) {
 	var result []*schema.IdentityVerificationDocument
+
 	for _, d := range m.documents {
 		if d.RetainUntil != nil && d.RetainUntil.Before(before) && d.DeletedAt == nil {
 			result = append(result, d)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) CreateSession(ctx context.Context, s *schema.IdentityVerificationSession) error {
 	m.sessions[s.ID] = s
+
 	return nil
 }
 
@@ -190,36 +221,43 @@ func (m *mockRepository) GetSessionByID(ctx context.Context, appID xid.ID, id st
 
 func (m *mockRepository) GetSessionsByUserID(ctx context.Context, appID xid.ID, userID xid.ID, limit, offset int) ([]*schema.IdentityVerificationSession, error) {
 	var result []*schema.IdentityVerificationSession
+
 	for _, s := range m.sessions {
 		if s.UserID == userID.String() {
 			result = append(result, s)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) UpdateSession(ctx context.Context, s *schema.IdentityVerificationSession) error {
 	m.sessions[s.ID] = s
+
 	return nil
 }
 
 func (m *mockRepository) DeleteSession(ctx context.Context, appID xid.ID, id string) error {
 	delete(m.sessions, id)
+
 	return nil
 }
 
 func (m *mockRepository) GetExpiredSessions(ctx context.Context, appID xid.ID, before time.Time, limit int) ([]*schema.IdentityVerificationSession, error) {
 	var result []*schema.IdentityVerificationSession
+
 	for _, s := range m.sessions {
 		if s.ExpiresAt.Before(before) && s.Status != "expired" {
 			result = append(result, s)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) CreateUserVerificationStatus(ctx context.Context, s *schema.UserVerificationStatus) error {
 	m.statuses[s.UserID] = s
+
 	return nil
 }
 
@@ -229,46 +267,54 @@ func (m *mockRepository) GetUserVerificationStatus(ctx context.Context, appID xi
 
 func (m *mockRepository) UpdateUserVerificationStatus(ctx context.Context, s *schema.UserVerificationStatus) error {
 	m.statuses[s.UserID] = s
+
 	return nil
 }
 
 func (m *mockRepository) DeleteUserVerificationStatus(ctx context.Context, appID xid.ID, orgID xid.ID, userID xid.ID) error {
 	delete(m.statuses, userID.String())
+
 	return nil
 }
 
 func (m *mockRepository) GetUsersRequiringReverification(ctx context.Context, appID xid.ID, limit int) ([]*schema.UserVerificationStatus, error) {
 	var result []*schema.UserVerificationStatus
+
 	for _, s := range m.statuses {
 		if s.RequiresReverification {
 			result = append(result, s)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) GetUsersByVerificationLevel(ctx context.Context, appID xid.ID, level string, limit, offset int) ([]*schema.UserVerificationStatus, error) {
 	var result []*schema.UserVerificationStatus
+
 	for _, s := range m.statuses {
 		if s.VerificationLevel == level {
 			result = append(result, s)
 		}
 	}
+
 	return result, nil
 }
 
 func (m *mockRepository) GetBlockedUsers(ctx context.Context, appID xid.ID, limit, offset int) ([]*schema.UserVerificationStatus, error) {
 	var result []*schema.UserVerificationStatus
+
 	for _, s := range m.statuses {
 		if s.IsBlocked {
 			result = append(result, s)
 		}
 	}
+
 	return result, nil
 }
 
-func (m *mockRepository) GetVerificationStats(ctx context.Context, appID xid.ID, orgID xid.ID, from, to time.Time) (map[string]interface{}, error) {
-	return map[string]interface{}{
+func (m *mockRepository) GetVerificationStats(ctx context.Context, appID xid.ID, orgID xid.ID, from, to time.Time) (map[string]any, error) {
+	return map[string]any{
 		"total_verifications":      len(m.verifications),
 		"successful_verifications": 0,
 		"failed_verifications":     0,
@@ -276,8 +322,8 @@ func (m *mockRepository) GetVerificationStats(ctx context.Context, appID xid.ID,
 	}, nil
 }
 
-func (m *mockRepository) GetProviderStats(ctx context.Context, appID xid.ID, provider string, from, to time.Time) (map[string]interface{}, error) {
-	return map[string]interface{}{
+func (m *mockRepository) GetProviderStats(ctx context.Context, appID xid.ID, provider string, from, to time.Time) (map[string]any, error) {
+	return map[string]any{
 		"provider":          provider,
 		"total_checks":      0,
 		"successful_checks": 0,
@@ -286,7 +332,7 @@ func (m *mockRepository) GetProviderStats(ctx context.Context, appID xid.ID, pro
 	}, nil
 }
 
-// Mock provider for testing
+// Mock provider for testing.
 type mockProvider struct {
 	sessionResponse *ProviderSession
 	sessionError    error
@@ -298,6 +344,7 @@ func (m *mockProvider) CreateSession(ctx context.Context, req *ProviderSessionRe
 	if m.sessionError != nil {
 		return nil, m.sessionError
 	}
+
 	return m.sessionResponse, nil
 }
 
@@ -309,6 +356,7 @@ func (m *mockProvider) GetCheck(ctx context.Context, checkID string) (*ProviderC
 	if m.checkError != nil {
 		return nil, m.checkError
 	}
+
 	return m.checkResult, nil
 }
 
@@ -395,7 +443,7 @@ func TestService_CreateVerification(t *testing.T) {
 		}
 
 		_, err := service.CreateVerification(ctx, req)
-		if err != ErrVerificationBlocked {
+		if !errs.Is(err, ErrVerificationBlocked) {
 			t.Errorf("Expected ErrVerificationBlocked, got %v", err)
 		}
 	})
@@ -406,7 +454,7 @@ func TestService_CreateVerification(t *testing.T) {
 		orgID := xid.New()
 
 		// Create 3 verifications in last 24 hours
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			v := &schema.IdentityVerification{
 				ID:     fmt.Sprintf("ver_%d", i),
 				UserID: userID.String(),
@@ -423,7 +471,7 @@ func TestService_CreateVerification(t *testing.T) {
 		}
 
 		_, err := service.CreateVerification(ctx, req)
-		if err != ErrMaxAttemptsReached {
+		if !errs.Is(err, ErrMaxAttemptsReached) {
 			t.Errorf("Expected ErrMaxAttemptsReached, got %v", err)
 		}
 	})

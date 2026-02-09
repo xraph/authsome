@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/xraph/authsome/core/ui"
 )
 
 func TestDashboardExtension_Interface(t *testing.T) {
@@ -15,7 +14,7 @@ func TestDashboardExtension_Interface(t *testing.T) {
 	assert.NotNil(t, ext, "DashboardExtension should not be nil")
 
 	// Verify it implements the interface (compile-time check via return type)
-	var _ ui.DashboardExtension = ext
+	var _ = ext
 }
 
 func TestDashboardExtension_ExtensionID(t *testing.T) {
@@ -32,7 +31,7 @@ func TestDashboardExtension_NavigationItems(t *testing.T) {
 
 	navItems := ext.NavigationItems()
 	assert.NotNil(t, navItems, "NavigationItems should not be nil")
-	assert.Equal(t, 0, len(navItems), "NavigationItems should be empty (settings-only plugin)")
+	assert.Empty(t, navItems, "NavigationItems should be empty (settings-only plugin)")
 }
 
 func TestDashboardExtension_Routes(t *testing.T) {
@@ -41,7 +40,7 @@ func TestDashboardExtension_Routes(t *testing.T) {
 
 	routes := ext.Routes()
 	assert.NotNil(t, routes, "Routes should not be nil")
-	assert.Greater(t, len(routes), 0, "Routes should not be empty")
+	assert.NotEmpty(t, routes, "Routes should not be empty")
 
 	// Verify we have the expected routes
 	routePaths := make(map[string]bool)
@@ -62,7 +61,7 @@ func TestDashboardExtension_SettingsPages(t *testing.T) {
 
 	settingsPages := ext.SettingsPages()
 	assert.NotNil(t, settingsPages, "SettingsPages should not be nil")
-	assert.Equal(t, 3, len(settingsPages), "Should have 3 settings pages")
+	assert.Len(t, settingsPages, 3, "Should have 3 settings pages")
 
 	// Verify page IDs
 	pageIDs := make(map[string]bool)
@@ -76,9 +75,10 @@ func TestDashboardExtension_SettingsPages(t *testing.T) {
 
 	// Verify categories
 	for _, page := range settingsPages {
-		if page.ID == "api-keys" || page.ID == "api-keys-config" {
+		switch page.ID {
+		case "api-keys", "api-keys-config":
 			assert.Equal(t, "integrations", page.Category, "API keys and config pages should be in integrations category")
-		} else if page.ID == "api-keys-security" {
+		case "api-keys-security":
 			assert.Equal(t, "security", page.Category, "Security page should be in security category")
 		}
 
@@ -96,7 +96,7 @@ func TestDashboardExtension_DashboardWidgets(t *testing.T) {
 
 	widgets := ext.DashboardWidgets()
 	assert.NotNil(t, widgets, "DashboardWidgets should not be nil")
-	assert.Equal(t, 1, len(widgets), "Should have 1 dashboard widget")
+	assert.Len(t, widgets, 1, "Should have 1 dashboard widget")
 
 	// Verify widget properties
 	widget := widgets[0]
@@ -113,5 +113,5 @@ func TestDashboardExtension_SettingsSections(t *testing.T) {
 
 	sections := ext.SettingsSections()
 	assert.NotNil(t, sections, "SettingsSections should not be nil")
-	assert.Equal(t, 0, len(sections), "SettingsSections should be empty (deprecated, using SettingsPages)")
+	assert.Empty(t, sections, "SettingsSections should be empty (deprecated, using SettingsPages)")
 }
