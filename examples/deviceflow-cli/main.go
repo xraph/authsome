@@ -52,7 +52,7 @@ func main() {
 	}
 
 	fmt.Println("🔐 Device Flow Authentication Demo")
-	fmt.Println("====================================\n")
+	fmt.Println("====================================")
 
 	// Step 1: Initiate device authorization
 	fmt.Println("Step 1: Requesting device code...")
@@ -67,7 +67,7 @@ func main() {
 	fmt.Println("\n" + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("📱 Please visit: %s\n", deviceAuth.VerificationURI)
 	fmt.Printf("🔢 Enter code: %s\n", deviceAuth.UserCode)
-	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("⏱️  Code expires in %d seconds\n", deviceAuth.ExpiresIn)
 	fmt.Printf("🔄 Polling interval: %d seconds\n\n", deviceAuth.Interval)
 
@@ -76,7 +76,7 @@ func main() {
 
 	// Step 3: Poll for token
 	fmt.Println("Step 3: Waiting for authorization...")
-	fmt.Println("(Polling every", deviceAuth.Interval, "seconds...)\n")
+	fmt.Println("(Polling every", deviceAuth.Interval, "seconds...)")
 
 	tokens, err := pollForToken(*authServerURL, *clientID, deviceAuth.DeviceCode, deviceAuth.Interval, deviceAuth.ExpiresIn)
 	if err != nil {

@@ -89,6 +89,23 @@ func (m *MockUserService) CountUsers(ctx context.Context, filter *user.CountUser
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockUserService) SetHookRegistry(registry interface{}) {}
+
+func (m *MockUserService) GetHookRegistry() interface{} {
+	return nil
+}
+
+func (m *MockUserService) SetVerificationRepo(repo interface{}) {}
+
+func (m *MockUserService) GetVerificationRepo() interface{} {
+	return nil
+}
+
+func (m *MockUserService) UpdatePassword(ctx context.Context, userID xid.ID, hashedPassword string) error {
+	args := m.Called(ctx, userID, hashedPassword)
+	return args.Error(0)
+}
+
 type MockSessionService struct {
 	mock.Mock
 }

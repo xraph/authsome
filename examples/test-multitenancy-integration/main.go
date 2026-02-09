@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -120,8 +119,8 @@ func testSignupWithOrg(orgID string) {
 
 		var result map[string]interface{}
 		json.Unmarshal(respBody, &result)
-		if user, ok := result["user"].(map[string]interface{}); ok {
-
+		if _, ok := result["user"].(map[string]interface{}); ok {
+			// User data available
 		}
 	} else {
 		if resp.StatusCode == 400 {
@@ -151,11 +150,12 @@ func testSignupWithoutOrg() {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	_, _ = io.ReadAll(resp.Body)
 
 	if resp.StatusCode >= 400 {
-
+		// Error handling
 	} else {
+		// Success handling
 	}
 }
 

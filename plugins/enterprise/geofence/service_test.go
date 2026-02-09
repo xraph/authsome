@@ -320,9 +320,9 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 
 	// Mock rule retrieval
 	rule := &GeofenceRule{
-		ID:             xid.New(),
-		AppID:          xid.New(),
-		Name:           "Block Sanctioned",
+		ID:               xid.New(),
+		AppID:            xid.New(),
+		Name:             "Block Sanctioned",
 		Enabled:          true,
 		Priority:         100,
 		RuleType:         "country",
@@ -341,7 +341,7 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 		UserID:    userID,
 		AppID:     rule.AppID,
 		IPAddress: "1.2.3.4",
-		EventType:  "login",
+		EventType: "login",
 	}
 
 	result, err := service.CheckLocation(context.Background(), req)
@@ -431,14 +431,14 @@ func TestCheckLocation_VPNDetected(t *testing.T) {
 
 	// Mock rule with VPN blocking
 	rule := &GeofenceRule{
-		ID:      xid.New(),
-		AppID:   xid.New(),
-		Name:    "Block VPNs",
-		Enabled: true,
-		Priority:       100,
-		RuleType:       "detection",
-		BlockVPN:       true,
-		Action:         "deny",
+		ID:       xid.New(),
+		AppID:    xid.New(),
+		Name:     "Block VPNs",
+		Enabled:  true,
+		Priority: 100,
+		RuleType: "detection",
+		BlockVPN: true,
+		Action:   "deny",
 	}
 	userID := xid.New()
 	repo.On("ListEnabledRules", mock.Anything, mock.Anything, &userID).Return([]*GeofenceRule{rule}, nil)

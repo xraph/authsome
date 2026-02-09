@@ -209,7 +209,7 @@ func TestAuthsomeError_ToHTTPError(t *testing.T) {
 	}
 
 	if httpErr.StatusCode() != http.StatusNotFound {
-		t.Errorf("expected HTTP status %d, got %d", http.StatusNotFound, httpErr.Code)
+		t.Errorf("expected HTTP status %d, got %d", http.StatusNotFound, httpErr.StatusCode())
 	}
 
 	if httpErr.Message != authErr.Message {

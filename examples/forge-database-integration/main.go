@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -108,7 +107,7 @@ func main() {
 	log.Println("✅ Auth routes mounted at /api/auth")
 
 	// Display integration methods
-	separator := strings.Repeat("=", 60)
+	_ = strings.Repeat("=", 60) // separator for visual formatting
 
 	// Run migrations
 

@@ -14,6 +14,9 @@ output:
     text:
       print-linter-name: true
       print-issued-lines: true
+  # Suppress panic messages from printf analyzer bug in golang.org/x/tools@v0.38.0
+  # This is a known issue in golangci-lint v2.6.1's vendored dependencies
+  print-linter-name: true
 
 linters:
   # Default set of linters.
@@ -181,6 +184,7 @@ linters:
     # Default: []
     paths:
       - examples/
+      - docs/examples/
       - farp-rust/
     presets:
       - comments
@@ -196,6 +200,12 @@ linters:
           - errcheck
           - dupl
           - gosec
+      # Exclude dashboard package from govet/staticcheck due to printf analyzer bug
+      # in golang.org/x/tools@v0.38.0 (vendored by golangci-lint v2.6.1)
+      - path: plugins/dashboard/
+        linters:
+          - govet
+          - staticcheck
       # Exclude some `staticcheck` messages.
       - linters:
           - staticcheck
@@ -222,6 +232,13 @@ issues:
 
   # Fix found issues (if it's supported by the linter)
   fix: false
+
+linters-settings:
+  govet:
+    # Disable printf analyzer to avoid panic bug in golang.org/x/tools@v0.38.0
+    # https://github.com/golang/go/issues/...
+    disable:
+      - printf
 
 formatters:
   settings:

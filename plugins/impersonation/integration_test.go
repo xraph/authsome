@@ -261,7 +261,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 	}
 	_, err = service.Get(ctx, getReq)
 	assert.Error(t, err)
-	assert.Equal(t, impersonation.ErrImpersonationNotFound, err)
+	assert.ErrorIs(t, err, impersonation.ErrImpersonationNotFound)
 
 	// Try to end org1 session with org2 admin - should fail
 	endReq := &impersonation.EndRequest{
@@ -271,7 +271,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 	}
 	_, err = service.End(ctx, endReq)
 	assert.Error(t, err)
-	assert.Equal(t, impersonation.ErrPermissionDenied, err)
+	assert.ErrorIs(t, err, impersonation.ErrPermissionDenied)
 }
 
 // TestIntegration_ConcurrentImpersonations tests multiple admins impersonating simultaneously
@@ -343,7 +343,7 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 		}
 		_, err := service.End(ctx, endReq)
 		assert.Error(t, err)
-		assert.Equal(t, impersonation.ErrPermissionDenied, err)
+		assert.ErrorIs(t, err, impersonation.ErrPermissionDenied)
 
 		// End with correct admin - should succeed
 		endReq.ImpersonatorID = admins[i].ID

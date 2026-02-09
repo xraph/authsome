@@ -485,15 +485,29 @@ func (s *Service) RequestDataExport(ctx context.Context, userID, orgID string, r
 	}
 
 	// Process export asynchronously (in production, use a job queue)
-	go s.processDataExport(context.Background(), exportReq)
+	// Pass the ID to avoid race conditions - the goroutine will fetch it from the DB
+	exportReqID := exportReq.ID.String()
+	userIDCopy := exportReq.UserID
+	orgIDCopy := exportReq.OrganizationID
+	includeSectionsCopy := make([]string, len(exportReq.IncludeSections))
+	copy(includeSectionsCopy, exportReq.IncludeSections)
+	formatCopy := exportReq.Format
+
+	go s.processDataExportAsync(context.Background(), exportReqID, userIDCopy, orgIDCopy, includeSectionsCopy, formatCopy)
 
 	// TODO: Audit log
 
 	return exportReq, nil
 }
 
-// processDataExport processes a data export request (GDPR Article 20)
-func (s *Service) processDataExport(ctx context.Context, req *DataExportRequest) {
+// processDataExportAsync processes a data export request asynchronously (GDPR Article 20)
+func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userID, orgID string, includeSections []string, format string) {
+	// Fetch the request from database to avoid race conditions
+	req, err := s.repo.GetExportRequest(ctx, exportReqID)
+	if err != nil || req == nil {
+		return
+	}
+
 	// Update status to processing
 	req.Status = string(StatusProcessing)
 	s.repo.UpdateExportRequest(ctx, req)

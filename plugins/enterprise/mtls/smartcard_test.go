@@ -23,6 +23,18 @@ func generateTestPIVCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 	// PIV Authentication OID
 	pivAuthOID := asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 7}
 
+	// Manually create certificate policies extension
+	type policyInformation struct {
+		PolicyIdentifier asn1.ObjectIdentifier
+	}
+	policies := []policyInformation{
+		{PolicyIdentifier: pivAuthOID},
+	}
+	policiesBytes, err := asn1.Marshal(policies)
+	if err != nil {
+		t.Fatalf("failed to marshal policies: %v", err)
+	}
+
 	// Add PIV-specific extensions
 	cardUUID := "12345678-1234-1234-1234-123456789abc"
 	uri, _ := url.Parse("urn:uuid:" + cardUUID)
@@ -34,12 +46,17 @@ func generateTestPIVCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 			CommonName:   "John Doe",
 			SerialNumber: "1234567890",
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		PolicyIdentifiers: []asn1.ObjectIdentifier{pivAuthOID},
-		URIs:              []*url.URL{uri},
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		URIs:        []*url.URL{uri},
+		ExtraExtensions: []pkix.Extension{
+			{
+				Id:    asn1.ObjectIdentifier{2, 5, 29, 32}, // certificatePolicies OID
+				Value: policiesBytes,
+			},
+		},
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, &privateKey.PublicKey, caKey)
@@ -64,6 +81,18 @@ func generateTestCACCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 	// CAC Authentication OID
 	cacAuthOID := asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 42}
 
+	// Manually create certificate policies extension
+	type policyInformation struct {
+		PolicyIdentifier asn1.ObjectIdentifier
+	}
+	policies := []policyInformation{
+		{PolicyIdentifier: cacAuthOID},
+	}
+	policiesBytes, err := asn1.Marshal(policies)
+	if err != nil {
+		t.Fatalf("failed to marshal policies: %v", err)
+	}
+
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(2),
 		Subject: pkix.Name{
@@ -71,11 +100,16 @@ func generateTestCACCert(t *testing.T, caCert *x509.Certificate, caKey *rsa.Priv
 			CommonName:   "Jane Smith",
 			SerialNumber: "9876543210", // EDIPI
 		},
-		NotBefore:         time.Now(),
-		NotAfter:          time.Now().Add(3 * 365 * 24 * time.Hour),
-		KeyUsage:          x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		PolicyIdentifiers: []asn1.ObjectIdentifier{cacAuthOID},
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().Add(3 * 365 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		ExtraExtensions: []pkix.Extension{
+			{
+				Id:    asn1.ObjectIdentifier{2, 5, 29, 32}, // certificatePolicies OID
+				Value: policiesBytes,
+			},
+		},
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, &privateKey.PublicKey, caKey)

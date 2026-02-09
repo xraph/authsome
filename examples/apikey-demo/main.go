@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -243,11 +242,14 @@ func createDemoAPIKey(service *apikey.Service) {
 		},
 	}
 
-	key, err := service.CreateAPIKey(ctx, req)
-	if err != nil {
-		log.Printf("⚠️  Failed to create demo API key: %v", err)
+	_, createErr := service.CreateAPIKey(ctx, req)
+	if createErr != nil {
+		log.Printf("⚠️  Failed to create demo API key: %v", createErr)
 		return
 	}
+
+	log.Println("✅ Demo API key created successfully")
+	log.Println("📝 Test with: curl -H \"X-API-Key: YOUR_KEY\" http://localhost:3000/todos")
 
 	// Commented out: Organization field from V2 architecture change
 

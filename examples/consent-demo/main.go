@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
 
 	"github.com/xraph/authsome"
 	_ "github.com/xraph/authsome/plugins/enterprise/consent"

@@ -225,11 +225,15 @@ func (s *Service) getPasswordResetRepo() (PasswordResetRepository, bool) {
 		return nil, false
 	}
 
-	// Try to cast users service to get verification repo
-	if repoProvider, ok := s.users.(interface {
-		GetVerificationRepo() PasswordResetRepository
-	}); ok {
-		return repoProvider.GetVerificationRepo(), true
+	// Get verification repo from users service
+	verificationRepo := s.users.GetVerificationRepo()
+	if verificationRepo == nil {
+		return nil, false
+	}
+
+	// Try to cast to PasswordResetRepository
+	if repo, ok := verificationRepo.(PasswordResetRepository); ok {
+		return repo, true
 	}
 
 	return nil, false

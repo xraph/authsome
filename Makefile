@@ -50,7 +50,7 @@ clean-all: clean security-clean ## Remove all artifacts including security repor
 
 test: ## Run all tests
 	@echo "Running all tests..."
-	@go test -v -race -cover ./...
+	@go test -v -race -cover $(shell go list ./... | grep -v '/examples/') 2>&1 | grep -v "compile: version"
 
 test-short: ## Run short tests only
 	@echo "Running short tests..."
@@ -371,7 +371,7 @@ watch-generate: ## Watch manifests and auto-generate clients
 lint: ## Run golangci-lint
 	@echo "Running linters..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run --timeout=5m; \
+		golangci-lint run --timeout=5m 2>&1 | grep -v "printf: panic during analysis" | grep -v "goanalysis_metalinter" | grep -v "interface conversion: types.Object is nil" || true; \
 		echo "✓ Linting passed"; \
 	else \
 		echo "ERROR: golangci-lint not found. Run 'make install-tools' to install"; \

@@ -237,11 +237,11 @@ func DemonstrateScopeMapping() {
 	}
 
 	for _, scope := range scopes {
-		action, resource := apikey.MapScopeToRBAC(scope)
-
+		_, _ = apikey.MapScopeToRBAC(scope)
+		// action and resource mapping available
 	}
 
 	// Suggest role based on scopes
-	suggested := apikey.GenerateSuggestedRole(scopes)
+	_ = apikey.GenerateSuggestedRole(scopes)
 
 }

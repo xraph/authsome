@@ -83,13 +83,13 @@ func (s *Service) Get(appID, key string) interface{} {
 	if appID != "" {
 		s.mu.RLock()
 		appConfig, exists := s.appConfigs[appID]
-		s.mu.RUnlock()
-
 		if exists {
 			if value, found := s.getNestedValue(appConfig, key); found {
+				s.mu.RUnlock()
 				return value
 			}
 		}
+		s.mu.RUnlock()
 	}
 
 	// Fall back to global configuration
@@ -102,13 +102,13 @@ func (s *Service) IsSet(appID, key string) bool {
 	if appID != "" {
 		s.mu.RLock()
 		appConfig, exists := s.appConfigs[appID]
-		s.mu.RUnlock()
-
 		if exists {
 			if _, found := s.getNestedValue(appConfig, key); found {
+				s.mu.RUnlock()
 				return true
 			}
 		}
+		s.mu.RUnlock()
 	}
 
 	// Check global configuration

@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -232,7 +233,7 @@ func TestCertificateValidator_validateKey_WeakKey(t *testing.T) {
 		t.Fatal("expected error for weak key")
 	}
 
-	if err != ErrKeyTooWeak {
+	if !errors.Is(err, ErrKeyTooWeak) {
 		t.Errorf("expected ErrKeyTooWeak, got %v", err)
 	}
 }

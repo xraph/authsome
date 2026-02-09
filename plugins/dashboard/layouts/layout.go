@@ -1434,15 +1434,14 @@ func (l *LayoutManager) buildAppSwitcher(currentApp *app.App) g.Node {
 		currentAppID = currentApp.ID.String()
 	}
 
-	return html.Div(
-		html.Class("w-full relative"),
-		g.Attr("x-data", fmt.Sprintf(`{
+	// Build x-data attribute separately to avoid confusing the printf analyzer
+	xData := `{
 			open: false,
 			apps: [],
 			loading: true,
 			search: '',
-			currentAppId: '%s',
-			currentApp: { name: '%s' },
+			currentAppId: '` + currentAppID + `',
+			currentApp: { name: '` + appName + `' },
 			get filteredApps() {
 				if (!this.search) return this.apps;
 				const searchLower = this.search.toLowerCase();
@@ -1453,7 +1452,7 @@ func (l *LayoutManager) buildAppSwitcher(currentApp *app.App) g.Node {
 					const result = await $go('getAppsList', {});
 					this.apps = result.apps || [];
 					if (this.currentAppId) {
-						this.currentApp = this.apps.find(a => a.id === this.currentAppId) || { name: '%s' };
+						this.currentApp = this.apps.find(a => a.id === this.currentAppId) || { name: '` + appName + `' };
 					}
 				} catch (err) {
 					console.error('Failed to load apps:', err);
@@ -1463,21 +1462,25 @@ func (l *LayoutManager) buildAppSwitcher(currentApp *app.App) g.Node {
 			},
 			selectApp(appId) {
 				this.open = false;
-				window.location.href = '%s/app/' + appId;
+				window.location.href = '` + l.baseUIPath + `/app/' + appId;
 			},
 			getGradientStyle(name) {
 				const gradients = [
-					'linear-gradient(135deg, #8b5cf6 0%%, #7c3aed 100%%)',
-					'linear-gradient(135deg, #3b82f6 0%%, #0ea5e9 100%%)',
-					'linear-gradient(135deg, #10b981 0%%, #14b8a6 100%%)',
-					'linear-gradient(135deg, #f97316 0%%, #ef4444 100%%)',
-					'linear-gradient(135deg, #ec4899 0%%, #f43f5e 100%%)',
-					'linear-gradient(135deg, #6366f1 0%%, #3b82f6 100%%)'
+					'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+					'linear-gradient(135deg, #3b82f6 0%, #0ea5e9 100%)',
+					'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+					'linear-gradient(135deg, #f97316 0%, #ef4444 100%)',
+					'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',
+					'linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)'
 				];
 				const hash = (name || 'A').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-				return gradients[hash %% gradients.length];
+				return gradients[hash % gradients.length];
 			}
-		}`, currentAppID, appName, appName, l.baseUIPath)),
+		}`
+
+	return html.Div(
+		html.Class("w-full relative"),
+		g.Attr("x-data", xData),
 		g.Attr("x-init", "loadApps()"),
 		alpine.XOn("click.outside", "open = false"),
 		alpine.XOn("keydown.escape.window", "open = false"),

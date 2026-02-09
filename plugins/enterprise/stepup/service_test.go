@@ -341,6 +341,10 @@ func TestEvaluateRequirement_RememberedDevice(t *testing.T) {
 		Return(rememberedDevice, nil)
 	repo.On("UpdateRememberedDevice", mock.Anything, mock.Anything).
 		Return(nil)
+	repo.On("GetLatestVerification", mock.Anything, "user123", "org123", mock.Anything).
+		Return(nil, assert.AnError)
+	repo.On("ListPolicies", mock.Anything, "org123").
+		Return([]*StepUpPolicy{}, nil)
 
 	// Execute
 	evalCtx := &EvaluationContext{

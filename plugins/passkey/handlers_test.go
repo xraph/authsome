@@ -56,7 +56,7 @@ func TestHandler_BeginRegister(t *testing.T) {
 	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp.Challenge)
 	assert.Equal(t, testUser.ID.String(), resp.UserID)
-	assert.Greater(t, resp.Timeout, 0)
+	assert.Greater(t, resp.Timeout, time.Duration(0))
 }
 
 // TestService_RegistrationFlow tests complete registration flow
@@ -394,8 +394,11 @@ func setupTestService(t *testing.T) (*bun.DB, *Service) {
 }
 
 func createTestUser(t *testing.T, db *bun.DB) *schema.User {
+	appID := xid.New()
+
 	user := &schema.User{
 		ID:    xid.New(),
+		AppID: &appID,
 		Email: "test@example.com",
 		Name:  "Test User",
 	}

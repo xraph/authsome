@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -265,7 +266,8 @@ func (bm *BridgeManager) createApp(ctx bridge.Context, input CreateAppInput) (*G
 
 	// Log audit event if audit service is available
 	if bm.auditSvc != nil {
-		_ = bm.auditSvc.Log(goCtx, nil, "app.created", "app", "", "", fmt.Sprintf(`{"name":"%s"}`, input.Name))
+		metadata, _ := json.Marshal(map[string]string{"name": input.Name})
+		_ = bm.auditSvc.Log(goCtx, nil, "app.created", "app", "", "", string(metadata))
 	}
 
 	return &GenericSuccessOutput{
@@ -321,7 +323,8 @@ func (bm *BridgeManager) updateApp(ctx bridge.Context, input UpdateAppInput) (*G
 
 	// Log audit event if audit service is available
 	if bm.auditSvc != nil {
-		_ = bm.auditSvc.Log(goCtx, nil, "app.updated", "app:"+input.AppID, "", "", fmt.Sprintf(`{"name":"%s","description":"%s"}`, input.Name, input.Description))
+		metadata, _ := json.Marshal(map[string]string{"name": input.Name, "description": input.Description})
+		_ = bm.auditSvc.Log(goCtx, nil, "app.updated", "app:"+input.AppID, "", "", string(metadata))
 	}
 
 	return &GenericSuccessOutput{

@@ -9,6 +9,7 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/xraph/authsome/core"
 	"github.com/xraph/authsome/core/hooks"
+	"github.com/xraph/authsome/core/middleware"
 	"github.com/xraph/authsome/core/registry"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
@@ -33,16 +34,17 @@ func (m *mockAuth) GetForgeApp() forge.App {
 	return m.forgeApp
 }
 
-func (m *mockAuth) Initialize(ctx context.Context) error             { return nil }
-func (m *mockAuth) Mount(router forge.Router, basePath string) error { return nil }
-func (m *mockAuth) RegisterPlugin(plugin core.Plugin) error          { return nil }
-func (m *mockAuth) GetConfig() core.Config                           { return core.Config{} }
-func (m *mockAuth) GetHookRegistry() *hooks.HookRegistry             { return nil }
-func (m *mockAuth) GetBasePath() string                              { return "" }
-func (m *mockAuth) GetPluginRegistry() core.PluginRegistry           { return nil }
-func (m *mockAuth) IsPluginEnabled(pluginID string) bool             { return false }
-func (m *mockAuth) Repository() repository.Repository                { return nil }
-func (m *mockAuth) Logger() forge.Logger                             { return nil }
+func (m *mockAuth) Initialize(ctx context.Context) error                        { return nil }
+func (m *mockAuth) Mount(router forge.Router, basePath string) error            { return nil }
+func (m *mockAuth) RegisterPlugin(plugin core.Plugin) error                     { return nil }
+func (m *mockAuth) RegisterAuthStrategy(strategy middleware.AuthStrategy) error { return nil }
+func (m *mockAuth) GetConfig() core.Config                                      { return core.Config{} }
+func (m *mockAuth) GetHookRegistry() *hooks.HookRegistry                        { return nil }
+func (m *mockAuth) GetBasePath() string                                         { return "" }
+func (m *mockAuth) GetPluginRegistry() core.PluginRegistry                      { return nil }
+func (m *mockAuth) IsPluginEnabled(pluginID string) bool                        { return false }
+func (m *mockAuth) Repository() repository.Repository                           { return nil }
+func (m *mockAuth) Logger() forge.Logger                                        { return nil }
 func (m *mockAuth) AuthMiddleware() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return next

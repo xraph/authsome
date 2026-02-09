@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -317,7 +318,8 @@ func (bm *BridgeManager) revokeAllSessions(ctx bridge.Context, input RevokeAllSe
 
 	// Log audit event if audit service is available
 	if bm.auditSvc != nil {
-		_ = bm.auditSvc.Log(goCtx, &userID, "sessions.revoked_all", "user:"+input.UserID, "", "", fmt.Sprintf(`{"count":%d}`, revokedCount))
+		metadata, _ := json.Marshal(map[string]int{"count": revokedCount})
+		_ = bm.auditSvc.Log(goCtx, &userID, "sessions.revoked_all", "user:"+input.UserID, "", "", string(metadata))
 	}
 
 	return &GenericSuccessOutput{

@@ -90,10 +90,11 @@ func testStandaloneMode() {
 
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
-		if user, ok := resp["user"].(map[string]interface{}); ok {
-
+		if _, ok := resp["user"].(map[string]interface{}); ok {
+			// User data available
 		}
 	} else {
+		// Error handling
 	}
 }
 
@@ -163,11 +164,11 @@ func testSaaSMode() {
 
 		var resp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &resp)
-		if user, ok := resp["user"].(map[string]interface{}); ok {
-
+		if _, ok := resp["user"].(map[string]interface{}); ok {
+			// User data available
 		}
 	} else {
-
+		// Error handling
 	}
 
 	// Test 2: Signup WITHOUT org context (should fail in SaaS mode)

@@ -1,6 +1,7 @@
 package examples
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -210,7 +211,7 @@ func (h *FiberStreamHandler) HandleSSE(c *fiber.Ctx) error {
 	defer h.streamService.Unsubscribe(clientID)
 
 	// Stream events
-	c.Context().SetBodyStreamWriter(func(w *fiber.StreamWriter) {
+	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 

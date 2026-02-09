@@ -18,14 +18,14 @@ import (
 func TestNotificationIntegration_AuthWelcome(t *testing.T) {
 	t.Skip("Integration test - requires full system setup")
 
-	ctx := context.Background()
+	_ = context.Background()
 	appID := xid.New()
 
 	// Setup mock notification service
 	// This would require a full test harness with DB, etc.
 
 	// Create user
-	newUser := &user.User{
+	_ = &user.User{
 		ID:    xid.New(),
 		AppID: appID,
 		Email: "test@example.com",
@@ -45,8 +45,8 @@ func TestNotificationIntegration_AuthWelcome(t *testing.T) {
 func TestNotificationIntegration_DeviceSecurity(t *testing.T) {
 	t.Skip("Integration test - requires full system setup")
 
-	ctx := context.Background()
-	userID := xid.New()
+	_ = context.Background()
+	_ = xid.New()
 
 	tests := []struct {
 		name     string
@@ -216,7 +216,7 @@ func TestNotificationConfig_CustomAutoSend(t *testing.T) {
 
 // TestHookRegistry_NotificationHooksRegistered tests that hooks are properly registered
 func TestHookRegistry_NotificationHooksRegistered(t *testing.T) {
-	registry := hooks.NewHookRegistry(false)
+	registry := hooks.NewHookRegistry()
 
 	// Register a test hook
 	registry.RegisterOnEmailChanged(func(ctx context.Context, userID xid.ID, oldEmail, newEmail string) error {
@@ -309,7 +309,7 @@ func TestNotificationIntegration_E2E(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkNotificationHookExecution(b *testing.B) {
-	registry := hooks.NewHookRegistry(false)
+	registry := hooks.NewHookRegistry()
 	ctx := context.Background()
 	userID := xid.New()
 

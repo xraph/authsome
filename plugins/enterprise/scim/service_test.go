@@ -170,7 +170,7 @@ func TestValidateUserAttributes(t *testing.T) {
 	service := &Service{
 		config: DefaultConfig(),
 	}
-	service.config.UserProvisioning.RequiredAttributes = []string{"userSCIMName", "emails"}
+	service.config.UserProvisioning.RequiredAttributes = []string{"userName", "emails"}
 
 	tests := []struct {
 		name      string
@@ -188,7 +188,7 @@ func TestValidateUserAttributes(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "Missing userSCIMName",
+			name: "Missing userName",
 			scimUser: &SCIMUser{
 				Emails: []Email{
 					{Value: "test@example.com"},
@@ -251,12 +251,12 @@ func TestApplyPatchOperationToRequest(t *testing.T) {
 			name: "Replace display name",
 			operation: &PatchOperation{
 				Op:    "replace",
-				Path:  "displaySCIMName",
-				Value: "New SCIMName",
+				Path:  "displayName",
+				Value: "New Name",
 			},
 			checkFunc: func(t *testing.T, req *user.UpdateUserRequest) {
 				require.NotNil(t, req.Name)
-				assert.Equal(t, "New SCIMName", *req.Name)
+				assert.Equal(t, "New Name", *req.Name)
 			},
 		},
 		{
@@ -412,7 +412,7 @@ func BenchmarkValidateUserAttributes(b *testing.B) {
 	service := &Service{
 		config: DefaultConfig(),
 	}
-	service.config.UserProvisioning.RequiredAttributes = []string{"userSCIMName", "emails"}
+	service.config.UserProvisioning.RequiredAttributes = []string{"userName", "emails"}
 
 	scimUser := &SCIMUser{
 		UserName: "bench@example.com",

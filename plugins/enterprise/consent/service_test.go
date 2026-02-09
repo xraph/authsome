@@ -2,12 +2,16 @@ package consent
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/rs/xid"
 )
 
 // MockRepository implements Repository for testing
 type MockRepository struct {
+	mu              sync.RWMutex
 	consents        map[string]*ConsentRecord
 	policies        map[string]*ConsentPolicy
 	cookieConsents  map[string]*CookieConsent
@@ -31,49 +35,74 @@ func NewMockRepository() *MockRepository {
 
 // Consent Records
 func (m *MockRepository) CreateConsent(ctx context.Context, consent *ConsentRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	consent.ID = xid.New()
 	m.consents[consent.ID.String()] = consent
 	return nil
 }
 
 func (m *MockRepository) GetConsent(ctx context.Context, id string) (*ConsentRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	consent, ok := m.consents[id]
 	if !ok {
 		return nil, ErrConsentNotFound
 	}
-	return consent, nil
+	consentCopy := *consent
+	return &consentCopy, nil
 }
 
 func (m *MockRepository) GetConsentByUserAndType(ctx context.Context, userID, orgID, consentType, purpose string) (*ConsentRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, consent := range m.consents {
 		if consent.UserID == userID && consent.OrganizationID == orgID &&
 			consent.ConsentType == consentType && consent.Purpose == purpose {
-			return consent, nil
+			consentCopy := *consent
+			return &consentCopy, nil
 		}
 	}
 	return nil, ErrConsentNotFound
 }
 
 func (m *MockRepository) ListConsentsByUser(ctx context.Context, userID, orgID string) ([]*ConsentRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var result []*ConsentRecord
 	for _, consent := range m.consents {
 		if consent.UserID == userID && consent.OrganizationID == orgID {
-			result = append(result, consent)
+			consentCopy := *consent
+			result = append(result, &consentCopy)
 		}
 	}
 	return result, nil
 }
 
 func (m *MockRepository) UpdateConsent(ctx context.Context, consent *ConsentRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.consents[consent.ID.String()] = consent
 	return nil
 }
 
 func (m *MockRepository) DeleteConsent(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	delete(m.consents, id)
 	return nil
 }
 
 func (m *MockRepository) ExpireConsents(ctx context.Context, beforeDate time.Time) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	count := 0
 	for _, consent := range m.consents {
 		if consent.ExpiresAt != nil && consent.ExpiresAt.Before(beforeDate) && consent.Granted {
@@ -88,42 +117,62 @@ func (m *MockRepository) ExpireConsents(ctx context.Context, beforeDate time.Tim
 
 // Consent Policies
 func (m *MockRepository) CreatePolicy(ctx context.Context, policy *ConsentPolicy) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	policy.ID = xid.New()
 	m.policies[policy.ID.String()] = policy
 	return nil
 }
 
 func (m *MockRepository) GetPolicy(ctx context.Context, id string) (*ConsentPolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	policy, ok := m.policies[id]
 	if !ok {
 		return nil, ErrPolicyNotFound
 	}
-	return policy, nil
+	policyCopy := *policy
+	return &policyCopy, nil
 }
 
 func (m *MockRepository) GetPolicyByTypeAndVersion(ctx context.Context, orgID, consentType, version string) (*ConsentPolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, policy := range m.policies {
 		if policy.OrganizationID == orgID && policy.ConsentType == consentType && policy.Version == version {
-			return policy, nil
+			policyCopy := *policy
+			return &policyCopy, nil
 		}
 	}
 	return nil, ErrPolicyNotFound
 }
 
 func (m *MockRepository) GetLatestPolicy(ctx context.Context, orgID, consentType string) (*ConsentPolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, policy := range m.policies {
 		if policy.OrganizationID == orgID && policy.ConsentType == consentType && policy.Active {
-			return policy, nil
+			policyCopy := *policy
+			return &policyCopy, nil
 		}
 	}
 	return nil, ErrPolicyNotFound
 }
 
 func (m *MockRepository) ListPolicies(ctx context.Context, orgID string, active *bool) ([]*ConsentPolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var result []*ConsentPolicy
 	for _, policy := range m.policies {
 		if policy.OrganizationID == orgID {
 			if active == nil || policy.Active == *active {
-				result = append(result, policy)
+				policyCopy := *policy
+				result = append(result, &policyCopy)
 			}
 		}
 	}
@@ -131,11 +180,17 @@ func (m *MockRepository) ListPolicies(ctx context.Context, orgID string, active 
 }
 
 func (m *MockRepository) UpdatePolicy(ctx context.Context, policy *ConsentPolicy) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.policies[policy.ID.String()] = policy
 	return nil
 }
 
 func (m *MockRepository) DeletePolicy(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	delete(m.policies, id)
 	return nil
 }
@@ -163,15 +218,26 @@ func (m *MockRepository) UpdateDPA(ctx context.Context, dpa *DataProcessingAgree
 
 // Consent Audit Logs
 func (m *MockRepository) CreateAuditLog(ctx context.Context, log *ConsentAuditLog) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.auditLogs = append(m.auditLogs, log)
 	return nil
 }
 
 func (m *MockRepository) ListAuditLogs(ctx context.Context, userID, orgID string, limit int) ([]*ConsentAuditLog, error) {
-	return m.auditLogs, nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	result := make([]*ConsentAuditLog, len(m.auditLogs))
+	copy(result, m.auditLogs)
+	return result, nil
 }
 
 func (m *MockRepository) GetAuditLogsByConsent(ctx context.Context, consentID string) ([]*ConsentAuditLog, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var result []*ConsentAuditLog
 	for _, log := range m.auditLogs {
 		if log.ConsentID == consentID {
@@ -183,53 +249,93 @@ func (m *MockRepository) GetAuditLogsByConsent(ctx context.Context, consentID st
 
 // Cookie Consents
 func (m *MockRepository) CreateCookieConsent(ctx context.Context, consent *CookieConsent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if a consent already exists for this user+org (should be unique)
+	for id, existing := range m.cookieConsents {
+		if existing.UserID == consent.UserID && existing.OrganizationID == consent.OrganizationID {
+			// Update existing record
+			consent.ID = existing.ID
+			m.cookieConsents[id] = consent
+			return nil
+		}
+	}
+
+	// Create new record
+	consent.ID = xid.New()
 	m.cookieConsents[consent.ID.String()] = consent
 	return nil
 }
 
 func (m *MockRepository) GetCookieConsent(ctx context.Context, userID, orgID string) (*CookieConsent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, consent := range m.cookieConsents {
 		if consent.UserID == userID && consent.OrganizationID == orgID {
-			return consent, nil
+			consentCopy := *consent
+			return &consentCopy, nil
 		}
 	}
 	return nil, ErrCookieConsentNotFound
 }
 
 func (m *MockRepository) GetCookieConsentBySession(ctx context.Context, sessionID, orgID string) (*CookieConsent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, consent := range m.cookieConsents {
 		if consent.SessionID == sessionID && consent.OrganizationID == orgID {
-			return consent, nil
+			consentCopy := *consent
+			return &consentCopy, nil
 		}
 	}
 	return nil, ErrCookieConsentNotFound
 }
 
 func (m *MockRepository) UpdateCookieConsent(ctx context.Context, consent *CookieConsent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.cookieConsents[consent.ID.String()] = consent
 	return nil
 }
 
 // Data Export Requests
 func (m *MockRepository) CreateExportRequest(ctx context.Context, request *DataExportRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	request.ID = xid.New()
 	m.exportRequests[request.ID.String()] = request
 	return nil
 }
 
 func (m *MockRepository) GetExportRequest(ctx context.Context, id string) (*DataExportRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	request, ok := m.exportRequests[id]
 	if !ok {
 		return nil, ErrExportNotFound
 	}
-	return request, nil
+
+	// Return a copy to avoid race conditions
+	reqCopy := *request
+	return &reqCopy, nil
 }
 
 func (m *MockRepository) ListExportRequests(ctx context.Context, userID, orgID string, status *string) ([]*DataExportRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var result []*DataExportRequest
 	for _, request := range m.exportRequests {
 		if request.UserID == userID && request.OrganizationID == orgID {
 			if status == nil || request.Status == *status {
-				result = append(result, request)
+				reqCopy := *request
+				result = append(result, &reqCopy)
 			}
 		}
 	}
@@ -237,11 +343,17 @@ func (m *MockRepository) ListExportRequests(ctx context.Context, userID, orgID s
 }
 
 func (m *MockRepository) UpdateExportRequest(ctx context.Context, request *DataExportRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.exportRequests[request.ID.String()] = request
 	return nil
 }
 
 func (m *MockRepository) DeleteExpiredExports(ctx context.Context, beforeDate time.Time) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	count := 0
 	for id, request := range m.exportRequests {
 		if request.ExpiresAt != nil && request.ExpiresAt.Before(beforeDate) {
@@ -254,24 +366,38 @@ func (m *MockRepository) DeleteExpiredExports(ctx context.Context, beforeDate ti
 
 // Data Deletion Requests
 func (m *MockRepository) CreateDeletionRequest(ctx context.Context, request *DataDeletionRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	request.ID = xid.New()
 	m.deleteRequests[request.ID.String()] = request
 	return nil
 }
 
 func (m *MockRepository) GetDeletionRequest(ctx context.Context, id string) (*DataDeletionRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	request, ok := m.deleteRequests[id]
 	if !ok {
 		return nil, ErrDeletionNotFound
 	}
-	return request, nil
+
+	// Return a copy to avoid race conditions
+	reqCopy := *request
+	return &reqCopy, nil
 }
 
 func (m *MockRepository) ListDeletionRequests(ctx context.Context, userID, orgID string, status *string) ([]*DataDeletionRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var result []*DataDeletionRequest
 	for _, request := range m.deleteRequests {
 		if request.UserID == userID && request.OrganizationID == orgID {
 			if status == nil || request.Status == *status {
-				result = append(result, request)
+				reqCopy := *request
+				result = append(result, &reqCopy)
 			}
 		}
 	}
@@ -279,15 +405,22 @@ func (m *MockRepository) ListDeletionRequests(ctx context.Context, userID, orgID
 }
 
 func (m *MockRepository) UpdateDeletionRequest(ctx context.Context, request *DataDeletionRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.deleteRequests[request.ID.String()] = request
 	return nil
 }
 
 func (m *MockRepository) GetPendingDeletionRequest(ctx context.Context, userID, orgID string) (*DataDeletionRequest, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, request := range m.deleteRequests {
 		if request.UserID == userID && request.OrganizationID == orgID &&
 			(request.Status == string(StatusPending) || request.Status == string(StatusApproved) || request.Status == string(StatusProcessing)) {
-			return request, nil
+			reqCopy := *request
+			return &reqCopy, nil
 		}
 	}
 	return nil, ErrDeletionNotFound
@@ -295,19 +428,29 @@ func (m *MockRepository) GetPendingDeletionRequest(ctx context.Context, userID, 
 
 // Privacy Settings
 func (m *MockRepository) CreatePrivacySettings(ctx context.Context, settings *PrivacySettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.privacySettings[settings.OrganizationID] = settings
 	return nil
 }
 
 func (m *MockRepository) GetPrivacySettings(ctx context.Context, orgID string) (*PrivacySettings, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	settings, ok := m.privacySettings[orgID]
 	if !ok {
 		return nil, ErrPrivacySettingsNotFound
 	}
-	return settings, nil
+	settingsCopy := *settings
+	return &settingsCopy, nil
 }
 
 func (m *MockRepository) UpdatePrivacySettings(ctx context.Context, settings *PrivacySettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.privacySettings[settings.OrganizationID] = settings
 	return nil
 }

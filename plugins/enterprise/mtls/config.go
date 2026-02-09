@@ -236,7 +236,7 @@ func DefaultConfig() *Config {
 			AllowSelfSigned:       false,
 			MinKeySize:            2048,
 			AllowedKeyAlgorithms:  []string{"RSA", "ECDSA", "Ed25519"},
-			AllowedSignatureAlgs:  []string{"SHA256WithRSA", "SHA384WithRSA", "SHA512WithRSA", "ECDSAWithSHA256", "ECDSAWithSHA384", "ECDSAWithSHA512"},
+			AllowedSignatureAlgs:  []string{"SHA256-RSA", "SHA384-RSA", "SHA512-RSA", "ECDSA-SHA256", "ECDSA-SHA384", "ECDSA-SHA512"},
 			MaxCertificateAge:     365,
 			MinRemainingValidity:  30,
 			RequiredKeyUsage:      []string{"digitalSignature", "keyEncipherment"},
