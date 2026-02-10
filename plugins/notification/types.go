@@ -2,7 +2,7 @@ package notification
 
 // Request DTOs for notification handlers
 
-// Template DTOs.
+// GetTemplateRequest DTOs.
 type GetTemplateRequest struct {
 	ID string `path:"id" validate:"required"`
 }
@@ -27,7 +27,7 @@ type RenderTemplateRequest struct {
 	ID string `path:"id" validate:"required"`
 }
 
-// Notification DTOs.
+// GetNotificationRequest DTOs.
 type GetNotificationRequest struct {
 	ID string `path:"id" validate:"required"`
 }
@@ -36,7 +36,7 @@ type ResendNotificationRequest struct {
 	ID string `path:"id" validate:"required"`
 }
 
-// Provider DTOs.
+// GetProviderRequest DTOs.
 type GetProviderRequest struct {
 	ID string `path:"id" validate:"required"`
 }
@@ -49,7 +49,7 @@ type DeleteProviderRequest struct {
 	ID string `path:"id" validate:"required"`
 }
 
-// Template Version DTOs.
+// GetTemplateVersionRequest Version DTOs.
 type GetTemplateVersionRequest struct {
 	TemplateID string `path:"templateId" validate:"required"`
 	VersionID  string `path:"versionId"  validate:"required"`
@@ -60,7 +60,7 @@ type RestoreTemplateVersionRequest struct {
 	VersionID  string `path:"versionId"  validate:"required"`
 }
 
-// AB Test DTOs.
+// GetABTestResultsRequest Test DTOs.
 type GetABTestResultsRequest struct {
 	TemplateID string `path:"templateId" validate:"required"`
 }
@@ -69,7 +69,7 @@ type DeclareABTestWinnerRequest struct {
 	TemplateID string `path:"templateId" validate:"required"`
 }
 
-// Analytics DTOs.
+// GetTemplateAnalyticsRequest DTOs.
 type GetTemplateAnalyticsRequest struct {
 	TemplateID string `path:"templateId" validate:"required"`
 }

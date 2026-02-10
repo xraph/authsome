@@ -8,6 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/session"
@@ -244,7 +245,7 @@ func TestProvisionUser_ExistingUser_NoUpdate(t *testing.T) {
 	usr, err := svc.ProvisionUser(ctx, "test@example.com", attributes, provider)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, usr)
 	assert.Equal(t, existingUser.ID, usr.ID)
 	assert.Equal(t, "Original Name", usr.Name) // Not updated
@@ -293,7 +294,7 @@ func TestProvisionUser_ExistingUser_WithUpdate(t *testing.T) {
 	usr, err := svc.ProvisionUser(ctx, "test@example.com", attributes, provider)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, usr)
 	assert.Equal(t, "New Name", usr.Name) // Updated
 	mockUserSvc.AssertExpectations(t)
@@ -335,7 +336,7 @@ func TestProvisionUser_NewUser_JITEnabled(t *testing.T) {
 	usr, err := svc.ProvisionUser(ctx, "newuser@example.com", attributes, provider)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, usr)
 	assert.Equal(t, "newuser@example.com", usr.Email)
 	mockUserSvc.AssertExpectations(t)
@@ -367,7 +368,7 @@ func TestProvisionUser_NewUser_JITDisabled(t *testing.T) {
 	usr, err := svc.ProvisionUser(ctx, "newuser@example.com", attributes, provider)
 
 	// Assert
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, usr)
 	mockUserSvc.AssertExpectations(t)
 }
@@ -404,7 +405,7 @@ func TestCreateSSOSession(t *testing.T) {
 	sess, token, err := svc.CreateSSOSession(ctx, userID, provider)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, sess)
 	assert.Equal(t, sessionID, sess.ID)
 	assert.NotEmpty(t, token)
@@ -482,7 +483,7 @@ func TestInitiateOIDCLogin(t *testing.T) {
 
 	authURL, pkce, err := svc.InitiateOIDCLogin(ctx, provider, redirectURI, state, nonce)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, authURL)
 	assert.Contains(t, authURL, "https://idp.example.com")
 	assert.Contains(t, authURL, "client_id=client-123")
@@ -511,22 +512,22 @@ func TestStateStore(t *testing.T) {
 
 	// Store state
 	err := store.Store(ctx, state)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Retrieve state
 	retrieved, err := store.Get(ctx, "test-state")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, "test-nonce", retrieved.Nonce)
 	assert.Equal(t, "test-verifier", retrieved.CodeVerifier)
 
 	// Delete state
 	err = store.Delete(ctx, "test-state")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify deletion
 	retrieved, err = store.Get(ctx, "test-state")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, retrieved)
 }
 
@@ -544,10 +545,10 @@ func TestStateStore_Expiration(t *testing.T) {
 
 	// Store expired state
 	err := store.Store(ctx, state)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Try to retrieve expired state
 	retrieved, err := store.Get(ctx, "expired-state")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, retrieved) // Should not return expired state
 }

@@ -6,12 +6,13 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateBackupCode(t *testing.T) {
 	// Test backup code generation
 	code, err := generateBackupCode()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, code)
 
 	// Check format: XXXX-XXXX
@@ -34,7 +35,7 @@ func TestGenerateBackupCode_Uniqueness(t *testing.T) {
 
 	for range 100 {
 		code, err := generateBackupCode()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, codes[code], "Generated duplicate code: %s", code)
 		codes[code] = true
 	}
@@ -83,8 +84,8 @@ func TestBackupCodeSecurity(t *testing.T) {
 	code1, err1 := generateBackupCode()
 	code2, err2 := generateBackupCode()
 
-	assert.NoError(t, err1)
-	assert.NoError(t, err2)
+	require.NoError(t, err1)
+	require.NoError(t, err2)
 	assert.NotEqual(t, code1, code2, "Codes should be randomly generated")
 
 	// Hash should not be reversible
@@ -97,7 +98,7 @@ func TestBackupCodeFormat(t *testing.T) {
 	// Test that generated codes match expected format
 	for range 10 {
 		code, err := generateBackupCode()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Should be 9 characters total (4 + dash + 4)
 		assert.Len(t, code, 9)
@@ -156,11 +157,11 @@ func TestBackupCodeCountValidation(t *testing.T) {
 	// Test invalid user ID
 	invalidID := "invalid-xid"
 	_, err := xid.FromString(invalidID)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Test valid user ID
 	_, err = xid.FromString(userID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestHashConsistency(t *testing.T) {

@@ -62,7 +62,7 @@ func (r *Repository) FindProvisioningTokenByID(ctx context.Context, id xid.ID) (
 }
 
 // ListProvisioningTokens lists all provisioning tokens for an organization
-// Updated for 3-tier architecture: App → Environment → Organization.
+// ListProvisioningTokens for 3-tier architecture: App → Environment → Organization.
 func (r *Repository) ListProvisioningTokens(ctx context.Context, appID, envID, orgID xid.ID, limit, offset int) ([]*ProvisioningToken, error) {
 	var tokens []*ProvisioningToken
 
@@ -107,7 +107,7 @@ func (r *Repository) RevokeProvisioningToken(ctx context.Context, id xid.ID) err
 }
 
 // CountProvisioningTokens counts active tokens for an organization
-// Updated for 3-tier architecture.
+// CountProvisioningTokens for 3-tier architecture.
 func (r *Repository) CountProvisioningTokens(ctx context.Context, appID, envID, orgID xid.ID) (int, error) {
 	count, err := r.db.NewSelect().
 		Model((*ProvisioningToken)(nil)).
@@ -132,7 +132,7 @@ func (r *Repository) CreateProvisioningLog(ctx context.Context, log *Provisionin
 }
 
 // ListProvisioningLogs lists provisioning logs with filtering
-// Updated for 3-tier architecture.
+// ListProvisioningLogs for 3-tier architecture.
 func (r *Repository) ListProvisioningLogs(ctx context.Context, appID, envID, orgID xid.ID, filters map[string]any, limit, offset int) ([]*ProvisioningLog, error) {
 	query := r.db.NewSelect().
 		Model((*ProvisioningLog)(nil)).
@@ -246,7 +246,7 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, appID, envID, org
 		stats["success_rate"] = 0.0
 	}
 
-	// Operations by type
+	// OperationCount by type
 	type OperationCount struct {
 		Operation string `bun:"operation"`
 		Count     int    `bun:"count"`
@@ -276,7 +276,7 @@ func (r *Repository) GetProvisioningStats(ctx context.Context, appID, envID, org
 
 	stats["operations_by_type"] = operationStats
 
-	// Average duration
+	// avgDuration duration
 	var avgDuration float64
 
 	err = r.db.NewSelect().
@@ -541,7 +541,7 @@ func (r *Repository) FindGroupMappingByTargetID(ctx context.Context, targetID xi
 }
 
 // FindGroupMappingBySCIMID finds a group mapping by SCIM group ID
-// Updated for 3-tier architecture.
+// FindGroupMappingBySCIMID for 3-tier architecture.
 func (r *Repository) FindGroupMappingBySCIMID(ctx context.Context, appID, envID, orgID xid.ID, scimGroupID string) (*GroupMapping, error) {
 	var mapping GroupMapping
 
@@ -559,7 +559,7 @@ func (r *Repository) FindGroupMappingBySCIMID(ctx context.Context, appID, envID,
 	return &mapping, nil
 }
 
-// FindAttributeMappingByOrgID finds attribute mapping by organization ID.
+// FindAttributeMappingByOrganization finds attribute mapping by organization ID.
 func (r *Repository) FindAttributeMappingByOrganization(ctx context.Context, appID, envID, orgID xid.ID) (*AttributeMapping, error) {
 	var mapping AttributeMapping
 
@@ -577,7 +577,7 @@ func (r *Repository) FindAttributeMappingByOrganization(ctx context.Context, app
 }
 
 // UpdateTeamProvisioningInfo updates team provisioning tracking fields
-// This method updates both app teams and organization teams.
+// UpdateTeamProvisioningInfo method updates both app teams and organization teams.
 func (r *Repository) UpdateTeamProvisioningInfo(ctx context.Context, teamID xid.ID, provisionedBy, externalID *string) error {
 	// Try updating app teams first
 	result, err := r.db.NewUpdate().
@@ -624,7 +624,7 @@ func (r *Repository) UpdateTeamProvisioningInfo(ctx context.Context, teamID xid.
 }
 
 // UpdateTeamMemberProvisioningInfo updates team member provisioning tracking field
-// This method updates both app team members and organization team members.
+// UpdateTeamMemberProvisioningInfo method updates both app team members and organization team members.
 func (r *Repository) UpdateTeamMemberProvisioningInfo(ctx context.Context, teamID, memberID xid.ID, provisionedBy *string) error {
 	// Try updating app team members first
 	result, err := r.db.NewUpdate().

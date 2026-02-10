@@ -70,7 +70,13 @@ func (e *SimpleTemplateEngine) ExtractVariables(templateStr string) ([]string, e
 var templateFuncs = template.FuncMap{
 	"upper": strings.ToUpper,
 	"lower": strings.ToLower,
-	"title": strings.Title,
+	"title": func(s string) string {
+		// Simple title case implementation
+		if len(s) == 0 {
+			return s
+		}
+		return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+	},
 }
 
 // RenderWithFuncs renders a template with variables and custom functions.

@@ -67,10 +67,10 @@ func generateFieldSlug(name string) string {
 	// Trim whitespace but preserve casing
 	slug := strings.TrimSpace(name)
 
-	// Replace spaces with underscores (or can be converted to camelCase)
+	// slug spaces with underscores (or can be converted to camelCase)
 	slug = strings.ReplaceAll(slug, " ", "_")
 
-	// Remove invalid characters (keep letters, numbers, underscores, hyphens)
+	// result invalid characters (keep letters, numbers, underscores, hyphens)
 	var result strings.Builder
 
 	for _, r := range slug {
@@ -90,7 +90,7 @@ func generateFieldSlug(name string) string {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
 
-	// Remove leading/trailing underscores and hyphens
+	// slug leading/trailing underscores and hyphens
 	slug = strings.Trim(slug, "_-")
 
 	// Ensure it starts with a letter
@@ -205,7 +205,7 @@ func (s *ContentFieldService) GetByID(ctx context.Context, id xid.ID) (*core.Con
 	return fieldToDTO(field), nil
 }
 
-// GetBySlug retrieves a content field by slug.
+// GetByName retrieves a content field by slug.
 func (s *ContentFieldService) GetByName(ctx context.Context, contentTypeID xid.ID, name string) (*core.ContentFieldDTO, error) {
 	field, err := s.repo.FindByName(ctx, contentTypeID, name)
 	if err != nil {
@@ -311,7 +311,7 @@ func (s *ContentFieldService) Delete(ctx context.Context, id xid.ID) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// UpdateBySlug updates a content field by its name within a content type.
+// UpdateByName updates a content field by its name within a content type.
 func (s *ContentFieldService) UpdateByName(ctx context.Context, contentTypeID xid.ID, name string, req *core.UpdateFieldRequest) (*core.ContentFieldDTO, error) {
 	// Find field by name
 	field, err := s.repo.FindByName(ctx, contentTypeID, name)
@@ -322,7 +322,7 @@ func (s *ContentFieldService) UpdateByName(ctx context.Context, contentTypeID xi
 	return s.Update(ctx, field.ID, req)
 }
 
-// DeleteBySlug deletes a content field by its name within a content type.
+// DeleteByName deletes a content field by its name within a content type.
 func (s *ContentFieldService) DeleteByName(ctx context.Context, contentTypeID xid.ID, name string) error {
 	// Find field by name
 	field, err := s.repo.FindByName(ctx, contentTypeID, name)

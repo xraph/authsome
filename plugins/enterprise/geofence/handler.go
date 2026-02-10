@@ -16,7 +16,7 @@ type Handler struct {
 	config  *Config
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse

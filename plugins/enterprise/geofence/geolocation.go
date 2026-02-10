@@ -271,7 +271,7 @@ func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error
 
 	// Parse location
 	var lat, lon float64
-	fmt.Sscanf(result.Loc, "%f,%f", &lat, &lon)
+	_, _ = fmt.Sscanf(result.Loc, "%f,%f", &lat, &lon)
 
 	// Parse ASN and org
 	var (
@@ -279,7 +279,7 @@ func (p *IPInfoProvider) Lookup(ctx context.Context, ip string) (*GeoData, error
 		org string
 	)
 
-	fmt.Sscanf(result.Org, "%s %s", &asn, &org)
+	_, _ = fmt.Sscanf(result.Org, "%s %s", &asn, &org)
 
 	return &GeoData{
 		IPAddress:    ip,
@@ -352,8 +352,8 @@ func (p *IPGeolocationProvider) Lookup(ctx context.Context, ip string) (*GeoData
 	}
 
 	var lat, lon float64
-	fmt.Sscanf(result.Latitude, "%f", &lat)
-	fmt.Sscanf(result.Longitude, "%f", &lon)
+	_, _ = fmt.Sscanf(result.Latitude, "%f", &lat)
+	_, _ = fmt.Sscanf(result.Longitude, "%f", &lon)
 
 	return &GeoData{
 		IPAddress:    ip,

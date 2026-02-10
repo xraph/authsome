@@ -258,7 +258,9 @@ func (s *SubscriptionService) Update(ctx context.Context, id xid.ID, req *core.U
 
 	// If plan changed, execute plan change hooks
 	if req.PlanID != nil && oldPlanID != *req.PlanID {
-		s.hookRegistry.ExecuteAfterPlanChange(ctx, id, oldPlanID, *req.PlanID)
+		if err := s.hookRegistry.ExecuteAfterPlanChange(ctx, id, oldPlanID, *req.PlanID); err != nil {
+			_ = err
+		}
 	}
 
 	return coreSub, nil
@@ -304,7 +306,9 @@ func (s *SubscriptionService) Cancel(ctx context.Context, id xid.ID, req *core.C
 	}
 
 	// Execute after hooks
-	s.hookRegistry.ExecuteAfterSubscriptionCancel(ctx, id)
+	if err := s.hookRegistry.ExecuteAfterSubscriptionCancel(ctx, id); err != nil {
+		_ = err
+	}
 
 	// Record event
 	s.recordEvent(ctx, sub.ID, sub.OrganizationID, string(core.EventSubscriptionCanceled), map[string]any{
@@ -459,7 +463,9 @@ func (s *SubscriptionService) ChangePlan(ctx context.Context, id, newPlanID xid.
 	coreSub := s.schemaToCoreSub(sub)
 
 	// Execute after hooks
-	s.hookRegistry.ExecuteAfterPlanChange(ctx, id, oldPlanID, newPlanID)
+	if err := s.hookRegistry.ExecuteAfterPlanChange(ctx, id, oldPlanID, newPlanID); err != nil {
+		_ = err
+	}
 
 	return coreSub, nil
 }
@@ -536,7 +542,9 @@ func (s *SubscriptionService) AttachAddOn(ctx context.Context, subID, addOnID xi
 	if err := s.repo.CreateAddOnItem(ctx, item); err != nil {
 		// Rollback provider change if local save fails
 		if providerItemID != "" && s.provider != nil {
-			s.provider.RemoveSubscriptionItem(ctx, sub.ProviderSubID, providerItemID)
+			if err := s.provider.RemoveSubscriptionItem(ctx, sub.ProviderSubID, providerItemID); err != nil {
+				_ = err
+			}
 		}
 
 		return fmt.Errorf("failed to create add-on item: %w", err)
@@ -774,7 +782,9 @@ func (s *SubscriptionService) recordEvent(ctx context.Context, subID, orgID xid.
 		EventData:      data,
 		CreatedAt:      time.Now(),
 	}
-	s.eventRepo.Create(ctx, event)
+	if err := s.eventRepo.Create(ctx, event); err != nil {
+		_ = err
+	}
 }
 
 func (s *SubscriptionService) schemaToCoreSub(sub *schema.Subscription) *core.Subscription {

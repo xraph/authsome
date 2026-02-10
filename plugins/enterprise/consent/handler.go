@@ -15,7 +15,7 @@ type Handler struct {
 	service *Service
 }
 
-// Response types - use shared responses from core.
+// MessageResponse types - use shared responses from core.
 type MessageResponse = responses.MessageResponse
 
 type ConsentsResponse struct {

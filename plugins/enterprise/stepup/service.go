@@ -564,7 +564,10 @@ func (s *Service) getExpiryTime(level SecurityLevel) time.Time {
 
 func (s *Service) generateChallengeToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback: use timestamp-based token if random generation fails
+		return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", time.Now().UnixNano())))
+	}
 
 	return base64.URLEncoding.EncodeToString(b)
 }

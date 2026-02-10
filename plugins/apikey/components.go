@@ -12,7 +12,7 @@ import (
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/user"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // renderAPIKeysListContent renders the main API keys management page content.

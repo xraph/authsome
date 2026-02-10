@@ -352,7 +352,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	api := router.Group("/permissions")
 
 	// Policy management
-	api.POST("/policies", p.handler.CreatePolicy,
+	if err := api.POST("/policies", p.handler.CreatePolicy,
 		append(routeOpts,
 			forge.WithName("permissions.policies.create"),
 			forge.WithSummary("Create permission policy"),
@@ -364,9 +364,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/policies", p.handler.ListPolicies,
+	if err := api.GET("/policies", p.handler.ListPolicies,
 		append(routeOpts,
 			forge.WithName("permissions.policies.list"),
 			forge.WithSummary("List permission policies"),
@@ -376,9 +379,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Policies"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/policies/:id", p.handler.GetPolicy,
+	if err := api.GET("/policies/:id", p.handler.GetPolicy,
 		append(routeOpts,
 			forge.WithName("permissions.policies.get"),
 			forge.WithSummary("Get permission policy"),
@@ -389,9 +395,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Policies"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.PUT("/policies/:id", p.handler.UpdatePolicy,
+	if err := api.PUT("/policies/:id", p.handler.UpdatePolicy,
 		append(routeOpts,
 			forge.WithName("permissions.policies.update"),
 			forge.WithSummary("Update permission policy"),
@@ -404,9 +413,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.DELETE("/policies/:id", p.handler.DeletePolicy,
+	if err := api.DELETE("/policies/:id", p.handler.DeletePolicy,
 		append(routeOpts,
 			forge.WithName("permissions.policies.delete"),
 			forge.WithSummary("Delete permission policy"),
@@ -417,9 +429,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Policies"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.POST("/policies/validate", p.handler.ValidatePolicy,
+	if err := api.POST("/policies/validate", p.handler.ValidatePolicy,
 		append(routeOpts,
 			forge.WithName("permissions.policies.validate"),
 			forge.WithSummary("Validate policy"),
@@ -431,9 +446,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.POST("/policies/test", p.handler.TestPolicy,
+	if err := api.POST("/policies/test", p.handler.TestPolicy,
 		append(routeOpts,
 			forge.WithName("permissions.policies.test"),
 			forge.WithSummary("Test policy"),
@@ -445,10 +463,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Resource management
-	api.POST("/resources", p.handler.CreateResource,
+	if err := api.POST("/resources", p.handler.CreateResource,
 		append(routeOpts,
 			forge.WithName("permissions.resources.create"),
 			forge.WithSummary("Create resource"),
@@ -460,9 +481,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Resources"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/resources", p.handler.ListResources,
+	if err := api.GET("/resources", p.handler.ListResources,
 		append(routeOpts,
 			forge.WithName("permissions.resources.list"),
 			forge.WithSummary("List resources"),
@@ -472,9 +496,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Resources"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/resources/:id", p.handler.GetResource,
+	if err := api.GET("/resources/:id", p.handler.GetResource,
 		append(routeOpts,
 			forge.WithName("permissions.resources.get"),
 			forge.WithSummary("Get resource"),
@@ -485,9 +512,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Resources"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.DELETE("/resources/:id", p.handler.DeleteResource,
+	if err := api.DELETE("/resources/:id", p.handler.DeleteResource,
 		append(routeOpts,
 			forge.WithName("permissions.resources.delete"),
 			forge.WithSummary("Delete resource"),
@@ -498,10 +528,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Resources"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Action management
-	api.POST("/actions", p.handler.CreateAction,
+	if err := api.POST("/actions", p.handler.CreateAction,
 		append(routeOpts,
 			forge.WithName("permissions.actions.create"),
 			forge.WithSummary("Create action"),
@@ -513,9 +546,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Actions"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/actions", p.handler.ListActions,
+	if err := api.GET("/actions", p.handler.ListActions,
 		append(routeOpts,
 			forge.WithName("permissions.actions.list"),
 			forge.WithSummary("List actions"),
@@ -525,9 +561,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Actions"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.DELETE("/actions/:id", p.handler.DeleteAction,
+	if err := api.DELETE("/actions/:id", p.handler.DeleteAction,
 		append(routeOpts,
 			forge.WithName("permissions.actions.delete"),
 			forge.WithSummary("Delete action"),
@@ -538,10 +577,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Actions"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Namespace management
-	api.POST("/namespaces", p.handler.CreateNamespace,
+	if err := api.POST("/namespaces", p.handler.CreateNamespace,
 		append(routeOpts,
 			forge.WithName("permissions.namespaces.create"),
 			forge.WithSummary("Create namespace"),
@@ -553,9 +595,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Namespaces"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/namespaces", p.handler.ListNamespaces,
+	if err := api.GET("/namespaces", p.handler.ListNamespaces,
 		append(routeOpts,
 			forge.WithName("permissions.namespaces.list"),
 			forge.WithSummary("List namespaces"),
@@ -565,9 +610,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Namespaces"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/namespaces/:id", p.handler.GetNamespace,
+	if err := api.GET("/namespaces/:id", p.handler.GetNamespace,
 		append(routeOpts,
 			forge.WithName("permissions.namespaces.get"),
 			forge.WithSummary("Get namespace"),
@@ -578,9 +626,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Namespaces"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.PUT("/namespaces/:id", p.handler.UpdateNamespace,
+	if err := api.PUT("/namespaces/:id", p.handler.UpdateNamespace,
 		append(routeOpts,
 			forge.WithName("permissions.namespaces.update"),
 			forge.WithSummary("Update namespace"),
@@ -593,9 +644,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Namespaces"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.DELETE("/namespaces/:id", p.handler.DeleteNamespace,
+	if err := api.DELETE("/namespaces/:id", p.handler.DeleteNamespace,
 		append(routeOpts,
 			forge.WithName("permissions.namespaces.delete"),
 			forge.WithSummary("Delete namespace"),
@@ -606,10 +660,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Namespaces"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Evaluation endpoint (primary authorization check)
-	api.POST("/evaluate", p.handler.Evaluate,
+	if err := api.POST("/evaluate", p.handler.Evaluate,
 		append(routeOpts,
 			forge.WithName("permissions.evaluate"),
 			forge.WithSummary("Evaluate permission"),
@@ -621,9 +678,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Evaluation"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.POST("/evaluate/batch", p.handler.EvaluateBatch,
+	if err := api.POST("/evaluate/batch", p.handler.EvaluateBatch,
 		append(routeOpts,
 			forge.WithName("permissions.evaluate.batch"),
 			forge.WithSummary("Batch evaluate permissions"),
@@ -635,10 +695,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Evaluation"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Policy templates
-	api.GET("/templates", p.handler.ListTemplates,
+	if err := api.GET("/templates", p.handler.ListTemplates,
 		append(routeOpts,
 			forge.WithName("permissions.templates.list"),
 			forge.WithSummary("List policy templates"),
@@ -647,9 +710,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Templates"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/templates/:id", p.handler.GetTemplate,
+	if err := api.GET("/templates/:id", p.handler.GetTemplate,
 		append(routeOpts,
 			forge.WithName("permissions.templates.get"),
 			forge.WithSummary("Get policy template"),
@@ -659,9 +725,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Templates"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.POST("/templates/:id/instantiate", p.handler.InstantiateTemplate,
+	if err := api.POST("/templates/:id/instantiate", p.handler.InstantiateTemplate,
 		append(routeOpts,
 			forge.WithName("permissions.templates.instantiate"),
 			forge.WithSummary("Instantiate policy template"),
@@ -674,12 +743,15 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Templates"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Migration from RBAC
 	if p.migrationHandler != nil {
 		// New migration API using the dedicated migration handler
-		api.POST("/migrate/all", p.migrationHandler.MigrateAll,
+		if err := api.POST("/migrate/all", p.migrationHandler.MigrateAll,
 			append(routeOpts,
 				forge.WithName("permissions.migrate.all"),
 				forge.WithSummary("Migrate all RBAC policies"),
@@ -691,9 +763,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Permissions", "Migration"),
 				forge.WithValidation(true),
 			)...,
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		api.POST("/migrate/roles", p.migrationHandler.MigrateRoles,
+		if err := api.POST("/migrate/roles", p.migrationHandler.MigrateRoles,
 			append(routeOpts,
 				forge.WithName("permissions.migrate.roles"),
 				forge.WithSummary("Migrate role-based permissions"),
@@ -705,9 +780,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Permissions", "Migration"),
 				forge.WithValidation(true),
 			)...,
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		api.POST("/migrate/preview", p.migrationHandler.PreviewConversion,
+		if err := api.POST("/migrate/preview", p.migrationHandler.PreviewConversion,
 			append(routeOpts,
 				forge.WithName("permissions.migrate.preview"),
 				forge.WithSummary("Preview RBAC policy conversion"),
@@ -719,11 +797,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Permissions", "Migration"),
 				forge.WithValidation(true),
 			)...,
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	// Legacy migration endpoints (for backward compatibility)
-	api.POST("/migrate/rbac", p.handler.MigrateFromRBAC,
+	if err := api.POST("/migrate/rbac", p.handler.MigrateFromRBAC,
 		append(routeOpts,
 			forge.WithName("permissions.migrate.rbac"),
 			forge.WithSummary("Migrate from RBAC (legacy)"),
@@ -735,9 +816,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Migration"),
 			forge.WithValidation(true),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/migrate/rbac/status", p.handler.GetMigrationStatus,
+	if err := api.GET("/migrate/rbac/status", p.handler.GetMigrationStatus,
 		append(routeOpts,
 			forge.WithName("permissions.migrate.rbac.status"),
 			forge.WithSummary("Get RBAC migration status"),
@@ -747,10 +831,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Migration"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Audit & reporting
-	api.GET("/audit", p.handler.GetAuditLog,
+	if err := api.GET("/audit", p.handler.GetAuditLog,
 		append(routeOpts,
 			forge.WithName("permissions.audit.log"),
 			forge.WithSummary("Get permission audit log"),
@@ -760,9 +847,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Audit"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/analytics", p.handler.GetAnalytics,
+	if err := api.GET("/analytics", p.handler.GetAnalytics,
 		append(routeOpts,
 			forge.WithName("permissions.analytics"),
 			forge.WithSummary("Get permission analytics"),
@@ -772,7 +862,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Analytics"),
 		)...,
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

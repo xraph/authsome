@@ -171,7 +171,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Router is already scoped to the auth basePath, create multi-session sub-group
 	grp := router.Group("/multi-session")
 	h := NewHandler(p.service)
-	grp.GET("/list", h.List,
+	if err := grp.GET("/list", h.List,
 		forge.WithName("multisession.list"),
 		forge.WithSummary("List user sessions"),
 		forge.WithDescription("Returns all active sessions for the current authenticated user with optional filtering, sorting, and pagination"),
@@ -179,8 +179,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Sessions retrieved", session.ListSessionsResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
-	grp.POST("/set-active", h.SetActive,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/set-active", h.SetActive,
 		forge.WithName("multisession.setactive"),
 		forge.WithSummary("Set active session"),
 		forge.WithDescription("Switches the current session cookie to the specified session ID"),
@@ -190,8 +193,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
 		forge.WithValidation(true),
-	)
-	grp.POST("/delete/{id}", h.Delete,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/delete/{id}", h.Delete,
 		forge.WithName("multisession.delete"),
 		forge.WithSummary("Delete session"),
 		forge.WithDescription("Revokes and deletes a specific session by ID for the current user"),
@@ -199,8 +205,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
-	grp.GET("/current", h.GetCurrent,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.GET("/current", h.GetCurrent,
 		forge.WithName("multisession.current"),
 		forge.WithSummary("Get current session"),
 		forge.WithDescription("Returns detailed information about the currently active session"),
@@ -208,8 +217,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(404, "Session not found", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
-	grp.GET("/{id}", h.GetByID,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.GET("/{id}", h.GetByID,
 		forge.WithName("multisession.get"),
 		forge.WithSummary("Get session by ID"),
 		forge.WithDescription("Returns details about a specific session by ID with ownership verification"),
@@ -218,8 +230,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(404, "Session not found", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
-	grp.POST("/revoke-all", h.RevokeAll,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/revoke-all", h.RevokeAll,
 		forge.WithName("multisession.revokeall"),
 		forge.WithSummary("Revoke all sessions"),
 		forge.WithDescription("Revokes all sessions for the current user. Optionally include current session with includeCurrentSession flag."),
@@ -229,8 +244,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Failed to revoke sessions", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
 		forge.WithValidation(true),
-	)
-	grp.POST("/revoke-others", h.RevokeOthers,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/revoke-others", h.RevokeOthers,
 		forge.WithName("multisession.revokeothers"),
 		forge.WithSummary("Revoke all other sessions"),
 		forge.WithDescription("Revokes all sessions except the current one. Useful after password change or suspicious activity."),
@@ -238,8 +256,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(500, "Failed to revoke sessions", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
-	grp.POST("/refresh", h.Refresh,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/refresh", h.Refresh,
 		forge.WithName("multisession.refresh"),
 		forge.WithSummary("Refresh current session"),
 		forge.WithDescription("Extends the expiry time of the current session"),
@@ -247,8 +268,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(500, "Failed to refresh session", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
-	grp.GET("/stats", h.GetStats,
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.GET("/stats", h.GetStats,
 		forge.WithName("multisession.stats"),
 		forge.WithSummary("Get session statistics"),
 		forge.WithDescription("Returns aggregated statistics about user sessions including active count, device count, and location count"),
@@ -256,12 +280,15 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(500, "Failed to retrieve statistics", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// Response types for multi-session routes.
+// MultiSessionErrorResponse types for multi-session routes.
 type MultiSessionErrorResponse struct {
 	Error string `example:"Error message" json:"error"`
 }
@@ -285,7 +312,7 @@ func (p *Plugin) GetAuthService() *auth.Service {
 
 // DashboardExtension implements the PluginWithDashboardExtension interface
 // This allows the multisession plugin to extend the dashboard with custom screens
-// Uses lazy initialization to ensure plugin is fully initialized before creating extension.
+// DashboardExtension lazy initialization to ensure plugin is fully initialized before creating extension.
 func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 	p.dashboardExtensionOnce.Do(func() {
 		p.dashboardExtension = NewDashboardExtension(p)

@@ -22,7 +22,7 @@ import (
 	"github.com/xraph/forgeui/bridge"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // DashboardExtension implements ui.DashboardExtension for the CMS plugin.

@@ -316,7 +316,7 @@ func TestChallengeStore(t *testing.T) {
 
 	// Should be expired
 	_, err = store.Get(ctx, sessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expired")
 }
 

@@ -13,7 +13,7 @@ import (
 
 // Template key constants for predefined notification templates.
 const (
-	// Authentication templates.
+	// TemplateKeyWelcome is the welcome email template key.
 	TemplateKeyWelcome       = "auth.welcome"
 	TemplateKeyVerifyEmail   = "auth.verify_email"
 	TemplateKeyPasswordReset = "auth.password_reset"
@@ -23,7 +23,7 @@ const (
 	TemplateKeyPhoneOTP      = "auth.phone_otp"
 	TemplateKeySecurityAlert = "auth.security_alert"
 
-	// Organization templates.
+	// TemplateKeyOrgInvite is the organization invitation template key.
 	TemplateKeyOrgInvite        = "org.invite"
 	TemplateKeyOrgMemberAdded   = "org.member_added"
 	TemplateKeyOrgMemberRemoved = "org.member_removed"
@@ -32,7 +32,7 @@ const (
 	TemplateKeyOrgDeleted       = "org.deleted"
 	TemplateKeyOrgMemberLeft    = "org.member_left"
 
-	// Account management templates.
+	// TemplateKeyEmailChangeRequest is the email change request template key.
 	TemplateKeyEmailChangeRequest = "account.email_change_request"
 	TemplateKeyEmailChanged       = "account.email_changed"
 	TemplateKeyPasswordChanged    = "account.password_changed"
@@ -42,21 +42,21 @@ const (
 	TemplateKeyAccountReactivated = "account.reactivated"
 	TemplateKeyDataExportReady    = "account.data_export_ready"
 
-	// Session/device templates.
+	// TemplateKeyNewDeviceLogin is the new device login template key.
 	TemplateKeyNewDeviceLogin     = "session.new_device"
 	TemplateKeyNewLocationLogin   = "session.new_location"
 	TemplateKeySuspiciousLogin    = "session.suspicious_login"
 	TemplateKeyDeviceRemoved      = "session.device_removed"
 	TemplateKeyAllSessionsRevoked = "session.all_revoked"
 
-	// Reminder templates.
+	// TemplateKeyVerificationReminder is the verification reminder template key.
 	TemplateKeyVerificationReminder = "reminder.verification"
 	TemplateKeyInactiveAccount      = "reminder.inactive"
 	TemplateKeyTrialExpiring        = "reminder.trial_expiring"
 	TemplateKeySubscriptionExpiring = "reminder.subscription_expiring"
 	TemplateKeyPasswordExpiring     = "reminder.password_expiring"
 
-	// Admin/moderation templates.
+	// TemplateKeyAccountLocked is the account locked template key.
 	TemplateKeyAccountLocked        = "admin.account_locked"
 	TemplateKeyAccountUnlocked      = "admin.account_unlocked"
 	TemplateKeyTermsUpdate          = "admin.terms_update"

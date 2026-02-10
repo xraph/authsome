@@ -36,7 +36,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// Environment CRUD errors.
+// EnvironmentNotFound returns an error when an environment is not found.
 func EnvironmentNotFound(id string) *errs.AuthsomeError {
 	return errs.New(CodeEnvironmentNotFound, "Environment not found", http.StatusNotFound).
 		WithContext("environment_id", id)
@@ -57,7 +57,7 @@ func DefaultEnvironmentNotFound(appID string) *errs.AuthsomeError {
 		WithContext("app_id", appID)
 }
 
-// Environment deletion errors.
+// CannotDeleteDefaultEnvironment returns an error when attempting to delete the default environment.
 func CannotDeleteDefaultEnvironment() *errs.AuthsomeError {
 	return errs.New(CodeCannotDeleteDefaultEnvironment, "Cannot delete default environment", http.StatusForbidden)
 }
@@ -66,7 +66,7 @@ func CannotDeleteProductionEnvironment() *errs.AuthsomeError {
 	return errs.New(CodeCannotDeleteProductionEnvironment, "Cannot delete production environment without explicit confirmation", http.StatusForbidden)
 }
 
-// Environment modification errors.
+// CannotModifyDefaultEnvironmentType returns an error when attempting to modify the default environment type.
 func CannotModifyDefaultEnvironmentType() *errs.AuthsomeError {
 	return errs.New(CodeCannotModifyDefaultEnvironmentType, "Cannot change default environment type", http.StatusForbidden)
 }
@@ -81,7 +81,7 @@ func EnvironmentLimitReached(limit int) *errs.AuthsomeError {
 		WithContext("limit", limit)
 }
 
-// Promotion errors.
+// PromotionNotAllowed returns an error when environment promotion is not allowed.
 func PromotionNotAllowed() *errs.AuthsomeError {
 	return errs.New(CodePromotionNotAllowed, "Environment promotion is disabled", http.StatusForbidden)
 }
@@ -101,7 +101,7 @@ func PromotionInProgress(id string) *errs.AuthsomeError {
 		WithContext("promotion_id", id)
 }
 
-// Validation errors.
+// InvalidEnvironmentStatus returns an error when an invalid environment status is provided.
 func InvalidEnvironmentStatus(status string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidEnvironmentStatus, "Invalid environment status", http.StatusBadRequest).
 		WithContext("status", status)

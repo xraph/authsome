@@ -13,13 +13,13 @@ import (
 )
 
 // Handler handles impersonation HTTP requests
-// Updated for V2 architecture: App → Environment → Organization.
+// Handler for V2 architecture: App → Environment → Organization.
 type Handler struct {
 	service *impersonation.Service
 	config  Config
 }
 
-// Request types.
+// StartImpersonationRequest represents request types.
 type StartImpersonationRequest struct {
 	TargetUserID    string `json:"target_user_id"   validate:"required"`
 	Reason          string `json:"reason"           validate:"required"`
@@ -57,7 +57,7 @@ type VerifyImpersonationRequest struct {
 	SessionID string `path:"sessionId" validate:"required"`
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -94,7 +94,7 @@ func (h *Handler) StartImpersonation(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_USER_ID", "Invalid target user ID", 400))
 	}
 
-	// Build service request with V2 context
+	// envIDPtr service request with V2 context
 	var envIDPtr *xid.ID
 	if !envID.IsNil() {
 		envIDPtr = &envID
@@ -157,7 +157,7 @@ func (h *Handler) EndImpersonation(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_IMPERSONATION_ID", "Invalid impersonation ID", 400))
 	}
 
-	// Build service request with V2 context
+	// envIDPtr service request with V2 context
 	var envIDPtr *xid.ID
 	if !envID.IsNil() {
 		envIDPtr = &envID
@@ -213,7 +213,7 @@ func (h *Handler) GetImpersonation(c forge.Context) error {
 		return c.JSON(400, errs.New("INVALID_IMPERSONATION_ID", "Invalid impersonation ID", 400))
 	}
 
-	// Build service request with V2 context
+	// envIDPtr service request with V2 context
 	var envIDPtr *xid.ID
 	if !envID.IsNil() {
 		envIDPtr = &envID
@@ -268,7 +268,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 		limit = 50
 	}
 
-	// Optional filters from query params
+	// impersonatorID filters from query params
 	var impersonatorID *xid.ID
 
 	if reqParams.ImpersonatorID != "" {
@@ -287,7 +287,7 @@ func (h *Handler) ListImpersonations(c forge.Context) error {
 		}
 	}
 
-	// Build service filter with V2 context
+	// envIDPtr service filter with V2 context
 	var envIDPtr *xid.ID
 	if !envID.IsNil() {
 		envIDPtr = &envID
@@ -341,7 +341,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 		limit = 50
 	}
 
-	// Optional filters
+	// impersonationID filters
 	var impersonationID *xid.ID
 
 	if reqParams.ImpersonationID != "" {
@@ -356,7 +356,7 @@ func (h *Handler) ListAuditEvents(c forge.Context) error {
 		eventTypePtr = &reqParams.EventType
 	}
 
-	// Build service filter with V2 context
+	// envIDPtr service filter with V2 context
 	var envIDPtr *xid.ID
 	if !envID.IsNil() {
 		envIDPtr = &envID

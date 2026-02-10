@@ -8,7 +8,7 @@ import (
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // calculateDateRange converts "7d", "30d", "90d" to start/end dates.

@@ -16,7 +16,7 @@ type OrganizationHandler struct {
 	plugin     *Plugin // Reference to plugin for notification sending
 }
 
-// Handler-level request types with path parameters.
+// CreateOrganizationHandlerRequest Handler-level request types with path parameters.
 type CreateOrganizationHandlerRequest struct {
 	organization.CreateOrganizationRequest
 }
@@ -102,7 +102,7 @@ type DeleteTeamRequest struct {
 }
 
 // Response types
-// Use shared response type.
+// MessageResponse shared response type.
 type MessageResponse = responses.MessageResponse
 
 type MembersResponse struct {
@@ -445,7 +445,7 @@ func (h *OrganizationHandler) InviteMember(c forge.Context) error {
 			if userSvc != nil {
 				inviter, err := userSvc.FindByID(ctx, userID)
 				if err == nil {
-					// Send invitation notification (errors are logged, not returned)
+					// _ invitation notification (errors are logged, not returned)
 					_ = h.plugin.SendInvitationNotification(ctx, invitation, inviter, org)
 				}
 			}
@@ -504,7 +504,7 @@ func (h *OrganizationHandler) RemoveMember(c forge.Context) error {
 		return c.JSON(400, errs.BadRequest("invalid member ID"))
 	}
 
-	// Permission check is handled in the service layer (RemoveMember checks admin/owner)
+	// err check is handled in the service layer (RemoveMember checks admin/owner)
 	err = h.orgService.RemoveMember(ctx, memberID, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))
@@ -708,7 +708,7 @@ func (h *OrganizationHandler) DeleteTeam(c forge.Context) error {
 		return c.JSON(404, errs.NotFound("team not found"))
 	}
 
-	// Permission check is handled in the service layer (DeleteTeam checks admin/owner)
+	// err check is handled in the service layer (DeleteTeam checks admin/owner)
 	err = h.orgService.DeleteTeam(ctx, teamID, userID)
 	if err != nil {
 		return c.JSON(500, errs.InternalError(err))

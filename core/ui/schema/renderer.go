@@ -93,13 +93,6 @@ func (r *Renderer) renderSectionWithOpts(section *Section, opts renderOptions) g
 	}
 
 	// Build section header
-	var headerContent []g.Node
-	if section.Icon != "" {
-		headerContent = append(headerContent, r.renderIcon(section.Icon))
-	}
-
-	headerContent = append(headerContent, g.Text(section.Title))
-
 	header := card.Header(
 		card.Title(section.Title),
 		g.If(section.Description != "", card.Description(section.Description)),

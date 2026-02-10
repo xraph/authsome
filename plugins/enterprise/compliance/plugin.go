@@ -74,10 +74,10 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		return errs.InternalServerErrorWithMessage("service registry not available")
 	}
 
-	// Load configuration from Forge config manager
+	// config configuration from Forge config manager
 	var config Config
 	if err := configManager.Bind("auth.compliance", &config); err != nil {
-		// Use defaults if binding fails
+		// config defaults if binding fails
 		config = *DefaultConfig()
 	}
 
@@ -142,7 +142,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	complianceGroup := router.Group(p.config.Dashboard.Path)
 	{
 		// Profiles
-		complianceGroup.POST("/profiles", p.handler.CreateProfile,
+		if err := complianceGroup.POST("/profiles", p.handler.CreateProfile,
 			forge.WithName("compliance.profiles.create"),
 			forge.WithSummary("Create compliance profile"),
 			forge.WithDescription("Create a new compliance profile for an app"),
@@ -150,8 +150,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.POST("/profiles/from-template", p.handler.CreateProfileFromTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.POST("/profiles/from-template", p.handler.CreateProfileFromTemplate,
 			forge.WithName("compliance.profiles.create.template"),
 			forge.WithSummary("Create profile from template"),
 			forge.WithDescription("Create a compliance profile from a predefined template (GDPR, HIPAA, SOC2, etc.)"),
@@ -159,22 +162,31 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.GET("/profiles/:id", p.handler.GetProfile,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/profiles/:id", p.handler.GetProfile,
 			forge.WithName("compliance.profiles.get"),
 			forge.WithSummary("Get compliance profile"),
 			forge.WithDescription("Retrieve a specific compliance profile by ID"),
 			forge.WithResponseSchema(200, "Profile retrieved", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
-		)
-		complianceGroup.GET("/apps/:appId/profile", p.handler.GetAppProfile,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/apps/:appId/profile", p.handler.GetAppProfile,
 			forge.WithName("compliance.profiles.app"),
 			forge.WithSummary("Get app profile"),
 			forge.WithDescription("Get the compliance profile for a specific app"),
 			forge.WithResponseSchema(200, "Profile retrieved", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance", "Apps"),
-		)
-		complianceGroup.PUT("/profiles/:id", p.handler.UpdateProfile,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.PUT("/profiles/:id", p.handler.UpdateProfile,
 			forge.WithName("compliance.profiles.update"),
 			forge.WithSummary("Update compliance profile"),
 			forge.WithDescription("Update an existing compliance profile"),
@@ -182,33 +194,45 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile updated", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.DELETE("/profiles/:id", p.handler.DeleteProfile,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.DELETE("/profiles/:id", p.handler.DeleteProfile,
 			forge.WithName("compliance.profiles.delete"),
 			forge.WithSummary("Delete compliance profile"),
 			forge.WithDescription("Delete a compliance profile"),
 			forge.WithResponseSchema(200, "Profile deleted", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Status and Dashboard
-		complianceGroup.GET("/apps/:appId/status", p.handler.GetComplianceStatus,
+		if err := complianceGroup.GET("/apps/:appId/status", p.handler.GetComplianceStatus,
 			forge.WithName("compliance.status"),
 			forge.WithSummary("Get compliance status"),
 			forge.WithDescription("Get overall compliance status for an app"),
 			forge.WithResponseSchema(200, "Status retrieved", ComplianceStatusDetailsResponse{}),
 			forge.WithTags("Compliance", "Apps"),
-		)
-		complianceGroup.GET("/apps/:appId/dashboard", p.handler.GetDashboard,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/apps/:appId/dashboard", p.handler.GetDashboard,
 			forge.WithName("compliance.dashboard"),
 			forge.WithSummary("Get compliance dashboard"),
 			forge.WithDescription("Get compliance dashboard metrics and overview for an app"),
 			forge.WithResponseSchema(200, "Dashboard retrieved", ComplianceDashboardResponse{}),
 			forge.WithTags("Compliance", "Apps"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Checks
-		complianceGroup.POST("/profiles/:profileId/checks", p.handler.RunCheck,
+		if err := complianceGroup.POST("/profiles/:profileId/checks", p.handler.RunCheck,
 			forge.WithName("compliance.checks.run"),
 			forge.WithSummary("Run compliance check"),
 			forge.WithDescription("Execute a compliance check for a profile"),
@@ -216,38 +240,53 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Check started", ComplianceCheckResponse{}),
 			forge.WithTags("Compliance", "Checks"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.GET("/profiles/:profileId/checks", p.handler.ListChecks,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/profiles/:profileId/checks", p.handler.ListChecks,
 			forge.WithName("compliance.checks.list"),
 			forge.WithSummary("List compliance checks"),
 			forge.WithDescription("List all compliance checks for a profile"),
 			forge.WithResponseSchema(200, "Checks retrieved", ComplianceChecksResponse{}),
 			forge.WithTags("Compliance", "Checks"),
-		)
-		complianceGroup.GET("/checks/:id", p.handler.GetCheck,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/checks/:id", p.handler.GetCheck,
 			forge.WithName("compliance.checks.get"),
 			forge.WithSummary("Get compliance check"),
 			forge.WithDescription("Retrieve details of a specific compliance check"),
 			forge.WithResponseSchema(200, "Check retrieved", ComplianceCheckResponse{}),
 			forge.WithTags("Compliance", "Checks"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Violations
-		complianceGroup.GET("/apps/:appId/violations", p.handler.ListViolations,
+		if err := complianceGroup.GET("/apps/:appId/violations", p.handler.ListViolations,
 			forge.WithName("compliance.violations.list"),
 			forge.WithSummary("List compliance violations"),
 			forge.WithDescription("List all compliance violations for an app"),
 			forge.WithResponseSchema(200, "Violations retrieved", ComplianceViolationsResponse{}),
 			forge.WithTags("Compliance", "Violations"),
-		)
-		complianceGroup.GET("/violations/:id", p.handler.GetViolation,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/violations/:id", p.handler.GetViolation,
 			forge.WithName("compliance.violations.get"),
 			forge.WithSummary("Get compliance violation"),
 			forge.WithDescription("Retrieve details of a specific compliance violation"),
 			forge.WithResponseSchema(200, "Violation retrieved", ComplianceViolationResponse{}),
 			forge.WithTags("Compliance", "Violations"),
-		)
-		complianceGroup.PUT("/violations/:id/resolve", p.handler.ResolveViolation,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.PUT("/violations/:id/resolve", p.handler.ResolveViolation,
 			forge.WithName("compliance.violations.resolve"),
 			forge.WithSummary("Resolve compliance violation"),
 			forge.WithDescription("Mark a compliance violation as resolved"),
@@ -255,10 +294,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Violation resolved", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Violations"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Reports
-		complianceGroup.POST("/apps/:appId/reports", p.handler.GenerateReport,
+		if err := complianceGroup.POST("/apps/:appId/reports", p.handler.GenerateReport,
 			forge.WithName("compliance.reports.generate"),
 			forge.WithSummary("Generate compliance report"),
 			forge.WithDescription("Generate a compliance report for an app"),
@@ -266,31 +308,43 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Report generated", ComplianceReportResponse{}),
 			forge.WithTags("Compliance", "Reports"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.GET("/apps/:appId/reports", p.handler.ListReports,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/apps/:appId/reports", p.handler.ListReports,
 			forge.WithName("compliance.reports.list"),
 			forge.WithSummary("List compliance reports"),
 			forge.WithDescription("List all compliance reports for an app"),
 			forge.WithResponseSchema(200, "Reports retrieved", ComplianceReportsResponse{}),
 			forge.WithTags("Compliance", "Reports"),
-		)
-		complianceGroup.GET("/reports/:id", p.handler.GetReport,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/reports/:id", p.handler.GetReport,
 			forge.WithName("compliance.reports.get"),
 			forge.WithSummary("Get compliance report"),
 			forge.WithDescription("Retrieve a specific compliance report"),
 			forge.WithResponseSchema(200, "Report retrieved", ComplianceReportResponse{}),
 			forge.WithTags("Compliance", "Reports"),
-		)
-		complianceGroup.GET("/reports/:id/download", p.handler.DownloadReport,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/reports/:id/download", p.handler.DownloadReport,
 			forge.WithName("compliance.reports.download"),
 			forge.WithSummary("Download compliance report"),
 			forge.WithDescription("Download a compliance report file (PDF, CSV, JSON)"),
 			forge.WithResponseSchema(200, "Report file", ComplianceReportFileResponse{}),
 			forge.WithTags("Compliance", "Reports"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Evidence
-		complianceGroup.POST("/apps/:appId/evidence", p.handler.CreateEvidence,
+		if err := complianceGroup.POST("/apps/:appId/evidence", p.handler.CreateEvidence,
 			forge.WithName("compliance.evidence.create"),
 			forge.WithSummary("Create evidence record"),
 			forge.WithDescription("Create a new compliance evidence record for an app"),
@@ -298,31 +352,43 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Evidence created", ComplianceEvidenceResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.GET("/apps/:appId/evidence", p.handler.ListEvidence,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/apps/:appId/evidence", p.handler.ListEvidence,
 			forge.WithName("compliance.evidence.list"),
 			forge.WithSummary("List evidence records"),
 			forge.WithDescription("List all compliance evidence records for an app"),
 			forge.WithResponseSchema(200, "Evidence retrieved", ComplianceEvidencesResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
-		)
-		complianceGroup.GET("/evidence/:id", p.handler.GetEvidence,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/evidence/:id", p.handler.GetEvidence,
 			forge.WithName("compliance.evidence.get"),
 			forge.WithSummary("Get evidence record"),
 			forge.WithDescription("Retrieve a specific compliance evidence record"),
 			forge.WithResponseSchema(200, "Evidence retrieved", ComplianceEvidenceResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
-		)
-		complianceGroup.DELETE("/evidence/:id", p.handler.DeleteEvidence,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.DELETE("/evidence/:id", p.handler.DeleteEvidence,
 			forge.WithName("compliance.evidence.delete"),
 			forge.WithSummary("Delete evidence record"),
 			forge.WithDescription("Delete a compliance evidence record"),
 			forge.WithResponseSchema(200, "Evidence deleted", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Policies
-		complianceGroup.POST("/apps/:appId/policies", p.handler.CreatePolicy,
+		if err := complianceGroup.POST("/apps/:appId/policies", p.handler.CreatePolicy,
 			forge.WithName("compliance.policies.create"),
 			forge.WithSummary("Create compliance policy"),
 			forge.WithDescription("Create a new compliance policy document for an app"),
@@ -330,22 +396,31 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Policy created", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.GET("/apps/:appId/policies", p.handler.ListPolicies,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/apps/:appId/policies", p.handler.ListPolicies,
 			forge.WithName("compliance.policies.list"),
 			forge.WithSummary("List compliance policies"),
 			forge.WithDescription("List all compliance policies for an app"),
 			forge.WithResponseSchema(200, "Policies retrieved", CompliancePoliciesResponse{}),
 			forge.WithTags("Compliance", "Policies"),
-		)
-		complianceGroup.GET("/policies/:id", p.handler.GetPolicy,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/policies/:id", p.handler.GetPolicy,
 			forge.WithName("compliance.policies.get"),
 			forge.WithSummary("Get compliance policy"),
 			forge.WithDescription("Retrieve a specific compliance policy"),
 			forge.WithResponseSchema(200, "Policy retrieved", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
-		)
-		complianceGroup.PUT("/policies/:id", p.handler.UpdatePolicy,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.PUT("/policies/:id", p.handler.UpdatePolicy,
 			forge.WithName("compliance.policies.update"),
 			forge.WithSummary("Update compliance policy"),
 			forge.WithDescription("Update an existing compliance policy"),
@@ -353,17 +428,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Policy updated", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.DELETE("/policies/:id", p.handler.DeletePolicy,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.DELETE("/policies/:id", p.handler.DeletePolicy,
 			forge.WithName("compliance.policies.delete"),
 			forge.WithSummary("Delete compliance policy"),
 			forge.WithDescription("Delete a compliance policy"),
 			forge.WithResponseSchema(200, "Policy deleted", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Policies"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Training
-		complianceGroup.POST("/apps/:appId/training", p.handler.CreateTraining,
+		if err := complianceGroup.POST("/apps/:appId/training", p.handler.CreateTraining,
 			forge.WithName("compliance.training.create"),
 			forge.WithSummary("Create training module"),
 			forge.WithDescription("Create a compliance training module for an app"),
@@ -371,22 +452,31 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Training created", ComplianceTrainingResponse{}),
 			forge.WithTags("Compliance", "Training"),
 			forge.WithValidation(true),
-		)
-		complianceGroup.GET("/apps/:appId/training", p.handler.ListTraining,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/apps/:appId/training", p.handler.ListTraining,
 			forge.WithName("compliance.training.list"),
 			forge.WithSummary("List training modules"),
 			forge.WithDescription("List all compliance training modules for an app"),
 			forge.WithResponseSchema(200, "Training retrieved", ComplianceTrainingsResponse{}),
 			forge.WithTags("Compliance", "Training"),
-		)
-		complianceGroup.GET("/users/:userId/training", p.handler.GetUserTraining,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/users/:userId/training", p.handler.GetUserTraining,
 			forge.WithName("compliance.training.user"),
 			forge.WithSummary("Get user training status"),
 			forge.WithDescription("Get compliance training status for a user"),
 			forge.WithResponseSchema(200, "Training status retrieved", ComplianceUserTrainingResponse{}),
 			forge.WithTags("Compliance", "Training"),
-		)
-		complianceGroup.PUT("/training/:id/complete", p.handler.CompleteTraining,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.PUT("/training/:id/complete", p.handler.CompleteTraining,
 			forge.WithName("compliance.training.complete"),
 			forge.WithRequestSchema(CompleteTrainingRequest{}),
 			forge.WithSummary("Complete training"),
@@ -394,23 +484,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Training completed", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Training"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Templates
-		complianceGroup.GET("/templates", p.handler.ListTemplates,
+		if err := complianceGroup.GET("/templates", p.handler.ListTemplates,
 			forge.WithName("compliance.templates.list"),
 			forge.WithSummary("List compliance templates"),
 			forge.WithDescription("List available compliance templates (GDPR, HIPAA, SOC2, PCI-DSS, etc.)"),
 			forge.WithResponseSchema(200, "Templates retrieved", ComplianceTemplatesResponse{}),
 			forge.WithTags("Compliance", "Templates"),
-		)
-		complianceGroup.GET("/templates/:standard", p.handler.GetTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := complianceGroup.GET("/templates/:standard", p.handler.GetTemplate,
 			forge.WithName("compliance.templates.get"),
 			forge.WithSummary("Get compliance template"),
 			forge.WithDescription("Retrieve a specific compliance template by standard name"),
 			forge.WithResponseSchema(200, "Template retrieved", ComplianceTemplateResponse{}),
 			forge.WithTags("Compliance", "Templates"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -535,7 +634,7 @@ func (p *Plugin) PolicyEngine() *PolicyEngine {
 	return p.policyEngine
 }
 
-// DTOs for compliance routes.
+// ComplianceStatusResponse for compliance routes.
 type ComplianceStatusResponse struct {
 	Status string `example:"success" json:"status"`
 }

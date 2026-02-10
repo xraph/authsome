@@ -8,7 +8,7 @@ import (
 
 // Domain errors for the subscription plugin.
 var (
-	// Plan errors.
+	// ErrPlanNotFound is returned when a plan is not found.
 	ErrPlanNotFound           = errors.New("plan not found")
 	ErrPlanAlreadyExists      = errors.New("plan with this slug already exists")
 	ErrPlanNotActive          = errors.New("plan is not active")
@@ -17,7 +17,7 @@ var (
 	ErrInvalidBillingPattern  = errors.New("invalid billing pattern")
 	ErrInvalidBillingInterval = errors.New("invalid billing interval")
 
-	// Subscription errors.
+	// ErrSubscriptionNotFound is returned when a subscription is not found.
 	ErrSubscriptionNotFound      = errors.New("subscription not found")
 	ErrSubscriptionAlreadyExists = errors.New("organization already has an active subscription")
 	ErrSubscriptionNotActive     = errors.New("subscription is not active")
@@ -26,7 +26,7 @@ var (
 	ErrCannotDowngrade           = errors.New("cannot downgrade subscription with current usage")
 	ErrInvalidQuantity           = errors.New("invalid subscription quantity")
 
-	// Add-on errors.
+	// ErrAddOnNotFound is returned when an add-on is not found.
 	ErrAddOnNotFound        = errors.New("add-on not found")
 	ErrAddOnAlreadyExists   = errors.New("add-on with this slug already exists")
 	ErrAddOnNotActive       = errors.New("add-on is not active")
@@ -35,35 +35,35 @@ var (
 	ErrAddOnNotAttached     = errors.New("add-on is not attached to subscription")
 	ErrAddOnMaxQuantity     = errors.New("add-on maximum quantity exceeded")
 
-	// Invoice errors.
+	// ErrInvoiceNotFound is returned when an invoice is not found.
 	ErrInvoiceNotFound    = errors.New("invoice not found")
 	ErrInvoiceAlreadyPaid = errors.New("invoice is already paid")
 	ErrInvoiceVoided      = errors.New("invoice has been voided")
 	ErrInvoiceNotOpen     = errors.New("invoice is not open for payment")
 
-	// Usage errors.
+	// ErrUsageRecordNotFound is returned when a usage record is not found.
 	ErrUsageRecordNotFound  = errors.New("usage record not found")
 	ErrDuplicateUsageRecord = errors.New("duplicate usage record (idempotency key)")
 	ErrInvalidUsageMetric   = errors.New("invalid usage metric key")
 	ErrInvalidUsageAction   = errors.New("invalid usage action")
 
-	// Payment method errors.
+	// ErrPaymentMethodNotFound method errors.
 	ErrPaymentMethodNotFound      = errors.New("payment method not found")
 	ErrPaymentMethodRequired      = errors.New("payment method is required")
 	ErrPaymentMethodExpired       = errors.New("payment method is expired")
 	ErrDefaultPaymentMethodDelete = errors.New("cannot delete default payment method")
 
-	// Customer errors.
+	// ErrCustomerNotFound is returned when a customer is not found.
 	ErrCustomerNotFound      = errors.New("customer not found")
 	ErrCustomerAlreadyExists = errors.New("customer already exists for organization")
 
-	// Provider errors.
+	// ErrProviderNotConfigured errors.
 	ErrProviderNotConfigured   = errors.New("payment provider is not configured")
 	ErrProviderAPIError        = errors.New("payment provider API error")
 	ErrWebhookSignatureInvalid = errors.New("invalid webhook signature")
 	ErrWebhookEventUnhandled   = errors.New("webhook event not handled")
 
-	// Feature/limit errors.
+	// ErrFeatureLimitExceeded is returned when a feature limit is exceeded.
 	ErrFeatureLimitExceeded = errors.New("feature limit exceeded")
 	ErrSeatLimitExceeded    = errors.New("seat limit exceeded")
 	ErrSubscriptionRequired = errors.New("subscription is required")
@@ -80,7 +80,7 @@ var (
 	ErrFeatureGrantNotFound = errors.New("feature grant not found")
 	ErrFeatureUsageNotFound = errors.New("feature usage record not found")
 
-	// General errors.
+	// ErrInvalidCurrency errors.
 	ErrInvalidCurrency = errors.New("invalid currency code")
 	ErrInvalidAppID    = errors.New("invalid app ID")
 	ErrInvalidOrgID    = errors.New("invalid organization ID")

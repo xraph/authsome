@@ -175,7 +175,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 		// Export plan features (legacy format)
 		for _, feature := range plan.Features {
 			var value any
-			json.Unmarshal([]byte(feature.Value), &value)
+			_ = json.Unmarshal([]byte(feature.Value), &value)
 			exportPlan.Features = append(exportPlan.Features, ExportPlanFeature{
 				FeatureKey: feature.Key,
 				Value:      value,
@@ -186,7 +186,7 @@ func (s *ExportImportService) ExportFeaturesAndPlans(ctx context.Context, appID 
 		for _, link := range plan.FeatureLinks {
 			if link.Feature != nil {
 				var value any
-				json.Unmarshal([]byte(link.Value), &value)
+				_ = json.Unmarshal([]byte(link.Value), &value)
 
 				// Check if already exported (prefer feature links)
 				found := false

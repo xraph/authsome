@@ -1,4 +1,3 @@
-// Package core defines the core domain types for the subscription plugin.
 package core
 
 import (

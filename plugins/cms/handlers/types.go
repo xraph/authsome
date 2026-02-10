@@ -2,7 +2,7 @@ package handlers
 
 // Request DTOs for CMS handlers
 
-// Content Type DTOs.
+// ListContentTypesRequest is the request DTO for listing content types.
 type ListContentTypesRequest struct {
 	Search    string `query:"search,omitempty"`
 	SortBy    string `query:"sortBy,omitempty"`
@@ -57,7 +57,7 @@ type ReorderFieldsRequest struct {
 	Slug string `path:"slug" validate:"required"`
 }
 
-// Content Entry DTOs.
+// ListEntriesRequest is the request DTO for listing entries.
 type ListEntriesRequest struct {
 	TypeSlug  string `path:"typeSlug"             validate:"required"`
 	Search    string `query:"search,omitempty"`
@@ -130,7 +130,7 @@ type GetEntryStatsRequest struct {
 	TypeSlug string `path:"typeSlug" validate:"required"`
 }
 
-// Revision DTOs.
+// ListRevisionsRequest is the request DTO for listing revisions.
 type ListRevisionsRequest struct {
 	TypeSlug string `path:"typeSlug"            validate:"required"`
 	EntryID  string `path:"entryId"             validate:"required"`

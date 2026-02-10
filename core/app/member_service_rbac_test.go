@@ -8,6 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/rbac"
 	"github.com/xraph/authsome/schema"
@@ -480,15 +481,15 @@ func TestMemberService_CreateMember_SyncsWithRBAC(t *testing.T) {
 		ID:     member.ID,
 		AppID:  appID,
 		UserID: userID,
-		Role:   schema.MemberRole(MemberRoleAdmin),
-		Status: schema.MemberStatus(MemberStatusActive),
+		Role:   MemberRoleAdmin,
+		Status: MemberStatusActive,
 	}, nil)
 
 	// Execute
 	created, err := service.CreateMember(ctx, member)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, created)
 	assert.Equal(t, MemberRoleAdmin, created.Role)
 
@@ -552,7 +553,7 @@ func TestMemberService_CreateMember_FirstUserPromotedToOwner(t *testing.T) {
 
 	// Expected member creation (with owner role!)
 	memberRepo.On("CreateMember", ctx, mock.MatchedBy(func(m *schema.Member) bool {
-		return m.Role == schema.MemberRole(MemberRoleOwner)
+		return m.Role == MemberRoleOwner
 	})).Return(nil)
 
 	// Expected member retrieval
@@ -560,15 +561,15 @@ func TestMemberService_CreateMember_FirstUserPromotedToOwner(t *testing.T) {
 		ID:     member.ID,
 		AppID:  platformAppID,
 		UserID: userID,
-		Role:   schema.MemberRole(MemberRoleOwner), // Promoted!
-		Status: schema.MemberStatus(MemberStatusActive),
+		Role:   MemberRoleOwner, // Promoted!
+		Status: MemberStatusActive,
 	}, nil)
 
 	// Execute
 	created, err := service.CreateMember(ctx, member)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, created)
 	assert.Equal(t, MemberRoleOwner, created.Role) // Should be promoted to owner
 
@@ -625,7 +626,7 @@ func TestMemberService_CreateMember_RollsBackOnRBACFailure(t *testing.T) {
 	created, err := service.CreateMember(ctx, member)
 
 	// Assert - should fail and rollback
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, created)
 	assert.Contains(t, err.Error(), "failed to sync role to RBAC")
 
@@ -652,7 +653,7 @@ func TestMemberService_UpdateMember_SyncsRoleChange(t *testing.T) {
 		ID:     memberID,
 		AppID:  appID,
 		UserID: userID,
-		Role:   schema.MemberRole(MemberRoleMember),
+		Role:   MemberRoleMember,
 	}
 
 	updatedMember := &Member{
@@ -689,7 +690,7 @@ func TestMemberService_UpdateMember_SyncsRoleChange(t *testing.T) {
 	err := service.UpdateMember(ctx, updatedMember)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify all expectations
 	memberRepo.AssertExpectations(t)
@@ -710,7 +711,7 @@ func TestMemberService_UpdateMember_SkipsRBACIfRoleUnchanged(t *testing.T) {
 		ID:     memberID,
 		AppID:  appID,
 		UserID: userID,
-		Role:   schema.MemberRole(MemberRoleAdmin),
+		Role:   MemberRoleAdmin,
 	}
 
 	updatedMember := &Member{
@@ -732,7 +733,7 @@ func TestMemberService_UpdateMember_SkipsRBACIfRoleUnchanged(t *testing.T) {
 	err := service.UpdateMember(ctx, updatedMember)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify no RBAC calls were made
 	roleRepo.AssertNotCalled(t, "FindByNameAndApp")
@@ -759,7 +760,7 @@ func TestMemberService_DeleteMember_CleansUpRBAC(t *testing.T) {
 		ID:     memberID,
 		AppID:  appID,
 		UserID: userID,
-		Role:   schema.MemberRole(MemberRoleAdmin),
+		Role:   MemberRoleAdmin,
 	}
 
 	// Expected: Find member before deletion
@@ -780,7 +781,7 @@ func TestMemberService_DeleteMember_CleansUpRBAC(t *testing.T) {
 	err := service.DeleteMember(ctx, memberID)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify all expectations
 	memberRepo.AssertExpectations(t)
@@ -800,7 +801,7 @@ func TestMemberService_DeleteMember_ContinuesOnRBACCleanupFailure(t *testing.T) 
 		ID:     memberID,
 		AppID:  appID,
 		UserID: userID,
-		Role:   schema.MemberRole(MemberRoleAdmin),
+		Role:   MemberRoleAdmin,
 	}
 
 	// Expected: Find member before deletion
@@ -816,7 +817,7 @@ func TestMemberService_DeleteMember_ContinuesOnRBACCleanupFailure(t *testing.T) 
 	err := service.DeleteMember(ctx, memberID)
 
 	// Assert - no error because member is already deleted
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify member was deleted
 	memberRepo.AssertCalled(t, "DeleteMember", ctx, memberID)
@@ -844,7 +845,7 @@ func TestMemberService_getRoleIDByName(t *testing.T) {
 	gotRoleID, err := service.getRoleIDByName(ctx, appID, "admin")
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, roleID, gotRoleID)
 	roleRepo.AssertExpectations(t)
 }
@@ -863,7 +864,7 @@ func TestMemberService_getRoleIDByName_RoleNotFound(t *testing.T) {
 	gotRoleID, err := service.getRoleIDByName(ctx, appID, "admin")
 
 	// Assert
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.True(t, gotRoleID.IsNil())
 	assert.Contains(t, err.Error(), "role admin not found")
 	roleRepo.AssertExpectations(t)

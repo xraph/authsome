@@ -7,7 +7,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/schema"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // RoleFormData contains data for rendering the role form.

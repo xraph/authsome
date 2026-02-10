@@ -291,14 +291,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	RegisterRoutes(router, handler)
 
 	// Add a test endpoint to verify MFA is loaded
-	router.GET("/mfa/ping", func(c forge.Context) error {
+	if err := router.GET("/mfa/ping", func(c forge.Context) error {
 		return c.JSON(200, map[string]any{
 			"plugin":            "mfa",
 			"version":           "1.0.0",
 			"enabled":           p.config.Enabled,
 			"available_factors": p.adapterRegistry.GetAvailable(),
 		})
-	})
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }

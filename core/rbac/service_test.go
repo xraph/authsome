@@ -8,6 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/schema"
 )
@@ -178,35 +179,35 @@ func TestService_AssignRoleToUser(t *testing.T) {
 		mockUserRoleRepo.On("Assign", ctx, userID, roleID, orgID).Return(nil)
 
 		err := service.AssignRoleToUser(ctx, userID, roleID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
 	t.Run("nil repository", func(t *testing.T) {
 		service := &Service{}
 		err := service.AssignRoleToUser(ctx, xid.New(), xid.New(), xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not initialized")
 	})
 
 	t.Run("invalid user ID", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.AssignRoleToUser(ctx, xid.ID{}, xid.New(), xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "user_id")
 	})
 
 	t.Run("invalid role ID", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.AssignRoleToUser(ctx, xid.New(), xid.ID{}, xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "role_id")
 	})
 
 	t.Run("invalid org ID", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.AssignRoleToUser(ctx, xid.New(), xid.New(), xid.ID{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "organization_id")
 	})
 }
@@ -225,14 +226,14 @@ func TestService_AssignRolesToUser(t *testing.T) {
 		mockUserRoleRepo.On("AssignBatch", ctx, userID, roleIDs, orgID).Return(nil)
 
 		err := service.AssignRolesToUser(ctx, userID, roleIDs, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
 	t.Run("empty role IDs", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.AssignRolesToUser(ctx, xid.New(), []xid.ID{}, xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at least one role_id")
 	})
 
@@ -240,7 +241,7 @@ func TestService_AssignRolesToUser(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		roleIDs := []xid.ID{xid.New(), xid.ID{}, xid.New()}
 		err := service.AssignRolesToUser(ctx, xid.New(), roleIDs, xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "role_id at index")
 	})
 }
@@ -259,7 +260,7 @@ func TestService_AssignRoleToUsers(t *testing.T) {
 		mockUserRoleRepo.On("AssignBulk", ctx, userIDs, roleID, orgID).Return(nil, nil)
 
 		result, err := service.AssignRoleToUsers(ctx, userIDs, roleID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, 3, result.SuccessCount)
 		assert.Equal(t, 0, result.FailureCount)
@@ -280,7 +281,7 @@ func TestService_AssignRoleToUsers(t *testing.T) {
 		mockUserRoleRepo.On("AssignBulk", ctx, userIDs, roleID, orgID).Return(errors, nil)
 
 		result, err := service.AssignRoleToUsers(ctx, userIDs, roleID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, 2, result.SuccessCount)
 		assert.Equal(t, 1, result.FailureCount)
@@ -291,7 +292,7 @@ func TestService_AssignRoleToUsers(t *testing.T) {
 	t.Run("empty user IDs", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		result, err := service.AssignRoleToUsers(ctx, []xid.ID{}, xid.New(), xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "at least one user_id")
 	})
@@ -311,14 +312,14 @@ func TestService_AssignAppLevelRole(t *testing.T) {
 		mockUserRoleRepo.On("AssignAppLevel", ctx, userID, roleID, appID).Return(nil)
 
 		err := service.AssignAppLevelRole(ctx, userID, roleID, appID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
 	t.Run("invalid app ID", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.AssignAppLevelRole(ctx, xid.New(), xid.New(), xid.ID{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "app_id")
 	})
 }
@@ -339,14 +340,14 @@ func TestService_UnassignRoleFromUser(t *testing.T) {
 		mockUserRoleRepo.On("Unassign", ctx, userID, roleID, orgID).Return(nil)
 
 		err := service.UnassignRoleFromUser(ctx, userID, roleID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
 	t.Run("nil repository", func(t *testing.T) {
 		service := &Service{}
 		err := service.UnassignRoleFromUser(ctx, xid.New(), xid.New(), xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not initialized")
 	})
 }
@@ -365,7 +366,7 @@ func TestService_UnassignRolesFromUser(t *testing.T) {
 		mockUserRoleRepo.On("UnassignBatch", ctx, userID, roleIDs, orgID).Return(nil)
 
 		err := service.UnassignRolesFromUser(ctx, userID, roleIDs, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
@@ -384,7 +385,7 @@ func TestService_UnassignRoleFromUsers(t *testing.T) {
 		mockUserRoleRepo.On("UnassignBulk", ctx, userIDs, roleID, orgID).Return(nil, nil)
 
 		result, err := service.UnassignRoleFromUsers(ctx, userIDs, roleID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, 2, result.SuccessCount)
 		assert.Equal(t, 0, result.FailureCount)
@@ -405,7 +406,7 @@ func TestService_UnassignRoleFromUsers(t *testing.T) {
 		mockUserRoleRepo.On("UnassignBulk", ctx, userIDs, roleID, orgID).Return(errors, nil)
 
 		result, err := service.UnassignRoleFromUsers(ctx, userIDs, roleID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, 1, result.SuccessCount)
 		assert.Equal(t, 1, result.FailureCount)
@@ -426,7 +427,7 @@ func TestService_ClearUserRolesInOrg(t *testing.T) {
 		mockUserRoleRepo.On("ClearUserRolesInOrg", ctx, userID, orgID).Return(nil)
 
 		err := service.ClearUserRolesInOrg(ctx, userID, orgID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
@@ -444,7 +445,7 @@ func TestService_ClearUserRolesInApp(t *testing.T) {
 		mockUserRoleRepo.On("ClearUserRolesInApp", ctx, userID, appID).Return(nil)
 
 		err := service.ClearUserRolesInApp(ctx, userID, appID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
@@ -466,7 +467,7 @@ func TestService_TransferUserRoles(t *testing.T) {
 		mockUserRoleRepo.On("TransferRoles", ctx, userID, sourceOrgID, targetOrgID, roleIDs).Return(nil)
 
 		err := service.TransferUserRoles(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
@@ -481,21 +482,21 @@ func TestService_TransferUserRoles(t *testing.T) {
 		mockUserRoleRepo.On("TransferRoles", ctx, userID, sourceOrgID, targetOrgID, []xid.ID{}).Return(nil)
 
 		err := service.TransferUserRoles(ctx, userID, sourceOrgID, targetOrgID, []xid.ID{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
 	t.Run("invalid source org", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.TransferUserRoles(ctx, xid.New(), xid.ID{}, xid.New(), []xid.ID{xid.New()})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "source org")
 	})
 
 	t.Run("invalid target org", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.TransferUserRoles(ctx, xid.New(), xid.New(), xid.ID{}, []xid.ID{xid.New()})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "target org")
 	})
 }
@@ -515,7 +516,7 @@ func TestService_CopyUserRoles(t *testing.T) {
 		mockUserRoleRepo.On("CopyRoles", ctx, userID, sourceOrgID, targetOrgID, roleIDs).Return(nil)
 
 		err := service.CopyUserRoles(ctx, userID, sourceOrgID, targetOrgID, roleIDs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
@@ -534,7 +535,7 @@ func TestService_ReplaceUserRoles(t *testing.T) {
 		mockUserRoleRepo.On("ReplaceUserRoles", ctx, userID, orgID, newRoleIDs).Return(nil)
 
 		err := service.ReplaceUserRoles(ctx, userID, orgID, newRoleIDs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
@@ -548,7 +549,7 @@ func TestService_ReplaceUserRoles(t *testing.T) {
 		mockUserRoleRepo.On("ReplaceUserRoles", ctx, userID, orgID, []xid.ID{}).Return(nil)
 
 		err := service.ReplaceUserRoles(ctx, userID, orgID, []xid.ID{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
@@ -581,7 +582,7 @@ func TestService_SyncRolesBetweenOrgs(t *testing.T) {
 		mockUserRoleRepo.On("ReplaceUserRoles", ctx, userID, targetOrgID, roleIDs).Return(nil)
 
 		err := service.SyncRolesBetweenOrgs(ctx, userID, config)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
@@ -611,14 +612,14 @@ func TestService_SyncRolesBetweenOrgs(t *testing.T) {
 		mockUserRoleRepo.On("CopyRoles", ctx, userID, sourceOrgID, targetOrgID, []xid.ID{roleID1, roleID2}).Return(nil)
 
 		err := service.SyncRolesBetweenOrgs(ctx, userID, config)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 
 	t.Run("nil config", func(t *testing.T) {
 		service := &Service{userRoleRepo: new(MockUserRoleRepository)}
 		err := service.SyncRolesBetweenOrgs(ctx, xid.New(), nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "config is required")
 	})
 
@@ -640,7 +641,7 @@ func TestService_SyncRolesBetweenOrgs(t *testing.T) {
 		mockUserRoleRepo.On("ListRolesForUser", ctx, userID, &sourceOrgID).Return(sourceRoles, nil)
 
 		err := service.SyncRolesBetweenOrgs(ctx, userID, config)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid sync mode")
 	})
 
@@ -662,7 +663,7 @@ func TestService_SyncRolesBetweenOrgs(t *testing.T) {
 		mockUserRoleRepo.On("ListRolesForUser", ctx, userID, &sourceOrgID).Return([]schema.Role{}, nil)
 
 		err := service.SyncRolesBetweenOrgs(ctx, userID, config)
-		assert.NoError(t, err) // No error, just nothing to sync
+		require.NoError(t, err) // No error, just nothing to sync
 		mockUserRoleRepo.AssertExpectations(t)
 	})
 }
@@ -699,7 +700,7 @@ func TestService_GetUserRolesInOrg(t *testing.T) {
 		mockRolePermRepo.On("GetRolePermissions", ctx, roleID2).Return([]*schema.Permission{perm2}, nil)
 
 		result, err := service.GetUserRolesInOrg(ctx, userID, orgID, envID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, result, 2)
 		assert.Equal(t, "admin", result[0].Name)
 		assert.Len(t, result[0].Permissions, 1)
@@ -711,7 +712,7 @@ func TestService_GetUserRolesInOrg(t *testing.T) {
 	t.Run("nil repositories", func(t *testing.T) {
 		service := &Service{}
 		result, err := service.GetUserRolesInOrg(ctx, xid.New(), xid.New(), xid.New())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "not initialized")
 	})
@@ -722,7 +723,7 @@ func TestService_GetUserRolesInOrg(t *testing.T) {
 			rolePermissionRepo: new(MockRolePermissionRepository),
 		}
 		result, err := service.GetUserRolesInOrg(ctx, xid.New(), xid.New(), xid.ID{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "environment_id")
 	})
@@ -754,7 +755,7 @@ func TestService_GetUserRolesInApp(t *testing.T) {
 		mockRolePermRepo.On("GetRolePermissions", ctx, roleID).Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.GetUserRolesInApp(ctx, userID, appID, envID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, "admin", result[0].Name)
 		assert.Len(t, result[0].Permissions, 1)
@@ -795,7 +796,7 @@ func TestService_ListAllUserRolesInOrg(t *testing.T) {
 		mockRolePermRepo.On("GetRolePermissions", ctx, role2ID).Return([]*schema.Permission{perm2}, nil)
 
 		result, err := service.ListAllUserRolesInOrg(ctx, orgID, envID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, result, 2) // 2 users
 
 		// Verify grouping by user
@@ -833,7 +834,7 @@ func TestService_ListAllUserRolesInOrg(t *testing.T) {
 		mockUserRoleRepo.On("ListAllUserRolesInOrg", ctx, orgID, envID).Return([]schema.UserRole{}, nil)
 
 		result, err := service.ListAllUserRolesInOrg(ctx, orgID, envID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, result)
 		mockUserRoleRepo.AssertExpectations(t)
 	})
@@ -868,7 +869,7 @@ func TestService_ListAllUserRolesInApp(t *testing.T) {
 		mockRolePermRepo.On("GetRolePermissions", ctx, roleID).Return([]*schema.Permission{perm}, nil).Times(2)
 
 		result, err := service.ListAllUserRolesInApp(ctx, appID, envID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, result, 2) // 2 org assignments for same user
 
 		mockUserRoleRepo.AssertExpectations(t)

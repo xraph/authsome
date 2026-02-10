@@ -26,7 +26,7 @@ func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome) *Handler {
 	return &Handler{svc: s, rl: rls, authInst: authInst}
 }
 
-// Request types.
+// SendRequest represents request types.
 type SendRequest struct {
 	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
@@ -37,11 +37,11 @@ type VerifyRequest struct {
 	Remember bool   `example:"false"            json:"remember"`
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type VerifyResponse = responses.VerifyResponse
 
-// Plugin-specific response.
+// SendResponse Plugin-specific response.
 type SendResponse struct {
 	Status string `example:"sent"   json:"status"`
 	DevOTP string `example:"123456" json:"dev_otp,omitempty"`

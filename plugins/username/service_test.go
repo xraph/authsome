@@ -154,7 +154,7 @@ func TestValidatePassword(t *testing.T) {
 			err := svc.ValidatePassword(tt.password)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errorMsg != "" {
 					// Check if it's an AuthsomeError and verify the context contains the message
@@ -184,7 +184,7 @@ func TestValidatePassword(t *testing.T) {
 					}
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}

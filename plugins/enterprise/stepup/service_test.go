@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // Mock repository for testing.
@@ -238,7 +239,7 @@ func TestEvaluateRequirement_NoStepUpForSmallAmount(t *testing.T) {
 	result, err := service.EvaluateRequirement(context.Background(), evalCtx)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, result.Required)
 }
 
@@ -271,7 +272,7 @@ func TestEvaluateRequirement_MediumSecurityForMediumAmount(t *testing.T) {
 	result, err := service.EvaluateRequirement(context.Background(), evalCtx)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, result.Required)
 	assert.Equal(t, SecurityLevelMedium, result.SecurityLevel)
 	assert.NotEmpty(t, result.RequirementID)
@@ -307,7 +308,7 @@ func TestEvaluateRequirement_CriticalSecurityForLargeAmount(t *testing.T) {
 	result, err := service.EvaluateRequirement(context.Background(), evalCtx)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, result.Required)
 	assert.Equal(t, SecurityLevelCritical, result.SecurityLevel)
 }
@@ -341,7 +342,7 @@ func TestEvaluateRequirement_RouteMatching(t *testing.T) {
 	result, err := service.EvaluateRequirement(context.Background(), evalCtx)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, result.Required)
 	assert.Equal(t, SecurityLevelMedium, result.SecurityLevel)
 	assert.Contains(t, result.Reason, "email")
@@ -384,7 +385,7 @@ func TestEvaluateRequirement_RememberedDevice(t *testing.T) {
 	result, err := service.EvaluateRequirement(context.Background(), evalCtx)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, result.Required)
 	assert.Equal(t, "Device is remembered", result.Reason)
 }
@@ -418,7 +419,7 @@ func TestEvaluateRequirement_RiskBasedEvaluation(t *testing.T) {
 	result, err := service.EvaluateRequirement(context.Background(), evalCtx)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, result.Required)
 	assert.Equal(t, SecurityLevelHigh, result.SecurityLevel)
 	assert.Contains(t, result.Reason, "Risk-based")
@@ -464,7 +465,7 @@ func TestVerifyStepUp_Success(t *testing.T) {
 	response, err := service.VerifyStepUp(context.Background(), verifyReq)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, response.Success)
 	assert.NotEmpty(t, response.VerificationID)
 	assert.Equal(t, SecurityLevelMedium, response.SecurityLevel)
@@ -513,7 +514,7 @@ func TestVerifyStepUp_RememberDevice(t *testing.T) {
 	response, err := service.VerifyStepUp(context.Background(), verifyReq)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, response.Success)
 	assert.True(t, response.DeviceRemembered)
 }
@@ -549,7 +550,7 @@ func TestVerifyStepUp_ExpiredRequirement(t *testing.T) {
 	response, err := service.VerifyStepUp(context.Background(), verifyReq)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, response.Success)
 	assert.Contains(t, response.Error, "expired")
 }
@@ -602,14 +603,14 @@ func TestConfigValidation(t *testing.T) {
 	// Test default config
 	config := DefaultConfig()
 	err := config.Validate()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test config with zero values
 	config2 := &Config{
 		Enabled: true,
 	}
 	err = config2.Validate()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotZero(t, config2.MediumAuthWindow)
 	assert.NotZero(t, config2.HighAuthWindow)
 	assert.NotZero(t, config2.RememberDuration)

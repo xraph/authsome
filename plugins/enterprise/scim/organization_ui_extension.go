@@ -8,7 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/xraph/authsome/core/ui"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // OrganizationUIExtension implements ui.OrganizationUIExtension to extend organization pages.

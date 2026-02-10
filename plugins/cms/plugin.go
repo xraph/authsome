@@ -317,7 +317,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	cms := router.Group("/cms")
 
 	// Health check
-	cms.GET("/ping", func(c forge.Context) error {
+	if err := cms.GET("/ping", func(c forge.Context) error {
 		return c.JSON(200, map[string]string{
 			"status":  "ok",
 			"plugin":  PluginID,
@@ -328,15 +328,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("CMS health check"),
 		forge.WithDescription("Verify that the CMS plugin is loaded and working"),
 		forge.WithTags("CMS", "Health"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Field Types endpoint
-	cms.GET("/field-types", contentTypeHandler.GetFieldTypes,
+	if err := cms.GET("/field-types", contentTypeHandler.GetFieldTypes,
 		forge.WithName("cms.field_types"),
 		forge.WithSummary("List available field types"),
 		forge.WithDescription("Returns all available field types that can be used in content type definitions"),
 		forge.WithTags("CMS", "Content Types"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// ==========================================================================
 	// Content Type Routes
@@ -344,44 +350,59 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	types := cms.Group("/types")
 
 	// List content types
-	types.GET("", contentTypeHandler.ListContentTypes,
+	if err := types.GET("", contentTypeHandler.ListContentTypes,
 		forge.WithName("cms.content_types.list"),
 		forge.WithSummary("List content types"),
 		forge.WithDescription("Returns all content types in the current app/environment"),
 		forge.WithTags("CMS", "Content Types"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Create content type
-	types.POST("", contentTypeHandler.CreateContentType,
+	if err := types.POST("", contentTypeHandler.CreateContentType,
 		forge.WithName("cms.content_types.create"),
 		forge.WithSummary("Create content type"),
 		forge.WithDescription("Creates a new content type definition"),
 		forge.WithTags("CMS", "Content Types"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Get content type by slug
-	types.GET("/:slug", contentTypeHandler.GetContentType,
+	if err := types.GET("/:slug", contentTypeHandler.GetContentType,
 		forge.WithName("cms.content_types.get"),
 		forge.WithSummary("Get content type"),
 		forge.WithDescription("Returns a specific content type by its name"),
 		forge.WithTags("CMS", "Content Types"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Update content type
-	types.PUT("/:slug", contentTypeHandler.UpdateContentType,
+	if err := types.PUT("/:slug", contentTypeHandler.UpdateContentType,
 		forge.WithName("cms.content_types.update"),
 		forge.WithSummary("Update content type"),
 		forge.WithDescription("Updates an existing content type definition"),
 		forge.WithTags("CMS", "Content Types"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Delete content type
-	types.DELETE("/:slug", contentTypeHandler.DeleteContentType,
+	if err := types.DELETE("/:slug", contentTypeHandler.DeleteContentType,
 		forge.WithName("cms.content_types.delete"),
 		forge.WithSummary("Delete content type"),
 		forge.WithDescription("Deletes a content type and all its fields (entries must be deleted first)"),
 		forge.WithTags("CMS", "Content Types"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// ==========================================================================
 	// Content Field Routes
@@ -389,52 +410,70 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	fields := types.Group("/:slug/fields")
 
 	// List fields
-	fields.GET("", contentTypeHandler.ListFields,
+	if err := fields.GET("", contentTypeHandler.ListFields,
 		forge.WithName("cms.content_fields.list"),
 		forge.WithSummary("List fields"),
 		forge.WithDescription("Returns all fields for a content type"),
 		forge.WithTags("CMS", "Content Fields"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Add field
-	fields.POST("", contentTypeHandler.AddField,
+	if err := fields.POST("", contentTypeHandler.AddField,
 		forge.WithName("cms.content_fields.create"),
 		forge.WithSummary("Add field"),
 		forge.WithDescription("Adds a new field to a content type"),
 		forge.WithTags("CMS", "Content Fields"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Reorder fields
-	fields.POST("/reorder", contentTypeHandler.ReorderFields,
+	if err := fields.POST("/reorder", contentTypeHandler.ReorderFields,
 		forge.WithName("cms.content_fields.reorder"),
 		forge.WithSummary("Reorder fields"),
 		forge.WithDescription("Changes the display order of fields"),
 		forge.WithTags("CMS", "Content Fields"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Get field
-	fields.GET("/:fieldSlug", contentTypeHandler.GetField,
+	if err := fields.GET("/:fieldSlug", contentTypeHandler.GetField,
 		forge.WithName("cms.content_fields.get"),
 		forge.WithSummary("Get field"),
 		forge.WithDescription("Returns a specific field by slug"),
 		forge.WithTags("CMS", "Content Fields"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Update field
-	fields.PUT("/:fieldSlug", contentTypeHandler.UpdateField,
+	if err := fields.PUT("/:fieldSlug", contentTypeHandler.UpdateField,
 		forge.WithName("cms.content_fields.update"),
 		forge.WithSummary("Update field"),
 		forge.WithDescription("Updates an existing field definition"),
 		forge.WithTags("CMS", "Content Fields"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Delete field
-	fields.DELETE("/:fieldSlug", contentTypeHandler.DeleteField,
+	if err := fields.DELETE("/:fieldSlug", contentTypeHandler.DeleteField,
 		forge.WithName("cms.content_fields.delete"),
 		forge.WithSummary("Delete field"),
 		forge.WithDescription("Removes a field from a content type"),
 		forge.WithTags("CMS", "Content Fields"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// ==========================================================================
 	// Content Entry Routes
@@ -442,138 +481,189 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	entries := cms.Group("/:typeSlug")
 
 	// List entries
-	entries.GET("", contentEntryHandler.ListEntries,
+	if err := entries.GET("", contentEntryHandler.ListEntries,
 		forge.WithName("cms.entries.list"),
 		forge.WithSummary("List entries"),
 		forge.WithDescription("Returns entries for a content type with filtering and pagination"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Create entry
-	entries.POST("", contentEntryHandler.CreateEntry,
+	if err := entries.POST("", contentEntryHandler.CreateEntry,
 		forge.WithName("cms.entries.create"),
 		forge.WithSummary("Create entry"),
 		forge.WithDescription("Creates a new content entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Advanced query
-	entries.POST("/query", contentEntryHandler.QueryEntries,
+	if err := entries.POST("/query", contentEntryHandler.QueryEntries,
 		forge.WithName("cms.entries.query"),
 		forge.WithSummary("Query entries"),
 		forge.WithDescription("Performs an advanced query on entries using the CMS query language"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Stats
-	entries.GET("/stats", contentEntryHandler.GetEntryStats,
+	if err := entries.GET("/stats", contentEntryHandler.GetEntryStats,
 		forge.WithName("cms.entries.stats"),
 		forge.WithSummary("Get entry stats"),
 		forge.WithDescription("Returns statistics for entries of a content type"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Bulk operations
 	bulk := entries.Group("/bulk")
 
-	bulk.POST("/publish", contentEntryHandler.BulkPublish,
+	if err := bulk.POST("/publish", contentEntryHandler.BulkPublish,
 		forge.WithName("cms.entries.bulk_publish"),
 		forge.WithSummary("Bulk publish"),
 		forge.WithDescription("Publishes multiple entries at once"),
 		forge.WithTags("CMS", "Content Entries", "Bulk"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	bulk.POST("/unpublish", contentEntryHandler.BulkUnpublish,
+	if err := bulk.POST("/unpublish", contentEntryHandler.BulkUnpublish,
 		forge.WithName("cms.entries.bulk_unpublish"),
 		forge.WithSummary("Bulk unpublish"),
 		forge.WithDescription("Unpublishes multiple entries at once"),
 		forge.WithTags("CMS", "Content Entries", "Bulk"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	bulk.POST("/delete", contentEntryHandler.BulkDelete,
+	if err := bulk.POST("/delete", contentEntryHandler.BulkDelete,
 		forge.WithName("cms.entries.bulk_delete"),
 		forge.WithSummary("Bulk delete"),
 		forge.WithDescription("Deletes multiple entries at once"),
 		forge.WithTags("CMS", "Content Entries", "Bulk"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Individual entry routes
 	entry := entries.Group("/:entryId")
 
-	entry.GET("", contentEntryHandler.GetEntry,
+	if err := entry.GET("", contentEntryHandler.GetEntry,
 		forge.WithName("cms.entries.get"),
 		forge.WithSummary("Get entry"),
 		forge.WithDescription("Returns a specific entry by ID"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	entry.PUT("", contentEntryHandler.UpdateEntry,
+	if err := entry.PUT("", contentEntryHandler.UpdateEntry,
 		forge.WithName("cms.entries.update"),
 		forge.WithSummary("Update entry"),
 		forge.WithDescription("Updates an existing entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	entry.DELETE("", contentEntryHandler.DeleteEntry,
+	if err := entry.DELETE("", contentEntryHandler.DeleteEntry,
 		forge.WithName("cms.entries.delete"),
 		forge.WithSummary("Delete entry"),
 		forge.WithDescription("Deletes an entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	entry.POST("/publish", contentEntryHandler.PublishEntry,
+	if err := entry.POST("/publish", contentEntryHandler.PublishEntry,
 		forge.WithName("cms.entries.publish"),
 		forge.WithSummary("Publish entry"),
 		forge.WithDescription("Publishes a draft entry or schedules it for publication"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	entry.POST("/unpublish", contentEntryHandler.UnpublishEntry,
+	if err := entry.POST("/unpublish", contentEntryHandler.UnpublishEntry,
 		forge.WithName("cms.entries.unpublish"),
 		forge.WithSummary("Unpublish entry"),
 		forge.WithDescription("Moves a published entry back to draft status"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	entry.POST("/archive", contentEntryHandler.ArchiveEntry,
+	if err := entry.POST("/archive", contentEntryHandler.ArchiveEntry,
 		forge.WithName("cms.entries.archive"),
 		forge.WithSummary("Archive entry"),
 		forge.WithDescription("Archives an entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// ==========================================================================
 	// Revision Routes
 	// ==========================================================================
 	revisions := entry.Group("/revisions")
 
-	revisions.GET("", revisionHandler.ListRevisions,
+	if err := revisions.GET("", revisionHandler.ListRevisions,
 		forge.WithName("cms.revisions.list"),
 		forge.WithSummary("List revisions"),
 		forge.WithDescription("Returns the revision history for an entry"),
 		forge.WithTags("CMS", "Revisions"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	revisions.GET("/compare", revisionHandler.CompareRevisions,
+	if err := revisions.GET("/compare", revisionHandler.CompareRevisions,
 		forge.WithName("cms.revisions.compare"),
 		forge.WithSummary("Compare revisions"),
 		forge.WithDescription("Compares two revisions and returns the differences"),
 		forge.WithTags("CMS", "Revisions"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	revisions.GET("/:version", revisionHandler.GetRevision,
+	if err := revisions.GET("/:version", revisionHandler.GetRevision,
 		forge.WithName("cms.revisions.get"),
 		forge.WithSummary("Get revision"),
 		forge.WithDescription("Returns a specific revision by version number"),
 		forge.WithTags("CMS", "Revisions"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	revisions.POST("/:version/restore", revisionHandler.RestoreRevision,
+	if err := revisions.POST("/:version/restore", revisionHandler.RestoreRevision,
 		forge.WithName("cms.revisions.restore"),
 		forge.WithSummary("Restore revision"),
 		forge.WithDescription("Restores an entry to a specific revision"),
 		forge.WithTags("CMS", "Revisions"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	p.logger.Debug("registered CMS routes")
 

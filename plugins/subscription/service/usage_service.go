@@ -221,7 +221,9 @@ func (s *UsageService) ReportToProvider(ctx context.Context, batchSize int) erro
 		}
 
 		// Mark as reported
-		s.repo.MarkReported(ctx, record.ID, providerID)
+		if err := s.repo.MarkReported(ctx, record.ID, providerID); err != nil {
+			_ = err
+		}
 	}
 
 	return nil
@@ -278,7 +280,9 @@ func (s *UsageService) recordEvent(ctx context.Context, subID, orgID xid.ID, eve
 		EventData:      data,
 		CreatedAt:      time.Now(),
 	}
-	s.eventRepo.Create(ctx, event)
+	if err := s.eventRepo.Create(ctx, event); err != nil {
+		_ = err
+	}
 }
 
 func (s *UsageService) schemaToCoreRecord(record *schema.SubscriptionUsageRecord) *core.UsageRecord {

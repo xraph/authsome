@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // TemplateEngine provides template rendering functionality.
@@ -19,7 +22,7 @@ func NewTemplateEngine() *TemplateEngine {
 		funcMap: template.FuncMap{
 			"upper":    strings.ToUpper,
 			"lower":    strings.ToLower,
-			"title":    strings.Title,
+			"title":    cases.Title(language.English).String,
 			"trim":     strings.TrimSpace,
 			"truncate": truncate,
 			"default":  defaultValue,

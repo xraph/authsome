@@ -64,7 +64,7 @@ func WithBasePath(path string) Option {
 	}
 }
 
-// WithExcludeFromSchemas sets whether to exclude the extension from schemas.
+// WithGlobalRoutesOptions sets global route options for all routes.
 func WithGlobalRoutesOptions(opts ...forge.RouteOption) Option {
 	return func(a *Auth) {
 		a.globalRoutesOptions = append(a.globalRoutesOptions, opts...)

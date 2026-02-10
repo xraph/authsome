@@ -367,7 +367,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Plan routes
 	planGroup := router.Group("/subscription/plans")
 	{
-		planGroup.POST("", p.handleCreatePlan,
+		_ = planGroup.POST("", p.handleCreatePlan,
 			forge.WithName("subscription.plans.create"),
 			forge.WithSummary("Create plan"),
 			forge.WithDescription("Create a new subscription plan"),
@@ -375,21 +375,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		planGroup.GET("", p.handleListPlans,
+		_ = planGroup.GET("", p.handleListPlans,
 			forge.WithName("subscription.plans.list"),
 			forge.WithSummary("List plans"),
 			forge.WithDescription("List all subscription plans"),
 			forge.WithTags("Subscription", "Plans"),
 		)
 
-		planGroup.GET("/:id", p.handleGetPlan,
+		_ = planGroup.GET("/:id", p.handleGetPlan,
 			forge.WithName("subscription.plans.get"),
 			forge.WithSummary("Get plan"),
 			forge.WithDescription("Get a specific plan by ID"),
 			forge.WithTags("Subscription", "Plans"),
 		)
 
-		planGroup.PATCH("/:id", p.handleUpdatePlan,
+		_ = planGroup.PATCH("/:id", p.handleUpdatePlan,
 			forge.WithName("subscription.plans.update"),
 			forge.WithSummary("Update plan"),
 			forge.WithDescription("Update an existing plan"),
@@ -397,14 +397,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		planGroup.DELETE("/:id", p.handleDeletePlan,
+		_ = planGroup.DELETE("/:id", p.handleDeletePlan,
 			forge.WithName("subscription.plans.delete"),
 			forge.WithSummary("Delete plan"),
 			forge.WithDescription("Delete a plan"),
 			forge.WithTags("Subscription", "Plans"),
 		)
 
-		planGroup.POST("/:id/sync", p.handleSyncPlan,
+		_ = planGroup.POST("/:id/sync", p.handleSyncPlan,
 			forge.WithName("subscription.plans.sync"),
 			forge.WithSummary("Sync plan to provider"),
 			forge.WithDescription("Sync a plan to the payment provider"),
@@ -415,7 +415,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Subscription routes
 	subGroup := router.Group("/subscription/subscriptions")
 	{
-		subGroup.POST("", p.handleCreateSubscription,
+		_ = subGroup.POST("", p.handleCreateSubscription,
 			forge.WithName("subscription.subscriptions.create"),
 			forge.WithSummary("Create subscription"),
 			forge.WithDescription("Create a new subscription for an organization"),
@@ -423,28 +423,28 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		subGroup.GET("", p.handleListSubscriptions,
+		_ = subGroup.GET("", p.handleListSubscriptions,
 			forge.WithName("subscription.subscriptions.list"),
 			forge.WithSummary("List subscriptions"),
 			forge.WithDescription("List all subscriptions"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.GET("/:id", p.handleGetSubscription,
+		_ = subGroup.GET("/:id", p.handleGetSubscription,
 			forge.WithName("subscription.subscriptions.get"),
 			forge.WithSummary("Get subscription"),
 			forge.WithDescription("Get a specific subscription by ID"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.GET("/organization/:orgId", p.handleGetOrganizationSubscription,
+		_ = subGroup.GET("/organization/:orgId", p.handleGetOrganizationSubscription,
 			forge.WithName("subscription.subscriptions.getByOrg"),
 			forge.WithSummary("Get organization subscription"),
 			forge.WithDescription("Get the active subscription for an organization"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.PATCH("/:id", p.handleUpdateSubscription,
+		_ = subGroup.PATCH("/:id", p.handleUpdateSubscription,
 			forge.WithName("subscription.subscriptions.update"),
 			forge.WithSummary("Update subscription"),
 			forge.WithDescription("Update an existing subscription"),
@@ -452,35 +452,35 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		subGroup.POST("/:id/cancel", p.handleCancelSubscription,
+		_ = subGroup.POST("/:id/cancel", p.handleCancelSubscription,
 			forge.WithName("subscription.subscriptions.cancel"),
 			forge.WithSummary("Cancel subscription"),
 			forge.WithDescription("Cancel a subscription"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.POST("/:id/pause", p.handlePauseSubscription,
+		_ = subGroup.POST("/:id/pause", p.handlePauseSubscription,
 			forge.WithName("subscription.subscriptions.pause"),
 			forge.WithSummary("Pause subscription"),
 			forge.WithDescription("Pause a subscription"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.POST("/:id/resume", p.handleResumeSubscription,
+		_ = subGroup.POST("/:id/resume", p.handleResumeSubscription,
 			forge.WithName("subscription.subscriptions.resume"),
 			forge.WithSummary("Resume subscription"),
 			forge.WithDescription("Resume a paused subscription"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.POST("/:id/sync", p.handleSyncSubscription,
+		_ = subGroup.POST("/:id/sync", p.handleSyncSubscription,
 			forge.WithName("subscription.subscriptions.sync"),
 			forge.WithSummary("Sync subscription to provider"),
 			forge.WithDescription("Sync a subscription to the payment provider (Stripe/Paddle)"),
 			forge.WithTags("Subscription", "Subscriptions"),
 		)
 
-		subGroup.POST("/:id/sync-from-provider", p.handleSyncSubscriptionFromProvider,
+		_ = subGroup.POST("/:id/sync-from-provider", p.handleSyncSubscriptionFromProvider,
 			forge.WithName("subscription.subscriptions.sync_from_provider"),
 			forge.WithSummary("Sync subscription from provider"),
 			forge.WithDescription("Pull latest subscription data from payment provider and update local record"),
@@ -491,7 +491,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Add-on routes
 	addOnGroup := router.Group("/subscription/addons")
 	{
-		addOnGroup.POST("", p.handleCreateAddOn,
+		_ = addOnGroup.POST("", p.handleCreateAddOn,
 			forge.WithName("subscription.addons.create"),
 			forge.WithSummary("Create add-on"),
 			forge.WithDescription("Create a new add-on"),
@@ -499,21 +499,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		addOnGroup.GET("", p.handleListAddOns,
+		_ = addOnGroup.GET("", p.handleListAddOns,
 			forge.WithName("subscription.addons.list"),
 			forge.WithSummary("List add-ons"),
 			forge.WithDescription("List all add-ons"),
 			forge.WithTags("Subscription", "AddOns"),
 		)
 
-		addOnGroup.GET("/:id", p.handleGetAddOn,
+		_ = addOnGroup.GET("/:id", p.handleGetAddOn,
 			forge.WithName("subscription.addons.get"),
 			forge.WithSummary("Get add-on"),
 			forge.WithDescription("Get a specific add-on by ID"),
 			forge.WithTags("Subscription", "AddOns"),
 		)
 
-		addOnGroup.PATCH("/:id", p.handleUpdateAddOn,
+		_ = addOnGroup.PATCH("/:id", p.handleUpdateAddOn,
 			forge.WithName("subscription.addons.update"),
 			forge.WithSummary("Update add-on"),
 			forge.WithDescription("Update an existing add-on"),
@@ -521,7 +521,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		addOnGroup.DELETE("/:id", p.handleDeleteAddOn,
+		_ = addOnGroup.DELETE("/:id", p.handleDeleteAddOn,
 			forge.WithName("subscription.addons.delete"),
 			forge.WithSummary("Delete add-on"),
 			forge.WithDescription("Delete an add-on"),
@@ -532,21 +532,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Invoice routes
 	invoiceGroup := router.Group("/subscription/invoices")
 	{
-		invoiceGroup.GET("", p.handleListInvoices,
+		_ = invoiceGroup.GET("", p.handleListInvoices,
 			forge.WithName("subscription.invoices.list"),
 			forge.WithSummary("List invoices"),
 			forge.WithDescription("List all invoices"),
 			forge.WithTags("Subscription", "Invoices"),
 		)
 
-		invoiceGroup.GET("/:id", p.handleGetInvoice,
+		_ = invoiceGroup.GET("/:id", p.handleGetInvoice,
 			forge.WithName("subscription.invoices.get"),
 			forge.WithSummary("Get invoice"),
 			forge.WithDescription("Get a specific invoice by ID"),
 			forge.WithTags("Subscription", "Invoices"),
 		)
 
-		invoiceGroup.POST("/sync", p.handleSyncInvoices,
+		_ = invoiceGroup.POST("/sync", p.handleSyncInvoices,
 			forge.WithName("subscription.invoices.sync"),
 			forge.WithSummary("Sync invoices from Stripe"),
 			forge.WithDescription("Backfill and sync invoices from Stripe to local database"),
@@ -557,7 +557,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Usage routes
 	usageGroup := router.Group("/subscription/usage")
 	{
-		usageGroup.POST("", p.handleRecordUsage,
+		_ = usageGroup.POST("", p.handleRecordUsage,
 			forge.WithName("subscription.usage.record"),
 			forge.WithSummary("Record usage"),
 			forge.WithDescription("Record usage for metered billing"),
@@ -565,7 +565,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		usageGroup.GET("/summary", p.handleGetUsageSummary,
+		_ = usageGroup.GET("/summary", p.handleGetUsageSummary,
 			forge.WithName("subscription.usage.summary"),
 			forge.WithSummary("Get usage summary"),
 			forge.WithDescription("Get usage summary for a subscription"),
@@ -576,7 +576,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Checkout routes
 	checkoutGroup := router.Group("/subscription/checkout")
 	{
-		checkoutGroup.POST("", p.handleCreateCheckout,
+		_ = checkoutGroup.POST("", p.handleCreateCheckout,
 			forge.WithName("subscription.checkout.create"),
 			forge.WithSummary("Create checkout session"),
 			forge.WithDescription("Create a checkout session for subscription purchase"),
@@ -584,7 +584,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		checkoutGroup.POST("/portal", p.handleCreatePortal,
+		_ = checkoutGroup.POST("/portal", p.handleCreatePortal,
 			forge.WithName("subscription.checkout.portal"),
 			forge.WithSummary("Create customer portal"),
 			forge.WithDescription("Create a customer portal session for billing management"),
@@ -595,7 +595,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Payment method routes
 	paymentGroup := router.Group("/subscription/payment-methods")
 	{
-		paymentGroup.POST("/setup-intent", p.handleCreateSetupIntent,
+		_ = paymentGroup.POST("/setup-intent", p.handleCreateSetupIntent,
 			forge.WithName("subscription.payment_methods.setup_intent"),
 			forge.WithSummary("Create setup intent"),
 			forge.WithDescription("Create a Stripe setup intent for adding payment method"),
@@ -603,7 +603,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		paymentGroup.POST("", p.handleAddPaymentMethod,
+		_ = paymentGroup.POST("", p.handleAddPaymentMethod,
 			forge.WithName("subscription.payment_methods.add"),
 			forge.WithSummary("Add payment method"),
 			forge.WithDescription("Attach a tokenized payment method to organization"),
@@ -611,28 +611,28 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithValidation(true),
 		)
 
-		paymentGroup.GET("", p.handleListPaymentMethods,
+		_ = paymentGroup.GET("", p.handleListPaymentMethods,
 			forge.WithName("subscription.payment_methods.list"),
 			forge.WithSummary("List payment methods"),
 			forge.WithDescription("List all payment methods for organization"),
 			forge.WithTags("Subscription", "Payment Methods"),
 		)
 
-		paymentGroup.GET("/:id", p.handleGetPaymentMethod,
+		_ = paymentGroup.GET("/:id", p.handleGetPaymentMethod,
 			forge.WithName("subscription.payment_methods.get"),
 			forge.WithSummary("Get payment method"),
 			forge.WithDescription("Get a specific payment method by ID"),
 			forge.WithTags("Subscription", "Payment Methods"),
 		)
 
-		paymentGroup.POST("/:id/set-default", p.handleSetDefaultPaymentMethod,
+		_ = paymentGroup.POST("/:id/set-default", p.handleSetDefaultPaymentMethod,
 			forge.WithName("subscription.payment_methods.set_default"),
 			forge.WithSummary("Set default payment method"),
 			forge.WithDescription("Set a payment method as the default"),
 			forge.WithTags("Subscription", "Payment Methods"),
 		)
 
-		paymentGroup.DELETE("/:id", p.handleRemovePaymentMethod,
+		_ = paymentGroup.DELETE("/:id", p.handleRemovePaymentMethod,
 			forge.WithName("subscription.payment_methods.remove"),
 			forge.WithSummary("Remove payment method"),
 			forge.WithDescription("Remove a payment method from organization"),
@@ -641,7 +641,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Webhook routes
-	router.POST("/subscription/webhooks/stripe", p.handleStripeWebhook,
+	_ = router.POST("/subscription/webhooks/stripe", p.handleStripeWebhook,
 		forge.WithName("subscription.webhooks.stripe"),
 		forge.WithSummary("Stripe webhook"),
 		forge.WithDescription("Handle Stripe webhook events"),
@@ -649,14 +649,14 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	)
 
 	// Feature/limit check routes (legacy)
-	router.GET("/subscription/features/:orgId/:feature", p.handleCheckFeature,
+	_ = router.GET("/subscription/features/:orgId/:feature", p.handleCheckFeature,
 		forge.WithName("subscription.features.check"),
 		forge.WithSummary("Check feature access"),
 		forge.WithDescription("Check if an organization has access to a feature"),
 		forge.WithTags("Subscription", "Features"),
 	)
 
-	router.GET("/subscription/limits/:orgId", p.handleGetLimits,
+	_ = router.GET("/subscription/limits/:orgId", p.handleGetLimits,
 		forge.WithName("subscription.limits.get"),
 		forge.WithSummary("Get organization limits"),
 		forge.WithDescription("Get all limits and current usage for an organization"),
@@ -953,7 +953,7 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 	// Feature CRUD routes
 	featureGroup := router.Group("/subscription/features")
 	{
-		featureGroup.POST("", p.handleCreateFeature,
+		_ = featureGroup.POST("", p.handleCreateFeature,
 			forge.WithName("subscription.features.create"),
 			forge.WithSummary("Create feature"),
 			forge.WithDescription("Create a new feature definition"),
@@ -961,21 +961,21 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 			forge.WithValidation(true),
 		)
 
-		featureGroup.GET("", p.handleListFeatures,
+		_ = featureGroup.GET("", p.handleListFeatures,
 			forge.WithName("subscription.features.list"),
 			forge.WithSummary("List features"),
 			forge.WithDescription("List all feature definitions"),
 			forge.WithTags("Subscription", "Features"),
 		)
 
-		featureGroup.GET("/:id", p.handleGetFeature,
+		_ = featureGroup.GET("/:id", p.handleGetFeature,
 			forge.WithName("subscription.features.get"),
 			forge.WithSummary("Get feature"),
 			forge.WithDescription("Get a specific feature by ID"),
 			forge.WithTags("Subscription", "Features"),
 		)
 
-		featureGroup.PATCH("/:id", p.handleUpdateFeature,
+		_ = featureGroup.PATCH("/:id", p.handleUpdateFeature,
 			forge.WithName("subscription.features.update"),
 			forge.WithSummary("Update feature"),
 			forge.WithDescription("Update an existing feature"),
@@ -983,28 +983,28 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 			forge.WithValidation(true),
 		)
 
-		featureGroup.DELETE("/:id", p.handleDeleteFeature,
+		_ = featureGroup.DELETE("/:id", p.handleDeleteFeature,
 			forge.WithName("subscription.features.delete"),
 			forge.WithSummary("Delete feature"),
 			forge.WithDescription("Delete a feature"),
 			forge.WithTags("Subscription", "Features"),
 		)
 
-		featureGroup.POST("/:id/sync", p.handleSyncFeature,
+		_ = featureGroup.POST("/:id/sync", p.handleSyncFeature,
 			forge.WithName("subscription.features.sync"),
 			forge.WithSummary("Sync feature to provider"),
 			forge.WithDescription("Manually sync a feature to the payment provider"),
 			forge.WithTags("Subscription", "Features"),
 		)
 
-		featureGroup.POST("/sync-from-provider/:providerId", p.handleSyncFeatureFromProvider,
+		_ = featureGroup.POST("/sync-from-provider/:providerId", p.handleSyncFeatureFromProvider,
 			forge.WithName("subscription.features.sync_from_provider"),
 			forge.WithSummary("Sync feature from provider"),
 			forge.WithDescription("Sync a feature from the payment provider"),
 			forge.WithTags("Subscription", "Features"),
 		)
 
-		featureGroup.POST("/sync-all-from-provider", p.handleSyncAllFeaturesFromProvider,
+		_ = featureGroup.POST("/sync-all-from-provider", p.handleSyncAllFeaturesFromProvider,
 			forge.WithName("subscription.features.sync_all_from_provider"),
 			forge.WithSummary("Sync all features from provider"),
 			forge.WithDescription("Sync all features from the payment provider for a product"),
@@ -1015,7 +1015,7 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 	// Plan-Feature linking routes
 	planFeatureGroup := router.Group("/subscription/plans/:planId/features")
 	{
-		planFeatureGroup.POST("", p.handleLinkFeatureToPlan,
+		_ = planFeatureGroup.POST("", p.handleLinkFeatureToPlan,
 			forge.WithName("subscription.plans.features.link"),
 			forge.WithSummary("Link feature to plan"),
 			forge.WithDescription("Link a feature to a plan with configuration"),
@@ -1023,14 +1023,14 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 			forge.WithValidation(true),
 		)
 
-		planFeatureGroup.GET("", p.handleGetPlanFeatures,
+		_ = planFeatureGroup.GET("", p.handleGetPlanFeatures,
 			forge.WithName("subscription.plans.features.list"),
 			forge.WithSummary("Get plan features"),
 			forge.WithDescription("Get all features linked to a plan"),
 			forge.WithTags("Subscription", "Plans", "Features"),
 		)
 
-		planFeatureGroup.PATCH("/:featureId", p.handleUpdatePlanFeatureLink,
+		_ = planFeatureGroup.PATCH("/:featureId", p.handleUpdatePlanFeatureLink,
 			forge.WithName("subscription.plans.features.update"),
 			forge.WithSummary("Update plan feature link"),
 			forge.WithDescription("Update the feature-plan link configuration"),
@@ -1038,7 +1038,7 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 			forge.WithValidation(true),
 		)
 
-		planFeatureGroup.DELETE("/:featureId", p.handleUnlinkFeatureFromPlan,
+		_ = planFeatureGroup.DELETE("/:featureId", p.handleUnlinkFeatureFromPlan,
 			forge.WithName("subscription.plans.features.unlink"),
 			forge.WithSummary("Unlink feature from plan"),
 			forge.WithDescription("Remove a feature from a plan"),
@@ -1049,28 +1049,28 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 	// Organization feature usage routes
 	orgFeatureGroup := router.Group("/subscription/organizations/:orgId/features")
 	{
-		orgFeatureGroup.GET("", p.handleGetOrgFeatures,
+		_ = orgFeatureGroup.GET("", p.handleGetOrgFeatures,
 			forge.WithName("subscription.organizations.features.list"),
 			forge.WithSummary("Get organization features"),
 			forge.WithDescription("Get all feature access for an organization"),
 			forge.WithTags("Subscription", "Organizations", "Features"),
 		)
 
-		orgFeatureGroup.GET("/:key/usage", p.handleGetFeatureUsage,
+		_ = orgFeatureGroup.GET("/:key/usage", p.handleGetFeatureUsage,
 			forge.WithName("subscription.organizations.features.usage"),
 			forge.WithSummary("Get feature usage"),
 			forge.WithDescription("Get usage for a specific feature"),
 			forge.WithTags("Subscription", "Organizations", "Features"),
 		)
 
-		orgFeatureGroup.GET("/:key/access", p.handleCheckFeatureAccess,
+		_ = orgFeatureGroup.GET("/:key/access", p.handleCheckFeatureAccess,
 			forge.WithName("subscription.organizations.features.access"),
 			forge.WithSummary("Check feature access"),
 			forge.WithDescription("Check if organization has access to a feature"),
 			forge.WithTags("Subscription", "Organizations", "Features"),
 		)
 
-		orgFeatureGroup.POST("/:key/consume", p.handleConsumeFeature,
+		_ = orgFeatureGroup.POST("/:key/consume", p.handleConsumeFeature,
 			forge.WithName("subscription.organizations.features.consume"),
 			forge.WithSummary("Consume feature quota"),
 			forge.WithDescription("Consume feature quota for an organization"),
@@ -1078,7 +1078,7 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 			forge.WithValidation(true),
 		)
 
-		orgFeatureGroup.POST("/:key/grant", p.handleGrantFeature,
+		_ = orgFeatureGroup.POST("/:key/grant", p.handleGrantFeature,
 			forge.WithName("subscription.organizations.features.grant"),
 			forge.WithSummary("Grant feature quota"),
 			forge.WithDescription("Grant additional feature quota to an organization"),
@@ -1088,14 +1088,14 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 	}
 
 	// Grants management
-	router.GET("/subscription/organizations/:orgId/grants", p.handleListGrants,
+	_ = router.GET("/subscription/organizations/:orgId/grants", p.handleListGrants,
 		forge.WithName("subscription.organizations.grants.list"),
 		forge.WithSummary("List grants"),
 		forge.WithDescription("List all active grants for an organization"),
 		forge.WithTags("Subscription", "Organizations", "Grants"),
 	)
 
-	router.DELETE("/subscription/grants/:grantId", p.handleRevokeGrant,
+	_ = router.DELETE("/subscription/grants/:grantId", p.handleRevokeGrant,
 		forge.WithName("subscription.grants.revoke"),
 		forge.WithSummary("Revoke grant"),
 		forge.WithDescription("Revoke a feature grant"),
@@ -1107,35 +1107,35 @@ func (p *Plugin) registerFeatureRoutes(router forge.Router) {
 func (p *Plugin) registerPublicRoutes(router forge.Router) {
 	publicGroup := router.Group("/subscription/public")
 	{
-		publicGroup.GET("/plans", p.handleListPublicPlans,
+		_ = publicGroup.GET("/plans", p.handleListPublicPlans,
 			forge.WithName("subscription.public.plans.list"),
 			forge.WithSummary("List public plans"),
 			forge.WithDescription("List all public plans with features for pricing pages"),
 			forge.WithTags("Subscription", "Public"),
 		)
 
-		publicGroup.GET("/plans/:slug", p.handleGetPublicPlan,
+		_ = publicGroup.GET("/plans/:slug", p.handleGetPublicPlan,
 			forge.WithName("subscription.public.plans.get"),
 			forge.WithSummary("Get public plan"),
 			forge.WithDescription("Get a public plan by slug"),
 			forge.WithTags("Subscription", "Public"),
 		)
 
-		publicGroup.GET("/plans/:slug/features", p.handleGetPublicPlanFeatures,
+		_ = publicGroup.GET("/plans/:slug/features", p.handleGetPublicPlanFeatures,
 			forge.WithName("subscription.public.plans.features"),
 			forge.WithSummary("Get public plan features"),
 			forge.WithDescription("Get features for a public plan"),
 			forge.WithTags("Subscription", "Public"),
 		)
 
-		publicGroup.GET("/features", p.handleListPublicFeatures,
+		_ = publicGroup.GET("/features", p.handleListPublicFeatures,
 			forge.WithName("subscription.public.features.list"),
 			forge.WithSummary("List public features"),
 			forge.WithDescription("List all public features"),
 			forge.WithTags("Subscription", "Public"),
 		)
 
-		publicGroup.GET("/compare", p.handleComparePlans,
+		_ = publicGroup.GET("/compare", p.handleComparePlans,
 			forge.WithName("subscription.public.compare"),
 			forge.WithSummary("Compare plans"),
 			forge.WithDescription("Compare features across plans"),

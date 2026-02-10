@@ -38,7 +38,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// JWT Key errors.
+// JWTKeyNotFound returns an error when a JWT key is not found.
 func JWTKeyNotFound() *errs.AuthsomeError {
 	return errs.New(CodeJWTKeyNotFound, "JWT signing key not found", http.StatusNotFound)
 }
@@ -63,7 +63,7 @@ func NoActiveSigningKey(appID string) *errs.AuthsomeError {
 		WithContext("app_id", appID)
 }
 
-// JWT Generation errors.
+// JWTGenerationFailed returns an error when JWT generation fails.
 func JWTGenerationFailed(reason string) *errs.AuthsomeError {
 	return errs.New(CodeJWTGenerationFailed, "Failed to generate JWT token", http.StatusInternalServerError).
 		WithContext("reason", reason)
@@ -73,7 +73,7 @@ func JWTSigningFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeJWTSigningFailed, "Failed to sign JWT token", http.StatusInternalServerError)
 }
 
-// JWT Verification errors.
+// JWTVerificationFailed returns an error when JWT verification fails.
 func JWTVerificationFailed(reason string) *errs.AuthsomeError {
 	return errs.New(CodeJWTVerificationFailed, "JWT token verification failed", http.StatusUnauthorized).
 		WithContext("reason", reason)
@@ -104,7 +104,7 @@ func InvalidJWTClaims(reason string) *errs.AuthsomeError {
 		WithContext("reason", reason)
 }
 
-// Algorithm and Key Type errors.
+// InvalidJWTAlgorithm returns an error when an invalid JWT algorithm is provided.
 func InvalidJWTAlgorithm(algorithm string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidJWTAlgorithm, "Invalid JWT signing algorithm", http.StatusBadRequest).
 		WithContext("algorithm", algorithm)
@@ -115,7 +115,7 @@ func InvalidJWTKeyType(keyType string) *errs.AuthsomeError {
 		WithContext("key_type", keyType)
 }
 
-// Encryption errors.
+// JWTKeyDecryptionFailed returns an error when JWT key decryption fails.
 func JWTKeyDecryptionFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeJWTKeyDecryptionFailed, "Failed to decrypt JWT private key", http.StatusInternalServerError)
 }
@@ -124,7 +124,7 @@ func JWTKeyEncryptionFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeJWTKeyEncryptionFailed, "Failed to encrypt JWT private key", http.StatusInternalServerError)
 }
 
-// Key generation errors.
+// JWTKeyGenerationFailed returns an error when JWT key generation fails.
 func JWTKeyGenerationFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeJWTKeyGenerationFailed, "Failed to generate JWT key pair", http.StatusInternalServerError)
 }
@@ -137,7 +137,7 @@ func CannotVerifyWithoutPublicKey() *errs.AuthsomeError {
 	return errs.New(CodeCannotVerifyWithoutPublic, "Cannot verify JWT without public key", http.StatusInternalServerError)
 }
 
-// JWKS errors.
+// JWKSGenerationFailed returns an error when JWKS generation fails.
 func JWKSGenerationFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeJWKSGenerationFailed, "Failed to generate JWKS", http.StatusInternalServerError)
 }

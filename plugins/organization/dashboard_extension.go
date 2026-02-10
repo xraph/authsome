@@ -22,11 +22,11 @@ import (
 	"github.com/xraph/forgeui/bridge"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface
-// This allows the organization plugin to add its own screens to the dashboard.
+// DashboardExtension allows the organization plugin to add its own screens to the dashboard.
 type DashboardExtension struct {
 	plugin     *Plugin
 	baseUIPath string
@@ -448,7 +448,7 @@ func (e *DashboardExtension) Routes() []ui.Route {
 }
 
 // SettingsSections returns settings sections to add to the settings page
-// Deprecated: Use SettingsPages() instead.
+// SettingsSections Deprecated: Use SettingsPages() instead.
 func (e *DashboardExtension) SettingsSections() []ui.SettingsSection {
 	return []ui.SettingsSection{
 		{
@@ -514,7 +514,7 @@ func (e *DashboardExtension) DashboardWidgets() []ui.DashboardWidget {
 
 // BridgeFunctions returns bridge functions for the organization plugin
 // Note: The extension registry will prefix these with "organization." to create
-// the full function name (e.g., "organization.getOrganizations").
+// BridgeFunctions the full function name (e.g., "organization.getOrganizations").
 func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 	return []ui.BridgeFunction{
 		// Simple test function to verify bridge is working
@@ -1089,7 +1089,7 @@ func (e *DashboardExtension) renderRolesPageContent(c *router.PageContext, org *
 	// Check management permission using RBAC
 	canManage := e.canManageOrganization(ctx, org.ID, currentUser.ID)
 
-	// Fetch organization-specific roles from RBAC service
+	// roles organization-specific roles from RBAC service
 	var roles []*schema.Role
 	if e.plugin.rbacService != nil {
 		roles, _ = e.plugin.rbacService.GetOrgRoles(ctx, org.ID, org.EnvironmentID)
@@ -1753,7 +1753,7 @@ func (e *DashboardExtension) CancelInvitation(ctx *router.PageContext) (g.Node, 
 
 // ServeRoleTemplatesSettings renders the role templates settings page
 // This is an app-level settings page, not an organization-specific page
-// Note: RequireAuth and RequireAdmin in route config handle authentication/authorization.
+// ServeRoleTemplatesSettings Note: RequireAuth and RequireAdmin in route config handle authentication/authorization.
 func (e *DashboardExtension) ServeRoleTemplatesSettings(ctx *router.PageContext) (g.Node, error) {
 	reqCtx := ctx.Request.Context()
 
@@ -1912,7 +1912,7 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 		}
 	}
 
-	// Get default environment for the app
+	// defaultEnvID default environment for the app
 	var defaultEnvID xid.ID
 
 	err = e.plugin.db.NewSelect().
@@ -1923,7 +1923,7 @@ func (e *DashboardExtension) CreateRoleTemplate(ctx *router.PageContext) (g.Node
 		Limit(1).
 		Scan(reqCtx, &defaultEnvID)
 	if err != nil {
-		// If no default environment, try to get the first one
+		// err no default environment, try to get the first one
 		err = e.plugin.db.NewSelect().
 			Table("environments").
 			Column("id").
@@ -2093,7 +2093,7 @@ func (e *DashboardExtension) AddCustomPermission(ctx *router.PageContext) (g.Nod
 
 // Helper Methods
 
-// Context helpers.
+// getUserFromContext helpers.
 func (e *DashboardExtension) getUserFromContext(c *router.PageContext) *user.User {
 	// Extract user from request context
 	ctx := c.Request.Context()
@@ -2175,7 +2175,7 @@ func (e *DashboardExtension) getCurrentOrganization(c *router.PageContext) (*cor
 	return org, nil
 }
 
-// Permission helpers.
+// checkOrgAccess helpers.
 func (e *DashboardExtension) checkOrgAccess(ctx context.Context, orgID, userID xid.ID) bool {
 	// App admins/owners can access all organizations
 	if e.isAppAdmin(ctx, userID) {
@@ -2225,7 +2225,7 @@ func (e *DashboardExtension) isUserAdmin(ctx context.Context, orgID, userID xid.
 // It checks:
 // 1. App-level role check (owner/admin/superadmin can manage all orgs in their app)
 // 2. Dynamic RBAC permission (create on members)
-// 3. Organization-level role check (owner/admin).
+// canManageOrganization 3. Organization-level role check (owner/admin).
 func (e *DashboardExtension) canManageOrganization(ctx context.Context, orgID, userID xid.ID) bool {
 	// First, check if user is an app owner/admin/superadmin
 	// App owners should be able to manage all organizations in their app
@@ -2249,7 +2249,7 @@ func (e *DashboardExtension) canManageOrganization(ctx context.Context, orgID, u
 }
 
 // isAppAdmin checks if a user has owner/admin/superadmin role at the app level
-// This allows app admins to manage all organizations within their app.
+// isAppAdmin allows app admins to manage all organizations within their app.
 func (e *DashboardExtension) isAppAdmin(ctx context.Context, userID xid.ID) bool {
 	// Get the current app from context
 	db := e.plugin.db
@@ -2257,7 +2257,7 @@ func (e *DashboardExtension) isAppAdmin(ctx context.Context, userID xid.ID) bool
 		return false
 	}
 
-	// Query user's app-level role from user_roles table
+	// userRoles user's app-level role from user_roles table
 	var userRoles []struct {
 		RoleName string `bun:"role__name"`
 	}
@@ -2285,7 +2285,7 @@ func (e *DashboardExtension) isAppAdmin(ctx context.Context, userID xid.ID) bool
 	return false
 }
 
-// Settings rendering.
+// RenderSettingsSection rendering.
 func (e *DashboardExtension) RenderSettingsSection(basePath string, currentApp *app.App) g.Node {
 	cfg := e.plugin.config
 
@@ -2424,7 +2424,7 @@ func (e *DashboardExtension) RenderSettingsSection(basePath string, currentApp *
 	)
 }
 
-// Dashboard widget rendering.
+// RenderDashboardWidget widget rendering.
 func (e *DashboardExtension) RenderDashboardWidget(basePath string, currentApp *app.App) g.Node {
 	return Div(
 		Class("rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900"),
@@ -3174,12 +3174,12 @@ func (e *DashboardExtension) renderCreateTeamModal(org *coreorg.Organization, cu
 // Settings content rendering
 
 func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, currentApp *app.App, basePath string) g.Node {
-	// Fetch role templates
+	// roleTemplates role templates
 	var roleTemplates []*schema.Role
 	if e.plugin.rbacService == nil {
 		roleTemplates = []*schema.Role{}
 	} else {
-		// Get default environment for the app
+		// defaultEnvID default environment for the app
 		var defaultEnvID xid.ID
 
 		err := e.plugin.db.NewSelect().
@@ -3190,7 +3190,7 @@ func (e *DashboardExtension) renderRoleTemplatesContent(ctx context.Context, cur
 			Limit(1).
 			Scan(ctx, &defaultEnvID)
 		if err != nil {
-			// If no default environment, try to get the first one
+			// err no default environment, try to get the first one
 			err = e.plugin.db.NewSelect().
 				Table("environments").
 				Column("id").

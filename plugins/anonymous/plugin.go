@@ -152,7 +152,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	h := NewHandler(p.service, p.authInst)
 
 	// Sign in as anonymous
-	router.POST("/anonymous/signin", h.SignIn,
+	if err := router.POST("/anonymous/signin", h.SignIn,
 		forge.WithName("anonymous.signin"),
 		forge.WithSummary("Sign in as anonymous user"),
 		forge.WithDescription("Creates a guest user and session for anonymous access"),
@@ -162,10 +162,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Server error", ErrorResponse{}),
 		forge.WithTags("Anonymous", "Authentication"),
 		forge.WithValidation(true),
-	)
+	); err != nil {
+		return err
+	}
 
 	// Link anonymous account to real account
-	router.POST("/anonymous/link", h.Link,
+	if err := router.POST("/anonymous/link", h.Link,
 		forge.WithName("anonymous.link"),
 		forge.WithSummary("Link anonymous account"),
 		forge.WithDescription("Upgrades an anonymous session to a registered account with email/password"),
@@ -175,7 +177,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("Anonymous", "Authentication"),
 		forge.WithValidation(true),
-	)
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

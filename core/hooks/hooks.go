@@ -125,7 +125,7 @@ type HookRegistry struct {
 
 // Hook function types
 
-// User hooks.
+// BeforeUserCreateHook is a hook function type for before user creation.
 type BeforeUserCreateHook func(ctx context.Context, req *user.CreateUserRequest) error
 type AfterUserCreateHook func(ctx context.Context, user *user.User) error
 type BeforeUserUpdateHook func(ctx context.Context, userID xid.ID, req *user.UpdateUserRequest) error
@@ -133,13 +133,13 @@ type AfterUserUpdateHook func(ctx context.Context, user *user.User) error
 type BeforeUserDeleteHook func(ctx context.Context, userID xid.ID) error
 type AfterUserDeleteHook func(ctx context.Context, userID xid.ID) error
 
-// Session hooks.
+// BeforeSessionCreateHook is a hook function type for before session creation.
 type BeforeSessionCreateHook func(ctx context.Context, req *session.CreateSessionRequest) error
 type AfterSessionCreateHook func(ctx context.Context, session *session.Session) error
 type BeforeSessionRevokeHook func(ctx context.Context, token string) error
 type AfterSessionRevokeHook func(ctx context.Context, sessionID xid.ID) error
 
-// Auth hooks.
+// BeforeSignUpHook is a hook function type for before sign up.
 type BeforeSignUpHook func(ctx context.Context, req *auth.SignUpRequest) error
 type AfterSignUpHook func(ctx context.Context, response *responses.AuthResponse) error
 type BeforeSignInHook func(ctx context.Context, req *auth.SignInRequest) error
@@ -147,7 +147,7 @@ type AfterSignInHook func(ctx context.Context, response *responses.AuthResponse)
 type BeforeSignOutHook func(ctx context.Context, token string) error
 type AfterSignOutHook func(ctx context.Context, token string) error
 
-// Organization hooks (for multi-tenancy plugin).
+// BeforeOrganizationCreateHook is a hook function type for before organization creation.
 type BeforeOrganizationCreateHook func(ctx context.Context, req any) error
 type AfterOrganizationCreateHook func(ctx context.Context, org any) error
 type AfterOrganizationUpdateHook func(ctx context.Context, org any) error
@@ -157,11 +157,10 @@ type AfterMemberAddHook func(ctx context.Context, member any) error
 type AfterMemberRemoveHook func(ctx context.Context, orgID xid.ID, userID xid.ID, memberName string) error
 type AfterMemberRoleChangeHook func(ctx context.Context, orgID xid.ID, userID xid.ID, oldRole string, newRole string) error
 
-// App hooks (for multi-app support).
+// BeforeAppCreateHook is a hook function type for before app creation.
 type BeforeAppCreateHook func(ctx context.Context, req any) error
 type AfterAppCreateHook func(ctx context.Context, app any) error
 
-// Permission hooks (for permissions plugin)
 // PermissionEvaluateRequest is passed to before/after permission evaluate hooks.
 type PermissionEvaluateRequest struct {
 	UserID       xid.ID
@@ -185,14 +184,14 @@ type AfterPermissionEvaluateHook func(ctx context.Context, req *PermissionEvalua
 type OnPolicyChangeHook func(ctx context.Context, policyID xid.ID, action string) error
 type OnCacheInvalidateHook func(ctx context.Context, scope string, id xid.ID) error
 
-// Device/Session security hooks.
+// OnNewDeviceDetectedHook is a hook function type for when a new device is detected.
 type OnNewDeviceDetectedHook func(ctx context.Context, userID xid.ID, deviceName, location, ipAddress string) error
 type OnNewLocationDetectedHook func(ctx context.Context, userID xid.ID, location, ipAddress string) error
 type OnSuspiciousLoginDetectedHook func(ctx context.Context, userID xid.ID, reason, location, ipAddress string) error
 type OnDeviceRemovedHook func(ctx context.Context, userID xid.ID, deviceName string) error
 type OnAllSessionsRevokedHook func(ctx context.Context, userID xid.ID) error
 
-// Account lifecycle hooks.
+// OnEmailChangeRequestHook is a hook function type for when an email change is requested.
 type OnEmailChangeRequestHook func(ctx context.Context, userID xid.ID, oldEmail, newEmail, confirmationUrl string) error
 type OnEmailChangedHook func(ctx context.Context, userID xid.ID, oldEmail, newEmail string) error
 type OnPasswordChangedHook func(ctx context.Context, userID xid.ID) error
@@ -277,7 +276,7 @@ func (h *HookRegistry) GetHookCounts() map[string]int {
 	}
 }
 
-// User hook registration methods.
+// RegisterBeforeUserCreate registers a hook to be called before user creation.
 func (h *HookRegistry) RegisterBeforeUserCreate(hook BeforeUserCreateHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -338,7 +337,7 @@ func (h *HookRegistry) RegisterAfterUserDelete(hook AfterUserDeleteHook) {
 	}
 }
 
-// Session hook registration methods.
+// RegisterBeforeSessionCreate registers a hook to be called before session creation.
 func (h *HookRegistry) RegisterBeforeSessionCreate(hook BeforeSessionCreateHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -379,7 +378,7 @@ func (h *HookRegistry) RegisterAfterSessionRevoke(hook AfterSessionRevokeHook) {
 	}
 }
 
-// Auth hook registration methods.
+// RegisterBeforeSignUp registers a hook to be called before sign up.
 func (h *HookRegistry) RegisterBeforeSignUp(hook BeforeSignUpHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -440,7 +439,7 @@ func (h *HookRegistry) RegisterAfterSignOut(hook AfterSignOutHook) {
 	}
 }
 
-// Organization hook registration methods (for multi-tenancy plugin).
+// RegisterBeforeOrganizationCreate registers a hook to be called before organization creation.
 func (h *HookRegistry) RegisterBeforeOrganizationCreate(hook BeforeOrganizationCreateHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -521,7 +520,7 @@ func (h *HookRegistry) RegisterAfterMemberRoleChange(hook AfterMemberRoleChangeH
 	}
 }
 
-// App hook registration methods (for multi-app support).
+// RegisterBeforeAppCreate registers a hook to be called before app creation.
 func (h *HookRegistry) RegisterBeforeAppCreate(hook BeforeAppCreateHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -1246,7 +1245,7 @@ func (h *HookRegistry) RegisterOnCacheInvalidate(hook OnCacheInvalidateHook) {
 	}
 }
 
-// Device/Session security hook registration methods.
+// RegisterOnNewDeviceDetected registers a hook to be called when a new device is detected.
 func (h *HookRegistry) RegisterOnNewDeviceDetected(hook OnNewDeviceDetectedHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -1297,7 +1296,7 @@ func (h *HookRegistry) RegisterOnAllSessionsRevoked(hook OnAllSessionsRevokedHoo
 	}
 }
 
-// Account lifecycle hook registration methods.
+// RegisterOnEmailChangeRequest registers a hook to be called when an email change is requested.
 func (h *HookRegistry) RegisterOnEmailChangeRequest(hook OnEmailChangeRequestHook) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -1468,7 +1467,7 @@ func (h *HookRegistry) ExecuteOnCacheInvalidate(ctx context.Context, scope strin
 	return nil
 }
 
-// Device/Session security hook execution methods.
+// ExecuteOnNewDeviceDetected executes all registered hooks for new device detection.
 func (h *HookRegistry) ExecuteOnNewDeviceDetected(ctx context.Context, userID xid.ID, deviceName, location, ipAddress string) error {
 	h.mu.RLock()
 	hooks := make([]OnNewDeviceDetectedHook, len(h.onNewDeviceDetected))
@@ -1589,7 +1588,7 @@ func (h *HookRegistry) ExecuteOnAllSessionsRevoked(ctx context.Context, userID x
 	return nil
 }
 
-// Account lifecycle hook execution methods.
+// ExecuteOnEmailChangeRequest executes all registered hooks for email change requests.
 func (h *HookRegistry) ExecuteOnEmailChangeRequest(ctx context.Context, userID xid.ID, oldEmail, newEmail, confirmationUrl string) error {
 	h.mu.RLock()
 	hooks := make([]OnEmailChangeRequestHook, len(h.onEmailChangeRequest))

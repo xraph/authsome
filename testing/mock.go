@@ -70,7 +70,7 @@ type Mock struct {
 }
 
 // NewMock creates a new mock Authsome instance for testing.
-// It automatically creates default app, environment, and organization.
+// NewMock automatically creates default app, environment, and organization.
 func NewMock(t *testing.T) *Mock {
 	t.Helper()
 
@@ -121,7 +121,7 @@ func NewMock(t *testing.T) *Mock {
 }
 
 // CreateUser creates a test user with the given email and name.
-// The user is automatically added to the default organization.
+// CreateUser user is automatically added to the default organization.
 func (m *Mock) CreateUser(email, name string) *schema.User {
 	m.t.Helper()
 

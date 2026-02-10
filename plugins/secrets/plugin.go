@@ -29,7 +29,7 @@ const (
 	// PluginDescription describes the plugin.
 	PluginDescription = "Secure secrets and configuration management with encryption, versioning, and Forge ConfigSource integration"
 
-	// Environment variable for master key.
+	// EnvMasterKey variable for master key.
 	EnvMasterKey = "AUTHSOME_SECRETS_MASTER_KEY"
 )
 
@@ -159,7 +159,7 @@ func (p *Plugin) Description() string {
 
 // Priority returns the plugin initialization priority
 // Lower values = higher priority (load first)
-// Secrets should load early to provide config values.
+// Priority should load early to provide config values.
 func (p *Plugin) Priority() int {
 	return -100 // High priority
 }
@@ -181,7 +181,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 		p.config = DefaultConfig()
 	}
 
-	// Try to load config from file
+	// fileConfig to load config from file
 	var fileConfig Config
 	if err := configManager.Bind("auth.secrets", &fileConfig); err == nil {
 		p.config.Merge(&fileConfig)
@@ -205,7 +205,7 @@ func (p *Plugin) Init(auth core.Authsome) error {
 		return errs.InternalServerError("invalid secrets configuration", err)
 	}
 
-	// Initialize encryption service
+	// err encryption service
 	var err error
 
 	p.encryption, err = NewEncryptionService(p.config.Encryption.MasterKey)
@@ -258,96 +258,118 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	secrets := router.Group("/secrets")
 
 	// List and create
-	secrets.GET("", p.handler.List,
+	if err := secrets.GET("", p.handler.List,
 		forge.WithName("secrets.list"),
 		forge.WithSummary("List secrets"),
 		forge.WithDescription("List secrets with optional filtering and pagination"),
 		forge.WithRequestSchema(ListSecretsRequest{}),
 		forge.WithResponseSchema(200, "Secrets listed", secretscore.ListSecretsResponse{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
-	secrets.POST("", p.handler.Create,
+	if err := secrets.POST("", p.handler.Create,
 		forge.WithName("secrets.create"),
 		forge.WithSummary("Create a secret"),
 		forge.WithDescription("Create a new encrypted secret"),
 		forge.WithRequestSchema(CreateSecretRequest{}),
 		forge.WithResponseSchema(201, "Secret created", secretscore.SecretDTO{}),
 		forge.WithTags("Secrets"),
-		forge.WithValidation(true))
+		forge.WithValidation(true)); err != nil {
+		return err
+	}
 
 	// Stats and tree (before :id routes)
-	secrets.GET("/stats", p.handler.GetStats,
+	if err := secrets.GET("/stats", p.handler.GetStats,
 		forge.WithName("secrets.stats"),
 		forge.WithSummary("Get secrets statistics"),
 		forge.WithDescription("Get statistics about secrets"),
 		forge.WithResponseSchema(200, "Statistics retrieved", secretscore.StatsDTO{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
-	secrets.GET("/tree", p.handler.GetTree,
+	if err := secrets.GET("/tree", p.handler.GetTree,
 		forge.WithName("secrets.tree"),
 		forge.WithSummary("Get secrets tree"),
 		forge.WithDescription("Get secrets organized in a tree structure"),
 		forge.WithRequestSchema(GetTreeRequest{}),
 		forge.WithResponseSchema(200, "Tree retrieved", secretscore.SecretTreeNode{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
 	// Path-based access
-	secrets.GET("/path/*path", p.handler.GetByPath,
+	if err := secrets.GET("/path/*path", p.handler.GetByPath,
 		forge.WithName("secrets.getByPath"),
 		forge.WithSummary("Get secret by path"),
 		forge.WithDescription("Retrieve a secret by its hierarchical path"),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
 	// Single secret operations
-	secrets.GET("/:id", p.handler.Get,
+	if err := secrets.GET("/:id", p.handler.Get,
 		forge.WithName("secrets.get"),
 		forge.WithSummary("Get a secret"),
 		forge.WithDescription("Retrieve secret metadata by ID"),
 		forge.WithRequestSchema(GetSecretRequest{}),
 		forge.WithResponseSchema(200, "Secret retrieved", secretscore.SecretDTO{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
-	secrets.GET("/:id/value", p.handler.GetValue,
+	if err := secrets.GET("/:id/value", p.handler.GetValue,
 		forge.WithName("secrets.getValue"),
 		forge.WithSummary("Get secret value"),
 		forge.WithDescription("Retrieve the decrypted secret value"),
 		forge.WithRequestSchema(GetValueRequest{}),
 		forge.WithResponseSchema(200, "Value retrieved", secretscore.RevealValueResponse{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
-	secrets.PUT("/:id", p.handler.Update,
+	if err := secrets.PUT("/:id", p.handler.Update,
 		forge.WithName("secrets.update"),
 		forge.WithSummary("Update a secret"),
 		forge.WithDescription("Update an existing secret"),
 		forge.WithRequestSchema(UpdateSecretRequest{}),
 		forge.WithResponseSchema(200, "Secret updated", secretscore.SecretDTO{}),
 		forge.WithTags("Secrets"),
-		forge.WithValidation(true))
+		forge.WithValidation(true)); err != nil {
+		return err
+	}
 
-	secrets.DELETE("/:id", p.handler.Delete,
+	if err := secrets.DELETE("/:id", p.handler.Delete,
 		forge.WithName("secrets.delete"),
 		forge.WithSummary("Delete a secret"),
 		forge.WithDescription("Soft-delete a secret"),
 		forge.WithRequestSchema(DeleteSecretRequest{}),
 		forge.WithResponseSchema(200, "Secret deleted", SuccessResponse{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
 	// Version operations
-	secrets.GET("/:id/versions", p.handler.GetVersions,
+	if err := secrets.GET("/:id/versions", p.handler.GetVersions,
 		forge.WithName("secrets.versions"),
 		forge.WithSummary("Get secret versions"),
 		forge.WithDescription("Get version history for a secret"),
 		forge.WithRequestSchema(GetVersionsRequest{}),
 		forge.WithResponseSchema(200, "Versions retrieved", secretscore.ListVersionsResponse{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
-	secrets.POST("/:id/rollback/:version", p.handler.Rollback,
+	if err := secrets.POST("/:id/rollback/:version", p.handler.Rollback,
 		forge.WithName("secrets.rollback"),
 		forge.WithSummary("Rollback secret"),
 		forge.WithDescription("Rollback a secret to a previous version"),
 		forge.WithRequestSchema(RollbackRequest{}),
 		forge.WithResponseSchema(200, "Secret rolled back", secretscore.SecretDTO{}),
-		forge.WithTags("Secrets"))
+		forge.WithTags("Secrets")); err != nil {
+		return err
+	}
 
 	p.logger.Debug("registered secrets routes")
 
@@ -393,7 +415,7 @@ func (p *Plugin) RegisterRoles(roleRegistry rbac.RoleRegistryInterface) error {
 		p.logger.Warn("failed to register secrets_admin role", forge.F("error", err.Error()))
 	}
 
-	// Register secrets viewer role
+	// err secrets viewer role
 	err = roleRegistry.RegisterRole(&rbac.RoleDefinition{
 		Name:        "secrets_viewer",
 		DisplayName: "Secrets Viewer",

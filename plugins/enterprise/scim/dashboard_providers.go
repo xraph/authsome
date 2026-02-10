@@ -12,7 +12,7 @@ import (
 
 	g "maragu.dev/gomponents"
 
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // Provider Management Handlers

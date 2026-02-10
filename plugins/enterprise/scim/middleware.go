@@ -54,7 +54,7 @@ func (p *Plugin) AuthMiddleware() func(func(forge.Context) error) func(forge.Con
 			ctx = contexts.SetAppID(ctx, provToken.AppID)
 			ctx = contexts.SetEnvironmentID(ctx, provToken.EnvironmentID)
 			ctx = contexts.SetOrganizationID(ctx, provToken.OrganizationID)
-			c.Request().WithContext(ctx)
+			*c.Request() = *c.Request().WithContext(ctx)
 
 			// Also store in Forge context for backwards compatibility with other middleware
 			c.Set("app_id", provToken.AppID)

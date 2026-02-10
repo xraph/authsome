@@ -33,7 +33,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// App errors.
+// AppNotFound returns an error when an app is not found.
 func AppNotFound() *errs.AuthsomeError {
 	return errs.New(CodeAppNotFound, "App not found", http.StatusNotFound)
 }
@@ -60,7 +60,7 @@ func PlatformAppImmutable() *errs.AuthsomeError {
 	return errs.New(CodePlatformAppImmutable, "Platform app cannot be modified", http.StatusForbidden)
 }
 
-// Member errors.
+// MemberNotFound returns an error when a member is not found.
 func MemberNotFound() *errs.AuthsomeError {
 	return errs.New(CodeMemberNotFound, "Member not found", http.StatusNotFound)
 }
@@ -79,7 +79,7 @@ func CannotRemoveOwner() *errs.AuthsomeError {
 	return errs.New(CodeCannotRemoveOwner, "Cannot remove or demote app owner", http.StatusForbidden)
 }
 
-// Team errors (reuse from errs package where applicable).
+// TeamNotFound returns an error when a team is not found.
 func TeamNotFound() *errs.AuthsomeError {
 	return errs.TeamNotFound()
 }
@@ -97,7 +97,7 @@ func TeamMemberNotFound() *errs.AuthsomeError {
 	return errs.New(CodeTeamMemberNotFound, "Team member not found", http.StatusNotFound)
 }
 
-// Invitation errors (reuse from errs package where applicable).
+// InvitationNotFound returns an error when an invitation is not found.
 func InvitationNotFound() *errs.AuthsomeError {
 	return errs.InvitationNotFound()
 }
@@ -116,7 +116,7 @@ func InvitationNotPending() *errs.AuthsomeError {
 	return errs.New(CodeInvitationNotPending, "Invitation is not in pending status", http.StatusConflict)
 }
 
-// Validation errors.
+// InvalidRole returns an error when an invalid role is provided.
 func InvalidRole(role string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidRole, "Invalid member role", http.StatusBadRequest).
 		WithContext("role", role)
@@ -127,7 +127,7 @@ func InvalidStatus(status string) *errs.AuthsomeError {
 		WithContext("status", status)
 }
 
-// Authorization errors.
+// Unauthorized returns an error when the user is unauthorized.
 func Unauthorized() *errs.AuthsomeError {
 	return errs.Unauthorized()
 }

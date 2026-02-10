@@ -477,35 +477,44 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// =============================================================================
 
 	// OIDC Discovery endpoint
-	grp.GET("/.well-known/openid-configuration", h.Discovery,
+	if err := grp.GET("/.well-known/openid-configuration", h.Discovery,
 		forge.WithName("oidc.discovery"),
 		forge.WithSummary("OIDC Discovery Document"),
 		forge.WithDescription("Returns the OpenID Connect discovery document with supported endpoints and capabilities"),
 		forge.WithResponseSchema(200, "Discovery document", DiscoveryResponse{}),
 		forge.WithTags("OIDC", "Discovery"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// JWKS endpoint
-	grp.GET("/jwks", h.JWKS,
+	if err := grp.GET("/jwks", h.JWKS,
 		forge.WithName("oidc.jwks"),
 		forge.WithSummary("JSON Web Key Set"),
 		forge.WithDescription("Returns public keys for token verification"),
 		forge.WithResponseSchema(200, "JWKS", JWKSResponse{}),
 		forge.WithTags("OIDC", "JWKS"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Authorization endpoint
-	grp.GET("/authorize", h.Authorize,
+	if err := grp.GET("/authorize", h.Authorize,
 		forge.WithName("oidc.authorize"),
 		forge.WithSummary("OAuth2/OIDC authorization endpoint"),
 		forge.WithDescription("Initiates the authorization flow and redirects to consent screen if needed"),
 		forge.WithResponseSchema(302, "Redirect to consent or callback", nil),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Authorization"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Consent handling
-	grp.POST("/consent", h.HandleConsent,
+	if err := grp.POST("/consent", h.HandleConsent,
 		forge.WithName("oidc.consent"),
 		forge.WithSummary("Handle user consent"),
 		forge.WithDescription("Processes user consent for OAuth2/OIDC authorization request"),
@@ -514,10 +523,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Consent"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Token endpoint
-	grp.POST("/token", h.Token,
+	if err := grp.POST("/token", h.Token,
 		forge.WithName("oidc.token"),
 		forge.WithSummary("OAuth2 token endpoint"),
 		forge.WithDescription("Exchanges authorization code for access token, ID token, and refresh token"),
@@ -526,17 +538,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Token"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// UserInfo endpoint (requires valid access token)
-	grp.GET("/userinfo", h.UserInfo,
+	if err := grp.GET("/userinfo", h.UserInfo,
 		forge.WithName("oidc.userinfo"),
 		forge.WithSummary("OIDC userinfo endpoint"),
 		forge.WithDescription("Returns user information for authenticated access token"),
 		forge.WithResponseSchema(200, "User info", UserInfoResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("OIDC", "UserInfo"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// =============================================================================
 	// DEVICE FLOW ENDPOINTS (RFC 8628)
@@ -545,7 +563,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if p.service.deviceFlowService != nil {
 		// Device authorization endpoint - device requests authorization (RFC 8628)
 		// This is called by the device itself, not the user
-		grp.POST("/device_authorization", h.DeviceAuthorize,
+		if err := grp.POST("/device_authorization", h.DeviceAuthorize,
 			forge.WithName("oidc.device.authorize"),
 			forge.WithSummary("Device authorization endpoint (RFC 8628)"),
 			forge.WithDescription("Initiates device authorization flow for input-constrained devices"),
@@ -554,20 +572,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// User endpoints - browser-based verification (mounted under /oauth2)
 		deviceGroup := grp.Group("/device")
 
-		deviceGroup.GET("", h.DeviceCodeEntry,
+		if err := deviceGroup.GET("", h.DeviceCodeEntry,
 			forge.WithName("oidc.device.entry"),
 			forge.WithSummary("Device code entry form"),
 			forge.WithDescription("Shows form for user to enter device code. In API mode, returns JSON with form data."),
 			forge.WithResponseSchema(200, "Device code entry page data", DeviceCodeEntryResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		deviceGroup.POST("/verify", h.DeviceVerify,
+		if err := deviceGroup.POST("/verify", h.DeviceVerify,
 			forge.WithName("oidc.device.verify"),
 			forge.WithSummary("Verify device code"),
 			forge.WithDescription("Verifies user code and shows consent screen. In API mode, returns verification info."),
@@ -575,9 +599,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Verification info", DeviceVerifyResponse{}),
 			forge.WithResponseSchema(400, "Invalid code", ErrorResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		deviceGroup.POST("/authorize", h.DeviceAuthorizeDecision,
+		if err := deviceGroup.POST("/authorize", h.DeviceAuthorizeDecision,
 			forge.WithName("oidc.device.decision"),
 			forge.WithSummary("Authorize or deny device"),
 			forge.WithDescription("Handles user's authorization decision. In API mode, returns status."),
@@ -585,7 +612,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Authorization result", DeviceDecisionResponse{}),
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	// =============================================================================
@@ -593,7 +623,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// =============================================================================
 
 	// Token introspection (RFC 7662)
-	grp.POST("/introspect", h.IntrospectToken,
+	if err := grp.POST("/introspect", h.IntrospectToken,
 		forge.WithName("oidc.introspect"),
 		forge.WithSummary("Token introspection endpoint (RFC 7662)"),
 		forge.WithDescription("Returns token metadata for authenticated client. Requires client authentication."),
@@ -602,10 +632,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Introspection", "Enterprise"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Token revocation (RFC 7009)
-	grp.POST("/revoke", h.RevokeToken,
+	if err := grp.POST("/revoke", h.RevokeToken,
 		forge.WithName("oidc.revoke"),
 		forge.WithSummary("Token revocation endpoint (RFC 7009)"),
 		forge.WithDescription("Revokes access or refresh token. Requires client authentication."),
@@ -614,14 +647,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Revocation", "Enterprise"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// =============================================================================
 	// ADMIN ENDPOINTS (Require admin authentication)
 	// =============================================================================
 
 	// Dynamic client registration (RFC 7591) - admin only
-	grp.POST("/register", p.adminHandler.RegisterClient,
+	if err := grp.POST("/register", p.adminHandler.RegisterClient,
 		forge.WithName("oidc.client.register"),
 		forge.WithSummary("Dynamic client registration (RFC 7591)"),
 		forge.WithDescription("Admin-only endpoint for OAuth2/OIDC client registration"),
@@ -631,29 +667,38 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Admin required", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Client management endpoints (admin only)
 	clientGroup := grp.Group("/clients")
 
-	clientGroup.GET("", p.adminHandler.ListClients,
+	if err := clientGroup.GET("", p.adminHandler.ListClients,
 		forge.WithName("oidc.clients.list"),
 		forge.WithSummary("List OAuth clients"),
 		forge.WithDescription("Lists all OAuth clients for the current app/environment/organization"),
 		forge.WithResponseSchema(200, "Clients list", ClientsListResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	clientGroup.GET("/:clientId", p.adminHandler.GetClient,
+	if err := clientGroup.GET("/:clientId", p.adminHandler.GetClient,
 		forge.WithName("oidc.clients.get"),
 		forge.WithSummary("Get OAuth client details"),
 		forge.WithDescription("Retrieves detailed information about an OAuth client"),
 		forge.WithResponseSchema(200, "Client details", ClientDetailsResponse{}),
 		forge.WithResponseSchema(404, "Client not found", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	clientGroup.PUT("/:clientId", p.adminHandler.UpdateClient,
+	if err := clientGroup.PUT("/:clientId", p.adminHandler.UpdateClient,
 		forge.WithName("oidc.clients.update"),
 		forge.WithSummary("Update OAuth client"),
 		forge.WithDescription("Updates an existing OAuth client configuration"),
@@ -662,16 +707,22 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Client not found", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	clientGroup.DELETE("/:clientId", p.adminHandler.DeleteClient,
+	if err := clientGroup.DELETE("/:clientId", p.adminHandler.DeleteClient,
 		forge.WithName("oidc.clients.delete"),
 		forge.WithSummary("Delete OAuth client"),
 		forge.WithDescription("Deletes an OAuth client and revokes all associated tokens"),
 		forge.WithResponseSchema(204, "Client deleted", nil),
 		forge.WithResponseSchema(404, "Client not found", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	p.logger.Debug("OIDC provider routes registered")
 

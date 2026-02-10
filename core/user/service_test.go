@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/internal/validator"
 	"github.com/xraph/authsome/schema"
@@ -206,7 +207,7 @@ func TestService_Create(t *testing.T) {
 			user, err := service.Create(context.Background(), tt.request)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errType != nil {
 					assert.ErrorIs(t, err, tt.errType)
@@ -214,7 +215,7 @@ func TestService_Create(t *testing.T) {
 
 				assert.Nil(t, user)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, user)
 				assert.Equal(t, tt.request.Email, user.Email)
 				assert.Equal(t, tt.request.Name, user.Name)
@@ -267,10 +268,10 @@ func TestService_FindByID(t *testing.T) {
 			user, err := service.FindByID(context.Background(), tt.id)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, user)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, user)
 				assert.Equal(t, testUser.ID, user.ID)
 			}
@@ -322,10 +323,10 @@ func TestService_FindByAppAndEmail(t *testing.T) {
 			user, err := service.FindByAppAndEmail(context.Background(), tt.appID, tt.email)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, user)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, user)
 				assert.Equal(t, testUser.Email, user.Email)
 			}
@@ -401,9 +402,9 @@ func TestService_Update(t *testing.T) {
 			user, err := service.Update(context.Background(), tt.user, tt.request)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, user)
 			}
 
@@ -454,9 +455,9 @@ func TestService_Delete(t *testing.T) {
 			err := service.Delete(context.Background(), tt.id)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -515,10 +516,10 @@ func TestService_ListUsers(t *testing.T) {
 			result, err := service.ListUsers(context.Background(), tt.filter)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, result)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, result)
 				assert.Len(t, result.Data, 2)
 			}
@@ -564,9 +565,9 @@ func TestService_CountUsers(t *testing.T) {
 			count, err := service.CountUsers(context.Background(), tt.filter)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.want, count)
 			}
 

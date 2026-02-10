@@ -95,27 +95,27 @@ func RegisterAppPermissions(registry rbac.RoleRegistryInterface) error {
 
 // Action constants for app resources.
 const (
-	// Generic actions.
+	// ActionRead is the read action.
 	ActionRead   = "read"
 	ActionCreate = "create"
 	ActionUpdate = "update"
 	ActionDelete = "delete"
 
-	// Member-specific actions.
+	// ActionUpdateRole is the update role action.
 	ActionUpdateRole = "update_role"
 	ActionInvite     = "invite"
 
-	// Team-specific actions.
+	// ActionAddMember is the add member action.
 	ActionAddMember    = "add_member"
 	ActionRemoveMember = "remove_member"
 
-	// Invitation-specific actions.
+	// ActionAccept is the accept action.
 	ActionAccept  = "accept"
 	ActionDecline = "decline"
 	ActionCancel  = "cancel"
 	ActionResend  = "resend"
 
-	// App-specific actions.
+	// ActionConfigure is the configure action.
 	ActionConfigure = "configure"
 	ActionTransfer  = "transfer"
 )

@@ -15,7 +15,7 @@ import (
 
 type Handler struct{ svc *Service }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -78,7 +78,7 @@ func (h *Handler) List(c forge.Context) error {
 		return c.JSON(http.StatusUnauthorized, errs.New("UNAUTHORIZED", "User authentication required", http.StatusUnauthorized))
 	}
 
-	// Parse filter parameters from query string
+	// req filter parameters from query string
 	var req ListSessionsRequest
 	if err := c.BindRequest(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_REQUEST", "Invalid query parameters", http.StatusBadRequest).WithError(err))
@@ -272,9 +272,9 @@ func (h *Handler) RevokeAll(c forge.Context) error {
 		return handleError(c, err, "INVALID_TOKEN", "Failed to extract session ID", http.StatusUnauthorized)
 	}
 
-	// Parse request body for optional includeCurrentSession flag
+	// body request body for optional includeCurrentSession flag
 	var body RevokeAllRequest
-	// Ignore decode errors - default to false
+	// _ decode errors - default to false
 	_ = c.BindRequest(&body)
 
 	count, err := h.svc.RevokeAll(c.Request().Context(), uid, body.IncludeCurrentSession, currentSID)
@@ -399,7 +399,7 @@ func (h *Handler) GetStats(c forge.Context) error {
 // =============================================================================
 
 // getUserIDFromAuthContext extracts user ID from auth context
-// Works with both session and API key authentication.
+// getUserIDFromAuthContext with both session and API key authentication.
 func getUserIDFromAuthContext(authCtx *contexts.AuthContext) xid.ID {
 	if authCtx.User != nil {
 		return authCtx.User.ID

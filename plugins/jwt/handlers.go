@@ -17,7 +17,7 @@ type Handler struct {
 	service *jwt.Service
 }
 
-// Request types.
+// CreateJWTKeyRequest represents request types.
 type CreateJWTKeyRequest struct {
 	IsPlatformKey bool           `json:"isPlatformKey"`
 	Algorithm     string         `json:"algorithm"     validate:"required"`

@@ -8,7 +8,7 @@ import (
 
 	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 
 	"github.com/xraph/forgeui"
 	"github.com/xraph/forgeui/components/badge"
@@ -188,7 +188,7 @@ func SearchInput(placeholder, value, formAction string) g.Node {
 		Action(formAction),
 		Class("flex-1 min-w-[200px]"),
 		input.InputGroup(nil,
-			input.InputLeftAddon(nil, lucide.Search(Class("size-4"))),
+			input.InputGroupAddon([]input.AddonOption{input.WithAddonAlign(input.AlignInlineStart)}, lucide.Search(Class("size-4"))),
 			input.Input(
 				input.WithType("text"),
 				input.WithName("search"),

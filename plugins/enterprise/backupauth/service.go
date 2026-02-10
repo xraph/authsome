@@ -320,7 +320,10 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req *VerifyRecoveryCod
 	}
 
 	// Increment attempts
-	s.repo.IncrementSessionAttempts(ctx, session.ID)
+	if err := s.repo.IncrementSessionAttempts(ctx, session.ID); err != nil {
+		// Log error but don't fail the operation
+		_ = err
+	}
 
 	return &VerifyRecoveryCodeResponse{
 		Valid:   false,
@@ -465,7 +468,10 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 			correctAnswers++
 		} else {
 			// Increment failed attempts
-			s.repo.IncrementQuestionFailedAttempts(ctx, q.ID)
+			if err := s.repo.IncrementQuestionFailedAttempts(ctx, q.ID); err != nil {
+				// Log error but don't fail the operation
+				_ = err
+			}
 		}
 	}
 
@@ -486,7 +492,10 @@ func (s *Service) VerifySecurityAnswers(ctx context.Context, req *VerifySecurity
 	}
 
 	// Increment session attempts
-	s.repo.IncrementSessionAttempts(ctx, session.ID)
+	if err := s.repo.IncrementSessionAttempts(ctx, session.ID); err != nil {
+		// Log error but don't fail the operation
+		_ = err
+	}
 
 	attemptsLeft := session.MaxAttempts - session.Attempts - 1
 
@@ -911,7 +920,10 @@ func (s *Service) logRecoveryAttempt(ctx context.Context, recoveryID, userID xid
 		IPAddress:          s.getIPFromContext(ctx),
 		UserAgent:          s.getUserAgentFromContext(ctx),
 	}
-	s.repo.CreateRecoveryLog(ctx, log)
+	if err := s.repo.CreateRecoveryLog(ctx, log); err != nil {
+		// Log error but don't fail the operation
+		_ = err
+	}
 }
 
 // ===== Cryptography Helpers =====

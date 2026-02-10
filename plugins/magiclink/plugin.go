@@ -242,7 +242,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return handler
 	}
 
-	router.POST("/magic-link/send", wrapHandler(h.Send),
+	if err := router.POST("/magic-link/send", wrapHandler(h.Send),
 		forge.WithName("magiclink.send"),
 		forge.WithSummary("Send magic link"),
 		forge.WithDescription("Sends a passwordless authentication link to the specified email address. Rate limited to 5 requests per minute per email"),
@@ -252,15 +252,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Too many requests", ErrorResponse{}),
 		forge.WithTags("MagicLink", "Authentication"),
 		forge.WithValidation(true),
-	)
-	router.GET("/magic-link/verify", wrapHandler(h.Verify),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.GET("/magic-link/verify", wrapHandler(h.Verify),
 		forge.WithName("magiclink.verify"),
 		forge.WithSummary("Verify magic link"),
 		forge.WithDescription("Verifies the magic link token from email and creates a user session on success. Supports implicit signup if enabled. Query params: token (required), remember (optional)"),
 		forge.WithResponseSchema(200, "Magic link verified", VerifyResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("MagicLink", "Authentication"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

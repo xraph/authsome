@@ -7,6 +7,14 @@ import (
 	"github.com/xraph/forge"
 )
 
+// Context keys for step-up authentication.
+type contextKey string
+
+const (
+	stepupResultContextKey      contextKey = "stepup_result"
+	stepupEvaluationContextKey  contextKey = "stepup_evaluation"
+)
+
 // Middleware provides step-up authentication middleware.
 type Middleware struct {
 	service *Service
@@ -124,8 +132,8 @@ func (m *Middleware) RequireForRoute() forge.Middleware {
 			}
 
 			// Store result in context for handlers
-			ctx := context.WithValue(c.Request().Context(), "stepup_result", result)
-			c.Request().WithContext(ctx)
+			ctx := context.WithValue(c.Request().Context(), stepupResultContextKey, result)
+			*c.Request() = *c.Request().WithContext(ctx)
 
 			return next(c)
 		}
@@ -337,8 +345,8 @@ func (m *Middleware) EvaluateMiddleware() forge.Middleware {
 
 				if result, err := m.service.EvaluateRequirement(c.Request().Context(), evalCtx); err == nil {
 					// Store in context for handlers
-					ctx := context.WithValue(c.Request().Context(), "stepup_evaluation", result)
-					c.Request().WithContext(ctx)
+					ctx := context.WithValue(c.Request().Context(), stepupEvaluationContextKey, result)
+					*c.Request() = *c.Request().WithContext(ctx)
 
 					// Also set as context value for easy access
 					c.Set("stepup_evaluation", result)

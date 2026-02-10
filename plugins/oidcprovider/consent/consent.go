@@ -7,7 +7,7 @@ import (
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/icons"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // ConsentPageData contains all data needed for the consent page.

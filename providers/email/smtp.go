@@ -108,7 +108,7 @@ func (p *SMTPProvider) sendWithTLS(addr string, auth smtp.Auth, from string, to 
 	if err != nil {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }()
 
 	// Authenticate
 	if auth != nil {

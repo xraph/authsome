@@ -89,9 +89,17 @@ func (p *Parser) GetFunctionHelp() map[string]string {
 func (p *Parser) ExpressionComplexity(ast *cel.Ast) int {
 	// Simple heuristic: count nodes in the expression
 	// Real implementation would walk the full AST
-	expr := ast.Expr()
+	checkedExpr, err := cel.AstToCheckedExpr(ast)
+	if err != nil {
+		// Fallback to parsed expr if checked expr fails
+		parsedExpr, err := cel.AstToParsedExpr(ast)
+		if err != nil {
+			return 0
+		}
+		return estimateComplexityNode(parsedExpr.GetExpr(), 0)
+	}
 
-	return estimateComplexityNode(expr, 0)
+	return estimateComplexityNode(checkedExpr.GetExpr(), 0)
 }
 
 // estimateComplexityNode recursively counts operations in an expression.
@@ -104,7 +112,7 @@ func estimateComplexityNode(expr any, depth int) int {
 	return 10
 }
 
-// Example expressions for testing.
+// ExampleExpressions expressions for testing.
 var ExampleExpressions = map[string]string{
 	"owner_only":      `resource.owner == principal.id`,
 	"admin_or_owner":  `principal.roles.exists(r, r == "admin") || resource.owner == principal.id`,

@@ -4,7 +4,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/errors"
 )
 
-// Re-export error types for convenience.
+// SubscriptionError is the subscription error type.
 type SubscriptionError = errors.SubscriptionError
 
 // NewSubscriptionError creates a new subscription error with context.
@@ -12,7 +12,7 @@ var NewSubscriptionError = errors.New
 
 // Re-export domain errors.
 var (
-	// Plan errors.
+	// ErrPlanNotFound is returned when a plan is not found.
 	ErrPlanNotFound           = errors.ErrPlanNotFound
 	ErrPlanAlreadyExists      = errors.ErrPlanAlreadyExists
 	ErrPlanNotActive          = errors.ErrPlanNotActive
@@ -21,7 +21,7 @@ var (
 	ErrInvalidBillingPattern  = errors.ErrInvalidBillingPattern
 	ErrInvalidBillingInterval = errors.ErrInvalidBillingInterval
 
-	// Subscription errors.
+	// ErrSubscriptionNotFound is returned when a subscription is not found.
 	ErrSubscriptionNotFound      = errors.ErrSubscriptionNotFound
 	ErrSubscriptionAlreadyExists = errors.ErrSubscriptionAlreadyExists
 	ErrSubscriptionNotActive     = errors.ErrSubscriptionNotActive
@@ -30,7 +30,7 @@ var (
 	ErrCannotDowngrade           = errors.ErrCannotDowngrade
 	ErrInvalidQuantity           = errors.ErrInvalidQuantity
 
-	// Add-on errors.
+	// ErrAddOnNotFound is returned when an add-on is not found.
 	ErrAddOnNotFound        = errors.ErrAddOnNotFound
 	ErrAddOnAlreadyExists   = errors.ErrAddOnAlreadyExists
 	ErrAddOnNotActive       = errors.ErrAddOnNotActive
@@ -39,41 +39,41 @@ var (
 	ErrAddOnNotAttached     = errors.ErrAddOnNotAttached
 	ErrAddOnMaxQuantity     = errors.ErrAddOnMaxQuantity
 
-	// Invoice errors.
+	// ErrInvoiceNotFound is returned when an invoice is not found.
 	ErrInvoiceNotFound    = errors.ErrInvoiceNotFound
 	ErrInvoiceAlreadyPaid = errors.ErrInvoiceAlreadyPaid
 	ErrInvoiceVoided      = errors.ErrInvoiceVoided
 	ErrInvoiceNotOpen     = errors.ErrInvoiceNotOpen
 
-	// Usage errors.
+	// ErrUsageRecordNotFound is returned when a usage record is not found.
 	ErrUsageRecordNotFound  = errors.ErrUsageRecordNotFound
 	ErrDuplicateUsageRecord = errors.ErrDuplicateUsageRecord
 	ErrInvalidUsageMetric   = errors.ErrInvalidUsageMetric
 	ErrInvalidUsageAction   = errors.ErrInvalidUsageAction
 
-	// Payment method errors.
+	// ErrPaymentMethodNotFound is returned when a payment method is not found.
 	ErrPaymentMethodNotFound      = errors.ErrPaymentMethodNotFound
 	ErrPaymentMethodRequired      = errors.ErrPaymentMethodRequired
 	ErrPaymentMethodExpired       = errors.ErrPaymentMethodExpired
 	ErrDefaultPaymentMethodDelete = errors.ErrDefaultPaymentMethodDelete
 
-	// Customer errors.
+	// ErrCustomerNotFound is returned when a customer is not found.
 	ErrCustomerNotFound      = errors.ErrCustomerNotFound
 	ErrCustomerAlreadyExists = errors.ErrCustomerAlreadyExists
 
-	// Provider errors.
+	// ErrProviderNotConfigured errors.
 	ErrProviderNotConfigured   = errors.ErrProviderNotConfigured
 	ErrProviderAPIError        = errors.ErrProviderAPIError
 	ErrWebhookSignatureInvalid = errors.ErrWebhookSignatureInvalid
 	ErrWebhookEventUnhandled   = errors.ErrWebhookEventUnhandled
 
-	// Feature/limit errors.
+	// ErrFeatureLimitExceeded is returned when a feature limit is exceeded.
 	ErrFeatureLimitExceeded = errors.ErrFeatureLimitExceeded
 	ErrSeatLimitExceeded    = errors.ErrSeatLimitExceeded
 	ErrSubscriptionRequired = errors.ErrSubscriptionRequired
 	ErrTrialExpired         = errors.ErrTrialExpired
 
-	// General errors.
+	// ErrInvalidCurrency is returned when currency is invalid.
 	ErrInvalidCurrency = errors.ErrInvalidCurrency
 	ErrInvalidAppID    = errors.ErrInvalidAppID
 	ErrInvalidOrgID    = errors.ErrInvalidOrgID

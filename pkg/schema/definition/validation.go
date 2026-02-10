@@ -202,7 +202,7 @@ func ValidateName(name string) error {
 	}
 
 	for i, c := range name {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' {
 			return fmt.Errorf("invalid character '%c' at position %d in name '%s'", c, i, name)
 		}
 	}

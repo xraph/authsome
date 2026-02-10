@@ -34,12 +34,12 @@ func NewHandler(s *Service, rls *rl.Service, authInst core.Authsome, authComplet
 	}
 }
 
-// Request types.
+// SendRequest represents request types.
 type SendRequest struct {
 	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
 
-// Response types.
+// ErrorResponse represents response types.
 type ErrorResponse = responses.ErrorResponse
 type VerifyResponse = responses.VerifyResponse
 

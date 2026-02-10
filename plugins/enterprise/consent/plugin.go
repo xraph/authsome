@@ -73,10 +73,10 @@ func (p *Plugin) Init(auth any) error {
 	configManager := forgeApp.Config()
 	serviceRegistry := authInstance.GetServiceRegistry()
 
-	// Load configuration from Forge config manager
+	// config configuration from Forge config manager
 	var config Config
 	if err := configManager.Bind("auth.consent", &config); err != nil {
-		// Use defaults if binding fails
+		// config defaults if binding fails
 		config = *DefaultConfig()
 	}
 
@@ -124,7 +124,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	consentGroup := router.Group(p.config.Dashboard.Path)
 	{
 		// Consent records (user endpoints)
-		consentGroup.POST("/records", p.handler.CreateConsent,
+		if err := consentGroup.POST("/records", p.handler.CreateConsent,
 			forge.WithName("consent.records.create"),
 			forge.WithSummary("Create consent record"),
 			forge.WithDescription("Record user consent for data processing activities"),
@@ -132,15 +132,21 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Consent recorded", ConsentRecordResponse{}),
 			forge.WithTags("Consent", "GDPR"),
 			forge.WithValidation(true),
-		)
-		consentGroup.GET("/records/:id", p.handler.GetConsent,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.GET("/records/:id", p.handler.GetConsent,
 			forge.WithName("consent.records.get"),
 			forge.WithSummary("Get consent record"),
 			forge.WithDescription("Retrieve a specific consent record"),
 			forge.WithResponseSchema(200, "Consent record retrieved", ConsentRecordResponse{}),
 			forge.WithTags("Consent", "GDPR"),
-		)
-		consentGroup.PUT("/records/:id", p.handler.UpdateConsent,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.PUT("/records/:id", p.handler.UpdateConsent,
 			forge.WithName("consent.records.update"),
 			forge.WithSummary("Update consent record"),
 			forge.WithDescription("Update an existing consent record"),
@@ -148,17 +154,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Consent updated", ConsentRecordResponse{}),
 			forge.WithTags("Consent", "GDPR"),
 			forge.WithValidation(true),
-		)
-		consentGroup.POST("/revoke/:id", p.handler.RevokeConsent,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.POST("/revoke/:id", p.handler.RevokeConsent,
 			forge.WithName("consent.records.revoke"),
 			forge.WithSummary("Revoke consent"),
 			forge.WithDescription("Revoke previously given consent"),
 			forge.WithResponseSchema(200, "Consent revoked", ConsentStatusResponse{}),
 			forge.WithTags("Consent", "GDPR"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Consent policies (read endpoints public, write endpoints admin only)
-		consentGroup.POST("/policies", p.handler.CreateConsentPolicy,
+		if err := consentGroup.POST("/policies", p.handler.CreateConsentPolicy,
 			forge.WithName("consent.policies.create"),
 			forge.WithSummary("Create consent policy"),
 			forge.WithDescription("Create a new consent policy (admin only)"),
@@ -166,17 +178,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Policy created", ConsentPolicyResponse{}),
 			forge.WithTags("Consent", "Policies"),
 			forge.WithValidation(true),
-		)
-		consentGroup.GET("/policies/:id", p.handler.GetConsentPolicy,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.GET("/policies/:id", p.handler.GetConsentPolicy,
 			forge.WithName("consent.policies.get"),
 			forge.WithSummary("Get consent policy"),
 			forge.WithDescription("Retrieve a specific consent policy"),
 			forge.WithResponseSchema(200, "Policy retrieved", ConsentPolicyResponse{}),
 			forge.WithTags("Consent", "Policies"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Cookie consent (public endpoints for anonymous users)
-		consentGroup.POST("/cookies", p.handler.RecordCookieConsent,
+		if err := consentGroup.POST("/cookies", p.handler.RecordCookieConsent,
 			forge.WithName("consent.cookies.record"),
 			forge.WithSummary("Record cookie consent"),
 			forge.WithDescription("Record user's cookie consent preferences"),
@@ -184,17 +202,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Cookie consent recorded", ConsentCookieResponse{}),
 			forge.WithTags("Consent", "Cookies"),
 			forge.WithValidation(true),
-		)
-		consentGroup.GET("/cookies", p.handler.GetCookieConsent,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.GET("/cookies", p.handler.GetCookieConsent,
 			forge.WithName("consent.cookies.get"),
 			forge.WithSummary("Get cookie consent"),
 			forge.WithDescription("Retrieve user's cookie consent preferences"),
 			forge.WithResponseSchema(200, "Cookie consent retrieved", ConsentCookieResponse{}),
 			forge.WithTags("Consent", "Cookies"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Data export (GDPR Article 20 - Right to Data Portability)
-		consentGroup.POST("/export", p.handler.RequestDataExport,
+		if err := consentGroup.POST("/export", p.handler.RequestDataExport,
 			forge.WithName("consent.export.request"),
 			forge.WithSummary("Request data export"),
 			forge.WithDescription("Request export of all user data (GDPR Article 20)"),
@@ -202,24 +226,33 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Export request created", ConsentExportResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
 			forge.WithValidation(true),
-		)
-		consentGroup.GET("/export/:id", p.handler.GetDataExport,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.GET("/export/:id", p.handler.GetDataExport,
 			forge.WithName("consent.export.get"),
 			forge.WithSummary("Get data export status"),
 			forge.WithDescription("Get status of a data export request"),
 			forge.WithResponseSchema(200, "Export status retrieved", ConsentExportResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
-		)
-		consentGroup.GET("/export/:id/download", p.handler.DownloadDataExport,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.GET("/export/:id/download", p.handler.DownloadDataExport,
 			forge.WithName("consent.export.download"),
 			forge.WithSummary("Download data export"),
 			forge.WithDescription("Download exported user data"),
 			forge.WithResponseSchema(200, "Export file", ConsentExportFileResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Data deletion (GDPR Article 17 - Right to be Forgotten)
-		consentGroup.POST("/deletion", p.handler.RequestDataDeletion,
+		if err := consentGroup.POST("/deletion", p.handler.RequestDataDeletion,
 			forge.WithName("consent.deletion.request"),
 			forge.WithSummary("Request data deletion"),
 			forge.WithDescription("Request deletion of all user data (GDPR Article 17 - Right to be Forgotten)"),
@@ -227,31 +260,43 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Deletion request created", ConsentDeletionResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
 			forge.WithValidation(true),
-		)
-		consentGroup.GET("/deletion/:id", p.handler.GetDataDeletion,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.GET("/deletion/:id", p.handler.GetDataDeletion,
 			forge.WithName("consent.deletion.get"),
 			forge.WithSummary("Get data deletion status"),
 			forge.WithDescription("Get status of a data deletion request"),
 			forge.WithResponseSchema(200, "Deletion status retrieved", ConsentDeletionResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
-		)
-		consentGroup.POST("/deletion/:id/approve", p.handler.ApproveDeletionRequest,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.POST("/deletion/:id/approve", p.handler.ApproveDeletionRequest,
 			forge.WithName("consent.deletion.approve"),
 			forge.WithSummary("Approve deletion request"),
 			forge.WithDescription("Approve a data deletion request (admin only)"),
 			forge.WithResponseSchema(200, "Deletion approved", ConsentStatusResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights", "Admin"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Privacy settings (admin only)
-		consentGroup.GET("/settings", p.handler.GetPrivacySettings,
+		if err := consentGroup.GET("/settings", p.handler.GetPrivacySettings,
 			forge.WithName("consent.settings.get"),
 			forge.WithSummary("Get privacy settings"),
 			forge.WithDescription("Get privacy and consent settings"),
 			forge.WithResponseSchema(200, "Settings retrieved", ConsentSettingsResponse{}),
 			forge.WithTags("Consent", "Settings"),
-		)
-		consentGroup.PUT("/settings", p.handler.UpdatePrivacySettings,
+		
+		); err != nil {
+			return err
+		}
+		if err := consentGroup.PUT("/settings", p.handler.UpdatePrivacySettings,
 			forge.WithName("consent.settings.update"),
 			forge.WithSummary("Update privacy settings"),
 			forge.WithDescription("Update privacy and consent settings (admin only)"),
@@ -259,26 +304,35 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Settings updated", ConsentSettingsResponse{}),
 			forge.WithTags("Consent", "Settings", "Admin"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Audit logs
-		consentGroup.GET("/audit", p.handler.GetConsentAuditLogs,
+		if err := consentGroup.GET("/audit", p.handler.GetConsentAuditLogs,
 			forge.WithName("consent.audit.list"),
 			forge.WithSummary("List consent audit logs"),
 			forge.WithDescription("List all consent and data processing audit logs"),
 			forge.WithResponseSchema(200, "Audit logs retrieved", ConsentAuditLogsResponse{}),
 			forge.WithTags("Consent", "Audit"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Reports (admin only)
-		consentGroup.POST("/reports", p.handler.GenerateConsentReport,
+		if err := consentGroup.POST("/reports", p.handler.GenerateConsentReport,
 			forge.WithName("consent.reports.generate"),
 			forge.WithSummary("Generate consent report"),
 			forge.WithDescription("Generate a consent and GDPR compliance report (admin only)"),
 			forge.WithResponseSchema(200, "Report generated", ConsentReportResponse{}),
 			forge.WithTags("Consent", "Reports", "Admin"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Data Processing Agreements - TODO: Implement handlers
 		// consentGroup.POST("/dpa", p.handler.CreateDPA)
@@ -367,7 +421,7 @@ func (p *Plugin) onOrganizationCreated(ctx context.Context, org any) error {
 	// When a new organization is created in SaaS mode,
 	// initialize default privacy settings for that organization
 
-	// Extract organization ID from interface
+	// orgID organization ID from interface
 	var orgID string
 
 	switch o := org.(type) {
@@ -558,7 +612,7 @@ func (p *Plugin) GetUserConsentStatus(ctx context.Context, userID, orgID, consen
 	return consent.Granted, nil
 }
 
-// DTOs for consent routes.
+// ConsentStatusResponse for consent routes.
 type ConsentStatusResponse struct {
 	Status string `example:"success" json:"status"`
 }

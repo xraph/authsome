@@ -10,8 +10,6 @@ import (
 	"github.com/xraph/authsome/core/hooks"
 	"github.com/xraph/authsome/core/impersonation"
 	"github.com/xraph/authsome/core/registry"
-	"github.com/xraph/authsome/core/session"
-	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
@@ -82,24 +80,14 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	}
 
 	// Get required services from registry
-	userSvcInterface := serviceRegistry.UserService()
-	if userSvcInterface == nil {
+	userSvc := serviceRegistry.UserService()
+	if userSvc == nil {
 		return errs.InternalServerErrorWithMessage("user service not found in registry")
 	}
 
-	userSvc, ok := userSvcInterface.(user.ServiceInterface)
-	if !ok {
-		return errs.InternalServerErrorWithMessage("invalid user service type")
-	}
-
-	sessionSvcInterface := serviceRegistry.SessionService()
-	if sessionSvcInterface == nil {
+	sessionSvc := serviceRegistry.SessionService()
+	if sessionSvc == nil {
 		return errs.InternalServerErrorWithMessage("session service not found in registry")
-	}
-
-	sessionSvc, ok := sessionSvcInterface.(session.ServiceInterface)
-	if !ok {
-		return errs.InternalServerErrorWithMessage("invalid session service type")
 	}
 
 	auditSvc := serviceRegistry.AuditService()
@@ -162,7 +150,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	api := router.Group("/impersonation")
 
 	// Impersonation management endpoints
-	api.POST("/start", p.handler.StartImpersonation,
+	if err := api.POST("/start", p.handler.StartImpersonation,
 		forge.WithName("impersonation.start"),
 		forge.WithSummary("Start impersonation"),
 		forge.WithDescription("Begin impersonating another user. Requires admin privileges and creates an audit trail."),
@@ -171,58 +159,76 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.POST("/end", p.handler.EndImpersonation,
+	if err := api.POST("/end", p.handler.EndImpersonation,
 		forge.WithName("impersonation.end"),
 		forge.WithSummary("End impersonation"),
 		forge.WithDescription("End the current impersonation session and restore the original user context"),
 		forge.WithResponseSchema(200, "Impersonation ended", ImpersonationEndResponse{}),
 		forge.WithResponseSchema(400, "Invalid request or no active impersonation", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/:id", p.handler.GetImpersonation,
+	if err := api.GET("/:id", p.handler.GetImpersonation,
 		forge.WithName("impersonation.get"),
 		forge.WithSummary("Get impersonation details"),
 		forge.WithDescription("Retrieve details of a specific impersonation session"),
 		forge.WithResponseSchema(200, "Impersonation retrieved", ImpersonationSession{}),
 		forge.WithResponseSchema(404, "Impersonation not found", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.GET("/", p.handler.ListImpersonations,
+	if err := api.GET("/", p.handler.ListImpersonations,
 		forge.WithName("impersonation.list"),
 		forge.WithSummary("List impersonations"),
 		forge.WithDescription("List all impersonation sessions (active and historical) with pagination support"),
 		forge.WithResponseSchema(200, "Impersonations retrieved", ImpersonationListResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	api.POST("/verify", p.handler.VerifyImpersonation,
+	if err := api.POST("/verify", p.handler.VerifyImpersonation,
 		forge.WithName("impersonation.verify"),
 		forge.WithSummary("Verify impersonation"),
 		forge.WithDescription("Verify if the current session is an active impersonation"),
 		forge.WithResponseSchema(200, "Verification result", ImpersonationVerifyResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Audit endpoints
-	api.GET("/audit", p.handler.ListAuditEvents,
+	if err := api.GET("/audit", p.handler.ListAuditEvents,
 		forge.WithName("impersonation.audit.list"),
 		forge.WithSummary("List impersonation audit events"),
 		forge.WithDescription("Retrieve audit logs of all impersonation activities for compliance and security monitoring"),
 		forge.WithResponseSchema(200, "Audit events retrieved", ImpersonationAuditResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation", "Audit"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// DTOs for impersonation routes (placeholder types).
+// ImpersonationErrorResponse for impersonation routes (placeholder types).
 type ImpersonationErrorResponse struct {
 	Error string `example:"Error message" json:"error"`
 }

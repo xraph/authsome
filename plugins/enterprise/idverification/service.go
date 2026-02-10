@@ -630,9 +630,7 @@ func (s *Service) sendWebhook(ctx context.Context, verification *schema.Identity
 
 	// Check if this event type should be sent
 	if len(s.config.WebhookEvents) > 0 {
-		found := slices.Contains(s.config.WebhookEvents, eventType)
-
-		if !found {
+		if !slices.Contains(s.config.WebhookEvents, eventType) {
 			return
 		}
 	}

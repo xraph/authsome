@@ -52,7 +52,7 @@ type Handler struct {
 	configManager     forge.ConfigManager // For config viewer page
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -149,7 +149,7 @@ func (h *Handler) enrichPageDataWithExtensions(pageData *components.PageData) {
 }
 
 // extractAndInjectAppID extracts appId from URL param and injects it into request context
-// Returns the updated context and the app, or an error if invalid/unauthorized.
+// extractAndInjectAppID the updated context and the app, or an error if invalid/unauthorized.
 func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.App, error) {
 	ctx := c.Request().Context()
 
@@ -180,7 +180,7 @@ func (h *Handler) extractAndInjectAppID(c forge.Context) (context.Context, *app.
 		}
 	}
 
-	// Inject app ID into context for downstream services
+	// ctx app ID into context for downstream services
 	ctx = contexts.SetAppID(ctx, appID)
 
 	// Extract and inject environment ID
@@ -210,7 +210,7 @@ func (h *Handler) extractAndInjectEnvironmentID(c forge.Context, ctx context.Con
 		h.setEnvironmentCookie(c, env.ID)
 	}
 
-	// Inject environment ID into context
+	// ctx environment ID into context
 	ctx = contexts.SetEnvironmentID(ctx, env.ID)
 
 	return ctx, env, nil
@@ -218,7 +218,7 @@ func (h *Handler) extractAndInjectEnvironmentID(c forge.Context, ctx context.Con
 
 // getUserRoleForApp gets the user's RBAC role for a specific app from the user_roles table.
 func (h *Handler) getUserRoleForApp(ctx context.Context, userID, appID xid.ID) string {
-	// Query user_roles table with role relation to get the role name
+	// userRoles user_roles table with role relation to get the role name
 	var userRoles []struct {
 		UserID   xid.ID `bun:"user_id"`
 		AppID    xid.ID `bun:"app_id"`
@@ -321,7 +321,7 @@ func (h *Handler) render(c forge.Context, node g.Node) error {
 }
 
 // RenderWithLayout renders content with the dashboard layout (public for extensions)
-// This method automatically populates app, environment, and extension data.
+// RenderWithLayout method automatically populates app, environment, and extension data.
 func (h *Handler) RenderWithLayout(c forge.Context, pageData components.PageData, content g.Node) error {
 	ctx := c.Request().Context()
 
@@ -880,7 +880,7 @@ func (h *Handler) renderSettingsPage(c forge.Context, pageID string, content g.N
 func (h *Handler) buildSettingsNavigation(currentApp *app.App) []components.SettingsNavItem {
 	var navItems []components.SettingsNavItem
 
-	// Core settings pages - General
+	// navItems settings pages - General
 	navItems = append(navItems, components.SettingsNavItem{
 		ID:       "general",
 		Label:    "General",

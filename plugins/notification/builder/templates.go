@@ -1425,7 +1425,7 @@ func getLastBlockID(doc *Document) string {
 	for id := range doc.Blocks {
 		if strings.HasPrefix(id, "block-") {
 			var num int
-			fmt.Sscanf(id, "block-%d", &num)
+			_, _ = fmt.Sscanf(id, "block-%d", &num)
 
 			if num > maxNum {
 				maxNum = num
@@ -1437,7 +1437,7 @@ func getLastBlockID(doc *Document) string {
 }
 
 func addColumnToColumns(doc *Document, columnsID string) string {
-	colID := fmt.Sprintf("col-%d-%d", len(doc.Blocks), 0)
+	var colID string
 	for i := 0; ; i++ {
 		colID = fmt.Sprintf("col-%d-%d", len(doc.Blocks), i)
 		if _, exists := doc.Blocks[colID]; !exists {

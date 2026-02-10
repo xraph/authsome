@@ -43,7 +43,7 @@ func (cr *ContentRevision) BeforeInsert() {
 	cr.CreatedAt = time.Now()
 }
 
-// CreateFromEntry creates a new revision from an entry.
+// CreateRevisionFromEntry creates a new revision from an entry.
 func CreateRevisionFromEntry(entry *ContentEntry, changeReason string, changedBy xid.ID) *ContentRevision {
 	rev := &ContentRevision{
 		ID:           xid.New(),

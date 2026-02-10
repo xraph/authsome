@@ -96,9 +96,9 @@ type PluginRegistry interface {
 	List() []Plugin
 }
 
-// PluginDependencies defines optional interface for plugins to declare their dependencies
-// Plugins implementing this interface will have their dependencies validated before initialization
-// Dependencies are declared by plugin ID and must be registered before the dependent plugin
+// PluginWithDependencies defines optional interface for plugins to declare their dependencies.
+// Plugins implementing this interface will have their dependencies validated before initialization.
+// Dependencies are declared by plugin ID and must be registered before the dependent plugin.
 //
 // Example:
 //

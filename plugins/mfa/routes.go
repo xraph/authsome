@@ -10,7 +10,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	// ==================== Factor Management ====================
 
 	// POST /mfa/factors/enroll - Enroll a new authentication factor
-	router.POST("/mfa/factors/enroll", handler.EnrollFactor,
+	_ = router.POST("/mfa/factors/enroll", handler.EnrollFactor,
 		forge.WithSummary("Enroll MFA factor"),
 		forge.WithDescription("Initiates enrollment of a new multi-factor authentication method (TOTP, SMS, Email, WebAuthn, etc.)"),
 		forge.WithTags("MFA", "Factor Management"),
@@ -22,7 +22,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// GET /mfa/factors - List all enrolled factors
-	router.GET("/mfa/factors", handler.ListFactors,
+	_ = router.GET("/mfa/factors", handler.ListFactors,
 		forge.WithSummary("List MFA factors"),
 		forge.WithDescription("Retrieves all MFA factors enrolled by the authenticated user"),
 		forge.WithTags("MFA", "Factor Management"),
@@ -33,7 +33,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// GET /mfa/factors/:id - Get a specific factor
-	router.GET("/mfa/factors/:id", handler.GetFactor,
+	_ = router.GET("/mfa/factors/:id", handler.GetFactor,
 		forge.WithSummary("Get MFA factor"),
 		forge.WithDescription("Retrieves details of a specific enrolled MFA factor"),
 		forge.WithTags("MFA", "Factor Management"),
@@ -46,7 +46,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// PUT /mfa/factors/:id - Update a factor
-	router.PUT("/mfa/factors/:id", handler.UpdateFactor,
+	_ = router.PUT("/mfa/factors/:id", handler.UpdateFactor,
 		forge.WithSummary("Update MFA factor"),
 		forge.WithDescription("Updates properties of an enrolled MFA factor (name, priority, status)"),
 		forge.WithTags("MFA", "Factor Management"),
@@ -59,7 +59,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// DELETE /mfa/factors/:id - Delete a factor
-	router.DELETE("/mfa/factors/:id", handler.DeleteFactor,
+	_ = router.DELETE("/mfa/factors/:id", handler.DeleteFactor,
 		forge.WithSummary("Delete MFA factor"),
 		forge.WithDescription("Removes an enrolled MFA factor from the user's account"),
 		forge.WithTags("MFA", "Factor Management"),
@@ -72,7 +72,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// POST /mfa/factors/:id/verify - Verify an enrolled factor
-	router.POST("/mfa/factors/:id/verify", handler.VerifyFactor,
+	_ = router.POST("/mfa/factors/:id/verify", handler.VerifyFactor,
 		forge.WithSummary("Verify enrolled factor"),
 		forge.WithDescription("Verifies and activates a newly enrolled MFA factor by providing a valid code"),
 		forge.WithTags("MFA", "Factor Management"),
@@ -87,7 +87,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	// ==================== Challenge & Verification ====================
 
 	// POST /mfa/challenge - Initiate an MFA challenge
-	router.POST("/mfa/challenge", handler.InitiateChallenge,
+	_ = router.POST("/mfa/challenge", handler.InitiateChallenge,
 		forge.WithSummary("Initiate MFA challenge"),
 		forge.WithDescription("Starts a new MFA challenge session requiring verification of one or more factors"),
 		forge.WithTags("MFA", "Authentication"),
@@ -99,7 +99,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// POST /mfa/verify - Verify an MFA challenge
-	router.POST("/mfa/verify", handler.VerifyChallenge,
+	_ = router.POST("/mfa/verify", handler.VerifyChallenge,
 		forge.WithSummary("Verify MFA challenge"),
 		forge.WithDescription("Verifies an MFA challenge by providing the required authentication code or data"),
 		forge.WithTags("MFA", "Authentication"),
@@ -112,7 +112,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// GET /mfa/challenge/:id - Get challenge status
-	router.GET("/mfa/challenge/:id", handler.GetChallengeStatus,
+	_ = router.GET("/mfa/challenge/:id", handler.GetChallengeStatus,
 		forge.WithSummary("Get challenge status"),
 		forge.WithDescription("Retrieves the current status and details of an MFA challenge"),
 		forge.WithTags("MFA", "Authentication"),
@@ -127,7 +127,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	// ==================== Trusted Devices ====================
 
 	// POST /mfa/devices/trust - Trust current device
-	router.POST("/mfa/devices/trust", handler.TrustDevice,
+	_ = router.POST("/mfa/devices/trust", handler.TrustDevice,
 		forge.WithSummary("Trust device"),
 		forge.WithDescription("Marks the current device as trusted to skip MFA for future authentications within the trust period"),
 		forge.WithTags("MFA", "Trusted Devices"),
@@ -139,7 +139,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// GET /mfa/devices - List trusted devices
-	router.GET("/mfa/devices", handler.ListTrustedDevices,
+	_ = router.GET("/mfa/devices", handler.ListTrustedDevices,
 		forge.WithSummary("List trusted devices"),
 		forge.WithDescription("Retrieves all devices currently trusted by the authenticated user"),
 		forge.WithTags("MFA", "Trusted Devices"),
@@ -150,7 +150,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// DELETE /mfa/devices/:id - Revoke trusted device
-	router.DELETE("/mfa/devices/:id", handler.RevokeTrustedDevice,
+	_ = router.DELETE("/mfa/devices/:id", handler.RevokeTrustedDevice,
 		forge.WithSummary("Revoke trusted device"),
 		forge.WithDescription("Removes trust status from a device, requiring MFA for future authentications"),
 		forge.WithTags("MFA", "Trusted Devices"),
@@ -165,7 +165,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	// ==================== Status & Info ====================
 
 	// GET /mfa/status - Get MFA status
-	router.GET("/mfa/status", handler.GetStatus,
+	_ = router.GET("/mfa/status", handler.GetStatus,
 		forge.WithSummary("Get MFA status"),
 		forge.WithDescription("Retrieves the current MFA enrollment and policy status for the authenticated user"),
 		forge.WithTags("MFA", "Status"),
@@ -176,7 +176,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// GET /mfa/policy - Get MFA policy
-	router.GET("/mfa/policy", handler.GetPolicy,
+	_ = router.GET("/mfa/policy", handler.GetPolicy,
 		forge.WithSummary("Get MFA policy"),
 		forge.WithDescription("Retrieves the organization's MFA policy configuration"),
 		forge.WithTags("MFA", "Policy"),
@@ -188,7 +188,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	// ==================== Admin Endpoints ====================
 
 	// PUT /mfa/policy - Update MFA policy (admin only)
-	router.PUT("/mfa/policy", handler.AdminUpdatePolicy,
+	_ = router.PUT("/mfa/policy", handler.AdminUpdatePolicy,
 		forge.WithSummary("Update MFA policy"),
 		forge.WithDescription("Updates the organization's MFA policy configuration (requires admin privileges)"),
 		forge.WithTags("MFA", "Policy", "Admin"),
@@ -201,7 +201,7 @@ func RegisterRoutes(router forge.Router, handler *Handler) {
 	)
 
 	// POST /mfa/users/:id/reset - Reset user's MFA (admin only)
-	router.POST("/mfa/users/:id/reset", handler.AdminResetUserMFA,
+	_ = router.POST("/mfa/users/:id/reset", handler.AdminResetUserMFA,
 		forge.WithSummary("Reset user MFA"),
 		forge.WithDescription("Resets all MFA factors and trusted devices for a user (requires admin privileges)"),
 		forge.WithTags("MFA", "Admin"),

@@ -15,7 +15,7 @@ type Handler struct {
 	svc *Service
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -217,7 +217,7 @@ func (h *Handler) Get(c forge.Context) error {
 	}
 
 	// Get single passkey - could be implemented in service if needed
-	// For now, return not implemented
+	// _ now, return not implemented
 	_ = passkeyID
 
 	return c.JSON(http.StatusNotImplemented, errs.NotImplemented("get single passkey"))

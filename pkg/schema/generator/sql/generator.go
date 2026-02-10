@@ -140,15 +140,6 @@ func (g *Generator) generateCreateTable(model definition.Model) string {
 		columns = append(columns, g.generateColumn(field))
 	}
 
-	// Add primary key constraint if composite
-	primaryKeys := []string{}
-
-	for _, field := range model.Fields {
-		if field.Primary {
-			primaryKeys = append(primaryKeys, g.dialect.QuoteIdentifier(field.Column))
-		}
-	}
-
 	// Add foreign key constraints
 	for _, field := range model.Fields {
 		if field.References != nil {

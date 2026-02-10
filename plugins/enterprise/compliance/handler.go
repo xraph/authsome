@@ -19,7 +19,7 @@ type Handler struct {
 	policyEngine *PolicyEngine
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -36,7 +36,7 @@ func NewHandler(service *Service, policyEngine *PolicyEngine) *Handler {
 // ===== Profile Handlers =====
 
 // CreateProfile creates a new compliance profile
-// POST /auth/compliance/profiles.
+// CreateProfile /auth/compliance/profiles.
 func (h *Handler) CreateProfile(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -67,7 +67,7 @@ func (h *Handler) CreateProfile(c forge.Context) error {
 }
 
 // CreateProfileFromTemplate creates a profile from a template
-// POST /auth/compliance/profiles/from-template.
+// CreateProfileFromTemplate /auth/compliance/profiles/from-template.
 func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -98,7 +98,7 @@ func (h *Handler) CreateProfileFromTemplate(c forge.Context) error {
 }
 
 // GetProfile retrieves a compliance profile
-// GET /auth/compliance/profiles/:id.
+// GetProfile /auth/compliance/profiles/:id.
 func (h *Handler) GetProfile(c forge.Context) error {
 	id := c.Param("id")
 
@@ -111,7 +111,7 @@ func (h *Handler) GetProfile(c forge.Context) error {
 }
 
 // GetAppProfile retrieves the compliance profile for an app
-// GET /auth/compliance/apps/:appId/profile.
+// GetAppProfile /auth/compliance/apps/:appId/profile.
 func (h *Handler) GetAppProfile(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -134,7 +134,7 @@ func (h *Handler) GetAppProfile(c forge.Context) error {
 }
 
 // UpdateProfile updates a compliance profile
-// PUT /auth/compliance/profiles/:id.
+// UpdateProfile /auth/compliance/profiles/:id.
 func (h *Handler) UpdateProfile(c forge.Context) error {
 	id := c.Param("id")
 
@@ -152,7 +152,7 @@ func (h *Handler) UpdateProfile(c forge.Context) error {
 }
 
 // DeleteProfile deletes a compliance profile
-// DELETE /auth/compliance/profiles/:id.
+// DeleteProfile /auth/compliance/profiles/:id.
 func (h *Handler) DeleteProfile(c forge.Context) error {
 	id := c.Param("id")
 
@@ -166,7 +166,7 @@ func (h *Handler) DeleteProfile(c forge.Context) error {
 // ===== Status & Dashboard Handlers =====
 
 // GetComplianceStatus gets overall compliance status for an app
-// GET /auth/compliance/apps/:appId/status.
+// GetComplianceStatus /auth/compliance/apps/:appId/status.
 func (h *Handler) GetComplianceStatus(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -189,7 +189,7 @@ func (h *Handler) GetComplianceStatus(c forge.Context) error {
 }
 
 // GetDashboard gets compliance dashboard data
-// GET /auth/compliance/apps/:appId/dashboard.
+// GetDashboard /auth/compliance/apps/:appId/dashboard.
 func (h *Handler) GetDashboard(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -255,7 +255,7 @@ func (h *Handler) GetDashboard(c forge.Context) error {
 // ===== Check Handlers =====
 
 // RunCheck executes a compliance check
-// POST /auth/compliance/profiles/:profileId/checks.
+// RunCheck /auth/compliance/profiles/:profileId/checks.
 func (h *Handler) RunCheck(c forge.Context) error {
 	profileID := c.Param("profileId")
 
@@ -276,7 +276,7 @@ func (h *Handler) RunCheck(c forge.Context) error {
 }
 
 // ListChecks lists compliance checks
-// GET /auth/compliance/profiles/:profileId/checks.
+// ListChecks /auth/compliance/profiles/:profileId/checks.
 func (h *Handler) ListChecks(c forge.Context) error {
 	ctx := c.Request().Context()
 	q := c.Request().URL.Query()
@@ -323,7 +323,7 @@ func (h *Handler) ListChecks(c forge.Context) error {
 }
 
 // GetCheck retrieves a compliance check
-// GET /auth/compliance/checks/:id.
+// GetCheck /auth/compliance/checks/:id.
 func (h *Handler) GetCheck(c forge.Context) error {
 	id := c.Param("id")
 
@@ -338,7 +338,7 @@ func (h *Handler) GetCheck(c forge.Context) error {
 // ===== Violation Handlers =====
 
 // ListViolations lists compliance violations
-// GET /auth/compliance/apps/:appId/violations.
+// ListViolations /auth/compliance/apps/:appId/violations.
 func (h *Handler) ListViolations(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -403,7 +403,7 @@ func (h *Handler) ListViolations(c forge.Context) error {
 }
 
 // GetViolation retrieves a compliance violation
-// GET /auth/compliance/violations/:id.
+// GetViolation /auth/compliance/violations/:id.
 func (h *Handler) GetViolation(c forge.Context) error {
 	id := c.Param("id")
 
@@ -416,7 +416,7 @@ func (h *Handler) GetViolation(c forge.Context) error {
 }
 
 // ResolveViolation resolves a compliance violation
-// PUT /auth/compliance/violations/:id/resolve.
+// ResolveViolation /auth/compliance/violations/:id/resolve.
 func (h *Handler) ResolveViolation(c forge.Context) error {
 	ctx := c.Request().Context()
 	id := c.Param("id")
@@ -443,7 +443,7 @@ func (h *Handler) ResolveViolation(c forge.Context) error {
 // ===== Report Handlers =====
 
 // GenerateReport generates a compliance report
-// POST /auth/compliance/apps/:appId/reports.
+// GenerateReport /auth/compliance/apps/:appId/reports.
 func (h *Handler) GenerateReport(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -493,7 +493,7 @@ func (h *Handler) GenerateReport(c forge.Context) error {
 }
 
 // ListReports lists compliance reports
-// GET /auth/compliance/apps/:appId/reports.
+// ListReports /auth/compliance/apps/:appId/reports.
 func (h *Handler) ListReports(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -554,7 +554,7 @@ func (h *Handler) ListReports(c forge.Context) error {
 }
 
 // GetReport retrieves a compliance report
-// GET /auth/compliance/reports/:id.
+// GetReport /auth/compliance/reports/:id.
 func (h *Handler) GetReport(c forge.Context) error {
 	id := c.Param("id")
 
@@ -567,7 +567,7 @@ func (h *Handler) GetReport(c forge.Context) error {
 }
 
 // DownloadReport downloads a compliance report file
-// GET /auth/compliance/reports/:id/download.
+// DownloadReport /auth/compliance/reports/:id/download.
 func (h *Handler) DownloadReport(c forge.Context) error {
 	id := c.Param("id")
 
@@ -593,7 +593,7 @@ func (h *Handler) generateReportAsync(report *ComplianceReport) {
 // ===== Evidence Handlers =====
 
 // CreateEvidence creates compliance evidence
-// POST /auth/compliance/apps/:appId/evidence.
+// CreateEvidence /auth/compliance/apps/:appId/evidence.
 func (h *Handler) CreateEvidence(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -649,7 +649,7 @@ func (h *Handler) CreateEvidence(c forge.Context) error {
 }
 
 // ListEvidence lists compliance evidence
-// GET /auth/compliance/apps/:appId/evidence.
+// ListEvidence /auth/compliance/apps/:appId/evidence.
 func (h *Handler) ListEvidence(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -706,7 +706,7 @@ func (h *Handler) ListEvidence(c forge.Context) error {
 }
 
 // GetEvidence retrieves compliance evidence
-// GET /auth/compliance/evidence/:id.
+// GetEvidence /auth/compliance/evidence/:id.
 func (h *Handler) GetEvidence(c forge.Context) error {
 	id := c.Param("id")
 
@@ -719,7 +719,7 @@ func (h *Handler) GetEvidence(c forge.Context) error {
 }
 
 // DeleteEvidence deletes compliance evidence
-// DELETE /auth/compliance/evidence/:id.
+// DeleteEvidence /auth/compliance/evidence/:id.
 func (h *Handler) DeleteEvidence(c forge.Context) error {
 	id := c.Param("id")
 
@@ -733,7 +733,7 @@ func (h *Handler) DeleteEvidence(c forge.Context) error {
 // ===== Policy Handlers =====
 
 // CreatePolicy creates a compliance policy
-// POST /auth/compliance/apps/:appId/policies.
+// CreatePolicy /auth/compliance/apps/:appId/policies.
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -784,7 +784,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 }
 
 // ListPolicies lists compliance policies
-// GET /auth/compliance/apps/:appId/policies.
+// ListPolicies /auth/compliance/apps/:appId/policies.
 func (h *Handler) ListPolicies(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -841,7 +841,7 @@ func (h *Handler) ListPolicies(c forge.Context) error {
 }
 
 // GetPolicy retrieves a compliance policy
-// GET /auth/compliance/policies/:id.
+// GetPolicy /auth/compliance/policies/:id.
 func (h *Handler) GetPolicy(c forge.Context) error {
 	id := c.Param("id")
 
@@ -854,7 +854,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 }
 
 // UpdatePolicy updates a compliance policy
-// PUT /auth/compliance/policies/:id.
+// UpdatePolicy /auth/compliance/policies/:id.
 func (h *Handler) UpdatePolicy(c forge.Context) error {
 	id := c.Param("id")
 
@@ -899,7 +899,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 }
 
 // DeletePolicy deletes a compliance policy
-// DELETE /auth/compliance/policies/:id.
+// DeletePolicy /auth/compliance/policies/:id.
 func (h *Handler) DeletePolicy(c forge.Context) error {
 	id := c.Param("id")
 
@@ -913,7 +913,7 @@ func (h *Handler) DeletePolicy(c forge.Context) error {
 // ===== Training Handlers =====
 
 // CreateTraining creates a training record
-// POST /auth/compliance/apps/:appId/training.
+// CreateTraining /auth/compliance/apps/:appId/training.
 func (h *Handler) CreateTraining(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -960,7 +960,7 @@ func (h *Handler) CreateTraining(c forge.Context) error {
 }
 
 // ListTraining lists training records
-// GET /auth/compliance/apps/:appId/training.
+// ListTraining /auth/compliance/apps/:appId/training.
 func (h *Handler) ListTraining(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -1021,7 +1021,7 @@ func (h *Handler) ListTraining(c forge.Context) error {
 }
 
 // GetUserTraining gets training status for a user
-// GET /auth/compliance/users/:userId/training.
+// GetUserTraining /auth/compliance/users/:userId/training.
 func (h *Handler) GetUserTraining(c forge.Context) error {
 	userID := c.Param("userId")
 
@@ -1034,7 +1034,7 @@ func (h *Handler) GetUserTraining(c forge.Context) error {
 }
 
 // CompleteTraining marks training as completed
-// PUT /auth/compliance/training/:id/complete.
+// CompleteTraining /auth/compliance/training/:id/complete.
 func (h *Handler) CompleteTraining(c forge.Context) error {
 	id := c.Param("id")
 
@@ -1070,7 +1070,7 @@ func (h *Handler) CompleteTraining(c forge.Context) error {
 // ===== Template Handlers =====
 
 // ListTemplates lists available compliance templates
-// GET /auth/compliance/templates.
+// ListTemplates /auth/compliance/templates.
 func (h *Handler) ListTemplates(c forge.Context) error {
 	templates := make([]map[string]any, 0)
 
@@ -1086,7 +1086,7 @@ func (h *Handler) ListTemplates(c forge.Context) error {
 }
 
 // GetTemplate retrieves a compliance template
-// GET /auth/compliance/templates/:standard.
+// GetTemplate /auth/compliance/templates/:standard.
 func (h *Handler) GetTemplate(c forge.Context) error {
 	standard := ComplianceStandard(c.Param("standard"))
 

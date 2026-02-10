@@ -231,7 +231,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// PROVIDER MANAGEMENT
 	// =============================================================================
 
-	grp.POST("/provider/register", h.RegisterProvider,
+	if err := grp.POST("/provider/register", h.RegisterProvider,
 		forge.WithName("sso.provider.register"),
 		forge.WithSummary("Register SSO provider"),
 		forge.WithDescription("Admin endpoint to register SAML or OIDC SSO provider with multi-tenant scoping"),
@@ -241,21 +241,27 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
 		forge.WithTags("SSO", "Admin", "Provider Management"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// =============================================================================
 	// SAML ENDPOINTS
 	// =============================================================================
 
-	grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata,
+	if err := grp.GET("/saml2/sp/metadata", h.SAMLSPMetadata,
 		forge.WithName("sso.saml.metadata"),
 		forge.WithSummary("SAML SP metadata"),
 		forge.WithDescription("Returns SAML Service Provider metadata XML for IdP configuration"),
 		forge.WithResponseSchema(200, "Metadata XML", MetadataResponse{}),
 		forge.WithTags("SSO", "SAML", "Metadata"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	grp.POST("/saml2/login/:providerId", h.SAMLLogin,
+	if err := grp.POST("/saml2/login/:providerId", h.SAMLLogin,
 		forge.WithName("sso.saml.login"),
 		forge.WithSummary("Initiate SAML login"),
 		forge.WithDescription("Initiates SAML authentication flow by generating AuthnRequest and returning redirect URL"),
@@ -265,9 +271,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithTags("SSO", "SAML", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	grp.POST("/saml2/callback/:providerId", h.SAMLCallback,
+	if err := grp.POST("/saml2/callback/:providerId", h.SAMLCallback,
 		forge.WithName("sso.saml.callback"),
 		forge.WithSummary("SAML callback"),
 		forge.WithDescription("Handles SAML assertion from IdP, validates it, provisions user (JIT), and creates session"),
@@ -276,13 +285,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
 		forge.WithTags("SSO", "SAML", "Authentication", "Callback"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// =============================================================================
 	// OIDC ENDPOINTS
 	// =============================================================================
 
-	grp.POST("/oidc/login/:providerId", h.OIDCLogin,
+	if err := grp.POST("/oidc/login/:providerId", h.OIDCLogin,
 		forge.WithName("sso.oidc.login"),
 		forge.WithSummary("Initiate OIDC login"),
 		forge.WithDescription("Initiates OIDC authentication flow with PKCE, generates authorization URL"),
@@ -292,9 +304,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithTags("SSO", "OIDC", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	grp.GET("/oidc/callback/:providerId", h.OIDCCallback,
+	if err := grp.GET("/oidc/callback/:providerId", h.OIDCCallback,
 		forge.WithName("sso.oidc.callback"),
 		forge.WithSummary("OIDC callback"),
 		forge.WithDescription("Handles OIDC callback, exchanges code for tokens, provisions user (JIT), and creates session"),
@@ -303,7 +318,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
 		forge.WithTags("SSO", "OIDC", "Authentication", "Callback"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	p.logger.Debug("SSO plugin routes registered",
 		forge.F("saml_enabled", p.config.AllowSAML),

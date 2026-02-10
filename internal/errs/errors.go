@@ -15,7 +15,7 @@ import (
 
 // Authsome-specific error codes for structured error handling.
 const (
-	// Authentication errors.
+	// CodeInvalidCredentials is the error code for invalid credentials.
 	CodeInvalidCredentials = "INVALID_CREDENTIALS"
 	CodeEmailNotVerified   = "EMAIL_NOT_VERIFIED"
 	CodeAccountLocked      = "ACCOUNT_LOCKED"
@@ -30,7 +30,7 @@ const (
 	CodeMagicLinkExpired   = "MAGIC_LINK_EXPIRED"
 	CodeMagicLinkInvalid   = "MAGIC_LINK_INVALID"
 
-	// User errors.
+	// CodeUserNotFound is the error code for user not found.
 	CodeUserNotFound          = "USER_NOT_FOUND"
 	CodeUserAlreadyExists     = "USER_ALREADY_EXISTS"
 	CodeEmailAlreadyExists    = "EMAIL_ALREADY_EXISTS"
@@ -41,7 +41,7 @@ const (
 	CodeInvalidUsername       = "INVALID_USERNAME"
 	CodeWeakPassword          = "WEAK_PASSWORD"
 
-	// Session errors.
+	// CodeSessionNotFound is the error code for session not found.
 	CodeSessionNotFound        = "SESSION_NOT_FOUND"
 	CodeSessionExpired         = "SESSION_EXPIRED"
 	CodeSessionInvalid         = "SESSION_INVALID"
@@ -49,7 +49,7 @@ const (
 	CodeConcurrentSessionLimit = "CONCURRENT_SESSION_LIMIT"
 	CodeSessionConflict        = "SESSION_CONFLICT"
 
-	// Organization errors.
+	// CodeOrganizationNotFound is the error code for organization not found.
 	CodeOrganizationNotFound     = "ORGANIZATION_NOT_FOUND"
 	CodeOrganizationExists       = "ORGANIZATION_EXISTS"
 	CodeNotMember                = "NOT_ORGANIZATION_MEMBER"
@@ -58,81 +58,81 @@ const (
 	CodeSlugAlreadyExists        = "SLUG_ALREADY_EXISTS"
 	CodeOrganizationLimitReached = "ORGANIZATION_LIMIT_REACHED"
 
-	// Team errors.
+	// CodeTeamNotFound is the error code for team not found.
 	CodeTeamNotFound      = "TEAM_NOT_FOUND"
 	CodeTeamAlreadyExists = "TEAM_ALREADY_EXISTS"
 	CodeNotTeamMember     = "NOT_TEAM_MEMBER"
 
-	// Invitation errors.
+	// CodeInvitationNotFound is the error code for invitation not found.
 	CodeInvitationNotFound  = "INVITATION_NOT_FOUND"
 	CodeInvitationExpired   = "INVITATION_EXPIRED"
 	CodeInvitationAccepted  = "INVITATION_ACCEPTED"
 	CodeInvitationCancelled = "INVITATION_CANCELLED"
 
-	// RBAC errors.
+	// CodePermissionDenied is the error code for permission denied.
 	CodePermissionDenied  = "PERMISSION_DENIED"
 	CodeRoleNotFound      = "ROLE_NOT_FOUND"
 	CodeRoleAlreadyExists = "ROLE_ALREADY_EXISTS"
 	CodePolicyViolation   = "POLICY_VIOLATION"
 	CodeInvalidPolicy     = "INVALID_POLICY"
 
-	// Rate limiting.
+	// CodeRateLimitExceeded is the error code for rate limit exceeded.
 	CodeRateLimitExceeded = "RATE_LIMIT_EXCEEDED"
 	CodeTooManyAttempts   = "TOO_MANY_ATTEMPTS"
 
-	// Validation errors.
+	// CodeValidationFailed is the error code for validation failed.
 	CodeValidationFailed = "VALIDATION_FAILED"
 	CodeInvalidInput     = "INVALID_INPUT"
 	CodeRequiredField    = "REQUIRED_FIELD"
 	CodeInvalidFormat    = "INVALID_FORMAT"
 
-	// Plugin errors.
+	// CodePluginNotFound is the error code for plugin not found.
 	CodePluginNotFound   = "PLUGIN_NOT_FOUND"
 	CodePluginInitFailed = "PLUGIN_INIT_FAILED"
 	CodePluginDisabled   = "PLUGIN_DISABLED"
 
-	// OAuth/SSO errors.
+	// CodeOAuthFailed is the error code for OAuth failure.
 	CodeOAuthFailed        = "OAUTH_FAILED"
 	CodeInvalidOAuthState  = "INVALID_OAUTH_STATE"
 	CodeOAuthProviderError = "OAUTH_PROVIDER_ERROR"
 	CodeSAMLError          = "SAML_ERROR"
 	CodeOIDCError          = "OIDC_ERROR"
 
-	// API Key errors.
+	// CodeAPIKeyNotFound is the error code for API key not found.
 	CodeAPIKeyNotFound = "API_KEY_NOT_FOUND"
 	CodeAPIKeyExpired  = "API_KEY_EXPIRED"
 	CodeAPIKeyRevoked  = "API_KEY_REVOKED"
 	CodeAPIKeyInvalid  = "API_KEY_INVALID"
 
-	// Webhook errors.
+	// CodeWebhookNotFound is the error code for webhook not found.
 	CodeWebhookNotFound       = "WEBHOOK_NOT_FOUND"
 	CodeWebhookDeliveryFailed = "WEBHOOK_DELIVERY_FAILED"
 
-	// Notification errors.
+	// CodeNotificationFailed is the error code for notification failure.
 	CodeNotificationFailed   = "NOTIFICATION_FAILED"
 	CodeTemplateNotFound     = "TEMPLATE_NOT_FOUND"
 	CodeTemplateRenderFailed = "TEMPLATE_RENDER_FAILED"
 
-	// Device errors.
+	// CodeDeviceNotFound is the error code for device not found.
 	CodeDeviceNotFound   = "DEVICE_NOT_FOUND"
 	CodeDeviceNotTrusted = "DEVICE_NOT_TRUSTED"
 	CodeDeviceBlocked    = "DEVICE_BLOCKED"
 
-	// Passkey errors.
+	// CodePasskeyNotFound is the error code for passkey not found.
 	CodePasskeyNotFound           = "PASSKEY_NOT_FOUND"
 	CodePasskeyVerificationFailed = "PASSKEY_VERIFICATION_FAILED"
 	CodePasskeyRegistrationFailed = "PASSKEY_REGISTRATION_FAILED"
 
-	// Compliance errors.
+	// CodeComplianceViolation is the error code for compliance violation.
 	CodeComplianceViolation    = "COMPLIANCE_VIOLATION"
 	CodeDataRetentionViolation = "DATA_RETENTION_VIOLATION"
 
-	// SCIM errors.
+	// CodeSCIMResourceNotFound is the error code for SCIM resource not found.
 	CodeSCIMResourceNotFound = "SCIM_RESOURCE_NOT_FOUND"
 	CodeSCIMInvalidFilter    = "SCIM_INVALID_FILTER"
 	CodeSCIMInvalidPath      = "SCIM_INVALID_PATH"
 
-	// General errors.
+	// CodeInternalError is the error code for internal error.
 	CodeInternalError  = "INTERNAL_ERROR"
 	CodeNotImplemented = "NOT_IMPLEMENTED"
 	CodeDatabaseError  = "DATABASE_ERROR"

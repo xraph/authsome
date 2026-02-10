@@ -3,7 +3,7 @@ package mtls
 import "errors"
 
 var (
-	// Certificate Errors.
+	// ErrCertificateNotFound is returned when a certificate is not found.
 	ErrCertificateNotFound    = errors.New("certificate not found")
 	ErrCertificateExpired     = errors.New("certificate has expired")
 	ErrCertificateRevoked     = errors.New("certificate has been revoked")
@@ -11,7 +11,7 @@ var (
 	ErrCertificateNotYetValid = errors.New("certificate is not yet valid")
 	ErrCertificateSuspended   = errors.New("certificate is suspended")
 
-	// Validation Errors.
+	// ErrInvalidSignature Errors.
 	ErrInvalidSignature        = errors.New("invalid certificate signature")
 	ErrUntrustedCA             = errors.New("certificate issued by untrusted CA")
 	ErrInvalidKeyUsage         = errors.New("invalid key usage for authentication")
@@ -19,17 +19,17 @@ var (
 	ErrUnsupportedAlgorithm    = errors.New("unsupported key or signature algorithm")
 	ErrCertificateChainInvalid = errors.New("certificate chain validation failed")
 
-	// Pinning Errors.
+	// ErrCertificateNotPinned Errors.
 	ErrCertificateNotPinned = errors.New("certificate not pinned (required by policy)")
 	ErrPinExpired           = errors.New("certificate pin has expired")
 	ErrPinMismatch          = errors.New("certificate does not match pinned fingerprint")
 
-	// Revocation Errors.
+	// ErrCRLCheckFailed Errors.
 	ErrCRLCheckFailed        = errors.New("CRL check failed")
 	ErrOCSPCheckFailed       = errors.New("OCSP check failed")
 	ErrRevocationUnavailable = errors.New("revocation status unavailable")
 
-	// PIV/CAC Errors.
+	// ErrNotPIVCertificate PIV/CAC Errors.
 	ErrNotPIVCertificate   = errors.New("certificate is not a PIV certificate")
 	ErrNotCACCertificate   = errors.New("certificate is not a CAC certificate")
 	ErrSmartCardNotPresent = errors.New("smart card not present")
@@ -37,24 +37,24 @@ var (
 	ErrPINRequired         = errors.New("smart card PIN required")
 	ErrInvalidPIN          = errors.New("invalid smart card PIN")
 
-	// HSM Errors.
+	// ErrHSMNotConfigured Errors.
 	ErrHSMNotConfigured       = errors.New("HSM not configured")
 	ErrHSMConnectionFailed    = errors.New("HSM connection failed")
 	ErrHSMKeyNotFound         = errors.New("HSM key not found")
 	ErrHSMOperationFailed     = errors.New("HSM operation failed")
 	ErrHSMProviderUnsupported = errors.New("HSM provider not supported")
 
-	// Policy Errors.
+	// ErrPolicyNotFound Errors.
 	ErrPolicyNotFound  = errors.New("certificate policy not found")
 	ErrPolicyViolation = errors.New("certificate policy violation")
 	ErrPolicyRequired  = errors.New("certificate policy required but not found")
 
-	// Trust Anchor Errors.
+	// ErrTrustAnchorNotFound Anchor Errors.
 	ErrTrustAnchorNotFound = errors.New("trust anchor not found")
 	ErrTrustAnchorExpired  = errors.New("trust anchor has expired")
 	ErrNoTrustAnchors      = errors.New("no trust anchors configured")
 
-	// General Errors.
+	// ErrCertificateParseFailed Errors.
 	ErrCertificateParseFailed = errors.New("failed to parse certificate")
 	ErrCRLParseFailed         = errors.New("failed to parse CRL")
 	ErrOCSPParseFailed        = errors.New("failed to parse OCSP response")

@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // ServeFeaturesListPage renders the features list dashboard.
@@ -1438,7 +1438,7 @@ func (e *DashboardExtension) renderPlanFeatureConfigList(ctx context.Context, fe
 		case core.FeatureTypeBoolean:
 			checked := false
 			if link != nil && link.Value != "" {
-				json.Unmarshal([]byte(link.Value), &checked)
+				_ = json.Unmarshal([]byte(link.Value), &checked)
 			}
 
 			valueInput = Div(

@@ -157,7 +157,7 @@ func (cm *ConsentManager) GenerateConsentHTML(clientName, clientLogoURI, scope s
 	scopeHTML += scopeHTMLSb144.String()
 
 	// If no logo, use placeholder
-	logoHTML := ""
+	var logoHTML string
 	if clientLogoURI != "" {
 		logoHTML = fmt.Sprintf(`<img src="%s" alt="%s logo" class="client-logo">`, clientLogoURI, clientName)
 	} else {

@@ -637,7 +637,7 @@ func (s *Service) GetOrgPermissions(ctx context.Context, orgID xid.ID) ([]*schem
 	return s.permissionRepo.ListByOrg(ctx, orgID)
 }
 
-// GetUserPermissions gets all permissions for a user.
+// GetPermission gets a permission by ID.
 func (s *Service) GetPermission(ctx context.Context, permissionID xid.ID) (*schema.Permission, error) {
 	if s.permissionRepo == nil {
 		return nil, errs.InternalServerErrorWithMessage("permission repository not initialized")

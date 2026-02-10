@@ -6,7 +6,7 @@ import "github.com/xraph/authsome/schema"
 // Enum Type Re-exports from Schema Package
 // ============================================================================
 
-// Member Role Types.
+// MemberRole is a member role type.
 type MemberRole = schema.MemberRole
 
 const (
@@ -15,7 +15,7 @@ const (
 	MemberRoleMember = schema.MemberRoleMember
 )
 
-// Member Status Types.
+// MemberStatus is a member status type.
 type MemberStatus = schema.MemberStatus
 
 const (
@@ -24,7 +24,7 @@ const (
 	MemberStatusPending   = schema.MemberStatusPending
 )
 
-// Invitation Status Types.
+// InvitationStatus is an invitation status type.
 type InvitationStatus = schema.InvitationStatus
 
 const (

@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 )
 
-// Request types.
+// SendRequest represents request types.
 type SendRequest struct {
 	Email string `example:"user@example.com" json:"email" validate:"required,email"`
 }
@@ -43,7 +43,7 @@ type StatusResponse struct {
 	EmailVerifiedAt *time.Time `example:"2024-12-13T15:45:00Z" json:"emailVerifiedAt,omitempty"`
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 
 // Error definitions.

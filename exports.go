@@ -380,33 +380,33 @@ var (
 
 // Contexts Functions.
 var (
-	// App Context Functions.
+	// GetAppID gets the app ID from context.
 	GetAppID     = contexts.GetAppID
 	SetAppID     = contexts.SetAppID
 	RequireAppID = contexts.RequireAppID
 
-	// Environment Context Functions.
+	// GetEnvironmentID gets the environment ID from context.
 	GetEnvironmentID     = contexts.GetEnvironmentID
 	SetEnvironmentID     = contexts.SetEnvironmentID
 	RequireEnvironmentID = contexts.RequireEnvironmentID
 
-	// Organization Context Functions.
+	// GetOrganizationID gets the organization ID from context.
 	GetOrganizationID     = contexts.GetOrganizationID
 	SetOrganizationID     = contexts.SetOrganizationID
 	RequireOrganizationID = contexts.RequireOrganizationID
 
-	// User Context Functions.
+	// GetUserID gets the user ID from context.
 	GetUserID     = contexts.GetUserID
 	SetUserID     = contexts.SetUserID
 	RequireUserID = contexts.RequireUserID
 
-	// Composite Context Helpers.
+	// WithAppAndOrganization creates a context with app and organization IDs.
 	WithAppAndOrganization            = contexts.WithAppAndOrganization
 	WithAppAndUser                    = contexts.WithAppAndUser
 	WithAppEnvironmentAndOrganization = contexts.WithAppEnvironmentAndOrganization
 	WithAll                           = contexts.WithAll
 
-	// Auth Context Functions.
+	// SetAuthContext sets the auth context.
 	SetAuthContext     = contexts.SetAuthContext
 	GetAuthContext     = contexts.GetAuthContext
 	RequireAuthContext = contexts.RequireAuthContext
@@ -439,34 +439,34 @@ type (
 
 // Schema Enums - Type aliases for cleaner API (re-exported from core/app).
 type (
-	// Member enums.
+	// MemberRole is a member role type.
 	MemberRole   = app.MemberRole
 	MemberStatus = app.MemberStatus
 
-	// Invitation enums.
+	// InvitationStatus is an invitation status type.
 	InvitationStatus = app.InvitationStatus
 )
 
 // Enum constants exported for convenience.
 const (
-	// Member Roles.
+	// MemberRoleOwner is the owner member role.
 	MemberRoleOwner  = app.MemberRoleOwner
 	MemberRoleAdmin  = app.MemberRoleAdmin
 	MemberRoleMember = app.MemberRoleMember
 
-	// Member Statuses.
+	// MemberStatusActive is the active member status.
 	MemberStatusActive    = app.MemberStatusActive
 	MemberStatusSuspended = app.MemberStatusSuspended
 	MemberStatusPending   = app.MemberStatusPending
 
-	// Invitation Statuses.
+	// InvitationStatusPending is the pending invitation status.
 	InvitationStatusPending   = app.InvitationStatusPending
 	InvitationStatusAccepted  = app.InvitationStatusAccepted
 	InvitationStatusExpired   = app.InvitationStatusExpired
 	InvitationStatusCancelled = app.InvitationStatusCancelled
 	InvitationStatusDeclined  = app.InvitationStatusDeclined
 
-	// Backward compatibility aliases.
+	// RoleOwner is a backward compatibility alias for MemberRoleOwner.
 	RoleOwner       = app.MemberRoleOwner
 	RoleAdmin       = app.MemberRoleAdmin
 	RoleMember      = app.MemberRoleMember

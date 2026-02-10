@@ -125,7 +125,9 @@ func (s *FeatureService) Create(ctx context.Context, appID xid.ID, req *core.Cre
 			feature.ProviderFeatureID = providerFeatureID
 			syncTime := time.Now()
 			feature.LastSyncedAt = &syncTime
-			s.featureRepo.Update(ctx, feature)
+			if err := s.featureRepo.Update(ctx, feature); err != nil {
+				_ = err
+			}
 		}
 	}
 
@@ -227,7 +229,9 @@ func (s *FeatureService) Update(ctx context.Context, id xid.ID, req *core.Update
 
 			syncTime := time.Now()
 			feature.LastSyncedAt = &syncTime
-			s.featureRepo.Update(ctx, feature)
+			if err := s.featureRepo.Update(ctx, feature); err != nil {
+				_ = err
+			}
 		}
 	}
 
@@ -470,17 +474,17 @@ func (s *FeatureService) GetPublicPlanFeatures(ctx context.Context, planID xid.I
 
 		switch l.Feature.Type {
 		case "boolean":
-			json.Unmarshal([]byte(l.Value), &value)
+			_ = json.Unmarshal([]byte(l.Value), &value)
 
 			if value == nil {
 				value = !l.IsBlocked
 			}
 		case "limit", "metered":
-			json.Unmarshal([]byte(l.Value), &value)
+			_ = json.Unmarshal([]byte(l.Value), &value)
 		case "unlimited":
 			value = -1
 		case "tiered":
-			json.Unmarshal([]byte(l.Value), &value)
+			_ = json.Unmarshal([]byte(l.Value), &value)
 		}
 
 		result = append(result, &core.PublicPlanFeature{

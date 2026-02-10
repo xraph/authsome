@@ -14,8 +14,6 @@ import (
 // SendOTP generates and stores a one-time password; returns the code for delivery.
 func (s *Service) SendOTP(ctx context.Context, userID string) (string, error) {
 	// 6-digit numeric code
-	rand.Seed(time.Now().UnixNano())
-
 	code := 100000 + rand.Intn(900000)
 	ch := sha256.Sum256([]byte(fmtCode(code)))
 	hash := hex.EncodeToString(ch[:])

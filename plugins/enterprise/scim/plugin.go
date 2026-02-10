@@ -297,26 +297,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	scimGroup := router.Group("/scim/v2")
 
 	// Service Provider Configuration (RFC 7643 Section 5)
-	scimGroup.GET("/ServiceProviderConfig", scimChain(p.handler.GetServiceProviderConfig),
+	if err := scimGroup.GET("/ServiceProviderConfig", scimChain(p.handler.GetServiceProviderConfig),
 		forge.WithName("scim.serviceprovider.config"),
 		forge.WithSummary("Get service provider configuration"),
 		forge.WithDescription("Returns SCIM 2.0 service provider configuration including supported features, authentication schemes, and capabilities"),
 		forge.WithResponseSchema(200, "Service provider configuration", ServiceProviderConfig{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Configuration"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Resource Types (RFC 7643 Section 6)
-	scimGroup.GET("/ResourceTypes", scimChain(p.handler.GetResourceTypes),
+	if err := scimGroup.GET("/ResourceTypes", scimChain(p.handler.GetResourceTypes),
 		forge.WithName("scim.resourcetypes.list"),
 		forge.WithSummary("List resource types"),
 		forge.WithDescription("Returns all supported SCIM resource types (User, Group) with their schemas and endpoints"),
 		forge.WithResponseSchema(200, "List of resource types", ListResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "ResourceTypes"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.GET("/ResourceTypes/:id", scimChain(p.handler.GetResourceType),
+	if err := scimGroup.GET("/ResourceTypes/:id", scimChain(p.handler.GetResourceType),
 		forge.WithName("scim.resourcetypes.get"),
 		forge.WithSummary("Get resource type"),
 		forge.WithDescription("Returns details for a specific SCIM resource type (User or Group)"),
@@ -324,19 +330,25 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Resource type not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "ResourceTypes"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Schemas (RFC 7643 Section 7)
-	scimGroup.GET("/Schemas", scimChain(p.handler.GetSchemas),
+	if err := scimGroup.GET("/Schemas", scimChain(p.handler.GetSchemas),
 		forge.WithName("scim.schemas.list"),
 		forge.WithSummary("List schemas"),
 		forge.WithDescription("Returns all supported SCIM schemas including core user schema, enterprise extension, and group schema"),
 		forge.WithResponseSchema(200, "List of schemas", ListResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Schemas"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.GET("/Schemas/:id", scimChain(p.handler.GetSchema),
+	if err := scimGroup.GET("/Schemas/:id", scimChain(p.handler.GetSchema),
 		forge.WithName("scim.schemas.get"),
 		forge.WithSummary("Get schema"),
 		forge.WithDescription("Returns detailed schema definition for a specific SCIM schema ID"),
@@ -344,10 +356,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Schema not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Schemas"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Users endpoint (RFC 7644 Section 3)
-	scimGroup.POST("/Users", scimChain(p.handler.CreateUser),
+	if err := scimGroup.POST("/Users", scimChain(p.handler.CreateUser),
 		forge.WithName("scim.users.create"),
 		forge.WithSummary("Create user"),
 		forge.WithDescription("Creates a new user via SCIM 2.0 provisioning. Supports core user attributes and enterprise extension"),
@@ -358,9 +373,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(409, "User already exists", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.GET("/Users", scimChain(p.handler.ListUsers),
+	if err := scimGroup.GET("/Users", scimChain(p.handler.ListUsers),
 		forge.WithName("scim.users.list"),
 		forge.WithSummary("List users"),
 		forge.WithDescription("Lists users with filtering, sorting, and pagination support. Supports SCIM filter syntax"),
@@ -368,9 +386,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid filter", ErrorResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.GET("/Users/:id", scimChain(p.handler.GetUser),
+	if err := scimGroup.GET("/Users/:id", scimChain(p.handler.GetUser),
 		forge.WithName("scim.users.get"),
 		forge.WithSummary("Get user"),
 		forge.WithDescription("Retrieves a specific user by SCIM ID with all attributes and extensions"),
@@ -378,9 +399,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.PUT("/Users/:id", scimChain(p.handler.ReplaceUser),
+	if err := scimGroup.PUT("/Users/:id", scimChain(p.handler.ReplaceUser),
 		forge.WithName("scim.users.replace"),
 		forge.WithSummary("Replace user"),
 		forge.WithRequestSchema(SCIMUser{}),
@@ -391,9 +415,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.PATCH("/Users/:id", scimChain(p.handler.UpdateUser),
+	if err := scimGroup.PATCH("/Users/:id", scimChain(p.handler.UpdateUser),
 		forge.WithName("scim.users.update"),
 		forge.WithSummary("Update user"),
 		forge.WithRequestSchema(PatchOp{}),
@@ -404,9 +431,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.DELETE("/Users/:id", scimChain(p.handler.DeleteUser),
+	if err := scimGroup.DELETE("/Users/:id", scimChain(p.handler.DeleteUser),
 		forge.WithName("scim.users.delete"),
 		forge.WithSummary("Delete user"),
 		forge.WithDescription("Deletes a user by SCIM ID. User is soft-deleted and can be restored if configured"),
@@ -414,10 +444,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Groups endpoint (RFC 7644 Section 3)
-	scimGroup.POST("/Groups", scimChain(p.handler.CreateGroup),
+	if err := scimGroup.POST("/Groups", scimChain(p.handler.CreateGroup),
 		forge.WithName("scim.groups.create"),
 		forge.WithSummary("Create group"),
 		forge.WithRequestSchema(SCIMGroup{}),
@@ -428,9 +461,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(409, "Group already exists", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.GET("/Groups", scimChain(p.handler.ListGroups),
+	if err := scimGroup.GET("/Groups", scimChain(p.handler.ListGroups),
 		forge.WithName("scim.groups.list"),
 		forge.WithSummary("List groups"),
 		forge.WithDescription("Lists groups with filtering, sorting, and pagination support. Supports SCIM filter syntax"),
@@ -438,9 +474,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid filter", ErrorResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.GET("/Groups/:id", scimChain(p.handler.GetGroup),
+	if err := scimGroup.GET("/Groups/:id", scimChain(p.handler.GetGroup),
 		forge.WithName("scim.groups.get"),
 		forge.WithSummary("Get group"),
 		forge.WithDescription("Retrieves a specific group by SCIM ID with all members and attributes"),
@@ -448,9 +487,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.PUT("/Groups/:id", scimChain(p.handler.ReplaceGroup),
+	if err := scimGroup.PUT("/Groups/:id", scimChain(p.handler.ReplaceGroup),
 		forge.WithName("scim.groups.replace"),
 		forge.WithSummary("Replace group"),
 		forge.WithRequestSchema(SCIMGroup{}),
@@ -461,9 +503,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.PATCH("/Groups/:id", scimChain(p.handler.UpdateGroup),
+	if err := scimGroup.PATCH("/Groups/:id", scimChain(p.handler.UpdateGroup),
 		forge.WithName("scim.groups.update"),
 		forge.WithSummary("Update group"),
 		forge.WithRequestSchema(PatchOp{}),
@@ -474,9 +519,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	scimGroup.DELETE("/Groups/:id", scimChain(p.handler.DeleteGroup),
+	if err := scimGroup.DELETE("/Groups/:id", scimChain(p.handler.DeleteGroup),
 		forge.WithName("scim.groups.delete"),
 		forge.WithSummary("Delete group"),
 		forge.WithDescription("Deletes a group by SCIM ID. Group memberships are preserved but group is removed"),
@@ -484,10 +532,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Bulk operations (RFC 7644 Section 3.7)
-	scimGroup.POST("/Bulk", scimChain(p.handler.BulkOperation),
+	if err := scimGroup.POST("/Bulk", scimChain(p.handler.BulkOperation),
 		forge.WithName("scim.bulk.operation"),
 		forge.WithSummary("Bulk operations"),
 		forge.WithRequestSchema(BulkRequest{}),
@@ -498,10 +549,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(413, "Request too large", ErrorResponse{}),
 		forge.WithTags("SCIM", "Bulk"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Search endpoint (RFC 7644 Section 3.4.3)
-	scimGroup.POST("/.search", scimChain(p.handler.Search),
+	if err := scimGroup.POST("/.search", scimChain(p.handler.Search),
 		forge.WithName("scim.search"),
 		forge.WithSummary("Search resources"),
 		forge.WithRequestSchema(SearchRequest{}),
@@ -511,7 +565,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Search"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Create admin middleware chain (SCIM auth + admin check)
 	adminChain := func(h func(forge.Context) error) func(forge.Context) error {
@@ -522,7 +579,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	adminGroup := router.Group("/admin/scim")
 
 	// Token management
-	adminGroup.POST("/tokens", adminChain(p.handler.CreateProvisioningToken),
+	if err := adminGroup.POST("/tokens", adminChain(p.handler.CreateProvisioningToken),
 		forge.WithName("scim.admin.tokens.create"),
 		forge.WithSummary("Create provisioning token"),
 		forge.WithRequestSchema(CreateTokenRequest{}),
@@ -533,9 +590,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Tokens"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	adminGroup.GET("/tokens", adminChain(p.handler.ListProvisioningTokens),
+	if err := adminGroup.GET("/tokens", adminChain(p.handler.ListProvisioningTokens),
 		forge.WithName("scim.admin.tokens.list"),
 		forge.WithSummary("List provisioning tokens"),
 		forge.WithDescription("Lists all provisioning tokens for the organization with pagination. Token values are never returned"),
@@ -543,9 +603,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Tokens"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	adminGroup.DELETE("/tokens/:id", adminChain(p.handler.RevokeProvisioningToken),
+	if err := adminGroup.DELETE("/tokens/:id", adminChain(p.handler.RevokeProvisioningToken),
 		forge.WithName("scim.admin.tokens.revoke"),
 		forge.WithSummary("Revoke provisioning token"),
 		forge.WithDescription("Revokes a provisioning token by ID. Token can no longer be used for SCIM authentication"),
@@ -555,10 +618,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithResponseSchema(404, "Token not found", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Tokens"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Attribute mapping configuration
-	adminGroup.GET("/mappings", adminChain(p.handler.GetAttributeMappings),
+	if err := adminGroup.GET("/mappings", adminChain(p.handler.GetAttributeMappings),
 		forge.WithName("scim.admin.mappings.get"),
 		forge.WithSummary("Get attribute mappings"),
 		forge.WithDescription("Retrieves custom attribute mappings for SCIM attributes to AuthSome fields"),
@@ -566,9 +632,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Mappings"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	adminGroup.PUT("/mappings", adminChain(p.handler.UpdateAttributeMappings),
+	if err := adminGroup.PUT("/mappings", adminChain(p.handler.UpdateAttributeMappings),
 		forge.WithName("scim.admin.mappings.update"),
 		forge.WithSummary("Update attribute mappings"),
 		forge.WithDescription("Updates custom attribute mappings for SCIM attributes to AuthSome fields. Used for custom field mapping"),
@@ -579,10 +648,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Mappings"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Provisioning logs and audit
-	adminGroup.GET("/logs", adminChain(p.handler.GetProvisioningLogs),
+	if err := adminGroup.GET("/logs", adminChain(p.handler.GetProvisioningLogs),
 		forge.WithName("scim.admin.logs.get"),
 		forge.WithSummary("Get provisioning logs"),
 		forge.WithDescription("Retrieves provisioning operation logs with filtering by action, pagination, and detailed request/response data"),
@@ -590,9 +662,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Logs"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	adminGroup.GET("/stats", adminChain(p.handler.GetProvisioningStats),
+	if err := adminGroup.GET("/stats", adminChain(p.handler.GetProvisioningStats),
 		forge.WithName("scim.admin.stats.get"),
 		forge.WithSummary("Get provisioning statistics"),
 		forge.WithDescription("Returns real-time SCIM provisioning metrics including request counts, error rates, and performance statistics"),
@@ -600,7 +675,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Stats"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

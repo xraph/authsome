@@ -16,7 +16,7 @@ type Handler struct {
 	service *Service
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -46,7 +46,7 @@ func NewHandler(service *Service) *Handler {
 // ===== Certificate Management Endpoints =====
 
 // RegisterCertificate registers a new certificate
-// POST /auth/mtls/certificates.
+// RegisterCertificate /auth/mtls/certificates.
 func (h *Handler) RegisterCertificate(c forge.Context) error {
 	var req RegisterCertificateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
@@ -62,7 +62,7 @@ func (h *Handler) RegisterCertificate(c forge.Context) error {
 }
 
 // AuthenticateWithCertificate authenticates using client certificate
-// POST /auth/mtls/authenticate.
+// AuthenticateWithCertificate /auth/mtls/authenticate.
 func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 	// Get certificate from TLS connection
 	if c.Request().TLS == nil || len(c.Request().TLS.PeerCertificates) == 0 {
@@ -99,7 +99,7 @@ func (h *Handler) AuthenticateWithCertificate(c forge.Context) error {
 }
 
 // GetCertificate retrieves a certificate by ID
-// GET /auth/mtls/certificates/:id.
+// GetCertificate /auth/mtls/certificates/:id.
 func (h *Handler) GetCertificate(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -115,7 +115,7 @@ func (h *Handler) GetCertificate(c forge.Context) error {
 }
 
 // ListCertificates lists certificates with filters
-// GET /auth/mtls/certificates.
+// ListCertificates /auth/mtls/certificates.
 func (h *Handler) ListCertificates(c forge.Context) error {
 	filters := CertificateFilters{
 		OrganizationID: c.Query("organizationId"),
@@ -149,7 +149,7 @@ func (h *Handler) ListCertificates(c forge.Context) error {
 }
 
 // RevokeCertificate revokes a certificate
-// POST /auth/mtls/certificates/:id/revoke.
+// RevokeCertificate /auth/mtls/certificates/:id/revoke.
 func (h *Handler) RevokeCertificate(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -176,7 +176,7 @@ func (h *Handler) RevokeCertificate(c forge.Context) error {
 // ===== Trust Anchor Endpoints =====
 
 // AddTrustAnchor adds a new trust anchor
-// POST /auth/mtls/trust-anchors.
+// AddTrustAnchor /auth/mtls/trust-anchors.
 func (h *Handler) AddTrustAnchor(c forge.Context) error {
 	var req AddTrustAnchorRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -192,7 +192,7 @@ func (h *Handler) AddTrustAnchor(c forge.Context) error {
 }
 
 // GetTrustAnchors lists trust anchors for an organization
-// GET /auth/mtls/trust-anchors.
+// GetTrustAnchors /auth/mtls/trust-anchors.
 func (h *Handler) GetTrustAnchors(c forge.Context) error {
 	orgID := c.Query("organizationId")
 	if orgID == "" {
@@ -213,7 +213,7 @@ func (h *Handler) GetTrustAnchors(c forge.Context) error {
 // ===== Policy Endpoints =====
 
 // CreatePolicy creates a certificate policy
-// POST /auth/mtls/policies.
+// CreatePolicy /auth/mtls/policies.
 func (h *Handler) CreatePolicy(c forge.Context) error {
 	var req CreatePolicyRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -229,7 +229,7 @@ func (h *Handler) CreatePolicy(c forge.Context) error {
 }
 
 // GetPolicy retrieves a policy by ID
-// GET /auth/mtls/policies/:id.
+// GetPolicy /auth/mtls/policies/:id.
 func (h *Handler) GetPolicy(c forge.Context) error {
 	id := c.Param("id")
 	if id == "" {
@@ -247,7 +247,7 @@ func (h *Handler) GetPolicy(c forge.Context) error {
 // ===== Statistics Endpoints =====
 
 // GetAuthStats retrieves authentication statistics
-// GET /auth/mtls/stats/auth.
+// GetAuthStats /auth/mtls/stats/auth.
 func (h *Handler) GetAuthStats(c forge.Context) error {
 	orgID := c.Query("organizationId")
 	if orgID == "" {
@@ -272,7 +272,7 @@ func (h *Handler) GetAuthStats(c forge.Context) error {
 }
 
 // GetExpiringCertificates retrieves certificates expiring soon
-// GET /auth/mtls/certificates/expiring.
+// GetExpiringCertificates /auth/mtls/certificates/expiring.
 func (h *Handler) GetExpiringCertificates(c forge.Context) error {
 	orgID := c.Query("organizationId")
 	if orgID == "" {
@@ -302,7 +302,7 @@ func (h *Handler) GetExpiringCertificates(c forge.Context) error {
 // ===== Validation Endpoint =====
 
 // ValidateCertificate validates a certificate without authentication
-// POST /auth/mtls/validate.
+// ValidateCertificate /auth/mtls/validate.
 func (h *Handler) ValidateCertificate(c forge.Context) error {
 	var req struct {
 		CertificatePEM string `json:"certificatePem"`

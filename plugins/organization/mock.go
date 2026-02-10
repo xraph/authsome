@@ -480,7 +480,7 @@ func (m *MockService) CleanupExpiredInvitations(ctx context.Context) (int, error
 	return 0, nil
 }
 
-// RBAC Permission methods.
+// CheckPermission Permission methods.
 func (m *MockService) CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error) {
 	return true, nil // Mock always allows
 }
@@ -493,5 +493,5 @@ func (m *MockService) RequirePermission(ctx context.Context, orgID, userID xid.I
 	return nil // Mock never denies
 }
 
-// Type assertion to ensure MockService implements CompositeOrganizationService.
+// _ assertion to ensure MockService implements CompositeOrganizationService.
 var _ organization.CompositeOrganizationService = (*MockService)(nil)

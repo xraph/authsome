@@ -21,7 +21,7 @@ type Handler struct {
 	twofa *repo.TwoFARepository
 }
 
-// Request types.
+// SignUpRequest represents request types.
 type SignUpRequest struct {
 	Username string `example:"johndoe"       json:"username" validate:"required"`
 	Password string `example:"SecureP@ss123" json:"password" validate:"required"`
@@ -33,7 +33,7 @@ type SignInRequest struct {
 	Remember bool   `example:"false"         json:"remember"`
 }
 
-// Response types.
+// SignUpResponse represents response types.
 type SignUpResponse struct {
 	Status  string `example:"created"                   json:"status"`
 	Message string `example:"User created successfully" json:"message,omitempty"`

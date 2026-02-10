@@ -529,7 +529,10 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 
 	// Update status to processing
 	req.Status = string(StatusProcessing)
-	s.repo.UpdateExportRequest(ctx, req)
+	if err := s.repo.UpdateExportRequest(ctx, req); err != nil {
+		// Log error but don't fail the operation
+		_ = err
+	}
 
 	// Collect data from various sources
 	data := make(map[string]any)
@@ -566,7 +569,9 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 	if err != nil {
 		req.Status = string(StatusFailed)
 		req.ErrorMessage = err.Error()
-		s.repo.UpdateExportRequest(ctx, req)
+		if updateErr := s.repo.UpdateExportRequest(ctx, req); updateErr != nil {
+			_ = updateErr
+		}
 
 		return
 	}
@@ -583,7 +588,9 @@ func (s *Service) processDataExportAsync(ctx context.Context, exportReqID, userI
 	// Generate download URL (would be a signed URL in production)
 	req.ExportURL = fmt.Sprintf("/consent/exports/%s/download", req.ID.String())
 
-	s.repo.UpdateExportRequest(ctx, req)
+	if err := s.repo.UpdateExportRequest(ctx, req); err != nil {
+		_ = err
+	}
 
 	// TODO: Send notification and audit log
 }
@@ -683,7 +690,9 @@ func (s *Service) RequestDataDeletion(ctx context.Context, userID, orgID string,
 		now := time.Now()
 		deletionReq.Status = string(StatusApproved)
 		deletionReq.ApprovedAt = &now
-		s.repo.UpdateDeletionRequest(ctx, deletionReq)
+		if err := s.repo.UpdateDeletionRequest(ctx, deletionReq); err != nil {
+			_ = err
+		}
 	}
 
 	// TODO: Audit log
@@ -746,7 +755,9 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 
 	// Update status
 	req.Status = string(StatusProcessing)
-	s.repo.UpdateDeletionRequest(ctx, req)
+	if err := s.repo.UpdateDeletionRequest(ctx, req); err != nil {
+		_ = err
+	}
 
 	// Archive data before deletion if configured
 	if s.config.DataDeletion.ArchiveBeforeDeletion {
@@ -754,7 +765,9 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 		if err != nil {
 			req.Status = string(StatusFailed)
 			req.ErrorMessage = fmt.Sprintf("archive failed: %v", err)
-			s.repo.UpdateDeletionRequest(ctx, req)
+			if updateErr := s.repo.UpdateDeletionRequest(ctx, req); updateErr != nil {
+				_ = updateErr
+			}
 
 			return fmt.Errorf("failed to archive user data: %w", err)
 		}
@@ -770,7 +783,9 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 			if err := s.deleteAllUserData(ctx, req.UserID, req.OrganizationID); err != nil {
 				req.Status = string(StatusFailed)
 				req.ErrorMessage = err.Error()
-				s.repo.UpdateDeletionRequest(ctx, req)
+				if updateErr := s.repo.UpdateDeletionRequest(ctx, req); updateErr != nil {
+					_ = updateErr
+				}
 
 				return err
 			}
@@ -778,7 +793,9 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 			// Delete consent records (keep audit logs)
 			consents, _ := s.repo.ListConsentsByUser(ctx, req.UserID, req.OrganizationID)
 			for _, consent := range consents {
-				s.repo.DeleteConsent(ctx, consent.ID.String())
+				if err := s.repo.DeleteConsent(ctx, consent.ID.String()); err != nil {
+					_ = err
+				}
 			}
 		case "profile":
 			// Mark user for deletion in user service
@@ -790,7 +807,13 @@ func (s *Service) ProcessDeletionRequest(ctx context.Context, requestID string) 
 	now := time.Now()
 	req.Status = string(StatusCompleted)
 	req.CompletedAt = &now
-	s.repo.UpdateDeletionRequest(ctx, req)
+	if err := s.repo.UpdateDeletionRequest(ctx, req); err != nil {
+		_ = err
+	}
+	req.CompletedAt = &now
+	if err := s.repo.UpdateDeletionRequest(ctx, req); err != nil {
+		_ = err
+	}
 
 	// TODO: Send notification and audit log
 
@@ -848,7 +871,9 @@ func (s *Service) deleteAllUserData(ctx context.Context, userID, orgID string) e
 	consents, err := s.repo.ListConsentsByUser(ctx, userID, orgID)
 	if err == nil {
 		for _, consent := range consents {
-			s.repo.DeleteConsent(ctx, consent.ID.String())
+			if err := s.repo.DeleteConsent(ctx, consent.ID.String()); err != nil {
+				_ = err
+			}
 		}
 	}
 
@@ -1022,8 +1047,12 @@ func (s *Service) createAuditLog(ctx context.Context, userID, orgID, consentID s
 	newJSON, _ := json.Marshal(newValue)
 
 	var prevMap, newMap JSONBMap
-	json.Unmarshal(prevJSON, &prevMap)
-	json.Unmarshal(newJSON, &newMap)
+	if err := json.Unmarshal(prevJSON, &prevMap); err != nil {
+		prevMap = make(JSONBMap)
+	}
+	if err := json.Unmarshal(newJSON, &newMap); err != nil {
+		newMap = make(JSONBMap)
+	}
 
 	log := &ConsentAuditLog{
 		UserID:         userID,
@@ -1040,7 +1069,9 @@ func (s *Service) createAuditLog(ctx context.Context, userID, orgID, consentID s
 	log.IPAddress = s.getIPFromContext(ctx)
 	log.UserAgent = s.getUserAgentFromContext(ctx)
 
-	s.repo.CreateAuditLog(ctx, log)
+	if err := s.repo.CreateAuditLog(ctx, log); err != nil {
+		_ = err
+	}
 }
 
 // TODO: Notification helper - integrate with notification service

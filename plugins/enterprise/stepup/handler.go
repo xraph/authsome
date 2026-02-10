@@ -16,7 +16,7 @@ type Handler struct {
 	config  *Config
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -349,7 +349,7 @@ func (h *Handler) UpdatePolicy(c forge.Context) error {
 		return c.JSON(403, errs.PermissionDenied("access", "step-up"))
 	}
 
-	// Decode updates
+	// updates updates
 	var updates StepUpPolicy
 	if err := json.NewDecoder(c.Request().Body).Decode(&updates); err != nil {
 		return c.JSON(400, errs.BadRequest("Invalid request body"))

@@ -57,7 +57,7 @@ func (e *DashboardExtension) parseFieldOptions(c forge.Context) *core.FieldOptio
 	// We need to parse the raw form values because FormValue only gets the first one
 	// and we don't know the indices ahead of time easily
 	if c.Request().PostForm == nil {
-		c.Request().ParseForm()
+		_ = c.Request().ParseForm() // Ignore parse errors
 	}
 
 	for key, values := range c.Request().PostForm {

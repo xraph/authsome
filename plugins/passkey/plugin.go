@@ -220,7 +220,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Registration endpoints
-	grp.POST("/register/begin", wrapHandler(h.BeginRegister),
+	if err := grp.POST("/register/begin", wrapHandler(h.BeginRegister),
 		forge.WithName("passkey.register.begin"),
 		forge.WithSummary("Begin passkey registration"),
 		forge.WithDescription("Initiates WebAuthn/FIDO2 passkey registration with cryptographic challenge. Supports platform authenticators (Touch ID, Windows Hello) and cross-platform authenticators (YubiKey, etc.)"),
@@ -229,8 +229,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Registration"),
 		forge.WithValidation(true),
-	)
-	grp.POST("/register/finish", wrapHandler(h.FinishRegister),
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/register/finish", wrapHandler(h.FinishRegister),
 		forge.WithName("passkey.register.finish"),
 		forge.WithSummary("Finish passkey registration"),
 		forge.WithDescription("Completes WebAuthn/FIDO2 passkey registration with attestation verification. Stores credential with cryptographic public key"),
@@ -239,10 +242,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Registration"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Authentication endpoints
-	grp.POST("/login/begin", wrapHandler(h.BeginLogin),
+	if err := grp.POST("/login/begin", wrapHandler(h.BeginLogin),
 		forge.WithName("passkey.login.begin"),
 		forge.WithSummary("Begin passkey login"),
 		forge.WithDescription("Initiates WebAuthn/FIDO2 passkey authentication. Supports both user-specific and discoverable (usernameless) credentials"),
@@ -251,8 +257,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
 		forge.WithValidation(true),
-	)
-	grp.POST("/login/finish", wrapHandler(h.FinishLogin),
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.POST("/login/finish", wrapHandler(h.FinishLogin),
 		forge.WithName("passkey.login.finish"),
 		forge.WithSummary("Finish passkey login"),
 		forge.WithDescription("Completes WebAuthn/FIDO2 passkey authentication with signature verification and creates user session. Validates sign count for replay attack detection"),
@@ -262,10 +271,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Management endpoints
-	grp.GET("/list", wrapHandler(h.List),
+	if err := grp.GET("/list", wrapHandler(h.List),
 		forge.WithName("passkey.list"),
 		forge.WithSummary("List passkeys"),
 		forge.WithDescription("Lists all registered passkeys for a user with metadata including name, type, last used, and sign count"),
@@ -274,8 +286,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
-	)
-	grp.PUT("/:id", wrapHandler(h.Update),
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.PUT("/:id", wrapHandler(h.Update),
 		forge.WithName("passkey.update"),
 		forge.WithSummary("Update passkey"),
 		forge.WithDescription("Updates a passkey's metadata (currently only name)"),
@@ -285,8 +300,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Passkey not found", ErrorResponse{}),
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
-	)
-	grp.DELETE("/:id", wrapHandler(h.Delete),
+	
+	); err != nil {
+		return err
+	}
+	if err := grp.DELETE("/:id", wrapHandler(h.Delete),
 		forge.WithName("passkey.delete"),
 		forge.WithSummary("Delete passkey"),
 		forge.WithDescription("Deletes a registered passkey by ID. Scoped to app and organization context"),
@@ -296,7 +314,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Passkey not found", ErrorResponse{}),
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -317,7 +338,7 @@ func (p *Plugin) Migrate() error {
 }
 
 // Legacy response type aliases for backward compatibility
-// Use the proper types defined in response_types.go instead.
+// PasskeyErrorResponse the proper types defined in response_types.go instead.
 type PasskeyErrorResponse = ErrorResponse
 type PasskeyStatusResponse = StatusResponse
 type PasskeyRegistrationOptionsResponse = BeginRegisterResponse

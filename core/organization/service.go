@@ -236,7 +236,7 @@ func (s *Service) RequireAdmin(ctx context.Context, orgID, userID xid.ID) error 
 	return s.Member.RequireAdmin(ctx, orgID, userID)
 }
 
-// RBAC Permission methods delegation.
+// CheckPermission checks if a user has permission for an action on a resource.
 func (s *Service) CheckPermission(ctx context.Context, orgID, userID xid.ID, action, resource string) (bool, error) {
 	return s.Member.CheckPermission(ctx, orgID, userID, action, resource)
 }

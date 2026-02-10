@@ -17,7 +17,7 @@ import (
 	"github.com/xraph/authsome/plugins/multisession/pages"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface
@@ -204,7 +204,7 @@ func (e *DashboardExtension) BridgeFunctions() []ui.BridgeFunction {
 
 func (e *DashboardExtension) getUserFromContext(ctx *router.PageContext) any {
 	reqCtx := ctx.Request.Context()
-	if u, ok := reqCtx.Value("user").(any); ok {
+	if u := reqCtx.Value("user"); u != nil {
 		return u
 	}
 

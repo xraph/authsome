@@ -293,6 +293,7 @@ func (e *Extractor) parseStructTags(field *definition.Field, tag string) {
 			// Don't set nullable here, check notnull separately
 		case strings.HasPrefix(part, "rel:"):
 			// Relation tag - we'll handle this separately
+			_ = strings.TrimPrefix(part, "rel:")
 		}
 	}
 }

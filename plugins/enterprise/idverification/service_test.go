@@ -408,10 +408,12 @@ func TestService_CreateVerification(t *testing.T) {
 		verification, err := service.CreateVerification(ctx, req)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
+			return
 		}
 
 		if verification == nil {
 			t.Error("Expected verification, got nil")
+			return
 		}
 
 		if verification.UserID != req.UserID.String() {

@@ -143,7 +143,7 @@ func (authsomeLib) ProgramOptions() []cel.ProgramOption {
 	return []cel.ProgramOption{}
 }
 
-// Helper function to check if a principal has a role (used by evaluator in Week 2+).
+// HasRole function to check if a principal has a role (used by evaluator in Week 2+).
 func HasRole(principal map[string]any, role string) bool {
 	if principal == nil {
 		return false

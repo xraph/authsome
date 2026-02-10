@@ -186,7 +186,7 @@ func (r *Route) GetQueryFields() []Field {
 	return fields
 }
 
-// GetTypeFields returns parsed type definition fields.
+// GetFields returns parsed type definition fields.
 func (t *TypeDef) GetFields() []Field {
 	var fields []Field
 	for name, typeStr := range t.Fields {

@@ -28,7 +28,7 @@ func NewHandlerWithLogger(svc *Service, logger forge.Logger) *Handler {
 	}
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -62,7 +62,7 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 
 	orgID, _ := contexts.GetOrganizationID(ctx) // Optional
 
-	// Parse request
+	// req request
 	var req RegisterProviderRequest
 	if err := c.BindJSON(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid request body"))
@@ -73,7 +73,7 @@ func (h *Handler) RegisterProvider(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("type must be 'saml' or 'oidc'"))
 	}
 
-	// Build provider with tenant context
+	// orgIDPtr provider with tenant context
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID
@@ -161,7 +161,7 @@ func (h *Handler) SAMLLogin(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("SAML entry point not configured"))
 	}
 
-	// Parse optional request body
+	// req optional request body
 	var req SAMLLoginRequest
 
 	_ = c.BindJSON(&req) // Optional, ignore error
@@ -293,7 +293,7 @@ func (h *Handler) OIDCLogin(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("provider is not configured for OIDC"))
 	}
 
-	// Parse optional request body
+	// req optional request body
 	var req OIDCLoginRequest
 
 	_ = c.BindJSON(&req) // Optional, ignore error
@@ -417,7 +417,7 @@ func (h *Handler) OIDCCallback(c forge.Context) error {
 	codeVerifier := oidcState.CodeVerifier
 	nonce := oidcState.Nonce
 
-	// Delete the state after retrieval (one-time use)
+	// _ the state after retrieval (one-time use)
 	_ = h.svc.stateStore.Delete(ctx, state)
 
 	// Build redirect URI

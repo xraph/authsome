@@ -309,14 +309,18 @@ func (s *FeatureUsageService) CheckAccess(ctx context.Context, orgID xid.ID, fea
 	switch featureType {
 	case core.FeatureTypeBoolean:
 		var val bool
-		json.Unmarshal([]byte(link.Value), &val)
+		if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+			return nil, err
+		}
 		hasAccess = val
 	case core.FeatureTypeUnlimited:
 		hasAccess = true
 		limit = -1
 	case core.FeatureTypeLimit, core.FeatureTypeMetered:
 		var val float64
-		json.Unmarshal([]byte(link.Value), &val)
+		if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+			return nil, err
+		}
 		limit = int64(val)
 		hasAccess = limit > 0
 	case core.FeatureTypeTiered:
@@ -392,11 +396,15 @@ func (s *FeatureUsageService) GetEffectiveLimit(ctx context.Context, orgID xid.I
 		return -1, nil // Unlimited
 	case core.FeatureTypeLimit, core.FeatureTypeMetered:
 		var val float64
-		json.Unmarshal([]byte(link.Value), &val)
+		if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+			return -1, err
+		}
 		baseLimit = int64(val)
 	case core.FeatureTypeBoolean:
 		var val bool
-		json.Unmarshal([]byte(link.Value), &val)
+		if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+			return -1, err
+		}
 
 		if val {
 			return -1, nil // Boolean true = unlimited access
@@ -541,12 +549,16 @@ func (s *FeatureUsageService) ProcessResets(ctx context.Context) error {
 			usage.LastReset = time.Now()
 			usage.PeriodStart = time.Now()
 			usage.PeriodEnd = s.calculateNextPeriodEnd(core.ResetPeriod(period))
-			s.usageRepo.UpdateUsage(ctx, usage)
+			if err := s.usageRepo.UpdateUsage(ctx, usage); err != nil {
+				_ = err
+			}
 		}
 	}
 
 	// Expire grants
-	s.usageRepo.ExpireGrants(ctx)
+	if err := s.usageRepo.ExpireGrants(ctx); err != nil {
+		_ = err
+	}
 
 	return nil
 }
@@ -602,7 +614,9 @@ func (s *FeatureUsageService) logUsage(ctx context.Context, orgID, featureID xid
 		log.Metadata = make(map[string]any)
 	}
 
-	s.usageRepo.CreateLog(ctx, log)
+	if err := s.usageRepo.CreateLog(ctx, log); err != nil {
+		_ = err
+	}
 }
 
 func (s *FeatureUsageService) calculateNextPeriodEnd(period core.ResetPeriod) time.Time {

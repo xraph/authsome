@@ -87,7 +87,7 @@ func (r *contentTypeRepository) FindByID(ctx context.Context, id xid.ID) (*schem
 	return contentType, nil
 }
 
-// FindBySlug finds a content type by slug within an app/environment.
+// FindByName finds a content type by slug within an app/environment.
 func (r *contentTypeRepository) FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
 
@@ -186,7 +186,7 @@ func (r *contentTypeRepository) List(ctx context.Context, appID, envID xid.ID, q
 	offset := (query.Page - 1) * query.PageSize
 	q = q.Limit(query.PageSize).Offset(offset)
 
-	// Execute query
+	// contentTypes query
 	var contentTypes []*schema.ContentType
 
 	err = q.Scan(ctx, &contentTypes)
@@ -260,7 +260,7 @@ func (r *contentTypeRepository) FindWithFields(ctx context.Context, id xid.ID) (
 	return contentType, nil
 }
 
-// FindBySlugWithFields finds a content type by slug with its fields loaded.
+// FindByNameWithFields finds a content type by slug with its fields loaded.
 func (r *contentTypeRepository) FindByNameWithFields(ctx context.Context, appID, envID xid.ID, name string) (*schema.ContentType, error) {
 	contentType := new(schema.ContentType)
 
@@ -308,7 +308,7 @@ func (r *contentTypeRepository) CountEntries(ctx context.Context, contentTypeID 
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a content type with the given name exists.
+// ExistsWithName checks if a content type with the given name exists.
 func (r *contentTypeRepository) ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ContentType)(nil)).

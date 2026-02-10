@@ -8,7 +8,7 @@ func ExampleCreateTemplate() {
 	doc := NewDocument()
 
 	// Add a spacer
-	doc.AddBlock(BlockTypeSpacer, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeSpacer, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{
 			"height": 20,
@@ -16,7 +16,7 @@ func ExampleCreateTemplate() {
 	}, doc.Root)
 
 	// Add a heading
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"color":     "#1a1a1a",
@@ -31,7 +31,7 @@ func ExampleCreateTemplate() {
 	}, doc.Root)
 
 	// Add text content
-	doc.AddBlock(BlockTypeText, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"fontSize":  15,
 			"textAlign": "center",
@@ -45,7 +45,7 @@ func ExampleCreateTemplate() {
 	}, doc.Root)
 
 	// Add a button
-	doc.AddBlock(BlockTypeButton, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeButton, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 16, "right": 24, "bottom": 32, "left": 24,
@@ -130,7 +130,7 @@ func ExampleComplexLayout() {
 	doc := NewDocument()
 
 	// Add heading
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeHeading, map[string]any{
 		"style": map[string]any{
 			"textAlign": "center",
 			"padding": map[string]any{
@@ -167,7 +167,7 @@ func ExampleComplexLayout() {
 	}, columnsID)
 
 	// Add image to first column
-	doc.AddBlock(BlockTypeImage, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeImage, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{
 			"url":   "https://via.placeholder.com/300x200",
@@ -177,7 +177,7 @@ func ExampleComplexLayout() {
 	}, col1ID)
 
 	// Add text to first column
-	doc.AddBlock(BlockTypeText, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 12, "right": 8, "bottom": 8, "left": 8,
@@ -198,7 +198,7 @@ func ExampleComplexLayout() {
 	}, columnsID)
 
 	// Add image to second column
-	doc.AddBlock(BlockTypeImage, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeImage, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{
 			"url":   "https://via.placeholder.com/300x200",
@@ -208,7 +208,7 @@ func ExampleComplexLayout() {
 	}, col2ID)
 
 	// Add text to second column
-	doc.AddBlock(BlockTypeText, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeText, map[string]any{
 		"style": map[string]any{
 			"padding": map[string]any{
 				"top": 12, "right": 8, "bottom": 8, "left": 8,
@@ -234,7 +234,7 @@ func ExampleValidation() {
 	doc := NewDocument()
 
 	// Add some blocks
-	doc.AddBlock(BlockTypeText, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeText, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{
 			"text": "Hello World",
@@ -258,7 +258,7 @@ func ExampleValidation() {
 func ExampleSerialization() {
 	// Create a document
 	doc := NewDocument()
-	doc.AddBlock(BlockTypeHeading, map[string]any{
+	_, _ = doc.AddBlock(BlockTypeHeading, map[string]any{
 		"style": map[string]any{},
 		"props": map[string]any{
 			"text":  "Test Heading",

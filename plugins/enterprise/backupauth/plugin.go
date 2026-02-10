@@ -71,10 +71,10 @@ func (p *Plugin) Init(auth any) error {
 	forgeApp := authInstance.GetForgeApp()
 	configManager := forgeApp.Config()
 
-	// Load configuration from Forge config manager
+	// config configuration from Forge config manager
 	var config Config
 	if err := configManager.Bind("auth.backupauth", &config); err != nil {
-		// Use defaults if binding fails
+		// config defaults if binding fails
 		config = *DefaultConfig()
 	}
 
@@ -114,106 +114,162 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Recovery session routes (public - no auth required for recovery)
-	router.POST("/recovery/start", p.handler.StartRecovery,
+	if err := router.POST("/recovery/start", p.handler.StartRecovery,
 		forge.WithName("backupauth.recovery.start"), forge.WithSummary("Start account recovery"), forge.WithDescription("Initialize account recovery process"),
-		forge.WithResponseSchema(200, "Recovery started", BackupAuthRecoveryResponse{}), forge.WithTags("Backup Auth", "Recovery"), forge.WithValidation(true))
-	router.POST("/recovery/continue", p.handler.ContinueRecovery,
+		forge.WithResponseSchema(200, "Recovery started", BackupAuthRecoveryResponse{}), forge.WithTags("Backup Auth", "Recovery"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/recovery/continue", p.handler.ContinueRecovery,
 		forge.WithName("backupauth.recovery.continue"), forge.WithSummary("Continue recovery"), forge.WithDescription("Continue multi-step recovery process"),
-		forge.WithResponseSchema(200, "Recovery continued", BackupAuthRecoveryResponse{}), forge.WithTags("Backup Auth", "Recovery"), forge.WithValidation(true))
-	router.POST("/recovery/complete", p.handler.CompleteRecovery,
+		forge.WithResponseSchema(200, "Recovery continued", BackupAuthRecoveryResponse{}), forge.WithTags("Backup Auth", "Recovery"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/recovery/complete", p.handler.CompleteRecovery,
 		forge.WithName("backupauth.recovery.complete"), forge.WithSummary("Complete recovery"), forge.WithDescription("Complete account recovery and restore access"),
-		forge.WithResponseSchema(200, "Recovery completed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Recovery"), forge.WithValidation(true))
-	router.POST("/recovery/cancel", p.handler.CancelRecovery,
+		forge.WithResponseSchema(200, "Recovery completed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Recovery"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/recovery/cancel", p.handler.CancelRecovery,
 		forge.WithName("backupauth.recovery.cancel"), forge.WithSummary("Cancel recovery"), forge.WithDescription("Cancel ongoing recovery process"),
-		forge.WithResponseSchema(200, "Recovery cancelled", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Recovery"))
+		forge.WithResponseSchema(200, "Recovery cancelled", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Recovery")); err != nil {
+		return err
+	}
 
 	// Recovery codes (authenticated)
-	router.POST("/recovery-codes/generate", p.handler.GenerateRecoveryCodes,
+	if err := router.POST("/recovery-codes/generate", p.handler.GenerateRecoveryCodes,
 		forge.WithName("backupauth.codes.generate"), forge.WithSummary("Generate recovery codes"), forge.WithDescription("Generate backup recovery codes"),
-		forge.WithResponseSchema(200, "Codes generated", BackupAuthCodesResponse{}), forge.WithTags("Backup Auth", "Codes"), forge.WithValidation(true))
-	router.POST("/recovery-codes/verify", p.handler.VerifyRecoveryCode,
+		forge.WithResponseSchema(200, "Codes generated", BackupAuthCodesResponse{}), forge.WithTags("Backup Auth", "Codes"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/recovery-codes/verify", p.handler.VerifyRecoveryCode,
 		forge.WithName("backupauth.codes.verify"), forge.WithSummary("Verify recovery code"), forge.WithDescription("Verify a recovery code for authentication"),
-		forge.WithResponseSchema(200, "Code verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Codes"), forge.WithValidation(true))
+		forge.WithResponseSchema(200, "Code verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Codes"), forge.WithValidation(true)); err != nil {
+		return err
+	}
 
 	// Security questions (authenticated for setup, public for recovery)
-	router.POST("/security-questions/setup", p.handler.SetupSecurityQuestions,
+	if err := router.POST("/security-questions/setup", p.handler.SetupSecurityQuestions,
 		forge.WithName("backupauth.questions.setup"), forge.WithSummary("Setup security questions"), forge.WithDescription("Configure security questions for recovery"),
-		forge.WithResponseSchema(200, "Questions setup", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Security Questions"), forge.WithValidation(true))
-	router.POST("/security-questions/get", p.handler.GetSecurityQuestions,
+		forge.WithResponseSchema(200, "Questions setup", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Security Questions"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/security-questions/get", p.handler.GetSecurityQuestions,
 		forge.WithName("backupauth.questions.get"), forge.WithSummary("Get security questions"), forge.WithDescription("Retrieve user's security questions"),
-		forge.WithResponseSchema(200, "Questions retrieved", BackupAuthQuestionsResponse{}), forge.WithTags("Backup Auth", "Security Questions"))
-	router.POST("/security-questions/verify", p.handler.VerifySecurityAnswers,
+		forge.WithResponseSchema(200, "Questions retrieved", BackupAuthQuestionsResponse{}), forge.WithTags("Backup Auth", "Security Questions")); err != nil {
+		return err
+	}
+	if err := router.POST("/security-questions/verify", p.handler.VerifySecurityAnswers,
 		forge.WithName("backupauth.questions.verify"), forge.WithSummary("Verify security answers"), forge.WithDescription("Verify answers to security questions"),
-		forge.WithResponseSchema(200, "Answers verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Security Questions"), forge.WithValidation(true))
+		forge.WithResponseSchema(200, "Answers verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Security Questions"), forge.WithValidation(true)); err != nil {
+		return err
+	}
 
 	// Trusted contacts (authenticated)
-	router.POST("/trusted-contacts/add", p.handler.AddTrustedContact,
+	if err := router.POST("/trusted-contacts/add", p.handler.AddTrustedContact,
 		forge.WithName("backupauth.contacts.add"), forge.WithSummary("Add trusted contact"), forge.WithDescription("Add a trusted contact for account recovery"),
-		forge.WithResponseSchema(200, "Contact added", BackupAuthContactResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"), forge.WithValidation(true))
-	router.GET("/trusted-contacts", p.handler.ListTrustedContacts,
+		forge.WithResponseSchema(200, "Contact added", BackupAuthContactResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.GET("/trusted-contacts", p.handler.ListTrustedContacts,
 		forge.WithName("backupauth.contacts.list"), forge.WithSummary("List trusted contacts"), forge.WithDescription("List all trusted contacts"),
-		forge.WithResponseSchema(200, "Contacts retrieved", BackupAuthContactsResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"))
-	router.POST("/trusted-contacts/verify", p.handler.VerifyTrustedContact,
+		forge.WithResponseSchema(200, "Contacts retrieved", BackupAuthContactsResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts")); err != nil {
+		return err
+	}
+	if err := router.POST("/trusted-contacts/verify", p.handler.VerifyTrustedContact,
 		forge.WithName("backupauth.contacts.verify"), forge.WithSummary("Verify trusted contact"), forge.WithDescription("Verify identity through trusted contact"),
-		forge.WithResponseSchema(200, "Contact verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"), forge.WithValidation(true))
-	router.POST("/trusted-contacts/request-verification", p.handler.RequestTrustedContactVerification,
+		forge.WithResponseSchema(200, "Contact verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/trusted-contacts/request-verification", p.handler.RequestTrustedContactVerification,
 		forge.WithName("backupauth.contacts.request"), forge.WithSummary("Request contact verification"), forge.WithDescription("Request verification from trusted contact"),
-		forge.WithResponseSchema(200, "Verification requested", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"), forge.WithValidation(true))
-	router.DELETE("/trusted-contacts/:id", p.handler.RemoveTrustedContact,
+		forge.WithResponseSchema(200, "Verification requested", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.DELETE("/trusted-contacts/:id", p.handler.RemoveTrustedContact,
 		forge.WithName("backupauth.contacts.remove"), forge.WithSummary("Remove trusted contact"), forge.WithDescription("Remove a trusted contact"),
-		forge.WithResponseSchema(200, "Contact removed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts"))
+		forge.WithResponseSchema(200, "Contact removed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Trusted Contacts")); err != nil {
+		return err
+	}
 
 	// Email/SMS verification (public)
-	router.POST("/verification/send", p.handler.SendVerificationCode,
+	if err := router.POST("/verification/send", p.handler.SendVerificationCode,
 		forge.WithName("backupauth.verification.send"), forge.WithSummary("Send verification code"), forge.WithDescription("Send verification code via email/SMS"),
-		forge.WithResponseSchema(200, "Code sent", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Verification"), forge.WithValidation(true))
-	router.POST("/verification/verify", p.handler.VerifyCode,
+		forge.WithResponseSchema(200, "Code sent", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Verification"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/verification/verify", p.handler.VerifyCode,
 		forge.WithName("backupauth.verification.verify"), forge.WithSummary("Verify code"), forge.WithDescription("Verify email/SMS verification code"),
-		forge.WithResponseSchema(200, "Code verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Verification"), forge.WithValidation(true))
+		forge.WithResponseSchema(200, "Code verified", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Verification"), forge.WithValidation(true)); err != nil {
+		return err
+	}
 
 	// Video verification (public for scheduling, admin for completion)
-	router.POST("/video/schedule", p.handler.ScheduleVideoSession,
+	if err := router.POST("/video/schedule", p.handler.ScheduleVideoSession,
 		forge.WithName("backupauth.video.schedule"), forge.WithSummary("Schedule video session"), forge.WithDescription("Schedule a video verification session"),
-		forge.WithResponseSchema(200, "Session scheduled", BackupAuthVideoResponse{}), forge.WithTags("Backup Auth", "Video"), forge.WithValidation(true))
-	router.POST("/video/start", p.handler.StartVideoSession,
+		forge.WithResponseSchema(200, "Session scheduled", BackupAuthVideoResponse{}), forge.WithTags("Backup Auth", "Video"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.POST("/video/start", p.handler.StartVideoSession,
 		forge.WithName("backupauth.video.start"), forge.WithSummary("Start video session"), forge.WithDescription("Start a scheduled video verification session"),
-		forge.WithResponseSchema(200, "Session started", BackupAuthVideoResponse{}), forge.WithTags("Backup Auth", "Video"))
-	router.POST("/video/complete", p.handler.CompleteVideoSession,
+		forge.WithResponseSchema(200, "Session started", BackupAuthVideoResponse{}), forge.WithTags("Backup Auth", "Video")); err != nil {
+		return err
+	}
+	if err := router.POST("/video/complete", p.handler.CompleteVideoSession,
 		forge.WithName("backupauth.video.complete"), forge.WithSummary("Complete video session"), forge.WithDescription("Complete video verification (admin only)"),
-		forge.WithResponseSchema(200, "Session completed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Video", "Admin"))
+		forge.WithResponseSchema(200, "Session completed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Video", "Admin")); err != nil {
+		return err
+	}
 
 	// Document verification (public for upload, admin for review)
-	router.POST("/documents/upload", p.handler.UploadDocument,
+	if err := router.POST("/documents/upload", p.handler.UploadDocument,
 		forge.WithName("backupauth.documents.upload"), forge.WithSummary("Upload document"), forge.WithDescription("Upload identity document for verification"),
-		forge.WithResponseSchema(200, "Document uploaded", BackupAuthDocumentResponse{}), forge.WithTags("Backup Auth", "Documents"), forge.WithValidation(true))
-	router.GET("/documents/:id", p.handler.GetDocumentVerification,
+		forge.WithResponseSchema(200, "Document uploaded", BackupAuthDocumentResponse{}), forge.WithTags("Backup Auth", "Documents"), forge.WithValidation(true)); err != nil {
+		return err
+	}
+	if err := router.GET("/documents/:id", p.handler.GetDocumentVerification,
 		forge.WithName("backupauth.documents.get"), forge.WithSummary("Get document status"), forge.WithDescription("Get document verification status"),
-		forge.WithResponseSchema(200, "Document status", BackupAuthDocumentResponse{}), forge.WithTags("Backup Auth", "Documents"))
-	router.POST("/documents/:id/review", p.handler.ReviewDocument,
+		forge.WithResponseSchema(200, "Document status", BackupAuthDocumentResponse{}), forge.WithTags("Backup Auth", "Documents")); err != nil {
+		return err
+	}
+	if err := router.POST("/documents/:id/review", p.handler.ReviewDocument,
 		forge.WithName("backupauth.documents.review"), forge.WithSummary("Review document"), forge.WithDescription("Review uploaded document (admin only)"),
-		forge.WithResponseSchema(200, "Document reviewed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Documents", "Admin"))
+		forge.WithResponseSchema(200, "Document reviewed", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Documents", "Admin")); err != nil {
+		return err
+	}
 
 	// Admin routes
 	adminGroup := router.Group("/admin")
 	{
-		adminGroup.GET("/sessions", p.handler.ListRecoverySessions,
+		if err := adminGroup.GET("/sessions", p.handler.ListRecoverySessions,
 			forge.WithName("backupauth.admin.sessions"), forge.WithSummary("List recovery sessions"), forge.WithDescription("List all recovery sessions"),
-			forge.WithResponseSchema(200, "Sessions retrieved", BackupAuthSessionsResponse{}), forge.WithTags("Backup Auth", "Admin"))
-		adminGroup.POST("/sessions/:id/approve", p.handler.ApproveRecovery,
+			forge.WithResponseSchema(200, "Sessions retrieved", BackupAuthSessionsResponse{}), forge.WithTags("Backup Auth", "Admin")); err != nil {
+			return err
+		}
+		if err := adminGroup.POST("/sessions/:id/approve", p.handler.ApproveRecovery,
 			forge.WithName("backupauth.admin.approve"), forge.WithSummary("Approve recovery"), forge.WithDescription("Approve a recovery request"),
-			forge.WithResponseSchema(200, "Recovery approved", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Admin"))
-		adminGroup.POST("/sessions/:id/reject", p.handler.RejectRecovery,
+			forge.WithResponseSchema(200, "Recovery approved", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Admin")); err != nil {
+			return err
+		}
+		if err := adminGroup.POST("/sessions/:id/reject", p.handler.RejectRecovery,
 			forge.WithName("backupauth.admin.reject"), forge.WithSummary("Reject recovery"), forge.WithDescription("Reject a recovery request"),
-			forge.WithResponseSchema(200, "Recovery rejected", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Admin"))
-		adminGroup.GET("/stats", p.handler.GetRecoveryStats,
+			forge.WithResponseSchema(200, "Recovery rejected", BackupAuthStatusResponse{}), forge.WithTags("Backup Auth", "Admin")); err != nil {
+			return err
+		}
+		if err := adminGroup.GET("/stats", p.handler.GetRecoveryStats,
 			forge.WithName("backupauth.admin.stats"), forge.WithSummary("Get recovery stats"), forge.WithDescription("Get recovery statistics"),
-			forge.WithResponseSchema(200, "Stats retrieved", BackupAuthStatsResponse{}), forge.WithTags("Backup Auth", "Admin"))
-		adminGroup.GET("/config", p.handler.GetRecoveryConfig,
+			forge.WithResponseSchema(200, "Stats retrieved", BackupAuthStatsResponse{}), forge.WithTags("Backup Auth", "Admin")); err != nil {
+			return err
+		}
+		if err := adminGroup.GET("/config", p.handler.GetRecoveryConfig,
 			forge.WithName("backupauth.admin.config"), forge.WithSummary("Get recovery config"), forge.WithDescription("Get recovery configuration"),
-			forge.WithResponseSchema(200, "Config retrieved", BackupAuthConfigResponse{}), forge.WithTags("Backup Auth", "Admin"))
-		adminGroup.PUT("/config", p.handler.UpdateRecoveryConfig,
+			forge.WithResponseSchema(200, "Config retrieved", BackupAuthConfigResponse{}), forge.WithTags("Backup Auth", "Admin")); err != nil {
+			return err
+		}
+		if err := adminGroup.PUT("/config", p.handler.UpdateRecoveryConfig,
 			forge.WithName("backupauth.admin.config.update"), forge.WithSummary("Update recovery config"), forge.WithDescription("Update recovery configuration"),
-			forge.WithResponseSchema(200, "Config updated", BackupAuthConfigResponse{}), forge.WithTags("Backup Auth", "Admin"), forge.WithValidation(true))
+			forge.WithResponseSchema(200, "Config updated", BackupAuthConfigResponse{}), forge.WithTags("Backup Auth", "Admin"), forge.WithValidation(true)); err != nil {
+			return err
+		}
 	}
 
 	// Health check
@@ -342,7 +398,7 @@ func (p *Plugin) Service() *Service {
 	return p.service
 }
 
-// DTOs for backupauth routes.
+// BackupAuthStatusResponse for backupauth routes.
 type BackupAuthStatusResponse struct {
 	Status string `example:"success" json:"status"`
 }

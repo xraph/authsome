@@ -9,27 +9,27 @@ import (
 
 // Error codes for the CMS plugin.
 const (
-	// Content Type errors.
+	// ErrCodeContentTypeNotFound is the error code for content type not found.
 	ErrCodeContentTypeNotFound    = "CMS_CONTENT_TYPE_NOT_FOUND"
 	ErrCodeContentTypeExists      = "CMS_CONTENT_TYPE_EXISTS"
 	ErrCodeContentTypeHasEntries  = "CMS_CONTENT_TYPE_HAS_ENTRIES"
 	ErrCodeInvalidContentTypeSlug = "CMS_INVALID_CONTENT_TYPE_SLUG"
 
-	// Content Field errors.
+	// ErrCodeFieldNotFound is the error code for field not found.
 	ErrCodeFieldNotFound    = "CMS_FIELD_NOT_FOUND"
 	ErrCodeFieldExists      = "CMS_FIELD_EXISTS"
 	ErrCodeInvalidFieldSlug = "CMS_INVALID_FIELD_SLUG"
 	ErrCodeInvalidFieldType = "CMS_INVALID_FIELD_TYPE"
 	ErrCodeFieldRequired    = "CMS_FIELD_REQUIRED"
 
-	// Component Schema errors.
+	// ErrCodeComponentSchemaNotFound is the error code for component schema not found.
 	ErrCodeComponentSchemaNotFound    = "CMS_COMPONENT_SCHEMA_NOT_FOUND"
 	ErrCodeComponentSchemaExists      = "CMS_COMPONENT_SCHEMA_EXISTS"
 	ErrCodeComponentSchemaInUse       = "CMS_COMPONENT_SCHEMA_IN_USE"
 	ErrCodeInvalidComponentSchemaSlug = "CMS_INVALID_COMPONENT_SCHEMA_SLUG"
 	ErrCodeCircularComponentRef       = "CMS_CIRCULAR_COMPONENT_REF"
 
-	// Content Entry errors.
+	// ErrCodeEntryNotFound is the error code for entry not found.
 	ErrCodeEntryNotFound         = "CMS_ENTRY_NOT_FOUND"
 	ErrCodeEntryValidationFailed = "CMS_ENTRY_VALIDATION_FAILED"
 	ErrCodeEntryAlreadyPublished = "CMS_ENTRY_ALREADY_PUBLISHED"
@@ -37,23 +37,23 @@ const (
 	ErrCodeEntryLimitReached     = "CMS_ENTRY_LIMIT_REACHED"
 	ErrCodeUniqueConstraint      = "CMS_UNIQUE_CONSTRAINT_VIOLATION"
 
-	// Revision errors.
+	// ErrCodeRevisionNotFound is the error code for revision not found.
 	ErrCodeRevisionNotFound = "CMS_REVISION_NOT_FOUND"
 	ErrCodeRollbackFailed   = "CMS_ROLLBACK_FAILED"
 
-	// Relation errors.
+	// ErrCodeRelationNotFound is the error code for relation not found.
 	ErrCodeRelationNotFound   = "CMS_RELATION_NOT_FOUND"
 	ErrCodeInvalidRelation    = "CMS_INVALID_RELATION"
 	ErrCodeCircularRelation   = "CMS_CIRCULAR_RELATION"
 	ErrCodeRelationConstraint = "CMS_RELATION_CONSTRAINT_VIOLATION"
 
-	// Query errors.
+	// ErrCodeInvalidQuery is the error code for invalid query.
 	ErrCodeInvalidQuery    = "CMS_INVALID_QUERY"
 	ErrCodeInvalidFilter   = "CMS_INVALID_FILTER"
 	ErrCodeInvalidSort     = "CMS_INVALID_SORT"
 	ErrCodeInvalidOperator = "CMS_INVALID_OPERATOR"
 
-	// General errors.
+	// ErrCodeAccessDenied is the error code for access denied.
 	ErrCodeAccessDenied      = "CMS_ACCESS_DENIED"
 	ErrCodeInvalidRequest    = "CMS_INVALID_REQUEST"
 	ErrCodeAppContextMissing = "CMS_APP_CONTEXT_MISSING"

@@ -69,7 +69,7 @@ func NewBunRepository(db *bun.DB) Repository {
 	return &BunRepository{db: db}
 }
 
-// Rules.
+// CreateRule Rules.
 func (r *BunRepository) CreateRule(ctx context.Context, rule *GeofenceRule) error {
 	if rule.ID.IsNil() {
 		rule.ID = xid.New()
@@ -139,10 +139,10 @@ func (r *BunRepository) ListEnabledRules(ctx context.Context, appID xid.ID, user
 		Where("enabled = ?", true)
 
 	if userID != nil {
-		// Get both org-wide and user-specific rules
+		// query both org-wide and user-specific rules
 		query = query.Where("user_id IS NULL OR user_id = ?", userID)
 	} else {
-		// Only org-wide rules
+		// query org-wide rules
 		query = query.Where("user_id IS NULL")
 	}
 
@@ -151,7 +151,7 @@ func (r *BunRepository) ListEnabledRules(ctx context.Context, appID xid.ID, user
 	return rules, err
 }
 
-// Location Events.
+// CreateLocationEvent Events.
 func (r *BunRepository) CreateLocationEvent(ctx context.Context, event *LocationEvent) error {
 	if event.ID.IsNil() {
 		event.ID = xid.New()
@@ -215,7 +215,7 @@ func (r *BunRepository) DeleteOldLocationEvents(ctx context.Context, before time
 	return result.RowsAffected()
 }
 
-// Travel Alerts.
+// CreateTravelAlert Alerts.
 func (r *BunRepository) CreateTravelAlert(ctx context.Context, alert *TravelAlert) error {
 	if alert.ID.IsNil() {
 		alert.ID = xid.New()
@@ -308,7 +308,7 @@ func (r *BunRepository) DenyTravel(ctx context.Context, alertID xid.ID, deniedBy
 	return err
 }
 
-// Trusted Locations.
+// CreateTrustedLocation Locations.
 func (r *BunRepository) CreateTrustedLocation(ctx context.Context, location *TrustedLocation) error {
 	if location.ID.IsNil() {
 		location.ID = xid.New()
@@ -387,7 +387,7 @@ func (r *BunRepository) IsLocationTrusted(ctx context.Context, userID xid.ID, la
 	return false, nil, nil
 }
 
-// Violations.
+// CreateViolation Violations.
 func (r *BunRepository) CreateViolation(ctx context.Context, violation *GeofenceViolation) error {
 	if violation.ID.IsNil() {
 		violation.ID = xid.New()
@@ -465,7 +465,7 @@ func (r *BunRepository) ResolveViolation(ctx context.Context, id xid.ID, resolve
 	return err
 }
 
-// Geo Cache.
+// GetCachedGeoData Cache.
 func (r *BunRepository) GetCachedGeoData(ctx context.Context, ip string) (*GeoCache, error) {
 	cache := new(GeoCache)
 

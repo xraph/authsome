@@ -207,7 +207,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return handler
 	}
 
-	router.POST("/email-otp/send", wrapHandler(h.Send),
+	if err := router.POST("/email-otp/send", wrapHandler(h.Send),
 		forge.WithName("emailotp.send"),
 		forge.WithSummary("Send email OTP"),
 		forge.WithDescription("Sends a one-time password (OTP) to the specified email address. Rate limited to 5 requests per minute per email"),
@@ -218,9 +218,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Server error", ErrorResponse{}),
 		forge.WithTags("EmailOTP", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	router.POST("/email-otp/verify", wrapHandler(h.Verify),
+	if err := router.POST("/email-otp/verify", wrapHandler(h.Verify),
 		forge.WithName("emailotp.verify"),
 		forge.WithSummary("Verify email OTP"),
 		forge.WithDescription("Verifies the OTP code and creates a user session on success. Supports implicit signup if enabled"),
@@ -230,7 +233,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid OTP", ErrorResponse{}),
 		forge.WithTags("EmailOTP", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

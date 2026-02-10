@@ -86,13 +86,13 @@ func TestValidatePhone(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validatePhone(tt.phone)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errType != nil {
 					assert.ErrorIs(t, err, tt.errType)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -136,7 +136,7 @@ func TestGenerateSecureCode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			code, err := generateSecureCode(tt.length)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				return
 			}

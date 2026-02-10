@@ -11,32 +11,32 @@ import (
 // =============================================================================
 
 const (
-	// Template errors.
+	// CodeTemplateNotFound is the error code for template not found.
 	CodeTemplateNotFound      = "TEMPLATE_NOT_FOUND"
 	CodeTemplateAlreadyExists = "TEMPLATE_ALREADY_EXISTS"
 	CodeInvalidTemplate       = "INVALID_TEMPLATE"
 	CodeTemplateInactive      = "TEMPLATE_INACTIVE"
 	CodeTemplateRenderFailed  = "TEMPLATE_RENDER_FAILED"
 
-	// Notification errors.
+	// CodeNotificationNotFound is the error code for notification not found.
 	CodeNotificationNotFound   = "NOTIFICATION_NOT_FOUND"
 	CodeNotificationFailed     = "NOTIFICATION_FAILED"
 	CodeNotificationSendFailed = "NOTIFICATION_SEND_FAILED"
 
-	// Provider errors.
+	// CodeProviderNotConfigured is the error code for provider not configured.
 	CodeProviderNotConfigured    = "PROVIDER_NOT_CONFIGURED"
 	CodeProviderNotFound         = "PROVIDER_NOT_FOUND"
 	CodeProviderValidationFailed = "PROVIDER_VALIDATION_FAILED"
 
-	// Version errors.
+	// CodeVersionNotFound is the error code for version not found.
 	CodeVersionNotFound      = "VERSION_NOT_FOUND"
 	CodeVersionRestoreFailed = "VERSION_RESTORE_FAILED"
 
-	// Test errors.
+	// CodeTestNotFound is the error code for test not found.
 	CodeTestNotFound = "TEST_NOT_FOUND"
 	CodeTestFailed   = "TEST_FAILED"
 
-	// Validation errors.
+	// CodeInvalidNotificationType is the error code for invalid notification type.
 	CodeInvalidNotificationType = "INVALID_NOTIFICATION_TYPE"
 	CodeInvalidRecipient        = "INVALID_RECIPIENT"
 	CodeMissingTemplateVariable = "MISSING_TEMPLATE_VARIABLE"
@@ -46,7 +46,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// Template errors.
+// TemplateNotFound returns an error when a template is not found.
 func TemplateNotFound() *errs.AuthsomeError {
 	return errs.New(CodeTemplateNotFound, "Notification template not found", http.StatusNotFound)
 }
@@ -70,7 +70,7 @@ func TemplateRenderFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeTemplateRenderFailed, "Failed to render notification template", http.StatusInternalServerError)
 }
 
-// Notification errors.
+// NotificationNotFound returns an error when a notification is not found.
 func NotificationNotFound() *errs.AuthsomeError {
 	return errs.New(CodeNotificationNotFound, "Notification not found", http.StatusNotFound)
 }
@@ -84,7 +84,7 @@ func NotificationSendFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeNotificationSendFailed, "Failed to send notification", http.StatusInternalServerError)
 }
 
-// Provider errors.
+// ProviderNotConfigured returns an error when a provider is not configured.
 func ProviderNotConfigured(notificationType NotificationType) *errs.AuthsomeError {
 	return errs.New(CodeProviderNotConfigured, "No provider configured for notification type", http.StatusServiceUnavailable).
 		WithContext("notification_type", notificationType)
@@ -99,7 +99,7 @@ func ProviderValidationFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeProviderValidationFailed, "Provider configuration validation failed", http.StatusBadRequest)
 }
 
-// Version errors.
+// VersionNotFound returns an error when a version is not found.
 func VersionNotFound() *errs.AuthsomeError {
 	return errs.New(CodeVersionNotFound, "Template version not found", http.StatusNotFound)
 }
@@ -108,7 +108,7 @@ func VersionRestoreFailed(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeVersionRestoreFailed, "Failed to restore template version", http.StatusInternalServerError)
 }
 
-// Test errors.
+// TestNotFound returns an error when a test is not found.
 func TestNotFound() *errs.AuthsomeError {
 	return errs.New(CodeTestNotFound, "Notification test not found", http.StatusNotFound)
 }
@@ -118,7 +118,7 @@ func TestFailed(reason string) *errs.AuthsomeError {
 		WithContext("reason", reason)
 }
 
-// Validation errors.
+// InvalidNotificationType returns an error when an invalid notification type is provided.
 func InvalidNotificationType(notifType string) *errs.AuthsomeError {
 	return errs.New(CodeInvalidNotificationType, "Invalid notification type", http.StatusBadRequest).
 		WithContext("type", notifType)

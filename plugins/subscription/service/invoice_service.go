@@ -311,7 +311,9 @@ func (s *InvoiceService) recordEvent(ctx context.Context, subID, orgID xid.ID, e
 		EventData:      data,
 		CreatedAt:      time.Now(),
 	}
-	s.eventRepo.Create(ctx, event)
+	if err := s.eventRepo.Create(ctx, event); err != nil {
+		_ = err
+	}
 }
 
 func (s *InvoiceService) schemaToCoreInvoice(invoice *schema.SubscriptionInvoice) *core.Invoice {

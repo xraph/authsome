@@ -1,4 +1,3 @@
-// Package repository implements the data access layer for the CMS plugin.
 package repository
 
 import (
@@ -90,7 +89,7 @@ func (r *componentSchemaRepository) FindByID(ctx context.Context, id xid.ID) (*s
 	return component, nil
 }
 
-// FindBySlug finds a component schema by slug within an app/environment.
+// FindByName finds a component schema by slug within an app/environment.
 func (r *componentSchemaRepository) FindByName(ctx context.Context, appID, envID xid.ID, name string) (*schema.ComponentSchema, error) {
 	component := new(schema.ComponentSchema)
 
@@ -189,7 +188,7 @@ func (r *componentSchemaRepository) List(ctx context.Context, appID, envID xid.I
 	offset := (query.Page - 1) * query.PageSize
 	q = q.Limit(query.PageSize).Offset(offset)
 
-	// Execute query
+	// components query
 	var components []*schema.ComponentSchema
 
 	err = q.Scan(ctx, &components)
@@ -250,7 +249,7 @@ func (r *componentSchemaRepository) Count(ctx context.Context, appID, envID xid.
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a component schema with the given name exists.
+// ExistsWithName checks if a component schema with the given name exists.
 func (r *componentSchemaRepository) ExistsWithName(ctx context.Context, appID, envID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ComponentSchema)(nil)).

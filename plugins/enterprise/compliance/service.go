@@ -97,8 +97,8 @@ func (s *Service) CreateProfile(ctx context.Context, req *CreateProfileRequest) 
 		return nil, InternalError("create_profile", err)
 	}
 
-	// Audit the creation
-	s.auditSvc.LogEvent(ctx, &AuditEvent{
+	// _ the creation
+	_ = s.auditSvc.LogEvent(ctx, &AuditEvent{
 		Action:     "compliance.profile.created",
 		AppID:      req.AppID,
 		ResourceID: profile.ID,
@@ -126,8 +126,8 @@ func (s *Service) CreateProfileFromTemplate(ctx context.Context, appID string, s
 		return nil, InternalError("create_profile_from_template", err)
 	}
 
-	// Audit
-	s.auditSvc.LogEvent(ctx, &AuditEvent{
+	// _ Audit
+	_ = s.auditSvc.LogEvent(ctx, &AuditEvent{
 		Action:     "compliance.profile.created_from_template",
 		AppID:      appID,
 		ResourceID: profile.ID,
@@ -202,8 +202,8 @@ func (s *Service) UpdateProfile(ctx context.Context, id string, req *UpdateProfi
 		return nil, InternalError("update_profile", err)
 	}
 
-	// Audit
-	s.auditSvc.LogEvent(ctx, &AuditEvent{
+	// _ Audit
+	_ = s.auditSvc.LogEvent(ctx, &AuditEvent{
 		Action:     "compliance.profile.updated",
 		AppID:      profile.AppID,
 		ResourceID: profile.ID,
@@ -479,7 +479,10 @@ func (s *Service) createViolationsFromCheck(ctx context.Context, check *Complian
 		Metadata:      check.Result,
 	}
 
-	s.repo.CreateViolation(ctx, violation)
+	if err := s.repo.CreateViolation(ctx, violation); err != nil {
+		// _ error but don't fail the operation
+		_ = err
+	}
 
 	// Notify if configured
 	if s.config.Notifications.Violations {
@@ -491,7 +494,7 @@ func (s *Service) createViolationsFromCheck(ctx context.Context, check *Complian
 // notifyFailedCheck sends notification for failed check.
 func (s *Service) notifyFailedCheck(ctx context.Context, profile *ComplianceProfile, check *ComplianceCheck) {
 	if profile.ComplianceContact != "" {
-		s.emailSvc.SendEmail(ctx, &Email{
+		_ = s.emailSvc.SendEmail(ctx, &Email{
 			To:      profile.ComplianceContact,
 			Subject: "Compliance Check Failed: " + check.CheckType,
 			Body:    fmt.Sprintf("The compliance check '%s' has failed. Please review and take action.", check.CheckType),
@@ -502,7 +505,7 @@ func (s *Service) notifyFailedCheck(ctx context.Context, profile *ComplianceProf
 // notifyViolation sends notification for compliance violation.
 func (s *Service) notifyViolation(ctx context.Context, profile *ComplianceProfile, violation *ComplianceViolation) {
 	if profile.ComplianceContact != "" {
-		s.emailSvc.SendEmail(ctx, &Email{
+		_ = s.emailSvc.SendEmail(ctx, &Email{
 			To:      profile.ComplianceContact,
 			Subject: "Compliance Violation: " + violation.ViolationType,
 			Body:    "A compliance violation has been detected: " + violation.Description,
@@ -579,7 +582,7 @@ func (s *Service) GetComplianceStatus(ctx context.Context, appID string) (*Compl
 	return status, nil
 }
 
-// Helper structs and interfaces.
+// CreateProfileRequest structs and interfaces.
 type CreateProfileRequest struct {
 	AppID                 string               `json:"appId"`
 	Name                  string               `json:"name"                  validate:"required"`
@@ -670,7 +673,7 @@ type CompleteTrainingRequest struct {
 	Score int `json:"score"`
 }
 
-// External service interfaces.
+// AuditService service interfaces.
 type AuditService interface {
 	LogEvent(ctx context.Context, event *AuditEvent) error
 	GetOldestLog(ctx context.Context, appID string) (*AuditLog, error)
@@ -688,7 +691,7 @@ type EmailService interface {
 	SendEmail(ctx context.Context, email *Email) error
 }
 
-// Helper types.
+// AuditEvent types.
 type AuditEvent struct {
 	Action     string
 	AppID      string

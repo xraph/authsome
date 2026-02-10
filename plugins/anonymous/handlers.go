@@ -23,10 +23,10 @@ func NewHandler(s *Service, authInst core.Authsome) *Handler {
 	return &Handler{svc: s, authInst: authInst}
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse is the error response type.
 type ErrorResponse = responses.ErrorResponse
 
-// Request types.
+// SignInRequest is the request type for anonymous sign-in.
 type SignInRequest struct {
 	// Empty for now, could add options later
 }
@@ -37,7 +37,7 @@ type LinkRequest struct {
 	Name     string `example:"John Doe"         json:"name"`
 }
 
-// Plugin-specific responses.
+// SignInResponse is the response type for anonymous sign-in.
 type SignInResponse struct {
 	Token   string `example:"session_token_abc123" json:"token"`
 	Session any    `json:"session"`

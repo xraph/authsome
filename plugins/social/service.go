@@ -414,7 +414,7 @@ func (s *Service) HandleCallback(ctx context.Context, providerName, stateToken, 
 			// Orphaned social account - user was deleted
 			// Delete the orphaned social account and treat as new signup
 			_ = s.socialRepo.Delete(ctx, existingAccount.ID)
-			existingAccount = nil // Continue to new user flow
+			// Continue to new user flow (existingAccount is no longer needed)
 		} else {
 			// User found, return for signin
 			return &CallbackResult{

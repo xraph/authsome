@@ -22,7 +22,6 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins"
 	"github.com/xraph/forge"
-	"github.com/xraph/forge/extensions/database"
 	forgedb "github.com/xraph/forge/extensions/database"
 )
 
@@ -54,7 +53,7 @@ func ResolveDatabase(container forge.Container) (*bun.DB, error) {
 // ResolveDatabaseManager resolves Forge's DatabaseManager from the container
 // This is useful for plugins that need access to multiple databases.
 func ResolveDatabaseManager(container forge.Container) (*forgedb.DatabaseManager, error) {
-	manager, err := database.GetManager(container)
+	manager, err := forgedb.GetManager(container)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve database manager: %w", err)
 	}

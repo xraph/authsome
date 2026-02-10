@@ -5,7 +5,7 @@ import (
 	"github.com/xraph/authsome/core/responses"
 )
 
-// App handler request types.
+// CreateAppRequest handler request types.
 type CreateAppRequest struct {
 	coreapp.CreateAppRequest
 }
@@ -29,7 +29,7 @@ type ListAppsRequest struct {
 	Offset int `query:"offset"`
 }
 
-// Member handler request types.
+// AddMemberRequest handler request types.
 type AddMemberRequest struct {
 	AppID  string `path:"appId"   validate:"required"`
 	UserID string `json:"user_id" validate:"required"`
@@ -77,7 +77,7 @@ type DeclineInvitationRequest struct {
 	Token string `path:"token" validate:"required"`
 }
 
-// Team handler request types.
+// CreateTeamRequest handler request types.
 type CreateTeamRequest struct {
 	AppID       string `path:"appId"       validate:"required"`
 	Name        string `json:"name"        validate:"required"`
@@ -119,7 +119,7 @@ type RemoveTeamMemberRequest struct {
 	MemberID string `path:"memberId" validate:"required"`
 }
 
-// Shared response types - use shared responses from core.
+// ErrorResponse response types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse

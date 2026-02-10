@@ -34,7 +34,7 @@ const (
 // ERROR CONSTRUCTORS
 // =============================================================================
 
-// Permission errors.
+// PermissionDenied returns an error when impersonation permission is denied.
 func PermissionDenied(reason string) *errs.AuthsomeError {
 	return errs.New(CodePermissionDenied, "Permission denied for impersonation", http.StatusForbidden).
 		WithContext("reason", reason)
@@ -45,7 +45,7 @@ func InvalidPermission(permission string) *errs.AuthsomeError {
 		WithContext("permission", permission)
 }
 
-// User errors.
+// UserNotFound returns an error when a user is not found.
 func UserNotFound(userID string) *errs.AuthsomeError {
 	return errs.New(CodeUserNotFound, "User not found", http.StatusNotFound).
 		WithContext("user_id", userID)
@@ -61,7 +61,7 @@ func ImpersonatorNotFound(userID string) *errs.AuthsomeError {
 		WithContext("impersonator_id", userID)
 }
 
-// Session errors.
+// SessionNotFound returns an error when a session is not found.
 func SessionNotFound(sessionID string) *errs.AuthsomeError {
 	return errs.New(CodeSessionNotFound, "Session not found", http.StatusNotFound).
 		WithContext("session_id", sessionID)
@@ -91,7 +91,7 @@ func SessionAlreadyEnded(impersonationID string) *errs.AuthsomeError {
 		WithContext("impersonation_id", impersonationID)
 }
 
-// Validation errors.
+// InvalidReason returns an error when the impersonation reason is invalid.
 func InvalidReason(minLength int) *errs.AuthsomeError {
 	return errs.New(CodeInvalidReason, "Impersonation reason is invalid", http.StatusBadRequest).
 		WithContext("min_length", minLength)
@@ -107,7 +107,7 @@ func RequireTicket() *errs.AuthsomeError {
 	return errs.New(CodeRequireTicket, "Ticket number is required for impersonation", http.StatusBadRequest)
 }
 
-// Operation errors.
+// FailedToCreateSession returns an error when impersonation session creation fails.
 func FailedToCreateSession(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeFailedToCreateSession, "Failed to create impersonation session", http.StatusInternalServerError)
 }
@@ -116,7 +116,7 @@ func FailedToRevokeSession(err error) *errs.AuthsomeError {
 	return errs.Wrap(err, CodeFailedToRevokeSession, "Failed to revoke impersonation session", http.StatusInternalServerError)
 }
 
-// Audit errors.
+// AuditEventNotFound returns an error when an audit event is not found.
 func AuditEventNotFound(eventID string) *errs.AuthsomeError {
 	return errs.New(CodeAuditEventNotFound, "Audit event not found", http.StatusNotFound).
 		WithContext("event_id", eventID)

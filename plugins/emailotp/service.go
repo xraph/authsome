@@ -75,7 +75,7 @@ func (s *Service) SendOTP(ctx context.Context, appID xid.ID, email, ip, ua strin
 	}
 
 	// Generate numeric OTP
-	rand.Seed(time.Now().UnixNano())
+	// Note: As of Go 1.20, rand.Seed is deprecated and not needed
 
 	max := int64(1)
 	for range s.config.OTPLength {

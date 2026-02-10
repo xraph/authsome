@@ -15,7 +15,7 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // Monitoring Handlers
@@ -637,7 +637,9 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 	defer writer.Flush()
 
 	// Write header
-	writer.Write([]string{"Timestamp", "Event Type", "Resource Type", "Status", "Direction", "Duration (ms)", "Error"})
+	if err := writer.Write([]string{"Timestamp", "Event Type", "Resource Type", "Status", "Direction", "Duration (ms)", "Error"}); err != nil {
+		return nil, err
+	}
 
 	// Write data
 	for _, event := range events {
@@ -646,7 +648,7 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 			errorMsg = *event.ErrorMessage
 		}
 
-		writer.Write([]string{
+		if err := writer.Write([]string{
 			event.CreatedAt.Format(time.RFC3339),
 			event.EventType,
 			event.ResourceType,
@@ -654,7 +656,9 @@ func (e *DashboardExtension) HandleExportLogs(ctx *router.PageContext) (g.Node, 
 			event.Direction,
 			strconv.FormatInt(event.Duration, 10),
 			errorMsg,
-		})
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil

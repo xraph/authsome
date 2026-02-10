@@ -133,9 +133,10 @@ func (v *EntryValidator) validateData(data map[string]any, existingEntry *schema
 
 	// Check for unknown fields (fields not in schema)
 	for key := range data {
-		if _, exists := v.fields[key]; !exists {
+		if _, ok := v.fields[key]; !ok {
 			// Unknown fields are allowed but logged
 			// You could make this stricter if needed
+			_ = key // Suppress unused variable warning
 		}
 	}
 

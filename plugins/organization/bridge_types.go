@@ -8,7 +8,7 @@ import (
 // Bridge Function Input/Output Types
 // =============================================================================
 
-// Common input fields.
+// BridgeAppInput input fields.
 type BridgeAppInput struct {
 	AppID string `json:"appId"`
 }

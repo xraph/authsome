@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/rs/xid"
-	"github.com/xraph/authsome/core/app"
-	coreapp "github.com/xraph/authsome/core/app"
+	app "github.com/xraph/authsome/core/app"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forge"
@@ -16,11 +15,11 @@ import (
 
 // MemberHandler handles app member-related HTTP requests.
 type MemberHandler struct {
-	appService *coreapp.ServiceImpl
+	appService *app.ServiceImpl
 }
 
 // NewMemberHandler creates a new member handler.
-func NewMemberHandler(appService *coreapp.ServiceImpl) *MemberHandler {
+func NewMemberHandler(appService *app.ServiceImpl) *MemberHandler {
 	return &MemberHandler{
 		appService: appService,
 	}
@@ -43,11 +42,11 @@ func (h *MemberHandler) AddMember(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_USER_ID", "Invalid user ID format", http.StatusBadRequest))
 	}
 
-	member, err := h.appService.CreateMember(c.Request().Context(), &coreapp.Member{
+		member, err := h.appService.CreateMember(c.Request().Context(), &app.Member{
 		AppID:     appID,
 		UserID:    userID,
-		Role:      coreapp.MemberRole(req.Role),
-		Status:    coreapp.MemberStatusActive,
+		Role:      app.MemberRole(req.Role),
+		Status:    app.MemberStatusActive,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	})
@@ -110,7 +109,7 @@ func (h *MemberHandler) ListMembers(c forge.Context) error {
 		}
 	}
 
-	filter := &coreapp.ListMembersFilter{
+	filter := &app.ListMembersFilter{
 		PaginationParams: pagination.PaginationParams{
 			Page:  (offset / limit) + 1,
 			Limit: limit,

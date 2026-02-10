@@ -20,6 +20,7 @@ const (
 	APIKeyUserContextKey   contextKey = "api_key_user"
 	APIKeyAuthenticatedKey contextKey = "api_key_authenticated"
 	APIKeyPermissionsKey   contextKey = "api_key_permissions"
+	UserContextKey         contextKey = "user" // Standard user context key
 )
 
 // Middleware handles API key authentication.
@@ -141,7 +142,7 @@ func (m *Middleware) Authenticate(next func(forge.Context) error) func(forge.Con
 
 		if usr != nil {
 			ctx = context.WithValue(ctx, APIKeyUserContextKey, usr)
-			ctx = context.WithValue(ctx, "user", usr) // Standard user context key
+			ctx = context.WithValue(ctx, UserContextKey, usr)
 		}
 
 		// Update request with new context

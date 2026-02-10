@@ -1,6 +1,6 @@
 package types
 
-// Pagination options.
+// PaginationOptions options.
 type PaginationOptions struct {
 	Page     int
 	PageSize int

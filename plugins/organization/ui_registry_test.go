@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/ui"
 	g "maragu.dev/gomponents"
 	. "maragu.dev/gomponents/html"
@@ -87,13 +88,13 @@ func TestOrganizationUIRegistry_Register(t *testing.T) {
 			err := registry.Register(tt.extension)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -104,12 +105,12 @@ func TestOrganizationUIRegistry_Register_Duplicate(t *testing.T) {
 
 	ext1 := &MockOrganizationUIExtension{id: "test"}
 	err := registry.Register(ext1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Try to register again with same ID
 	ext2 := &MockOrganizationUIExtension{id: "test"}
 	err = registry.Register(ext2)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already registered")
 }
 
@@ -137,7 +138,7 @@ func TestOrganizationUIRegistry_GetWidgets(t *testing.T) {
 		},
 	}
 	err := registry.Register(ext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("admin user sees all widgets", func(t *testing.T) {
 		ctx := ui.OrgExtensionContext{
@@ -191,7 +192,7 @@ func TestOrganizationUIRegistry_GetTabs(t *testing.T) {
 		},
 	}
 	err := registry.Register(ext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("admin user sees all tabs", func(t *testing.T) {
 		ctx := ui.OrgExtensionContext{
@@ -242,7 +243,7 @@ func TestOrganizationUIRegistry_GetTabByPath(t *testing.T) {
 		},
 	}
 	err := registry.Register(ext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	ctx := ui.OrgExtensionContext{
 		OrgID:   xid.New(),
@@ -294,7 +295,7 @@ func TestOrganizationUIRegistry_GetActions(t *testing.T) {
 		},
 	}
 	err := registry.Register(ext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("admin user sees all actions", func(t *testing.T) {
 		ctx := ui.OrgExtensionContext{
@@ -350,7 +351,7 @@ func TestOrganizationUIRegistry_GetQuickLinks(t *testing.T) {
 		},
 	}
 	err := registry.Register(ext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("admin user sees all links", func(t *testing.T) {
 		ctx := ui.OrgExtensionContext{

@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/schema"
 )
@@ -239,10 +240,10 @@ func TestService_Create(t *testing.T) {
 			session, err := svc.Create(context.Background(), tt.req)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, session)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, session)
 
 				if tt.check != nil {
@@ -310,10 +311,10 @@ func TestService_FindByToken(t *testing.T) {
 			session, err := svc.FindByToken(context.Background(), tt.token)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, session)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, session)
 			}
 
@@ -375,9 +376,9 @@ func TestService_Revoke(t *testing.T) {
 			err := svc.Revoke(context.Background(), tt.token)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			mockRepo.AssertExpectations(t)
@@ -438,7 +439,7 @@ func TestService_TokenGeneration(t *testing.T) {
 			IPAddress: "192.168.1.1",
 			UserAgent: "Mozilla/5.0",
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotEmpty(t, session.Token)
 
 		// Check for uniqueness

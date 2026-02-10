@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/auth"
 	"github.com/xraph/authsome/core/device"
 	"github.com/xraph/authsome/core/responses"
@@ -129,7 +130,7 @@ func TestCompletionService_CompleteAuthentication(t *testing.T) {
 	resp, err := completion.CompleteAuthentication(req)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.NotNil(t, resp.Session)
 	assert.Equal(t, "test_token_123", resp.Token)
@@ -167,7 +168,7 @@ func TestCompletionService_CompleteAuthentication_SocialProvider(t *testing.T) {
 
 	resp, err := completion.CompleteAuthentication(req)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, "signin_social_google", auditSvc.lastAction, "Audit action should include provider")
 }
@@ -195,7 +196,7 @@ func TestCompletionService_NilServices(t *testing.T) {
 	resp, err := completion.CompleteAuthentication(req)
 
 	// Should still work with just auth service
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.True(t, authSvc.createSessionCalled)
 }
@@ -227,7 +228,7 @@ func TestCompletionService_CompleteSignUpOrSignIn_NewUser(t *testing.T) {
 	resp, err := completion.CompleteSignUpOrSignIn(req)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.NotNil(t, resp.User)
 	assert.NotNil(t, resp.Session)
@@ -278,7 +279,7 @@ func TestCompletionService_CompleteSignUpOrSignIn_ExistingUser(t *testing.T) {
 	resp, err := completion.CompleteSignUpOrSignIn(req)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.NotNil(t, resp.User)
 	assert.Equal(t, existingUser.ID, resp.User.ID)
@@ -345,7 +346,7 @@ func TestCompletionService_CompleteSignUpOrSignIn_ExistingUserNilUser(t *testing
 	resp, err := completion.CompleteSignUpOrSignIn(req)
 
 	// Assert - should return error
-	assert.Error(t, err, "Should return error when User is nil for existing user signin")
+	require.Error(t, err, "Should return error when User is nil for existing user signin")
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "USER_REQUIRED", "Error should indicate user is required")
 }
@@ -479,7 +480,7 @@ func TestCompletionService_SocialLoginFlow(t *testing.T) {
 		resp, err := completion.CompleteSignUpOrSignIn(req)
 
 		// Assert signup succeeded
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, resp)
 		assert.NotNil(t, resp.User)
 		assert.NotNil(t, resp.Session)
@@ -525,7 +526,7 @@ func TestCompletionService_SocialLoginFlow(t *testing.T) {
 		resp, err := completion.CompleteSignUpOrSignIn(req)
 
 		// Assert signin succeeded
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, resp)
 		assert.NotNil(t, resp.Session, "Session should be created")
 		assert.NotEmpty(t, resp.Token, "Token should be returned for cookie")

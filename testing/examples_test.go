@@ -126,7 +126,7 @@ func TestExample_RoleBasedAuth(t *testing.T) {
 	memberCtx := mock.NewTestContextWithUser(memberUser)
 
 	_, err = mock.RequireOrgRole(memberCtx, org.ID, "admin")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, authsometesting.ErrInsufficientPermissions, err)
 }
 
@@ -142,7 +142,7 @@ func TestExample_SessionExpiration(t *testing.T) {
 
 	// Try to validate the expired session
 	_, err := mock.SessionService.Validate(context.Background(), expiredSession.Token)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expired")
 }
 
@@ -182,7 +182,7 @@ func TestExample_CommonScenarios(t *testing.T) {
 	t.Run("expired session", func(t *testing.T) {
 		scenario := scenarios.ExpiredSession()
 		_, err := mock.SessionService.Validate(context.Background(), scenario.Session.Token)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("unauthenticated", func(t *testing.T) {
@@ -210,7 +210,7 @@ func TestExample_ServiceMethods(t *testing.T) {
 	t.Run("user service", func(t *testing.T) {
 		// Test user creation
 		user, err := mock.UserService.GetByEmail(ctx, "test@example.com")
-		assert.Error(t, err) // Should not exist yet
+		require.Error(t, err) // Should not exist yet
 
 		// Create user
 		created := mock.CreateUser("test@example.com", "Test User")
@@ -251,7 +251,7 @@ func TestExample_ServiceMethods(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = mock.SessionService.GetByID(ctx, session.ID)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("organization service", func(t *testing.T) {
@@ -334,7 +334,7 @@ func TestExample_HandlerWithAuth(t *testing.T) {
 
 		// Should fail
 		_, err := getUserProfile(ctx, mock)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, authsometesting.ErrNotAuthenticated, err)
 	})
 }

@@ -703,7 +703,7 @@ func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan
 	features := make([]core.PlanFeature, len(plan.Features))
 	for i, f := range plan.Features {
 		var value any
-		json.Unmarshal([]byte(f.Value), &value)
+		_ = json.Unmarshal([]byte(f.Value), &value)
 		features[i] = core.PlanFeature{
 			Key:         f.Key,
 			Name:        f.Name,
@@ -721,7 +721,7 @@ func (s *PlanService) schemaToCorePlan(plan *schema.SubscriptionPlan) *core.Plan
 		for _, link := range plan.FeatureLinks {
 			if link.Feature != nil && !link.IsBlocked {
 				var value any
-				json.Unmarshal([]byte(link.Value), &value)
+				_ = json.Unmarshal([]byte(link.Value), &value)
 				linkFeatureMap[link.Feature.Key] = core.PlanFeature{
 					Key:           link.Feature.Key,
 					Name:          link.Feature.Name,

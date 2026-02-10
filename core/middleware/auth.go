@@ -128,7 +128,7 @@ func (m *AuthMiddleware) Authenticate(next forge.Handler) forge.Handler {
 	return m.HandleAuthentication(m.config.Optional)(next)
 }
 
-// Authenticate is the main middleware function that populates auth context
+// HandleAuthentication is the main middleware function that populates auth context.
 // It tries authentication strategies in priority order.
 func (m *AuthMiddleware) HandleAuthentication(optional bool) func(next forge.Handler) forge.Handler {
 	return func(next forge.Handler) forge.Handler {

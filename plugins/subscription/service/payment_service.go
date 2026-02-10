@@ -87,7 +87,9 @@ func (s *PaymentService) AddPaymentMethod(ctx context.Context, orgID xid.ID, pro
 
 	// Clear existing default if setting new default
 	if setDefault {
-		s.repo.ClearDefault(ctx, orgID)
+		if err := s.repo.ClearDefault(ctx, orgID); err != nil {
+			_ = err
+		}
 	}
 
 	if err := s.repo.Create(ctx, method); err != nil {

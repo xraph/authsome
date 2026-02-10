@@ -120,7 +120,7 @@ func (r *TwoFARepository) VerifyAndUseBackupCode(ctx context.Context, userID xid
 	return true, nil
 }
 
-// Trusted devices.
+// MarkTrustedDevice devices.
 func (r *TwoFARepository) MarkTrustedDevice(ctx context.Context, userID xid.ID, deviceID string, expiresAt time.Time) error {
 	td := &schema.TrustedDevice{ID: xid.New(), UserID: userID, DeviceID: deviceID, ExpiresAt: expiresAt}
 	td.CreatedBy = userID
@@ -149,7 +149,7 @@ func (r *TwoFARepository) IsTrustedDevice(ctx context.Context, userID xid.ID, de
 	return true, nil
 }
 
-// OTP codes.
+// CreateOTPCode codes.
 func (r *TwoFARepository) CreateOTPCode(ctx context.Context, userID xid.ID, codeHash string, expiresAt time.Time) error {
 	oc := &schema.OTPCode{ID: xid.New(), UserID: userID, CodeHash: codeHash, ExpiresAt: expiresAt, Attempts: 0}
 	oc.CreatedBy = userID

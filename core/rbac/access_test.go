@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/schema"
 )
 
@@ -116,7 +117,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInOrg(ctx, userID, orgID, envID, "view", "users", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.False(t, result.IsWildcard)
@@ -151,7 +152,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInOrg(ctx, userID, orgID, envID, "delete", "users", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.True(t, result.IsWildcard)
@@ -183,7 +184,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInOrg(ctx, userID, orgID, envID, "view", "posts", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.True(t, result.IsWildcard)
@@ -214,7 +215,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInOrg(ctx, userID, orgID, envID, "delete", "anything", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.True(t, result.IsWildcard)
@@ -246,7 +247,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInOrg(ctx, userID, orgID, envID, "delete", "users", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.False(t, result.Allowed)
 		assert.False(t, result.IsWildcard)
@@ -271,7 +272,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 		}
 
 		result, err := service.CheckUserAccessInOrg(ctx, xid.New(), xid.New(), xid.New(), "edit", "users", cachedRoles)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.False(t, result.IsWildcard)
@@ -304,7 +305,7 @@ func TestService_CheckUserAccessInOrg(t *testing.T) {
 			Return([]*schema.Permission{perm2}, nil)
 
 		result, err := service.CheckUserAccessInOrg(ctx, userID, orgID, envID, "edit", "users", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, result.Allowed)
 		assert.Equal(t, "edit on users", result.MatchedPermission.Name)
 		assert.Equal(t, "editor", result.MatchedRole.Name)
@@ -342,7 +343,7 @@ func TestService_CheckUserAccessInApp(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInApp(ctx, userID, appID, envID, "manage", "settings", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.False(t, result.IsWildcard)
@@ -374,7 +375,7 @@ func TestService_CheckUserAccessInApp(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInApp(ctx, userID, appID, envID, "delete", "anything", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.True(t, result.IsWildcard)
@@ -405,7 +406,7 @@ func TestService_CheckUserAccessInApp(t *testing.T) {
 			Return([]*schema.Permission{perm}, nil)
 
 		result, err := service.CheckUserAccessInApp(ctx, userID, appID, envID, "manage", "settings", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.False(t, result.Allowed)
 		assert.Contains(t, result.Reason, "does not have permission")
@@ -427,7 +428,7 @@ func TestService_CheckUserAccessInApp(t *testing.T) {
 		}
 
 		result, err := service.CheckUserAccessInApp(ctx, xid.New(), xid.New(), xid.New(), "manage", "users", cachedRoles)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.True(t, result.Allowed)
 		assert.True(t, result.IsWildcard)
@@ -449,7 +450,7 @@ func TestService_CheckUserAccessInApp(t *testing.T) {
 			Return([]schema.Role{}, nil)
 
 		result, err := service.CheckUserAccessInApp(ctx, userID, appID, envID, "view", "users", nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.False(t, result.Allowed)
 		assert.Contains(t, result.Reason, "does not have permission")

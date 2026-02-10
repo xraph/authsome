@@ -48,7 +48,7 @@ func (m *FeaturesMigration) MigrateExistingFeatures(ctx context.Context, appID x
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Step 1: Get all unique feature keys from existing PlanFeature entries
 	type featureKeyInfo struct {

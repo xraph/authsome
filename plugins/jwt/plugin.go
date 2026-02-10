@@ -164,7 +164,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// JWT key management routes
 	jwtKeys := router.Group("/jwt/keys")
 	{
-		jwtKeys.POST("", p.handler.CreateJWTKey,
+		if err := jwtKeys.POST("", p.handler.CreateJWTKey,
 			forge.WithName("jwt.keys.create"),
 			forge.WithSummary("Create JWT key"),
 			forge.WithDescription("Create a new JWT signing key for token generation and verification"),
@@ -174,9 +174,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Keys"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		jwtKeys.GET("", p.handler.ListJWTKeys,
+		if err := jwtKeys.GET("", p.handler.ListJWTKeys,
 			forge.WithName("jwt.keys.list"),
 			forge.WithSummary("List JWT keys"),
 			forge.WithDescription("List all JWT signing keys for the app with pagination"),
@@ -184,13 +187,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "JWT keys retrieved", jwt.ListJWTKeysResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Keys"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	// JWT token routes
 	jwtTokens := router.Group("/jwt")
 	{
-		jwtTokens.POST("/generate", p.handler.GenerateToken,
+		if err := jwtTokens.POST("/generate", p.handler.GenerateToken,
 			forge.WithName("jwt.generate"),
 			forge.WithSummary("Generate JWT token"),
 			forge.WithDescription("Generate a new JWT token for authenticated access. Requires valid session or API key."),
@@ -201,9 +207,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Tokens"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		jwtTokens.POST("/verify", p.handler.VerifyToken,
+		if err := jwtTokens.POST("/verify", p.handler.VerifyToken,
 			forge.WithName("jwt.verify"),
 			forge.WithSummary("Verify JWT token"),
 			forge.WithDescription("Verify the validity and signature of a JWT token"),
@@ -213,16 +222,22 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Invalid or expired token", ErrorResponse{}),
 			forge.WithTags("JWT", "Tokens"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		jwtTokens.GET("/jwks", p.handler.GetJWKS,
+		if err := jwtTokens.GET("/jwks", p.handler.GetJWKS,
 			forge.WithName("jwt.jwks"),
 			forge.WithSummary("Get JSON Web Key Set (JWKS)"),
 			forge.WithDescription("Retrieve the public keys used for JWT signature verification in JWKS format (RFC 7517)"),
 			forge.WithResponseSchema(200, "JWKS retrieved", jwt.JWKSResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Keys"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	p.logger.Debug("JWT routes registered")

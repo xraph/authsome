@@ -204,6 +204,9 @@ linters:
           - errcheck
           - dupl
           - gosec
+      - path: cmd/
+        linters:
+          - forbidigo
       # Exclude dashboard package from govet/staticcheck due to printf analyzer bug
       # in golang.org/x/tools@v0.38.0 (vendored by golangci-lint v2.6.1)
       - path: plugins/dashboard/

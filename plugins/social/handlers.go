@@ -23,7 +23,7 @@ type Handler struct {
 	authCompletion *authflow.CompletionService // Centralized authentication completion
 }
 
-// Request types.
+// SignInRequest represents request types.
 type SignInRequest struct {
 	Provider    string   `example:"google"                            json:"provider"              validate:"required"`
 	Scopes      []string `example:"[\"email\",\"profile\"]"           json:"scopes,omitempty"`
@@ -51,7 +51,7 @@ type AdminUpdateProviderRequest struct {
 	Enabled      *bool    `json:"enabled,omitempty"`
 }
 
-// Response types - properly typed.
+// AuthURLResponse types - properly typed.
 type AuthURLResponse struct {
 	URL string `example:"https://accounts.google.com/o/oauth2/v2/auth?..." json:"url"`
 }
@@ -91,7 +91,7 @@ type ProviderConfigResponse struct {
 	AppID    string `example:"c9h7b3j2k1m4n5p6"                 json:"appId"`
 }
 
-// Use shared response type.
+// MessageResponse shared response type.
 type MessageResponse = responses.MessageResponse
 
 // NewHandler creates a new social OAuth handler.
@@ -118,7 +118,7 @@ func handleError(c forge.Context, err error, code string, message string, defaul
 }
 
 // SignIn initiates OAuth flow for sign-in
-// POST /api/auth/signin/social.
+// SignIn /api/auth/signin/social.
 func (h *Handler) SignIn(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -166,7 +166,7 @@ type CallbackRequest struct {
 }
 
 // Callback handles OAuth provider callback
-// GET /api/auth/callback/:provider.
+// Callback /api/auth/callback/:provider.
 func (h *Handler) Callback(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -285,7 +285,7 @@ func (h *Handler) Callback(c forge.Context) error {
 }
 
 // LinkAccount links a social provider to the current user
-// POST /api/auth/account/link.
+// LinkAccount /api/auth/account/link.
 func (h *Handler) LinkAccount(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -336,7 +336,7 @@ func (h *Handler) LinkAccount(c forge.Context) error {
 }
 
 // UnlinkAccount unlinks a social provider from the current user
-// DELETE /api/auth/account/unlink/:provider.
+// UnlinkAccount /api/auth/account/unlink/:provider.
 func (h *Handler) UnlinkAccount(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -371,7 +371,7 @@ func (h *Handler) UnlinkAccount(c forge.Context) error {
 }
 
 // ListProviders returns available OAuth providers
-// GET /api/auth/providers.
+// ListProviders /api/auth/providers.
 func (h *Handler) ListProviders(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -389,7 +389,7 @@ func (h *Handler) ListProviders(c forge.Context) error {
 // =============================================================================
 
 // AdminListProviders handles GET /social/admin/providers
-// Lists configured OAuth providers for an app.
+// AdminListProviders configured OAuth providers for an app.
 func (h *Handler) AdminListProviders(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -418,7 +418,7 @@ func (h *Handler) AdminListProviders(c forge.Context) error {
 }
 
 // AdminAddProvider handles POST /social/admin/providers
-// Adds/configures an OAuth provider for an app.
+// AdminAddProvider Adds/configures an OAuth provider for an app.
 func (h *Handler) AdminAddProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -463,7 +463,7 @@ func (h *Handler) AdminAddProvider(c forge.Context) error {
 }
 
 // AdminUpdateProvider handles PUT /social/admin/providers/:provider
-// Updates OAuth provider configuration for an app.
+// AdminUpdateProvider OAuth provider configuration for an app.
 func (h *Handler) AdminUpdateProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -505,7 +505,7 @@ func (h *Handler) AdminUpdateProvider(c forge.Context) error {
 }
 
 // AdminDeleteProvider handles DELETE /social/admin/providers/:provider
-// Removes OAuth provider configuration for an app.
+// AdminDeleteProvider OAuth provider configuration for an app.
 func (h *Handler) AdminDeleteProvider(c forge.Context) error {
 	ctx := c.Request().Context()
 

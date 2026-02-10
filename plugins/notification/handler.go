@@ -26,7 +26,7 @@ type Handler struct {
 	config       Config
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse types - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
@@ -174,7 +174,7 @@ func (h *Handler) ListTemplates(c forge.Context) error {
 		}
 	}
 
-	// Parse filter parameters
+	// notifType filter parameters
 	var notifType *notification.NotificationType
 
 	if typeStr := c.Query("type"); typeStr != "" {
@@ -512,7 +512,7 @@ func (h *Handler) ListNotifications(c forge.Context) error {
 		}
 	}
 
-	// Parse filter parameters
+	// notifType filter parameters
 	var notifType *notification.NotificationType
 
 	if typeStr := c.Query("type"); typeStr != "" {
@@ -611,7 +611,7 @@ func (h *Handler) HandleWebhook(c forge.Context) error {
 	}
 
 	// Parse webhook payload based on provider
-	// This is a placeholder - actual implementation would depend on provider specs
+	// payload is a placeholder - actual implementation would depend on provider specs
 	var payload map[string]any
 	if err := c.BindJSON(&payload); err != nil {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid webhook payload"))
@@ -822,7 +822,7 @@ func (h *Handler) CreateTemplateVersion(c forge.Context) error {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
-	// Get current user ID if available (for changedBy)
+	// changedBy current user ID if available (for changedBy)
 	var changedBy *xid.ID
 	// TODO: Extract user ID from context
 
@@ -902,7 +902,7 @@ func (h *Handler) RestoreTemplateVersion(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("invalid version ID"))
 	}
 
-	// Get current user ID if available (for restoredBy)
+	// restoredBy current user ID if available (for restoredBy)
 	var restoredBy *xid.ID
 	// TODO: Extract user ID from context
 

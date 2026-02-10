@@ -11,7 +11,7 @@ import (
 // Handler exposes HTTP endpoints for 2FA operations.
 type Handler struct{ svc *Service }
 
-// Request types.
+// EnableRequest2FA represents request types.
 type EnableRequest2FA struct {
 	UserID string `json:"user_id" validate:"required"`
 	Method string `json:"method"`
@@ -42,10 +42,10 @@ type GetStatusRequest struct {
 	DeviceID string `json:"device_id"`
 }
 
-// Response types - use shared responses from core.
+// StatusResponse types - use shared responses from core.
 type StatusResponse = responses.StatusResponse
 
-// Plugin-specific responses.
+// CodesResponse Plugin-specific responses.
 type CodesResponse struct {
 	Codes []string `json:"codes"`
 }

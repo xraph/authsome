@@ -191,7 +191,7 @@ func NewRepo(db *bun.DB) Repository {
 	}
 }
 
-// Core repositories.
+// User returns the user repository.
 func (r *Repo) User() *UserRepository {
 	return r.user
 }
@@ -204,7 +204,7 @@ func (r *Repo) SocialAccount() SocialAccountRepository {
 	return r.socialAccount
 }
 
-// Authentication & Security.
+// APIKey returns the API key repository.
 func (r *Repo) APIKey() *APIKeyRepository {
 	return r.apiKey
 }
@@ -253,7 +253,7 @@ func (r *Repo) Notification() notification.Repository {
 	return r.notification
 }
 
-// OAuth & SSO.
+// OAuthToken & SSO.
 func (r *Repo) OAuthToken() *OAuthTokenRepository {
 	return r.oauthToken
 }
@@ -274,7 +274,7 @@ func (r *Repo) SocialProviderConfig() SocialProviderConfigRepository {
 	return r.socialProviderConfig
 }
 
-// Multi-factor Authentication.
+// TwoFA returns the two-factor authentication repository.
 func (r *Repo) TwoFA() *TwoFARepository {
 	return r.twoFA
 }
@@ -287,7 +287,7 @@ func (r *Repo) EmailOTP() *EmailOTPRepository {
 	return r.emailOTP
 }
 
-// Authentication Methods.
+// Phone Methods.
 func (r *Repo) Phone() *PhoneRepository {
 	return r.phone
 }
@@ -296,7 +296,7 @@ func (r *Repo) MagicLink() *MagicLinkRepository {
 	return r.magicLink
 }
 
-// Identity & Verification.
+// IdentityVerification returns the identity verification repository.
 func (r *Repo) IdentityVerification() *IdentityVerificationRepository {
 	return r.identityVerification
 }

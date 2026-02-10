@@ -20,7 +20,7 @@ type Handler struct {
 	metrics *Metrics
 }
 
-// Response types - use shared responses from core.
+// MessageResponse types - use shared responses from core.
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse
 type SuccessResponse = responses.SuccessResponse
@@ -247,7 +247,7 @@ func (h *Handler) CreateUser(c forge.Context) error {
 		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
-	// Parse request body
+	// scimUser request body
 	var scimUser SCIMUser
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimUser); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -366,7 +366,7 @@ func (h *Handler) ReplaceUser(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid user ID format"))
 	}
 
-	// Parse request body
+	// scimUser request body
 	var scimUser SCIMUser
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimUser); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -410,7 +410,7 @@ func (h *Handler) UpdateUser(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid user ID format"))
 	}
 
-	// Parse patch operations
+	// patch patch operations
 	var patch PatchOp
 	if err := json.NewDecoder(c.Request().Body).Decode(&patch); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -490,7 +490,7 @@ func (h *Handler) CreateGroup(c forge.Context) error {
 		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
-	// Parse request body
+	// scimGroup request body
 	var scimGroup SCIMGroup
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimGroup); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -603,7 +603,7 @@ func (h *Handler) ReplaceGroup(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid group ID format"))
 	}
 
-	// Parse request body
+	// scimGroup request body
 	var scimGroup SCIMGroup
 	if err := json.NewDecoder(c.Request().Body).Decode(&scimGroup); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -647,7 +647,7 @@ func (h *Handler) UpdateGroup(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, h.scimError(http.StatusBadRequest, "invalidValue", "Invalid group ID format"))
 	}
 
-	// Parse patch operations
+	// patch patch operations
 	var patch PatchOp
 	if err := json.NewDecoder(c.Request().Body).Decode(&patch); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -731,7 +731,7 @@ func (h *Handler) BulkOperation(c forge.Context) error {
 		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
-	// Parse bulk request
+	// bulkReq bulk request
 	var bulkReq BulkRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&bulkReq); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -775,7 +775,7 @@ func (h *Handler) Search(c forge.Context) error {
 		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
-	// Parse search request
+	// searchReq search request
 	var searchReq SearchRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&searchReq); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -827,7 +827,7 @@ func (h *Handler) CreateProvisioningToken(c forge.Context) error {
 		return c.JSON(http.StatusForbidden, h.scimError(http.StatusForbidden, "invalidValue", "Organization context required"))
 	}
 
-	// Parse request
+	// req request
 	var req CreateTokenRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		h.metrics.RecordError("invalid_json")
@@ -971,7 +971,7 @@ func (h *Handler) UpdateAttributeMappings(c forge.Context) error {
 	envID, _ := contexts.GetEnvironmentID(ctx)
 	orgID, _ := contexts.GetOrganizationID(ctx)
 
-	// Parse request
+	// req request
 	var req UpdateAttributeMappingsRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
 		h.metrics.RecordError("invalid_json")

@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/authsome/repository"
 	"github.com/xraph/forge"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // DashboardExtension implements ui.DashboardExtension for the OIDC provider plugin.

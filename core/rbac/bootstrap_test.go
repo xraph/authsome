@@ -77,7 +77,7 @@ func TestRoleRegistry_RegisterRole(t *testing.T) {
 	}
 
 	err := registry.RegisterRole(role)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify role was registered
 	retrieved, exists := registry.GetRole(RoleAdmin)
@@ -193,7 +193,7 @@ func TestRoleRegistry_CircularInheritanceDetection(t *testing.T) {
 
 	// Should detect circular dependency
 	_, err = registry.resolveInheritance()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "circular")
 }
 
@@ -429,18 +429,18 @@ func TestRoleRegistry_ValidateRoleAssignment(t *testing.T) {
 
 	// Test platform role validation
 	err = registry.ValidateRoleAssignment(RoleSuperAdmin, true)
-	assert.NoError(t, err, "Platform role should be assignable in platform app")
+	require.NoError(t, err, "Platform role should be assignable in platform app")
 
 	err = registry.ValidateRoleAssignment(RoleSuperAdmin, false)
-	assert.Error(t, err, "Platform role should NOT be assignable in non-platform app")
+	require.Error(t, err, "Platform role should NOT be assignable in non-platform app")
 	assert.Contains(t, err.Error(), "platform role")
 
 	// Test app role validation
 	err = registry.ValidateRoleAssignment(RoleAdmin, true)
-	assert.NoError(t, err, "App role should be assignable in platform app")
+	require.NoError(t, err, "App role should be assignable in platform app")
 
 	err = registry.ValidateRoleAssignment(RoleAdmin, false)
-	assert.NoError(t, err, "App role should be assignable in non-platform app")
+	require.NoError(t, err, "App role should be assignable in non-platform app")
 }
 
 func TestRoleRegistry_GetRoleHierarchy(t *testing.T) {

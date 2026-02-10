@@ -63,7 +63,7 @@ type AccessCheckResult struct {
 type PermissionCategory string
 
 const (
-	// Pre-defined permission categories.
+	// CategoryUsers is the users permission category.
 	CategoryUsers         PermissionCategory = "users"
 	CategorySettings      PermissionCategory = "settings"
 	CategoryContent       PermissionCategory = "content"
@@ -98,22 +98,21 @@ func (c PermissionCategory) IsValid() bool {
 type PermissionAction string
 
 const (
-	// CRUD actions.
+	// ActionView is the view action.
 	ActionView   PermissionAction = "view"
 	ActionCreate PermissionAction = "create"
 	ActionEdit   PermissionAction = "edit"
 	ActionUpdate PermissionAction = "update"
 	ActionDelete PermissionAction = "delete"
 
-	// Management actions.
-	ActionManage  PermissionAction = "manage"  // Full control
-	ActionList    PermissionAction = "list"    // List/index
-	ActionRead    PermissionAction = "read"    // Read-only
-	ActionWrite   PermissionAction = "write"   // Write access
-	ActionExecute PermissionAction = "execute" // Execute/run
+	// ActionManage is the manage action (full control).
+	ActionManage  PermissionAction = "manage"
+	ActionList    PermissionAction = "list"
+	ActionWrite   PermissionAction = "write"
+	ActionExecute PermissionAction = "execute"
 
-	// Special actions.
-	ActionAll PermissionAction = "*" // Wildcard - all actions
+	// ActionAll is the wildcard action (all actions).
+	ActionAll PermissionAction = "*"
 )
 
 // String returns the string representation of the action.
@@ -125,7 +124,7 @@ func (a PermissionAction) String() string {
 type PermissionResource string
 
 const (
-	// Core resources.
+	// ResourceUsers is the users resource.
 	ResourceUsers         PermissionResource = "users"
 	ResourceSessions      PermissionResource = "sessions"
 	ResourceOrganizations PermissionResource = "organizations"
@@ -137,7 +136,7 @@ const (
 	ResourceDashboard     PermissionResource = "dashboard"
 	ResourceProfile       PermissionResource = "profile"
 
-	// Wildcard.
+	// ResourceAll is the wildcard resource (all resources).
 	ResourceAll PermissionResource = "*"
 )
 

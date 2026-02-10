@@ -16,6 +16,8 @@ type ContextKey string
 const (
 	// ImpersonationContextKey is the context key for impersonation data.
 	ImpersonationContextKey ContextKey = "impersonation"
+	// ImpersonationActionContextKey is the context key for impersonation action.
+	ImpersonationActionContextKey ContextKey = "impersonation_action"
 )
 
 // ImpersonationContext holds impersonation data in the request context.
@@ -76,7 +78,7 @@ func (m *ImpersonationMiddleware) Handle() func(forge.Context) error {
 
 		// Store in context
 		ctx := context.WithValue(c.Request().Context(), ImpersonationContextKey, impCtx)
-		c.Request().WithContext(ctx)
+		*c.Request() = *c.Request().WithContext(ctx)
 
 		// Add response header if impersonating (for UI to show banner)
 		if verifyResp.IsImpersonating && m.config.ShowIndicator {
@@ -137,8 +139,8 @@ func (m *ImpersonationMiddleware) AuditImpersonationAction() func(forge.Context)
 		action := fmt.Sprintf("%s %s", c.Request().Method, c.Request().URL.Path)
 
 		// Store action for later auditing
-		ctx := context.WithValue(c.Request().Context(), "impersonation_action", action)
-		c.Request().WithContext(ctx)
+		ctx := context.WithValue(c.Request().Context(), ImpersonationActionContextKey, action)
+		*c.Request() = *c.Request().WithContext(ctx)
 
 		return nil
 	}

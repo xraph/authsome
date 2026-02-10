@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/authsome/plugins/social/providers"
@@ -244,11 +245,11 @@ func TestStateStore_SetGetDelete(t *testing.T) {
 
 	// Test Set
 	err := store.Set(ctx, "test-state-key", state, 15*time.Minute)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test Get
 	retrieved, err := store.Get(ctx, "test-state-key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, "google", retrieved.Provider)
 	assert.Equal(t, appID, retrieved.AppID)
@@ -256,11 +257,11 @@ func TestStateStore_SetGetDelete(t *testing.T) {
 
 	// Test Delete
 	err = store.Delete(ctx, "test-state-key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify deleted
 	_, err = store.Get(ctx, "test-state-key")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestMemoryStateStore_Expiration(t *testing.T) {
@@ -278,11 +279,11 @@ func TestMemoryStateStore_Expiration(t *testing.T) {
 
 	// Set state with TTL of 10 milliseconds
 	err := store.Set(ctx, "test-key", state, 10*time.Millisecond)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Immediately get - should succeed
 	retrieved, err := store.Get(ctx, "test-key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, retrieved)
 
 	// Wait for expiration
@@ -290,7 +291,7 @@ func TestMemoryStateStore_Expiration(t *testing.T) {
 
 	// Try to get - should fail due to expiration
 	_, err = store.Get(ctx, "test-key")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	if err != nil {
 		assert.Contains(t, err.Error(), "expired")

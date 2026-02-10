@@ -11,7 +11,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 	// Webhook management routes
 	webhooks := router.Group("/webhooks")
 	{
-		webhooks.POST("", handler.CreateWebhook,
+		_ = webhooks.POST("", handler.CreateWebhook,
 			forge.WithName("webhooks.create"),
 			forge.WithSummary("Create webhook"),
 			forge.WithDescription("Create a new webhook to receive event notifications for this app environment. Webhooks are called when specified events occur."),
@@ -22,7 +22,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithValidation(true),
 		)
 
-		webhooks.GET("", handler.ListWebhooks,
+		_ = webhooks.GET("", handler.ListWebhooks,
 			forge.WithName("webhooks.list"),
 			forge.WithSummary("List webhooks"),
 			forge.WithDescription("List all webhooks for the app environment. Supports pagination via page and limit query parameters, and filtering by enabled status and event type."),
@@ -31,7 +31,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithTags("Webhooks"),
 		)
 
-		webhooks.GET("/:id", handler.GetWebhook,
+		_ = webhooks.GET("/:id", handler.GetWebhook,
 			forge.WithName("webhooks.get"),
 			forge.WithSummary("Get webhook"),
 			forge.WithDescription("Retrieve a specific webhook by ID"),
@@ -42,7 +42,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithTags("Webhooks"),
 		)
 
-		webhooks.PUT("/:id", handler.UpdateWebhook,
+		_ = webhooks.PUT("/:id", handler.UpdateWebhook,
 			forge.WithName("webhooks.update"),
 			forge.WithSummary("Update webhook"),
 			forge.WithDescription("Update an existing webhook's URL, events, or settings"),
@@ -53,7 +53,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithValidation(true),
 		)
 
-		webhooks.DELETE("/:id", handler.DeleteWebhook,
+		_ = webhooks.DELETE("/:id", handler.DeleteWebhook,
 			forge.WithName("webhooks.delete"),
 			forge.WithSummary("Delete webhook"),
 			forge.WithDescription("Delete a webhook. This action is irreversible and will stop all event notifications to this endpoint."),
@@ -62,7 +62,7 @@ func RegisterWebhookRoutes(router forge.Router, handler *handlers.WebhookHandler
 			forge.WithTags("Webhooks"),
 		)
 
-		webhooks.GET("/:id/deliveries", handler.GetWebhookDeliveries,
+		_ = webhooks.GET("/:id/deliveries", handler.GetWebhookDeliveries,
 			forge.WithName("webhooks.deliveries.list"),
 			forge.WithSummary("List webhook deliveries"),
 			forge.WithDescription("Retrieve delivery logs for a specific webhook. Shows delivery attempts, responses, and retry information."),

@@ -11,7 +11,7 @@ import (
 	core "github.com/xraph/authsome/plugins/subscription/core"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // ServeBillingOverviewPage renders the billing overview dashboard.

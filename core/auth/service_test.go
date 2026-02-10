@@ -9,6 +9,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/contexts"
 	"github.com/xraph/authsome/core/pagination"
 	"github.com/xraph/authsome/core/responses"
@@ -354,7 +355,7 @@ func TestService_SignUp(t *testing.T) {
 			resp, err := svc.SignUp(ctx, tt.req)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
@@ -362,7 +363,7 @@ func TestService_SignUp(t *testing.T) {
 
 				assert.Nil(t, resp)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 
 				if tt.check != nil {
@@ -621,7 +622,7 @@ func TestService_SignIn(t *testing.T) {
 			resp, err := svc.SignIn(ctx, tt.req)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
@@ -629,7 +630,7 @@ func TestService_SignIn(t *testing.T) {
 
 				assert.Nil(t, resp)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 
 				if tt.check != nil {
@@ -705,10 +706,10 @@ func TestService_CheckCredentials(t *testing.T) {
 			user, err := svc.CheckCredentials(context.Background(), tt.email, tt.password)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, user)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, user)
 				assert.Equal(t, tt.email, user.Email)
 			}
@@ -755,9 +756,9 @@ func TestService_SignOut(t *testing.T) {
 			err := svc.SignOut(context.Background(), tt.req)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			mockSessionSvc.AssertExpectations(t)
@@ -855,7 +856,7 @@ func TestService_GetSession(t *testing.T) {
 			resp, err := svc.GetSession(context.Background(), tt.token)
 
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
@@ -863,7 +864,7 @@ func TestService_GetSession(t *testing.T) {
 
 				assert.Nil(t, resp)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, resp)
 
 				if tt.check != nil {

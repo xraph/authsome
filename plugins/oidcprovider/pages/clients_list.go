@@ -11,7 +11,7 @@ import (
 	"github.com/xraph/forgeui/primitives"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // ClientsListPage shows the list of OAuth2/OIDC clients.

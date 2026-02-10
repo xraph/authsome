@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTrustedDeviceDaysValidation(t *testing.T) {
@@ -68,11 +69,11 @@ func TestTrustedDeviceIDValidation(t *testing.T) {
 	// Test user ID validation
 	validUserID := xid.New().String()
 	_, err := xid.FromString(validUserID)
-	assert.NoError(t, err, "Valid XID should parse correctly")
+	require.NoError(t, err, "Valid XID should parse correctly")
 
 	invalidUserID := "invalid-xid"
 	_, err = xid.FromString(invalidUserID)
-	assert.Error(t, err, "Invalid XID should produce error")
+	require.Error(t, err, "Invalid XID should produce error")
 
 	// Test device ID validation
 	emptyDeviceID := ""
@@ -149,7 +150,7 @@ func TestMultipleTrustedDevices(t *testing.T) {
 
 	// User ID should be valid
 	_, err := xid.FromString(userID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestTrustedDeviceCleanup(t *testing.T) {

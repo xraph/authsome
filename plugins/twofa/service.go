@@ -194,7 +194,7 @@ func sha256Hex(in string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// Trusted devices helpers (stubs).
+// MarkTrusted devices helpers (stubs).
 func (s *Service) MarkTrusted(ctx context.Context, userID, deviceID string, days int) error {
 	uid, err := xid.FromString(userID)
 	if err != nil {

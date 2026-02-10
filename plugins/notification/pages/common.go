@@ -3,7 +3,7 @@ package pages
 import (
 	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // PageHeader renders a page header with title and description.

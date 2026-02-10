@@ -326,7 +326,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// App management routes
 	appGroup := router.Group("/apps", gopts...)
 	{
-		appGroup.POST("", p.appHandler.CreateApp,
+		if err := appGroup.POST("", p.appHandler.CreateApp,
 			forge.WithName("multitenancy.apps.create"),
 			forge.WithSummary("Create app"),
 			forge.WithDescription("Create a new app in multi-tenant mode"),
@@ -334,27 +334,36 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		appGroup.GET("", p.appHandler.ListApps,
+		if err := appGroup.GET("", p.appHandler.ListApps,
 			forge.WithName("multitenancy.apps.list"),
 			forge.WithSummary("List apps"),
 			forge.WithDescription("List all apps the user has access to"),
 			forge.WithResponseSchema(200, "Apps retrieved", AppsListResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		appGroup.GET("/:appId", p.appHandler.GetApp,
+		if err := appGroup.GET("/:appId", p.appHandler.GetApp,
 			forge.WithName("multitenancy.apps.get"),
 			forge.WithSummary("Get app"),
 			forge.WithDescription("Retrieve a specific app by ID"),
 			forge.WithResponseSchema(200, "App retrieved", app.App{}),
 			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		appGroup.PUT("/:appId", p.appHandler.UpdateApp,
+		if err := appGroup.PUT("/:appId", p.appHandler.UpdateApp,
 			forge.WithName("multitenancy.apps.update"),
 			forge.WithSummary("Update app"),
 			forge.WithDescription("Update app details (name, metadata, settings)"),
@@ -363,9 +372,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		appGroup.DELETE("/:appId", p.appHandler.DeleteApp,
+		if err := appGroup.DELETE("/:appId", p.appHandler.DeleteApp,
 			forge.WithName("multitenancy.apps.delete"),
 			forge.WithSummary("Delete app"),
 			forge.WithDescription("Delete an app and all associated data. This action is irreversible."),
@@ -373,21 +385,27 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Member management
 		memberGroup := appGroup.Group("/:appId/members")
 		{
-			memberGroup.GET("", p.memberHandler.ListMembers,
+			if err := memberGroup.GET("", p.memberHandler.ListMembers,
 				forge.WithName("multitenancy.members.list"),
 				forge.WithSummary("List app members"),
 				forge.WithDescription("List all members of an app with their roles and status"),
 				forge.WithResponseSchema(200, "Members retrieved", MembersListResponse{}),
 				forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			memberGroup.POST("/invite", p.memberHandler.InviteMember,
+			if err := memberGroup.POST("/invite", p.memberHandler.InviteMember,
 				forge.WithName("multitenancy.members.invite"),
 				forge.WithSummary("Invite member to app"),
 				forge.WithDescription("Send an invitation to a user to join the app"),
@@ -395,9 +413,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			memberGroup.PUT("/:memberId", p.memberHandler.UpdateMember,
+			if err := memberGroup.PUT("/:memberId", p.memberHandler.UpdateMember,
 				forge.WithName("multitenancy.members.update"),
 				forge.WithSummary("Update member"),
 				forge.WithDescription("Update member role or status within the app"),
@@ -406,9 +427,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			memberGroup.DELETE("/:memberId", p.memberHandler.RemoveMember,
+			if err := memberGroup.DELETE("/:memberId", p.memberHandler.RemoveMember,
 				forge.WithName("multitenancy.members.remove"),
 				forge.WithSummary("Remove member"),
 				forge.WithDescription("Remove a member from the app"),
@@ -416,22 +440,28 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
-			)
+			
+			); err != nil {
+				return err
+			}
 		}
 
 		// Team management
 		teamGroup := appGroup.Group("/:appId/teams")
 		{
-			teamGroup.GET("", p.teamHandler.ListTeams,
+			if err := teamGroup.GET("", p.teamHandler.ListTeams,
 				forge.WithName("multitenancy.teams.list"),
 				forge.WithSummary("List teams"),
 				forge.WithDescription("List all teams within the app"),
 				forge.WithResponseSchema(200, "Teams retrieved", TeamsListResponse{}),
 				forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.POST("", p.teamHandler.CreateTeam,
+			if err := teamGroup.POST("", p.teamHandler.CreateTeam,
 				forge.WithName("multitenancy.teams.create"),
 				forge.WithSummary("Create team"),
 				forge.WithDescription("Create a new team within the app"),
@@ -439,18 +469,24 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.GET("/:teamId", p.teamHandler.GetTeam,
+			if err := teamGroup.GET("/:teamId", p.teamHandler.GetTeam,
 				forge.WithName("multitenancy.teams.get"),
 				forge.WithSummary("Get team"),
 				forge.WithDescription("Retrieve a specific team by ID"),
 				forge.WithResponseSchema(200, "Team retrieved", app.Team{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.PUT("/:teamId", p.teamHandler.UpdateTeam,
+			if err := teamGroup.PUT("/:teamId", p.teamHandler.UpdateTeam,
 				forge.WithName("multitenancy.teams.update"),
 				forge.WithSummary("Update team"),
 				forge.WithDescription("Update team details (name, description, etc.)"),
@@ -459,9 +495,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.DELETE("/:teamId", p.teamHandler.DeleteTeam,
+			if err := teamGroup.DELETE("/:teamId", p.teamHandler.DeleteTeam,
 				forge.WithName("multitenancy.teams.delete"),
 				forge.WithSummary("Delete team"),
 				forge.WithDescription("Delete a team from the app"),
@@ -469,9 +508,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.POST("/:teamId/members", p.teamHandler.AddTeamMember,
+			if err := teamGroup.POST("/:teamId/members", p.teamHandler.AddTeamMember,
 				forge.WithName("multitenancy.teams.members.add"),
 				forge.WithSummary("Add team member"),
 				forge.WithDescription("Add a member to a team"),
@@ -480,9 +522,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.DELETE("/:teamId/members/:memberId", p.teamHandler.RemoveTeamMember,
+			if err := teamGroup.DELETE("/:teamId/members/:memberId", p.teamHandler.RemoveTeamMember,
 				forge.WithName("multitenancy.teams.members.remove"),
 				forge.WithSummary("Remove team member"),
 				forge.WithDescription("Remove a member from a team"),
@@ -490,23 +535,29 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			)
+			
+			); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Invitation routes
 	inviteGroup := router.Group("/invitations")
 	{
-		inviteGroup.GET("/:token", p.memberHandler.GetInvitation,
+		if err := inviteGroup.GET("/:token", p.memberHandler.GetInvitation,
 			forge.WithName("multitenancy.invitations.get"),
 			forge.WithSummary("Get invitation"),
 			forge.WithDescription("Retrieve invitation details by token"),
 			forge.WithResponseSchema(200, "Invitation retrieved", app.Invitation{}),
 			forge.WithResponseSchema(404, "Invitation not found or expired", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Invitations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation,
+		if err := inviteGroup.POST("/:token/accept", p.memberHandler.AcceptInvitation,
 			forge.WithName("multitenancy.invitations.accept"),
 			forge.WithSummary("Accept invitation"),
 			forge.WithDescription("Accept an app invitation and become a member"),
@@ -514,16 +565,22 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid or expired invitation", MultitenancyErrorResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Invitations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		inviteGroup.POST("/:token/decline", p.memberHandler.DeclineInvitation,
+		if err := inviteGroup.POST("/:token/decline", p.memberHandler.DeclineInvitation,
 			forge.WithName("multitenancy.invitations.decline"),
 			forge.WithSummary("Decline invitation"),
 			forge.WithDescription("Decline an app invitation"),
 			forge.WithResponseSchema(200, "Invitation declined", MultitenancyStatusResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Invitations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	return nil

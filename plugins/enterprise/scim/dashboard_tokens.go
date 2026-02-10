@@ -13,7 +13,7 @@ import (
 	"github.com/xraph/authsome/internal/errs"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // Token Management Handlers
@@ -40,9 +40,6 @@ func (e *DashboardExtension) ServeTokensListPage(ctx *router.PageContext) (g.Nod
 	currentEnv := &environment.Environment{
 		ID:   xid.New(),
 		Name: "default",
-	}
-	if currentEnv == nil {
-		return nil, errs.BadRequest("Invalid environment context")
 	}
 
 	// Get organization if in org mode
@@ -393,9 +390,6 @@ func (e *DashboardExtension) HandleCreateToken(ctx *router.PageContext) (g.Node,
 	currentEnv := &environment.Environment{
 		ID:   xid.New(),
 		Name: "default",
-	}
-	if currentEnv == nil {
-		return nil, errs.BadRequest("Invalid environment context")
 	}
 
 	// Get organization if in org mode

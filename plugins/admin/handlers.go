@@ -18,7 +18,7 @@ type Handler struct {
 	service *Service
 }
 
-// Request types.
+// CreateUserRequestDTO is the request DTO for creating a user.
 type CreateUserRequestDTO struct {
 	Email         string            `json:"email"              validate:"required,email"`
 	Password      string            `json:"password,omitempty"`
@@ -81,7 +81,7 @@ type GetAuditLogsRequestDTO struct {
 	PageSize int `query:"page_size"`
 }
 
-// Response types - use shared responses from core.
+// ErrorResponse is the error response type.
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 

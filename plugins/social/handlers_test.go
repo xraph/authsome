@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xraph/authsome/core/audit"
 	"github.com/xraph/authsome/core/user"
 	"github.com/xraph/authsome/plugins/social/providers"
@@ -22,12 +23,12 @@ func TestSignInRequest_JSON(t *testing.T) {
 	}
 
 	data, err := json.Marshal(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var decoded SignInRequest
 
 	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "google", decoded.Provider)
 	assert.Len(t, decoded.Scopes, 2)
 }
@@ -39,12 +40,12 @@ func TestLinkAccountRequest_JSON(t *testing.T) {
 	}
 
 	data, err := json.Marshal(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var decoded LinkAccountRequest
 
 	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "github", decoded.Provider)
 	assert.Len(t, decoded.Scopes, 1)
 }
@@ -55,12 +56,12 @@ func TestAuthURLResponse_JSON(t *testing.T) {
 	}
 
 	data, err := json.Marshal(resp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var decoded AuthURLResponse
 
 	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, decoded.URL, "accounts.google.com")
 }
 
@@ -77,12 +78,12 @@ func TestCallbackDataResponse_JSON(t *testing.T) {
 	}
 
 	data, err := json.Marshal(resp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var decoded CallbackDataResponse
 
 	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, userID, decoded.User.ID)
 	assert.True(t, decoded.IsNewUser)
 	assert.Equal(t, "signup", decoded.Action)
@@ -94,12 +95,12 @@ func TestProvidersResponse_JSON(t *testing.T) {
 	}
 
 	data, err := json.Marshal(resp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var decoded ProvidersResponse
 
 	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, decoded.Providers, 3)
 	assert.Contains(t, decoded.Providers, "google")
 }
@@ -141,7 +142,7 @@ func TestRateLimiter_Allow(t *testing.T) {
 	ctx := context.Background()
 
 	err := limiter.Allow(ctx, "oauth_signin", "127.0.0.1")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test setting custom limits
 	limiter.SetLimit("custom_action", 5, 1*time.Minute)

@@ -19,16 +19,16 @@ func TestAttributeResolver_RegisterProvider(t *testing.T) {
 
 	// Test successful registration
 	err := resolver.RegisterProvider(userProvider)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test duplicate registration
 	err = resolver.RegisterProvider(userProvider)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already registered")
 
 	// Test nil provider
 	err = resolver.RegisterProvider(nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be nil")
 }
 
@@ -38,7 +38,7 @@ func TestAttributeResolver_GetProvider(t *testing.T) {
 
 	// Test getting non-existent provider
 	_, err := resolver.GetProvider("user")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 
 	// Register and get provider
@@ -48,7 +48,7 @@ func TestAttributeResolver_GetProvider(t *testing.T) {
 	require.NoError(t, err)
 
 	provider, err := resolver.GetProvider("user")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, provider)
 	assert.Equal(t, "user", provider.Name())
 }
@@ -303,7 +303,7 @@ func TestAttributeResolver_ClearCache(t *testing.T) {
 
 	// Clear all cache
 	err := resolver.ClearCache(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify cache is cleared (next resolve should hit provider)
 	attrs, err := resolver.Resolve(ctx, "user", "user_1")
@@ -323,11 +323,11 @@ func TestAttributeResolver_ErrorHandling(t *testing.T) {
 
 	// Test non-existent user
 	_, err := resolver.Resolve(ctx, "user", "nonexistent")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "user not found")
 
 	// Test non-existent provider
 	_, err = resolver.Resolve(ctx, "nonexistent_provider", "key")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }

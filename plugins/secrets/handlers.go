@@ -28,7 +28,7 @@ func NewHandler(service *Service, logger forge.Logger) *Handler {
 // Request/Response DTOs
 // =============================================================================
 
-// Request types.
+// ListSecretsRequest represents request types.
 type ListSecretsRequest struct {
 	Prefix    string   `query:"prefix"`
 	ValueType string   `query:"valueType"`

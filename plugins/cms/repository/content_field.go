@@ -96,7 +96,7 @@ func (r *contentFieldRepository) FindByID(ctx context.Context, id xid.ID) (*sche
 	return field, nil
 }
 
-// FindBySlug finds a content field by slug within a content type.
+// FindByName finds a content field by slug within a content type.
 func (r *contentFieldRepository) FindByName(ctx context.Context, contentTypeID xid.ID, name string) (*schema.ContentField, error) {
 	field := new(schema.ContentField)
 
@@ -228,7 +228,7 @@ func (r *contentFieldRepository) Count(ctx context.Context, contentTypeID xid.ID
 		Count(ctx)
 }
 
-// ExistsWithSlug checks if a field with the given name exists in a content type.
+// ExistsWithName checks if a field with the given name exists in a content type.
 func (r *contentFieldRepository) ExistsWithName(ctx context.Context, contentTypeID xid.ID, name string) (bool, error) {
 	count, err := r.db.NewSelect().
 		Model((*schema.ContentField)(nil)).

@@ -364,7 +364,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	h := NewHandler(p.service, rls, p.authInst.Repository().TwoFA())
 
-	router.POST("/username/signup", h.SignUp,
+	if err := router.POST("/username/signup", h.SignUp,
 		forge.WithName("username.signup"),
 		forge.WithSummary("Sign up with username"),
 		forge.WithDescription("Creates a new user account with username and password. Validates password strength and checks for username availability"),
@@ -375,8 +375,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", errs.AuthsomeError{}),
 		forge.WithTags("Username", "Authentication"),
 		forge.WithValidation(true),
-	)
-	router.POST("/username/signin", h.SignIn,
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/username/signin", h.SignIn,
 		forge.WithName("username.signin"),
 		forge.WithSummary("Sign in with username"),
 		forge.WithDescription("Authenticates user with username and password. Returns 2FA requirement if enabled. Implements account lockout after failed attempts"),
@@ -389,7 +392,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", errs.AuthsomeError{}),
 		forge.WithTags("Username", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

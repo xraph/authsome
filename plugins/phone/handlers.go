@@ -20,7 +20,7 @@ type Handler struct {
 	authInst core.Authsome
 }
 
-// Request types.
+// SendCodeRequest represents request types.
 type SendCodeRequest struct {
 	Phone string `example:"+1234567890" json:"phone" validate:"required"`
 }
@@ -32,7 +32,7 @@ type VerifyRequest struct {
 	Remember bool   `example:"false"            json:"remember"`
 }
 
-// Response types.
+// SendCodeResponse represents response types.
 type SendCodeResponse struct {
 	Status  string `example:"sent"   json:"status"`
 	DevCode string `example:"123456" json:"dev_code,omitempty"`

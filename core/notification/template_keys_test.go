@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestGetDefaultTemplateMetadata verifies all 39 templates are available.
@@ -94,11 +95,11 @@ func TestGetDefaultTemplate(t *testing.T) {
 		t.Run(tc.key, func(t *testing.T) {
 			template, err := GetDefaultTemplate(tc.key)
 			if tc.shouldExist {
-				assert.NoError(t, err, "Template %s should exist", tc.key)
+				require.NoError(t, err, "Template %s should exist", tc.key)
 				assert.NotNil(t, template, "Template %s should not be nil", tc.key)
 				assert.Equal(t, tc.key, template.Key, "Template key should match")
 			} else {
-				assert.Error(t, err, "Non-existent template should return error")
+				require.Error(t, err, "Non-existent template should return error")
 				assert.Nil(t, template, "Non-existent template should be nil")
 			}
 		})

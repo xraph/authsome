@@ -192,7 +192,7 @@ func (h *PublicHandlers) HandleComparePlans(c forge.Context) error {
 
 	var planIDs []string
 	if err := json.Unmarshal([]byte(planIDsStr), &planIDs); err != nil {
-		// Try comma-separated
+		// planIDs comma-separated
 		planIDs = splitString(planIDsStr, ",")
 	}
 

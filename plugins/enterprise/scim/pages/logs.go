@@ -9,7 +9,7 @@ import (
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/components/input"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // LogsPage renders the SCIM event logs page.

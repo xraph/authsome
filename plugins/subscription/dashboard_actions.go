@@ -626,18 +626,18 @@ func (e *DashboardExtension) linkFeaturesFromForm(ctx context.Context, planID xi
 				updateReq := &core.UpdateLinkRequest{
 					Value: &value,
 				}
-				e.plugin.featureSvc.UpdatePlanLink(ctx, planID, feature.ID, updateReq)
+				_, _ = e.plugin.featureSvc.UpdatePlanLink(ctx, planID, feature.ID, updateReq)
 			} else {
 				// Create new link
 				linkReq := &core.LinkFeatureRequest{
 					FeatureID: feature.ID,
 					Value:     value,
 				}
-				e.plugin.featureSvc.LinkToPlan(ctx, planID, linkReq)
+				_, _ = e.plugin.featureSvc.LinkToPlan(ctx, planID, linkReq)
 			}
 		} else if existingMap[featureID] {
 			// Remove link if previously linked but now unselected
-			e.plugin.featureSvc.UnlinkFromPlan(ctx, planID, feature.ID)
+			_ = e.plugin.featureSvc.UnlinkFromPlan(ctx, planID, feature.ID)
 		}
 	}
 }

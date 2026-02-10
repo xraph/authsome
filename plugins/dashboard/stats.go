@@ -62,9 +62,6 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 	}
 
 	// Count total users for this app
-	totalUsers := 0
-	newUsersToday := 0
-
 	userFilter := &user.CountUsersFilter{
 		AppID: appID,
 	}
@@ -81,6 +78,7 @@ func (h *Handler) getDashboardStats(ctx context.Context) (*DashboardStats, error
 		CreatedSince: &startOfToday,
 	}
 
+	var newUsersToday int
 	newUsersToday, err = h.userSvc.CountUsers(ctx, newUserFilter)
 	if err != nil {
 		newUsersToday = 0

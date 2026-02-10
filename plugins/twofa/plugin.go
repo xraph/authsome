@@ -208,7 +208,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return handler
 	}
 
-	router.POST("/2fa/enable", wrapHandler(h.Enable),
+	if err := router.POST("/2fa/enable", wrapHandler(h.Enable),
 		forge.WithName("twofa.enable"),
 		forge.WithSummary("Enable 2FA"),
 		forge.WithDescription("Enables two-factor authentication for a user. Returns TOTP URI for QR code generation"),
@@ -216,8 +216,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "TOTP"),
 		forge.WithValidation(true),
-	)
-	router.POST("/2fa/verify", wrapHandler(h.Verify),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/2fa/verify", wrapHandler(h.Verify),
 		forge.WithName("twofa.verify"),
 		forge.WithSummary("Verify 2FA code"),
 		forge.WithDescription("Verifies a 2FA code (TOTP or backup code) for authentication. Optionally marks device as trusted"),
@@ -226,8 +229,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid code", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "Verification"),
 		forge.WithValidation(true),
-	)
-	router.POST("/2fa/disable", wrapHandler(h.Disable),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/2fa/disable", wrapHandler(h.Disable),
 		forge.WithName("twofa.disable"),
 		forge.WithSummary("Disable 2FA"),
 		forge.WithDescription("Disables two-factor authentication for a user"),
@@ -235,8 +241,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "Management"),
 		forge.WithValidation(true),
-	)
-	router.POST("/2fa/generate-backup-codes", wrapHandler(h.GenerateBackupCodes),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/2fa/generate-backup-codes", wrapHandler(h.GenerateBackupCodes),
 		forge.WithName("twofa.backupcodes.generate"),
 		forge.WithSummary("Generate backup codes"),
 		forge.WithDescription("Generates new backup codes for 2FA recovery. Previous codes are invalidated"),
@@ -244,8 +253,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "BackupCodes"),
 		forge.WithValidation(true),
-	)
-	router.POST("/2fa/send-otp", wrapHandler(h.SendOTP),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/2fa/send-otp", wrapHandler(h.SendOTP),
 		forge.WithName("twofa.sendotp"),
 		forge.WithSummary("Send OTP code"),
 		forge.WithDescription("Sends a one-time password via email or SMS for 2FA. Returns code in dev mode"),
@@ -253,8 +265,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "OTP"),
 		forge.WithValidation(true),
-	)
-	router.POST("/2fa/status", wrapHandler(h.Status),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/2fa/status", wrapHandler(h.Status),
 		forge.WithName("twofa.status"),
 		forge.WithSummary("Get 2FA status"),
 		forge.WithDescription("Retrieves 2FA status for a user including enabled state, method, and trusted device status"),
@@ -262,7 +277,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "Status"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -296,7 +314,7 @@ func (p *Plugin) Migrate() error {
 	return nil
 }
 
-// Response types for 2FA routes.
+// TwoFAErrorResponse types for 2FA routes.
 type TwoFAErrorResponse struct {
 	Error string `example:"Error message" json:"error"`
 }

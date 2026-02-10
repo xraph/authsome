@@ -81,7 +81,7 @@ func (a *AppleProvider) GetUserInfo(ctx context.Context, token *oauth2.Token) (*
 }
 
 // GenerateClientSecret generates a client secret JWT for Apple
-// Required for Apple's OAuth flow.
+// GenerateAppleClientSecret for Apple's OAuth flow.
 func GenerateAppleClientSecret(teamID, clientID, keyID string, privateKey *rsa.PrivateKey) (string, error) {
 	now := jwt.NewNumericDate(time.Now())
 	expiresAt := jwt.NewNumericDate(time.Now().Add(6 * 30 * 24 * time.Hour)) // 6 months

@@ -24,10 +24,10 @@ import (
 var (
 	// E.164 phone number format: +[country code][subscriber number]
 	// Example: +1234567890, +442071838750
-	// Minimum 7 digits (e.g., +1234567), maximum 15 digits total.
+	// phoneRegex 7 digits (e.g., +1234567), maximum 15 digits total.
 	phoneRegex = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
 
-	// Common errors.
+	// ErrInvalidPhoneFormat errors.
 	ErrInvalidPhoneFormat = errors.New("invalid phone number format, must be E.164 format (e.g., +1234567890)")
 	ErrMissingPhone       = errors.New("phone number is required")
 	ErrMissingCode        = errors.New("verification code is required")
@@ -266,7 +266,7 @@ func (s *Service) Verify(ctx context.Context, phone, code, email string, remembe
 		return nil, ErrInvalidCode
 	}
 
-	// Mark code as consumed
+	// _ code as consumed
 	_ = s.repo.Consume(ctx, rec, time.Now())
 
 	u, err := s.users.FindByEmail(ctx, e)

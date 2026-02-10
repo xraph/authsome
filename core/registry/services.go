@@ -65,7 +65,7 @@ func NewServiceRegistry() *ServiceRegistry {
 	}
 }
 
-// Core service setters (used during initialization).
+// SetUserService sets the user service.
 func (r *ServiceRegistry) SetUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
@@ -114,7 +114,7 @@ func (r *ServiceRegistry) SetRateLimitService(svc *ratelimit.Service) {
 	r.ratelimitService = svc
 }
 
-// Core service getters.
+// UserService returns the user service.
 func (r *ServiceRegistry) UserService() user.ServiceInterface {
 	return r.userService
 }
@@ -163,17 +163,17 @@ func (r *ServiceRegistry) RateLimitService() *ratelimit.Service {
 	return r.ratelimitService
 }
 
-// Hook registry getter.
+// HookRegistry returns the hook registry.
 func (r *ServiceRegistry) HookRegistry() *hooks.HookRegistry {
 	return r.hookRegistry
 }
 
-// Role registry getter.
+// RoleRegistry returns the role registry.
 func (r *ServiceRegistry) RoleRegistry() *rbac.RoleRegistry {
 	return r.roleRegistry
 }
 
-// ServiceImpl replacement methods (used by plugins to decorate services).
+// ReplaceUserService replaces the user service (used by plugins to decorate services).
 func (r *ServiceRegistry) ReplaceUserService(svc user.ServiceInterface) {
 	r.userService = svc
 }
@@ -198,7 +198,7 @@ func (r *ServiceRegistry) ReplaceFormsService(svc *forms.Service) {
 	r.formsService = svc
 }
 
-// Plugin service setters (for multi-tenancy plugin).
+// SetOrganizationService sets the organization service.
 func (r *ServiceRegistry) SetOrganizationService(svc *organization.Service) {
 	r.organizationService = svc
 }
@@ -215,7 +215,7 @@ func (r *ServiceRegistry) SetEnvironmentService(svc environment.EnvironmentServi
 	r.environmentService = svc
 }
 
-// Plugin service getters (for multi-tenancy plugin).
+// OrganizationService returns the organization service.
 func (r *ServiceRegistry) OrganizationService() *organization.Service {
 	return r.organizationService
 }
@@ -232,7 +232,7 @@ func (r *ServiceRegistry) EnvironmentService() environment.EnvironmentService {
 	return r.environmentService
 }
 
-// Utility methods for plugins.
+// HasOrganizationService checks if the organization service is available.
 func (r *ServiceRegistry) HasOrganizationService() bool {
 	return r.organizationService != nil
 }
@@ -360,7 +360,7 @@ func (r *ServiceRegistry) ListKeys() []string {
 	return keys
 }
 
-// RBAC registry getter.
+// RBACRegistry returns the RBAC role registry.
 func (r *ServiceRegistry) RBACRegistry() *rbac.RoleRegistry {
 	return r.roleRegistry
 }

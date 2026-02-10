@@ -424,7 +424,7 @@ func TestService_SetRequiresAppID(t *testing.T) {
 
 	// Setting without app ID should fail
 	err := service.Set("", "auth.test.key", "value")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "app ID is required")
 }
 
@@ -434,6 +434,6 @@ func TestService_LoadAppConfigRequiresAppID(t *testing.T) {
 
 	// Loading config without app ID should fail
 	err := service.LoadAppConfig("", map[string]any{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "app ID is required")
 }

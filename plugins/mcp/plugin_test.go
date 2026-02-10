@@ -72,7 +72,7 @@ func TestPluginInit(t *testing.T) {
 	}
 
 	err := plugin.Init(auth)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database not available")
 }
 
@@ -130,13 +130,13 @@ func TestPluginHooksAndDecorators(t *testing.T) {
 
 	// MCP plugin doesn't use hooks or decorators
 	err := plugin.RegisterHooks(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = plugin.RegisterServiceDecorators(nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = plugin.Migrate()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSecurityLayer(t *testing.T) {
@@ -147,10 +147,10 @@ func TestSecurityLayer(t *testing.T) {
 
 	// Test authorization
 	err := security.CheckOperationAllowed("query_user")
-	assert.NoError(t, err) // query_user is in allowed list
+	require.NoError(t, err) // query_user is in allowed list
 
 	err = security.CheckOperationAllowed("unknown_operation")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestSecurityLayerAdminOperations(t *testing.T) {
@@ -164,7 +164,7 @@ func TestSecurityLayerAdminOperations(t *testing.T) {
 	security := NewSecurityLayer(config, nil)
 
 	err := security.CheckOperationAllowed("revoke_session")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "requires admin mode")
 
 	// Test admin mode - admin operations allowed
@@ -172,7 +172,7 @@ func TestSecurityLayerAdminOperations(t *testing.T) {
 	security = NewSecurityLayer(config, nil)
 
 	err = security.CheckOperationAllowed("revoke_session")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSanitizeUser(t *testing.T) {

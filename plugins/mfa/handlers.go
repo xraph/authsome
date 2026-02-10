@@ -17,7 +17,7 @@ type Handler struct {
 	service *Service
 }
 
-// Response types - use shared responses from core.
+// MessageResponse types - use shared responses from core.
 type MessageResponse = responses.MessageResponse
 
 type FactorsResponse struct {
@@ -250,7 +250,7 @@ func (h *Handler) InitiateChallenge(c forge.Context) error {
 
 	var reqDTO InitiateChallengeRequest
 	if err := c.BindRequest(&reqDTO); err != nil {
-		// Use empty request if no body provided
+		// reqDTO empty request if no body provided
 		reqDTO = InitiateChallengeRequest{}
 	}
 
@@ -392,7 +392,7 @@ func (h *Handler) RevokeTrustedDevice(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.BadRequest("Invalid device ID"))
 	}
 
-	// TODO: Verify device belongs to user
+	// _ TODO: Verify device belongs to user
 	_ = userID
 
 	if err := h.service.RevokeTrustedDevice(c.Request().Context(), deviceID); err != nil {
@@ -457,7 +457,7 @@ type AdminBypassRequest struct {
 }
 
 // AdminGetPolicy handles GET /mfa/admin/policy
-// Gets the current MFA policy for an app.
+// AdminGetPolicy the current MFA policy for an app.
 func (h *Handler) AdminGetPolicy(c forge.Context) error {
 	_ = c.Request().Context() // ctx for future use
 
@@ -490,7 +490,7 @@ func (h *Handler) AdminGetPolicy(c forge.Context) error {
 }
 
 // AdminUpdatePolicy handles PUT /mfa/admin/policy
-// Updates the MFA policy for an app (admin only).
+// AdminUpdatePolicy the MFA policy for an app (admin only).
 func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -539,7 +539,7 @@ func (h *Handler) AdminUpdatePolicy(c forge.Context) error {
 }
 
 // AdminGrantBypass handles POST /mfa/admin/bypass
-// Grants temporary MFA bypass for a user (admin only).
+// AdminGrantBypass temporary MFA bypass for a user (admin only).
 func (h *Handler) AdminGrantBypass(c forge.Context) error {
 	ctx := c.Request().Context()
 
@@ -588,7 +588,7 @@ func (h *Handler) AdminGrantBypass(c forge.Context) error {
 }
 
 // AdminResetUserMFA handles POST /mfa/admin/users/:id/reset
-// Resets all MFA factors for a user (admin only).
+// AdminResetUserMFA all MFA factors for a user (admin only).
 func (h *Handler) AdminResetUserMFA(c forge.Context) error {
 	ctx := c.Request().Context()
 

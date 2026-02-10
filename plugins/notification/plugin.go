@@ -67,7 +67,7 @@ func WithDefaultLanguage(lang string) PluginOption {
 	}
 }
 
-// WithAllowOrgOverrides sets whether to allow organization overrides.
+// WithAllowAppOverrides sets whether to allow organization overrides.
 func WithAllowAppOverrides(allow bool) PluginOption {
 	return func(p *Plugin) {
 		p.defaultConfig.AllowAppOverrides = allow
@@ -248,7 +248,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Template management routes
 	templates := router.Group("/templates")
 	{
-		templates.POST("", handler.CreateTemplate,
+		if err := templates.POST("", handler.CreateTemplate,
 			forge.WithName("notification.templates.create"),
 			forge.WithSummary("Create notification template"),
 			forge.WithDescription("Creates a new notification template for email or SMS with subject, body, and variables"),
@@ -256,23 +256,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		)
-		templates.GET("", handler.ListTemplates,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.GET("", handler.ListTemplates,
 			forge.WithName("notification.templates.list"),
 			forge.WithSummary("List notification templates"),
 			forge.WithDescription("Lists all notification templates with optional filtering by organization, type, and language"),
 			forge.WithResponseSchema(200, "Templates retrieved", NotificationTemplateListResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		)
-		templates.GET("/:id", handler.GetTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.GET("/:id", handler.GetTemplate,
 			forge.WithName("notification.templates.get"),
 			forge.WithSummary("Get notification template"),
 			forge.WithDescription("Retrieves details of a specific notification template by ID"),
 			forge.WithResponseSchema(200, "Template retrieved", NotificationTemplateResponse{}),
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		)
-		templates.PUT("/:id", handler.UpdateTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.PUT("/:id", handler.UpdateTemplate,
 			forge.WithName("notification.templates.update"),
 			forge.WithSummary("Update notification template"),
 			forge.WithDescription("Updates an existing notification template with new subject, body, or variables"),
@@ -281,38 +290,53 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		)
-		templates.DELETE("/:id", handler.DeleteTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.DELETE("/:id", handler.DeleteTemplate,
 			forge.WithName("notification.templates.delete"),
 			forge.WithSummary("Delete notification template"),
 			forge.WithDescription("Deletes a notification template by ID"),
 			forge.WithResponseSchema(200, "Template deleted", NotificationStatusResponse{}),
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		)
-		templates.POST("/:id/reset", handler.ResetTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.POST("/:id/reset", handler.ResetTemplate,
 			forge.WithName("notification.templates.reset"),
 			forge.WithSummary("Reset template to default"),
 			forge.WithDescription("Resets a notification template to its default values"),
 			forge.WithResponseSchema(200, "Template reset", NotificationStatusResponse{}),
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		)
-		templates.POST("/reset-all", handler.ResetAllTemplates,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.POST("/reset-all", handler.ResetAllTemplates,
 			forge.WithName("notification.templates.reset_all"),
 			forge.WithSummary("Reset all templates to defaults"),
 			forge.WithDescription("Resets all notification templates for the app to their default values"),
 			forge.WithResponseSchema(200, "All templates reset", NotificationStatusResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		)
-		templates.GET("/defaults", handler.GetTemplateDefaults,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.GET("/defaults", handler.GetTemplateDefaults,
 			forge.WithName("notification.templates.defaults"),
 			forge.WithSummary("Get default template metadata"),
 			forge.WithDescription("Returns metadata for all default notification templates including variables and default content"),
 			forge.WithResponseSchema(200, "Default templates retrieved", NotificationTemplateListResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		)
-		templates.POST("/:id/preview", handler.PreviewTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.POST("/:id/preview", handler.PreviewTemplate,
 			forge.WithName("notification.templates.preview"),
 			forge.WithSummary("Preview notification template"),
 			forge.WithDescription("Renders a notification template with provided variables for preview"),
@@ -321,8 +345,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		)
-		templates.POST("/render", handler.RenderTemplate,
+		
+		); err != nil {
+			return err
+		}
+		if err := templates.POST("/render", handler.RenderTemplate,
 			forge.WithName("notification.templates.render"),
 			forge.WithSummary("Render notification template"),
 			forge.WithDescription("Renders a notification template with provided variables without saving"),
@@ -330,13 +357,16 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	// Notification sending routes
 	notifications := router.Group("/notifications")
 	{
-		notifications.POST("/send", handler.SendNotification,
+		if err := notifications.POST("/send", handler.SendNotification,
 			forge.WithName("notification.send"),
 			forge.WithSummary("Send notification"),
 			forge.WithDescription("Sends a notification (email or SMS) using a template with provided variables"),
@@ -344,23 +374,32 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Sending"),
 			forge.WithValidation(true),
-		)
-		notifications.GET("", handler.ListNotifications,
+		
+		); err != nil {
+			return err
+		}
+		if err := notifications.GET("", handler.ListNotifications,
 			forge.WithName("notification.list"),
 			forge.WithSummary("List notifications"),
 			forge.WithDescription("Lists all sent notifications with optional filtering by organization, status, and type"),
 			forge.WithResponseSchema(200, "Notifications retrieved", NotificationListResponse{}),
 			forge.WithTags("Notification", "History"),
-		)
-		notifications.GET("/:id", handler.GetNotification,
+		
+		); err != nil {
+			return err
+		}
+		if err := notifications.GET("/:id", handler.GetNotification,
 			forge.WithName("notification.get"),
 			forge.WithSummary("Get notification"),
 			forge.WithDescription("Retrieves details of a specific sent notification by ID including delivery status"),
 			forge.WithResponseSchema(200, "Notification retrieved", NotificationResponse{}),
 			forge.WithResponseSchema(404, "Notification not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "History"),
-		)
-		notifications.POST("/:id/resend", handler.ResendNotification,
+		
+		); err != nil {
+			return err
+		}
+		if err := notifications.POST("/:id/resend", handler.ResendNotification,
 			forge.WithName("notification.resend"),
 			forge.WithSummary("Resend notification"),
 			forge.WithDescription("Resends a previously sent notification by ID"),
@@ -368,18 +407,24 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithResponseSchema(404, "Notification not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Sending"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	// Webhook for provider callbacks (e.g., delivery status)
-	router.POST("/notifications/webhook/:provider", handler.HandleWebhook,
+	if err := router.POST("/notifications/webhook/:provider", handler.HandleWebhook,
 		forge.WithName("notification.webhook"),
 		forge.WithSummary("Handle provider webhook"),
 		forge.WithDescription("Receives webhook events from notification providers (SendGrid, Twilio, etc.) for delivery status updates"),
 		forge.WithResponseSchema(200, "Webhook processed", NotificationWebhookResponse{}),
 		forge.WithResponseSchema(400, "Invalid webhook", NotificationErrorResponse{}),
 		forge.WithTags("Notification", "Webhooks"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -412,7 +457,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 		hookRegistry.RegisterAfterUserCreate(func(ctx context.Context, createdUser *user.User) error {
 			// Send welcome email to new user
 			if p.service != nil && p.templateSvc != nil && createdUser != nil && createdUser.Email != "" {
-				// Get platform app ID
+				// platformApp platform app ID
 				var platformApp schema.App
 
 				err := p.db.NewSelect().
@@ -994,7 +1039,7 @@ func (p *Plugin) Migrate() error {
 
 // addDefaultTemplates adds default notification templates.
 func (p *Plugin) addDefaultTemplates(ctx context.Context) error {
-	// Get platform app ID
+	// platformApp platform app ID
 	var platformApp schema.App
 
 	err := p.db.NewSelect().
@@ -1210,7 +1255,7 @@ func getBoolConfig(config map[string]any, key string, defaultValue bool) bool {
 	return defaultValue
 }
 
-// Response types for notification routes.
+// NotificationErrorResponse types for notification routes.
 type NotificationErrorResponse struct {
 	Error string `example:"Error message" json:"error"`
 }

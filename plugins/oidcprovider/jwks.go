@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"math/big"
 	"sync"
 	"time"
@@ -113,7 +113,7 @@ func NewKeyStoreFromFiles(privateKeyPath, publicKeyPath, rotationInterval, keyLi
 	}
 
 	// Load private key from file
-	privateKeyData, err := ioutil.ReadFile(privateKeyPath)
+	privateKeyData, err := os.ReadFile(privateKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key file: %w", err)
 	}

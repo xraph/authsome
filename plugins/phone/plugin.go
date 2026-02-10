@@ -261,7 +261,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return nil
 	}
 
-	// Setup rate limiting storage
+	// rateLimitStorage rate limiting storage
 	var rateLimitStorage rl.Storage
 
 	if p.config.RateLimit.Enabled {
@@ -329,7 +329,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return handler
 	}
 
-	router.POST("/phone/send-code", wrapHandler(h.SendCode),
+	if err := router.POST("/phone/send-code", wrapHandler(h.SendCode),
 		forge.WithName("phone.sendcode"),
 		forge.WithSummary("Send phone verification code"),
 		forge.WithDescription("Sends a verification code via SMS to the specified phone number. Rate limited to 5 requests per minute per phone"),
@@ -339,8 +339,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Too many requests", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
-	)
-	router.POST("/phone/verify", wrapHandler(h.Verify),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/phone/verify", wrapHandler(h.Verify),
 		forge.WithName("phone.verify"),
 		forge.WithSummary("Verify phone code"),
 		forge.WithDescription("Verifies the phone verification code and creates a user session on success. Supports implicit signup if enabled"),
@@ -350,8 +353,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid code", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
-	)
-	router.POST("/phone/signin", wrapHandler(h.SignIn),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/phone/signin", wrapHandler(h.SignIn),
 		forge.WithName("phone.signin"),
 		forge.WithSummary("Sign in with phone"),
 		forge.WithDescription("Alias for phone verification. Verifies the phone code and creates a user session"),
@@ -361,7 +367,10 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid code", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -381,5 +390,5 @@ func (p *Plugin) Migrate() error {
 	return err
 }
 
-// Type alias for route registration.
+// ErrorResponse alias for route registration.
 type ErrorResponse = errs.AuthsomeError

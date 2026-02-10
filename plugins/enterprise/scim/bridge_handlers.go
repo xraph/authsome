@@ -422,11 +422,9 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	tokens, _, _ := e.plugin.service.ListProvisioningTokens(goCtx, appID, envID, orgID, 100, 0)
 	activeTokens := 0
 
-	if tokens != nil {
-		for _, t := range tokens {
-			if t.RevokedAt == nil && (t.ExpiresAt == nil || t.ExpiresAt.After(time.Now())) {
-				activeTokens++
-			}
+	for _, t := range tokens {
+		if t.RevokedAt == nil && (t.ExpiresAt == nil || t.ExpiresAt.After(time.Now())) {
+			activeTokens++
 		}
 	}
 
@@ -437,8 +435,7 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 
 	var lastSyncTime time.Time
 
-	if events != nil {
-		for _, ev := range events {
+	for _, ev := range events {
 			description := ev.EventType
 			if ev.ErrorMessage != nil && *ev.ErrorMessage != "" {
 				description = *ev.ErrorMessage
@@ -459,7 +456,6 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 			if lastSyncTime.IsZero() || ev.CreatedAt.After(lastSyncTime) {
 				lastSyncTime = ev.CreatedAt
 			}
-		}
 	}
 
 	return &GetOverviewOutput{
@@ -575,8 +571,7 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 	events, _ := e.plugin.service.GetProviderSyncHistory(goCtx, providerID, 10)
 	syncHistory := make([]SyncHistoryItem, 0)
 
-	if events != nil {
-		for _, ev := range events {
+	for _, ev := range events {
 			errMsg := ""
 			if ev.ErrorMessage != nil {
 				errMsg = *ev.ErrorMessage
@@ -600,7 +595,6 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 				ErrorCount:    errCount,
 				ErrorMessage:  errMsg,
 			})
-		}
 	}
 
 	endpointURL := ""

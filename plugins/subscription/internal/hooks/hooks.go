@@ -210,7 +210,6 @@ func (r *SubscriptionHookRegistry) ExecuteBeforeSubscriptionUpdate(ctx context.C
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -240,7 +239,6 @@ func (r *SubscriptionHookRegistry) ExecuteAfterSubscriptionCancel(ctx context.Co
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -250,7 +248,6 @@ func (r *SubscriptionHookRegistry) ExecuteOnStatusChange(ctx context.Context, su
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -260,7 +257,6 @@ func (r *SubscriptionHookRegistry) ExecuteOnTrialEnding(ctx context.Context, sub
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -270,7 +266,6 @@ func (r *SubscriptionHookRegistry) ExecuteOnPaymentSuccess(ctx context.Context, 
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -280,7 +275,6 @@ func (r *SubscriptionHookRegistry) ExecuteOnPaymentFailed(ctx context.Context, s
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -290,7 +284,6 @@ func (r *SubscriptionHookRegistry) ExecuteOnUsageLimitApproaching(ctx context.Co
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -300,7 +293,6 @@ func (r *SubscriptionHookRegistry) ExecuteOnUsageLimitExceeded(ctx context.Conte
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -310,7 +302,6 @@ func (r *SubscriptionHookRegistry) ExecuteBeforePlanChange(ctx context.Context, 
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -320,6 +311,5 @@ func (r *SubscriptionHookRegistry) ExecuteAfterPlanChange(ctx context.Context, s
 			return err
 		}
 	}
-
 	return nil
 }

@@ -21,7 +21,7 @@ import (
 	. "maragu.dev/gomponents/html"
 )
 
-// ModernHomePage - Simple handler returning content only.
+// RegisterPage - Simple handler returning content only.
 func (p *PagesManager) RegisterPage(ctx *router.PageContext) (g.Node, error) {
 	// // Check if already authenticated (check session cookie directly since no auth middleware)
 	// if user := p.checkExistingPageSession(ctx); user != nil {
@@ -38,7 +38,7 @@ func (p *PagesManager) RegisterPage(ctx *router.PageContext) (g.Node, error) {
 	// Check if this is the first user (show signup prominently)
 	isFirstUser, _ := p.isFirstUser(ctx.Request.Context())
 
-	// Map error codes to user-friendly messages
+	// errorMessage error codes to user-friendly messages
 	var errorMessage string
 
 	switch errorParam {

@@ -72,14 +72,18 @@ func (s *EnforcementService) CheckFeatureAccess(ctx context.Context, orgID xid.I
 		switch f.Type {
 		case "boolean":
 			var val bool
-			json.Unmarshal([]byte(f.Value), &val)
+			if err := json.Unmarshal([]byte(f.Value), &val); err != nil {
+				return false, err
+			}
 
 			return val, nil
 		case "unlimited":
 			return true, nil
 		case "limit":
 			var val float64
-			json.Unmarshal([]byte(f.Value), &val)
+			if err := json.Unmarshal([]byte(f.Value), &val); err != nil {
+				return false, err
+			}
 
 			return val > 0, nil
 		}
@@ -293,14 +297,18 @@ func (s *EnforcementService) CheckFeatureAccessEnhanced(ctx context.Context, org
 				switch feature.Type {
 				case "boolean":
 					var val bool
-					json.Unmarshal([]byte(link.Value), &val)
+					if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+						return nil, err
+					}
 					hasAccess = val
 				case "unlimited":
 					hasAccess = true
 					limit = -1
 				case "limit", "metered":
 					var val float64
-					json.Unmarshal([]byte(link.Value), &val)
+					if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+						return nil, err
+					}
 					limit = int64(val)
 					hasAccess = limit > 0
 				case "tiered":
@@ -386,11 +394,15 @@ func (s *EnforcementService) GetEffectiveLimitEnhanced(ctx context.Context, orgI
 					return -1, nil
 				case "limit", "metered":
 					var val float64
-					json.Unmarshal([]byte(link.Value), &val)
+					if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+						return 0, err
+					}
 					baseLimit = int64(val)
 				case "boolean":
 					var val bool
-					json.Unmarshal([]byte(link.Value), &val)
+					if err := json.Unmarshal([]byte(link.Value), &val); err != nil {
+						return 0, err
+					}
 
 					if val {
 						return -1, nil

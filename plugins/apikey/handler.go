@@ -13,13 +13,13 @@ import (
 )
 
 // Handler handles API key related HTTP requests
-// Updated for V2 architecture: App → Environment → Organization.
+// Handler for V2 architecture: App → Environment → Organization.
 type Handler struct {
 	service *apikey.Service
 	config  Config
 }
 
-// Request types.
+// CreateAPIKeyRequest represents request types.
 type CreateAPIKeyRequest struct {
 	Name        string            `json:"name"        validate:"required"`
 	Description string            `json:"description"`
@@ -81,13 +81,13 @@ type GetEffectivePermissionsRequest struct {
 	ID string `path:"id" validate:"required"`
 }
 
-// Response types.
+// CreateAPIKeyResponse represents response types.
 type CreateAPIKeyResponse struct {
 	APIKey  *apikey.APIKey `json:"api_key"`
 	Message string         `json:"message"`
 }
 
-// Use shared response type.
+// MessageResponse shared response type.
 type MessageResponse = responses.MessageResponse
 
 type RotateAPIKeyResponse struct {
@@ -138,7 +138,7 @@ func (h *Handler) CreateAPIKey(c forge.Context) error {
 		return c.JSON(400, errs.BadRequest(err.Error()))
 	}
 
-	// Build request with context
+	// orgIDPtr request with context
 	var orgIDPtr *xid.ID
 	if !orgID.IsNil() {
 		orgIDPtr = &orgID

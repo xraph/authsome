@@ -44,7 +44,7 @@ func SetCookie(
 	// Determine Secure flag
 	// If explicitly set, use that value
 	// If nil, auto-detect based on whether the request is over TLS
-	secure := false
+	var secure bool
 	if config.Secure != nil {
 		secure = *config.Secure
 	} else {

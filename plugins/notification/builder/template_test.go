@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestAllTemplatesRender verifies all 39 templates can be rendered.
@@ -36,13 +37,13 @@ func TestAllTemplatesRender(t *testing.T) {
 	for _, templateName := range expectedTemplates {
 		t.Run(templateName, func(t *testing.T) {
 			doc, err := GetSampleTemplate(templateName)
-			assert.NoError(t, err, "Template %s should exist", templateName)
+			require.NoError(t, err, "Template %s should exist", templateName)
 			assert.NotNil(t, doc, "Template %s should not be nil", templateName)
 
 			// Verify template can be rendered to HTML
 			renderer := NewRenderer(doc)
 			html, err := renderer.RenderToHTML()
-			assert.NoError(t, err, "Template %s should render to HTML", templateName)
+			require.NoError(t, err, "Template %s should render to HTML", templateName)
 			assert.NotEmpty(t, html, "Template %s should produce non-empty HTML", templateName)
 
 			// Verify HTML contains basic structure (case-insensitive for doctype)
@@ -99,7 +100,7 @@ func TestTemplateVariableSubstitution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.templateName, func(t *testing.T) {
 			html, err := RenderTemplate(SampleTemplates[tc.templateName], tc.variables)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotEmpty(t, html)
 
 			for _, expected := range tc.shouldContain {

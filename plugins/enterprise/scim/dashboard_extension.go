@@ -14,7 +14,7 @@ import (
 	"github.com/xraph/authsome/plugins/enterprise/scim/pages"
 	"github.com/xraph/forgeui/router"
 	g "maragu.dev/gomponents"
-	. "maragu.dev/gomponents/html"
+	. "maragu.dev/gomponents/html" //nolint:staticcheck // dot import is intentional for UI library
 )
 
 // DashboardExtension implements the ui.DashboardExtension interface

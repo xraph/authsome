@@ -132,7 +132,9 @@ func (s *CustomerService) Update(ctx context.Context, id xid.ID, req *core.Updat
 	}
 
 	// Sync to provider
-	s.provider.UpdateCustomer(ctx, customer.ProviderCustomerID, customer.Email, customer.Name, customer.Metadata)
+	if err := s.provider.UpdateCustomer(ctx, customer.ProviderCustomerID, customer.Email, customer.Name, customer.Metadata); err != nil {
+		_ = err // Log but don't fail
+	}
 
 	return s.schemaToCoreCustomer(customer), nil
 }

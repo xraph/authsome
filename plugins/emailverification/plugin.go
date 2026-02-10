@@ -212,7 +212,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Public routes (no auth required)
-	router.GET("/email-verification/verify", h.Verify,
+	if err := router.GET("/email-verification/verify", h.Verify,
 		forge.WithName("emailverification.verify"),
 		forge.WithSummary("Verify email token"),
 		forge.WithDescription("Verifies email address using token from verification link. Optionally creates a session for auto-login."),
@@ -222,9 +222,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Token not found", ErrorResponse{}),
 		forge.WithResponseSchema(410, "Token expired or used", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	router.POST("/email-verification/resend", h.Resend,
+	if err := router.POST("/email-verification/resend", h.Resend,
 		forge.WithName("emailverification.resend"),
 		forge.WithSummary("Resend verification email"),
 		forge.WithDescription("Requests a new verification email to be sent. Rate limited to 3 per hour per user."),
@@ -235,9 +238,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
-	router.POST("/email-verification/send", h.Send,
+	if err := router.POST("/email-verification/send", h.Send,
 		forge.WithName("emailverification.send"),
 		forge.WithSummary("Send verification email"),
 		forge.WithDescription("Manually sends a verification email to a user"),
@@ -247,17 +253,23 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
 		forge.WithValidation(true),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	// Authenticated routes
-	router.GET("/email-verification/status", wrapHandler(h.Status),
+	if err := router.GET("/email-verification/status", wrapHandler(h.Status),
 		forge.WithName("emailverification.status"),
 		forge.WithSummary("Check verification status"),
 		forge.WithDescription("Returns the email verification status for the current authenticated user"),
 		forge.WithResponseSchema(200, "Verification status retrieved", StatusResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

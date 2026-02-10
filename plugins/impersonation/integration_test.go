@@ -261,7 +261,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 		AppID:           org2, // Wrong org
 	}
 	_, err = service.Get(ctx, getReq)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorIs(t, err, impersonation.ErrImpersonationNotFound)
 
 	// Try to end org1 session with org2 admin - should fail
@@ -271,7 +271,7 @@ func TestIntegration_MultipleOrganizations(t *testing.T) {
 		ImpersonatorID:  admin2.ID, // Admin from different org
 	}
 	_, err = service.End(ctx, endReq)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorIs(t, err, impersonation.ErrPermissionDenied)
 }
 
@@ -346,7 +346,7 @@ func TestIntegration_ConcurrentImpersonations(t *testing.T) {
 			ImpersonatorID:  wrongAdmin.ID,
 		}
 		_, err := service.End(ctx, endReq)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.ErrorIs(t, err, impersonation.ErrPermissionDenied)
 
 		// End with correct admin - should succeed

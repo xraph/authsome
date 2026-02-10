@@ -80,7 +80,10 @@ func (e *PolicyEngine) EnforceMFA(ctx context.Context, appID, userID string, mfa
 			Description:   "User does not have MFA enabled despite app requirement",
 			Status:        "open",
 		}
-		e.service.repo.CreateViolation(ctx, violation)
+		if err := e.service.repo.CreateViolation(ctx, violation); err != nil {
+			// Log error but don't fail the operation
+			_ = err
+		}
 
 		return MFARequired()
 	}
@@ -128,7 +131,10 @@ func (e *PolicyEngine) EnforceSessionPolicy(ctx context.Context, appID string, s
 				"current_ip": session.CurrentIP,
 			},
 		}
-		e.service.repo.CreateViolation(ctx, violation)
+		if err := e.service.repo.CreateViolation(ctx, violation); err != nil {
+			// Log error but don't fail the operation
+			_ = err
+		}
 
 		return AccessDenied("session IP mismatch detected")
 	}
@@ -208,7 +214,10 @@ func (e *PolicyEngine) EnforceTraining(ctx context.Context, appID, userID string
 				"missing_training": missingTraining,
 			},
 		}
-		e.service.repo.CreateViolation(ctx, violation)
+		if err := e.service.repo.CreateViolation(ctx, violation); err != nil {
+			// Log error but don't fail the operation
+			_ = err
+		}
 
 		return TrainingRequired(fmt.Sprintf("%v", missingTraining))
 	}

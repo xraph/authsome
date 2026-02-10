@@ -172,7 +172,7 @@ func (p *Plugin) ID() string {
 }
 
 // Dependencies declares the plugin dependencies
-// Dashboard requires multiapp plugin for environment management.
+// Dependencies requires multiapp plugin for environment management.
 func (p *Plugin) Dependencies() []string {
 	return []string{"multiapp"}
 }
@@ -462,7 +462,7 @@ func (p *Plugin) initializeForgeUI() {
 }
 
 // RegisterRoles implements the PluginWithRoles optional interface
-// This is called automatically during server initialization to register dashboard roles.
+// RegisterRoles is called automatically during server initialization to register dashboard roles.
 func (p *Plugin) RegisterRoles(registry any) error {
 	roleRegistry, ok := registry.(*rbac.RoleRegistry)
 	if !ok {
@@ -480,7 +480,7 @@ func (p *Plugin) RegisterRoles(registry any) error {
 }
 
 // PlatformOrgContext middleware injects platform organization context into all dashboard requests
-// Dashboard always operates in the context of the platform organization without requiring API keys.
+// PlatformOrgContext always operates in the context of the platform organization without requiring API keys.
 func (p *Plugin) PlatformOrgContext() func(func(forge.Context) error) func(forge.Context) error {
 	return func(next func(forge.Context) error) func(forge.Context) error {
 		return func(c forge.Context) error {
@@ -521,8 +521,8 @@ func (p *Plugin) ForgeUIBridge() *bridge.Bridge {
 func (p *Plugin) registerForgeUIRoutes(router forge.Router) error {
 	// Serve static files through asset pipeline
 	// In development mode: no fingerprinting, moderate caching
-	// In production mode: automatic fingerprinting, immutable caching
-	router.GET("/static/*", p.fuiApp.Assets.Handler())
+	// _ production mode: automatic fingerprinting, immutable caching
+	_ = router.GET("/static/*", p.fuiApp.Assets.Handler())
 
 	return nil
 }
@@ -539,13 +539,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 
 	// Create middleware chain with platform org context
 	// Platform org context is injected FIRST, then environment context, then other middleware
-	// Note: chain no longer used - extension routes registered via ForgeUI
+	// _ Note: chain no longer used - extension routes registered via ForgeUI
 	_ = func(h func(forge.Context) error) func(forge.Context) error {
 		return p.PlatformOrgContext()(p.EnvironmentContext()(p.RequireAuth()(p.RequireAdmin()(p.AuditLog()(p.RateLimit()(h))))))
 	}
 
 	// Chain for public auth routes: use app context (multi-app) without auth
-	// Note: authlessChain no longer used - extension routes registered via ForgeUI
+	// _ Note: authlessChain no longer used - extension routes registered via ForgeUI
 	_ = func(h func(forge.Context) error) func(forge.Context) error {
 		return p.AppContext()(h)
 	}
@@ -632,11 +632,13 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Use our custom middleware to enrich the bridge context with user, app, and environment IDs
 	bridgeHTTPHandler := p.BridgeContextMiddleware()
 
-	uiRouter.POST("/api/bridge", func(c forge.Context) error {
+	if err := uiRouter.POST("/api/bridge", func(c forge.Context) error {
 		bridgeHTTPHandler.ServeHTTP(c.Response(), c.Request())
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	// Register wildcard ForgeUI handler AFTER specific routes
 	// This catches all other /ui/* requests
@@ -669,9 +671,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Test route without middleware
-	uiRouter.GET("/ping", func(c forge.Context) error {
+	if err := uiRouter.GET("/ping", func(c forge.Context) error {
 		return c.JSON(200, map[string]string{"message": "Dashboard plugin is working!"})
-	})
+	}); err != nil {
+		return err
+	}
 
 	// All page routes are now handled by ForgeUI in pages/pages.go
 	// Only keep static asset serving here
@@ -770,7 +774,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	return nil
 }
 
-// DTOs for dashboard routes.
+// DashboardErrorResponse for dashboard routes.
 type DashboardErrorResponse struct {
 	Error string `example:"Error message" json:"error"`
 }

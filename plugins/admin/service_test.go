@@ -5,6 +5,7 @@ import (
 
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -23,14 +24,14 @@ func TestCheckAdminPermission_InvalidAdminID(t *testing.T) {
 	// For now, we're testing the ID parsing logic
 	invalidID := "invalid-xid"
 	_, err := xid.FromString(invalidID)
-	assert.Error(t, err, "Invalid XID should produce an error")
+	require.Error(t, err, "Invalid XID should produce an error")
 }
 
 func TestCheckAdminPermission_ValidAdminID(t *testing.T) {
 	// Test that valid XID parsing works
 	validID := xid.New()
 	parsed, err := xid.FromString(validID.String())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, validID, parsed)
 }
 
@@ -190,7 +191,7 @@ func TestRevokeSessionRequest_Validation(t *testing.T) {
 	// Test string conversion roundtrip
 	sessionIDStr := sessionID.String()
 	parsed, err := xid.FromString(sessionIDStr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, sessionID, parsed)
 }
 

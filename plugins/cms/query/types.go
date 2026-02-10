@@ -151,29 +151,29 @@ const (
 	OpLessThan         FilterOperator = "lt"
 	OpLessThanEqual    FilterOperator = "lte"
 
-	// String operators.
-	OpLike       FilterOperator = "like"     // Case-sensitive pattern match
-	OpILike      FilterOperator = "ilike"    // Case-insensitive pattern match
-	OpContains   FilterOperator = "contains" // String contains
+	// OpLike is the like operator (case-sensitive pattern match).
+	OpLike       FilterOperator = "like"
+	OpILike      FilterOperator = "ilike"
+	OpContains   FilterOperator = "contains"
 	OpStartsWith FilterOperator = "startsWith"
 	OpEndsWith   FilterOperator = "endsWith"
 
-	// Array operators.
-	OpIn    FilterOperator = "in"  // Value is in array
-	OpNotIn FilterOperator = "nin" // Value is not in array
-	OpAll   FilterOperator = "all" // Array contains all values
-	OpAny   FilterOperator = "any" // Array contains any value
+	// OpIn is the in operator (value is in array).
+	OpIn    FilterOperator = "in"
+	OpNotIn FilterOperator = "nin"
+	OpAll   FilterOperator = "all"
+	OpAny   FilterOperator = "any"
 
-	// Null operators.
-	OpNull   FilterOperator = "null"   // Field is null (value: true) or not null (value: false)
-	OpExists FilterOperator = "exists" // Field exists (for JSON fields)
+	// OpNull is the null operator (field is null or not null).
+	OpNull   FilterOperator = "null"
+	OpExists FilterOperator = "exists"
 
-	// JSON operators.
-	OpJsonContains FilterOperator = "jsonContains" // JSON contains
-	OpJsonHasKey   FilterOperator = "jsonHasKey"   // JSON has key
+	// OpJsonContains is the JSON contains operator.
+	OpJsonContains FilterOperator = "jsonContains"
+	OpJsonHasKey   FilterOperator = "jsonHasKey"
 
-	// Date operators.
-	OpBetween FilterOperator = "between" // Value is between two values
+	// OpBetween is the between operator (value is between two values).
+	OpBetween FilterOperator = "between"
 )
 
 // IsValid returns true if the operator is valid.
@@ -356,7 +356,7 @@ var SystemFields = map[string]bool{
 }
 
 // IsSystemField returns true if the field is a system field (not user-defined)
-// Supports both legacy format (e.g., "status") and new meta format (e.g., "_meta.status").
+// IsSystemField both legacy format (e.g., "status") and new meta format (e.g., "_meta.status").
 func IsSystemField(field string) bool {
 	// Check for _meta prefixed fields
 	if after, ok := strings.CutPrefix(field, MetaPrefix); ok {
@@ -379,7 +379,7 @@ func IsMetaField(field string) bool {
 }
 
 // GetSystemFieldName extracts the actual field name from a potentially _meta prefixed field
-// e.g., "_meta.status" -> "status", "status" -> "status".
+// GetSystemFieldName e.g., "_meta.status" -> "status", "status" -> "status".
 func GetSystemFieldName(field string) string {
 	if after, ok := strings.CutPrefix(field, MetaPrefix); ok {
 		return after

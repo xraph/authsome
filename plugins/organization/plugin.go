@@ -361,7 +361,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Organization management routes
 	orgGroup := router.Group("/organizations")
 	{
-		orgGroup.POST("", p.orgHandler.CreateOrganization,
+		if err := orgGroup.POST("", p.orgHandler.CreateOrganization,
 			forge.WithName("organization.create"),
 			forge.WithSummary("Create organization"),
 			forge.WithDescription("Create a new user organization (workspace)"),
@@ -369,36 +369,48 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithTags("Organizations"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		orgGroup.GET("", p.orgHandler.ListOrganizations,
+		if err := orgGroup.GET("", p.orgHandler.ListOrganizations,
 			forge.WithName("organization.list"),
 			forge.WithSummary("List user organizations"),
 			forge.WithDescription("List all organizations the current user is a member of"),
 			forge.WithResponseSchema(200, "Organizations retrieved", organization.Organization{}),
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		orgGroup.GET("/:id", p.orgHandler.GetOrganization,
+		if err := orgGroup.GET("/:id", p.orgHandler.GetOrganization,
 			forge.WithName("organization.get"),
 			forge.WithSummary("Get organization"),
 			forge.WithDescription("Retrieve a specific organization by ID"),
 			forge.WithResponseSchema(200, "Organization retrieved", organization.Organization{}),
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		orgGroup.GET("/slug/:slug", p.orgHandler.GetOrganizationBySlug,
+		if err := orgGroup.GET("/slug/:slug", p.orgHandler.GetOrganizationBySlug,
 			forge.WithName("organization.get_by_slug"),
 			forge.WithSummary("Get organization by slug"),
 			forge.WithDescription("Retrieve a specific organization by its slug"),
 			forge.WithResponseSchema(200, "Organization retrieved", organization.Organization{}),
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		orgGroup.PATCH("/:id", p.orgHandler.UpdateOrganization,
+		if err := orgGroup.PATCH("/:id", p.orgHandler.UpdateOrganization,
 			forge.WithName("organization.update"),
 			forge.WithSummary("Update organization"),
 			forge.WithDescription("Update organization details (name, logo, metadata)"),
@@ -407,9 +419,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
 			forge.WithValidation(true),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		orgGroup.DELETE("/:id", p.orgHandler.DeleteOrganization,
+		if err := orgGroup.DELETE("/:id", p.orgHandler.DeleteOrganization,
 			forge.WithName("organization.delete"),
 			forge.WithSummary("Delete organization"),
 			forge.WithDescription("Delete an organization (owner only). This action is irreversible."),
@@ -417,21 +432,27 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
 		// Member management
 		memberGroup := orgGroup.Group("/:id/members")
 		{
-			memberGroup.GET("", p.orgHandler.ListMembers,
+			if err := memberGroup.GET("", p.orgHandler.ListMembers,
 				forge.WithName("organization.members.list"),
 				forge.WithSummary("List organization members"),
 				forge.WithDescription("List all members of an organization with their roles and status"),
 				forge.WithResponseSchema(200, "Members retrieved", map[string]any{}),
 				forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			memberGroup.POST("/invite", p.orgHandler.InviteMember,
+			if err := memberGroup.POST("/invite", p.orgHandler.InviteMember,
 				forge.WithName("organization.members.invite"),
 				forge.WithSummary("Invite member to organization"),
 				forge.WithDescription("Send an invitation to a user to join the organization"),
@@ -439,9 +460,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			memberGroup.PATCH("/:memberId", p.orgHandler.UpdateMember,
+			if err := memberGroup.PATCH("/:memberId", p.orgHandler.UpdateMember,
 				forge.WithName("organization.members.update"),
 				forge.WithSummary("Update member"),
 				forge.WithDescription("Update member role or status within the organization"),
@@ -450,9 +474,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Member not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			memberGroup.DELETE("/:memberId", p.orgHandler.RemoveMember,
+			if err := memberGroup.DELETE("/:memberId", p.orgHandler.RemoveMember,
 				forge.WithName("organization.members.remove"),
 				forge.WithSummary("Remove member"),
 				forge.WithDescription("Remove a member from the organization"),
@@ -460,22 +487,28 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
-			)
+			
+			); err != nil {
+				return err
+			}
 		}
 
 		// Team management
 		teamGroup := orgGroup.Group("/:id/teams")
 		{
-			teamGroup.GET("", p.orgHandler.ListTeams,
+			if err := teamGroup.GET("", p.orgHandler.ListTeams,
 				forge.WithName("organization.teams.list"),
 				forge.WithSummary("List teams"),
 				forge.WithDescription("List all teams within the organization"),
 				forge.WithResponseSchema(200, "Teams retrieved", map[string]any{}),
 				forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.POST("", p.orgHandler.CreateTeam,
+			if err := teamGroup.POST("", p.orgHandler.CreateTeam,
 				forge.WithName("organization.teams.create"),
 				forge.WithSummary("Create team"),
 				forge.WithDescription("Create a new team within the organization"),
@@ -483,9 +516,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.PATCH("/:teamId", p.orgHandler.UpdateTeam,
+			if err := teamGroup.PATCH("/:teamId", p.orgHandler.UpdateTeam,
 				forge.WithName("organization.teams.update"),
 				forge.WithSummary("Update team"),
 				forge.WithDescription("Update team details (name, description, etc.)"),
@@ -494,9 +530,12 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
 				forge.WithValidation(true),
-			)
+			
+			); err != nil {
+				return err
+			}
 
-			teamGroup.DELETE("/:teamId", p.orgHandler.DeleteTeam,
+			if err := teamGroup.DELETE("/:teamId", p.orgHandler.DeleteTeam,
 				forge.WithName("organization.teams.delete"),
 				forge.WithSummary("Delete team"),
 				forge.WithDescription("Delete a team from the organization"),
@@ -504,14 +543,17 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
-			)
+			
+			); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Invitation routes
 	inviteGroup := router.Group("/organization-invitations")
 	{
-		inviteGroup.POST("/:token/accept", p.orgHandler.AcceptInvitation,
+		if err := inviteGroup.POST("/:token/accept", p.orgHandler.AcceptInvitation,
 			forge.WithName("organization.invitations.accept"),
 			forge.WithSummary("Accept organization invitation"),
 			forge.WithDescription("Accept an organization invitation and become a member"),
@@ -519,16 +561,22 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid or expired invitation", ErrorResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", ErrorResponse{}),
 			forge.WithTags("Organizations", "Invitations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 
-		inviteGroup.POST("/:token/decline", p.orgHandler.DeclineInvitation,
+		if err := inviteGroup.POST("/:token/decline", p.orgHandler.DeclineInvitation,
 			forge.WithName("organization.invitations.decline"),
 			forge.WithSummary("Decline organization invitation"),
 			forge.WithDescription("Decline an organization invitation"),
 			forge.WithResponseSchema(200, "Invitation declined", StatusResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", ErrorResponse{}),
 			forge.WithTags("Organizations", "Invitations"),
-		)
+		
+		); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -732,7 +780,7 @@ func (p *Plugin) RegisterHooks(hookRegistry *hooks.HookRegistry) error {
 }
 
 // SendInvitationNotification sends an org.invite notification when an invitation is created
-// This should be called by handlers after creating an invitation.
+// SendInvitationNotification should be called by handlers after creating an invitation.
 func (p *Plugin) SendInvitationNotification(ctx context.Context, invitation *organization.Invitation, inviter *user.User, org *organization.Organization) error {
 	if p.notifAdapter == nil {
 		return nil
@@ -849,7 +897,7 @@ func (p *Plugin) DashboardExtension() ui.DashboardExtension {
 }
 
 // RegisterRoles implements the PluginWithRoles interface
-// This registers organization-related permissions for platform roles.
+// RegisterRoles registers organization-related permissions for platform roles.
 func (p *Plugin) RegisterRoles(reg any) error {
 	roleRegistry, ok := reg.(*rbac.RoleRegistry)
 	if !ok {
@@ -948,12 +996,12 @@ func (p *Plugin) RegisterRoles(reg any) error {
 }
 
 // GetOrganizationUIRegistry returns the UI registry for accessing registered extensions
-// This is used by the dashboard extension to render extension widgets, tabs, and actions.
+// GetOrganizationUIRegistry is used by the dashboard extension to render extension widgets, tabs, and actions.
 func (p *Plugin) GetOrganizationUIRegistry() *OrganizationUIRegistry {
 	return p.uiRegistry
 }
 
-// DTOs for organization routes - use shared responses from core.
+// ErrorResponse for organization routes - use shared responses from core.
 type ErrorResponse = responses.ErrorResponse
 type StatusResponse = responses.StatusResponse
 

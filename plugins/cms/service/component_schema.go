@@ -1,4 +1,3 @@
-// Package service implements the business logic layer for the CMS plugin.
 package service
 
 import (
@@ -132,7 +131,7 @@ func (s *ComponentSchemaService) GetByID(ctx context.Context, id xid.ID) (*core.
 	return s.toDTO(component, usageCount), nil
 }
 
-// GetBySlug retrieves a component schema by slug.
+// GetByName retrieves a component schema by slug.
 func (s *ComponentSchemaService) GetByName(ctx context.Context, name string) (*core.ComponentSchemaDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {
@@ -348,7 +347,7 @@ func (s *ComponentSchemaService) ValidateComponentRef(ctx context.Context, compo
 		return err
 	}
 
-	// Check nested component refs recursively
+	// visited nested component refs recursively
 	visited = append(visited, componentSlug)
 
 	for _, field := range component.Fields {

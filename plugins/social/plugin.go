@@ -154,7 +154,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Create audit service
 	auditSvc := authInst.GetServiceRegistry().AuditService()
 
-	// Create state store
+	// stateStore state store
 	var stateStore StateStore
 
 	if p.config.StateStorage.UseRedis {
@@ -185,7 +185,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 	// Set config repository on service for environment-scoped loading
 	p.service.SetConfigRepository(p.configRepo)
 
-	// Create rate limiter (only if Redis is available)
+	// rateLimiter rate limiter (only if Redis is available)
 	var rateLimiter *RateLimiter
 
 	if p.config.StateStorage.UseRedis {
@@ -198,7 +198,7 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 		rateLimiter = NewRateLimiter(redisClient)
 	}
 
-	// Create centralized authentication completion service
+	// authCompletion centralized authentication completion service
 	var authCompletion *authflow.CompletionService
 
 	serviceRegistry := authInst.GetServiceRegistry()
@@ -210,13 +210,13 @@ func (p *Plugin) Init(authInst core.Authsome) error {
 
 		// Create completion service - use App sub-service for cookie config
 		// The appService.GetCookieConfig() method already handles getting the global
-		// cookie config (set via SetGlobalCookieConfig in authsome.go) as a fallback
+		// appService cookie config (set via SetGlobalCookieConfig in authsome.go) as a fallback
 		var appService authflow.AppServiceInterface
 		if appServiceImpl != nil {
 			appService = appServiceImpl.App // Access the AppService from ServiceImpl
 		}
 
-		// Pass nil for cookieConfig - appService.GetCookieConfig() handles global config
+		// authCompletion nil for cookieConfig - appService.GetCookieConfig() handles global config
 		authCompletion = authflow.NewCompletionService(
 			authService,
 			deviceService,
@@ -242,7 +242,7 @@ func (p *Plugin) SetConfig(config Config) {
 		userSvc := user.NewService(p.authInst.Repository().User(), user.Config{}, nil, p.authInst.GetHookRegistry())
 		auditSvc := p.authInst.GetServiceRegistry().AuditService()
 
-		// Recreate state store
+		// stateStore state store
 		var stateStore StateStore
 
 		if config.StateStorage.UseRedis {
@@ -288,7 +288,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Router is already scoped to the correct basePath
-	router.POST("/signin/social", wrapHandler(handler.SignIn),
+	if err := router.POST("/signin/social", wrapHandler(handler.SignIn),
 		forge.WithName("social.signin"),
 		forge.WithSummary("Sign in with social provider"),
 		forge.WithDescription("Initiate OAuth sign-in flow with a social provider (Google, GitHub, Facebook, etc.)"),
@@ -297,8 +297,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid provider", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 		forge.WithValidation(true),
-	)
-	router.GET("/callback/:provider", wrapHandler(handler.Callback),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.GET("/callback/:provider", wrapHandler(handler.Callback),
 		forge.WithName("social.callback"),
 		forge.WithSummary("OAuth callback"),
 		forge.WithDescription("Handle OAuth provider callback and complete authentication. This endpoint receives the authorization code and state from the OAuth provider after user grants permission."),
@@ -309,8 +312,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 		forge.WithValidation(true),
-	)
-	router.POST("/account/link", wrapHandler(handler.LinkAccount),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.POST("/account/link", wrapHandler(handler.LinkAccount),
 		forge.WithName("social.link"),
 		forge.WithSummary("Link social account"),
 		forge.WithDescription("Link a social provider account to existing user account"),
@@ -320,8 +326,11 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
 		forge.WithValidation(true),
-	)
-	router.DELETE("/account/unlink/:provider", wrapHandler(handler.UnlinkAccount),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.DELETE("/account/unlink/:provider", wrapHandler(handler.UnlinkAccount),
 		forge.WithName("social.unlink"),
 		forge.WithSummary("Unlink social account"),
 		forge.WithDescription("Unlink a social provider account from user account"),
@@ -329,14 +338,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Provider not linked", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
-	)
-	router.GET("/providers", wrapHandler(handler.ListProviders),
+	
+	); err != nil {
+		return err
+	}
+	if err := router.GET("/providers", wrapHandler(handler.ListProviders),
 		forge.WithName("social.providers.list"),
 		forge.WithSummary("List available providers"),
 		forge.WithDescription("List all configured social authentication providers"),
 		forge.WithResponseSchema(200, "Providers list", ProvidersResponse{}),
 		forge.WithTags("Social", "Configuration"),
-	)
+	
+	); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -455,5 +470,5 @@ func (p *Plugin) GetConfigRepository() repository.SocialProviderConfigRepository
 	return p.configRepo
 }
 
-// Type alias for error responses.
+// ErrorResponse alias for error responses.
 type ErrorResponse = errs.AuthsomeError

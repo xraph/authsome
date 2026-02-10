@@ -8,6 +8,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // MockRepository implements Repository for testing.
@@ -383,7 +384,7 @@ func TestCheckLocation_BlockedCountry(t *testing.T) {
 
 	result, err := service.CheckLocation(context.Background(), req)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, result.Allowed)
 	assert.Equal(t, "country_blocked", result.Reason)
 	assert.Contains(t, result.Violations, "country_blocked")
@@ -431,7 +432,7 @@ func TestCheckLocation_AllowedCountry(t *testing.T) {
 
 	result, err := service.CheckLocation(context.Background(), req)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, result.Allowed)
 	assert.Empty(t, result.Violations)
 }
@@ -495,7 +496,7 @@ func TestCheckLocation_VPNDetected(t *testing.T) {
 
 	result, err := service.CheckLocation(context.Background(), req)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, result.Allowed)
 	assert.Equal(t, "vpn_detected", result.Reason)
 }
@@ -570,7 +571,7 @@ func TestGetGeolocation_WithCache(t *testing.T) {
 	// Get geolocation (should use cache, not call provider)
 	result, err := service.GetGeolocation(context.Background(), "8.8.8.8")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, "8.8.8.8", result.IPAddress)
 	assert.Equal(t, "United States", result.Country)
@@ -609,7 +610,7 @@ func TestGetGeolocation_CacheMiss(t *testing.T) {
 	// Get geolocation (should call provider and cache result)
 	result, err := service.GetGeolocation(context.Background(), "8.8.8.8")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, "8.8.8.8", result.IPAddress)
 

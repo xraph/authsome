@@ -106,7 +106,7 @@ type StepUpAuditLog struct {
 	CreatedAt time.Time      `bun:"created_at,notnull,default:current_timestamp" json:"created_at"`
 }
 
-// Table names.
+// TableName names.
 func (*StepUpVerification) TableName() string     { return "stepup_verifications" }
 func (*StepUpRequirement) TableName() string      { return "stepup_requirements" }
 func (*StepUpRememberedDevice) TableName() string { return "stepup_remembered_devices" }

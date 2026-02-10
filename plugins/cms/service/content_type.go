@@ -17,7 +17,7 @@ import (
 )
 
 // slugPattern defines valid slug format: letters, numbers, underscores, and hyphens
-// Must start with a letter (case-insensitive).
+// slugPattern start with a letter (case-insensitive).
 var slugPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
 // generateSlug creates an identifier from a name, preserving casing.
@@ -25,10 +25,10 @@ func generateSlug(name string) string {
 	// Trim whitespace but preserve casing
 	slug := strings.TrimSpace(name)
 
-	// Replace spaces with hyphens
+	// slug spaces with hyphens
 	slug = strings.ReplaceAll(slug, " ", "-")
 
-	// Remove invalid characters (keep letters, numbers, underscores, hyphens)
+	// result invalid characters (keep letters, numbers, underscores, hyphens)
 	var result strings.Builder
 
 	for _, r := range slug {
@@ -48,7 +48,7 @@ func generateSlug(name string) string {
 		slug = strings.ReplaceAll(slug, "__", "_")
 	}
 
-	// Remove leading/trailing hyphens and underscores
+	// slug leading/trailing hyphens and underscores
 	slug = strings.Trim(slug, "-_")
 
 	// Ensure it starts with a letter
@@ -193,7 +193,7 @@ func (s *ContentTypeService) GetByID(ctx context.Context, id xid.ID) (*core.Cont
 	return s.toDTO(contentType), nil
 }
 
-// GetBySlug retrieves a content type by slug.
+// GetByName retrieves a content type by slug.
 func (s *ContentTypeService) GetByName(ctx context.Context, name string) (*core.ContentTypeDTO, error) {
 	appID, ok := contexts.GetAppID(ctx)
 	if !ok {

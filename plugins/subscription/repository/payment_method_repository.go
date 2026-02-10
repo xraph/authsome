@@ -124,7 +124,7 @@ func (r *paymentMethodRepository) SetDefault(ctx context.Context, orgID, payment
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Clear existing default
 	_, err = tx.NewUpdate().

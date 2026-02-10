@@ -396,7 +396,7 @@ func (s *AddOnService) schemaToCoreAddOn(addon *schema.SubscriptionAddOn) *core.
 	features := make([]core.PlanFeature, len(addon.Features))
 	for i, f := range addon.Features {
 		var value any
-		json.Unmarshal([]byte(f.Value), &value)
+		_ = json.Unmarshal([]byte(f.Value), &value)
 		features[i] = core.PlanFeature{
 			Key:         f.Key,
 			Name:        f.Name,

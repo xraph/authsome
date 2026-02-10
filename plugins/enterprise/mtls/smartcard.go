@@ -366,13 +366,13 @@ func validateRequiredOIDs(cert *x509.Certificate, requiredOIDs []string) error {
 
 // PIV/CAC OID Constants.
 var (
-	// PIV OIDs.
+	// OID_PIV_Authentication OIDs.
 	OID_PIV_Authentication   = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 7}
 	OID_PIV_CardAuth         = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 13}
 	OID_PIV_DigitalSignature = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 2}
 	OID_PIV_KeyManagement    = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 2, 1, 3, 4}
 
-	// CAC OIDs.
+	// OID_CAC_PKI OIDs.
 	OID_CAC_PKI            = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 39}
 	OID_CAC_Authentication = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 42}
 	OID_CAC_Email          = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 2, 1, 11, 17}

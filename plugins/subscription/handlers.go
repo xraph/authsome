@@ -437,7 +437,9 @@ func (p *Plugin) handleCancelSubscription(c forge.Context) error {
 	}
 
 	var req cancelSubscriptionRequest
-	c.BindJSON(&req)
+	if err := c.BindJSON(&req); err != nil {
+		return err
+	}
 
 	if err := p.subscriptionSvc.Cancel(c.Context(), id, &core.CancelSubscriptionRequest{
 		Immediate: req.Immediate,
@@ -456,7 +458,9 @@ func (p *Plugin) handlePauseSubscription(c forge.Context) error {
 	}
 
 	var req pauseSubscriptionRequest
-	c.BindJSON(&req)
+	if err := c.BindJSON(&req); err != nil {
+		return err
+	}
 
 	if err := p.subscriptionSvc.Pause(c.Context(), id, &core.PauseSubscriptionRequest{
 		Reason: req.Reason,

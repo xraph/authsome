@@ -109,10 +109,10 @@ func TestParser_Parse_ValidExpressions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ast, err := parser.Parse(tt.expression)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, ast)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, ast)
 			}
 		})
@@ -168,7 +168,7 @@ func TestParser_Parse_InvalidExpressions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ast, err := parser.Parse(tt.expression)
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Nil(t, ast)
 			assert.Contains(t, err.Error(), tt.errorMsg)
 		})
@@ -213,9 +213,9 @@ func TestParser_ValidateExpression(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := parser.ValidateExpression(tt.expression)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -229,7 +229,7 @@ func TestParser_ExampleExpressions(t *testing.T) {
 	for name, expression := range ExampleExpressions {
 		t.Run(name, func(t *testing.T) {
 			ast, err := parser.Parse(expression)
-			assert.NoError(t, err, "Example expression '%s' should be valid", name)
+			require.NoError(t, err, "Example expression '%s' should be valid", name)
 			assert.NotNil(t, ast)
 		})
 	}
