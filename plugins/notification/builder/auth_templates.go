@@ -10,6 +10,7 @@ func mustAddBlock(doc *Document, blockType BlockType, data map[string]any, paren
 	if err != nil {
 		panic("failed to add block to template: " + err.Error())
 	}
+
 	return id
 }
 

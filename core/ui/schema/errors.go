@@ -27,6 +27,8 @@ func NewValidationError(fieldID, validatorID, format string, args ...any) *Valid
 }
 
 // ValidationResult holds the result of validating a section or schema.
+//
+//nolint:errname // Validation result DTO, not a Go error type
 type ValidationResult struct {
 	Valid        bool                          `json:"valid"`
 	FieldErrors  map[string][]*ValidationError `json:"fieldErrors,omitempty"`

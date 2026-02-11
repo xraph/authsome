@@ -159,7 +159,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -171,7 +170,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Impersonation ended", ImpersonationEndResponse{}),
 		forge.WithResponseSchema(400, "Invalid request or no active impersonation", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	
 	); err != nil {
 		return err
 	}
@@ -183,7 +181,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Impersonation retrieved", ImpersonationSession{}),
 		forge.WithResponseSchema(404, "Impersonation not found", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	
 	); err != nil {
 		return err
 	}
@@ -195,7 +192,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Impersonations retrieved", ImpersonationListResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	
 	); err != nil {
 		return err
 	}
@@ -207,7 +203,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Verification result", ImpersonationVerifyResponse{}),
 		forge.WithResponseSchema(400, "Invalid request", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation"),
-	
 	); err != nil {
 		return err
 	}
@@ -220,7 +215,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Audit events retrieved", ImpersonationAuditResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", ImpersonationErrorResponse{}),
 		forge.WithTags("Impersonation", "Audit"),
-	
 	); err != nil {
 		return err
 	}

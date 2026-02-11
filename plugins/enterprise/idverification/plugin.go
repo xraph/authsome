@@ -134,7 +134,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Sessions"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -146,7 +145,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithResponseSchema(404, "Session not found", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Sessions"),
-		
 		); err != nil {
 			return err
 		}
@@ -159,7 +157,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Verifications retrieved", IDVerificationListResponse{}),
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "User"),
-		
 		); err != nil {
 			return err
 		}
@@ -170,7 +167,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Status retrieved", IDVerificationStatusResponse{}),
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "User"),
-		
 		); err != nil {
 			return err
 		}
@@ -183,7 +179,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "User"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -197,7 +192,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithResponseSchema(404, "Verification not found", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification"),
-		
 		); err != nil {
 			return err
 		}
@@ -210,7 +204,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Webhook processed", IDVerificationWebhookResponse{}),
 			forge.WithResponseSchema(400, "Invalid webhook", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Webhooks"),
-		
 		); err != nil {
 			return err
 		}
@@ -227,7 +220,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Admin"),
-		
 		); err != nil {
 			return err
 		}
@@ -239,7 +231,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Admin"),
-		
 		); err != nil {
 			return err
 		}
@@ -251,7 +242,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Admin"),
-		
 		); err != nil {
 			return err
 		}
@@ -263,7 +253,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", IDVerificationErrorResponse{}),
 			forge.WithResponseSchema(403, "Insufficient privileges", IDVerificationErrorResponse{}),
 			forge.WithTags("IdentityVerification", "Admin"),
-		
 		); err != nil {
 			return err
 		}

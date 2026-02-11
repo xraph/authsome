@@ -120,6 +120,8 @@ type RemoveTeamMemberRequest struct {
 }
 
 // ErrorResponse response types - use shared responses from core.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse

@@ -179,7 +179,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Sessions retrieved", session.ListSessionsResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}
@@ -193,7 +192,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -205,7 +203,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}
@@ -217,7 +214,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(404, "Session not found", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}
@@ -230,7 +226,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(404, "Session not found", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}
@@ -244,7 +239,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Failed to revoke sessions", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -256,7 +250,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(500, "Failed to revoke sessions", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}
@@ -268,7 +261,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(500, "Failed to refresh session", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}
@@ -280,7 +272,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Not authenticated", MultiSessionErrorResponse{}),
 		forge.WithResponseSchema(500, "Failed to retrieve statistics", MultiSessionErrorResponse{}),
 		forge.WithTags("MultiSession", "Sessions"),
-	
 	); err != nil {
 		return err
 	}

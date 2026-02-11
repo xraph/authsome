@@ -266,11 +266,16 @@ func (s *Section) ExtractData(data map[string]any) map[string]any {
 
 // Clone creates a deep copy of the section.
 func (s *Section) Clone() *Section {
-	data, _ := json.Marshal(s)
+	data, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
 
 	var cloned Section
 
-	_ = json.Unmarshal(data, &cloned)
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil
+	}
 
 	return &cloned
 }

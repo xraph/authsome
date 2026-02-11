@@ -364,7 +364,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -379,7 +378,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Policies"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -395,7 +393,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Policies"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -413,7 +410,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -429,7 +425,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Policies"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -446,7 +441,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -463,7 +457,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Policies"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -481,7 +474,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Resources"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -496,7 +488,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Resources"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -512,7 +503,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Resources"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -528,7 +518,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Resources"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -546,7 +535,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Actions"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -561,7 +549,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Actions"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -577,7 +564,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Actions"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -595,7 +581,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Namespaces"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -610,7 +595,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Namespaces"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -626,7 +610,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Namespaces"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -644,7 +627,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Namespaces"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -660,7 +642,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Namespaces"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -678,7 +659,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Evaluation"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -695,7 +675,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Evaluation"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -710,7 +689,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Templates"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -725,7 +703,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Templates"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -743,7 +720,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Templates"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -763,7 +739,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Permissions", "Migration"),
 				forge.WithValidation(true),
 			)...,
-		
 		); err != nil {
 			return err
 		}
@@ -780,7 +755,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Permissions", "Migration"),
 				forge.WithValidation(true),
 			)...,
-		
 		); err != nil {
 			return err
 		}
@@ -797,7 +771,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithTags("Permissions", "Migration"),
 				forge.WithValidation(true),
 			)...,
-		
 		); err != nil {
 			return err
 		}
@@ -816,7 +789,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithTags("Permissions", "Migration"),
 			forge.WithValidation(true),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -831,7 +803,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Migration"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -847,7 +818,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Audit"),
 		)...,
-	
 	); err != nil {
 		return err
 	}
@@ -862,7 +832,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(501, "Not implemented", handlers.MessageResponse{}),
 			forge.WithTags("Permissions", "Analytics"),
 		)...,
-	
 	); err != nil {
 		return err
 	}

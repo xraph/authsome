@@ -11,8 +11,8 @@ import (
 type contextKey string
 
 const (
-	stepupResultContextKey      contextKey = "stepup_result"
-	stepupEvaluationContextKey  contextKey = "stepup_evaluation"
+	stepupResultContextKey     contextKey = "stepup_result"
+	stepupEvaluationContextKey contextKey = "stepup_evaluation"
 )
 
 // Middleware provides step-up authentication middleware.

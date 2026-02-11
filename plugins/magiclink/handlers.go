@@ -40,6 +40,8 @@ type SendRequest struct {
 }
 
 // ErrorResponse represents response types.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 type VerifyResponse = responses.VerifyResponse
 

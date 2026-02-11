@@ -289,6 +289,8 @@ type ClientUpdateRequest struct {
 // =============================================================================
 
 // ErrorResponse is the standard OAuth2/OIDC error response.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 
 // OAuthErrorResponse represents an OAuth2-specific error response.

@@ -375,7 +375,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", errs.AuthsomeError{}),
 		forge.WithTags("Username", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -392,7 +391,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", errs.AuthsomeError{}),
 		forge.WithTags("Username", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}

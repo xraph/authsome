@@ -127,7 +127,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Evaluation result", StepUpEvaluationResponse{}),
 		forge.WithTags("Step-Up", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -139,7 +138,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Verification failed", StepUpErrorResponse{}),
 		forge.WithTags("Step-Up", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -149,7 +147,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Get current step-up authentication status for the session"),
 		forge.WithResponseSchema(200, "Status retrieved", StepUpStatusResponse{}),
 		forge.WithTags("Step-Up", "Authentication"),
-	
 	); err != nil {
 		return err
 	}
@@ -161,7 +158,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Retrieve details of a specific step-up requirement"),
 		forge.WithResponseSchema(200, "Requirement retrieved", StepUpRequirementResponse{}),
 		forge.WithTags("Step-Up", "Requirements"),
-	
 	); err != nil {
 		return err
 	}
@@ -171,7 +167,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("List all pending step-up requirements for current user"),
 		forge.WithResponseSchema(200, "Pending requirements", StepUpRequirementsResponse{}),
 		forge.WithTags("Step-Up", "Requirements"),
-	
 	); err != nil {
 		return err
 	}
@@ -183,7 +178,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("List step-up verification history"),
 		forge.WithResponseSchema(200, "Verifications retrieved", StepUpVerificationsResponse{}),
 		forge.WithTags("Step-Up", "History"),
-	
 	); err != nil {
 		return err
 	}
@@ -195,7 +189,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("List devices that are remembered for step-up authentication"),
 		forge.WithResponseSchema(200, "Devices retrieved", StepUpDevicesResponse{}),
 		forge.WithTags("Step-Up", "Devices"),
-	
 	); err != nil {
 		return err
 	}
@@ -205,7 +198,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Remove a device from remembered devices list"),
 		forge.WithResponseSchema(200, "Device forgotten", StepUpStatusResponse{}),
 		forge.WithTags("Step-Up", "Devices"),
-	
 	); err != nil {
 		return err
 	}
@@ -218,7 +210,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Policy created", StepUpPolicyResponse{}),
 		forge.WithTags("Step-Up", "Policies"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -228,7 +219,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("List all step-up authentication policies"),
 		forge.WithResponseSchema(200, "Policies retrieved", StepUpPoliciesResponse{}),
 		forge.WithTags("Step-Up", "Policies"),
-	
 	); err != nil {
 		return err
 	}
@@ -238,7 +228,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Retrieve a specific step-up policy"),
 		forge.WithResponseSchema(200, "Policy retrieved", StepUpPolicyResponse{}),
 		forge.WithTags("Step-Up", "Policies"),
-	
 	); err != nil {
 		return err
 	}
@@ -249,7 +238,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Policy updated", StepUpPolicyResponse{}),
 		forge.WithTags("Step-Up", "Policies"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -259,7 +247,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Delete a step-up authentication policy"),
 		forge.WithResponseSchema(200, "Policy deleted", StepUpStatusResponse{}),
 		forge.WithTags("Step-Up", "Policies"),
-	
 	); err != nil {
 		return err
 	}
@@ -271,7 +258,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Retrieve step-up authentication audit logs"),
 		forge.WithResponseSchema(200, "Audit logs retrieved", StepUpAuditLogsResponse{}),
 		forge.WithTags("Step-Up", "Audit"),
-	
 	); err != nil {
 		return err
 	}

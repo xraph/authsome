@@ -144,11 +144,16 @@ func (s *Schema) GetDefaults() map[string]map[string]any {
 
 // Clone creates a deep copy of the schema.
 func (s *Schema) Clone() *Schema {
-	data, _ := json.Marshal(s)
+	data, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
 
 	var cloned Schema
 
-	_ = json.Unmarshal(data, &cloned)
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil
+	}
 
 	return &cloned
 }

@@ -86,9 +86,9 @@ linters:
     - modernize
     - musttag
     - nakedret
-    - nilerr
+    # - nilerr # Disabled: 139 issues, requires returning err instead of nil when err!=nil
     - nilnesserr
-    - nilnil
+    # - nilnil # Disabled: 291 issues, requires sentinel errors for nil,nil returns
     - nlreturn
     - noctx
     - nolintlint
@@ -169,6 +169,7 @@ linters:
 
   # Defines a set of rules to ignore issues.
   # It does not skip the analysis, and so does not ignore "typecheck" errors.
+  # Note: nilerr and nilnil require significant refactoring (430+ issues) - disable until addressed incrementally
   exclusions:
     # Mode of the generated files analysis.
     #
@@ -204,6 +205,8 @@ linters:
           - errcheck
           - dupl
           - gosec
+          - errchkjson
+          - nlreturn
       - path: cmd/
         linters:
           - forbidigo

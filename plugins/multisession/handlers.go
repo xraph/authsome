@@ -16,6 +16,8 @@ import (
 type Handler struct{ svc *Service }
 
 // ErrorResponse types - use shared responses from core.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 type StatusResponse = responses.StatusResponse

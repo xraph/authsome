@@ -218,7 +218,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Server error", ErrorResponse{}),
 		forge.WithTags("EmailOTP", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -233,7 +232,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid OTP", ErrorResponse{}),
 		forge.WithTags("EmailOTP", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}

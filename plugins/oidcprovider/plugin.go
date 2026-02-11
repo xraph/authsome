@@ -483,7 +483,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Returns the OpenID Connect discovery document with supported endpoints and capabilities"),
 		forge.WithResponseSchema(200, "Discovery document", DiscoveryResponse{}),
 		forge.WithTags("OIDC", "Discovery"),
-	
 	); err != nil {
 		return err
 	}
@@ -495,7 +494,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Returns public keys for token verification"),
 		forge.WithResponseSchema(200, "JWKS", JWKSResponse{}),
 		forge.WithTags("OIDC", "JWKS"),
-	
 	); err != nil {
 		return err
 	}
@@ -508,7 +506,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(302, "Redirect to consent or callback", nil),
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Authorization"),
-	
 	); err != nil {
 		return err
 	}
@@ -523,7 +520,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Consent"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -538,7 +534,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Token"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -551,7 +546,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "User info", UserInfoResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("OIDC", "UserInfo"),
-	
 	); err != nil {
 		return err
 	}
@@ -572,7 +566,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -586,7 +579,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Shows form for user to enter device code. In API mode, returns JSON with form data."),
 			forge.WithResponseSchema(200, "Device code entry page data", DeviceCodeEntryResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
-		
 		); err != nil {
 			return err
 		}
@@ -599,7 +591,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Verification info", DeviceVerifyResponse{}),
 			forge.WithResponseSchema(400, "Invalid code", ErrorResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
-		
 		); err != nil {
 			return err
 		}
@@ -612,7 +603,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Authorization result", DeviceDecisionResponse{}),
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithTags("OIDC", "OAuth2", "DeviceFlow"),
-		
 		); err != nil {
 			return err
 		}
@@ -632,7 +622,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Introspection", "Enterprise"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -647,7 +636,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Revocation", "Enterprise"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -667,7 +655,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Admin required", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -681,7 +668,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Lists all OAuth clients for the current app/environment/organization"),
 		forge.WithResponseSchema(200, "Clients list", ClientsListResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
-	
 	); err != nil {
 		return err
 	}
@@ -693,7 +679,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Client details", ClientDetailsResponse{}),
 		forge.WithResponseSchema(404, "Client not found", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
-	
 	); err != nil {
 		return err
 	}
@@ -707,7 +692,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Client not found", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -719,7 +703,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(204, "Client deleted", nil),
 		forge.WithResponseSchema(404, "Client not found", ErrorResponse{}),
 		forge.WithTags("OIDC", "OAuth2", "Client", "Admin"),
-	
 	); err != nil {
 		return err
 	}

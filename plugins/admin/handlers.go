@@ -82,6 +82,8 @@ type GetAuditLogsRequestDTO struct {
 }
 
 // ErrorResponse is the error response type.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 type MessageResponse = responses.MessageResponse
 

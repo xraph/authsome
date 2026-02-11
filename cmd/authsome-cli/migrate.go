@@ -126,6 +126,7 @@ var migrateResetCmd = &cobra.Command{
 		var response string
 		if _, err := fmt.Scanln(&response); err != nil {
 			fmt.Println("Error reading input:", err)
+
 			return err
 		}
 		if response != "y" && response != "Y" {

@@ -96,6 +96,7 @@ func (p *Parser) ExpressionComplexity(ast *cel.Ast) int {
 		if err != nil {
 			return 0
 		}
+
 		return estimateComplexityNode(parsedExpr.GetExpr(), 0)
 	}
 

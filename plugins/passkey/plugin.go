@@ -229,7 +229,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Registration"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -242,7 +241,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Registration"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -257,7 +255,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -271,7 +268,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "WebAuthn", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -286,7 +282,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -300,7 +295,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Passkey not found", ErrorResponse{}),
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -314,7 +308,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Passkey not found", ErrorResponse{}),
 		forge.WithTags("Passkey", "Management"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -339,6 +332,8 @@ func (p *Plugin) Migrate() error {
 
 // Legacy response type aliases for backward compatibility
 // PasskeyErrorResponse the proper types defined in response_types.go instead.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type PasskeyErrorResponse = ErrorResponse
 type PasskeyStatusResponse = StatusResponse
 type PasskeyRegistrationOptionsResponse = BeginRegisterResponse

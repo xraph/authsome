@@ -168,7 +168,11 @@ func (e *DatadogExporter) HealthCheck(ctx context.Context) error {
 		},
 	}
 
-	payload, _ := json.Marshal(testLog)
+	payload, err := json.Marshal(testLog)
+	if err != nil {
+		return fmt.Errorf("marshal test log: %w", err)
+	}
+
 	endpoint := fmt.Sprintf("https://http-intake.logs.%s/api/v2/logs", e.config.Site)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))

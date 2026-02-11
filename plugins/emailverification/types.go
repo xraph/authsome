@@ -44,6 +44,8 @@ type StatusResponse struct {
 }
 
 // ErrorResponse types - use shared responses from core.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 
 // Error definitions.

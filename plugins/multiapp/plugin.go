@@ -334,7 +334,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -346,7 +345,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Apps retrieved", AppsListResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
-		
 		); err != nil {
 			return err
 		}
@@ -358,7 +356,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "App retrieved", app.App{}),
 			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
-		
 		); err != nil {
 			return err
 		}
@@ -372,7 +369,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -385,7 +381,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 			forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Apps"),
-		
 		); err != nil {
 			return err
 		}
@@ -400,7 +395,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Members retrieved", MembersListResponse{}),
 				forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
-			
 			); err != nil {
 				return err
 			}
@@ -413,7 +407,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -427,7 +420,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -440,7 +432,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Members"),
-			
 			); err != nil {
 				return err
 			}
@@ -456,7 +447,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Teams retrieved", TeamsListResponse{}),
 				forge.WithResponseSchema(404, "App not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			
 			); err != nil {
 				return err
 			}
@@ -469,7 +459,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -481,7 +470,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Team retrieved", app.Team{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			
 			); err != nil {
 				return err
 			}
@@ -495,7 +483,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -508,7 +495,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			
 			); err != nil {
 				return err
 			}
@@ -522,7 +508,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -535,7 +520,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", MultitenancyErrorResponse{}),
 				forge.WithResponseSchema(404, "Team or member not found", MultitenancyErrorResponse{}),
 				forge.WithTags("Multiapp", "Apps", "Teams"),
-			
 			); err != nil {
 				return err
 			}
@@ -552,7 +536,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Invitation retrieved", app.Invitation{}),
 			forge.WithResponseSchema(404, "Invitation not found or expired", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Invitations"),
-		
 		); err != nil {
 			return err
 		}
@@ -565,7 +548,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid or expired invitation", MultitenancyErrorResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Invitations"),
-		
 		); err != nil {
 			return err
 		}
@@ -577,7 +559,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Invitation declined", MultitenancyStatusResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", MultitenancyErrorResponse{}),
 			forge.WithTags("Multiapp", "Invitations"),
-		
 		); err != nil {
 			return err
 		}

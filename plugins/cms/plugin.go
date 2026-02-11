@@ -328,7 +328,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("CMS health check"),
 		forge.WithDescription("Verify that the CMS plugin is loaded and working"),
 		forge.WithTags("CMS", "Health"),
-	
 	); err != nil {
 		return err
 	}
@@ -339,7 +338,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("List available field types"),
 		forge.WithDescription("Returns all available field types that can be used in content type definitions"),
 		forge.WithTags("CMS", "Content Types"),
-	
 	); err != nil {
 		return err
 	}
@@ -355,7 +353,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("List content types"),
 		forge.WithDescription("Returns all content types in the current app/environment"),
 		forge.WithTags("CMS", "Content Types"),
-	
 	); err != nil {
 		return err
 	}
@@ -366,7 +363,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Create content type"),
 		forge.WithDescription("Creates a new content type definition"),
 		forge.WithTags("CMS", "Content Types"),
-	
 	); err != nil {
 		return err
 	}
@@ -377,7 +373,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Get content type"),
 		forge.WithDescription("Returns a specific content type by its name"),
 		forge.WithTags("CMS", "Content Types"),
-	
 	); err != nil {
 		return err
 	}
@@ -388,7 +383,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Update content type"),
 		forge.WithDescription("Updates an existing content type definition"),
 		forge.WithTags("CMS", "Content Types"),
-	
 	); err != nil {
 		return err
 	}
@@ -399,7 +393,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Delete content type"),
 		forge.WithDescription("Deletes a content type and all its fields (entries must be deleted first)"),
 		forge.WithTags("CMS", "Content Types"),
-	
 	); err != nil {
 		return err
 	}
@@ -415,7 +408,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("List fields"),
 		forge.WithDescription("Returns all fields for a content type"),
 		forge.WithTags("CMS", "Content Fields"),
-	
 	); err != nil {
 		return err
 	}
@@ -426,7 +418,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Add field"),
 		forge.WithDescription("Adds a new field to a content type"),
 		forge.WithTags("CMS", "Content Fields"),
-	
 	); err != nil {
 		return err
 	}
@@ -437,7 +428,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Reorder fields"),
 		forge.WithDescription("Changes the display order of fields"),
 		forge.WithTags("CMS", "Content Fields"),
-	
 	); err != nil {
 		return err
 	}
@@ -448,7 +438,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Get field"),
 		forge.WithDescription("Returns a specific field by slug"),
 		forge.WithTags("CMS", "Content Fields"),
-	
 	); err != nil {
 		return err
 	}
@@ -459,7 +448,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Update field"),
 		forge.WithDescription("Updates an existing field definition"),
 		forge.WithTags("CMS", "Content Fields"),
-	
 	); err != nil {
 		return err
 	}
@@ -470,7 +458,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Delete field"),
 		forge.WithDescription("Removes a field from a content type"),
 		forge.WithTags("CMS", "Content Fields"),
-	
 	); err != nil {
 		return err
 	}
@@ -486,7 +473,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("List entries"),
 		forge.WithDescription("Returns entries for a content type with filtering and pagination"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -497,7 +483,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Create entry"),
 		forge.WithDescription("Creates a new content entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -508,7 +493,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Query entries"),
 		forge.WithDescription("Performs an advanced query on entries using the CMS query language"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -519,7 +503,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Get entry stats"),
 		forge.WithDescription("Returns statistics for entries of a content type"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -532,7 +515,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Bulk publish"),
 		forge.WithDescription("Publishes multiple entries at once"),
 		forge.WithTags("CMS", "Content Entries", "Bulk"),
-	
 	); err != nil {
 		return err
 	}
@@ -542,7 +524,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Bulk unpublish"),
 		forge.WithDescription("Unpublishes multiple entries at once"),
 		forge.WithTags("CMS", "Content Entries", "Bulk"),
-	
 	); err != nil {
 		return err
 	}
@@ -552,7 +533,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Bulk delete"),
 		forge.WithDescription("Deletes multiple entries at once"),
 		forge.WithTags("CMS", "Content Entries", "Bulk"),
-	
 	); err != nil {
 		return err
 	}
@@ -565,7 +545,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Get entry"),
 		forge.WithDescription("Returns a specific entry by ID"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -575,7 +554,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Update entry"),
 		forge.WithDescription("Updates an existing entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -585,7 +563,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Delete entry"),
 		forge.WithDescription("Deletes an entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -595,7 +572,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Publish entry"),
 		forge.WithDescription("Publishes a draft entry or schedules it for publication"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -605,7 +581,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Unpublish entry"),
 		forge.WithDescription("Moves a published entry back to draft status"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -615,7 +590,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Archive entry"),
 		forge.WithDescription("Archives an entry"),
 		forge.WithTags("CMS", "Content Entries"),
-	
 	); err != nil {
 		return err
 	}
@@ -630,7 +604,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("List revisions"),
 		forge.WithDescription("Returns the revision history for an entry"),
 		forge.WithTags("CMS", "Revisions"),
-	
 	); err != nil {
 		return err
 	}
@@ -640,7 +613,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Compare revisions"),
 		forge.WithDescription("Compares two revisions and returns the differences"),
 		forge.WithTags("CMS", "Revisions"),
-	
 	); err != nil {
 		return err
 	}
@@ -650,7 +622,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Get revision"),
 		forge.WithDescription("Returns a specific revision by version number"),
 		forge.WithTags("CMS", "Revisions"),
-	
 	); err != nil {
 		return err
 	}
@@ -660,7 +631,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithSummary("Restore revision"),
 		forge.WithDescription("Restores an entry to a specific revision"),
 		forge.WithTags("CMS", "Revisions"),
-	
 	); err != nil {
 		return err
 	}

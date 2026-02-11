@@ -138,23 +138,23 @@ func (k *JWTKey) CanVerify() bool {
 
 // TokenClaims represents JWT token claims.
 type TokenClaims struct {
-	UserID      string           `json:"userId"`
-	AppID       string           `json:"appId"`
-	SessionID   string           `json:"sessionId,omitempty"`
-	Scopes      []string         `json:"scopes,omitempty"`
-	Permissions []string         `json:"permissions,omitempty"`
-	TokenType   string           `json:"tokenType"` // access, refresh, id
-	Audience    []string         `json:"aud,omitempty"`
-	Subject     string           `json:"sub"`
-	Issuer      string           `json:"iss"`
+	UserID      string   `json:"userId"`
+	AppID       string   `json:"appId"`
+	SessionID   string   `json:"sessionId,omitempty"`
+	Scopes      []string `json:"scopes,omitempty"`
+	Permissions []string `json:"permissions,omitempty"`
+	TokenType   string   `json:"tokenType"` // access, refresh, id
+	Audience    []string `json:"aud,omitempty"`
+	Subject     string   `json:"sub"`
+	Issuer      string   `json:"iss"`
 	jwt.RegisteredClaims
 
-	IssuedAt    *jwt.NumericDate `json:"iat"`
-	ExpiresAt   *jwt.NumericDate `json:"exp"`
-	NotBefore   *jwt.NumericDate `json:"nbf,omitempty"`
-	JwtID       string           `json:"jti"`
-	KeyID       string           `json:"kid"`
-	Metadata    map[string]any   `json:"metadata,omitempty"`
+	IssuedAt  *jwt.NumericDate `json:"iat"`
+	ExpiresAt *jwt.NumericDate `json:"exp"`
+	NotBefore *jwt.NumericDate `json:"nbf,omitempty"`
+	JwtID     string           `json:"jti"`
+	KeyID     string           `json:"kid"`
+	Metadata  map[string]any   `json:"metadata,omitempty"`
 }
 
 // =============================================================================

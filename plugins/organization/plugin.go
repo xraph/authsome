@@ -369,7 +369,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithTags("Organizations"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -381,7 +380,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Organizations retrieved", organization.Organization{}),
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		
 		); err != nil {
 			return err
 		}
@@ -393,7 +391,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Organization retrieved", organization.Organization{}),
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		
 		); err != nil {
 			return err
 		}
@@ -405,7 +402,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Organization retrieved", organization.Organization{}),
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		
 		); err != nil {
 			return err
 		}
@@ -419,7 +415,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -432,7 +427,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 			forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 			forge.WithTags("Organizations"),
-		
 		); err != nil {
 			return err
 		}
@@ -447,7 +441,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Members retrieved", map[string]any{}),
 				forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
-			
 			); err != nil {
 				return err
 			}
@@ -460,7 +453,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -474,7 +466,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Member not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -487,7 +478,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithResponseSchema(404, "Member not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Members"),
-			
 			); err != nil {
 				return err
 			}
@@ -503,7 +493,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(200, "Teams retrieved", map[string]any{}),
 				forge.WithResponseSchema(404, "Organization not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
-			
 			); err != nil {
 				return err
 			}
@@ -516,7 +505,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -530,7 +518,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(404, "Team not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
 				forge.WithValidation(true),
-			
 			); err != nil {
 				return err
 			}
@@ -543,7 +530,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 				forge.WithResponseSchema(400, "Invalid request", ErrorResponse{}),
 				forge.WithResponseSchema(404, "Team not found", ErrorResponse{}),
 				forge.WithTags("Organizations", "Teams"),
-			
 			); err != nil {
 				return err
 			}
@@ -561,7 +547,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid or expired invitation", ErrorResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", ErrorResponse{}),
 			forge.WithTags("Organizations", "Invitations"),
-		
 		); err != nil {
 			return err
 		}
@@ -573,7 +558,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Invitation declined", StatusResponse{}),
 			forge.WithResponseSchema(404, "Invitation not found", ErrorResponse{}),
 			forge.WithTags("Organizations", "Invitations"),
-		
 		); err != nil {
 			return err
 		}
@@ -1002,6 +986,8 @@ func (p *Plugin) GetOrganizationUIRegistry() *OrganizationUIRegistry {
 }
 
 // ErrorResponse for organization routes - use shared responses from core.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse
 type StatusResponse = responses.StatusResponse
 

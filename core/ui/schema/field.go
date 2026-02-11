@@ -146,11 +146,16 @@ type AsyncValidatorConfig struct {
 
 // Clone creates a deep copy of the field.
 func (f *Field) Clone() *Field {
-	data, _ := json.Marshal(f)
+	data, err := json.Marshal(f)
+	if err != nil {
+		return nil
+	}
 
 	var cloned Field
 
-	_ = json.Unmarshal(data, &cloned)
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil
+	}
 
 	return &cloned
 }

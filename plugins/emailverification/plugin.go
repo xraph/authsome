@@ -222,7 +222,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Token not found", ErrorResponse{}),
 		forge.WithResponseSchema(410, "Token expired or used", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
-	
 	); err != nil {
 		return err
 	}
@@ -238,7 +237,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -253,7 +251,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -266,7 +263,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Verification status retrieved", StatusResponse{}),
 		forge.WithResponseSchema(401, "Not authenticated", ErrorResponse{}),
 		forge.WithTags("EmailVerification", "Authentication"),
-	
 	); err != nil {
 		return err
 	}

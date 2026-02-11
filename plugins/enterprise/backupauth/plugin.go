@@ -273,7 +273,9 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	}
 
 	// Health check
-	if err := router.GET("/health", p.handler.HealthCheck); err != nil { return err }
+	if err := router.GET("/health", p.handler.HealthCheck); err != nil {
+		return err
+	}
 
 	return nil
 }

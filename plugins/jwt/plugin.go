@@ -174,7 +174,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Keys"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -187,7 +186,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "JWT keys retrieved", jwt.ListJWTKeysResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Keys"),
-		
 		); err != nil {
 			return err
 		}
@@ -207,7 +205,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Tokens"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -222,7 +219,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Invalid or expired token", ErrorResponse{}),
 			forge.WithTags("JWT", "Tokens"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -234,7 +230,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "JWKS retrieved", jwt.JWKSResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", ErrorResponse{}),
 			forge.WithTags("JWT", "Keys"),
-		
 		); err != nil {
 			return err
 		}
@@ -261,4 +256,6 @@ func (p *Plugin) Migrate() error {
 }
 
 // ErrorResponse represents an error response for JWT operations - use shared response from core.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = responses.ErrorResponse

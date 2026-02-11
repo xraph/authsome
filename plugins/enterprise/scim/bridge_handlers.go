@@ -436,26 +436,26 @@ func (e *DashboardExtension) bridgeGetOverview(ctx bridge.Context, input GetOver
 	var lastSyncTime time.Time
 
 	for _, ev := range events {
-			description := ev.EventType
-			if ev.ErrorMessage != nil && *ev.ErrorMessage != "" {
-				description = *ev.ErrorMessage
-			}
+		description := ev.EventType
+		if ev.ErrorMessage != nil && *ev.ErrorMessage != "" {
+			description = *ev.ErrorMessage
+		}
 
-			recentActivity = append(recentActivity, ActivityItem{
-				ID:          ev.ID.String(),
-				Type:        ev.EventType,
-				Description: description,
-				Status:      ev.Status,
-				Timestamp:   formatTime(&ev.CreatedAt),
-				Provider:    "", // Provider name not in schema
-			})
-			if ev.Status == "error" || ev.Status == "failed" {
-				syncErrors++
-			}
+		recentActivity = append(recentActivity, ActivityItem{
+			ID:          ev.ID.String(),
+			Type:        ev.EventType,
+			Description: description,
+			Status:      ev.Status,
+			Timestamp:   formatTime(&ev.CreatedAt),
+			Provider:    "", // Provider name not in schema
+		})
+		if ev.Status == "error" || ev.Status == "failed" {
+			syncErrors++
+		}
 
-			if lastSyncTime.IsZero() || ev.CreatedAt.After(lastSyncTime) {
-				lastSyncTime = ev.CreatedAt
-			}
+		if lastSyncTime.IsZero() || ev.CreatedAt.After(lastSyncTime) {
+			lastSyncTime = ev.CreatedAt
+		}
 	}
 
 	return &GetOverviewOutput{
@@ -572,29 +572,29 @@ func (e *DashboardExtension) bridgeGetProvider(ctx bridge.Context, input GetProv
 	syncHistory := make([]SyncHistoryItem, 0)
 
 	for _, ev := range events {
-			errMsg := ""
-			if ev.ErrorMessage != nil {
-				errMsg = *ev.ErrorMessage
-			}
+		errMsg := ""
+		if ev.ErrorMessage != nil {
+			errMsg = *ev.ErrorMessage
+		}
 
-			errCount := 0
-			if ev.Status == "failed" || ev.Status == "error" {
-				errCount = 1
-			}
+		errCount := 0
+		if ev.Status == "failed" || ev.Status == "error" {
+			errCount = 1
+		}
 
-			syncHistory = append(syncHistory, SyncHistoryItem{
-				ID:            ev.ID.String(),
-				StartTime:     ev.CreatedAt.Format(time.RFC3339),
-				EndTime:       ev.CreatedAt.Format(time.RFC3339), // No end time in schema
-				Status:        ev.Status,
-				UsersAdded:    0,
-				UsersUpdated:  0,
-				UsersRemoved:  0,
-				GroupsAdded:   0,
-				GroupsUpdated: 0,
-				ErrorCount:    errCount,
-				ErrorMessage:  errMsg,
-			})
+		syncHistory = append(syncHistory, SyncHistoryItem{
+			ID:            ev.ID.String(),
+			StartTime:     ev.CreatedAt.Format(time.RFC3339),
+			EndTime:       ev.CreatedAt.Format(time.RFC3339), // No end time in schema
+			Status:        ev.Status,
+			UsersAdded:    0,
+			UsersUpdated:  0,
+			UsersRemoved:  0,
+			GroupsAdded:   0,
+			GroupsUpdated: 0,
+			ErrorCount:    errCount,
+			ErrorMessage:  errMsg,
+		})
 	}
 
 	endpointURL := ""

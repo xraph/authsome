@@ -256,7 +256,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -266,7 +265,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Lists all notification templates with optional filtering by organization, type, and language"),
 			forge.WithResponseSchema(200, "Templates retrieved", NotificationTemplateListResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -277,7 +275,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Template retrieved", NotificationTemplateResponse{}),
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -290,7 +287,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -301,7 +297,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Template deleted", NotificationStatusResponse{}),
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -312,7 +307,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Template reset", NotificationStatusResponse{}),
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -322,7 +316,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Resets all notification templates for the app to their default values"),
 			forge.WithResponseSchema(200, "All templates reset", NotificationStatusResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -332,7 +325,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Returns metadata for all default notification templates including variables and default content"),
 			forge.WithResponseSchema(200, "Default templates retrieved", NotificationTemplateListResponse{}),
 			forge.WithTags("Notification", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -345,7 +337,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Template not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -357,7 +348,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Templates"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -374,7 +364,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Sending"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -384,7 +373,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Lists all sent notifications with optional filtering by organization, status, and type"),
 			forge.WithResponseSchema(200, "Notifications retrieved", NotificationListResponse{}),
 			forge.WithTags("Notification", "History"),
-		
 		); err != nil {
 			return err
 		}
@@ -395,7 +383,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Notification retrieved", NotificationResponse{}),
 			forge.WithResponseSchema(404, "Notification not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "History"),
-		
 		); err != nil {
 			return err
 		}
@@ -407,7 +394,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", NotificationErrorResponse{}),
 			forge.WithResponseSchema(404, "Notification not found", NotificationErrorResponse{}),
 			forge.WithTags("Notification", "Sending"),
-		
 		); err != nil {
 			return err
 		}
@@ -421,7 +407,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Webhook processed", NotificationWebhookResponse{}),
 		forge.WithResponseSchema(400, "Invalid webhook", NotificationErrorResponse{}),
 		forge.WithTags("Notification", "Webhooks"),
-	
 	); err != nil {
 		return err
 	}

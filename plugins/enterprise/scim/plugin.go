@@ -304,7 +304,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Service provider configuration", ServiceProviderConfig{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Configuration"),
-	
 	); err != nil {
 		return err
 	}
@@ -317,7 +316,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "List of resource types", ListResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "ResourceTypes"),
-	
 	); err != nil {
 		return err
 	}
@@ -330,7 +328,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Resource type not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "ResourceTypes"),
-	
 	); err != nil {
 		return err
 	}
@@ -343,7 +340,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "List of schemas", ListResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Schemas"),
-	
 	); err != nil {
 		return err
 	}
@@ -356,7 +352,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Schema not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Schemas"),
-	
 	); err != nil {
 		return err
 	}
@@ -373,7 +368,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(409, "User already exists", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -386,7 +380,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid filter", ErrorResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
-	
 	); err != nil {
 		return err
 	}
@@ -399,7 +392,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
-	
 	); err != nil {
 		return err
 	}
@@ -415,7 +407,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -431,7 +422,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -444,7 +434,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "User not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Users"),
-	
 	); err != nil {
 		return err
 	}
@@ -461,7 +450,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(409, "Group already exists", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -474,7 +462,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid filter", ErrorResponse{}),
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
-	
 	); err != nil {
 		return err
 	}
@@ -487,7 +474,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
-	
 	); err != nil {
 		return err
 	}
@@ -503,7 +489,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -519,7 +504,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -532,7 +516,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Group not found", ErrorResponse{}),
 		forge.WithTags("SCIM", "Groups"),
-	
 	); err != nil {
 		return err
 	}
@@ -549,7 +532,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(413, "Request too large", ErrorResponse{}),
 		forge.WithTags("SCIM", "Bulk"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -565,7 +547,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("SCIM", "Search"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -590,7 +571,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Tokens"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -603,7 +583,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Tokens"),
-	
 	); err != nil {
 		return err
 	}
@@ -618,7 +597,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithResponseSchema(404, "Token not found", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Tokens"),
-	
 	); err != nil {
 		return err
 	}
@@ -632,7 +610,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Mappings"),
-	
 	); err != nil {
 		return err
 	}
@@ -648,7 +625,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Mappings"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -662,7 +638,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Logs"),
-	
 	); err != nil {
 		return err
 	}
@@ -675,7 +650,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", SCIMErrorResponse{}),
 		forge.WithResponseSchema(403, "Insufficient privileges", SCIMErrorResponse{}),
 		forge.WithTags("SCIM", "Admin", "Stats"),
-	
 	); err != nil {
 		return err
 	}

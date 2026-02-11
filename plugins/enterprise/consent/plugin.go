@@ -132,7 +132,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Consent recorded", ConsentRecordResponse{}),
 			forge.WithTags("Consent", "GDPR"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -142,7 +141,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific consent record"),
 			forge.WithResponseSchema(200, "Consent record retrieved", ConsentRecordResponse{}),
 			forge.WithTags("Consent", "GDPR"),
-		
 		); err != nil {
 			return err
 		}
@@ -154,7 +152,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Consent updated", ConsentRecordResponse{}),
 			forge.WithTags("Consent", "GDPR"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -164,7 +161,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Revoke previously given consent"),
 			forge.WithResponseSchema(200, "Consent revoked", ConsentStatusResponse{}),
 			forge.WithTags("Consent", "GDPR"),
-		
 		); err != nil {
 			return err
 		}
@@ -178,7 +174,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Policy created", ConsentPolicyResponse{}),
 			forge.WithTags("Consent", "Policies"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -188,7 +183,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific consent policy"),
 			forge.WithResponseSchema(200, "Policy retrieved", ConsentPolicyResponse{}),
 			forge.WithTags("Consent", "Policies"),
-		
 		); err != nil {
 			return err
 		}
@@ -202,7 +196,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Cookie consent recorded", ConsentCookieResponse{}),
 			forge.WithTags("Consent", "Cookies"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -212,7 +205,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve user's cookie consent preferences"),
 			forge.WithResponseSchema(200, "Cookie consent retrieved", ConsentCookieResponse{}),
 			forge.WithTags("Consent", "Cookies"),
-		
 		); err != nil {
 			return err
 		}
@@ -226,7 +218,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Export request created", ConsentExportResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -236,7 +227,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get status of a data export request"),
 			forge.WithResponseSchema(200, "Export status retrieved", ConsentExportResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
-		
 		); err != nil {
 			return err
 		}
@@ -246,7 +236,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Download exported user data"),
 			forge.WithResponseSchema(200, "Export file", ConsentExportFileResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
-		
 		); err != nil {
 			return err
 		}
@@ -260,7 +249,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Deletion request created", ConsentDeletionResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -270,7 +258,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get status of a data deletion request"),
 			forge.WithResponseSchema(200, "Deletion status retrieved", ConsentDeletionResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights"),
-		
 		); err != nil {
 			return err
 		}
@@ -280,7 +267,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Approve a data deletion request (admin only)"),
 			forge.WithResponseSchema(200, "Deletion approved", ConsentStatusResponse{}),
 			forge.WithTags("Consent", "GDPR", "Data Rights", "Admin"),
-		
 		); err != nil {
 			return err
 		}
@@ -292,7 +278,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get privacy and consent settings"),
 			forge.WithResponseSchema(200, "Settings retrieved", ConsentSettingsResponse{}),
 			forge.WithTags("Consent", "Settings"),
-		
 		); err != nil {
 			return err
 		}
@@ -304,7 +289,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Settings updated", ConsentSettingsResponse{}),
 			forge.WithTags("Consent", "Settings", "Admin"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -316,7 +300,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all consent and data processing audit logs"),
 			forge.WithResponseSchema(200, "Audit logs retrieved", ConsentAuditLogsResponse{}),
 			forge.WithTags("Consent", "Audit"),
-		
 		); err != nil {
 			return err
 		}
@@ -329,7 +312,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Report generated", ConsentReportResponse{}),
 			forge.WithTags("Consent", "Reports", "Admin"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}

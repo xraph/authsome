@@ -143,7 +143,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Certificates"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -154,7 +153,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Certificates retrieved", MTLSCertificateListResponse{}),
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Certificates"),
-		
 		); err != nil {
 			return err
 		}
@@ -166,7 +164,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithResponseSchema(404, "Certificate not found", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Certificates"),
-		
 		); err != nil {
 			return err
 		}
@@ -179,7 +176,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithResponseSchema(404, "Certificate not found", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Certificates"),
-		
 		); err != nil {
 			return err
 		}
@@ -190,7 +186,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Expiring certificates retrieved", MTLSCertificateListResponse{}),
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Certificates"),
-		
 		); err != nil {
 			return err
 		}
@@ -205,7 +200,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
 		forge.WithResponseSchema(401, "Authentication failed", mTLSErrorResponse{}),
 		forge.WithTags("mTLS", "Authentication"),
-	
 	); err != nil {
 		return err
 	}
@@ -221,7 +215,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "TrustAnchors"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -232,7 +225,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Trust anchors retrieved", mTLSTrustAnchorListResponse{}),
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "TrustAnchors"),
-		
 		); err != nil {
 			return err
 		}
@@ -249,7 +241,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Policies"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -261,7 +252,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithResponseSchema(404, "Policy not found", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Policies"),
-		
 		); err != nil {
 			return err
 		}
@@ -277,7 +267,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Validation"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -292,7 +281,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Statistics retrieved", mTLSStatsResponse{}),
 			forge.WithResponseSchema(401, "Unauthorized", mTLSErrorResponse{}),
 			forge.WithTags("mTLS", "Statistics"),
-		
 		); err != nil {
 			return err
 		}

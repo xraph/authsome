@@ -297,7 +297,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid provider", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -312,7 +311,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Rate limit exceeded", ErrorResponse{}),
 		forge.WithTags("Social", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -326,7 +324,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -338,7 +335,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Unauthorized", ErrorResponse{}),
 		forge.WithResponseSchema(404, "Provider not linked", ErrorResponse{}),
 		forge.WithTags("Social", "Account Management"),
-	
 	); err != nil {
 		return err
 	}
@@ -348,7 +344,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("List all configured social authentication providers"),
 		forge.WithResponseSchema(200, "Providers list", ProvidersResponse{}),
 		forge.WithTags("Social", "Configuration"),
-	
 	); err != nil {
 		return err
 	}
@@ -471,4 +466,6 @@ func (p *Plugin) GetConfigRepository() repository.SocialProviderConfigRepository
 }
 
 // ErrorResponse alias for error responses.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = errs.AuthsomeError

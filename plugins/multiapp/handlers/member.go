@@ -42,7 +42,7 @@ func (h *MemberHandler) AddMember(c forge.Context) error {
 		return c.JSON(http.StatusBadRequest, errs.New("INVALID_USER_ID", "Invalid user ID format", http.StatusBadRequest))
 	}
 
-		member, err := h.appService.CreateMember(c.Request().Context(), &app.Member{
+	member, err := h.appService.CreateMember(c.Request().Context(), &app.Member{
 		AppID:     appID,
 		UserID:    userID,
 		Role:      app.MemberRole(req.Role),

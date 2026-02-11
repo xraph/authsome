@@ -30,8 +30,8 @@ require (
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
 	github.com/uptrace/bun/driver/pgdriver v1.2.16
 	github.com/uptrace/bun/driver/sqliteshim v1.2.16
-	github.com/xraph/forge v0.9.0
-	github.com/xraph/forge/extensions/database v0.9.0
+	github.com/xraph/forge v0.9.7
+	github.com/xraph/forge/extensions/database v0.9.7
 	github.com/xraph/forgeui v0.0.8
 	github.com/xraph/go-utils v0.0.11
 	github.com/xraph/vessel v0.0.3
@@ -125,7 +125,7 @@ require (
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/term v0.39.0 // indirect
-	golang.org/x/text v0.33.0 // indirect
+	golang.org/x/text v0.33.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250825161204-c5933d9347a5 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect

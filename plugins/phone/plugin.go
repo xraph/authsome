@@ -339,7 +339,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(429, "Too many requests", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -353,7 +352,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid code", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -367,7 +365,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid code", ErrorResponse{}),
 		forge.WithTags("Phone", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -391,4 +388,6 @@ func (p *Plugin) Migrate() error {
 }
 
 // ErrorResponse alias for route registration.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = errs.AuthsomeError

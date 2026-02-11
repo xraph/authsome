@@ -241,7 +241,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
 		forge.WithTags("SSO", "Admin", "Provider Management"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -256,7 +255,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithDescription("Returns SAML Service Provider metadata XML for IdP configuration"),
 		forge.WithResponseSchema(200, "Metadata XML", MetadataResponse{}),
 		forge.WithTags("SSO", "SAML", "Metadata"),
-	
 	); err != nil {
 		return err
 	}
@@ -271,7 +269,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithTags("SSO", "SAML", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -285,7 +282,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
 		forge.WithTags("SSO", "SAML", "Authentication", "Callback"),
-	
 	); err != nil {
 		return err
 	}
@@ -304,7 +300,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithTags("SSO", "OIDC", "Authentication"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -318,7 +313,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Provider not found", ErrorResponse{}),
 		forge.WithResponseSchema(500, "Internal error", ErrorResponse{}),
 		forge.WithTags("SSO", "OIDC", "Authentication", "Callback"),
-	
 	); err != nil {
 		return err
 	}

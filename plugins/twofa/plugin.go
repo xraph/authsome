@@ -216,7 +216,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "TOTP"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -229,7 +228,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(401, "Invalid code", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "Verification"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -241,7 +239,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "Management"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -253,7 +250,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "BackupCodes"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -265,7 +261,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "OTP"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -277,7 +272,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", TwoFAErrorResponse{}),
 		forge.WithTags("2FA", "Status"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}

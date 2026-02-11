@@ -195,25 +195,47 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	admin := router.Group("/admin")
 
 	// User management
-	if err := admin.POST("/users", p.handler.CreateUser); err != nil { return err }
-	if err := admin.GET("/users", p.handler.ListUsers); err != nil { return err }
-	if err := admin.DELETE("/users/:id", p.handler.DeleteUser); err != nil { return err }
+	if err := admin.POST("/users", p.handler.CreateUser); err != nil {
+		return err
+	}
+	if err := admin.GET("/users", p.handler.ListUsers); err != nil {
+		return err
+	}
+	if err := admin.DELETE("/users/:id", p.handler.DeleteUser); err != nil {
+		return err
+	}
 
 	// Security operations
-	if err := admin.POST("/users/:id/ban", p.handler.BanUser); err != nil { return err }
-	if err := admin.POST("/users/:id/unban", p.handler.UnbanUser); err != nil { return err }
-	if err := admin.POST("/users/:id/impersonate", p.handler.ImpersonateUser); err != nil { return err }
+	if err := admin.POST("/users/:id/ban", p.handler.BanUser); err != nil {
+		return err
+	}
+	if err := admin.POST("/users/:id/unban", p.handler.UnbanUser); err != nil {
+		return err
+	}
+	if err := admin.POST("/users/:id/impersonate", p.handler.ImpersonateUser); err != nil {
+		return err
+	}
 
 	// Session management
-	if err := admin.GET("/sessions", p.handler.ListSessions); err != nil { return err }
-	if err := admin.DELETE("/sessions/:id", p.handler.RevokeSession); err != nil { return err }
+	if err := admin.GET("/sessions", p.handler.ListSessions); err != nil {
+		return err
+	}
+	if err := admin.DELETE("/sessions/:id", p.handler.RevokeSession); err != nil {
+		return err
+	}
 
 	// Role management
-	if err := admin.POST("/users/:id/role", p.handler.SetUserRole); err != nil { return err }
+	if err := admin.POST("/users/:id/role", p.handler.SetUserRole); err != nil {
+		return err
+	}
 
 	// Statistics & monitoring
-	if err := admin.GET("/stats", p.handler.GetStats); err != nil { return err }
-	if err := admin.GET("/audit-logs", p.handler.GetAuditLogs); err != nil { return err }
+	if err := admin.GET("/stats", p.handler.GetStats); err != nil {
+		return err
+	}
+	if err := admin.GET("/audit-logs", p.handler.GetAuditLogs); err != nil {
+		return err
+	}
 
 	return nil
 }

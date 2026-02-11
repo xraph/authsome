@@ -196,7 +196,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Rules"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -207,7 +206,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Rules retrieved", GeofenceRulesResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Rules"),
-		
 		); err != nil {
 			return err
 		}
@@ -218,7 +216,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Rule retrieved", GeofenceRuleResponse{}),
 			forge.WithResponseSchema(404, "Rule not found", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Rules"),
-		
 		); err != nil {
 			return err
 		}
@@ -231,7 +228,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(404, "Rule not found", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Rules"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -242,7 +238,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Rule deleted", GeofenceStatusResponse{}),
 			forge.WithResponseSchema(404, "Rule not found", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Rules"),
-		
 		); err != nil {
 			return err
 		}
@@ -258,7 +253,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Validation"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -269,7 +263,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "IP lookup successful", GeofenceLookupResponse{}),
 			forge.WithResponseSchema(400, "Invalid IP address", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Validation"),
-		
 		); err != nil {
 			return err
 		}
@@ -283,7 +276,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Events retrieved", GeofenceEventsResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Events"),
-	
 	); err != nil {
 		return err
 	}
@@ -294,7 +286,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Event retrieved", GeofenceEventResponse{}),
 		forge.WithResponseSchema(404, "Event not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Events"),
-	
 	); err != nil {
 		return err
 	}
@@ -307,7 +298,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Travel alerts retrieved", GeofenceTravelAlertsResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Travel"),
-	
 	); err != nil {
 		return err
 	}
@@ -318,7 +308,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Travel alert retrieved", GeofenceTravelAlertResponse{}),
 		forge.WithResponseSchema(404, "Travel alert not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Travel"),
-	
 	); err != nil {
 		return err
 	}
@@ -329,7 +318,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Travel approved", GeofenceStatusResponse{}),
 		forge.WithResponseSchema(404, "Travel alert not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Travel"),
-	
 	); err != nil {
 		return err
 	}
@@ -340,7 +328,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Travel denied", GeofenceStatusResponse{}),
 		forge.WithResponseSchema(404, "Travel alert not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Travel"),
-	
 	); err != nil {
 		return err
 	}
@@ -354,7 +341,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(400, "Invalid request", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Trusted Locations"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -365,7 +351,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Trusted locations retrieved", GeofenceTrustedLocationsResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Trusted Locations"),
-	
 	); err != nil {
 		return err
 	}
@@ -376,7 +361,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Trusted location retrieved", GeofenceTrustedLocationResponse{}),
 		forge.WithResponseSchema(404, "Trusted location not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Trusted Locations"),
-	
 	); err != nil {
 		return err
 	}
@@ -389,7 +373,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(404, "Trusted location not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Trusted Locations"),
 		forge.WithValidation(true),
-	
 	); err != nil {
 		return err
 	}
@@ -400,7 +383,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Trusted location deleted", GeofenceStatusResponse{}),
 		forge.WithResponseSchema(404, "Trusted location not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Trusted Locations"),
-	
 	); err != nil {
 		return err
 	}
@@ -413,7 +395,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Violations retrieved", GeofenceViolationsResponse{}),
 		forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Violations"),
-	
 	); err != nil {
 		return err
 	}
@@ -424,7 +405,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Violation retrieved", GeofenceViolationResponse{}),
 		forge.WithResponseSchema(404, "Violation not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Violations"),
-	
 	); err != nil {
 		return err
 	}
@@ -435,7 +415,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithResponseSchema(200, "Violation resolved", GeofenceStatusResponse{}),
 		forge.WithResponseSchema(404, "Violation not found", GeofenceErrorResponse{}),
 		forge.WithTags("Geofence", "Violations"),
-	
 	); err != nil {
 		return err
 	}
@@ -449,7 +428,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Metrics retrieved", GeofenceMetricsResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Analytics"),
-		
 		); err != nil {
 			return err
 		}
@@ -460,7 +438,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Location analytics retrieved", GeofenceLocationAnalyticsResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Analytics"),
-		
 		); err != nil {
 			return err
 		}
@@ -471,7 +448,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Violation analytics retrieved", GeofenceViolationAnalyticsResponse{}),
 			forge.WithResponseSchema(500, "Internal server error", GeofenceErrorResponse{}),
 			forge.WithTags("Geofence", "Analytics"),
-		
 		); err != nil {
 			return err
 		}

@@ -150,7 +150,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -162,7 +161,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile created", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -172,7 +170,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific compliance profile by ID"),
 			forge.WithResponseSchema(200, "Profile retrieved", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
-		
 		); err != nil {
 			return err
 		}
@@ -182,7 +179,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get the compliance profile for a specific app"),
 			forge.WithResponseSchema(200, "Profile retrieved", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance", "Apps"),
-		
 		); err != nil {
 			return err
 		}
@@ -194,7 +190,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Profile updated", ComplianceProfileResponse{}),
 			forge.WithTags("Compliance"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -204,7 +199,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Delete a compliance profile"),
 			forge.WithResponseSchema(200, "Profile deleted", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance"),
-		
 		); err != nil {
 			return err
 		}
@@ -216,7 +210,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get overall compliance status for an app"),
 			forge.WithResponseSchema(200, "Status retrieved", ComplianceStatusDetailsResponse{}),
 			forge.WithTags("Compliance", "Apps"),
-		
 		); err != nil {
 			return err
 		}
@@ -226,7 +219,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get compliance dashboard metrics and overview for an app"),
 			forge.WithResponseSchema(200, "Dashboard retrieved", ComplianceDashboardResponse{}),
 			forge.WithTags("Compliance", "Apps"),
-		
 		); err != nil {
 			return err
 		}
@@ -240,7 +232,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Check started", ComplianceCheckResponse{}),
 			forge.WithTags("Compliance", "Checks"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -250,7 +241,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all compliance checks for a profile"),
 			forge.WithResponseSchema(200, "Checks retrieved", ComplianceChecksResponse{}),
 			forge.WithTags("Compliance", "Checks"),
-		
 		); err != nil {
 			return err
 		}
@@ -260,7 +250,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve details of a specific compliance check"),
 			forge.WithResponseSchema(200, "Check retrieved", ComplianceCheckResponse{}),
 			forge.WithTags("Compliance", "Checks"),
-		
 		); err != nil {
 			return err
 		}
@@ -272,7 +261,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all compliance violations for an app"),
 			forge.WithResponseSchema(200, "Violations retrieved", ComplianceViolationsResponse{}),
 			forge.WithTags("Compliance", "Violations"),
-		
 		); err != nil {
 			return err
 		}
@@ -282,7 +270,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve details of a specific compliance violation"),
 			forge.WithResponseSchema(200, "Violation retrieved", ComplianceViolationResponse{}),
 			forge.WithTags("Compliance", "Violations"),
-		
 		); err != nil {
 			return err
 		}
@@ -294,7 +281,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Violation resolved", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Violations"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -308,7 +294,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Report generated", ComplianceReportResponse{}),
 			forge.WithTags("Compliance", "Reports"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -318,7 +303,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all compliance reports for an app"),
 			forge.WithResponseSchema(200, "Reports retrieved", ComplianceReportsResponse{}),
 			forge.WithTags("Compliance", "Reports"),
-		
 		); err != nil {
 			return err
 		}
@@ -328,7 +312,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific compliance report"),
 			forge.WithResponseSchema(200, "Report retrieved", ComplianceReportResponse{}),
 			forge.WithTags("Compliance", "Reports"),
-		
 		); err != nil {
 			return err
 		}
@@ -338,7 +321,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Download a compliance report file (PDF, CSV, JSON)"),
 			forge.WithResponseSchema(200, "Report file", ComplianceReportFileResponse{}),
 			forge.WithTags("Compliance", "Reports"),
-		
 		); err != nil {
 			return err
 		}
@@ -352,7 +334,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Evidence created", ComplianceEvidenceResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -362,7 +343,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all compliance evidence records for an app"),
 			forge.WithResponseSchema(200, "Evidence retrieved", ComplianceEvidencesResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
-		
 		); err != nil {
 			return err
 		}
@@ -372,7 +352,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific compliance evidence record"),
 			forge.WithResponseSchema(200, "Evidence retrieved", ComplianceEvidenceResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
-		
 		); err != nil {
 			return err
 		}
@@ -382,7 +361,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Delete a compliance evidence record"),
 			forge.WithResponseSchema(200, "Evidence deleted", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Evidence"),
-		
 		); err != nil {
 			return err
 		}
@@ -396,7 +374,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Policy created", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -406,7 +383,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all compliance policies for an app"),
 			forge.WithResponseSchema(200, "Policies retrieved", CompliancePoliciesResponse{}),
 			forge.WithTags("Compliance", "Policies"),
-		
 		); err != nil {
 			return err
 		}
@@ -416,7 +392,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific compliance policy"),
 			forge.WithResponseSchema(200, "Policy retrieved", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
-		
 		); err != nil {
 			return err
 		}
@@ -428,7 +403,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Policy updated", CompliancePolicyResponse{}),
 			forge.WithTags("Compliance", "Policies"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -438,7 +412,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Delete a compliance policy"),
 			forge.WithResponseSchema(200, "Policy deleted", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Policies"),
-		
 		); err != nil {
 			return err
 		}
@@ -452,7 +425,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Training created", ComplianceTrainingResponse{}),
 			forge.WithTags("Compliance", "Training"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -462,7 +434,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List all compliance training modules for an app"),
 			forge.WithResponseSchema(200, "Training retrieved", ComplianceTrainingsResponse{}),
 			forge.WithTags("Compliance", "Training"),
-		
 		); err != nil {
 			return err
 		}
@@ -472,7 +443,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Get compliance training status for a user"),
 			forge.WithResponseSchema(200, "Training status retrieved", ComplianceUserTrainingResponse{}),
 			forge.WithTags("Compliance", "Training"),
-		
 		); err != nil {
 			return err
 		}
@@ -484,7 +454,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithResponseSchema(200, "Training completed", ComplianceStatusResponse{}),
 			forge.WithTags("Compliance", "Training"),
 			forge.WithValidation(true),
-		
 		); err != nil {
 			return err
 		}
@@ -496,7 +465,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("List available compliance templates (GDPR, HIPAA, SOC2, PCI-DSS, etc.)"),
 			forge.WithResponseSchema(200, "Templates retrieved", ComplianceTemplatesResponse{}),
 			forge.WithTags("Compliance", "Templates"),
-		
 		); err != nil {
 			return err
 		}
@@ -506,7 +474,6 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 			forge.WithDescription("Retrieve a specific compliance template by standard name"),
 			forge.WithResponseSchema(200, "Template retrieved", ComplianceTemplateResponse{}),
 			forge.WithTags("Compliance", "Templates"),
-		
 		); err != nil {
 			return err
 		}

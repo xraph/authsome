@@ -9,6 +9,7 @@ import (
 // Base response types used across handlers and plugins
 
 // ErrorResponse is an alias to errs.AuthsomeError for consistency across the codebase.
+//
 // Instead of using &ErrorResponse{Error: "message"}, use the errs package constructors:
 //   - errs.New(code, message, httpStatus)
 //   - errs.BadRequest(message)
@@ -17,6 +18,8 @@ import (
 //   - etc.
 //
 // See internal/errs/errors.go for all available error constructors.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type ErrorResponse = errs.AuthsomeError
 
 // MessageResponse represents a simple message response.

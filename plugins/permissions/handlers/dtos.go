@@ -12,6 +12,8 @@ import (
 // =============================================================================
 
 // Use shared response types from core.
+//
+//nolint:errname // HTTP response DTO, not a Go error type
 type (
 	MessageResponse = responses.MessageResponse
 	StatusResponse  = responses.StatusResponse
