@@ -1,0 +1,65 @@
+package components
+
+import (
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/table"
+	"time"
+)
+
+// isSessionExpired reports whether the session has passed its expiry time.
+func isSessionExpired(s *session.Session) bool {
+	return s.ExpiresAt.Before(time.Now())
+}
+
+// SessionTable renders a table of sessions with User ID, IP Address, User Agent, Expires, and Created columns.
+templ SessionTable(sessions []*session.Session) {
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() {
+					User ID
+				}
+				@table.Head() {
+					IP Address
+				}
+				@table.Head() {
+					User Agent
+				}
+				@table.Head() {
+					Expires
+				}
+				@table.Head() {
+					Created
+				}
+			}
+		}
+		@table.Body() {
+			for _, s := range sessions {
+				@table.Row() {
+					@table.Cell() {
+						<span class="font-mono text-xs">{ s.UserID.String() }</span>
+					}
+					@table.Cell() {
+						{ s.IPAddress }
+					}
+					@table.Cell(table.CellProps{Class: "max-w-[200px] truncate"}) {
+						{ s.UserAgent }
+					}
+					@table.Cell() {
+						if isSessionExpired(s) {
+							@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+								Expired
+							}
+						} else {
+							<span class="text-sm">{ s.ExpiresAt.Format("Jan 02, 2006 15:04") }</span>
+						}
+					}
+					@table.Cell() {
+						{ s.CreatedAt.Format("Jan 02, 2006") }
+					}
+				}
+			}
+		}
+	}
+}

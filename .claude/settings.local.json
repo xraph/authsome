@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(grep:*)",
+      "Bash(go env:*)",
+      "Bash(go get:*)",
+      "Bash(go test:*)",
+      "Bash(go run:*)",
+      "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/test_appid_test.go << 'GOTEST'\npackage authsome_test\n\nimport \\(\n\t\"fmt\"\n\t\"testing\"\n\t\"github.com/xraph/authsome/id\"\n\\)\n\nfunc TestAppIDPrefix\\(t *testing.T\\) {\n\tvar aid id.AppID\n\tfmt.Printf\\(\"Zero AppID Prefix: %q\\\\n\", aid.Prefix\\(\\)\\)\n\tfmt.Printf\\(\"Zero AppID String: %q\\\\n\", aid.String\\(\\)\\)\n\n\tparsed, _ := id.ParseAppID\\(\"aapp_01jf0000000000000000000000\"\\)\n\tfmt.Printf\\(\"Parsed AppID Prefix: %q\\\\n\", parsed.Prefix\\(\\)\\)\n\tfmt.Printf\\(\"Parsed AppID String: %q\\\\n\", parsed.String\\(\\)\\)\n}\nGOTEST)",
+      "Bash(__NEW_LINE_b8529063e2544778__ go test -run TestAppIDPrefix -v -count=1 .)",
+      "Bash(go version:*)",
+      "Bash(go doc:*)",
+      "Bash(/tmp/jsonb_fix_test.go << 'GOEOF'\n//go:build integration\n\npackage bun_test\n\nimport \\(\n\t\"context\"\n\t\"encoding/json\"\n\t\"testing\"\n\t\"time\"\n\n\t\"github.com/stretchr/testify/require\"\n\t\"github.com/uptrace/bun\"\n\n\t\"github.com/xraph/authsome/id\"\n\\)\n\ntype TestAppModel struct {\n\tbun.BaseModel `bun:\"table:authsome_apps,alias:a\"`\n\n\tID       string          `bun:\"id,pk\"`\n\tName     string          `bun:\"name,notnull\"`\n\tSlug     string          `bun:\"slug,notnull\"`\n\tLogo     string          `bun:\"logo\"`\n\tMetadata json.RawMessage `bun:\"metadata,type:jsonb\"`\n\tCreatedAt time.Time      `bun:\"created_at,notnull,default:now\\(\\)\"`\n\tUpdatedAt time.Time      `bun:\"updated_at,notnull,default:now\\(\\)\"`\n}\n\nfunc TestDebugMetadataRawMessage\\(t *testing.T\\) {\n\ts := setupTestStore\\(t\\)\n\tctx := context.Background\\(\\)\n\n\tappID := id.NewAppID\\(\\)\n\tmd, _ := json.Marshal\\(map[string]string{\"plan\": \"pro\"}\\)\n\n\tm := &TestAppModel{\n\t\tID:        appID.String\\(\\),\n\t\tName:      \"Raw App\",\n\t\tSlug:      \"raw-app\",\n\t\tMetadata:  json.RawMessage\\(md\\),\n\t\tCreatedAt: time.Now\\(\\),\n\t\tUpdatedAt: time.Now\\(\\),\n\t}\n\t_, err := s.DB\\(\\).NewInsert\\(\\).Model\\(m\\).Exec\\(ctx\\)\n\trequire.NoError\\(t, err\\)\n\n\tgot := new\\(TestAppModel\\)\n\terr = s.DB\\(\\).NewSelect\\(\\).Model\\(got\\).Where\\(\"id = ?\", appID.String\\(\\)\\).Scan\\(ctx\\)\n\trequire.NoError\\(t, err\\)\n\tt.Logf\\(\"metadata \\(json.RawMessage\\): %s\", got.Metadata\\)\n\n\tvar parsed map[string]string\n\trequire.NoError\\(t, json.Unmarshal\\(got.Metadata, &parsed\\)\\)\n\tt.Logf\\(\"parsed: %v\", parsed\\)\n\trequire.Equal\\(t, \"pro\", parsed[\"plan\"]\\)\n}\nGOEOF)",
+      "Bash(/tmp/typeid_test.go << 'EOF'\npackage main\n\nimport \\(\n\t\"fmt\"\n\t\"go.jetify.com/typeid/v2\"\n\\)\n\nfunc main\\(\\) {\n\tvar zero typeid.TypeID\n\ts := zero.String\\(\\)\n\tfmt.Printf\\(\"zero TypeID String\\(\\) = %q \\(len=%d\\)\\\\n\", s, len\\(s\\)\\)\n\tfmt.Printf\\(\"zero TypeID Prefix\\(\\) = %q\\\\n\", zero.Prefix\\(\\)\\)\n}\nEOF)",
+      "Bash(/tmp/typeidcheck.go << 'EOF'\npackage main\n\nimport \\(\n\t\"fmt\"\n\t\"go.jetify.com/typeid/v2\"\n\\)\n\nfunc main\\(\\) {\n\tvar zero typeid.TypeID\n\ts := zero.String\\(\\)\n\tfmt.Printf\\(\"zero TypeID String\\(\\) = %q \\(len=%d\\)\\\\n\", s, len\\(s\\)\\)\n\tfmt.Printf\\(\"zero TypeID Prefix\\(\\) = %q\\\\n\", zero.Prefix\\(\\)\\)\n}\nEOF)",
+      "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/rbac/rbac_test.go:*)",
+      "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/store/bun/store.go:*)",
+      "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/middleware/rbac.go:*)",
+      "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/rbac/store_memory_test.go:*)",
+      "Bash(done)"
+    ]
+  }
+}

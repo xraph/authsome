@@ -1,0 +1,120 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    # Core correctness
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+
+    # Code quality
+    - gocritic
+    - revive
+    - misspell
+    - unconvert
+    - unparam
+    - prealloc
+
+    # Bug prevention
+    - bodyclose
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - gosec
+    - errname
+    - errorlint
+
+    # Style
+    - nolintlint
+    - whitespace
+    - predeclared
+
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          arguments: [checkPrivateReceivers]
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+          arguments:
+            - [] # allowList
+            - [] # blockList
+            - [{skipPackageNameChecks: true}]
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+
+    gosec:
+      excludes:
+        - G104
+        - G117 # Secret field names are legitimate for HMAC signing secrets.
+        - G304
+        - G402
+        - G704 # Endpoint URLs are stored config, not user-tainted input.
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      exclude-functions:
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (github.com/jackc/pgx/v5.Tx).Rollback
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck, gocritic]
+      - path: _examples/
+        linters: [errcheck, gosec]
+      - path: ".*_gen\\.go"
+        linters: [all]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/xraph/authsome
+
+output:
+  sort-order:
+    - linter
+    - file

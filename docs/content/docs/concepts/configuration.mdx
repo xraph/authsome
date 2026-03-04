@@ -1,0 +1,253 @@
+---
+title: Configuration
+description: All configuration options for the Authsome engine, sessions, passwords, rate limiting, and lockout.
+---
+
+The root `authsome` package defines the `Config` struct, `DefaultConfig()` defaults, and the `Option` functions for constructing an engine. All configuration is passed at construction time via `authsome.New(opts...)`.
+
+## authsome.Config
+
+`Config` is the top-level configuration struct for the Authsome engine.
+
+```go
+import "github.com/xraph/authsome"
+
+type Config struct {
+    AppID          string          `json:"app_id"`
+    BasePath       string          `json:"base_path"`
+    Session        SessionConfig   `json:"session"`
+    Password       PasswordConfig  `json:"password"`
+    RateLimit      RateLimitConfig `json:"rate_limit"`
+    Lockout        LockoutConfig   `json:"lockout"`
+    DriverName     string          `json:"driver_name"`
+    Debug          bool            `json:"debug"`
+    DisableRoutes  bool            `json:"disable_routes"`
+    DisableMigrate bool            `json:"disable_migrate"`
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `AppID` | `string` | `""` | Application identifier used for scoping. Required if not set via `WithAppID`. |
+| `BasePath` | `string` | `"/v1/auth"` | URL prefix for all auto-registered auth routes. |
+| `Session` | `SessionConfig` | See below | Session token and refresh token behavior. |
+| `Password` | `PasswordConfig` | See below | Password policy and hashing algorithm. |
+| `RateLimit` | `RateLimitConfig` | See below | Per-endpoint rate limiting. |
+| `Lockout` | `LockoutConfig` | See below | Account lockout after repeated failures. |
+| `DriverName` | `string` | `""` | Grove driver name (`"pg"`, `"sqlite"`, `"mongo"`, `"memory"`). Set automatically by the extension. |
+| `Debug` | `bool` | `false` | Enables verbose logging of all engine operations. |
+| `DisableRoutes` | `bool` | `false` | When `true`, prevents automatic route registration on `Start`. |
+| `DisableMigrate` | `bool` | `false` | When `true`, prevents automatic schema migration on `Start`. |
+
+## SessionConfig
+
+```go
+type SessionConfig struct {
+    TokenTTL           time.Duration `json:"token_ttl"`
+    RefreshTokenTTL    time.Duration `json:"refresh_token_ttl"`
+    MaxActiveSessions  int           `json:"max_active_sessions"`
+    RotateRefreshToken *bool         `json:"rotate_refresh_token"`
+    BindToIP           bool          `json:"bind_to_ip"`
+    BindToDevice       bool          `json:"bind_to_device"`
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `TokenTTL` | `time.Duration` | `1h` | Lifetime of access tokens. After expiry, the client must use the refresh token. |
+| `RefreshTokenTTL` | `time.Duration` | `720h` (30 days) | Lifetime of refresh tokens. After expiry, the user must sign in again. |
+| `MaxActiveSessions` | `int` | `0` (unlimited) | Maximum concurrent sessions per user. When exceeded, the oldest session is revoked. |
+| `RotateRefreshToken` | `*bool` | `true` | When `true`, every `Refresh` call issues a new refresh token and invalidates the old one. Set to `false` to reuse the same refresh token. |
+| `BindToIP` | `bool` | `false` | When `true`, sessions are rejected if the client IP differs from the IP recorded at creation. Useful for high-security environments but breaks users on mobile networks. |
+| `BindToDevice` | `bool` | `false` | When `true`, sessions are rejected if the User-Agent differs from the one recorded at creation. |
+
+### ShouldRotateRefreshToken
+
+The `SessionConfig` helper method `ShouldRotateRefreshToken()` returns `true` when `RotateRefreshToken` is nil (unset) or explicitly `true`:
+
+```go
+cfg := authsome.SessionConfig{}
+cfg.ShouldRotateRefreshToken() // returns true (default)
+
+t := true
+cfg.RotateRefreshToken = &t
+cfg.ShouldRotateRefreshToken() // returns true
+
+f := false
+cfg.RotateRefreshToken = &f
+cfg.ShouldRotateRefreshToken() // returns false
+```
+
+## PasswordConfig
+
+```go
+type PasswordConfig struct {
+    MinLength        int          `json:"min_length"`
+    RequireUppercase bool         `json:"require_uppercase"`
+    RequireLowercase bool         `json:"require_lowercase"`
+    RequireDigit     bool         `json:"require_digit"`
+    RequireSpecial   bool         `json:"require_special"`
+    BcryptCost       int          `json:"bcrypt_cost"`
+    Algorithm        string       `json:"algorithm"`
+    Argon2           Argon2Config `json:"argon2"`
+    CheckBreached    bool         `json:"check_breached"`
+    HistoryCount     int          `json:"history_count"`
+    MaxAgeDays       int          `json:"max_age_days"`
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `MinLength` | `int` | `8` | Minimum password length in characters. |
+| `RequireUppercase` | `bool` | `true` | Requires at least one uppercase letter (`A-Z`). |
+| `RequireLowercase` | `bool` | `true` | Requires at least one lowercase letter (`a-z`). |
+| `RequireDigit` | `bool` | `true` | Requires at least one digit (`0-9`). |
+| `RequireSpecial` | `bool` | `false` | Requires at least one special character (`!@#$%^&*`). |
+| `BcryptCost` | `int` | `12` | bcrypt work factor. Higher values are slower but more secure. Production minimum: 12. |
+| `Algorithm` | `string` | `"bcrypt"` | Hashing algorithm: `"bcrypt"` or `"argon2id"`. Existing hashes are transparently re-hashed on next login when the algorithm changes. |
+| `Argon2` | `Argon2Config` | See below | Argon2id parameters (used when `Algorithm = "argon2id"`). |
+| `CheckBreached` | `bool` | `false` | When `true`, checks passwords against the HaveIBeenPwned k-anonymity API on signup and password change. Fail-open on network errors. |
+| `HistoryCount` | `int` | `0` (disabled) | Number of previous password hashes to retain. Users cannot reuse any of their last N passwords. |
+| `MaxAgeDays` | `int` | `0` (disabled) | Forces password rotation after this many days. Returns `ErrPasswordExpired` on sign-in with an expired password. |
+
+### Argon2Config
+
+```go
+type Argon2Config struct {
+    Memory      uint32 `json:"memory"`      // KiB (default: 65536 = 64 MiB)
+    Iterations  uint32 `json:"iterations"`  // time cost (default: 3)
+    Parallelism uint8  `json:"parallelism"` // threads (default: 2)
+    SaltLength  uint32 `json:"salt_length"` // bytes (default: 16)
+    KeyLength   uint32 `json:"key_length"`  // bytes (default: 32)
+}
+```
+
+The Argon2 defaults (`64 MiB`, `3 iterations`, `2 threads`) meet the OWASP recommendation for server-side password hashing.
+
+## RateLimitConfig
+
+```go
+type RateLimitConfig struct {
+    SignInLimit          int  `json:"signin_limit"`
+    SignUpLimit          int  `json:"signup_limit"`
+    ForgotPasswordLimit  int  `json:"forgot_password_limit"`
+    MFAChallengeLimit    int  `json:"mfa_challenge_limit"`
+    WindowSeconds        int  `json:"window_seconds"`
+    Enabled              bool `json:"enabled"`
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Enabled` | `bool` | `false` | Rate limiting is disabled by default. Set to `true` to enable. |
+| `SignInLimit` | `int` | `5` | Max sign-in attempts per IP per window. |
+| `SignUpLimit` | `int` | `3` | Max sign-up attempts per IP per window. |
+| `ForgotPasswordLimit` | `int` | `3` | Max forgot-password requests per IP per window. |
+| `MFAChallengeLimit` | `int` | `5` | Max MFA challenge attempts per session per window. |
+| `WindowSeconds` | `int` | `60` | Sliding window duration in seconds. |
+
+Rate limiting requires a `ratelimit.Limiter` backend to be configured with `WithRateLimiter`. Without a limiter, rate limit config is ignored.
+
+## LockoutConfig
+
+```go
+type LockoutConfig struct {
+    MaxAttempts            int  `json:"max_attempts"`
+    LockoutDurationSeconds int  `json:"lockout_duration_seconds"`
+    ResetAfterSeconds      int  `json:"reset_after_seconds"`
+    Enabled                bool `json:"enabled"`
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Enabled` | `bool` | `false` | Account lockout is disabled by default. Set to `true` to enable. |
+| `MaxAttempts` | `int` | `5` | Number of consecutive failed sign-in attempts before the account is locked. |
+| `LockoutDurationSeconds` | `int` | `900` (15 min) | Duration of the lockout in seconds. |
+| `ResetAfterSeconds` | `int` | `3600` (1 hour) | Resets the failure counter after this many seconds of no failures. |
+
+Account lockout requires a `lockout.Tracker` backend configured with `WithLockoutTracker`.
+
+## DefaultConfig
+
+`DefaultConfig()` returns sensible defaults for all fields:
+
+```go
+cfg := authsome.DefaultConfig()
+// cfg.BasePath              = "/v1/auth"
+// cfg.Session.TokenTTL      = 1 * time.Hour
+// cfg.Session.RefreshTokenTTL = 30 * 24 * time.Hour
+// cfg.Password.MinLength    = 8
+// cfg.Password.RequireUppercase = true
+// cfg.Password.RequireLowercase = true
+// cfg.Password.RequireDigit = true
+// cfg.Password.BcryptCost   = 12
+// cfg.RateLimit.SignInLimit  = 5
+// cfg.RateLimit.SignUpLimit  = 3
+// cfg.RateLimit.WindowSeconds = 60
+// cfg.Lockout.MaxAttempts   = 5
+// cfg.Lockout.LockoutDurationSeconds = 900
+// cfg.Lockout.ResetAfterSeconds = 3600
+```
+
+## Option functions
+
+All engine options are `func(*Engine)` type values passed to `authsome.New`.
+
+| Option | Description |
+|--------|-------------|
+| `WithConfig(cfg Config)` | Set the full config, overriding defaults. |
+| `WithStore(s store.Store)` | Set the persistence backend. Required. |
+| `WithLogger(l *slog.Logger)` | Set the structured logger. |
+| `WithDebug(bool)` | Enable verbose debug logging. |
+| `WithAppID(string)` | Set the default application ID. |
+| `WithPlugin(p plugin.Plugin)` | Register a plugin. Call multiple times for multiple plugins. |
+| `WithStrategy(s, priority int)` | Register a custom auth strategy. |
+| `WithChronicle(bridge.Chronicle)` | Set the audit trail bridge. |
+| `WithMailer(bridge.Mailer)` | Set the transactional email bridge. |
+| `WithSMSSender(bridge.SMSSender)` | Set the SMS sending bridge. |
+| `WithHerald(bridge.Herald)` | Set the unified notification bridge. |
+| `WithWarden(*warden.Engine)` | Set the Warden authorization engine. |
+| `WithKeysmith(*keysmith.Engine)` | Set the Keysmith API key engine. |
+| `WithEventRelay(bridge.EventRelay)` | Set the webhook event relay. |
+| `WithVault(bridge.Vault)` | Set the secrets/config bridge. |
+| `WithDispatcher(bridge.Dispatcher)` | Set the background job bridge. |
+| `WithLedger(bridge.Ledger)` | Set the billing bridge. |
+| `WithMetrics(bridge.MetricsCollector)` | Set the metrics bridge. |
+| `WithBasePath(string)` | Override the URL prefix. |
+| `WithDisableRoutes()` | Prevent automatic route registration. |
+| `WithDisableMigrate()` | Prevent automatic migration on Start. |
+| `WithRateLimiter(ratelimit.Limiter)` | Set the rate limiter backend. |
+| `WithLockoutTracker(lockout.Tracker)` | Set the account lockout tracker. |
+| `WithCeremonyStore(ceremony.Store)` | Set the ceremony state store. |
+| `WithPasswordHistory(account.PasswordHistoryStore)` | Set the password history store. |
+| `WithDefaultTokenFormat(tokenformat.Format)` | Set the default access token format. |
+| `WithJWTFormat(appID string, jwt *tokenformat.JWT)` | Set JWT token format for a specific app. |
+| `WithAppSessionConfig(*appsessionconfig.Config)` | Seed a per-app session config override. |
+
+## Per-app session config overrides
+
+You can override session configuration for a specific app using `appsessionconfig.Config`. This is useful when different apps within the same engine instance need different token TTLs.
+
+```go
+import "github.com/xraph/authsome/appsessionconfig"
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(password.New()),
+    authsome.WithAppSessionConfig(&appsessionconfig.Config{
+        AppID:           "premium-app",
+        TokenTTL:        ptr(8 * time.Hour),    // longer TTL for premium app
+        RefreshTokenTTL: ptr(90 * 24 * time.Hour), // 90 days
+        MaxActiveSessions: ptr(20),
+    }),
+)
+```
+
+Per-app session config is seeded into the store during `Start` and takes precedence over the global `SessionConfig`. Per-environment settings take precedence over both.
+
+Resolution order (highest priority wins):
+
+1. Per-environment settings (`EnvironmentSettings.SessionOverrides`)
+2. Per-app session config (`appsessionconfig.Config`)
+3. Global engine `SessionConfig`

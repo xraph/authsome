@@ -1,0 +1,176 @@
+---
+title: Notification Plugin
+description: Multi-channel notifications via Herald bridge with event-driven templates for email, SMS, and in-app messaging.
+---
+
+The `notification` plugin provides a unified multi-channel notification system for Authsome. It replaces the legacy email plugin with Herald bridge integration, supporting email, SMS, push, and in-app notifications from a single configuration. Notifications are triggered automatically by authentication lifecycle events.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/notification"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithHerald(heraldBridge),
+    authsome.WithPlugin(notification.New(notification.Config{
+        AppName:       "My App",
+        BaseURL:       "https://example.com",
+        DefaultLocale: "en",
+        Async:         true,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `AppName` | `string` | `"AuthSome"` | Application name used in notification templates |
+| `BaseURL` | `string` | `""` | Root URL for building links in notifications |
+| `DefaultLocale` | `string` | `"en"` | Default locale for template rendering |
+| `Async` | `bool` | `false` | Send notifications asynchronously via Dispatch |
+| `Mappings` | `map[string]*Mapping` | default mappings | Override or disable hook-to-notification mappings |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"notification"`) |
+| `OnInit` | Captures Herald bridge, hook bus, and logger; registers global hook handler |
+| `AfterSignUp` | Sends welcome notification to new users |
+| `AfterUserCreate` | Sends verification notification to unverified users |
+
+## Default notification mappings
+
+The plugin maps authentication events to Herald templates:
+
+| Event | Template | Channels | Description |
+|-------|----------|----------|-------------|
+| `auth.signup` | `auth.welcome` | email, inapp | Welcome notification on sign-up |
+| `user.create` | `auth.email-verification` | email | Email verification request |
+| `auth.password_reset` | `auth.password-reset` | email | Password reset link |
+| `auth.password_change` | `auth.password-changed` | email, inapp | Confirmation of password change |
+| `org.invitation.accept` | `auth.invitation` | email, inapp | Organization invitation |
+| `auth.mfa.enroll` | `auth.mfa-code` | sms | MFA enrollment code |
+| `auth.account_locked` | `auth.account-locked` | email, inapp | Account lockout notification |
+
+## Customizing mappings
+
+Override default mappings or add new ones:
+
+```go
+notification.New(notification.Config{
+    AppName: "My App",
+    BaseURL: "https://example.com",
+    Mappings: map[string]*notification.Mapping{
+        // Override the welcome template
+        "auth.signup": {
+            Template: "custom.welcome",
+            Channels: []string{"email", "sms", "inapp"},
+            Enabled:  true,
+        },
+        // Disable password change notifications
+        "auth.password_change": nil,
+        // Add a custom event mapping
+        "custom.event": {
+            Template: "custom.event-template",
+            Channels: []string{"inapp"},
+            Enabled:  true,
+        },
+    },
+})
+```
+
+Setting a mapping to `nil` disables notifications for that event.
+
+## Event-triggered notifications
+
+The plugin uses two mechanisms to trigger notifications:
+
+### Direct plugin hooks
+
+For `AfterSignUp` and `AfterUserCreate`, the plugin receives the user object directly and builds the notification:
+
+```go
+func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Session) error {
+    return p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+        Template: "auth.welcome",
+        Channels: []string{"email", "inapp"},
+        To:       []string{u.Email},
+        Data:     map[string]any{"user_name": u.Name, "app_name": p.config.AppName},
+    })
+}
+```
+
+### Global hook handler
+
+For all other mapped events, the plugin registers a handler on the global hook bus during `OnInit`. When any hook event fires, the handler checks if a mapping exists and sends the notification:
+
+```go
+p.hooks.On("herald-notification", func(ctx context.Context, event *hook.Event) error {
+    return p.handleHookEvent(ctx, event)
+})
+```
+
+Events handled by direct hooks (`auth.signup`, `user.create`) are skipped in the global handler to avoid duplicates.
+
+## Integration with Herald bridge
+
+The Herald bridge provides the notification delivery interface:
+
+```go
+type Herald interface {
+    Notify(ctx context.Context, req *HeraldNotifyRequest) error
+}
+
+type HeraldNotifyRequest struct {
+    AppID    string
+    Template string
+    Channels []string
+    To       []string
+    UserID   string
+    Locale   string
+    Async    bool
+    Data     map[string]any
+}
+```
+
+## Direct notification methods
+
+The plugin exposes methods for the engine to call directly:
+
+### Password reset notification
+
+```go
+err := notificationPlugin.SendPasswordReset(ctx, email, name, resetURL)
+```
+
+### Invitation notification
+
+```go
+err := notificationPlugin.SendInvitation(ctx, email, inviterName, orgName, acceptURL)
+```
+
+## Template data
+
+Each notification includes template data that Herald uses for rendering:
+
+| Variable | Description |
+|----------|-------------|
+| `user_name` | User's display name or email |
+| `app_name` | Application name from config |
+| `login_url` | Login page URL |
+| `verify_url` | Email verification URL |
+| `reset_url` | Password reset URL |
+| `accept_url` | Invitation accept URL |
+| `expires_in` | Token expiry description |
+| `inviter_name` | Name of the person who sent the invitation |
+| `org_name` | Organization name |
+
+## Async delivery
+
+When `Async: true`, notifications are queued via the Dispatch bridge for background delivery. This prevents notification failures from blocking authentication operations. Synchronous mode (default) sends notifications inline and logs warnings on failure.

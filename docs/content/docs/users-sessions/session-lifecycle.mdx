@@ -1,0 +1,293 @@
+---
+title: Session Lifecycle
+description: Session creation, token generation, refresh, revocation, and concurrent session management.
+---
+
+Every successful authentication in Authsome produces a session. Sessions track active user logins, bind tokens to users, and provide the foundation for authorization. This page covers the full session lifecycle from creation to revocation.
+
+## Session entity
+
+```go
+type Session struct {
+    ID                    id.SessionID     `json:"id"`
+    AppID                 id.AppID         `json:"app_id"`
+    EnvID                 id.EnvironmentID `json:"env_id"`
+    UserID                id.UserID        `json:"user_id"`
+    OrgID                 id.OrgID         `json:"org_id,omitempty"`
+    Token                 string           `json:"-"`
+    RefreshToken          string           `json:"-"`
+    IPAddress             string           `json:"ip_address,omitempty"`
+    UserAgent             string           `json:"user_agent,omitempty"`
+    DeviceID              id.DeviceID      `json:"device_id,omitempty"`
+    ImpersonatedBy        id.UserID        `json:"impersonated_by,omitempty"`
+    ExpiresAt             time.Time        `json:"expires_at"`
+    RefreshTokenExpiresAt time.Time        `json:"refresh_token_expires_at"`
+    CreatedAt             time.Time        `json:"created_at"`
+    UpdatedAt             time.Time        `json:"updated_at"`
+}
+```
+
+Key fields:
+
+- **`Token`** and **`RefreshToken`** are tagged `json:"-"` and only returned in authentication responses, never in session list endpoints.
+- **`DeviceID`** links the session to a tracked device (see [Device Tracking](/docs/users-sessions/device-tracking)).
+- **`ImpersonatedBy`** is set when an admin creates a session on behalf of another user (see [Impersonation](/docs/users-sessions/impersonation)).
+- **`OrgID`** is set when the session is scoped to a specific organization.
+- Session IDs have the prefix `ases_`.
+
+## Session creation
+
+Sessions are created automatically on successful authentication. The engine generates two cryptographically random tokens:
+
+1. **Session token** (access token) — short-lived, used for API authorization
+2. **Refresh token** — long-lived, used to obtain new session tokens
+
+```go
+import "github.com/xraph/authsome/account"
+
+sess, err := account.NewSession(appID, userID, account.SessionConfig{
+    TokenTTL:           1 * time.Hour,    // session token lifetime
+    RefreshTokenTTL:    30 * 24 * time.Hour, // refresh token lifetime
+    MaxActiveSessions:  5,                // 0 = unlimited
+    RotateRefreshToken: true,             // issue new refresh token on refresh
+})
+```
+
+The engine performs these steps during session creation:
+
+1. Generates a 32-byte cryptographically random session token
+2. Generates a 32-byte cryptographically random refresh token
+3. Sets expiry timestamps based on the session configuration
+4. Records IP address and User-Agent from the request (if available)
+5. Associates a device record (if device tracking is enabled)
+6. Enforces `MaxActiveSessions` (evicts oldest session if limit exceeded)
+7. Calls `BeforeSessionCreate` plugin hooks
+8. Persists the session to the store
+9. Emits `ActionSessionCreate` on the hook bus
+
+### Authentication response
+
+When a session is created during sign-in or sign-up, both tokens are returned:
+
+```json
+{
+  "user": {
+    "id": "ausr_01j9...",
+    "email": "alice@example.com",
+    "name": "Alice Liddell"
+  },
+  "session_token": "a3f8c9d4e5f2g7h1...",
+  "refresh_token": "d72b1ef8a4c6e9b3...",
+  "expires_at": "2024-11-01T11:00:00Z"
+}
+```
+
+The client should store both tokens securely. The session token is sent as `Authorization: Bearer <token>` on subsequent requests.
+
+## Token refresh
+
+When the session token expires, the client uses the refresh token to obtain new tokens without re-authenticating.
+
+`POST /v1/auth/refresh`
+
+```json
+{
+  "refresh_token": "d72b1ef8a4c6e9b3..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "session_token": "new_session_token...",
+  "refresh_token": "new_refresh_token...",
+  "expires_at": "2024-11-01T12:00:00Z"
+}
+```
+
+The refresh flow:
+
+1. Looks up the session by refresh token
+2. Validates the refresh token has not expired
+3. Generates a new session token (and new refresh token if `RotateRefreshToken` is enabled)
+4. Updates the session record with new token values and expiry
+5. Returns the new tokens
+
+### Refresh token rotation
+
+When `RotateRefreshToken: true` (recommended), each refresh request issues a new refresh token and invalidates the old one. This limits the window of exposure if a refresh token is compromised.
+
+```go
+Session: authsome.SessionConfig{
+    RotateRefreshToken: true,
+}
+```
+
+If an attacker attempts to use a previously rotated refresh token, the engine detects the reuse and revokes all sessions for the user as a security measure.
+
+## Session revocation
+
+### Revoke current session (sign out)
+
+`POST /v1/auth/signout`
+
+```
+Authorization: Bearer <session_token>
+```
+
+```json
+{"status": "signed out"}
+```
+
+### Revoke a specific session
+
+`DELETE /v1/auth/sessions/:sessionId`
+
+```
+Authorization: Bearer <session_token>
+```
+
+Requires the user to be authenticated. Users can only revoke their own sessions.
+
+### Revoke all user sessions
+
+In Go, you can revoke all sessions for a user:
+
+```go
+err := engine.RevokeAllSessions(ctx, userID)
+```
+
+This is also triggered automatically during:
+- Password reset (all sessions revoked for security)
+- Account deletion
+- Admin-initiated session purge
+
+### In Go
+
+```go
+// Sign out (revoke by session ID)
+err := engine.SignOut(ctx, sessionID)
+
+// Revoke a specific session
+err := engine.RevokeSession(ctx, sessionID)
+
+// List all sessions for a user
+sessions, err := engine.ListSessions(ctx, userID)
+```
+
+## List active sessions
+
+Users can view all their active sessions:
+
+`GET /v1/auth/sessions`
+
+```
+Authorization: Bearer <session_token>
+```
+
+**Response:**
+
+```json
+{
+  "sessions": [
+    {
+      "id": "ases_01j9...",
+      "app_id": "aapp_01j9...",
+      "user_id": "ausr_01j9...",
+      "ip_address": "192.168.1.1",
+      "user_agent": "Mozilla/5.0...",
+      "device_id": "adev_01j9...",
+      "expires_at": "2024-11-01T11:00:00Z",
+      "created_at": "2024-11-01T10:00:00Z"
+    },
+    {
+      "id": "ases_01jb...",
+      "app_id": "aapp_01j9...",
+      "user_id": "ausr_01j9...",
+      "ip_address": "10.0.0.1",
+      "user_agent": "MyApp/1.0",
+      "device_id": "adev_01jb...",
+      "expires_at": "2024-11-02T09:00:00Z",
+      "created_at": "2024-11-02T08:00:00Z"
+    }
+  ]
+}
+```
+
+Note that `Token` and `RefreshToken` are never included in the session list response.
+
+## Maximum concurrent sessions
+
+The `MaxActiveSessions` configuration limits how many simultaneous sessions a user can have. When the limit is reached, the oldest session is automatically revoked to make room for the new one.
+
+```go
+Session: authsome.SessionConfig{
+    MaxActiveSessions: 5, // 0 = unlimited (default)
+}
+```
+
+This is useful for:
+- Preventing account sharing (set to 1 for single-session enforcement)
+- Limiting resource usage per user
+- Security hygiene (fewer active sessions = smaller attack surface)
+
+## Per-app session configuration
+
+Session behavior can be overridden on a per-app basis using `AppSessionConfig`:
+
+```go
+import "github.com/xraph/authsome/appsessionconfig"
+
+cfg := &appsessionconfig.Config{
+    AppID:                  appID,
+    TokenTTLSeconds:        intPtr(3600),     // 1 hour
+    RefreshTokenTTLSeconds: intPtr(2592000),  // 30 days
+    MaxActiveSessions:      intPtr(3),
+    RotateRefreshToken:     boolPtr(true),
+    BindToIP:               boolPtr(true),
+    BindToDevice:           boolPtr(true),
+    TokenFormat:            "jwt",            // or "opaque"
+}
+
+err := engine.SetAppSessionConfig(ctx, cfg)
+```
+
+Fields set to `nil` inherit from the global engine configuration. See [Token Formats](/docs/users-sessions/token-formats) for details on `TokenFormat`.
+
+## Session configuration reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `TokenTTL` | `time.Duration` | `1h` | Session token lifetime |
+| `RefreshTokenTTL` | `time.Duration` | `30d` | Refresh token lifetime |
+| `MaxActiveSessions` | `int` | `0` (unlimited) | Max concurrent sessions per user |
+| `RotateRefreshToken` | `bool` | `true` | Issue new refresh token on each refresh |
+| `BindToIP` | `bool` | `false` | Invalidate session if IP changes |
+| `BindToDevice` | `bool` | `false` | Invalidate session if device fingerprint changes |
+
+## Session store interface
+
+```go
+type Store interface {
+    CreateSession(ctx context.Context, s *Session) error
+    GetSession(ctx context.Context, sessionID id.SessionID) (*Session, error)
+    GetSessionByToken(ctx context.Context, token string) (*Session, error)
+    GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
+    UpdateSession(ctx context.Context, s *Session) error
+    DeleteSession(ctx context.Context, sessionID id.SessionID) error
+    DeleteUserSessions(ctx context.Context, userID id.UserID) error
+    ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
+}
+```
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/signin` | Authenticate and create a session |
+| `POST` | `/signup` | Create account and session |
+| `POST` | `/signout` | Revoke current session |
+| `POST` | `/refresh` | Exchange refresh token for new tokens |
+| `GET` | `/sessions` | List active sessions |
+| `DELETE` | `/sessions/:sessionId` | Revoke a specific session |

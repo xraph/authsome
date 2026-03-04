@@ -1,0 +1,251 @@
+---
+title: Forge Extension
+description: Mount Authsome into a Forge application as a first-class extension with automatic dependency discovery and route registration.
+---
+
+Authsome ships a ready-made Forge extension in the `extension` package. It wires the engine, HTTP API, middleware, and lifecycle management into Forge's extension system with automatic discovery of optional forgery bridges.
+
+## Installation
+
+```go
+import "github.com/xraph/authsome/extension"
+```
+
+## Registering the extension
+
+```go
+package main
+
+import (
+	"github.com/xraph/forge"
+	"github.com/xraph/authsome/extension"
+)
+
+func main() {
+	app := forge.New()
+
+	authExt := extension.New(
+		extension.WithGroveDatabase(""), // resolve default grove.DB from DI
+	)
+
+	app.RegisterExtension(authExt)
+	app.Run()
+}
+```
+
+Or with an explicit store:
+
+```go
+import pgstore "github.com/xraph/authsome/store/postgres"
+
+authExt := extension.New(
+	extension.WithEngineOption(authsome.WithStore(pgstore.New(db))),
+)
+```
+
+## What the extension does
+
+| Lifecycle event | Behaviour |
+|----------------|-----------|
+| `Register` | Loads configuration, auto-discovers bridges from DI, builds the engine, registers it in the container |
+| `Start` | Runs `store.Migrate` (unless disabled), initializes plugins, auto-registers strategies |
+| `RegisterRoutes` | Mounts all Authsome HTTP endpoints on the Forge router |
+| `Middlewares` | Returns the auth middleware for global application to all routes |
+| `Stop` | Calls `engine.Stop` -- emits `OnShutdown` to all plugins |
+
+## Extension options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `WithConfig(cfg)` | `Config` | defaults | Full config struct |
+| `WithPlugin(p)` | `plugin.Plugin` | -- | Register a plugin (repeatable) |
+| `WithPlugins(ps...)` | `...plugin.Plugin` | -- | Register multiple plugins |
+| `WithEngineOption(opt)` | `authsome.Option` | -- | Pass engine option directly |
+| `WithEngineOptions(opts...)` | `...authsome.Option` | -- | Pass multiple engine options |
+| `WithDisableRoutes()` | -- | `false` | Skip HTTP route registration |
+| `WithDisableMigrate()` | -- | `false` | Skip migrations on Start |
+| `WithBasePath(path)` | `string` | `"/v1/auth"` | URL prefix for all auth routes |
+| `WithGroveDatabase(name)` | `string` | `""` | Name of the grove.DB to resolve from DI |
+| `WithRequireConfig(b)` | `bool` | `false` | Require config in YAML files |
+| `WithLogger(l)` | `log.Logger` | Forge logger | Custom logger |
+
+## Auto-discovered bridges
+
+When running inside a Forge app, the extension automatically discovers optional bridges from the DI container. You do not need to configure these manually -- they are resolved if the corresponding extension is registered.
+
+| Bridge | Discovered from | Purpose |
+|--------|----------------|---------|
+| Chronicle | `chronicle.Emitter` | Audit trail logging |
+| Warden | `*warden.Engine` | RBAC/ReBAC/ABAC authorization |
+| Keysmith | `*keysmith.Engine` | API key management |
+| Relay | `*relay.Relay` | Webhook event delivery |
+| Herald | `*herald.Herald` | Multi-channel notifications |
+| Dispatch | `*dispatch.Engine` | Background job queue |
+| Ledger | `*ledger.Ledger` | Billing and metering |
+| Vault | `*vault.Vault` | Secrets and feature flags |
+| Grove DB | `*grove.DB` | Database (PostgreSQL, SQLite, MongoDB) |
+
+If a bridge is not found in the container, a no-op implementation is used automatically.
+
+## File-based configuration (YAML)
+
+The extension loads configuration from YAML config files. It looks for config under these keys (in order):
+
+1. `extensions.authsome` -- standard Forge extension config namespace
+2. `authsome` -- top-level shorthand
+
+### Example YAML config
+
+```yaml
+# forge.yaml
+extensions:
+  authsome:
+    base_path: "/v1/auth"
+    disable_routes: false
+    disable_migrate: false
+    grove_database: ""
+    debug: false
+
+    session:
+      token_ttl: "1h"
+      refresh_token_ttl: "720h"
+      max_active_sessions: 0
+      rotate_refresh_token: true
+
+    password:
+      min_length: 8
+      require_uppercase: true
+      require_lowercase: true
+      require_digit: true
+      bcrypt_cost: 12
+      algorithm: "bcrypt"
+
+    rate_limit:
+      enabled: true
+      signin_limit: 5
+      signup_limit: 3
+      window_seconds: 60
+
+    lockout:
+      enabled: true
+      max_attempts: 5
+      lockout_duration_seconds: 900
+      reset_after_seconds: 3600
+
+    mailer:
+      provider: "resend"
+      resend:
+        api_key: "${RESEND_API_KEY}"
+        from: "noreply@example.com"
+```
+
+### Merge behaviour
+
+File-based configuration is merged with programmatic options. Programmatic boolean flags (`DisableRoutes`, `DisableMigrate`, `Debug`) always win when set to `true`. For other fields, YAML values take precedence, then programmatic values, then defaults.
+
+## Accessing the engine from other extensions
+
+After `Register` is called by Forge, `authExt.Engine()` returns the fully initialized engine:
+
+```go
+eng := authExt.Engine()
+// Use eng.Store(), eng.Plugins(), etc. from another extension.
+```
+
+Or resolve the engine from the DI container:
+
+```go
+import (
+	"github.com/xraph/vessel"
+	authsome "github.com/xraph/authsome"
+)
+
+eng, err := vessel.Inject[*authsome.Engine](app.Container())
+```
+
+## Adding plugins
+
+Register plugins that provide additional authentication methods:
+
+```go
+import (
+	"github.com/xraph/authsome/extension"
+	"github.com/xraph/authsome/plugins/social"
+	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/plugins/passkey"
+	"github.com/xraph/authsome/plugins/magiclink"
+	"github.com/xraph/authsome/plugins/phone"
+)
+
+authExt := extension.New(
+	extension.WithGroveDatabase(""),
+	extension.WithPlugins(
+		social.New(
+			social.WithGoogle(googleID, googleSecret),
+			social.WithGitHub(ghID, ghSecret),
+		),
+		mfa.New(),
+		passkey.New(passkey.Config{
+			RPName: "My App",
+			RPID:   "example.com",
+			Origin: "https://example.com",
+		}),
+		magiclink.New(),
+		phone.New(),
+	),
+)
+```
+
+## Auth middleware
+
+The extension automatically registers global authentication middleware via `Middlewares()`. This middleware:
+
+1. Reads the `Authorization: Bearer <token>` header
+2. Validates the token (opaque lookup or JWT validation)
+3. Falls back to the strategy registry (API keys, etc.) when session resolution fails
+4. Sets the authenticated user and session on the request context
+
+Other extensions can access the authenticated user via the Forge scope:
+
+```go
+import "github.com/xraph/forge"
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	scope := forge.ScopeFromContext(r.Context())
+	userID := scope.UserID()
+	orgID := scope.OrgID()
+}
+```
+
+## Grove database integration
+
+### Using the default grove database
+
+```go
+ext := extension.New(
+	extension.WithGroveDatabase(""),
+)
+```
+
+### Using a named grove database
+
+```go
+ext := extension.New(
+	extension.WithGroveDatabase("authsome"),
+)
+```
+
+### Store resolution order
+
+1. **Explicit store** -- if `WithEngineOption(authsome.WithStore(s))` was called, it is used directly.
+2. **Grove database** -- if `WithGroveDatabase(name)` was called, the named or default `grove.DB` is resolved from DI.
+3. **Auto-discovery** -- if neither is configured, the extension attempts to resolve a default `grove.DB` from the container.
+
+## Dashboard integration
+
+When the Forge Dashboard extension is present, Authsome automatically registers as the dashboard's authentication provider:
+
+- Provides sign-in and sign-up pages for the dashboard
+- Handles session checking and user resolution
+- Contributes "Profile" and "Security" items to the user dropdown menu
+- Renders user management pages in the dashboard

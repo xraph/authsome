@@ -1,0 +1,183 @@
+---
+title: Consent Plugin
+description: GDPR-compliant consent management with grant, revoke, audit trail, and data export.
+---
+
+The `consent` plugin provides GDPR-compliant consent tracking for Authsome. It records user consent for specific purposes (marketing, analytics, essential cookies), supports consent withdrawal, maintains a full audit trail, and contributes consent records to GDPR data exports.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/consent"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(consent.New()),
+)
+```
+
+To use a persistent consent store instead of the default in-memory store:
+
+```go
+authsome.WithPlugin(consent.New(consentPostgresStore))
+```
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"consent"`) |
+| `OnInit` | Captures hooks, relay, chronicle, logger, and base path from the engine |
+| `RouteProvider` | Registers consent grant, revoke, and list endpoints |
+| `MigrationProvider` | Contributes the `consents` table |
+| `DataExportContributor` | Exports all consent records for GDPR data requests |
+
+## Consent types and purposes
+
+Consent purposes are free-form strings that represent what the user is consenting to. Common purposes include:
+
+| Purpose | Description |
+|---------|-------------|
+| `essential` | Required cookies and functionality |
+| `analytics` | Analytics and performance tracking |
+| `marketing` | Marketing communications and targeted advertising |
+| `personalization` | Personalized content and recommendations |
+| `third_party` | Sharing data with third-party services |
+
+You define purposes based on your application's needs. The plugin does not enforce a fixed set of purposes.
+
+## Recording consent
+
+`POST /v1/auth/consent/grant`
+
+```json
+{
+  "purpose": "marketing",
+  "version": "v2.1",
+  "app_id": "aapp_01j9..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "acon_01j9...",
+  "user_id": "ausr_01j9...",
+  "app_id": "aapp_01j9...",
+  "purpose": "marketing",
+  "granted": true,
+  "version": "v2.1",
+  "ip_address": "192.168.1.1",
+  "granted_at": "2024-11-01T10:00:00Z",
+  "created_at": "2024-11-01T10:00:00Z"
+}
+```
+
+Each consent record captures:
+
+- **Purpose** -- What the user is consenting to
+- **Version** -- The policy version this consent applies to (for tracking policy changes)
+- **IP address** -- The client IP at the time of consent (from `X-Forwarded-For`, `X-Real-IP`, or `RemoteAddr`)
+- **Timestamp** -- When consent was granted
+
+## Consent withdrawal
+
+`POST /v1/auth/consent/revoke`
+
+```json
+{
+  "purpose": "marketing",
+  "app_id": "aapp_01j9..."
+}
+```
+
+**Response:**
+
+```json
+{"status": "revoked"}
+```
+
+Revoking consent marks the record as withdrawn. The original consent record is preserved for audit purposes.
+
+## Listing consent records
+
+`GET /v1/auth/consent`
+
+Query parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `purpose` | `string` | Filter by consent purpose |
+| `cursor` | `string` | Pagination cursor |
+| `limit` | `int` | Results per page (default 50, max 200) |
+
+**Response:**
+
+```json
+{
+  "consents": [
+    {
+      "id": "acon_01j9...",
+      "purpose": "marketing",
+      "granted": true,
+      "version": "v2.1",
+      "granted_at": "2024-11-01T10:00:00Z"
+    },
+    {
+      "id": "acon_01j9...",
+      "purpose": "analytics",
+      "granted": false,
+      "version": "v2.0",
+      "granted_at": "2024-10-15T08:00:00Z"
+    }
+  ],
+  "next_cursor": "eyJpZCI6..."
+}
+```
+
+## Consent audit trail
+
+Every consent operation is recorded through multiple observability channels:
+
+- **Chronicle** -- Audit events with action, resource, actor, and metadata
+- **Relay** -- Webhook events for external systems (`consent.granted`, `consent.revoked`)
+- **Hook bus** -- Internal hook events for other plugins to react to consent changes
+
+## GDPR data export
+
+The plugin implements `DataExportContributor` to include all consent records in user data exports:
+
+```go
+func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (string, any, error) {
+    consents, _, err := p.store.ListConsents(ctx, &Query{
+        UserID: userID,
+        Limit:  1000,
+    })
+    return "consents", consents, err
+}
+```
+
+When the engine processes a GDPR data export request, consent records are included under the `"consents"` key.
+
+## Cookie consent integration
+
+The consent plugin can be used with a frontend cookie consent banner:
+
+1. The frontend displays a cookie consent banner on first visit
+2. When the user makes their choices, the frontend calls `POST /v1/auth/consent/grant` for each accepted purpose
+3. The frontend stores a local flag to suppress the banner on subsequent visits
+4. When the user changes preferences, call `POST /v1/auth/consent/revoke` for withdrawn purposes and `POST /v1/auth/consent/grant` for newly accepted ones
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/consent/grant` | Record consent for a purpose |
+| `POST` | `/v1/auth/consent/revoke` | Withdraw consent for a purpose |
+| `GET` | `/v1/auth/consent` | List consent records for the authenticated user |
+
+All endpoints require authentication (`Authorization: Bearer` header).

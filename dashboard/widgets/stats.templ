@@ -1,0 +1,13 @@
+package widgets
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+)
+
+templ StatsWidget(totalUsers int) {
+	<div class="grid grid-cols-2 gap-4">
+		@components.StatCard("users", "Total Users", strconv.Itoa(totalUsers), "Registered accounts")
+	</div>
+}

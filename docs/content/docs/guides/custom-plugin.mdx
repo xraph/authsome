@@ -1,0 +1,318 @@
+---
+title: Custom Plugin
+description: Build a custom Authsome plugin by implementing lifecycle hook interfaces.
+---
+
+Authsome's plugin system uses Go interfaces -- implement only the hooks you need and register your plugin with the engine. This guide walks through building a complete plugin from scratch.
+
+## The base interface
+
+Every plugin must implement `plugin.Plugin`:
+
+```go
+import "github.com/xraph/authsome/plugin"
+
+type Plugin interface {
+	Name() string
+}
+```
+
+## Available hooks
+
+Authsome defines lifecycle and event hooks as separate interfaces. Implement any combination:
+
+### Lifecycle hooks
+
+| Hook | Signature | When called |
+|------|-----------|-------------|
+| `OnInit` | `OnInit(ctx, engine) error` | During engine initialization |
+| `OnShutdown` | `OnShutdown(ctx) error` | During engine shutdown |
+
+### Auth event hooks
+
+| Hook | Signature | When called |
+|------|-----------|-------------|
+| `BeforeSignUp` | `OnBeforeSignUp(ctx, *SignUpRequest) error` | Before account creation |
+| `AfterSignUp` | `OnAfterSignUp(ctx, *User, *Session) error` | After account creation |
+| `BeforeSignIn` | `OnBeforeSignIn(ctx, *SignInRequest) error` | Before authentication |
+| `AfterSignIn` | `OnAfterSignIn(ctx, *User, *Session) error` | After authentication |
+| `BeforeSignOut` | `OnBeforeSignOut(ctx, sessionID) error` | Before session end |
+| `AfterSignOut` | `OnAfterSignOut(ctx, sessionID) error` | After session end |
+
+### User lifecycle hooks
+
+| Hook | Signature | When called |
+|------|-----------|-------------|
+| `BeforeUserCreate` | `OnBeforeUserCreate(ctx, *User) error` | Before user creation |
+| `AfterUserCreate` | `OnAfterUserCreate(ctx, *User) error` | After user creation |
+| `BeforeUserUpdate` | `OnBeforeUserUpdate(ctx, *User) error` | Before user update |
+| `AfterUserUpdate` | `OnAfterUserUpdate(ctx, *User) error` | After user update |
+| `BeforeUserDelete` | `OnBeforeUserDelete(ctx, userID) error` | Before user deletion |
+| `AfterUserDelete` | `OnAfterUserDelete(ctx, userID) error` | After user deletion |
+
+### Session lifecycle hooks
+
+| Hook | Signature | When called |
+|------|-----------|-------------|
+| `BeforeSessionCreate` | `OnBeforeSessionCreate(ctx, *Session) error` | Before session creation |
+| `AfterSessionCreate` | `OnAfterSessionCreate(ctx, *Session) error` | After session creation |
+| `AfterSessionRefresh` | `OnAfterSessionRefresh(ctx, *Session) error` | After token refresh |
+| `AfterSessionRevoke` | `OnAfterSessionRevoke(ctx, sessionID) error` | After session revocation |
+
+### Organization lifecycle hooks
+
+| Hook | Signature | When called |
+|------|-----------|-------------|
+| `AfterOrgCreate` | `OnAfterOrgCreate(ctx, *Organization) error` | After org creation |
+| `AfterOrgUpdate` | `OnAfterOrgUpdate(ctx, *Organization) error` | After org update |
+| `AfterOrgDelete` | `OnAfterOrgDelete(ctx, orgID) error` | After org deletion |
+| `AfterMemberAdd` | `OnAfterMemberAdd(ctx, *Member) error` | After member added |
+| `AfterMemberRemove` | `OnAfterMemberRemove(ctx, memberID) error` | After member removed |
+| `AfterMemberRoleChange` | `OnAfterMemberRoleChange(ctx, *Member) error` | After role change |
+
+### Provider interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `RouteProvider` | Register additional HTTP routes |
+| `MigrationProvider` | Provide database migration groups |
+| `StrategyProvider` | Contribute an authentication strategy |
+| `AuthMethodContributor` | Report auth methods linked to a user |
+| `AuthMethodUnlinker` | Support unlinking an auth method |
+| `DataExportContributor` | Contribute data for GDPR export |
+
+## Example: API Token plugin
+
+A complete plugin that adds API token authentication as an alternative to session tokens.
+
+```go
+package apitoken
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/strategy"
+	"github.com/xraph/authsome/user"
+
+	"github.com/xraph/grove/migrate"
+)
+
+// Compile-time interface checks.
+var (
+	_ plugin.Plugin              = (*Plugin)(nil)
+	_ plugin.OnInit              = (*Plugin)(nil)
+	_ plugin.MigrationProvider   = (*Plugin)(nil)
+	_ plugin.RouteProvider       = (*Plugin)(nil)
+	_ plugin.StrategyProvider    = (*Plugin)(nil)
+	_ plugin.AfterUserDelete     = (*Plugin)(nil)
+)
+
+// Plugin provides API token authentication.
+type Plugin struct {
+	store  *TokenStore
+	engine any // set during OnInit
+}
+
+func New() *Plugin {
+	return &Plugin{}
+}
+
+func (p *Plugin) Name() string { return "api-token" }
+
+// ── Lifecycle ──
+
+func (p *Plugin) OnInit(ctx context.Context, engine any) error {
+	p.engine = engine
+	// Initialize the token store using the engine's store.
+	// In practice, you would resolve a database connection here.
+	return nil
+}
+
+// ── Migrations ──
+
+func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
+	switch driverName {
+	case "pg":
+		return []*migrate.Group{pgMigrations()}
+	case "sqlite":
+		return []*migrate.Group{sqliteMigrations()}
+	default:
+		return nil
+	}
+}
+
+func pgMigrations() *migrate.Group {
+	g := migrate.NewGroup("api_token")
+	g.Add("001_create_api_tokens", `
+		CREATE TABLE IF NOT EXISTS api_tokens (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE,
+			prefix TEXT NOT NULL,
+			scopes TEXT[] DEFAULT '{}',
+			expires_at TIMESTAMPTZ,
+			last_used_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX idx_api_tokens_user ON api_tokens(user_id);
+		CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
+	`, `DROP TABLE IF EXISTS api_tokens;`)
+	return g
+}
+
+// ── Routes ──
+
+func (p *Plugin) RegisterRoutes(router any) error {
+	// Register POST /v1/auth/api-tokens (create)
+	// Register GET  /v1/auth/api-tokens (list)
+	// Register DELETE /v1/auth/api-tokens/:id (revoke)
+	return nil
+}
+
+// ── Strategy ──
+
+func (p *Plugin) Strategy() strategy.Strategy {
+	return &apiTokenStrategy{plugin: p}
+}
+
+func (p *Plugin) StrategyPriority() int { return 100 }
+
+// ── Cleanup on user deletion ──
+
+func (p *Plugin) OnAfterUserDelete(ctx context.Context, userID id.UserID) error {
+	// Delete all API tokens for the deleted user.
+	return p.store.DeleteByUserID(ctx, userID)
+}
+
+// ── Strategy implementation ──
+
+type apiTokenStrategy struct {
+	plugin *Plugin
+}
+
+func (s *apiTokenStrategy) Name() string { return "api-token" }
+
+func (s *apiTokenStrategy) Authenticate(ctx context.Context, token string) (*user.User, *session.Session, error) {
+	// 1. Hash the token
+	// 2. Look up the hash in api_tokens table
+	// 3. Check expiry
+	// 4. Resolve the user
+	// 5. Update last_used_at
+	// 6. Return user and a synthetic session
+	return nil, nil, fmt.Errorf("not implemented")
+}
+
+// ── Token generation helper ──
+
+func GenerateToken() (raw string, prefix string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	raw = hex.EncodeToString(b)
+	prefix = raw[:8]
+	return raw, prefix, nil
+}
+```
+
+## Registering with the engine
+
+Pass your plugin via `authsome.WithPlugin`:
+
+```go
+import (
+	authsome "github.com/xraph/authsome"
+	"myapp/apitoken"
+)
+
+eng, err := authsome.NewEngine(
+	authsome.WithStore(store),
+	authsome.WithPlugin(apitoken.New()),
+)
+```
+
+Or when using the Forge extension:
+
+```go
+import "github.com/xraph/authsome/extension"
+
+authExt := extension.New(
+	extension.WithGroveDatabase(""),
+	extension.WithPlugin(apitoken.New()),
+)
+```
+
+## How dispatch works
+
+The engine's plugin registry uses type assertions at registration time to discover which hooks each plugin implements. When an event fires, only plugins implementing that specific hook interface are called. Hooks are invoked sequentially in registration order. If any hook returns an error:
+
+- **Before hooks** -- the error aborts the operation
+- **After hooks** -- the error is logged but does not abort the operation
+
+## Testing your plugin
+
+```go
+package apitoken_test
+
+import (
+	"context"
+	"testing"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/store/memory"
+	"myapp/apitoken"
+)
+
+func TestPluginRegisters(t *testing.T) {
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(memory.New()),
+		authsome.WithPlugin(apitoken.New()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := eng.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Stop(context.Background())
+
+	// Verify the plugin is registered
+	found := false
+	for _, p := range eng.Plugins().Plugins() {
+		if p.Name() == "api-token" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("api-token plugin not registered")
+	}
+
+	// Verify the strategy is registered
+	strategies := eng.Strategies().Strategies()
+	if len(strategies) == 0 {
+		t.Fatal("no strategies registered")
+	}
+}
+```
+
+## Built-in plugins
+
+Authsome ships several built-in plugins you can use as reference implementations:
+
+| Plugin | Package | Hooks implemented |
+|--------|---------|-------------------|
+| Social (OAuth) | `plugins/social` | `RouteProvider`, `MigrationProvider`, `StrategyProvider`, `AuthMethodContributor` |
+| MFA (TOTP) | `plugins/mfa` | `RouteProvider`, `MigrationProvider`, `AuthMethodContributor` |
+| Passkey (WebAuthn) | `plugins/passkey` | `RouteProvider`, `MigrationProvider`, `StrategyProvider`, `AuthMethodContributor` |
+| Magic Link | `plugins/magiclink` | `RouteProvider`, `MigrationProvider` |
+| Phone (SMS) | `plugins/phone` | `RouteProvider`, `MigrationProvider`, `AuthMethodContributor` |

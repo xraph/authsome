@@ -1,0 +1,62 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/authsome/user"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/pagination"
+)
+
+templ UsersPage(users *user.UserList, cursor string, basePath string) {
+	<div class="space-y-6">
+		<!-- Header Row -->
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">Users</h1>
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(users.Total) }
+				}
+			</div>
+		</div>
+
+		<!-- Search -->
+		@card.Card() {
+			@card.Content() {
+				<div
+					hx-get={ basePath }
+					hx-trigger="keyup changed delay:300ms"
+					hx-target="closest div.space-y-6"
+					hx-swap="outerHTML"
+				>
+					@input.Input(input.Props{
+						Type:        input.TypeSearch,
+						Name:        "email",
+						Placeholder: "Search by email...",
+					})
+				</div>
+			}
+		}
+
+		<!-- User Table -->
+		@components.UserTable(users.Users, basePath)
+
+		<!-- Pagination -->
+		if users.NextCursor != "" {
+			{{ nextHref := basePath + "?cursor=" + users.NextCursor }}
+			@pagination.Pagination() {
+				@pagination.Content() {
+					@pagination.Item() {
+						@pagination.Next(pagination.NextProps{
+							Href:  nextHref,
+							Label: "Next",
+						})
+					}
+				}
+			}
+		}
+	</div>
+}

@@ -1,0 +1,388 @@
+---
+title: Multi-Factor Authentication
+description: Add TOTP, SMS OTP, and recovery codes as a second authentication factor with the MFA plugin.
+---
+
+The `mfa` plugin adds a second authentication factor to any sign-in flow. It supports TOTP (Time-based One-Time Passwords) for authenticator apps, SMS OTP for phone-based verification, and one-time recovery codes as a fallback. MFA is enforced after primary authentication succeeds — the user signs in with their password (or other primary method), receives an MFA challenge, and must complete it before a session is issued.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/mfa"
+    "github.com/xraph/authsome/bridge/smsadapter"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(password.New()),
+    authsome.WithMFAStore(mfaStore),       // mfa.Store implementation
+    authsome.WithSMSSender(smsSender),      // required for SMS OTP
+    authsome.WithConfig(authsome.Config{
+        AppID: "myapp",
+        MFA: authsome.MFAConfig{
+            Enabled:            true,
+            Issuer:             "MyApp",          // shown in authenticator apps
+            RecoveryCodeCount:  8,                // number of backup codes
+            SMSCodeLength:      6,                // digits in SMS codes
+            SMSCodeTTL:         "5m",             // SMS code validity window
+            EnforceForAllUsers: false,            // true = require MFA for every user
+        },
+    }),
+)
+```
+
+> **Note:** The MFA plugin requires a dedicated `mfa.Store` for enrollment and recovery code persistence. All store backends (PostgreSQL, SQLite, MongoDB, memory) ship with MFA store implementations.
+
+## Concepts
+
+### Enrollment
+
+An `Enrollment` represents a user's MFA registration for a specific method. Each user can have one enrollment per method (e.g., one TOTP enrollment and one SMS enrollment).
+
+```go
+type Enrollment struct {
+    ID        id.MFAID  `json:"id"`
+    UserID    id.UserID `json:"user_id"`
+    Method    string    `json:"method"`   // "totp" or "sms"
+    Secret    string    `json:"-"`        // hidden from JSON serialization
+    Verified  bool      `json:"verified"` // true after first successful verification
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
+The `Secret` field stores the Base32-encoded TOTP secret (for TOTP enrollments) or is empty for SMS enrollments. It is never exposed in JSON responses.
+
+### Recovery codes
+
+Recovery codes are single-use backup codes that allow account access when the primary MFA device is unavailable. They are bcrypt-hashed before storage — only the plaintext codes are shown to the user once, at generation time.
+
+```go
+type RecoveryCode struct {
+    ID        id.RecoveryCodeID `json:"id"`
+    UserID    id.UserID         `json:"user_id"`
+    CodeHash  string            `json:"-"`    // bcrypt hash
+    Used      bool              `json:"used"`
+    UsedAt    *time.Time        `json:"used_at,omitempty"`
+    CreatedAt time.Time         `json:"created_at"`
+}
+```
+
+By default, 8 recovery codes are generated per enrollment. Each code is 8 characters long, drawn from an unambiguous alphabet (`abcdefghjkmnpqrstuvwxyz23456789` — no `0`, `o`, `1`, `l`, `i`).
+
+## TOTP setup flow
+
+TOTP (Time-based One-Time Password) works with authenticator apps such as Google Authenticator, Authy, and 1Password. The setup flow is a two-step process: enroll, then verify.
+
+
+
+**Enroll**: Generate a TOTP secret and return the provisioning URI.
+
+`POST /v1/auth/mfa/enroll`
+
+```json
+{
+  "method": "totp"
+}
+```
+
+**Response:**
+
+```json
+{
+  "enrollment": {
+    "id": "amfa_01jb...",
+    "method": "totp",
+    "verified": false,
+    "created_at": "2024-11-01T10:00:00Z"
+  },
+  "totp_uri": "otpauth://totp/MyApp:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp",
+  "totp_secret": "JBSWY3DPEHPK3PXP",
+  "recovery_codes": [
+    "a3b8c9d4",
+    "e5f2g7h1",
+    "j6k9m2n8",
+    "p4q7r3s5",
+    "t8u2v6w9",
+    "x3y7z4a8",
+    "b9c5d2e6",
+    "f7g3h8j4"
+  ]
+}
+```
+
+The `totp_uri` can be rendered as a QR code for the user to scan. The `recovery_codes` are shown exactly once — instruct the user to save them securely.
+
+
+**Verify**: Confirm enrollment by submitting a valid TOTP code from the authenticator app.
+
+`POST /v1/auth/mfa/verify`
+
+```json
+{
+  "method": "totp",
+  "code": "482917"
+}
+```
+
+This validates the code against the stored secret using the standard TOTP algorithm (RFC 6238, 30-second time step, SHA-1, 6-digit codes). On success, the enrollment is marked as `verified: true`.
+
+
+
+### TOTP in Go
+
+```go
+import "github.com/xraph/authsome/plugins/mfa"
+
+// Generate a new TOTP key
+key, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{
+    Issuer:      "MyApp",
+    AccountName: "alice@example.com",
+})
+// key.URL()    → provisioning URI for QR code
+// key.Secret() → Base32 secret string
+
+// Validate a user-submitted code against the secret
+valid := mfa.ValidateTOTP("482917", key.Secret())
+
+// Generate a code programmatically (useful for testing)
+code, err := mfa.GenerateTOTPCode(key.Secret())
+```
+
+## SMS OTP flow
+
+SMS OTP sends a 6-digit numeric code to the user's verified phone number. It requires an SMS bridge to be configured.
+
+
+
+**Enroll**: Register the user's phone number for SMS MFA.
+
+`POST /v1/auth/mfa/enroll`
+
+```json
+{
+  "method": "sms",
+  "phone": "+15551234567"
+}
+```
+
+The engine sends an initial verification code to confirm the phone number is valid and reachable.
+
+
+**Verify**: Confirm enrollment by submitting the SMS code.
+
+`POST /v1/auth/mfa/verify`
+
+```json
+{
+  "method": "sms",
+  "code": "847293"
+}
+```
+
+
+
+### SMS bridge configuration
+
+The SMS bridge implements `bridge.SMSSender`. Authsome ships with a Twilio adapter:
+
+```go
+import "github.com/xraph/authsome/bridge/smsadapter"
+
+smsSender := smsadapter.NewTwilioSender(
+    "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Account SID
+    "your_auth_token",                     // Auth Token
+    "+15559876543",                         // From number
+)
+
+eng, err := authsome.New(
+    authsome.WithSMSSender(smsSender),
+    // ... other options
+)
+```
+
+You can implement your own SMS bridge by satisfying the `bridge.SMSSender` interface:
+
+```go
+type SMSSender interface {
+    SendSMS(ctx context.Context, msg *SMSMessage) error
+}
+
+type SMSMessage struct {
+    To   string `json:"to"`
+    Body string `json:"body"`
+}
+```
+
+SMS codes are 6 digits by default and expire after 5 minutes.
+
+## Challenge flow
+
+When MFA is enabled for a user, the sign-in flow becomes a two-phase process:
+
+
+
+**Primary authentication**: The user signs in with email/password (or any primary method).
+
+`POST /v1/auth/signin`
+
+```json
+{
+  "email": "alice@example.com",
+  "password": "Secure!Pass99",
+  "app_id": "myapp"
+}
+```
+
+If the user has a verified MFA enrollment, instead of returning a full session, the engine returns an MFA challenge:
+
+```json
+{
+  "mfa_required": true,
+  "challenge_token": "chall_01jb...",
+  "methods": ["totp"],
+  "expires_at": "2024-11-01T10:05:00Z"
+}
+```
+
+The `challenge_token` is a short-lived opaque token (default 5 minutes) that proves the user passed primary authentication.
+
+
+**MFA verification**: The user submits the challenge token along with their MFA code.
+
+`POST /v1/auth/mfa/challenge`
+
+```json
+{
+  "challenge_token": "chall_01jb...",
+  "method": "totp",
+  "code": "482917"
+}
+```
+
+On success, the engine creates and returns a full session:
+
+```json
+{
+  "user": {
+    "id": "ausr_01j9...",
+    "email": "alice@example.com",
+    "name": "Alice Liddell"
+  },
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "expires_at": "2024-11-01T11:00:00Z"
+}
+```
+
+
+
+### Using a recovery code
+
+If the user does not have access to their MFA device, they can complete the challenge with a recovery code:
+
+```json
+{
+  "challenge_token": "chall_01jb...",
+  "method": "recovery",
+  "code": "a3b8c9d4"
+}
+```
+
+The recovery code is consumed (marked as `used`) on success. Each code can only be used once.
+
+## Recovery code management
+
+### Regenerate codes
+
+Users can regenerate their recovery codes at any time. This invalidates all previous codes.
+
+`POST /v1/auth/mfa/recovery-codes/regenerate`
+
+```json
+{
+  "recovery_codes": [
+    "n7p4q2r8",
+    "s3t9u5v6",
+    "w8x2y7z3",
+    "a4b9c5d2",
+    "e6f3g8h7",
+    "j2k7m4n9",
+    "p5q3r8s6",
+    "t9u4v2w7"
+  ]
+}
+```
+
+### In Go
+
+```go
+import "github.com/xraph/authsome/plugins/mfa"
+
+// Generate 8 recovery codes for a user
+records, plaintexts, err := mfa.GenerateRecoveryCodes(userID, 8)
+// records  → []*RecoveryCode (store these)
+// plaintexts → []string (show to user once)
+
+// Verify a recovery code
+valid := mfa.VerifyRecoveryCode("a3b8c9d4", recoveryCodeRecord)
+```
+
+## Disabling MFA
+
+Users can disable MFA by deleting their enrollment:
+
+`DELETE /v1/auth/mfa/enrollment`
+
+This removes the enrollment record and all associated recovery codes. The user will no longer be prompted for MFA on sign-in.
+
+## Configuration reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Enabled` | `bool` | `false` | Enable MFA support |
+| `Issuer` | `string` | `""` | Application name shown in authenticator apps |
+| `RecoveryCodeCount` | `int` | `8` | Number of recovery codes to generate |
+| `SMSCodeLength` | `int` | `6` | Number of digits in SMS codes |
+| `SMSCodeTTL` | `string` | `"5m"` | SMS code validity duration |
+| `EnforceForAllUsers` | `bool` | `false` | Require MFA for all users (not just enrolled ones) |
+| `ChallengeTTL` | `string` | `"5m"` | How long a challenge token is valid |
+
+## MFA store interface
+
+The MFA plugin requires a store that implements the `mfa.Store` interface:
+
+```go
+type Store interface {
+    // Enrollment CRUD
+    CreateEnrollment(ctx context.Context, e *Enrollment) error
+    GetEnrollment(ctx context.Context, userID id.UserID, method string) (*Enrollment, error)
+    GetEnrollmentByID(ctx context.Context, mfaID id.MFAID) (*Enrollment, error)
+    UpdateEnrollment(ctx context.Context, e *Enrollment) error
+    DeleteEnrollment(ctx context.Context, mfaID id.MFAID) error
+    ListEnrollments(ctx context.Context, userID id.UserID) ([]*Enrollment, error)
+
+    // Recovery codes
+    CreateRecoveryCodes(ctx context.Context, codes []*RecoveryCode) error
+    GetRecoveryCodes(ctx context.Context, userID id.UserID) ([]*RecoveryCode, error)
+    ConsumeRecoveryCode(ctx context.Context, codeID id.RecoveryCodeID) error
+    DeleteRecoveryCodes(ctx context.Context, userID id.UserID) error
+}
+```
+
+Built-in implementations are provided in `plugins/mfa/store_postgres.go`, `plugins/mfa/store_sqlite.go`, `plugins/mfa/store_mongo.go`, and `plugins/mfa/store_memory.go`.
+
+## API routes
+
+All MFA routes are registered under `BasePath` (default `/v1/auth`):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/mfa/enroll` | Start MFA enrollment for a method |
+| `POST` | `/mfa/verify` | Verify enrollment with a code |
+| `POST` | `/mfa/challenge` | Complete an MFA challenge during sign-in |
+| `DELETE` | `/mfa/enrollment` | Remove MFA enrollment and recovery codes |
+| `POST` | `/mfa/recovery-codes/regenerate` | Generate new recovery codes (invalidates old ones) |
+| `GET` | `/mfa/enrollments` | List active enrollments for the current user |

@@ -1,0 +1,132 @@
+package auth
+
+import (
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/label"
+	"github.com/xraph/forgeui/icons"
+)
+
+// LoginPageLinks holds navigation paths for the login page.
+type LoginPageLinks struct {
+	RegisterPath       string
+	ForgotPasswordPath string
+}
+
+// LoginPage renders the dashboard login form.
+// The auth layout already provides centering, card wrapper, and padding.
+templ LoginPage(links LoginPageLinks) {
+	<div class="flex items-center justify-center mb-2">
+		@icons.ShieldCheck(icons.WithSize(32), icons.WithClass("text-primary"))
+	</div>
+	<h2 class="text-lg font-semibold text-center">Sign in</h2>
+	<p class="text-sm text-muted-foreground text-center mb-4">Enter your credentials to access the dashboard</p>
+	<form method="POST" class="space-y-4">
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "name@example.com",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		<div class="space-y-2">
+			<div class="flex items-center justify-between">
+				@label.Label(label.Props{For: "password"}) {
+					Password
+				}
+				if links.ForgotPasswordPath != "" {
+					<a href={ templ.SafeURL(links.ForgotPasswordPath) } class="text-xs text-muted-foreground hover:text-primary hover:underline">
+						Forgot password?
+					</a>
+				}
+			</div>
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Enter your password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "current-password"},
+			})
+		</div>
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Sign in
+		}
+	</form>
+	if links.RegisterPath != "" {
+		<p class="text-sm text-center text-muted-foreground mt-4">
+			Don't have an account?{ " " }
+			<a href={ templ.SafeURL(links.RegisterPath) } class="text-primary hover:underline font-medium">
+				Create one
+			</a>
+		</p>
+	}
+}
+
+// LoginError renders the login page with an error message.
+templ LoginError(errorMsg string, links LoginPageLinks) {
+	<div class="flex items-center justify-center mb-2">
+		@icons.ShieldCheck(icons.WithSize(32), icons.WithClass("text-primary"))
+	</div>
+	<h2 class="text-lg font-semibold text-center">Sign in</h2>
+	<p class="text-sm text-muted-foreground text-center mb-4">Enter your credentials to access the dashboard</p>
+	<form method="POST" class="space-y-4">
+		if errorMsg != "" {
+			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+				{ errorMsg }
+			</div>
+		}
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "name@example.com",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		<div class="space-y-2">
+			<div class="flex items-center justify-between">
+				@label.Label(label.Props{For: "password"}) {
+					Password
+				}
+				if links.ForgotPasswordPath != "" {
+					<a href={ templ.SafeURL(links.ForgotPasswordPath) } class="text-xs text-muted-foreground hover:text-primary hover:underline">
+						Forgot password?
+					</a>
+				}
+			</div>
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Enter your password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "current-password"},
+			})
+		</div>
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Sign in
+		}
+	</form>
+	if links.RegisterPath != "" {
+		<p class="text-sm text-center text-muted-foreground mt-4">
+			Don't have an account?{ " " }
+			<a href={ templ.SafeURL(links.RegisterPath) } class="text-primary hover:underline font-medium">
+				Create one
+			</a>
+		</p>
+	}
+}

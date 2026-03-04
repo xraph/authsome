@@ -1,0 +1,164 @@
+---
+title: Relay Bridge
+description: Reliable webhook delivery — sends auth event payloads to Relay for fan-out with retry semantics.
+---
+
+The Relay bridge connects Authsome to the Relay webhook delivery extension. When configured, every auth event that triggers a webhook (sign-in, sign-up, org changes, MFA enrollment, API key creation, and more) is sent to Relay, which handles reliable fan-out to all registered subscriber endpoints with configurable retry policies.
+
+Without Relay, Authsome stores webhook configurations in its own database and emits delivery attempts directly. With Relay, delivery is fully offloaded — Relay owns the delivery queue, retry backoff, failure tracking, and subscriber management.
+
+## Interface
+
+The `bridge.EventRelay` interface is defined in `github.com/xraph/authsome/bridge`:
+
+```go
+type EventRelay interface {
+    Send(ctx context.Context, event *WebhookEvent) error
+    RegisterEventTypes(ctx context.Context, defs []WebhookDefinition) error
+}
+
+type WebhookEvent struct {
+    Type           string            `json:"type"`
+    TenantID       string            `json:"tenant_id,omitempty"`
+    EnvID          string            `json:"env_id,omitempty"`
+    Data           map[string]string `json:"data,omitempty"`
+    IdempotencyKey string            `json:"idempotency_key,omitempty"`
+}
+
+type WebhookDefinition struct {
+    Name        string `json:"name"`
+    Description string `json:"description"`
+    Group       string `json:"group"`
+}
+```
+
+## Setup with the Relay adapter
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/relayadapter"
+    "github.com/xraph/relay"
+)
+
+// Build the Relay engine (see Relay docs for full setup).
+relayEng, err := relay.New(
+    relay.WithStore(relayStore),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Wrap in the Authsome adapter.
+relayBridge := relayadapter.New(relayEng)
+
+// Register with Authsome.
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithPlugin(password.New()),
+    authsome.WithEventRelay(relayBridge),
+)
+```
+
+When the Authsome engine starts, it calls `RegisterEventTypes` to seed Relay with Authsome's full webhook event catalog. This ensures Relay knows about every possible event type and can display them in its dashboard UI.
+
+## Webhook event catalog
+
+Authsome emits 35+ distinct webhook event types, organised into groups:
+
+| Group | Events |
+|-------|--------|
+| `user` | `user.created`, `user.updated`, `user.deleted` |
+| `session` | `session.created`, `session.revoked` |
+| `auth` | `auth.signin`, `auth.signin.failed`, `auth.signout`, `auth.password.reset`, `auth.mfa.enabled`, `auth.mfa.enrolled`, `auth.mfa.verified`, `auth.mfa.challenged`, `auth.mfa.disabled`, `auth.passkey.registered`, `auth.passkey.authenticated`, `auth.passkey.deleted`, `auth.social.signin`, `auth.social.signup`, `auth.sso.signin`, `auth.sso.signup` |
+| `org` | `org.created`, `org.updated`, `org.member.invited`, `org.member.joined`, `org.member.removed`, `org.member.role_changed` |
+| `environment` | `environment.created`, `environment.updated`, `environment.deleted`, `environment.cloned` |
+| `apikey` | `apikey.created`, `apikey.revoked` |
+| `consent` | `consent.granted`, `consent.revoked` |
+
+## Event payload structure
+
+Each `WebhookEvent` includes a `Data` map with event-specific fields:
+
+### `auth.signin`
+
+```json
+{
+  "type": "auth.signin",
+  "tenant_id": "aorg_01j...",
+  "env_id": "aenv_01j...",
+  "idempotency_key": "ases_01j...",
+  "data": {
+    "user_id": "ausr_01j...",
+    "session_id": "ases_01j...",
+    "method": "password",
+    "ip": "203.0.113.1",
+    "user_agent": "Mozilla/5.0..."
+  }
+}
+```
+
+### `user.created`
+
+```json
+{
+  "type": "user.created",
+  "tenant_id": "aorg_01j...",
+  "env_id": "aenv_01j...",
+  "idempotency_key": "ausr_01j...",
+  "data": {
+    "user_id": "ausr_01j...",
+    "email": "user@example.com",
+    "method": "password"
+  }
+}
+```
+
+### `org.member.invited`
+
+```json
+{
+  "type": "org.member.invited",
+  "tenant_id": "aorg_01j...",
+  "env_id": "aenv_01j...",
+  "idempotency_key": "ainv_01j...",
+  "data": {
+    "org_id": "aorg_01j...",
+    "invited_email": "newmember@example.com",
+    "invited_by": "ausr_01j...",
+    "role": "member"
+  }
+}
+```
+
+## Standalone development stub
+
+During development, use the built-in `NoopRelay` that logs events at debug level and drops them:
+
+```go
+import (
+    "log/slog"
+    "github.com/xraph/authsome/bridge"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    authsome.WithEventRelay(bridge.NewNoopRelay(slog.Default())),
+)
+```
+
+You can also use an inline function adapter to inspect events in tests:
+
+```go
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    authsome.WithEventRelay(bridge.EventRelayFunc(func(ctx context.Context, event *bridge.WebhookEvent) error {
+        t.Logf("webhook event: type=%s tenant=%s", event.Type, event.TenantID)
+        return nil
+    })),
+)
+```
+
+## Idempotency
+
+Every webhook event includes an `IdempotencyKey` field set to the TypeID of the entity that changed (session ID for sign-in events, user ID for user creation events, etc.). Relay uses this key to deduplicate delivery attempts — if the same event is sent twice (e.g., due to a retry after a network timeout), subscribers receive it exactly once.

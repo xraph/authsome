@@ -1,0 +1,168 @@
+---
+title: Identity (TypeID)
+description: How Authsome uses prefix-qualified, globally unique identifiers for every entity.
+---
+
+Every entity in Authsome has a TypeID. TypeIDs are globally unique, sortable, URL-safe identifiers built on UUIDv7 with a human-readable prefix that tells you what kind of entity you are looking at.
+
+A TypeID looks like this:
+
+```
+ausr_01j9k3mq2fhex4vsk0n852p0qt
+```
+
+The `ausr` prefix identifies this as a user. The suffix is a base32-encoded UUIDv7 that encodes creation time, so IDs sort chronologically within the same prefix.
+
+## The `id` package
+
+The `id` package in `github.com/xraph/authsome/id` provides the `ID` struct and type-specific named types built on top of it. All entity types share the same underlying struct — the prefix distinguishes them at parse time.
+
+### Creating IDs
+
+```go
+import "github.com/xraph/authsome/id"
+
+// Create a new ID for each entity type.
+userID    := id.NewUserID()         // ausr_01j9...
+sessionID := id.NewSessionID()      // ases_01j9...
+appID     := id.NewAppID()          // aapp_01j9...
+orgID     := id.NewOrganizationID() // aorg_01j9...
+memberID  := id.NewMemberID()       // amem_01j9...
+teamID    := id.NewTeamID()         // atm_01j9...
+inviteID  := id.NewInvitationID()   // ainv_01j9...
+deviceID  := id.NewDeviceID()       // adev_01j9...
+webhookID := id.NewWebhookID()      // awhk_01j9...
+envID     := id.NewEnvironmentID()  // aenv_01j9...
+roleID    := id.NewRoleID()         // arol_01j9...
+permID    := id.NewPermissionID()   // aprm_01j9...
+```
+
+### Parsing IDs
+
+```go
+// Parse any Authsome TypeID.
+parsed, err := id.Parse("ausr_01j9k3mq2fhex4vsk0n852p0qt")
+
+// Parse and validate a specific prefix.
+userID, err := id.ParseUserID("ausr_01j9k3mq2fhex4vsk0n852p0qt")
+sessID, err := id.ParseSessionID("ases_01j9k3mq2fhex4vsk0n852p0qt")
+appID,  err := id.ParseAppID("aapp_01j9k3mq2fhex4vsk0n852p0qt")
+```
+
+Parsing with a prefix-specific function validates that the prefix matches. Passing a `ausr_` ID to `ParseSessionID` returns an error — this prevents cross-entity ID confusion at the API boundary.
+
+### Nil ID
+
+```go
+var empty id.UserID
+empty.IsNil()  // true
+empty.String() // ""
+```
+
+Nil IDs are the zero value for any named ID type. They serialize as empty strings in JSON.
+
+### String representation
+
+```go
+userID := id.NewUserID()
+fmt.Println(userID.String())  // "ausr_01j9k3mq2fhex4vsk0n852p0qt"
+fmt.Println(userID.Prefix())  // "ausr"
+```
+
+### Database serialization
+
+All ID types implement `sql.Scanner` and `driver.Valuer`. They store as plain strings in the database, and return `NULL` for nil IDs. No special column type is needed — use `VARCHAR` or `TEXT`.
+
+### JSON serialization
+
+All ID types implement `encoding.TextMarshaler` and `encoding.TextUnmarshaler`. Nil IDs marshal as empty strings (`""`), not `null`.
+
+## Prefix reference
+
+All 27 Authsome TypeID prefixes:
+
+| Constant | Prefix | Entity |
+|----------|--------|--------|
+| `id.PrefixUser` | `ausr` | User account |
+| `id.PrefixSession` | `ases` | Auth session |
+| `id.PrefixApp` | `aapp` | Application |
+| `id.PrefixOrganization` | `aorg` | Organization |
+| `id.PrefixMember` | `amem` | Organization member |
+| `id.PrefixTeam` | `atm` | Team |
+| `id.PrefixInvitation` | `ainv` | Org invitation |
+| `id.PrefixDevice` | `adev` | Device |
+| `id.PrefixWebhook` | `awhk` | Webhook endpoint |
+| `id.PrefixNotification` | `antf` | Notification record |
+| `id.PrefixVerification` | `avrf` | Email/phone verification token |
+| `id.PrefixPasswordReset` | `apwr` | Password reset token |
+| `id.PrefixAPIKey` | `akey` | API key |
+| `id.PrefixOAuthAccount` | `aoau` | Linked OAuth account |
+| `id.PrefixPasskey` | `apsk` | Passkey credential |
+| `id.PrefixMFADevice` | `amfa` | MFA device (TOTP/SMS) |
+| `id.PrefixEnvironment` | `aenv` | Environment |
+| `id.PrefixRole` | `arol` | RBAC role |
+| `id.PrefixPermission` | `aprm` | RBAC permission |
+| `id.PrefixRecoveryCode` | `arec` | MFA recovery code |
+| `id.PrefixSSOConnection` | `asso` | SSO connection |
+| `id.PrefixConsent` | `acns` | OAuth2 consent record |
+| `id.PrefixFormConfig` | `afcf` | Dynamic form configuration |
+| `id.PrefixBridge` | `abrd` | Bridge configuration |
+| `id.PrefixAppSessionConfig` | `ascf` | Per-app session config |
+| `id.PrefixOAuth2Client` | `ao2c` | OAuth2 provider client |
+| `id.PrefixAuditACO` | `aaco` | Audit access control object |
+
+## Named ID types
+
+Each entity has a named type alias over the base `id.ID` for additional compile-time safety:
+
+```go
+type UserID        = ID
+type SessionID     = ID
+type AppID         = ID
+type OrganizationID = ID
+type MemberID      = ID
+type TeamID        = ID
+type InvitationID  = ID
+type DeviceID      = ID
+type WebhookID     = ID
+type EnvironmentID = ID
+type RoleID        = ID
+type PermissionID  = ID
+type MFADeviceID   = ID
+type PasskeyID     = ID
+type APIKeyID      = ID
+```
+
+Using named types in function signatures makes intent explicit and prevents accidental misuse:
+
+```go
+// Clear: the function wants a UserID, not just any ID.
+func (e *Engine) GetMe(ctx context.Context, userID id.UserID) (*user.User, error)
+
+// Clear: the function wants a SessionID specifically.
+func (e *Engine) RevokeSession(ctx context.Context, sessionID id.SessionID) error
+```
+
+## Generating IDs from strings
+
+When you have a raw string ID (e.g., from an HTTP header or database read), use the appropriate parse function:
+
+```go
+rawUserID := r.Header.Get("X-User-ID") // "ausr_01j9..."
+
+userID, err := id.ParseUserID(rawUserID)
+if err != nil {
+    http.Error(w, "invalid user ID", http.StatusBadRequest)
+    return
+}
+
+u, err := engine.GetMe(ctx, userID)
+```
+
+Using `id.MustParse` is available for contexts where you have already validated the format (e.g., in test setup):
+
+```go
+userID := id.MustParse("ausr_01j9k3mq2fhex4vsk0n852p0qt")
+```
+
+`MustParse` panics on invalid input. Never use it in production request handlers.

@@ -1,0 +1,15 @@
+package widgets
+
+import "github.com/xraph/forgeui/icons"
+
+templ AuthActivityWidget() {
+	<div class="flex flex-col items-center justify-center py-8 text-center">
+		<div class="text-muted-foreground mb-3">
+			@icons.Shield(icons.WithSize(32))
+		</div>
+		<p class="text-sm font-medium">Authentication activity overview</p>
+		<p class="text-xs text-muted-foreground mt-1 max-w-[240px]">
+			Connect Chronicle for detailed auth activity tracking
+		</p>
+	</div>
+}

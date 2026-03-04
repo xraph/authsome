@@ -1,0 +1,282 @@
+---
+title: Token Formats
+description: Opaque tokens vs JWT, claims structure, OIDC compatibility, JWKS endpoint, and per-app token configuration.
+---
+
+Authsome supports two token formats for session tokens: **opaque tokens** and **JSON Web Tokens (JWT)**. The format can be configured globally and overridden per application.
+
+## Opaque tokens
+
+Opaque tokens are the default format. They are cryptographically random strings with no embedded data. To validate an opaque token, the resource server must call Authsome's session lookup endpoint (or query the session store directly).
+
+```
+Authorization: Bearer a3f8c9d4e5f2g7h1j2k3m4n5p6q7r8s9
+```
+
+**Advantages:**
+- Immediate revocation — deleting the session record instantly invalidates the token
+- No token size overhead
+- No cryptographic key management required
+- Tokens cannot be decoded by clients (no information leakage)
+
+**Trade-offs:**
+- Every request requires a session store lookup
+- Not self-contained — cannot be verified without contacting the auth server
+
+### Configuration
+
+```go
+Session: authsome.SessionConfig{
+    TokenFormat: "opaque", // default
+}
+```
+
+## JWT tokens
+
+JWT tokens are self-contained, signed tokens that embed claims about the user and session. Resource servers can verify them locally using the public signing key, without contacting Authsome.
+
+```
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImtleS0yMDI0LTAxIn0...
+```
+
+**Advantages:**
+- Stateless verification — no session store lookup needed
+- Self-contained user claims reduce API calls
+- Compatible with OIDC-compliant resource servers
+- Can be verified by any service with access to the public key
+
+**Trade-offs:**
+- Tokens are valid until expiry, even after session revocation (eventual consistency)
+- Larger token size (typically 800-1200 bytes)
+- Requires cryptographic key management
+
+### Configuration
+
+```go
+Session: authsome.SessionConfig{
+    TokenFormat: "jwt",
+    JWT: authsome.JWTConfig{
+        SigningAlgorithm: "RS256",       // RS256, RS384, RS512, ES256, ES384, ES512
+        Issuer:           "https://auth.myapp.com",
+        Audience:         []string{"https://api.myapp.com"},
+        KeyID:            "key-2024-01",
+        PrivateKeyPath:   "/path/to/private.pem",
+    },
+}
+```
+
+## JWT claims structure
+
+When using JWT format, session tokens contain the following claims:
+
+### Standard claims
+
+```json
+{
+  "iss": "https://auth.myapp.com",
+  "sub": "ausr_01j9...",
+  "aud": ["https://api.myapp.com"],
+  "exp": 1730455200,
+  "iat": 1730451600,
+  "jti": "ases_01j9..."
+}
+```
+
+| Claim | Description |
+|-------|-------------|
+| `iss` | Issuer — your Authsome instance URL |
+| `sub` | Subject — the user ID |
+| `aud` | Audience — intended token recipients |
+| `exp` | Expiration time (Unix timestamp) |
+| `iat` | Issued at time (Unix timestamp) |
+| `jti` | JWT ID — the session ID (unique per token) |
+
+### Authsome custom claims
+
+```json
+{
+  "app_id": "aapp_01j9...",
+  "env_id": "aenv_01j9...",
+  "email": "alice@example.com",
+  "email_verified": true,
+  "name": "Alice Liddell",
+  "username": "alice",
+  "org_id": "aorg_01j9...",
+  "roles": ["admin", "member"],
+  "session_id": "ases_01j9..."
+}
+```
+
+| Claim | Description |
+|-------|-------------|
+| `app_id` | Application the session belongs to |
+| `env_id` | Environment the session belongs to |
+| `email` | User's email address |
+| `email_verified` | Whether the email has been verified |
+| `name` | User's display name |
+| `username` | User's username |
+| `org_id` | Organization scope (if session is org-scoped) |
+| `roles` | User's RBAC roles |
+| `session_id` | The Authsome session ID |
+
+## OIDC-compatible claims
+
+When the `openid` scope is requested (via the OAuth2 provider), ID tokens include standard OIDC claims:
+
+```json
+{
+  "iss": "https://auth.myapp.com",
+  "sub": "ausr_01j9...",
+  "aud": "aoc2_01jb...",
+  "exp": 1730455200,
+  "iat": 1730451600,
+  "auth_time": 1730451600,
+  "nonce": "random_nonce_value",
+  "at_hash": "fUHyO2r2Z3Dz10...",
+  "email": "alice@example.com",
+  "email_verified": true,
+  "name": "Alice Liddell",
+  "preferred_username": "alice",
+  "picture": "https://cdn.example.com/alice.jpg",
+  "phone_number": "+15551234567",
+  "phone_number_verified": true,
+  "updated_at": 1730451600
+}
+```
+
+Claims are included based on the requested scopes:
+
+| Scope | Claims included |
+|-------|-----------------|
+| `openid` | `sub`, `iss`, `aud`, `exp`, `iat`, `auth_time` |
+| `profile` | `name`, `preferred_username`, `picture`, `updated_at` |
+| `email` | `email`, `email_verified` |
+| `phone` | `phone_number`, `phone_number_verified` |
+
+## JWKS endpoint
+
+The JWKS (JSON Web Key Set) endpoint publishes the public keys used to verify JWT tokens. Resource servers fetch this endpoint to obtain the verification keys.
+
+`GET /.well-known/jwks.json`
+
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "key-2024-01",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "0vx7agoebGcQSuuPiLJXZ...",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+### Key rotation
+
+To rotate signing keys without downtime:
+
+1. Generate a new key pair with a new `kid`
+2. Add the new public key to the JWKS endpoint
+3. Update the engine to sign with the new key
+4. After the maximum token lifetime has elapsed, remove the old public key
+
+Both old and new keys are available simultaneously during the rotation window, allowing resource servers to verify tokens signed with either key.
+
+## Per-app token format overrides
+
+Different applications can use different token formats. For example, your main web application might use opaque tokens (for immediate revocation), while a public API uses JWT (for stateless verification).
+
+```go
+import "github.com/xraph/authsome/appsessionconfig"
+
+// Web app: opaque tokens with short TTL
+webConfig := &appsessionconfig.Config{
+    AppID:           webAppID,
+    TokenFormat:     "opaque",
+    TokenTTLSeconds: intPtr(1800), // 30 minutes
+}
+err := engine.SetAppSessionConfig(ctx, webConfig)
+
+// Public API: JWT tokens with longer TTL
+apiConfig := &appsessionconfig.Config{
+    AppID:           apiAppID,
+    TokenFormat:     "jwt",
+    TokenTTLSeconds: intPtr(3600), // 1 hour
+}
+err := engine.SetAppSessionConfig(ctx, apiConfig)
+```
+
+The per-app config structure:
+
+```go
+type Config struct {
+    ID                     id.AppSessionConfigID `json:"id"`
+    AppID                  id.AppID              `json:"app_id"`
+    TokenTTLSeconds        *int                  `json:"token_ttl_seconds,omitempty"`
+    RefreshTokenTTLSeconds *int                  `json:"refresh_token_ttl_seconds,omitempty"`
+    MaxActiveSessions      *int                  `json:"max_active_sessions,omitempty"`
+    RotateRefreshToken     *bool                 `json:"rotate_refresh_token,omitempty"`
+    BindToIP               *bool                 `json:"bind_to_ip,omitempty"`
+    BindToDevice           *bool                 `json:"bind_to_device,omitempty"`
+    TokenFormat            string                `json:"token_format,omitempty"`
+    CreatedAt              time.Time             `json:"created_at"`
+    UpdatedAt              time.Time             `json:"updated_at"`
+}
+```
+
+Fields set to `nil` inherit from the global engine configuration.
+
+## Token expiration configuration
+
+### Global defaults
+
+```go
+Session: authsome.SessionConfig{
+    TokenTTL:        1 * time.Hour,           // session token
+    RefreshTokenTTL: 30 * 24 * time.Hour,     // refresh token (30 days)
+}
+```
+
+### Recommended settings by use case
+
+| Use case | Token TTL | Refresh TTL | Format | Notes |
+|----------|-----------|-------------|--------|-------|
+| Web application | 30m-1h | 7-30d | opaque | Short tokens + refresh for UX |
+| Mobile app | 1h | 90d | jwt | Longer refresh for offline use |
+| Single-page app | 15m | 7d | opaque | Short for security, refresh on tab focus |
+| Machine-to-machine | 1h | N/A | jwt | No refresh, re-authenticate |
+| High-security | 15m | 1d | opaque | Short tokens, frequent re-auth |
+
+## Verifying tokens in Go
+
+### Opaque tokens
+
+```go
+// Look up session by token
+sess, err := engine.ValidateToken(ctx, token)
+if err != nil {
+    // Token is invalid, expired, or revoked
+}
+// sess.UserID, sess.AppID, etc. are available
+```
+
+### JWT tokens
+
+```go
+import "github.com/xraph/authsome/jwt"
+
+// Parse and verify a JWT token
+claims, err := jwt.Verify(token, jwt.VerifyOptions{
+    PublicKey: publicKey,
+    Issuer:    "https://auth.myapp.com",
+    Audience:  "https://api.myapp.com",
+})
+if err != nil {
+    // Token is invalid, expired, or has wrong issuer/audience
+}
+// claims.Subject → user ID
+// claims.SessionID → session ID
+```

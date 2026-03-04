@@ -1,0 +1,292 @@
+package auth
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/checkbox"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/label"
+	"github.com/xraph/forgeui/components/radio"
+	"github.com/xraph/forgeui/components/selectbox"
+	switchcomp "github.com/xraph/forgeui/components/switch"
+	"github.com/xraph/forgeui/components/textarea"
+	"github.com/xraph/forgeui/icons"
+
+	"github.com/xraph/authsome/formconfig"
+)
+
+// DynamicRegisterProps holds the data for the dynamic register page.
+type DynamicRegisterProps struct {
+	Links     RegisterPageLinks
+	Fields    []formconfig.FormField
+	Branding  *formconfig.BrandingConfig // optional
+	ErrorMsg  string
+	Values    map[string]string // pre-filled values for re-render
+	FieldErrs map[string]string // per-field error messages
+}
+
+// sortedFields returns a copy of fields sorted by Order.
+func sortedFields(fields []formconfig.FormField) []formconfig.FormField {
+	sorted := make([]formconfig.FormField, len(fields))
+	copy(sorted, fields)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Order < sorted[j].Order
+	})
+	return sorted
+}
+
+// fieldInputType maps formconfig.FieldType to input.Type.
+func fieldInputType(ft formconfig.FieldType) input.Type {
+	switch ft {
+	case formconfig.FieldEmail:
+		return input.TypeEmail
+	case formconfig.FieldNumber:
+		return input.TypeNumber
+	case formconfig.FieldTel:
+		return input.TypeTel
+	case formconfig.FieldURL:
+		return input.TypeURL
+	case formconfig.FieldDate:
+		return input.TypeDate
+	default:
+		return input.TypeText
+	}
+}
+
+// metaName returns the form field name prefixed with "meta_".
+func metaName(key string) string {
+	return "meta_" + key
+}
+
+// fieldAttrs builds templ.Attributes from a FormField's validation rules.
+func fieldAttrs(field formconfig.FormField) templ.Attributes {
+	attrs := templ.Attributes{}
+	if field.Validation.Required {
+		attrs["required"] = "true"
+	}
+	if field.Validation.MinLen > 0 {
+		attrs["minlength"] = fmt.Sprintf("%d", field.Validation.MinLen)
+	}
+	if field.Validation.MaxLen > 0 {
+		attrs["maxlength"] = fmt.Sprintf("%d", field.Validation.MaxLen)
+	}
+	if field.Validation.Pattern != "" {
+		attrs["pattern"] = field.Validation.Pattern
+	}
+	if field.Validation.Min != nil {
+		attrs["min"] = fmt.Sprintf("%d", *field.Validation.Min)
+	}
+	if field.Validation.Max != nil {
+		attrs["max"] = fmt.Sprintf("%d", *field.Validation.Max)
+	}
+	return attrs
+}
+
+// brandingCSS builds an inline CSS string from a BrandingConfig.
+func brandingCSS(b *formconfig.BrandingConfig) string {
+	if b == nil {
+		return ""
+	}
+	var parts []string
+	if b.PrimaryColor != "" {
+		parts = append(parts, "--primary: "+b.PrimaryColor)
+	}
+	if b.BackgroundColor != "" {
+		parts = append(parts, "--background: "+b.BackgroundColor)
+	}
+	if b.AccentColor != "" {
+		parts = append(parts, "--accent: "+b.AccentColor)
+	}
+	if b.FontFamily != "" {
+		parts = append(parts, "--font-family: "+b.FontFamily)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return ":root { " + strings.Join(parts, "; ") + "; }"
+}
+
+// DynamicRegisterPage renders the register form with custom fields from a FormConfig.
+// Core fields (email, password) are always rendered. Custom fields are rendered
+// in order between the core fields section and the submit button.
+templ DynamicRegisterPage(props DynamicRegisterProps) {
+	if props.Branding != nil && props.Branding.CompanyName != "" {
+		<div class="text-center mb-2">
+			if props.Branding.LogoURL != "" {
+				<img src={ props.Branding.LogoURL } alt={ props.Branding.CompanyName } class="h-8 mx-auto mb-2"/>
+			}
+			<h2 class="text-lg font-semibold">{ props.Branding.CompanyName }</h2>
+			if props.Branding.Tagline != "" {
+				<p class="text-sm text-muted-foreground">{ props.Branding.Tagline }</p>
+			}
+		</div>
+	} else {
+		<div class="flex items-center justify-center mb-2">
+			@icons.UserPlus(icons.WithSize(32), icons.WithClass("text-primary"))
+		</div>
+		<h2 class="text-lg font-semibold text-center">Create account</h2>
+		<p class="text-sm text-muted-foreground text-center mb-4">Enter your details to create a new account</p>
+	}
+	if css := brandingCSS(props.Branding); css != "" {
+		<style>{ css }</style>
+	}
+	<form method="POST" class="space-y-4">
+		if props.ErrorMsg != "" {
+			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+				{ props.ErrorMsg }
+			</div>
+		}
+		// Core: Name field
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "name"}) {
+				Name
+			}
+			@input.Input(input.Props{
+				ID:          "name",
+				Name:        "name",
+				Type:        input.TypeText,
+				Placeholder: "Your full name",
+				Value:       props.Values["name"],
+				Attributes:  templ.Attributes{"autocomplete": "name"},
+			})
+		</div>
+		// Core: Email field (always required)
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "name@example.com",
+				Value:       props.Values["email"],
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		// Core: Password field (always required)
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "password"}) {
+				Password
+			}
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Choose a password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "new-password"},
+			})
+		</div>
+		// Custom fields from FormConfig
+		for _, field := range sortedFields(props.Fields) {
+			@dynamicField(field, props.Values, props.FieldErrs)
+		}
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Create account
+		}
+	</form>
+	if props.Links.LoginPath != "" {
+		<p class="text-sm text-center text-muted-foreground mt-4">
+			Already have an account?{ " " }
+			<a href={ templ.SafeURL(props.Links.LoginPath) } class="text-primary hover:underline font-medium">
+				Sign in
+			</a>
+		</p>
+	}
+}
+
+// dynamicField renders a single custom form field based on its FieldType.
+templ dynamicField(field formconfig.FormField, values map[string]string, fieldErrs map[string]string) {
+	<div class="space-y-2">
+		@label.Label(label.Props{For: metaName(field.Key)}) {
+			{ field.Label }
+		}
+		switch field.Type {
+		case formconfig.FieldTextarea:
+			@textarea.Textarea(textarea.Props{
+				ID:          metaName(field.Key),
+				Name:        metaName(field.Key),
+				Placeholder: field.Placeholder,
+				Value:       values[field.Key],
+				HasError:    fieldErrs[field.Key] != "",
+				Attributes:  fieldAttrs(field),
+			})
+		case formconfig.FieldSelect:
+			@selectbox.SelectBox(selectbox.Props{
+				ID: metaName(field.Key),
+			}) {
+				@selectbox.Trigger(selectbox.TriggerProps{
+					ID:       metaName(field.Key) + "-trigger",
+					Name:     metaName(field.Key),
+					HasError: fieldErrs[field.Key] != "",
+				}) {
+					@selectbox.Value(selectbox.ValueProps{
+						Placeholder: field.Placeholder,
+					})
+				}
+				@selectbox.Content(selectbox.ContentProps{}) {
+					for _, opt := range field.Options {
+						@selectbox.Item(selectbox.ItemProps{
+							Value:    opt.Value,
+							Selected: values[field.Key] == opt.Value,
+						}) {
+							{ opt.Label }
+						}
+					}
+				}
+			}
+		case formconfig.FieldCheckbox:
+			@checkbox.Checkbox(checkbox.Props{
+				ID:      metaName(field.Key),
+				Name:    metaName(field.Key),
+				Value:   "true",
+				Checked: values[field.Key] == "true",
+			})
+		case formconfig.FieldRadio:
+			<div class="space-y-1">
+				for _, opt := range field.Options {
+					<div class="flex items-center gap-2">
+						@radio.Radio(radio.Props{
+							ID:      metaName(field.Key) + "-" + opt.Value,
+							Name:    metaName(field.Key),
+							Value:   opt.Value,
+							Checked: values[field.Key] == opt.Value,
+						})
+						@label.Label(label.Props{For: metaName(field.Key) + "-" + opt.Value}) {
+							{ opt.Label }
+						}
+					</div>
+				}
+			</div>
+		case formconfig.FieldSwitch:
+			@switchcomp.Switch(switchcomp.Props{
+				ID:      metaName(field.Key),
+				Name:    metaName(field.Key),
+				Value:   "true",
+				Checked: values[field.Key] == "true",
+			})
+		default:
+			@input.Input(input.Props{
+				ID:          metaName(field.Key),
+				Name:        metaName(field.Key),
+				Type:        fieldInputType(field.Type),
+				Placeholder: field.Placeholder,
+				Value:       values[field.Key],
+				HasError:    fieldErrs[field.Key] != "",
+				Attributes:  fieldAttrs(field),
+			})
+		}
+		if field.Description != "" {
+			<p class="text-xs text-muted-foreground">{ field.Description }</p>
+		}
+		if fieldErrs[field.Key] != "" {
+			<p class="text-xs text-destructive">{ fieldErrs[field.Key] }</p>
+		}
+	</div>
+}

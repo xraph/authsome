@@ -1,0 +1,132 @@
+---
+title: Keysmith Bridge
+description: Centralized API key management — delegates key operations to Keysmith for rate limiting, scoping, and rotation.
+---
+
+The Keysmith bridge connects Authsome to the Keysmith API key management extension. When configured, all API key creation, validation, and revocation operations are delegated to Keysmith, which provides a richer feature set than Authsome's built-in API key store: rate limiting per key, scope enforcement, key rotation with grace periods, usage analytics, and multi-tenant isolation.
+
+## Interface
+
+The `bridge.KeyManager` interface is defined in `github.com/xraph/authsome/bridge`:
+
+```go
+type KeyManager interface {
+    CreateKey(ctx context.Context, input *CreateKeyInput) (*KeyResult, error)
+    ValidateKey(ctx context.Context, rawKey string) (*ValidatedKey, error)
+    RevokeKey(ctx context.Context, keyID string) error
+}
+
+type CreateKeyInput struct {
+    Name        string            `json:"name"`
+    Owner       string            `json:"owner"`        // User ID
+    Environment string            `json:"environment,omitempty"`
+    Scopes      []string          `json:"scopes,omitempty"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+}
+
+type KeyResult struct {
+    ID     string `json:"id"`
+    RawKey string `json:"raw_key"` // Only returned on creation; store securely
+}
+
+type ValidatedKey struct {
+    ID          string            `json:"id"`
+    Name        string            `json:"name"`
+    Owner       string            `json:"owner"`
+    Environment string            `json:"environment,omitempty"`
+    Scopes      []string          `json:"scopes,omitempty"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+}
+```
+
+## Setup with the Keysmith engine (recommended)
+
+Authsome provides a first-class `WithKeysmith` option that accepts the concrete `*keysmith.Engine` directly:
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/keysmith"
+)
+
+// Build the Keysmith engine.
+keysmithEng, err := keysmith.New(
+    keysmith.WithStore(keysmithStore),
+    keysmith.WithRateLimit(keysmith.RateLimitConfig{
+        RequestsPerMinute: 1000,
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Register with Authsome using the first-class option.
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithKeysmith(keysmithEng),
+)
+```
+
+Internally, `WithKeysmith` calls:
+
+```go
+e.keysmith_ = keysmithEng
+e.keyManager = keysmithadapter.New(keysmithEng)
+```
+
+## Setup with the generic KeyManager interface
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/keysmithadapter"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithKeyManager(keysmithadapter.New(keysmithEng)),
+)
+```
+
+## Capabilities gained with Keysmith
+
+| Feature | Without Keysmith | With Keysmith |
+|---------|-----------------|---------------|
+| Key creation | Stored in `authsome_api_keys` table | Managed in Keysmith with full audit trail |
+| Key validation | Database lookup by prefix | Keysmith's in-memory cache with rate limiting |
+| Rate limiting | Not available | Per-key rate limits (req/min, req/day) |
+| Scope enforcement | Not available | Declarative scope validation |
+| Key rotation | Manual revoke + create | Grace period rotation (old key valid for X minutes) |
+| Usage analytics | Not available | Per-key request counts, last-used timestamp |
+| Multi-tenant isolation | App-level scoping | Full tenant-scoped key namespacing |
+
+## Scope enforcement
+
+When Keysmith is configured, API key validation includes scope checking. Create keys with explicit scopes:
+
+```go
+result, err := eng.CreateAPIKey(ctx, &authsome.CreateAPIKeyRequest{
+    Name:   "CI pipeline key",
+    UserID: userID,
+    Scopes: []string{"read:users", "read:sessions"},
+})
+```
+
+Keysmith validates that the key's declared scopes match the required scopes for each operation. Requests from keys without the required scope are rejected with a `403 Forbidden`.
+
+## Standalone development stub
+
+During development without Keysmith, API key operations return `ErrKeyManagerNotAvailable`:
+
+```go
+import "github.com/xraph/authsome/bridge"
+
+// Authsome uses NoopKeyManager internally when no KeyManager is set.
+// You can also set it explicitly to be explicit:
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    authsome.WithKeyManager(bridge.NewNoopKeyManager()),
+)
+```
+
+When `NoopKeyManager` is active, calls to create, validate, or revoke API keys return an error. If your application does not use API keys, this is fine — no action needed.

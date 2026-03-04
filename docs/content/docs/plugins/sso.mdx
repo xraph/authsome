@@ -1,0 +1,171 @@
+---
+title: SSO Plugin
+description: Enterprise Single Sign-On via OIDC and SAML with per-organization provider configuration and domain-based routing.
+---
+
+The `sso` plugin provides enterprise Single Sign-On for Authsome. It supports both OIDC (OpenID Connect) and SAML 2.0 identity providers, with per-organization SSO connections and domain-based routing.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/sso"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(sso.New(sso.Config{
+        Providers: []sso.Provider{
+            sso.NewOIDC(sso.OIDCConfig{
+                Name:         "okta",
+                Issuer:       "https://mycompany.okta.com",
+                ClientID:     "your-client-id",
+                ClientSecret: "your-client-secret",
+                RedirectURL:  "https://example.com/v1/auth/sso/okta/callback",
+            }),
+            sso.NewSAML(sso.SAMLConfig{
+                Name:       "azure-ad",
+                MetadataURL: "https://login.microsoftonline.com/.../metadata",
+                ACSPath:    "/v1/auth/sso/azure-ad/acs",
+                EntityID:   "https://example.com",
+            }),
+        },
+        SessionTokenTTL:   1 * time.Hour,
+        SessionRefreshTTL: 30 * 24 * time.Hour,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Providers` | `[]Provider` | `[]` | List of SSO provider configurations |
+| `SessionTokenTTL` | `time.Duration` | `1h` | Lifetime of sessions created via SSO |
+| `SessionRefreshTTL` | `time.Duration` | `30d` | Lifetime of refresh tokens |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"sso"`) |
+| `OnInit` | Captures store, bridges, ceremony store, and session config resolver |
+| `RouteProvider` | Registers SSO login, callback, and ACS endpoints |
+| `MigrationProvider` | Contributes the `sso_connections` table |
+
+## OIDC integration
+
+OIDC providers (Okta, Auth0, Azure AD, Google Workspace) are configured with standard OpenID Connect discovery:
+
+```go
+sso.NewOIDC(sso.OIDCConfig{
+    Name:         "okta",
+    Issuer:       "https://mycompany.okta.com",
+    ClientID:     "your-client-id",
+    ClientSecret: "your-client-secret",
+    RedirectURL:  "https://example.com/v1/auth/sso/okta/callback",
+    Scopes:       []string{"openid", "email", "profile"},
+})
+```
+
+The plugin resolves the `.well-known/openid-configuration` endpoint from the issuer URL to discover authorization, token, and userinfo endpoints automatically.
+
+## SAML integration
+
+SAML 2.0 providers (Azure AD, ADFS, OneLogin) use XML metadata for configuration:
+
+```go
+sso.NewSAML(sso.SAMLConfig{
+    Name:        "azure-ad",
+    MetadataURL: "https://login.microsoftonline.com/.../federationmetadata/2007-06/federationmetadata.xml",
+    ACSPath:     "/v1/auth/sso/azure-ad/acs",
+    EntityID:    "https://example.com",
+    Certificate: samlCertPEM,
+})
+```
+
+The ACS (Assertion Consumer Service) endpoint receives the SAML response from the IdP and extracts the user identity.
+
+## SSO authentication flow
+
+### SP-initiated flow (Service Provider initiated)
+
+
+
+**Start login**: The client requests the SSO login URL.
+
+`POST /v1/auth/sso/:provider/login`
+
+**Response:**
+
+```json
+{
+  "login_url": "https://mycompany.okta.com/oauth2/v1/authorize?...",
+  "state": "random-state-token"
+}
+```
+
+
+**User authenticates**: The user is redirected to the IdP, authenticates, and is redirected back.
+
+
+**Callback**: For OIDC, the callback exchanges the code for tokens. For SAML, the ACS endpoint processes the SAML response.
+
+`POST /v1/auth/sso/:provider/callback` (OIDC)
+`POST /v1/auth/sso/:provider/acs` (SAML)
+
+**Response:**
+
+```json
+{
+  "user": {"id": "ausr_01j9...", "email": "alice@company.com", "email_verified": true},
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "provider": "okta",
+  "is_new_user": false
+}
+```
+
+
+
+### IdP-initiated flow (Identity Provider initiated)
+
+In IdP-initiated SAML flows, the user starts at the identity provider dashboard and clicks the application tile. The IdP sends a SAML response directly to the ACS endpoint without a prior authentication request. The plugin validates the `RelayState` if present.
+
+## Domain-based SSO routing
+
+For applications that serve multiple organizations, route users to the correct SSO provider based on their email domain:
+
+```go
+// In your frontend, resolve the provider by email domain:
+// alice@company.com -> "okta"
+// bob@partner.com   -> "azure-ad"
+```
+
+The engine supports per-organization SSO connections stored in the database, allowing each tenant to configure their own identity provider.
+
+## User provisioning
+
+When a user authenticates via SSO for the first time:
+
+1. The plugin looks up the user by email
+2. If no user exists, a new user is created with `EmailVerified: true` (SSO-authenticated emails are trusted)
+3. A session is created and returned
+
+SSO users are always treated as email-verified since the identity provider has already validated their identity.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/sso/:provider/login` | Start SSO login flow, returns IdP login URL |
+| `POST` | `/v1/auth/sso/:provider/callback` | OIDC callback endpoint |
+| `POST` | `/v1/auth/sso/:provider/acs` | SAML ACS (Assertion Consumer Service) endpoint |
+
+## Observability
+
+The plugin emits events for:
+
+- `auth.sso.signup` -- New user created via SSO
+- `auth.sso.signin` -- Existing user signed in via SSO

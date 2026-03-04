@@ -1,0 +1,151 @@
+---
+title: Authsome UI Overview
+description: Pre-built authentication UI components for React, Next.js, and Vue — headless hooks plus styled Radix + Tailwind components.
+---
+
+Authsome UI is a family of five JavaScript/TypeScript packages that provide authentication UI for any React, Next.js, or Vue application backed by an Authsome API. The packages are layered: each higher-level package builds on the one below it, and you choose the level of abstraction that fits your project.
+
+## Package architecture
+
+```
+@authsome/ui-core          ← HTTP client, AuthManager, TypeScript types
+        │
+        ├── @authsome/ui-react     ← React hooks + headless render-prop components
+        │           │
+        │           ├── @authsome/ui-components  ← Styled auth forms (Radix + Tailwind)
+        │           │
+        │           └── @authsome/ui-nextjs      ← Next.js server utilities + Edge middleware
+        │
+        └── @authsome/ui-vue       ← Vue 3 composables (uses ui-core directly)
+```
+
+## The five packages
+
+| Package | Version | What it provides |
+|---------|---------|-----------------|
+| `@authsome/ui-core` | — | `AuthManager` class, `AuthClient` HTTP client, TypeScript type definitions (`User`, `Session`, `Organization`, `AuthState`, etc.) |
+| `@authsome/ui-react` | — | `AuthProvider`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken`, headless `SignInForm`, `SignUpForm`, `MFAChallengeForm`, `AuthGuard` |
+| `@authsome/ui-components` | — | 40+ styled components built with Radix UI primitives and Tailwind CSS |
+| `@authsome/ui-nextjs` | — | `getServerSession()` for RSC, `createCookieStorage()`, `createAuthMiddleware()` for Edge, pre-built Next.js auth pages |
+| `@authsome/ui-vue` | — | `createAuthPlugin()`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken` composables |
+
+## Installation
+
+Install the packages appropriate for your framework:
+
+**React** (headless hooks only):
+
+```bash
+npm install @authsome/ui-react @authsome/ui-core
+```
+
+**React** (headless + styled components):
+
+```bash
+npm install @authsome/ui-react @authsome/ui-core @authsome/ui-components
+```
+
+**Next.js** (full integration with styled components):
+
+```bash
+npm install @authsome/ui-nextjs @authsome/ui-react @authsome/ui-core @authsome/ui-components
+```
+
+**Vue**:
+
+```bash
+npm install @authsome/ui-vue @authsome/ui-core
+```
+
+## Package comparison
+
+| Feature | `ui-core` | `ui-react` | `ui-components` | `ui-nextjs` | `ui-vue` |
+|---------|-----------|------------|-----------------|-------------|----------|
+| TypeScript types | Yes | Re-exports | — | Re-exports | — |
+| HTTP client (`AuthClient`) | Yes | Via context | — | Via context | Via composables |
+| State management | `AuthManager` | `AuthProvider` | Uses React | Uses React | `createAuthPlugin` |
+| Hooks / composables | — | Yes | — | Re-exports | Yes |
+| Headless form components | — | Yes | — | Re-exports | — |
+| Styled form components | — | — | Yes | — | — |
+| Server session (`RSC`) | — | — | — | Yes | — |
+| Edge middleware | — | — | — | Yes | — |
+| Cookie token storage | — | — | — | Yes | — |
+
+## Core concepts
+
+### AuthManager
+
+`AuthManager` in `@authsome/ui-core` is the framework-agnostic state machine that manages authentication lifecycle. It:
+
+- Persists session tokens to configurable storage (localStorage, cookies, custom)
+- Hydrates state on page load from stored tokens
+- Automatically refreshes tokens before expiry
+- Provides a synchronous `getState()` and a subscription API for reactive frameworks
+
+```typescript
+import { AuthManager } from "@authsome/ui-core";
+
+const manager = new AuthManager({
+  baseURL: "https://api.example.com",
+  tokenStorage: localStorage,  // or custom TokenStorage implementation
+});
+
+await manager.initialize(); // Hydrate from storage
+await manager.signIn({ email, password });
+
+const state = manager.getState();
+// state.status: "loading" | "authenticated" | "unauthenticated" | "error"
+```
+
+### AuthClient
+
+`AuthClient` in `@authsome/ui-core` is the typed HTTP client that talks to the Authsome API. It wraps all endpoints under `/v1/auth`:
+
+```typescript
+import { AuthClient } from "@authsome/ui-core";
+
+const client = new AuthClient({ baseURL: "https://api.example.com" });
+
+// All methods are typed and return the exact Authsome API response shape.
+const result = await client.signIn({ email, password });
+const user = await client.getMe(sessionToken);
+const orgs = await client.listOrganizations(sessionToken);
+```
+
+## Quick start (React)
+
+```tsx
+import { AuthProvider, useAuth } from "@authsome/ui-react";
+import { SignInForm, SignUpForm } from "@authsome/ui-components";
+
+function App() {
+  return (
+    <AuthProvider baseURL="https://api.example.com">
+      <Routes />
+    </AuthProvider>
+  );
+}
+
+function Dashboard() {
+  const { user, isAuthenticated, signOut } = useAuth();
+
+  if (!isAuthenticated) return <SignInForm />;
+
+  return (
+    <div>
+      <p>Welcome, {user?.name}</p>
+      <button onClick={signOut}>Sign out</button>
+    </div>
+  );
+}
+```
+
+## Where to go next
+
+<Cards>
+  <Card title="React Integration" href="/docs/ui/react" description="AuthProvider, useAuth hook, headless components." />
+  <Card title="Styled Components" href="/docs/ui/components" description="40+ Radix + Tailwind auth components." />
+  <Card title="Next.js Integration" href="/docs/ui/nextjs" description="Server sessions, Edge middleware, pre-built pages." />
+  <Card title="Vue Integration" href="/docs/ui/vue" description="createAuthPlugin and Vue 3 composables." />
+  <Card title="Playground" href="/docs/ui/playground" description="Interactive Storybook with all components." />
+</Cards>

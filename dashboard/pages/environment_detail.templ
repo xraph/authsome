@@ -1,0 +1,123 @@
+package pages
+
+import (
+	"github.com/xraph/authsome/environment"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ EnvironmentDetailPage(env *environment.Environment) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "/environments",
+				"hx-target":   "#main-content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Environments
+		}
+
+		<!-- Environment Info Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-4">
+						<span class="inline-block w-4 h-4 rounded-full" style={ "background-color:" + env.Color }></span>
+						<div>
+							@card.Title() {
+								{ env.Name }
+							}
+							@card.Description() {
+								<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ env.Slug }</code>
+							}
+						</div>
+					</div>
+					<div class="flex items-center gap-2">
+						@envTypeBadge(env.Type)
+						if env.IsDefault {
+							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+								Default
+							}
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+					@envField("Environment ID", env.ID.String())
+					@envField("Slug", env.Slug)
+					@envField("Type", string(env.Type))
+					@envField("Color", env.Color)
+					if env.Description != "" {
+						@envField("Description", env.Description)
+					}
+					if !env.ClonedFrom.IsNil() {
+						@envField("Cloned From", env.ClonedFrom.String())
+					}
+					@envField("Created", env.CreatedAt.Format("Jan 02, 2006 15:04"))
+					@envField("Updated", env.UpdatedAt.Format("Jan 02, 2006 15:04"))
+				</dl>
+			}
+		}
+
+		<!-- Settings Card -->
+		if env.Settings != nil {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Settings
+					}
+				}
+				@card.Content() {
+					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						@envSettingField("Skip Email Verification", env.Settings.SkipEmailVerificationEnabled())
+						@envSettingField("Allow Test Credentials", env.Settings.AllowTestCredentialsEnabled())
+						@envSettingField("Rate Limiting", env.Settings.IsRateLimitEnabled())
+						@envSettingField("Account Lockout", env.Settings.IsLockoutEnabled())
+						@envSettingField("Breach Check", env.Settings.IsBreachCheckEnabled())
+						if env.Settings.WebhookURLOverride != "" {
+							@envField("Webhook URL Override", env.Settings.WebhookURLOverride)
+						}
+					</dl>
+				}
+			}
+		}
+
+		<!-- Plugin-contributed sections slot -->
+		{ children... }
+	</div>
+}
+
+templ envField(label string, value string) {
+	<div>
+		<dt class="text-sm font-medium text-muted-foreground">{ label }</dt>
+		<dd class="mt-1 text-sm">{ value }</dd>
+	</div>
+}
+
+templ envSettingField(label string, enabled bool) {
+	<div>
+		<dt class="text-sm font-medium text-muted-foreground">{ label }</dt>
+		<dd class="mt-1 text-sm">
+			if enabled {
+				@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+					Enabled
+				}
+			} else {
+				@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+					Disabled
+				}
+			}
+		</dd>
+	</div>
+}

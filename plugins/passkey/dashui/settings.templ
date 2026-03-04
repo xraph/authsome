@@ -1,0 +1,34 @@
+package dashui
+
+import (
+	"strings"
+
+	"github.com/xraph/forgeui/components/card"
+)
+
+templ SettingsPanel(rpDisplayName string, rpID string, rpOrigins []string, sessionTimeout string) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				Passkeys / WebAuthn
+			}
+			@card.Description() {
+				FIDO2 WebAuthn configuration
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">RP Display Name</dt>
+				<dd class="font-medium">{ rpDisplayName }</dd>
+				<dt class="text-muted-foreground">RP ID</dt>
+				<dd class="font-medium">{ rpID }</dd>
+				if len(rpOrigins) > 0 {
+					<dt class="text-muted-foreground">Origins</dt>
+					<dd class="font-medium">{ strings.Join(rpOrigins, ", ") }</dd>
+				}
+				<dt class="text-muted-foreground">Session Timeout</dt>
+				<dd class="font-medium">{ sessionTimeout }</dd>
+			</dl>
+		}
+	}
+}

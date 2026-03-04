@@ -1,0 +1,178 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/label"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ SignupFormEditorPage(fc *formconfig.FormConfig) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<a href="../signup-forms" class="text-muted-foreground hover:text-foreground">
+					@icons.ArrowLeft(icons.WithSize(20))
+				</a>
+				<h1 class="text-3xl font-bold tracking-tight">
+					if fc.ID.IsNil() {
+						New Signup Form
+					} else {
+						Edit Signup Form
+					}
+				</h1>
+				if !fc.ID.IsNil() {
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ "v" + strconv.Itoa(fc.Version) }
+					}
+				}
+			</div>
+		</div>
+
+		<!-- Current fields -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Custom Fields
+				}
+				@card.Description() {
+					Fields shown on the signup form in addition to email and password. Field values are stored in user metadata.
+				}
+			}
+			@card.Content() {
+				if len(fc.Fields) == 0 {
+					@emptyState("No custom fields defined yet. Add fields below.", icons.FilePen(icons.WithSize(40)))
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Order }
+								@table.Head() { Label }
+								@table.Head() { Key }
+								@table.Head() { Type }
+								@table.Head() { Required }
+							}
+						}
+						@table.Body() {
+							for _, field := range fc.Fields {
+								@table.Row() {
+									@table.Cell() { { strconv.Itoa(field.Order) } }
+									@table.Cell() {
+										<span class="font-medium">{ field.Label }</span>
+									}
+									@table.Cell() {
+										<code class="text-xs">{ field.Key }</code>
+									}
+									@table.Cell() {
+										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+											{ string(field.Type) }
+										}
+									}
+									@table.Cell() {
+										if field.Validation.Required {
+											@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+												Yes
+											}
+										} else {
+											<span class="text-muted-foreground">No</span>
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		<!-- Add field form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Add Field
+				}
+				@card.Description() {
+					Add a new custom field to the signup form. Submit to save.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="add_field"/>
+					<div class="grid grid-cols-2 gap-4">
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "field_label"}) {
+								Label
+							}
+							@input.Input(input.Props{
+								ID:          "field_label",
+								Name:        "field_label",
+								Type:        input.TypeText,
+								Placeholder: "e.g., Company Name",
+								Attributes:  templ.Attributes{"required": "true"},
+							})
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "field_key"}) {
+								Key
+							}
+							@input.Input(input.Props{
+								ID:          "field_key",
+								Name:        "field_key",
+								Type:        input.TypeText,
+								Placeholder: "e.g., company_name",
+								Attributes:  templ.Attributes{"required": "true", "pattern": "[a-z][a-z0-9_]*"},
+							})
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "field_type"}) {
+								Type
+							}
+							<select id="field_type" name="field_type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
+								<option value="text">Text</option>
+								<option value="email">Email</option>
+								<option value="number">Number</option>
+								<option value="tel">Phone</option>
+								<option value="url">URL</option>
+								<option value="date">Date</option>
+								<option value="textarea">Textarea</option>
+								<option value="select">Select</option>
+								<option value="checkbox">Checkbox</option>
+								<option value="radio">Radio</option>
+								<option value="switch">Switch</option>
+							</select>
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "field_placeholder"}) {
+								Placeholder
+							}
+							@input.Input(input.Props{
+								ID:          "field_placeholder",
+								Name:        "field_placeholder",
+								Type:        input.TypeText,
+								Placeholder: "Optional placeholder text",
+							})
+						</div>
+					</div>
+					<div class="flex items-center gap-4">
+						<label class="flex items-center gap-2 text-sm">
+							<input type="checkbox" name="field_required" value="true"/>
+							Required
+						</label>
+						<div class="flex-1"></div>
+						@button.Button(button.Props{Type: button.TypeSubmit}) {
+							@icons.Plus(icons.WithSize(16))
+							Add Field
+						}
+					</div>
+				</form>
+			}
+		}
+	</div>
+}

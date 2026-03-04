@@ -1,0 +1,21 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+@layer utilities {
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--color-fd-border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-fd-border) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  .bg-dotted {
+    background-image: radial-gradient(
+      circle,
+      var(--color-fd-border) 1px,
+      transparent 1px
+    );
+    background-size: 32px 32px;
+  }
+}

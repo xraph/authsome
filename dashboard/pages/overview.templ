@@ -1,0 +1,67 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/authsome/user"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+)
+
+templ OverviewPage(totalUsers int, recentUsers []*user.User) {
+	<div class="space-y-8">
+		<!-- Page Header -->
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Authentication Overview</h1>
+			<p class="text-muted-foreground mt-1">Monitor your authentication system at a glance.</p>
+		</div>
+
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			@components.StatCard("users", "Total Users", strconv.Itoa(totalUsers), "Registered accounts")
+		</div>
+
+		<!-- Recent Users Section -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Recent Signups
+				}
+				@card.Description() {
+					The last 5 users who signed up.
+				}
+			}
+			@card.Content() {
+				if len(recentUsers) == 0 {
+					<p class="text-sm text-muted-foreground py-4 text-center">No users yet.</p>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Email }
+								@table.Head() { Created }
+							}
+						}
+						@table.Body() {
+							for _, u := range recentUsers {
+								@table.Row() {
+									@table.Cell() { { u.Name() } }
+									@table.Cell() { { u.Email } }
+									@table.Cell() {
+										{{ created := u.CreatedAt.Format("Jan 02, 2006") }}
+										{ created }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		<!-- Plugin-contributed sections slot -->
+		{ children... }
+	</div>
+}

@@ -1,0 +1,30 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+)
+
+// ConsentsPage renders the consent management page.
+templ ConsentsPage() {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Consent Records</h1>
+			<p class="text-muted-foreground mt-1">Track and manage user consent for data processing purposes.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					All Consents
+				}
+				@card.Description() {
+					Consent records are scoped per application and user
+				}
+			}
+			@card.Content() {
+				<p class="text-sm text-muted-foreground py-4 text-center">
+					Consent data is available on individual user detail pages.
+				</p>
+			}
+		}
+	</div>
+}

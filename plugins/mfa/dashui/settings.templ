@@ -1,0 +1,24 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+)
+
+templ SettingsPanel(issuer string) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				Multi-Factor Authentication
+			}
+			@card.Description() {
+				TOTP and SMS challenge configuration
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">Issuer</dt>
+				<dd class="font-medium">{ issuer }</dd>
+			</dl>
+		}
+	}
+}

@@ -1,0 +1,162 @@
+---
+title: Errors
+description: Sentinel error values, API error response format, and error handling patterns.
+---
+
+Authsome defines sentinel error values in dedicated packages. Use `errors.Is` to check for specific error conditions. Never compare error strings directly — error messages are not part of the public API.
+
+## Using errors.Is
+
+```go
+import (
+    "errors"
+
+    "github.com/xraph/authsome/account"
+    "github.com/xraph/authsome/store"
+)
+
+u, sess, err := engine.SignIn(ctx, req)
+switch {
+case errors.Is(err, account.ErrInvalidCredentials):
+    // Wrong email or password — return 401
+case errors.Is(err, account.ErrAccountLocked):
+    // Too many failed attempts — return 423
+case errors.Is(err, account.ErrUserBanned):
+    // User is banned — return 403
+case err != nil:
+    // Unexpected error — return 500
+default:
+    // Success
+}
+```
+
+All service methods wrap sentinel errors using `fmt.Errorf` and `%w`, so `errors.Is` works correctly even when the error is wrapped with additional context.
+
+## Store errors
+
+**Package:** `github.com/xraph/authsome/store`
+
+| Error | Description |
+|-------|-------------|
+| `store.ErrNotFound` | The requested entity does not exist. Returned by all Get/Lookup operations. |
+| `store.ErrDuplicate` | A unique constraint was violated (e.g., duplicate email). |
+| `store.ErrConflict` | A write conflict or optimistic lock violation occurred. |
+
+```go
+u, err := engine.Store().GetUserByEmail(ctx, appID, email)
+if errors.Is(err, store.ErrNotFound) {
+    // User does not exist
+}
+```
+
+## Account errors
+
+**Package:** `github.com/xraph/authsome/account`
+
+### Authentication errors
+
+| Error | Description |
+|-------|-------------|
+| `account.ErrInvalidCredentials` | Email/password combination is incorrect, or the identifier was not found. Deliberately vague to prevent email enumeration. |
+| `account.ErrUserBanned` | The user's account has been banned (permanently or temporarily). |
+| `account.ErrAccountLocked` | The account has been locked due to too many failed sign-in attempts. |
+| `account.ErrSessionExpired` | The access token or refresh token has expired. |
+
+### Password errors
+
+| Error | Description |
+|-------|-------------|
+| `account.ErrPasswordBreached` | The password was found in the HaveIBeenPwned breach database. Only returned when `CheckBreached: true`. |
+| `account.ErrPasswordReused` | The new password matches one of the user's previous passwords. Only returned when `HistoryCount > 0`. |
+| `account.ErrPasswordExpired` | The user's password has exceeded `MaxAgeDays`. Returned from `SignIn` — the user must change their password. |
+| `account.ErrPasswordTooWeak` | The password does not meet the policy (min length, uppercase, digit, special). |
+
+### Registration errors
+
+| Error | Description |
+|-------|-------------|
+| `account.ErrEmailTaken` | A user with this email already exists in the app. |
+| `account.ErrUsernameTaken` | A user with this username already exists in the app. |
+
+## API error response format
+
+When a request fails, the HTTP API returns a JSON error body with a consistent shape:
+
+```json
+{
+  "error": {
+    "code": "invalid_credentials",
+    "message": "Invalid email or password.",
+    "status": 401
+  }
+}
+```
+
+### HTTP status code mapping
+
+| Sentinel error | HTTP status | Error code |
+|----------------|-------------|------------|
+| `account.ErrInvalidCredentials` | `401 Unauthorized` | `invalid_credentials` |
+| `account.ErrSessionExpired` | `401 Unauthorized` | `session_expired` |
+| `account.ErrUserBanned` | `403 Forbidden` | `user_banned` |
+| `account.ErrAccountLocked` | `423 Locked` | `account_locked` |
+| `account.ErrEmailTaken` | `409 Conflict` | `email_taken` |
+| `account.ErrUsernameTaken` | `409 Conflict` | `username_taken` |
+| `account.ErrPasswordBreached` | `422 Unprocessable Entity` | `password_breached` |
+| `account.ErrPasswordReused` | `422 Unprocessable Entity` | `password_reused` |
+| `account.ErrPasswordExpired` | `428 Precondition Required` | `password_expired` |
+| `account.ErrPasswordTooWeak` | `422 Unprocessable Entity` | `password_too_weak` |
+| `store.ErrNotFound` | `404 Not Found` | `not_found` |
+| Any unexpected error | `500 Internal Server Error` | `internal_error` |
+
+## Error wrapping patterns
+
+Authsome wraps all internal errors with context before returning them. The wrapping format is consistent: `"authsome: <operation>: <underlying>"`.
+
+```go
+// Internal wrapping — always use errors.Is, not string comparison.
+if err := e.store.CreateUser(ctx, u); err != nil {
+    return nil, nil, fmt.Errorf("authsome: create user: %w", err)
+}
+```
+
+When you receive an error from the engine, unwrap it to inspect the root cause:
+
+```go
+u, sess, err := engine.SignUp(ctx, req)
+if err != nil {
+    // Check for the specific root cause.
+    if errors.Is(err, account.ErrEmailTaken) {
+        // handle duplicate email
+        return
+    }
+    // Log the full wrapped error for debugging.
+    slog.Error("signup failed", "error", err)
+}
+```
+
+## Plugin errors
+
+Plugin `OnBeforeSignUp` and `OnBeforeSignIn` hooks can return custom errors to block the operation. Return any error value — it will be wrapped and propagated to the caller:
+
+```go
+func (p *DomainRestrictPlugin) OnBeforeSignUp(_ context.Context, req *account.SignUpRequest) error {
+    if !strings.HasSuffix(req.Email, "@mycompany.com") {
+        return fmt.Errorf("only @mycompany.com emails are allowed")
+    }
+    return nil
+}
+```
+
+The caller receives: `"authsome: before signup: only @mycompany.com emails are allowed"`.
+
+## Form validation errors
+
+When a `FormConfig` is active and the sign-up request fails field validation, the engine returns a descriptive error message:
+
+```go
+// Returns: "authsome: form validation: company_name is required"
+u, sess, err := engine.SignUp(ctx, req)
+```
+
+Individual field validation errors are checked before the user is created. The error message includes the field name to help the client surface appropriate UI feedback.

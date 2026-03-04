@@ -1,0 +1,30 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+)
+
+// EnrollmentsPage renders the MFA enrollments overview.
+templ EnrollmentsPage() {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Multi-Factor Authentication</h1>
+			<p class="text-muted-foreground mt-1">Manage MFA enrollments across your application.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Enrollments
+				}
+				@card.Description() {
+					All MFA enrollments registered by users
+				}
+			}
+			@card.Content() {
+				<p class="text-sm text-muted-foreground py-4 text-center">
+					MFA enrollment data is available on individual user detail pages.
+				</p>
+			}
+		}
+	</div>
+}

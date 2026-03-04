@@ -1,0 +1,228 @@
+---
+title: MFA Plugin
+description: Multi-factor authentication with TOTP, SMS OTP, recovery codes, and challenge flows.
+---
+
+The `mfa` plugin adds multi-factor authentication to Authsome. It supports TOTP (Time-based One-Time Passwords) for authenticator apps, SMS-based OTP as a second factor, and recovery codes for account recovery when the primary MFA method is unavailable.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/mfa"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithSMSSender(smsBridge),       // Required for SMS MFA
+    authsome.WithPlugin(mfa.New(mfa.Config{
+        Issuer: "My App",
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Issuer` | `string` | `"AuthSome"` | Name displayed in authenticator apps (Google Authenticator, Authy, etc.) |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"mfa"`) |
+| `OnInit` | Captures SMS sender, Chronicle, Relay, hooks, logger, and ceremony store |
+| `RouteProvider` | Registers all MFA endpoints under `/v1/auth/mfa` |
+| `MigrationProvider` | Contributes `mfa_enrollments` and `mfa_recovery_codes` tables |
+
+## TOTP enrollment
+
+TOTP (RFC 6238) is the recommended MFA method. It works with any authenticator app that supports the `otpauth://` URI scheme.
+
+### Step 1: Start enrollment
+
+`POST /v1/auth/mfa/enroll`
+
+```json
+{"method": "totp"}
+```
+
+**Response:**
+
+```json
+{
+  "id": "amfa_01j9...",
+  "method": "totp",
+  "secret": "JBSWY3DPEHPK3PXP",
+  "otpauth_url": "otpauth://totp/My%20App:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=My%20App"
+}
+```
+
+The `otpauth_url` can be rendered as a QR code for the user to scan with their authenticator app. The `secret` is displayed as a manual entry fallback.
+
+### Step 2: Verify enrollment
+
+`POST /v1/auth/mfa/verify`
+
+```json
+{"code": "123456"}
+```
+
+The user enters the 6-digit code from their authenticator app. On first successful verification, the enrollment is marked as verified and recovery codes are generated.
+
+**Response:**
+
+```json
+{
+  "verified": true,
+  "method": "totp",
+  "recovery_codes": [
+    "a1b2c3d4e5",
+    "f6g7h8i9j0",
+    "k1l2m3n4o5"
+  ]
+}
+```
+
+Recovery codes are shown only once. The user must store them securely.
+
+## SMS MFA
+
+SMS OTP provides a second factor using text messages. It requires an SMS bridge to be configured.
+
+### Enroll via SMS
+
+`POST /v1/auth/mfa/enroll`
+
+```json
+{"method": "sms", "phone": "+14155551234"}
+```
+
+The plugin sends an initial verification code to the provided phone number.
+
+### Send SMS code
+
+`POST /v1/auth/mfa/sms/send`
+
+```json
+{"phone": "+14155551234"}
+```
+
+**Response:**
+
+```json
+{
+  "sent": true,
+  "expires_in_seconds": 300,
+  "phone_masked": "***1234"
+}
+```
+
+### Verify SMS code
+
+`POST /v1/auth/mfa/sms/verify`
+
+```json
+{"code": "123456"}
+```
+
+## MFA challenge flow
+
+During sign-in, if the user has MFA enrolled, the engine requires an MFA challenge before issuing a full session.
+
+`POST /v1/auth/mfa/challenge`
+
+```json
+{"code": "123456"}
+```
+
+**Response:**
+
+```json
+{
+  "challenge_passed": true,
+  "method": "totp"
+}
+```
+
+The challenge validates the TOTP code against the user's enrolled secret. On success, the session is upgraded to full access.
+
+## Recovery codes
+
+Recovery codes are generated when MFA is first verified. Each code is one-time use and bcrypt-hashed before storage.
+
+### Verify a recovery code
+
+`POST /v1/auth/mfa/recovery/verify`
+
+```json
+{"code": "a1b2c3d4e5"}
+```
+
+**Response:**
+
+```json
+{
+  "challenge_passed": true,
+  "codes_remaining": 7
+}
+```
+
+### Regenerate recovery codes
+
+`POST /v1/auth/mfa/recovery/regenerate`
+
+Generates a fresh set of recovery codes, replacing all existing codes. Requires an active MFA enrollment.
+
+**Response:**
+
+```json
+{
+  "codes": ["x1y2z3...", "a4b5c6...", "..."]
+}
+```
+
+## Disable MFA
+
+`DELETE /v1/auth/mfa/enrollment`
+
+Removes the MFA enrollment for the authenticated user. Recovery codes are not automatically deleted.
+
+## Checking MFA status
+
+The plugin exposes a `HasMFA` method for programmatic checks:
+
+```go
+mfaPlugin := mfa.New(mfa.Config{Issuer: "My App"})
+// ... register and start engine ...
+
+hasMFA := mfaPlugin.HasMFA(ctx, userID)
+```
+
+This checks both TOTP and SMS enrollments.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/mfa/enroll` | Start MFA enrollment (TOTP or SMS) |
+| `POST` | `/v1/auth/mfa/verify` | Verify TOTP code to confirm enrollment |
+| `POST` | `/v1/auth/mfa/challenge` | Verify TOTP code during sign-in challenge |
+| `DELETE` | `/v1/auth/mfa/enrollment` | Disable MFA for the authenticated user |
+| `POST` | `/v1/auth/mfa/recovery/verify` | Verify a recovery code |
+| `POST` | `/v1/auth/mfa/recovery/regenerate` | Generate new recovery codes |
+| `POST` | `/v1/auth/mfa/sms/send` | Send an SMS verification code |
+| `POST` | `/v1/auth/mfa/sms/verify` | Verify an SMS code |
+
+## Observability
+
+The MFA plugin emits audit events to Chronicle, webhook events to Relay, and hook events on the global bus for:
+
+- `auth.mfa.enrolled` -- MFA enrollment started
+- `auth.mfa.verified` -- MFA enrollment confirmed
+- `auth.mfa.challenged` -- MFA challenge passed
+- `auth.mfa.disabled` -- MFA enrollment removed
+- `auth.mfa.recovery_used` -- Recovery code consumed
+- `auth.mfa.recovery_regenerated` -- Recovery codes regenerated

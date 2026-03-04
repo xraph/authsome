@@ -1,0 +1,228 @@
+---
+title: Phone Authentication
+description: SMS-based phone number verification and passwordless sign-in via one-time codes.
+---
+
+The phone authentication plugin enables users to sign in using their phone number and a one-time SMS verification code. It supports both passwordless sign-in (phone number is the only credential) and phone number verification as an additional identity attribute alongside email/password.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/phone"
+    "github.com/xraph/authsome/bridge/smsadapter"
+)
+
+// Configure the SMS bridge (Twilio example)
+smsSender := smsadapter.NewTwilioSender(
+    "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Account SID
+    "your_auth_token",                     // Auth Token
+    "+15559876543",                         // From number
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(phone.New()),
+    authsome.WithSMSSender(smsSender),
+    authsome.WithConfig(authsome.Config{
+        AppID: "myapp",
+        Phone: authsome.PhoneConfig{
+            CodeLength: 6,              // number of digits in OTP
+            CodeTTL:    "5m",           // code validity window
+            MaxAttempts: 3,             // max verification attempts per code
+        },
+    }),
+)
+```
+
+> **Note:** An SMS bridge is required. Without it, the engine returns `ErrSMSNotAvailable` when phone auth is attempted.
+
+## Phone sign-in flow
+
+Phone-based sign-in is a two-step process: request a code, then verify it.
+
+
+
+**Request code**: The user submits their phone number.
+
+`POST /v1/auth/phone/send-code`
+
+```json
+{
+  "phone": "+15551234567",
+  "app_id": "myapp"
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "code_sent",
+  "expires_at": "2024-11-01T10:05:00Z"
+}
+```
+
+The engine generates a random 6-digit numeric code and sends it via the configured SMS bridge. The response always returns `code_sent` regardless of whether the phone number exists, preventing phone number enumeration.
+
+
+**Verify code**: The user submits the code they received.
+
+`POST /v1/auth/phone/verify`
+
+```json
+{
+  "phone": "+15551234567",
+  "code": "847293",
+  "app_id": "myapp"
+}
+```
+
+**Response (new user):**
+
+```json
+{
+  "user": {
+    "id": "ausr_01jb...",
+    "phone": "+15551234567",
+    "phone_verified": true,
+    "app_id": "aapp_01jb...",
+    "created_at": "2024-11-01T10:00:00Z"
+  },
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "expires_at": "2024-11-01T11:00:00Z"
+}
+```
+
+If the phone number is not associated with an existing user, a new user account is created automatically. If the phone number belongs to an existing user, a new session is created for that user.
+
+
+
+### Code generation and validation
+
+Internally, the phone plugin uses the same SMS code infrastructure as the MFA plugin:
+
+```go
+import "github.com/xraph/authsome/plugins/mfa"
+
+// Generate a random numeric code
+code, err := mfa.GenerateSMSCode(6)
+// code → "847293"
+
+// Send via the SMS bridge
+challenge, err := mfa.SendSMSChallenge(ctx, smsSender, "+15551234567")
+// challenge.Code      → "847293"
+// challenge.ExpiresAt → time.Now().Add(5 * time.Minute)
+
+// Validate the submitted code
+valid := mfa.ValidateSMSCode("847293", challenge)
+```
+
+## Phone number verification
+
+When using phone as an additional identity attribute (not the primary sign-in method), users can verify their phone number through the same OTP flow:
+
+`POST /v1/auth/phone/verify-number`
+
+```json
+{
+  "phone": "+15551234567",
+  "code": "847293"
+}
+```
+
+On success, the user's `phone_verified` field is set to `true` and the `phone` field is updated on the user record. This is useful when phone was provided during signup but not yet verified.
+
+## SMS bridge
+
+### Interface
+
+The SMS bridge is defined by the `bridge.SMSSender` interface:
+
+```go
+type SMSSender interface {
+    SendSMS(ctx context.Context, msg *SMSMessage) error
+}
+
+type SMSMessage struct {
+    To   string `json:"to"`
+    Body string `json:"body"`
+}
+```
+
+### Twilio adapter
+
+The built-in Twilio adapter sends SMS via the Twilio REST API:
+
+```go
+import "github.com/xraph/authsome/bridge/smsadapter"
+
+sender := smsadapter.NewTwilioSender(
+    "ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Account SID
+    "your_auth_token",                     // Auth Token
+    "+15559876543",                         // From number
+)
+```
+
+The adapter uses Basic Auth with the Account SID and Auth Token, and posts to the Twilio Messages API endpoint.
+
+### Custom SMS bridge
+
+Implement the `bridge.SMSSender` interface to integrate with any SMS provider:
+
+```go
+type MyCustomSender struct {
+    apiKey string
+    client *http.Client
+}
+
+func (s *MyCustomSender) SendSMS(ctx context.Context, msg *bridge.SMSMessage) error {
+    // Send via your SMS provider
+    payload := map[string]string{
+        "to":      msg.To,
+        "message": msg.Body,
+    }
+    // ... make API call ...
+    return nil
+}
+```
+
+Then pass it to the engine:
+
+```go
+eng, err := authsome.New(
+    authsome.WithSMSSender(&MyCustomSender{
+        apiKey: os.Getenv("SMS_API_KEY"),
+    }),
+    // ... other options
+)
+```
+
+## Configuration reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `CodeLength` | `int` | `6` | Number of digits in the OTP |
+| `CodeTTL` | `string` | `"5m"` | How long the code remains valid |
+| `MaxAttempts` | `int` | `3` | Maximum verification attempts before the code is invalidated |
+| `AllowSignUp` | `bool` | `true` | Automatically create new users for unknown phone numbers |
+| `RequireVerifiedPhone` | `bool` | `false` | Only allow sign-in if phone is already verified |
+
+## API routes
+
+All phone auth routes are registered under `BasePath` (default `/v1/auth`):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/phone/send-code` | Request an SMS OTP for sign-in |
+| `POST` | `/phone/verify` | Verify OTP and sign in (or sign up) |
+| `POST` | `/phone/verify-number` | Verify phone number for an authenticated user |
+
+## Security considerations
+
+- **Rate limiting**: Phone endpoints should be rate-limited to prevent SMS abuse. Configure `RateLimit.PhoneCodeLimit` to control the maximum number of code requests per phone number per window.
+- **Code expiry**: Codes expire after the configured TTL (default 5 minutes). Expired codes cannot be used.
+- **Attempt limits**: After `MaxAttempts` failed verifications, the code is invalidated and the user must request a new one.
+- **Phone number format**: Phone numbers should be submitted in E.164 format (e.g., `+15551234567`). The engine does not perform phone number normalization.

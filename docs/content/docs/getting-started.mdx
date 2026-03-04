@@ -1,0 +1,295 @@
+---
+title: Getting Started
+description: Install Authsome and run your first auth flow in five minutes.
+---
+
+This guide walks you through installing Authsome, creating an engine with password authentication, starting a local server, and exercising the sign-up, sign-in, and session endpoints with `curl`. By the end you will have a working auth service you can extend with additional plugins.
+
+## Prerequisites
+
+- **Go 1.24 or later** — the module requires recent generics and `log/slog` support
+- A Go module (`go mod init your/module`)
+- `curl` or any HTTP client for testing
+
+## Install
+
+```bash
+go get github.com/xraph/authsome
+```
+
+This installs the core engine, all built-in plugins, and the `store/memory` backend. Add a database-backed store separately when needed:
+
+```bash
+# PostgreSQL
+go get github.com/xraph/authsome/store/postgres
+
+# SQLite
+go get github.com/xraph/authsome/store/sqlite
+
+# MongoDB
+go get github.com/xraph/authsome/store/mongo
+```
+
+## Step 1 — Create the engine
+
+Create a `main.go` file. Start with the in-memory store so you can run immediately without a database.
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "log/slog"
+    "net/http"
+    "time"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/store/memory"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // In-memory store is perfect for local development.
+    // Swap for postgres.New() or sqlite.New() before deploying.
+    memStore := memory.New()
+
+    eng, err := authsome.New(
+        authsome.WithStore(memStore),
+        authsome.WithLogger(slog.Default()),
+        authsome.WithPlugin(password.New()),
+        authsome.WithConfig(authsome.Config{
+            AppID:    "myapp",
+            BasePath: "/v1/auth",
+            Session: authsome.SessionConfig{
+                TokenTTL:        1 * time.Hour,
+                RefreshTokenTTL: 30 * 24 * time.Hour,
+            },
+            Password: authsome.PasswordConfig{
+                MinLength:        8,
+                RequireUppercase: true,
+                RequireLowercase: true,
+                RequireDigit:     true,
+            },
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+```
+
+The `password.New()` call registers the password strategy and contributes the `/signup`, `/signin`, `/forgot-password`, `/reset-password`, and `/change-password` route handlers.
+
+## Step 2 — Start the engine
+
+`Start` runs schema migrations and calls `OnInit` on every registered plugin. Always call `Stop` to flush in-flight operations on shutdown.
+
+```go
+    if err := eng.Start(ctx); err != nil {
+        log.Fatal(err)
+    }
+    defer eng.Stop(ctx)
+```
+
+<Callout type="info">
+When using the memory store, `Start` is a no-op for migrations since there is no schema to apply. With `postgres` or `sqlite`, `Start` runs embedded SQL migrations automatically unless `WithDisableMigrate()` is passed.
+</Callout>
+
+## Step 3 — Register API routes
+
+Authsome auto-registers all plugin-contributed routes on any `http.ServeMux`. Call `RegisterRoutes` after `Start`.
+
+```go
+    mux := http.NewServeMux()
+    eng.RegisterRoutes(mux)
+
+    log.Println("listening on :8080")
+    if err := http.ListenAndServe(":8080", mux); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+Your application now serves the following endpoints under `/v1/auth`:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/signup` | Create account and return session |
+| `POST` | `/v1/auth/signin` | Sign in with email + password |
+| `POST` | `/v1/auth/signout` | Revoke the current session |
+| `POST` | `/v1/auth/refresh` | Exchange refresh token for new tokens |
+| `GET` | `/v1/auth/me` | Return the currently authenticated user |
+| `POST` | `/v1/auth/forgot-password` | Request a password reset email |
+| `POST` | `/v1/auth/reset-password` | Confirm reset with token + new password |
+| `POST` | `/v1/auth/change-password` | Change password (requires current password) |
+
+## Step 4 — Test with curl
+
+Run the server (`go run .`), then exercise the endpoints.
+
+### Sign up
+
+```bash
+curl -s -X POST http://localhost:8080/v1/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"Secure1234","app_id":"myapp"}' | jq .
+```
+
+Response:
+
+```json
+{
+  "user": {
+    "id": "ausr_01j9...",
+    "email": "alice@example.com",
+    "app_id": "aapp_01j9...",
+    "created_at": "2024-11-01T10:00:00Z"
+  },
+  "session": {
+    "id": "ases_01j9...",
+    "token": "a3f8c9d4...",
+    "refresh_token": "d72b1ef8...",
+    "expires_at": "2024-11-01T11:00:00Z"
+  }
+}
+```
+
+### Sign in
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"Secure1234","app_id":"myapp"}' \
+  | jq -r '.session.token')
+```
+
+### Call the /me endpoint
+
+```bash
+curl -s http://localhost:8080/v1/auth/me \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Response:
+
+```json
+{
+  "id": "ausr_01j9...",
+  "email": "alice@example.com",
+  "email_verified": false,
+  "app_id": "aapp_01j9...",
+  "created_at": "2024-11-01T10:00:00Z",
+  "updated_at": "2024-11-01T10:00:00Z"
+}
+```
+
+### Refresh tokens
+
+```bash
+REFRESH=$(curl -s -X POST http://localhost:8080/v1/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"Secure1234","app_id":"myapp"}' \
+  | jq -r '.session.refresh_token')
+
+curl -s -X POST http://localhost:8080/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d "{\"refresh_token\":\"$REFRESH\"}" | jq .
+```
+
+The response includes a new `token` and, if refresh token rotation is enabled (the default), a new `refresh_token`. The old refresh token is immediately invalidated.
+
+## Step 5 — Add more plugins
+
+The real power of Authsome is in its plugin system. Add plugins at engine construction time.
+
+### Add magic link sign-in
+
+```go
+import "github.com/xraph/authsome/plugins/magiclink"
+
+eng, err := authsome.New(
+    authsome.WithStore(memStore),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(magiclink.New(magiclink.Config{
+        TokenTTL: 15 * time.Minute,
+    })),
+    // A mailer bridge is required to deliver magic link emails.
+    authsome.WithMailer(myMailer),
+)
+```
+
+### Add Google and GitHub social login
+
+```go
+import "github.com/xraph/authsome/plugins/social"
+
+eng, err := authsome.New(
+    authsome.WithStore(memStore),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(social.New(social.Config{
+        Providers: []social.Provider{
+            {
+                Name:         "google",
+                ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+                ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+                RedirectURL:  "https://myapp.com/v1/auth/social/google/callback",
+            },
+            {
+                Name:         "github",
+                ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+                ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+                RedirectURL:  "https://myapp.com/v1/auth/social/github/callback",
+            },
+        },
+    })),
+)
+```
+
+### Add TOTP-based MFA
+
+```go
+import "github.com/xraph/authsome/plugins/mfa"
+
+eng, err := authsome.New(
+    authsome.WithStore(memStore),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(mfa.New(mfa.Config{
+        TOTPIssuer: "MyApp",
+    })),
+)
+```
+
+## Step 6 — Switch to PostgreSQL
+
+When you are ready for a persistent store, swap the backend. The engine API does not change.
+
+```go
+import "github.com/xraph/authsome/store/postgres"
+
+pgStore, err := postgres.New(ctx, "postgres://user:pass@localhost:5432/myapp_auth")
+if err != nil {
+    log.Fatal(err)
+}
+
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    // ... same plugins and config
+)
+```
+
+`Start` will apply all pending schema migrations automatically. Existing data is preserved across upgrades.
+
+<Callout type="warn">
+For production deployments, run migrations in a dedicated step rather than relying on auto-migration at startup. Pass `WithDisableMigrate()` to the engine and invoke `eng.Migrate(ctx)` from your deployment pipeline before starting the server.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Card title="Architecture" href="/docs/architecture" description="Understand how Engine, plugins, stores, and bridges fit together." />
+  <Card title="Password Authentication" href="/docs/authentication/password" description="Password policies, hashing algorithms, reset flow, and breach checking." />
+  <Card title="Configuration" href="/docs/concepts/configuration" description="All engine and session configuration options with defaults." />
+  <Card title="Store Backends" href="/docs/stores" description="Configure PostgreSQL, SQLite, MongoDB, or the in-memory store." />
+</Cards>

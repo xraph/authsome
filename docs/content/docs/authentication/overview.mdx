@@ -1,0 +1,154 @@
+---
+title: Authentication Overview
+description: How Authsome's strategy-based auth system works, and how plugins contribute authentication methods.
+---
+
+Authsome uses a **strategy-based authentication system**. Each authentication method — password, magic link, social login, passkeys, SSO — is implemented as an independent plugin that registers one or more strategies with the engine's strategy registry.
+
+## Strategy-based authentication
+
+A strategy is a Go type that implements the `strategy.Strategy` interface:
+
+```go
+type Strategy interface {
+    // Name returns a unique identifier for this strategy.
+    Name() string
+
+    // Accepts returns true if this strategy can handle the given request.
+    // The engine evaluates strategies in priority order and calls the
+    // first one that accepts the request.
+    Accepts(ctx context.Context, req *account.SignInRequest) bool
+
+    // Authenticate performs the actual authentication.
+    // Returns the user on success, or an error.
+    Authenticate(ctx context.Context, req *account.SignInRequest) (*user.User, error)
+}
+```
+
+Strategies are registered with a numeric priority. Lower priority values are evaluated first. When a sign-in request arrives, the engine iterates strategies in priority order and delegates to the first one whose `Accepts` method returns `true`.
+
+## How plugins contribute strategies
+
+Plugins register strategies by implementing the `plugin.AuthMethodContributor` interface:
+
+```go
+type AuthMethodContributor interface {
+    AuthMethods() []AuthMethod
+}
+
+type AuthMethod struct {
+    Name     string            // display name
+    Strategy strategy.Strategy // the strategy implementation
+    Priority int               // lower = evaluated first
+}
+```
+
+At `engine.Start()`, the plugin registry collects `AuthMethods()` from all registered plugins and loads them into the strategy registry.
+
+```go
+// After Start(), the strategy registry might contain:
+// priority 10: "password"
+// priority 20: "social:google"
+// priority 20: "social:github"
+// priority 30: "passkey"
+// priority 50: "magiclink"
+```
+
+## Priority-based strategy selection
+
+When the engine receives a sign-in request, it walks the strategy list in priority order:
+
+```go
+// Simplified pseudocode of the engine's auth dispatch:
+for _, s := range e.strategies.Sorted() {
+    if s.Accepts(ctx, req) {
+        user, err := s.Authenticate(ctx, req)
+        if err != nil {
+            return nil, nil, err
+        }
+        // Strategy accepted and authenticated -- proceed to session creation.
+        break
+    }
+}
+```
+
+The `Accepts` function for the password strategy returns `true` when `req.Password` is non-empty. The `Accepts` function for the social strategy returns `true` when `req.Provider` is set to a known OAuth provider name.
+
+## Multi-strategy flows: password + MFA
+
+When MFA is enrolled, authentication is a two-step process:
+
+
+
+**Step 1 — Primary authentication**: The password (or other) strategy authenticates the user and verifies credentials.
+
+
+**Step 2 — MFA challenge**: If the user has MFA enrolled, the engine returns an `ErrMFARequired` sentinel error along with an `mfa_challenge_id`. No session is created yet.
+
+
+**Step 3 — MFA verification**: The client submits the TOTP code or SMS OTP along with the `mfa_challenge_id`. On success, a session is created.
+
+
+
+```go
+// Step 1: Primary sign-in
+u, sess, err := engine.SignIn(ctx, &account.SignInRequest{
+    Email:    "alice@example.com",
+    Password: "Secure1234",
+    AppID:    appID,
+})
+
+if errors.Is(err, mfa.ErrMFARequired) {
+    // Extract the challenge ID from the error.
+    challengeID := mfa.ChallengeIDFromError(err)
+
+    // Step 3 (after user submits TOTP code):
+    sess, err = mfaPlugin.VerifyChallenge(ctx, challengeID, totpCode)
+}
+```
+
+## Auth event lifecycle
+
+Every authentication operation emits structured events on the hook bus. You can subscribe to these to implement audit logging, notifications, or custom business logic.
+
+```go
+import "github.com/xraph/authsome/hook"
+
+engine.Hooks().Subscribe(hook.ActionSignUp, func(ctx context.Context, evt *hook.Event) {
+    metrics.Increment("auth.signups", map[string]string{"app": evt.Tenant})
+})
+
+engine.Hooks().Subscribe(hook.ActionSignIn, func(ctx context.Context, evt *hook.Event) {
+    if evt.Err != nil {
+        metrics.Increment("auth.signin_failures", map[string]string{"app": evt.Tenant})
+    }
+})
+
+engine.Hooks().Subscribe(hook.ActionAccountLocked, func(ctx context.Context, evt *hook.Event) {
+    // Send alert to security team.
+    alerter.Send("account_locked", evt.Metadata["identifier"])
+})
+```
+
+## Selecting authentication methods for your app
+
+Use only the plugins you need. Each plugin adds routes, migrations, and optional external dependencies:
+
+| Method | Plugin | External dependency |
+|--------|--------|---------------------|
+| Password | `plugins/password` | None |
+| Magic link | `plugins/magiclink` | Mailer bridge |
+| Social login | `plugins/social` | None (OAuth2 handled in-process) |
+| Enterprise SSO | `plugins/sso` | OIDC/SAML identity provider |
+| Passkeys | `plugins/passkey` | None (WebAuthn in-process) |
+| TOTP MFA | `plugins/mfa` | None |
+| SMS MFA | `plugins/mfa` | SMSSender bridge |
+| Phone OTP | `plugins/phone` | SMSSender bridge |
+| API keys | `plugins/apikey` | Optional: Keysmith engine |
+
+<Cards>
+  <Card title="Password" href="/docs/authentication/password" description="Password policies, bcrypt/argon2id, reset flow." />
+  <Card title="Magic Links" href="/docs/authentication/magic-links" description="Passwordless email sign-in." />
+  <Card title="Social Login" href="/docs/authentication/social-login" description="Google, GitHub, Microsoft, Apple." />
+  <Card title="MFA" href="/docs/authentication/mfa" description="TOTP and SMS second-factor." />
+</Cards>

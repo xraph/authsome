@@ -1,0 +1,105 @@
+---
+title: Introduction
+description: Production-grade authentication & identity platform for Go.
+---
+
+Authsome is a Go library that delivers complete authentication and identity management for production applications. It handles everything from password-based sign-in to enterprise SSO, multi-factor authentication, passkeys, social login, organizations, RBAC, webhook delivery, and dynamic sign-up forms — all behind a single `Engine` type you embed in your own application.
+
+Authsome is a **library, not a service.** You bring your own database, HTTP server, and process lifecycle. Authsome provides the authentication plumbing.
+
+## What it does
+
+| Capability | Details |
+|------------|---------|
+| **14 plugins** | `password`, `magiclink`, `social`, `sso`, `passkey`, `mfa`, `phone`, `oauth2provider`, `organization`, `apikey`, `consent`, `email`, `notification`, `passkey` |
+| **4 store backends** | `memory` (testing), `postgres`, `sqlite`, `mongo` |
+| **40+ UI components** | Pre-built React components via `@authsome/ui` for sign-in, sign-up, MFA, org management, and more |
+| **31 webhook events** | `auth.signin`, `user.created`, `org.member_added`, `mfa.enrolled`, `session.revoked`, and 26 more |
+| **27 TypeID prefixes** | `ausr_`, `ases_`, `aapp_`, `aorg_`, `amem_`, `atm_`, `ainv_`, `adev_`, `awhk_`, `antf_`, `avrf_`, `apwr_`, `akey_`, `aoau_`, `apsk_`, `amfa_`, `aenv_`, `arol_`, `aprm_`, `arec_`, `asso_`, `acns_`, `afcf_`, `abrd_`, `ascf_`, `ao2c_`, `aaco_` |
+| **Token formats** | Opaque (64-char hex, default) or JWT with OIDC claims, configurable per app |
+| **Session management** | Token + refresh token pairs, rotation, IP/device binding, max active sessions |
+| **Environments** | Isolated production, staging, and development environments per app |
+| **RBAC** | Roles, permissions, role hierarchy with native Warden integration |
+| **Dynamic forms** | Field-level validation and metadata capture on sign-up and other flows |
+| **Bridges** | 11 integration adapters: Chronicle (audit), Relay (webhooks), Mailer, SMS, Herald (notifications), Warden (authz), Keysmith (API keys), Vault (secrets), Dispatch (jobs), Ledger (billing), Metrics |
+
+## Design philosophy
+
+**Library, not service.** Authsome is a set of Go packages you import. You control `main`, the database connection, and the HTTP server. There is no sidecar to run.
+
+**Interfaces over implementations.** Every bridge is an interface. Swap any external dependency with a single type change.
+
+**Tenant-scoped by design.** Every entity is scoped to an `AppID`. Cross-app data access is structurally impossible at the store layer.
+
+**Plugin system.** Authentication methods are plugins. You opt in to exactly the methods your application needs. Password, magic links, social login, and SSO are all independent plugins that register routes and strategies when added to the engine.
+
+**TypeID everywhere.** All entities use type-prefixed, K-sortable, UUIDv7-based identifiers. Passing a `ausr_` ID where an `ases_` ID is expected fails at parse time.
+
+## Quick look
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "net/http"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/store/memory"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // 1. Create an in-memory store (swap for postgres or sqlite in production).
+    memStore := memory.New()
+
+    // 2. Build the engine with the password plugin.
+    eng, err := authsome.New(
+        authsome.WithStore(memStore),
+        authsome.WithPlugin(password.New()),
+        authsome.WithConfig(authsome.Config{
+            AppID:    "myapp",
+            BasePath: "/v1/auth",
+            Session: authsome.SessionConfig{
+                TokenTTL:        1 * time.Hour,
+                RefreshTokenTTL: 30 * 24 * time.Hour,
+            },
+            Password: authsome.PasswordConfig{
+                MinLength:        10,
+                RequireUppercase: true,
+                RequireDigit:     true,
+            },
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer eng.Stop(ctx)
+
+    // 3. Start the engine (runs migrations, initializes plugins).
+    if err := eng.Start(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    // 4. Mount the auto-registered auth routes on your HTTP mux.
+    mux := http.NewServeMux()
+    eng.RegisterRoutes(mux)
+
+    log.Println("listening on :8080")
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+With only this setup you get `POST /v1/auth/signup`, `POST /v1/auth/signin`, `POST /v1/auth/signout`, `POST /v1/auth/refresh`, `GET /v1/auth/me`, and the full password reset flow.
+
+## Where to go next
+
+<Cards>
+  <Card title="Getting Started" href="/docs/getting-started" description="Install Authsome and complete a full sign-up/sign-in flow in five minutes." />
+  <Card title="Architecture" href="/docs/architecture" description="Understand how Engine, plugins, stores, and bridges fit together." />
+  <Card title="Authentication" href="/docs/authentication/overview" description="Password, magic links, social login, SSO, passkeys, MFA, and more." />
+  <Card title="Authsome UI" href="/docs/ui" description="40+ pre-built React components for your authentication UI." />
+</Cards>

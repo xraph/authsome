@@ -1,0 +1,330 @@
+---
+title: Architecture
+description: How Authsome packages fit together.
+---
+
+Authsome is organized around a central `Engine` type that orchestrates authentication across a composable set of plugins, store backends, and bridge interfaces. Understanding this structure helps you make informed decisions about which components to use and how to extend the system.
+
+## High-level diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Engine (authsome.Engine)                          │
+│                                                                             │
+│  SignUp / SignIn / SignOut / Refresh / GetMe / UpdateMe                     │
+│  ForgotPassword / ResetPassword / ChangePassword / VerifyEmail              │
+│  Impersonate / RBAC / Webhooks / Devices / Environments                     │
+├──────────────────────────┬──────────────────────────────────────────────────┤
+│        Plugin System     │        Strategy Registry                         │
+│                          │                                                  │
+│  plugin.Registry         │  strategy.Registry                               │
+│  BeforeSignUp            │    password strategy (priority 10)               │
+│  AfterSignUp             │    social strategy (priority 20)                 │
+│  BeforeSignIn            │    passkey strategy (priority 30)                │
+│  AfterSignIn             │    sso strategy (priority 40)                   │
+│  BeforeSessionCreate     │    magiclink strategy (priority 50)              │
+│  AfterUserDelete         │    phone strategy (priority 60)                  │
+│  RouteProvider           │    (priority determines fallback order)          │
+│  MigrationProvider       │                                                  │
+├──────────────────────────┴──────────────────────────────────────────────────┤
+│                          Hook Bus (hook.Bus)                                 │
+│  40+ action types: ActionSignUp, ActionSignIn, ActionSignOut,               │
+│  ActionRefresh, ActionUserUpdate, ActionSessionRevoke, ActionImpersonate,   │
+│  ActionAdminBanUser, ActionRoleCreate, ActionEnvironmentCreate, ...         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                         Bridge Interfaces                                    │
+│  Chronicle (audit) · Relay (webhooks) · Mailer · SMSSender · Herald        │
+│  Warden (authz) · Keysmith (API keys) · Vault (secrets) · Dispatch (jobs)  │
+│  Ledger (billing) · MetricsCollector                                        │
+├──────────────────────────┬──────────────────────────────────────────────────┤
+│       store.Store        │     Token Formats                                │
+│  (composite interface)   │                                                  │
+│  UserStore               │  tokenformat.Format interface                   │
+│  SessionStore            │    Opaque (64-char hex, default)                 │
+│  DeviceStore             │    JWT (OIDC claims, per-app)                    │
+│  WebhookStore            │                                                  │
+│  OrganizationStore       │                                                  │
+│  EnvironmentStore        │                                                  │
+│  RBACStore               │                                                  │
+│  FormConfigStore         │                                                  │
+├──────┬───────────────────┴──────────────────────────────────────────────────┤
+│memory│  postgres  │  sqlite  │  mongo                                       │
+└──────┴────────────┴──────────┴──────────────────────────────────────────────┘
+```
+
+## Engine
+
+The `Engine` is the top-level orchestrator. It holds references to the store, plugin registry, strategy registry, hook bus, and all bridge interfaces. All authentication logic flows through the engine.
+
+```go
+import "github.com/xraph/authsome"
+
+eng, err := authsome.New(
+    authsome.WithStore(myStore),
+    authsome.WithPlugin(passwordPlugin),
+    authsome.WithWarden(wardenEngine),    // optional: Warden for RBAC
+    authsome.WithChronicle(chronicle),    // optional: audit trail
+    authsome.WithMailer(mailer),          // optional: transactional email
+)
+```
+
+The engine is constructed with `authsome.New(opts...)` and activated with `eng.Start(ctx)`. It exposes the full service API as methods on `*Engine`.
+
+## Store abstraction
+
+All persistence goes through the `store.Store` composite interface. Swap the backend at construction time with no other changes.
+
+```go
+// Development: no external dependencies
+store := memory.New()
+
+// Production: PostgreSQL
+store, err := postgres.New(ctx, "postgres://user:pass@host:5432/db")
+
+// Alternative: SQLite for embedded applications
+store, err := sqlite.New(ctx, "./auth.db")
+
+// Alternative: MongoDB for document-oriented workloads
+store, err := mongo.New(ctx, "mongodb://localhost:27017", "authdb")
+```
+
+The composite interface covers:
+
+| Sub-interface | Responsibility |
+|---------------|----------------|
+| `UserStore` | User CRUD, lookup by email/username/phone |
+| `SessionStore` | Session CRUD, lookup by token/refresh token |
+| `DeviceStore` | Device fingerprinting and trusted device management |
+| `WebhookStore` | Webhook endpoint registration and delivery records |
+| `OrganizationStore` | Orgs, members, teams, invitations |
+| `EnvironmentStore` | Environment isolation per app |
+| `RBACStore` | Roles, permissions, user role assignments |
+| `FormConfigStore` | Dynamic form field definitions |
+| `AppSessionConfigStore` | Per-app session configuration overrides |
+| `PasswordResetStore` | Password reset tokens |
+| `VerificationStore` | Email/phone verification tokens |
+| `PasswordHistoryStore` | Historic password hashes for reuse prevention |
+
+## Plugin system
+
+Plugins are the primary extension point. Each plugin implements the `plugin.Plugin` base interface and any combination of optional lifecycle interfaces.
+
+```go
+// Base interface — all plugins must implement this.
+type Plugin interface {
+    Name() string
+}
+
+// Optional lifecycle interfaces a plugin may implement:
+type OnInit interface {
+    OnInit(ctx context.Context, e PluginEngine) error
+}
+type RouteProvider interface {
+    RegisterRoutes(r forge.Router, e PluginEngine)
+}
+type MigrationProvider interface {
+    Migrations(driver string) []migrate.Migration
+}
+type BeforeSignUp interface {
+    OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest) error
+}
+type AfterSignUp interface {
+    OnAfterSignUp(ctx context.Context, u *user.User, sess *session.Session)
+}
+type BeforeSignIn interface {
+    OnBeforeSignIn(ctx context.Context, req *account.SignInRequest) error
+}
+type AfterSignIn interface {
+    OnAfterSignIn(ctx context.Context, u *user.User, sess *session.Session)
+}
+type AuthMethodContributor interface {
+    AuthMethods() []AuthMethod
+}
+```
+
+The engine's plugin registry discovers capabilities at registration time using type assertions.
+
+### Built-in plugins
+
+| Plugin | Import | Contributes |
+|--------|--------|-------------|
+| `password` | `github.com/xraph/authsome/plugins/password` | Password strategy, signup/signin/reset routes |
+| `magiclink` | `github.com/xraph/authsome/plugins/magiclink` | Passwordless email strategy, magic link routes |
+| `social` | `github.com/xraph/authsome/plugins/social` | OAuth2 strategies for Google, GitHub, Microsoft, Apple |
+| `sso` | `github.com/xraph/authsome/plugins/sso` | OIDC/SAML enterprise SSO strategy and connection management |
+| `passkey` | `github.com/xraph/authsome/plugins/passkey` | WebAuthn/FIDO2 strategy, registration/authentication ceremonies |
+| `mfa` | `github.com/xraph/authsome/plugins/mfa` | TOTP and SMS OTP second-factor challenges |
+| `phone` | `github.com/xraph/authsome/plugins/phone` | Phone number sign-in via OTP |
+| `oauth2provider` | `github.com/xraph/authsome/plugins/oauth2provider` | Become an OAuth2 authorization server |
+| `organization` | `github.com/xraph/authsome/plugins/organization` | Org/team/invitation management routes |
+| `apikey` | `github.com/xraph/authsome/plugins/apikey` | API key issuance and verification |
+| `consent` | `github.com/xraph/authsome/plugins/consent` | User consent management for OAuth2 flows |
+| `email` | `github.com/xraph/authsome/plugins/email` | Email template management |
+| `notification` | `github.com/xraph/authsome/plugins/notification` | Multi-channel notification delivery |
+
+## Hook bus
+
+The hook bus emits structured events for every significant operation. Listeners can react to events for metrics, audit, downstream notifications, or custom business logic.
+
+```go
+import "github.com/xraph/authsome/hook"
+
+// Subscribe to sign-up events.
+eng.Hooks().Subscribe(hook.ActionSignUp, func(ctx context.Context, event *hook.Event) {
+    log.Printf("new signup: user=%s app=%s", event.ResourceID, event.Tenant)
+})
+```
+
+### Action types
+
+The hook bus defines 40+ named action constants:
+
+| Category | Actions |
+|----------|---------|
+| Auth | `ActionSignUp`, `ActionSignIn`, `ActionSignOut`, `ActionRefresh`, `ActionAccountLocked` |
+| User | `ActionUserUpdate`, `ActionUserDelete`, `ActionDataExport`, `ActionAccountDeletion` |
+| Session | `ActionSessionRevoke`, `ActionImpersonate` |
+| Admin | `ActionAdminBanUser`, `ActionAdminUnbanUser`, `ActionAdminDeleteUser` |
+| RBAC | `ActionRoleCreate`, `ActionRoleUpdate`, `ActionRoleDelete`, `ActionRoleAssign`, `ActionRoleUnassign` |
+| Webhook | `ActionWebhookCreate`, `ActionWebhookUpdate`, `ActionWebhookDelete` |
+| Environment | `ActionEnvironmentCreate`, `ActionEnvironmentUpdate`, `ActionEnvironmentDelete`, `ActionEnvironmentClone` |
+| Device | `ActionDeviceTrust`, `ActionDeviceRegister` |
+| MFA | `ActionMFAEnroll`, `ActionMFAChallenge`, `ActionMFAVerify` |
+
+## Strategy registry
+
+Authentication strategies are registered with a priority. When a sign-in request arrives, the engine selects the highest-priority strategy that accepts the request.
+
+```go
+import "github.com/xraph/authsome/strategy"
+
+// Plugins register strategies through the plugin.AuthMethodContributor interface.
+// You can also register strategies directly:
+eng.RegisterStrategy(myStrategy, 5)
+```
+
+Lower priority values are evaluated first (priority 1 runs before priority 10). This allows you to insert custom strategies that intercept before built-in ones.
+
+## Bridges
+
+Bridges are optional integration interfaces. When a bridge is not configured, the corresponding functionality is silently skipped (fail-open).
+
+| Bridge | Interface | Used for |
+|--------|-----------|----------|
+| `Chronicle` | `bridge.Chronicle` | Audit trail — records every auth event with severity and outcome |
+| `Relay` | `bridge.EventRelay` | Webhook delivery — forwards hook events to registered endpoints |
+| `Mailer` | `bridge.Mailer` | Transactional email for magic links, verifications, password resets |
+| `SMSSender` | `bridge.SMSSender` | SMS delivery for phone OTP and MFA SMS codes |
+| `Herald` | `bridge.Herald` | Unified multi-channel notification system (replaces Mailer + SMS) |
+| `Warden` | `bridge.Authorizer` | Authorization engine for RBAC/ReBAC/ABAC policy evaluation |
+| `Keysmith` | `bridge.KeyManager` | API key management with rotation, scopes, and usage tracking |
+| `Vault` | `bridge.Vault` | Secrets management and feature flag access |
+| `Dispatch` | `bridge.Dispatcher` | Background job queue for async tasks |
+| `Ledger` | `bridge.Ledger` | Billing/metering integration |
+| `Metrics` | `bridge.MetricsCollector` | Counter and histogram metrics for observability |
+
+### Bridge adapters
+
+Each bridge ships with one or more pre-built adapters:
+
+```go
+import (
+    "github.com/xraph/authsome/bridge/chronicleadapter"
+    "github.com/xraph/authsome/bridge/maileradapter"
+    "github.com/xraph/authsome/bridge/smsadapter"
+    "github.com/xraph/authsome/bridge/relayadapter"
+)
+
+// Chronicle: wrap a Chronicle engine
+authsome.WithChronicle(chronicleadapter.New(chronicleEngine))
+
+// Mailer: SMTP or Resend
+authsome.WithMailer(maileradapter.NewSMTP(smtpConfig))
+authsome.WithMailer(maileradapter.NewResend(resendAPIKey))
+
+// SMS: Twilio
+authsome.WithSMSSender(smsadapter.NewTwilio(twilioConfig))
+
+// Relay: wrap a Relay engine
+authsome.WithEventRelay(relayadapter.New(relayEngine))
+```
+
+## API layer and middleware
+
+The engine integrates with Forge-based HTTP applications through the extension system.
+
+```go
+import "github.com/xraph/authsome/extension"
+
+// Register as a Forge extension (auto-wires store from DI container).
+app.Register(extension.New(
+    extension.WithPlugin(password.New()),
+    extension.WithPlugin(social.New(socialCfg)),
+))
+```
+
+Standalone middleware is available for non-Forge applications:
+
+```go
+import "github.com/xraph/authsome/middleware"
+
+// Extract and validate Bearer token, inject user into context.
+mux.Handle("/api/", middleware.RequireAuth(eng)(apiHandler))
+
+// Require a specific permission (delegates to Warden if configured).
+mux.Handle("/api/admin/", middleware.RequirePermission(eng, "admin", "users")(adminHandler))
+
+// Apply per-endpoint rate limiting.
+mux.Handle("/api/", middleware.RateLimit(eng)(apiHandler))
+```
+
+## Token formats
+
+Access tokens are opaque 64-character hex strings by default. Switch to signed JWTs per app for use cases that require client-side validation or OIDC compatibility.
+
+```go
+import "github.com/xraph/authsome/tokenformat"
+
+// JWT format with RSA-256 signing key.
+jwtFmt, err := tokenformat.NewJWT(tokenformat.JWTConfig{
+    Algorithm:  "RS256",
+    PrivateKey: rsaPrivateKey,
+    PublicKey:  rsaPublicKey,
+    Issuer:     "https://auth.myapp.com",
+    Audience:   []string{"https://api.myapp.com"},
+})
+
+// Register JWT format for a specific app.
+authsome.WithJWTFormat("myapp", jwtFmt)
+```
+
+When JWT is configured for an app, all sessions created for that app receive a signed JWT as the access token. The refresh token remains opaque.
+
+## Package index
+
+| Package | Import path | Purpose |
+|---------|-------------|---------|
+| `authsome` | `github.com/xraph/authsome` | Root — Engine, Config, Option, entity type aliases |
+| `id` | `github.com/xraph/authsome/id` | TypeID-based identifiers with 27 prefixes |
+| `account` | `github.com/xraph/authsome/account` | SignUpRequest, SignInRequest, session creation, password hashing |
+| `user` | `github.com/xraph/authsome/user` | User entity and UserQuery/UserList pagination types |
+| `session` | `github.com/xraph/authsome/session` | Session entity |
+| `device` | `github.com/xraph/authsome/device` | Device entity and fingerprinting |
+| `hook` | `github.com/xraph/authsome/hook` | Hook bus, Event, 40+ action constants |
+| `plugin` | `github.com/xraph/authsome/plugin` | Plugin interfaces (base + 15 capability interfaces) |
+| `strategy` | `github.com/xraph/authsome/strategy` | Strategy interface and priority registry |
+| `bridge` | `github.com/xraph/authsome/bridge` | 11 bridge interfaces and their adapters |
+| `tokenformat` | `github.com/xraph/authsome/tokenformat` | Opaque and JWT token format implementations |
+| `ceremony` | `github.com/xraph/authsome/ceremony` | Short-lived auth ceremony state store |
+| `rbac` | `github.com/xraph/authsome/rbac` | Role, Permission, UserRole, RBAC store interface |
+| `organization` | `github.com/xraph/authsome/organization` | Org, Member, Team, Invitation entity types |
+| `environment` | `github.com/xraph/authsome/environment` | Environment entity and clone operations |
+| `formconfig` | `github.com/xraph/authsome/formconfig` | Dynamic form field definitions and submission validation |
+| `webhook` | `github.com/xraph/authsome/webhook` | Webhook entity and delivery records |
+| `middleware` | `github.com/xraph/authsome/middleware` | HTTP middleware: auth extraction, RBAC, rate limiting, IP access |
+| `store` | `github.com/xraph/authsome/store` | Composite Store interface and sentinel errors |
+| `store/memory` | `github.com/xraph/authsome/store/memory` | In-memory store (testing and development) |
+| `store/postgres` | `github.com/xraph/authsome/store/postgres` | PostgreSQL store |
+| `store/sqlite` | `github.com/xraph/authsome/store/sqlite` | SQLite store |
+| `store/mongo` | `github.com/xraph/authsome/store/mongo` | MongoDB store |
+| `extension` | `github.com/xraph/authsome/extension` | Forge extension adapter |

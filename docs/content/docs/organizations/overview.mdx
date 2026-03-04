@@ -1,0 +1,233 @@
+---
+title: Organizations Overview
+description: Multi-tenant organization management with CRUD operations, org-scoped features, and plugin-based setup.
+---
+
+Organizations are the primary multi-tenancy boundary in Authsome. An organization groups users together under a shared namespace, giving them shared resources, roles, and configuration. Every organization belongs to an application and is environment-scoped, so users, sessions, and permissions for one environment are always isolated from another.
+
+## The Organization model
+
+```go
+import "github.com/xraph/authsome/org"
+
+type Organization struct {
+    ID          id.ID             `json:"id"`           // aorg_ prefix
+    AppID       string            `json:"app_id"`
+    EnvID       string            `json:"env_id"`
+    Name        string            `json:"name"`
+    Slug        string            `json:"slug"`
+    Description string            `json:"description,omitempty"`
+    LogoURL     string            `json:"logo_url,omitempty"`
+    Color       string            `json:"color,omitempty"`      // hex color for UI
+    IsPersonal  bool              `json:"is_personal"`
+    IsActive    bool              `json:"is_active"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `id.ID` | Globally unique identifier with `aorg_` prefix |
+| `AppID` | `string` | The application this organization belongs to |
+| `EnvID` | `string` | The environment this organization is scoped to |
+| `Name` | `string` | Human-readable display name, e.g. `"Acme Corporation"` |
+| `Slug` | `string` | URL-safe unique identifier within the app, e.g. `"acme-corp"`. Auto-generated from name if not provided. |
+| `Description` | `string` | Optional description shown in dashboards and member invitations |
+| `LogoURL` | `string` | URL to the organization's logo image |
+| `Color` | `string` | Hex color code used for visual identification in dashboards (`#3B82F6`) |
+| `IsPersonal` | `bool` | When `true`, this is a system-created personal organization for a single user |
+| `IsActive` | `bool` | When `false`, the organization is suspended and members cannot authenticate with it |
+| `Metadata` | `map[string]string` | Arbitrary key-value pairs for application-specific data |
+
+### Slug constraints
+
+Slugs are unique within an application-environment pair. The slug must:
+- Contain only lowercase letters, numbers, and hyphens
+- Start and end with a letter or number
+- Be between 2 and 64 characters long
+
+Authsome auto-generates a slug from the organization name by lowercasing, replacing spaces with hyphens, and stripping non-alphanumeric characters. If the generated slug is already taken, a short random suffix is appended.
+
+## Setting up the Organization plugin
+
+The organization features are provided by the `organization` plugin. Register it during Authsome initialization:
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/organization"
+)
+
+auth := authsome.New(
+    authsome.WithPlugin(organization.New(
+        organization.WithMaxOrgsPerUser(10),
+        organization.WithPersonalOrgEnabled(true),
+        organization.WithDefaultMemberRole("member"),
+    )),
+)
+```
+
+### Plugin options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `WithMaxOrgsPerUser` | `int` | `0` (unlimited) | Maximum number of organizations a single user can create. `0` disables the limit. |
+| `WithPersonalOrgEnabled` | `bool` | `true` | Whether to auto-create a personal organization for each new user at sign-up |
+| `WithDefaultMemberRole` | `string` | `"member"` | The role assigned to new members when they join via invitation |
+| `WithTeamsEnabled` | `bool` | `true` | Whether to enable team management within organizations |
+| `WithInvitationExpiry` | `time.Duration` | `72h` | How long invitation tokens remain valid before expiring |
+| `WithSlugFromName` | `bool` | `true` | Whether to auto-generate slugs from organization names |
+
+## CRUD operations
+
+### Create an organization
+
+```go
+import (
+    "context"
+    "github.com/xraph/authsome/org"
+)
+
+// Create a new organization.
+created, err := auth.Orgs().Create(ctx, &org.CreateInput{
+    Name:        "Acme Corporation",
+    Slug:        "acme-corp",          // optional, auto-generated if omitted
+    Description: "The main org",
+    LogoURL:     "https://cdn.example.com/logos/acme.png",
+    Color:       "#3B82F6",
+    OwnerUserID: currentUserID,
+    Metadata: map[string]string{
+        "billing_plan": "enterprise",
+        "region":       "us-east-1",
+    },
+})
+if err != nil {
+    return err
+}
+fmt.Printf("created org: id=%s slug=%s\n", created.ID, created.Slug)
+```
+
+The creating user is automatically added as an `owner` member of the organization.
+
+### Get an organization
+
+```go
+// By ID.
+o, err := auth.Orgs().GetByID(ctx, orgID)
+
+// By slug (within the current app/env).
+o, err := auth.Orgs().GetBySlug(ctx, "acme-corp")
+```
+
+### Update an organization
+
+```go
+updated, err := auth.Orgs().Update(ctx, orgID, &org.UpdateInput{
+    Name:        "Acme Corporation (Renamed)",
+    Description: "Updated description",
+    Color:       "#10B981",
+})
+```
+
+Only the fields present in `UpdateInput` are modified. Pass `nil` for fields you want to leave unchanged.
+
+### Deactivate and delete
+
+```go
+// Suspend the organization -- members can no longer sign in under it.
+err := auth.Orgs().Deactivate(ctx, orgID)
+
+// Reactivate a suspended organization.
+err := auth.Orgs().Activate(ctx, orgID)
+
+// Permanently delete the organization and all its members, teams, and invitations.
+// This cannot be undone.
+err := auth.Orgs().Delete(ctx, orgID)
+```
+
+<Callout type="warn">
+Deleting an organization permanently removes all member records, team memberships, and pending invitations. It does not delete the user accounts themselves. Consider deactivating instead of deleting if you may need to restore access later.
+</Callout>
+
+### List organizations
+
+```go
+// All organizations for the current app/env.
+orgs, err := auth.Orgs().List(ctx, &org.ListInput{
+    Limit:  50,
+    Cursor: "",      // leave empty for first page
+})
+
+// Organizations a specific user belongs to.
+orgs, err := auth.Orgs().ListByUser(ctx, userID, &org.ListInput{
+    Limit: 50,
+})
+```
+
+The list result uses cursor-based pagination:
+
+```go
+type ListResult struct {
+    Items      []*Organization `json:"items"`
+    NextCursor string          `json:"next_cursor,omitempty"`
+    HasMore    bool            `json:"has_more"`
+}
+```
+
+Pass `NextCursor` as the `Cursor` input on the next call to retrieve the subsequent page.
+
+## Org-scoped features
+
+Organizations scope the following features:
+
+- **Members** -- Each organization has its own member roster with roles (`owner`, `admin`, `member`). See [Members](/docs/organizations/members).
+- **Teams** -- Sub-groups within an organization for delegated access control. See [Teams](/docs/organizations/teams).
+- **Invitations** -- Email-based invitation flow for adding members. See [Invitations](/docs/organizations/invitations).
+- **Roles** -- RBAC roles can be assigned at the org level in addition to the global level. See [Org-Scoped Roles](/docs/organizations/org-scoped-roles).
+- **Branding** -- Per-org logos, colors, and custom CSS. See [Branding](/docs/dynamic-forms/branding).
+- **Webhooks** -- Org lifecycle events (`org.created`, `org.updated`, `org.member.invited`, etc.) are emitted via the webhook system.
+
+## HTTP API endpoints
+
+The organization plugin registers the following routes under the `/api/v1` prefix:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/orgs` | Create a new organization |
+| `GET` | `/orgs` | List organizations for the authenticated user |
+| `GET` | `/orgs/:org_id` | Get organization by ID |
+| `GET` | `/orgs/slug/:slug` | Get organization by slug |
+| `PATCH` | `/orgs/:org_id` | Update an organization |
+| `DELETE` | `/orgs/:org_id` | Delete an organization |
+| `POST` | `/orgs/:org_id/activate` | Activate a suspended organization |
+| `POST` | `/orgs/:org_id/deactivate` | Suspend an organization |
+| `GET` | `/users/me/orgs` | List organizations the current user belongs to |
+
+## Events emitted
+
+When organization operations complete, Authsome emits webhook events:
+
+| Event | Trigger |
+|-------|---------|
+| `org.created` | A new organization was created |
+| `org.updated` | Organization details were changed |
+| `org.member.invited` | A new member was invited |
+| `org.member.joined` | An invited member accepted and joined |
+| `org.member.removed` | A member was removed |
+| `org.member.role_changed` | A member's role was changed |
+
+See [Webhooks](/docs/security/webhooks) for payload schemas and delivery configuration.
+
+## Personal organizations
+
+When `WithPersonalOrgEnabled(true)` is set (the default), Authsome automatically creates a personal organization for each new user at sign-up. Personal organizations:
+
+- Have `IsPersonal: true`
+- Are named after the user's display name or email
+- Have the user as the sole `owner` member
+- Cannot be deleted (only the user account deletion removes it)
+- Do not appear in invitation flows
+
+Personal organizations let you use a single org-scoped permission model for both individual and team users without special-casing in your application logic.

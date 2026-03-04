@@ -1,0 +1,19 @@
+package pages
+
+// truncateString shortens s to maxLen characters, appending "..." if truncated.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// emptyState renders a centered placeholder for pages with no data.
+templ emptyState(message string, icon templ.Component) {
+	<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+		<div class="mb-4 opacity-50">
+			@icon
+		</div>
+		<p class="text-sm">{ message }</p>
+	</div>
+}

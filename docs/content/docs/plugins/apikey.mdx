@@ -1,0 +1,177 @@
+---
+title: API Key Plugin
+description: API key generation, scoped permissions, rotation, revocation, and bearer token authentication strategy.
+---
+
+The `apikey` plugin provides API key management and authentication for Authsome. It generates cryptographically secure API keys, supports key scoping and permissions, handles key rotation and revocation, and contributes an authentication strategy that evaluates API keys in the `Authorization` or `X-API-Key` header.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/apikey"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(apikey.New(apiKeyStore, apikey.Config{
+        PathPrefix:     "/v1/auth/keys",
+        MaxKeysPerUser: 10,
+        DefaultExpiry:  90 * 24 * time.Hour,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `PathPrefix` | `string` | `"/v1/auth/keys"` | HTTP path prefix for API key management routes |
+| `MaxKeysPerUser` | `int` | `0` (unlimited) | Maximum number of active keys per user |
+| `DefaultExpiry` | `time.Duration` | `0` (never) | Default TTL for newly created keys |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"apikey"`) |
+| `OnInit` | Captures Chronicle, Relay, hooks, logger, and user resolver |
+| `RouteProvider` | Registers key creation, listing, and revocation endpoints |
+| `StrategyProvider` | Contributes the API key authentication strategy (priority 100) |
+
+## API key generation
+
+`POST /v1/auth/keys`
+
+```json
+{
+  "app_id": "aapp_01j9...",
+  "user_id": "ausr_01j9...",
+  "name": "CI/CD Pipeline",
+  "scopes": ["read:users", "write:users"]
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "akey_01j9...",
+  "key": "ask_7f3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f",
+  "key_prefix": "ask_7f3a2b1c",
+  "name": "CI/CD Pipeline",
+  "scopes": ["read:users", "write:users"],
+  "expires_at": "2025-01-30T10:00:00Z",
+  "created_at": "2024-11-01T10:00:00Z"
+}
+```
+
+The raw key is returned only once at creation time. It is SHA-256 hashed before storage. The `key_prefix` (first 12 characters) is stored in plaintext for lookup.
+
+## Key format
+
+API keys use the `ask_` prefix followed by 64 hex characters:
+
+```
+ask_7f3a2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f
+```
+
+The `ask_` prefix allows the authentication strategy to identify API keys in the `Authorization: Bearer` header without ambiguity against session tokens.
+
+## Key scoping and permissions
+
+Keys can be scoped to specific permissions:
+
+```json
+{
+  "scopes": ["read:users", "write:users", "read:organizations"]
+}
+```
+
+Scopes are stored on the key and can be checked by your application logic. The plugin does not enforce scope semantics -- it stores and retrieves them.
+
+## Listing keys
+
+`GET /v1/auth/keys?app_id=aapp_01j9...`
+
+Optionally filter by user:
+
+`GET /v1/auth/keys?app_id=aapp_01j9...&user_id=ausr_01j9...`
+
+**Response:**
+
+```json
+{
+  "keys": [
+    {
+      "id": "akey_01j9...",
+      "name": "CI/CD Pipeline",
+      "key_prefix": "ask_7f3a2b1c",
+      "scopes": ["read:users", "write:users"],
+      "expires_at": "2025-01-30T10:00:00Z",
+      "last_used_at": "2024-11-15T14:30:00Z",
+      "revoked": false,
+      "created_at": "2024-11-01T10:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+The raw key is never returned in list responses. Only the prefix is shown for identification.
+
+## Key revocation
+
+`DELETE /v1/auth/keys/:keyId`
+
+Marks the key as revoked. Revoked keys are rejected during authentication. The key record is preserved for audit purposes.
+
+## Key rotation
+
+To rotate a key:
+
+1. Create a new key with the same scopes
+2. Update your application to use the new key
+3. Revoke the old key
+
+The `MaxKeysPerUser` configuration prevents unbounded key accumulation.
+
+## Authentication strategy
+
+The API key plugin contributes an authentication strategy with priority 100 (evaluated after session-based auth at priority 0):
+
+```go
+// The strategy checks these headers in order:
+// 1. Authorization: Bearer ask_...
+// 2. X-API-Key: ask_...
+```
+
+When a request includes an API key:
+
+1. The strategy extracts the key from the header
+2. Looks up the key by prefix in the API key store
+3. Verifies the raw key against the stored hash
+4. Checks that the key is not revoked or expired
+5. Updates the `last_used_at` timestamp (best-effort)
+6. Resolves the associated user
+7. Creates a synthetic session for context propagation
+
+The `X-App-ID` header or `app_id` query parameter is required for API key authentication to scope the key lookup.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/keys` | Create a new API key |
+| `GET` | `/v1/auth/keys` | List API keys (filter by app and user) |
+| `DELETE` | `/v1/auth/keys/:keyId` | Revoke an API key |
+
+## Observability
+
+The plugin emits events for:
+
+- `apikey.created` -- New API key generated
+- `apikey.revoked` -- API key revoked
+
+Events are sent to Chronicle (audit), Relay (webhooks), and the global hook bus.

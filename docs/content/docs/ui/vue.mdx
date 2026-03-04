@@ -1,0 +1,320 @@
+---
+title: Vue Integration
+description: Vue 3 composables and plugin for Authsome authentication via @authsome/ui-vue.
+---
+
+`@authsome/ui-vue` provides a Vue 3 plugin and composables for integrating Authsome authentication into Vue applications. It uses `@authsome/ui-core` under the hood and exposes reactive state through the Vue Composition API.
+
+## Installation
+
+```bash
+npm install @authsome/ui-vue @authsome/ui-core
+```
+
+## Plugin setup
+
+Register the auth plugin in your Vue app's entry point. This creates an `AuthManager` instance and provides it to all components via Vue's dependency injection.
+
+```ts
+// main.ts
+import { createApp } from "vue";
+import { createAuthPlugin } from "@authsome/ui-vue";
+import App from "./App.vue";
+
+const app = createApp(App);
+
+app.use(
+  createAuthPlugin({
+    baseURL: "https://api.example.com",
+  })
+);
+
+app.mount("#app");
+```
+
+### Plugin options
+
+The plugin accepts the same `AuthConfig` options as the core `AuthManager`:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | -- | Base URL of your Authsome API |
+| `storage` | `TokenStorage` | `localStorage` | Token persistence strategy |
+| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation |
+| `onStateChange` | `(state: AuthState) => void` | -- | State change callback |
+| `onError` | `(error: APIError) => void` | -- | Error callback |
+
+## Composables
+
+### useAuth
+
+The primary composable. Returns reactive authentication state and action methods.
+
+```vue
+<script setup lang="ts">
+import { useAuth } from "@authsome/ui-vue";
+
+const {
+  state,
+  user,
+  session,
+  isAuthenticated,
+  isLoading,
+  error,
+  client,
+  signIn,
+  signUp,
+  signOut,
+  submitMFACode,
+  submitRecoveryCode,
+} = useAuth();
+
+async function handleSignIn() {
+  await signIn("user@example.com", "password123");
+}
+</script>
+
+<template>
+  <div v-if="isLoading">Loading...</div>
+  <div v-else-if="isAuthenticated">
+    <p>Welcome, {{ user?.name }}</p>
+    <button @click="signOut">Sign out</button>
+  </div>
+  <div v-else>
+    <button @click="handleSignIn">Sign in</button>
+    <p v-if="error" class="text-red-500">{{ error }}</p>
+  </div>
+</template>
+```
+
+#### Return value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `state` | `Readonly<Ref<AuthState>>` | Full reactive auth state |
+| `user` | `ComputedRef<User \| null>` | Current user |
+| `session` | `ComputedRef<Session \| null>` | Current session |
+| `isAuthenticated` | `ComputedRef<boolean>` | Whether authenticated |
+| `isLoading` | `ComputedRef<boolean>` | Whether loading |
+| `error` | `ComputedRef<string \| null>` | Current error message |
+| `client` | `AuthClient` | HTTP API client |
+| `signIn` | `(email, password) => Promise<void>` | Sign in |
+| `signUp` | `(email, password, name?) => Promise<void>` | Create account |
+| `signOut` | `() => Promise<void>` | End session |
+| `submitMFACode` | `(enrollmentId, code) => Promise<void>` | Submit MFA code |
+| `submitRecoveryCode` | `(code) => Promise<void>` | Submit recovery code |
+
+### useUser
+
+Returns the current user profile with a `reload` function.
+
+```vue
+<script setup lang="ts">
+import { useUser } from "@authsome/ui-vue";
+
+const { user, isLoading, reload } = useUser();
+</script>
+
+<template>
+  <div v-if="!isLoading && user">
+    <p>{{ user.email }}</p>
+    <button @click="reload">Refresh profile</button>
+  </div>
+</template>
+```
+
+### useOrganizations
+
+Fetches organizations for the current user. Automatically loads on component mount when authenticated.
+
+```vue
+<script setup lang="ts">
+import { useOrganizations } from "@authsome/ui-vue";
+
+const { organizations, total, isLoading, reload } = useOrganizations();
+</script>
+
+<template>
+  <select v-if="!isLoading">
+    <option v-for="org in organizations" :key="org.id" :value="org.id">
+      {{ org.name }}
+    </option>
+  </select>
+</template>
+```
+
+### useSessionToken
+
+Returns a computed ref containing the current session token string.
+
+```vue
+<script setup lang="ts">
+import { useSessionToken } from "@authsome/ui-vue";
+
+const token = useSessionToken();
+
+async function callApi() {
+  const res = await fetch("/api/data", {
+    headers: { Authorization: `Bearer ${token.value}` },
+  });
+  return res.json();
+}
+</script>
+```
+
+## Building a sign-in form
+
+Since `@authsome/ui-vue` provides composables only (no styled components), you build your own forms:
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import { useAuth } from "@authsome/ui-vue";
+import { useRouter } from "vue-router";
+
+const { signIn, isLoading, error } = useAuth();
+const router = useRouter();
+
+const email = ref("");
+const password = ref("");
+
+async function handleSubmit() {
+  await signIn(email.value, password.value);
+  router.push("/dashboard");
+}
+</script>
+
+<template>
+  <form @submit.prevent="handleSubmit" class="space-y-4">
+    <div>
+      <label for="email">Email</label>
+      <input id="email" v-model="email" type="email" required />
+    </div>
+    <div>
+      <label for="password">Password</label>
+      <input id="password" v-model="password" type="password" required />
+    </div>
+    <p v-if="error" class="text-red-500">{{ error }}</p>
+    <button type="submit" :disabled="isLoading">
+      {{ isLoading ? "Signing in..." : "Sign in" }}
+    </button>
+  </form>
+</template>
+```
+
+## Vue Router guard
+
+Protect routes with a navigation guard:
+
+```ts
+// router/index.ts
+import { createRouter, createWebHistory } from "vue-router";
+import { useAuth } from "@authsome/ui-vue";
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    { path: "/sign-in", component: () => import("../views/SignIn.vue") },
+    {
+      path: "/dashboard",
+      component: () => import("../views/Dashboard.vue"),
+      meta: { requiresAuth: true },
+    },
+  ],
+});
+
+router.beforeEach((to) => {
+  const { isAuthenticated } = useAuth();
+  if (to.meta.requiresAuth && !isAuthenticated.value) {
+    return { path: "/sign-in", query: { redirect: to.fullPath } };
+  }
+});
+
+export default router;
+```
+
+## Nuxt.js integration
+
+For Nuxt 3, create a plugin that registers the auth plugin and expose composables globally.
+
+```ts
+// plugins/authsome.client.ts
+import { createAuthPlugin } from "@authsome/ui-vue";
+
+export default defineNuxtPlugin((nuxtApp) => {
+  const config = useRuntimeConfig();
+
+  nuxtApp.vueApp.use(
+    createAuthPlugin({
+      baseURL: config.public.authsomeUrl,
+    })
+  );
+});
+```
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  runtimeConfig: {
+    public: {
+      authsomeUrl: process.env.AUTHSOME_API_URL || "http://localhost:8080",
+    },
+  },
+});
+```
+
+Then use composables in any component:
+
+```vue
+<script setup>
+import { useAuth } from "@authsome/ui-vue";
+
+const { user, isAuthenticated, signOut } = useAuth();
+</script>
+```
+
+## Handling MFA
+
+When the auth state transitions to `mfa_required`, render an MFA challenge form:
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue";
+import { useAuth } from "@authsome/ui-vue";
+
+const { state, submitMFACode } = useAuth();
+const code = ref("");
+
+async function handleMFA() {
+  if (state.value.status === "mfa_required") {
+    await submitMFACode("enrollment-id", code.value);
+  }
+}
+</script>
+
+<template>
+  <div v-if="state.status === 'mfa_required'">
+    <h2>Enter verification code</h2>
+    <input v-model="code" placeholder="6-digit code" />
+    <button @click="handleMFA">Verify</button>
+  </div>
+</template>
+```
+
+## TypeScript
+
+All core types are re-exported from `@authsome/ui-vue`:
+
+```ts
+import type {
+  AuthState,
+  AuthConfig,
+  User,
+  Session,
+  Organization,
+  Member,
+  MFAEnrollment,
+  APIError,
+  TokenStorage,
+} from "@authsome/ui-vue";
+```

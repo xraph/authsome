@@ -1,0 +1,139 @@
+---
+title: Warden Bridge
+description: Advanced RBAC engine — delegates permission checks to Warden for richer RBAC, ReBAC, and ABAC policy evaluation.
+---
+
+The Warden bridge connects Authsome to the Warden authorization engine. When configured, Authsome's RBAC permission checks are delegated to Warden, which supports more expressive authorization models: full RBAC with inheritance, Relationship-Based Access Control (ReBAC), and Attribute-Based Access Control (ABAC) — all in a single policy engine.
+
+Without Warden, Authsome evaluates permissions using its built-in RBAC store (`rbac.Store`), which supports role-permission assignments and a single level of role hierarchy. Warden unlocks policies like:
+
+- "Allow access if the user owns the resource"
+- "Allow access if the user is a member of the resource's parent organisation"
+- "Deny access during weekends regardless of role"
+- "Allow if user has role `admin` in the requesting tenant AND is in the EMEA region"
+
+## Interface
+
+The `bridge.Authorizer` interface is defined in `github.com/xraph/authsome/bridge`:
+
+```go
+type Authorizer interface {
+    Check(ctx context.Context, req *AuthzRequest) (*AuthzResult, error)
+}
+
+type AuthzRequest struct {
+    Subject  string `json:"subject"`   // User ID
+    Action   string `json:"action"`    // e.g. "read", "write", "delete"
+    Resource string `json:"resource"`  // e.g. "document", "api:v1/users"
+    Tenant   string `json:"tenant,omitempty"`
+}
+
+type AuthzResult struct {
+    Allowed bool   `json:"allowed"`
+    Reason  string `json:"reason,omitempty"`
+}
+```
+
+## Setup with the Warden engine (recommended)
+
+Authsome provides a first-class `WithWarden` option that accepts the concrete `*warden.Engine` directly. This is the recommended approach — it provides Warden's full RBAC/ReBAC/ABAC evaluation and also satisfies the `bridge.Authorizer` interface for backward compatibility:
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/warden"
+    "github.com/xraph/authsome/store/postgres"
+)
+
+// Build the Warden engine.
+wardenEng, err := warden.New(
+    warden.WithStore(wardenStore),
+    warden.WithPolicy(warden.PolicyOPA), // or PolicyCasbin, PolicyCEL
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Register with Authsome using the first-class option.
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithWarden(wardenEng),
+)
+```
+
+Internally, `WithWarden` calls:
+
+```go
+e.warden_ = wardenEng
+e.authorizer = wardenadapter.New(wardenEng)
+```
+
+## Setup with the generic Authorizer interface
+
+If you want to integrate a different authorization engine, implement `bridge.Authorizer` directly:
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/wardenadapter"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithAuthorizer(wardenadapter.New(wardenEng)),
+)
+```
+
+## How Authsome uses the Authorizer
+
+Authsome calls the Authorizer bridge for:
+
+1. **RBAC permission checks** — Before allowing any `HasPermission` evaluation on the RBAC service, the authorizer is called if Warden is configured.
+2. **API endpoint access control** — Auth-protected management routes (user ban/unban, RBAC management) check the authorizer.
+3. **Plugin-level checks** — Plugins that perform sensitive operations (e.g., the organization plugin before allowing member removal) can call the authorizer.
+
+When the Authorizer is not configured (nil), Authsome falls back to its built-in RBAC store evaluation.
+
+## The NoopAuthorizer
+
+During development, use the built-in `NoopAuthorizer` that always allows all requests:
+
+```go
+import "github.com/xraph/authsome/bridge"
+
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    authsome.WithAuthorizer(bridge.NewNoopAuthorizer()),
+)
+```
+
+<Callout type="warn">
+The `NoopAuthorizer` always returns `allowed: true` with the reason `"standalone mode: always allowed"`. Never use it in production. In production, either configure Warden or rely on Authsome's built-in RBAC (which evaluates real role and permission assignments from the database).
+</Callout>
+
+## Warden policy example
+
+With Warden's OPA backend, you can write policies that express complex authorization logic:
+
+```text
+package authsome
+
+import future.keywords.if
+
+default allow = false
+
+# Allow if user has the required role in the tenant.
+allow if {
+    role := data.roles[input.subject][input.tenant]
+    action_allowed(role, input.action, input.resource)
+}
+
+# Allow admins everything.
+action_allowed("admin", _, _) = true
+
+# Allow editors to write but not delete.
+action_allowed("editor", "read", _) = true
+action_allowed("editor", "write", _) = true
+```
+
+Refer to the [Warden documentation](/docs/guides/forge-extension) for the full policy language reference.

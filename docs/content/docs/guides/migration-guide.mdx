@@ -1,0 +1,285 @@
+---
+title: Migration Guide
+description: Migrate to Authsome from Firebase Auth, Auth0, Supabase Auth, or custom JWT implementations.
+---
+
+This guide covers strategies for migrating your existing authentication system to Authsome. Whether you are coming from a managed service like Firebase Auth or Auth0, or from a custom JWT implementation, the process follows the same general pattern: export users, map data to Authsome's schema, import, and gradually cut over.
+
+## General migration strategy
+
+1. **Export users** from your current auth provider
+2. **Map fields** to Authsome's user and account schema
+3. **Import users** into Authsome (with password hashes where possible)
+4. **Run both systems** in parallel during a transition period
+5. **Cut over** to Authsome and decommission the old system
+
+## Migration from Firebase Auth
+
+### Export users
+
+Use the Firebase CLI to export all users:
+
+```bash
+firebase auth:export users.json --format=json --project your-project-id
+```
+
+### Map to Authsome schema
+
+Firebase users map to Authsome as follows:
+
+| Firebase field | Authsome field | Notes |
+|---------------|---------------|-------|
+| `localId` | external reference | Store as metadata for rollback |
+| `email` | `user.email` | Direct mapping |
+| `displayName` | `user.name` | Direct mapping |
+| `photoUrl` | `user.avatar_url` | Direct mapping |
+| `emailVerified` | `user.email_verified` | Direct mapping |
+| `passwordHash` | -- | Firebase uses scrypt; requires re-hashing or forced reset |
+| `providerUserInfo` | `account` records | One account per provider |
+| `mfaInfo` | MFA plugin enrollment | Requires MFA plugin setup |
+
+### Import script
+
+```go
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"os"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/user"
+)
+
+type FirebaseUser struct {
+	LocalID       string `json:"localId"`
+	Email         string `json:"email"`
+	DisplayName   string `json:"displayName"`
+	PhotoURL      string `json:"photoUrl"`
+	EmailVerified bool   `json:"emailVerified"`
+	Disabled      bool   `json:"disabled"`
+}
+
+type FirebaseExport struct {
+	Users []FirebaseUser `json:"users"`
+}
+
+func main() {
+	ctx := context.Background()
+	eng := setupEngine() // Your engine setup
+
+	data, _ := os.ReadFile("users.json")
+	var export FirebaseExport
+	json.Unmarshal(data, &export)
+
+	for _, fu := range export.Users {
+		if fu.Disabled {
+			continue
+		}
+		u := &user.User{
+			ID:            id.NewUserID(),
+			Email:         fu.Email,
+			Name:          fu.DisplayName,
+			AvatarURL:     fu.PhotoURL,
+			EmailVerified: fu.EmailVerified,
+			Metadata: map[string]any{
+				"firebase_id":       fu.LocalID,
+				"requires_password_reset": true,
+			},
+		}
+		if err := eng.Store().CreateUser(ctx, u); err != nil {
+			log.Printf("skip %s: %v", fu.Email, err)
+		}
+	}
+}
+```
+
+> **Password handling:** Firebase uses a custom scrypt variant that cannot be directly imported. Options: (1) force a password reset for all migrated users, or (2) implement a custom password verifier that checks Firebase scrypt hashes during the transition period.
+
+## Migration from Auth0
+
+### Export users
+
+Use the Auth0 Management API or the Auth0 Dashboard to export users:
+
+```bash
+curl -X POST "https://YOUR_DOMAIN.auth0.com/api/v2/jobs/users-exports" \
+  -H "Authorization: Bearer $AUTH0_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "format": "json",
+    "fields": [
+      {"name": "user_id"},
+      {"name": "email"},
+      {"name": "name"},
+      {"name": "picture"},
+      {"name": "email_verified"},
+      {"name": "identities"}
+    ]
+  }'
+```
+
+### Field mapping
+
+| Auth0 field | Authsome field | Notes |
+|------------|---------------|-------|
+| `user_id` | external reference | Format: `auth0\|abc123` |
+| `email` | `user.email` | Direct mapping |
+| `name` | `user.name` | Direct mapping |
+| `picture` | `user.avatar_url` | Direct mapping |
+| `email_verified` | `user.email_verified` | Direct mapping |
+| `identities[].connection` | `account.provider` | Map `google-oauth2` to `google`, etc. |
+| `identities[].provider` | `account.provider` | Social provider identifier |
+| `app_metadata` | `user.metadata` | Custom data |
+
+### Password handling
+
+Auth0 uses bcrypt for password hashing. Authsome also supports bcrypt by default, so you can import password hashes directly if Auth0 provides them in the export (requires a special export job with password hashes enabled).
+
+## Migration from Supabase Auth
+
+### Export users
+
+Query the `auth.users` table in your Supabase PostgreSQL database:
+
+```sql
+SELECT
+  id,
+  email,
+  raw_user_meta_data->>'full_name' as name,
+  raw_user_meta_data->>'avatar_url' as avatar_url,
+  email_confirmed_at IS NOT NULL as email_verified,
+  encrypted_password,
+  created_at
+FROM auth.users
+WHERE deleted_at IS NULL;
+```
+
+### Password handling
+
+Supabase uses bcrypt (via GoTrue). Since Authsome also uses bcrypt by default, you can import password hashes directly:
+
+```go
+u := &user.User{
+	ID:            id.NewUserID(),
+	Email:         supabaseUser.Email,
+	Name:          supabaseUser.Name,
+	EmailVerified: supabaseUser.EmailVerified,
+	PasswordHash:  supabaseUser.EncryptedPassword, // bcrypt hash, compatible
+}
+```
+
+## Migration from custom JWT auth
+
+### Mapping considerations
+
+| Your system | Authsome equivalent |
+|------------|-------------------|
+| Users table | `user.User` (create via store) |
+| JWT signing key | Configure via `WithDefaultTokenFormat` or `WithJWTFormat` |
+| Refresh tokens | Authsome sessions with `refresh_token` |
+| Roles/permissions | Warden integration or user metadata |
+| OAuth connections | Account records + social plugin |
+
+### Gradual migration with JWT validation
+
+If your current system uses JWTs, you can run both systems in parallel by having Authsome validate your existing JWTs during the transition:
+
+```go
+import "github.com/xraph/authsome/tokenformat"
+
+// Configure Authsome to accept your existing JWTs
+jwtFmt, _ := tokenformat.NewJWT(tokenformat.JWTConfig{
+	Issuer:     "your-existing-issuer",
+	Audience:   "your-app",
+	SigningKey:  existingPublicKey,
+	SigningMethod: "RS256",
+})
+
+eng, _ := authsome.NewEngine(
+	authsome.WithStore(store),
+	authsome.WithDefaultTokenFormat(jwtFmt),
+)
+```
+
+## Gradual migration (running both systems)
+
+For zero-downtime migration, run both auth systems simultaneously during a transition period.
+
+### Phase 1: Read from both, write to Authsome
+
+1. New sign-ups go to Authsome
+2. Existing sign-ins try Authsome first, fall back to the old system
+3. On successful old-system sign-in, migrate the user to Authsome
+
+### Phase 2: Authsome primary
+
+1. All sign-ups go to Authsome
+2. All sign-ins go to Authsome
+3. Users who have not signed in since migration get a forced password reset
+4. Old system is read-only
+
+### Phase 3: Decommission
+
+1. Remove old system integration code
+2. Delete old auth database (after backup)
+3. Remove fallback logic
+
+### Proxy pattern for gradual migration
+
+```go
+// middleware that tries Authsome first, falls back to legacy
+func migrationMiddleware(authsomeEng *authsome.Engine, legacyAuth LegacyAuth) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := extractBearerToken(r)
+
+			// Try Authsome first
+			session, err := authsomeEng.ResolveSessionByToken(r.Context(), token)
+			if err == nil {
+				ctx := setUser(r.Context(), session.UserID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// Fall back to legacy system
+			userID, err := legacyAuth.ValidateToken(token)
+			if err != nil {
+				http.Error(w, "Unauthorized", 401)
+				return
+			}
+
+			// Optionally: migrate the user to Authsome in the background
+			go migrateUserToAuthsome(authsomeEng, legacyAuth, userID)
+
+			ctx := setUser(r.Context(), userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+```
+
+## Migration checklist
+
+Use this checklist to track your migration progress:
+
+- [ ] Export all users from the existing auth provider
+- [ ] Map user fields to Authsome schema
+- [ ] Handle password hashes (import or force reset)
+- [ ] Migrate social login connections to Authsome social plugin
+- [ ] Migrate MFA enrollments to Authsome MFA plugin
+- [ ] Set up Authsome server with all required plugins
+- [ ] Import users into Authsome
+- [ ] Test sign-in for migrated users
+- [ ] Test sign-up for new users
+- [ ] Deploy migration middleware (dual-system mode)
+- [ ] Monitor error rates and sign-in success rates
+- [ ] Send password reset emails to users who have not migrated
+- [ ] Remove legacy auth system
+- [ ] Update client applications to use Authsome UI SDK
+- [ ] Verify all API keys and service tokens are migrated
+- [ ] Update webhook endpoints to Authsome's event format
+- [ ] Archive export data and old auth database backup

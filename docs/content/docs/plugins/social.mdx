@@ -1,0 +1,187 @@
+---
+title: Social Login Plugin
+description: OAuth2 social authentication with Google, GitHub, Microsoft, Apple, and custom providers.
+---
+
+The `social` plugin adds OAuth2 social login to Authsome. Users can sign in with their existing accounts from Google, GitHub, Microsoft, Apple, or any custom OAuth2 provider. The plugin handles the full OAuth2 flow, account linking, and profile data mapping.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/social"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(social.New(social.Config{
+        Providers: []social.Provider{
+            social.NewGoogle(social.GoogleConfig{
+                ClientID:     "your-client-id",
+                ClientSecret: "your-client-secret",
+                RedirectURL:  "https://example.com/v1/auth/social/google/callback",
+                Scopes:       []string{"openid", "email", "profile"},
+            }),
+            social.NewGitHub(social.GitHubConfig{
+                ClientID:     "your-client-id",
+                ClientSecret: "your-client-secret",
+                RedirectURL:  "https://example.com/v1/auth/social/github/callback",
+            }),
+        },
+        SessionTokenTTL:   1 * time.Hour,
+        SessionRefreshTTL: 30 * 24 * time.Hour,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Providers` | `[]Provider` | `[]` | List of enabled OAuth providers |
+| `SessionTokenTTL` | `time.Duration` | `1h` | Lifetime of sessions created via social sign-in |
+| `SessionRefreshTTL` | `time.Duration` | `30d` | Lifetime of refresh tokens |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"social"`) |
+| `OnInit` | Captures store, bridges, ceremony store, and session config resolver |
+| `RouteProvider` | Registers `/v1/auth/social/:provider` and callback endpoints |
+| `MigrationProvider` | Contributes the `oauth_connections` table |
+| `AuthMethodContributor` | Reports linked social accounts as auth methods |
+| `AuthMethodUnlinker` | Supports unlinking a social account from a user |
+
+## Supported providers
+
+### Google
+
+```go
+social.NewGoogle(social.GoogleConfig{
+    ClientID:     "your-client-id.apps.googleusercontent.com",
+    ClientSecret: "your-client-secret",
+    RedirectURL:  "https://example.com/v1/auth/social/google/callback",
+    Scopes:       []string{"openid", "email", "profile"},
+})
+```
+
+### GitHub
+
+```go
+social.NewGitHub(social.GitHubConfig{
+    ClientID:     "your-client-id",
+    ClientSecret: "your-client-secret",
+    RedirectURL:  "https://example.com/v1/auth/social/github/callback",
+})
+```
+
+### Microsoft
+
+```go
+social.NewMicrosoft(social.MicrosoftConfig{
+    ClientID:     "your-client-id",
+    ClientSecret: "your-client-secret",
+    TenantID:     "common",
+    RedirectURL:  "https://example.com/v1/auth/social/microsoft/callback",
+})
+```
+
+### Apple
+
+```go
+social.NewApple(social.AppleConfig{
+    ClientID:    "your-service-id",
+    TeamID:      "your-team-id",
+    KeyID:       "your-key-id",
+    PrivateKey:  applePrivateKeyPEM,
+    RedirectURL: "https://example.com/v1/auth/social/apple/callback",
+})
+```
+
+### Custom provider
+
+Implement the `Provider` interface to add any OAuth2 provider:
+
+```go
+type Provider interface {
+    Name() string
+    OAuth2Config() *oauth2.Config
+    FetchUser(ctx context.Context, token *oauth2.Token) (*ProviderUser, error)
+}
+```
+
+## OAuth2 callback flow
+
+
+
+**Start OAuth flow**: The client calls the start endpoint to get the authorization URL.
+
+`POST /v1/auth/social/:provider`
+
+**Response:**
+
+```json
+{"auth_url": "https://accounts.google.com/o/oauth2/v2/auth?..."}
+```
+
+The plugin generates a cryptographic state parameter for CSRF protection and stores it in the ceremony store with a 10-minute TTL.
+
+
+**User authorizes**: The user is redirected to the provider's consent screen and grants access.
+
+
+**Callback**: The provider redirects back with an authorization code.
+
+`GET /v1/auth/social/:provider/callback?code=...&state=...`
+
+The plugin validates the state parameter, exchanges the code for an access token, fetches the user profile from the provider, and either links to an existing user or creates a new one.
+
+**Response:**
+
+```json
+{
+  "user": {"id": "ausr_01j9...", "email": "alice@example.com"},
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "provider": "google",
+  "is_new_user": false
+}
+```
+
+
+
+## Account linking
+
+When a user signs in with a social provider, the plugin follows this logic:
+
+1. Check if an OAuth connection already exists for this provider + provider user ID
+2. If yes, look up the linked Authsome user and update tokens
+3. If no, try to find a user by email
+4. If a user with that email exists, link the social account to it
+5. If no user exists, create a new user and link the social account
+
+## Unlinking social accounts
+
+Users can unlink a social provider from their account:
+
+```go
+err := socialPlugin.UnlinkAuthMethod(ctx, userID, "google")
+```
+
+The `CanUnlink` method checks whether the provider is managed by this plugin. The engine aggregates unlink requests across all `AuthMethodUnlinker` plugins.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/social/:provider` | Start OAuth flow, returns authorization URL |
+| `GET` | `/v1/auth/social/:provider/callback` | OAuth callback, exchanges code for session |
+
+## Observability
+
+The plugin emits events for:
+
+- `auth.social.signup` -- New user created via social login
+- `auth.social.signin` -- Existing user signed in via social login

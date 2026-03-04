@@ -1,0 +1,52 @@
+package dashui
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+)
+
+templ SettingsPanel(minLength int, requireSpecial bool, allowedDomains []string) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				Password Policy
+			}
+			@card.Description() {
+				Password validation rules and domain restrictions
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">Min Length</dt>
+				<dd class="font-medium">
+					if minLength > 0 {
+						{ strconv.Itoa(minLength) } characters
+					} else {
+						Engine default
+					}
+				</dd>
+				<dt class="text-muted-foreground">Require Special Characters</dt>
+				<dd class="font-medium">
+					if requireSpecial {
+						@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+							Yes
+						}
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							No
+						}
+					}
+				</dd>
+				if len(allowedDomains) > 0 {
+					<dt class="text-muted-foreground">Allowed Domains</dt>
+					<dd class="font-medium">
+						{ strings.Join(allowedDomains, ", ") }
+					</dd>
+				}
+			</dl>
+		}
+	}
+}

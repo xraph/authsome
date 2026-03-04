@@ -1,0 +1,192 @@
+---
+title: Per-Environment Isolation
+description: How Authsome enforces strict data isolation between environments, including users, sessions, organizations, and per-environment session configuration.
+---
+
+Every entity in Authsome is stamped with both an `app_id` and an `env_id`. This means users in `development` and users in `production` are completely separate records -- there is no overlap, no accidental cross-contamination, and no way for a query in one environment to accidentally touch another environment's data.
+
+## Isolation model
+
+```
+Application (AppID)
+  ├── Environment: production  (EnvID: aenv_prod...)
+  │     ├── Users (scoped to env)
+  │     ├── Sessions (scoped to env)
+  │     ├── Organizations (scoped to env)
+  │     ├── API Keys (scoped to env)
+  │     └── Audit Events (scoped to env)
+  │
+  ├── Environment: staging     (EnvID: aenv_stg...)
+  │     ├── Users (completely separate from production)
+  │     ├── Sessions
+  │     └── ...
+  │
+  └── Environment: development (EnvID: aenv_dev...)
+        └── ...
+```
+
+The `env_id` is injected into the `context.Context` at the HTTP middleware layer and is automatically applied to every database query. Cross-environment access is structurally impossible -- every store method takes an `envID` parameter and filters by it at the SQL level.
+
+## Environment context injection
+
+### In HTTP handlers
+
+When a request arrives, Authsome resolves the environment from the request and injects it into the context:
+
+```go
+import "github.com/xraph/authsome/middleware"
+
+// Use X-Authsome-Environment header or env query parameter.
+router.Use(middleware.EnvironmentContext(auth))
+```
+
+The middleware resolution order:
+1. `X-Authsome-Environment` HTTP header (slug or ID)
+2. `env` query parameter
+3. JWT claim `env_id`
+4. Default environment for the application
+
+### In Go code
+
+```go
+import "github.com/xraph/authsome"
+
+// Inject by environment ID.
+ctx = authsome.WithEnvID(ctx, envID)
+
+// Inject by slug (resolved at injection time).
+ctx, err = authsome.WithEnvSlug(ctx, auth, "production")
+
+// All subsequent calls use this environment.
+user, err := auth.Users().GetByEmail(ctx, "alice@example.com")
+```
+
+## Isolated user accounts
+
+A user email address can exist in multiple environments simultaneously as separate, independent accounts. Alice can have an account in `development` and a completely separate account in `production`. They share nothing: different user IDs, different passwords, different sessions, different MFA configurations.
+
+```go
+// In production environment.
+prodCtx := authsome.WithEnvID(ctx, productionEnvID)
+prodUser, err := auth.Users().GetByEmail(prodCtx, "alice@example.com")
+// prodUser.ID = ausr_prod123...
+
+// In development environment.
+devCtx := authsome.WithEnvID(ctx, developmentEnvID)
+devUser, err := auth.Users().GetByEmail(devCtx, "alice@example.com")
+// devUser.ID = ausr_dev456... (completely different user record)
+```
+
+## Isolated sessions
+
+Sessions are scoped to an environment. A session token created in `staging` cannot be used to authenticate in `production`. Authsome validates the session's `env_id` against the request's environment context and rejects mismatches.
+
+```go
+// Session created in staging.
+stagingCtx := authsome.WithEnvID(ctx, stagingEnvID)
+session, err := auth.Auth().SignIn(stagingCtx, ...)
+// session.EnvID = stagingEnvID
+
+// Attempt to use this session in production.
+prodCtx := authsome.WithEnvID(ctx, productionEnvID)
+_, err = auth.Sessions().Get(prodCtx, session.ID)
+// err = ErrSessionNotFound (the session exists only in staging)
+```
+
+## Isolated organizations
+
+Organizations are scoped to an environment. Organizations and their members in `staging` are separate records from those in `production`. Inviting someone to an organization in `development` does not affect `production`.
+
+## Per-environment session configuration
+
+While environments share the same plugin configuration as the application, each environment can override session-related settings independently:
+
+```go
+import "github.com/xraph/authsome/env"
+
+// Set a short session TTL for development.
+_, err := auth.Environments().Update(ctx, devEnvID, &env.UpdateInput{
+    Settings: &env.EnvironmentSettings{
+        SessionTTL:          1 * time.Hour,      // very short in dev
+        RefreshTokenTTL:     4 * time.Hour,
+        MaxSessionsPerUser:  5,
+        IdleSessionTimeout:  30 * time.Minute,
+    },
+})
+
+// Set a longer TTL with MFA required for production.
+_, err = auth.Environments().Update(ctx, prodEnvID, &env.UpdateInput{
+    Settings: &env.EnvironmentSettings{
+        SessionTTL:         7 * 24 * time.Hour,   // 7 days
+        RefreshTokenTTL:    30 * 24 * time.Hour,   // 30 days
+        MFARequired:        true,
+        MaxSessionsPerUser: 10,
+        IPBinding:          "subnet",
+    },
+})
+```
+
+### Session config override precedence
+
+```
+Request-time session config
+  1. Environment settings (highest priority)
+  2. Application-level defaults
+  3. Authsome built-in defaults (lowest priority)
+```
+
+## Per-environment allowed auth methods
+
+Different environments can enable different authentication methods. For example, in development you might disable SSO to avoid setting up SAML/OIDC connections, while production has SSO required:
+
+```go
+// Development: simple password + Google OAuth only.
+_, err := auth.Environments().Update(ctx, devEnvID, &env.UpdateInput{
+    Settings: &env.EnvironmentSettings{
+        AllowedAuthMethods: []string{"password", "google"},
+    },
+})
+
+// Production: password, Google, and SAML SSO.
+_, err = auth.Environments().Update(ctx, prodEnvID, &env.UpdateInput{
+    Settings: &env.EnvironmentSettings{
+        AllowedAuthMethods: []string{"password", "google", "saml"},
+    },
+})
+```
+
+When `AllowedAuthMethods` is `nil`, all methods provided by registered plugins are enabled.
+
+## Preventing accidental production operations
+
+Authsome wraps destructive operations in production environments with an additional confirmation requirement. The HTTP API returns a `424 Failed Dependency` with a `confirmation_required` error when you attempt:
+
+- Deleting all users
+- Revoking all sessions
+- Deleting the environment
+- Changing the environment type from `production` to another type
+
+To confirm the operation, include the `X-Authsome-Confirm: delete-users` (or appropriate action) header in the repeat request.
+
+```go
+// The Go SDK handles confirmations transparently when you set the option.
+err := auth.Users().DeleteAll(prodCtx,
+    authsome.WithConfirmDestructive("delete-all-users"),
+)
+```
+
+## Environment labels in tokens
+
+JWTs issued by Authsome include the `env_id` claim so your application can know which environment a token belongs to:
+
+```json
+{
+  "sub": "ausr_01h455vb...",
+  "env_id": "aenv_01h455vb...",
+  "app_id": "myapp",
+  "iat": 1718000000,
+  "exp": 1718604800
+}
+```
+
+Validate this claim in your application middleware to ensure users from a development environment cannot access production resources.

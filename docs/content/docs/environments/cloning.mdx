@@ -1,0 +1,167 @@
+---
+title: Environment Cloning
+description: Clone an existing environment's configuration to create a new environment, without copying user data.
+---
+
+Environment cloning creates a new environment pre-configured with the settings, plugins, webhooks, custom form schemas, branding, and RBAC roles of an existing environment. User data -- accounts, sessions, and organizations -- is never cloned. Cloning is the fastest way to spin up a new staging or preview environment that matches production configuration.
+
+## What gets cloned
+
+| Resource | Cloned | Notes |
+|----------|--------|-------|
+| Environment settings | Yes | `SessionTTL`, `MFARequired`, `LockoutConfig`, etc. |
+| Plugin configuration | Yes | Enabled plugins and their per-env settings |
+| Custom form schemas | Yes | All field definitions and validation rules |
+| Branding config | Yes | Logo, colors, fonts, custom CSS |
+| RBAC roles and permissions | Yes | All roles and their permission sets |
+| Webhooks | Yes | Subscriptions, but new signing secrets are generated |
+| IP control rules | Yes | Whitelist and blacklist entries |
+| Rate limit overrides | Yes | Per-endpoint limit overrides |
+| Users | No | Never cloned -- each environment has its own users |
+| Sessions | No | Each environment manages its own sessions |
+| Organizations | No | Org data is environment-scoped and is not cloned |
+| API keys | No | API keys are not cloned -- create new ones for the new env |
+| Audit events | No | Audit trails are environment-specific |
+
+## Cloning an environment
+
+```go
+import "github.com/xraph/authsome/env"
+
+result, err := auth.Environments().Clone(ctx, &env.CloneInput{
+    SourceEnvID: productionEnvID,
+    Name:        "Staging",
+    Type:        env.EnvironmentTypeStaging,
+    Description: "Pre-production staging environment, cloned from production",
+    Color:       "#F59E0B",
+    // Optional: override specific settings that differ from the source.
+    SettingsOverrides: &env.EnvironmentSettings{
+        SelfRegistration:   true,    // allow test signups in staging
+        MFARequired:        false,   // don't require MFA in staging
+        LockoutEnabled:     false,   // disable lockout during testing
+        SessionTTL:         1 * time.Hour,
+    },
+})
+if err != nil {
+    return err
+}
+
+fmt.Printf("cloned environment: id=%s slug=%s\n", result.ID, result.Slug)
+```
+
+### CloneInput fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `SourceEnvID` | `id.ID` | Yes | The environment to clone from |
+| `Name` | `string` | Yes | Display name for the new environment |
+| `Type` | `EnvironmentType` | Yes | Type of the new environment |
+| `Slug` | `string` | No | URL-safe slug; auto-generated from name if omitted |
+| `Description` | `string` | No | Description for the new environment |
+| `Color` | `string` | No | Hex color; defaults to the type's default color |
+| `SettingsOverrides` | `*EnvironmentSettings` | No | Settings that differ from the source; non-nil fields override |
+| `CloneWebhooks` | `bool` | No | Default `true`; set to `false` to skip webhook cloning |
+| `CloneRoles` | `bool` | No | Default `true`; set to `false` to skip role cloning |
+| `CloneBranding` | `bool` | No | Default `true`; set to `false` to skip branding cloning |
+
+## What happens during cloning
+
+Cloning is executed in a transaction:
+
+1. A new `Environment` record is created with the provided name, type, and settings.
+2. Settings from the source environment are copied, then `SettingsOverrides` are applied.
+3. All custom form schemas from the source are duplicated in the new environment.
+4. Branding configuration is copied to the new environment.
+5. All RBAC roles and their permissions are duplicated. Role IDs are new; names and structures are identical.
+6. Webhooks are copied. New signing secrets are generated for each webhook (the originals are not replicated -- they are stored as hashes and cannot be copied).
+7. IP control rules are copied.
+8. The `environment.cloned` webhook event is emitted on the source environment.
+
+<Callout type="info">
+Because webhooks get new signing secrets, you must retrieve and store the new secrets from the clone response. The secrets are included in `result.WebhookSecrets` as a map of `webhookID → secret`.
+</Callout>
+
+## Retrieving new webhook secrets after cloning
+
+```go
+result, err := auth.Environments().Clone(ctx, &env.CloneInput{
+    SourceEnvID: productionEnvID,
+    Name:        "Preview-PR-42",
+    Type:        env.EnvironmentTypeCustom,
+})
+if err != nil {
+    return err
+}
+
+// result.WebhookSecrets contains new secrets for each cloned webhook.
+for webhookID, secret := range result.WebhookSecrets {
+    fmt.Printf("  webhook %s: new secret = %s\n", webhookID, secret)
+    // Store these secrets in your secrets manager.
+    secretsManager.Set(fmt.Sprintf("authsome/webhook/%s/secret", webhookID), secret)
+}
+```
+
+## Common use cases
+
+### Ephemeral preview environments
+
+For pull request previews, clone production on every PR open and delete it on close:
+
+```go
+// On PR open: create preview env.
+preview, err := auth.Environments().Clone(ctx, &env.CloneInput{
+    SourceEnvID: productionEnvID,
+    Name:        fmt.Sprintf("Preview-PR-%d", pr.Number),
+    Type:        env.EnvironmentTypeCustom,
+    SettingsOverrides: &env.EnvironmentSettings{
+        SelfRegistration: true,
+        MFARequired:      false,
+        LockoutEnabled:   false,
+    },
+})
+
+// On PR close: clean up.
+err := auth.Environments().Delete(ctx, preview.ID)
+```
+
+### Staging refresh
+
+When staging configuration drifts from production, clone production over it:
+
+```go
+// Delete old staging.
+err := auth.Environments().Delete(ctx, oldStagingEnvID)
+
+// Clone fresh from production.
+_, err = auth.Environments().Clone(ctx, &env.CloneInput{
+    SourceEnvID: productionEnvID,
+    Name:        "Staging",
+    Type:        env.EnvironmentTypeStaging,
+    SettingsOverrides: &env.EnvironmentSettings{
+        SelfRegistration: true,
+        MFARequired:      false,
+    },
+})
+```
+
+### Configuration audit
+
+Compare two environments after cloning to verify settings are aligned:
+
+```go
+prod, _ := auth.Environments().GetByID(ctx, productionEnvID)
+staging, _ := auth.Environments().GetByID(ctx, stagingEnvID)
+
+if prod.Settings.SessionTTL != staging.Settings.SessionTTL {
+    log.Printf("DRIFT: session TTL differs: prod=%s staging=%s",
+        prod.Settings.SessionTTL, staging.Settings.SessionTTL)
+}
+```
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/environments/:env_id/clone` | Clone an environment |
+
+The response body includes the new environment object and the `webhook_secrets` map.

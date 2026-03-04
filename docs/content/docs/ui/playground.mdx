@@ -1,0 +1,166 @@
+---
+title: Playground
+description: Interactive Storybook playground for exploring and testing all Authsome UI components.
+---
+
+The Authsome UI ships with a comprehensive [Storybook](https://storybook.js.org/) playground that lets you interact with every component in isolation. Use it to explore component variants, test different states, and prototype layouts before integrating into your application.
+
+## Running locally
+
+Clone the Authsome repository and start the Storybook dev server:
+
+```bash
+cd ui
+pnpm install
+pnpm storybook
+```
+
+Storybook launches at `http://localhost:6006` by default.
+
+## Story categories
+
+The playground organizes stories into 6 categories with 31 story files covering every component:
+
+### Auth Forms (9 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `SignInForm` | `<SignInForm />` | Email/password sign-in with social providers, error states, loading |
+| `SignUpForm` | `<SignUpForm />` | Registration form with validation and success states |
+| `ForgotPasswordForm` | `<ForgotPasswordForm />` | Password reset request flow |
+| `ResetPasswordForm` | `<ResetPasswordForm />` | New password entry with token |
+| `MagicLinkForm` | `<MagicLinkForm />` | Passwordless sign-in via email |
+| `MFAChallengeForm` | `<MFAChallengeFormStyled />` | TOTP/SMS code entry with OTP input |
+| `ChangePasswordForm` | `<ChangePasswordForm />` | Current/new password update for authenticated users |
+| `PasskeyLogin` | `<PasskeyLoginButton />` | WebAuthn passkey authentication |
+| `DeviceAuthorization` | `<DeviceAuthorizationForm />` | Device code authorization flow |
+
+### User (7 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `UserAvatar` | `<UserAvatar />` | Avatar with image, fallback initials, and sizes |
+| `UserButton` | `<UserButton />` | Dropdown menu with user info and sign-out action |
+| `UserProfileCard` | `<UserProfileCard />` | Profile display with editable fields |
+| `OrgSwitcher` | `<OrgSwitcher />` | Organization selection dropdown |
+| `SessionList` | `<SessionList />` | Active session cards with revoke action |
+| `DeviceList` | `<DeviceList />` | Authorized device management |
+| `PasskeyList` | `<PasskeyList />` | Registered passkey management |
+
+### Shared (5 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `AuthCard` | `<AuthCard />` | Card wrapper with header, description, and footer |
+| `SocialButtons` | `<SocialButtons />` | Social login provider buttons (grid and stack layouts) |
+| `PasswordInput` | `<PasswordInput />` | Password field with visibility toggle |
+| `LoadingSpinner` | `<LoadingSpinner />` | Animated spinner in different sizes |
+| `ErrorDisplay` | `<ErrorDisplay />` | Error message rendering with dismiss |
+
+### Guards (1 story)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `StyledAuthGuard` | `<StyledAuthGuard />` | Auth gate with loading spinner and sign-in fallback |
+
+### Pages (3 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `FullPageSignIn` | Full sign-in page | Complete sign-in layout with social providers |
+| `FullPageSignUp` | Full sign-up page | Complete registration layout |
+| `FullPageForgotPassword` | Full forgot-password page | Complete password reset request layout |
+
+### Primitives (7 stories)
+
+| Story | Component | What it demonstrates |
+|-------|-----------|---------------------|
+| `Button` | `<Button />` | All button variants, sizes, and states |
+| `Card` | `<Card />` | Card layout with header, content, and footer |
+| `Dialog` | `<Dialog />` | Modal dialog with Radix primitives |
+| `Input` | `<Input />` | Text input variants and validation states |
+| `Select` | `<Select />` | Select dropdown with groups |
+| `Tabs` | `<Tabs />` | Tab navigation |
+| `Tooltip` | `<Tooltip />` | Hover and focus tooltips |
+
+## MockAuthProvider
+
+All stories use `MockAuthProvider` to simulate authentication state without a real backend. This is also useful for testing your own components:
+
+```tsx
+import { MockAuthProvider } from "@authsome/ui-react/testing";
+
+function MyStory() {
+  return (
+    <MockAuthProvider
+      initialState={{
+        status: "authenticated",
+        user: {
+          id: "usr_123",
+          email: "jane@example.com",
+          name: "Jane Doe",
+        },
+        session: {
+          session_token: "mock-token",
+          refresh_token: "mock-refresh",
+          expires_at: "2099-01-01T00:00:00Z",
+        },
+      }}
+    >
+      <UserProfileCard />
+    </MockAuthProvider>
+  );
+}
+```
+
+## Writing custom stories
+
+Create a new `.stories.tsx` file in the stories directory:
+
+```tsx
+// stories/custom/MyComponent.stories.tsx
+import type { Meta, StoryObj } from "@storybook/react";
+import { SignInForm } from "@authsome/ui-components";
+
+const meta: Meta<typeof SignInForm> = {
+  title: "Custom/BrandedSignIn",
+  component: SignInForm,
+  decorators: [
+    (Story) => (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <Story />
+      </div>
+    ),
+  ],
+};
+export default meta;
+
+type Story = StoryObj<typeof SignInForm>;
+
+export const Default: Story = {
+  args: {
+    showForgotPassword: true,
+    signUpHref: "/sign-up",
+  },
+};
+
+export const WithSocial: Story = {
+  args: {
+    ...Default.args,
+    socialProviders: [
+      { provider: "google", label: "Google" },
+      { provider: "github", label: "GitHub" },
+    ],
+  },
+};
+```
+
+## Using the playground for exploration
+
+The Storybook playground is the fastest way to:
+
+- **Preview component variants** -- toggle props in the controls panel to see how components behave with different configurations
+- **Test responsive layouts** -- use the viewport toolbar to simulate mobile, tablet, and desktop sizes
+- **Verify dark mode** -- toggle the theme switcher to preview components in light and dark modes
+- **Inspect accessibility** -- use the A11y addon panel to catch accessibility issues
+- **Copy code snippets** -- the "Show code" button displays the JSX for each story, ready to paste into your application

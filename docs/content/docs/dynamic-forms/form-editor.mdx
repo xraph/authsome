@@ -1,0 +1,183 @@
+---
+title: Form Editor
+description: Visual dashboard editor for building and previewing custom signup forms without code.
+---
+
+The Authsome Dashboard includes a visual form editor that lets non-technical users create, modify, and preview custom signup forms. The editor produces `FormConfig` records (see [Custom Schemas](/docs/dynamic-forms/custom-schemas)) and publishes them to the Authsome engine.
+
+## Overview
+
+The form editor provides a drag-and-drop interface for building signup forms. It is available in the Authsome Dashboard under **Settings > Forms** for each application. The editor consists of three panels:
+
+1. **Field palette** — available field types that can be added to the form
+2. **Form canvas** — the current form layout with fields in display order
+3. **Properties panel** — configuration for the selected field (label, validation, options)
+
+## Adding fields
+
+To add a field to the form:
+
+1. Click a field type in the palette (text, email, select, checkbox, etc.)
+2. The field appears at the bottom of the form canvas
+3. Click the field to configure it in the properties panel
+4. Set the field's key, label, placeholder, and validation rules
+
+### Field properties
+
+When a field is selected, the properties panel shows:
+
+| Property | Description | Required |
+|----------|-------------|----------|
+| **Key** | The metadata key used to store the value in `User.Metadata` | Yes |
+| **Label** | Display text shown above the input | Yes |
+| **Placeholder** | Hint text inside the input | No |
+| **Description** | Helper text shown below the input | No |
+| **Default value** | Pre-filled value for the field | No |
+| **Required** | Whether the field must be filled | No |
+| **Min length** | Minimum text length | No |
+| **Max length** | Maximum text length | No |
+| **Pattern** | Regex validation pattern | No |
+
+For select, radio, and checkbox fields, an additional **Options** section lets you add, remove, and reorder choices:
+
+```
+Options:
+  + Engineering  → engineering
+  + Marketing    → marketing
+  + Sales        → sales
+  [Add option]
+```
+
+Each option has a display label and a stored value.
+
+## Removing fields
+
+To remove a field:
+
+1. Hover over the field on the canvas
+2. Click the trash icon that appears
+3. Confirm the deletion
+
+Removing a field from the form does not delete existing user metadata that was collected with that field. Historical data remains in `User.Metadata`.
+
+## Reordering fields
+
+Fields can be reordered by dragging them on the form canvas. The `Order` value on each `FormField` is automatically updated to match the visual order. Fields are displayed to users in ascending order.
+
+## Preview
+
+The editor includes a live preview panel that renders the form exactly as users will see it during signup. The preview:
+
+- Applies the current branding configuration (logo, colors, fonts)
+- Shows all fields with their labels, placeholders, and help text
+- Reflects validation indicators (required markers, character limits)
+- Updates in real-time as you make changes
+
+### Preview modes
+
+| Mode | Description |
+|------|-------------|
+| **Desktop** | Full-width form layout |
+| **Tablet** | Medium-width responsive layout |
+| **Mobile** | Narrow-width mobile layout |
+
+Switch between modes using the device icons in the preview toolbar.
+
+## Publishing changes
+
+Form changes are not applied immediately. The editor works on a draft that must be published:
+
+
+
+**Edit**: Make changes to fields, validation rules, or ordering. Changes are saved as a draft automatically.
+
+
+**Preview**: Review the form in the preview panel. Test different viewport sizes.
+
+
+**Publish**: Click "Publish" to create a new active `FormConfig` version. The previous version is deactivated and the new version becomes the active form for signups.
+
+
+
+Publishing creates a new `FormConfig` with an incremented `Version` number. The previous active config remains in the database (deactivated) for audit purposes and can be restored if needed.
+
+### Reverting to a previous version
+
+To revert to a previous form version:
+
+1. Navigate to **Settings > Forms > Version History**
+2. Select the version you want to restore
+3. Click "Restore this version"
+4. The selected version is cloned and published as a new active version
+
+## Integration with UI components
+
+The form editor generates `FormConfig` records that the Authsome UI consumes to render signup forms. The UI components:
+
+1. Fetch the active FormConfig via `GET /v1/auth/forms/active`
+2. Render each `FormField` using the appropriate input component based on `Type`
+3. Apply client-side validation rules from the `Validation` object
+4. Submit metadata values alongside the standard signup fields
+
+### React component usage
+
+If you are using the Authsome UI React components:
+
+```tsx
+import { AuthForm } from "@authsome/ui";
+
+function SignupPage() {
+  return (
+    <AuthForm
+      appId="myapp"
+      formType="signup"
+      onSuccess={(result) => {
+        // result.user, result.sessionToken
+        router.push("/dashboard");
+      }}
+    />
+  );
+}
+```
+
+The `AuthForm` component automatically fetches the active form configuration, renders the custom fields, applies branding, and handles submission.
+
+### Custom rendering
+
+If you need full control over form rendering, fetch the config and render manually:
+
+```tsx
+import { useFormConfig } from "@authsome/ui";
+
+function CustomSignupForm() {
+  const { config, loading } = useFormConfig("myapp", "signup");
+
+  if (loading) return <Spinner />;
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Standard fields */}
+      <input name="email" type="email" required />
+      <input name="password" type="password" required />
+
+      {/* Dynamic custom fields */}
+      {config.fields.map((field) => (
+        <DynamicField key={field.key} field={field} />
+      ))}
+
+      <button type="submit">Sign Up</button>
+    </form>
+  );
+}
+```
+
+## Dashboard access
+
+The form editor is available to users with the `admin` role for the application. Organization owners and admins can edit forms for their organization's apps.
+
+| Permission | Action |
+|------------|--------|
+| `forms:read` | View form configurations |
+| `forms:write` | Create and update form configurations |
+| `forms:publish` | Publish form changes (make active) |
+| `forms:delete` | Delete form configurations |

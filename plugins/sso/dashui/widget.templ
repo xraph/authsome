@@ -1,0 +1,25 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+// ConnectionsWidget displays SSO connection info.
+templ ConnectionsWidget(providerNames []string) {
+	@card.Card() {
+		@card.Content() {
+			<div class="flex items-center gap-3">
+				<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+					@icons.Lock(icons.WithSize(20), icons.WithClass("text-primary"))
+				</div>
+				<div>
+					<p class="text-sm font-medium text-muted-foreground">SSO Providers</p>
+					<p class="text-lg font-bold">{ strconv.Itoa(len(providerNames)) } configured</p>
+				</div>
+			</div>
+		}
+	}
+}

@@ -1,0 +1,223 @@
+---
+title: Device Tracking
+description: Device fingerprinting, trusted device management, and session-device binding.
+---
+
+The device tracking plugin records information about the devices users sign in from. It enables trusted device management, session-device binding for enhanced security, and provides users with visibility into where their account is active.
+
+## Device entity
+
+```go
+type Device struct {
+    ID          id.DeviceID      `json:"id"`
+    UserID      id.UserID        `json:"user_id"`
+    AppID       id.AppID         `json:"app_id"`
+    EnvID       id.EnvironmentID `json:"env_id"`
+    Name        string           `json:"name,omitempty"`
+    Type        string           `json:"type,omitempty"`
+    Browser     string           `json:"browser,omitempty"`
+    OS          string           `json:"os,omitempty"`
+    IPAddress   string           `json:"ip_address,omitempty"`
+    Fingerprint string           `json:"fingerprint,omitempty"`
+    Trusted     bool             `json:"trusted"`
+    LastSeenAt  time.Time        `json:"last_seen_at"`
+    CreatedAt   time.Time        `json:"created_at"`
+    UpdatedAt   time.Time        `json:"updated_at"`
+}
+```
+
+Key fields:
+
+- **`Type`** — device category: `"desktop"`, `"mobile"`, `"tablet"`, `"unknown"`
+- **`Browser`** — parsed browser name from the User-Agent header (e.g., `"Chrome"`, `"Safari"`, `"Firefox"`)
+- **`OS`** — parsed operating system from the User-Agent (e.g., `"macOS"`, `"Windows 11"`, `"iOS 17"`)
+- **`Fingerprint`** — a unique identifier for the device, typically derived from client-side fingerprinting
+- **`Trusted`** — when `true`, MFA challenges may be skipped for this device
+- **`LastSeenAt`** — updated on every authenticated request from this device
+- Device IDs have the prefix `adev_`.
+
+## How device tracking works
+
+When a user signs in, the engine:
+
+1. Parses the `User-Agent` header to extract browser and OS information
+2. Reads the device fingerprint from the `X-Device-Fingerprint` header (if present)
+3. Looks up an existing device record by fingerprint for the user
+4. If found, updates `LastSeenAt` and `IPAddress`
+5. If not found, creates a new device record
+6. Associates the device with the new session (`Session.DeviceID`)
+
+### Client-side fingerprinting
+
+To enable device identification across sessions, the client should send a fingerprint header:
+
+```
+X-Device-Fingerprint: abc123def456
+```
+
+The fingerprint can be generated using any client-side fingerprinting library. The value should be stable across sessions but unique per device. Authsome does not prescribe a specific fingerprinting algorithm — popular choices include:
+
+- [FingerprintJS](https://fingerprint.com) for browsers
+- Device identifier (IDFV/Android ID) for mobile apps
+- A hash of hardware characteristics for desktop apps
+
+If no fingerprint header is sent, the engine falls back to IP address + User-Agent combination for device identification.
+
+## Trusted devices
+
+Marking a device as trusted has two effects:
+
+1. **MFA bypass** — when a device is trusted and the MFA configuration allows it, the user may skip the MFA challenge on subsequent sign-ins from that device
+2. **Security signals** — sign-ins from new (untrusted) devices can trigger notifications or additional verification
+
+### Trust a device
+
+`PATCH /v1/auth/devices/:deviceId/trust`
+
+```
+Authorization: Bearer <session_token>
+```
+
+**Response:**
+
+```json
+{
+  "id": "adev_01j9...",
+  "user_id": "ausr_01j9...",
+  "name": "Chrome on Mac",
+  "type": "desktop",
+  "browser": "Chrome",
+  "os": "macOS",
+  "trusted": true,
+  "last_seen_at": "2024-11-01T10:00:00Z",
+  "created_at": "2024-10-15T08:00:00Z",
+  "updated_at": "2024-11-01T10:00:00Z"
+}
+```
+
+### In Go
+
+```go
+device, err := engine.TrustDevice(ctx, deviceID)
+// device.Trusted is now true
+```
+
+## Session-device binding
+
+When `BindToDevice` is enabled in the session configuration, the engine validates that each authenticated request comes from the same device that created the session. If the device fingerprint changes, the session is invalidated.
+
+```go
+Session: authsome.SessionConfig{
+    BindToDevice: true,
+}
+```
+
+Or per-app:
+
+```go
+import "github.com/xraph/authsome/appsessionconfig"
+
+cfg := &appsessionconfig.Config{
+    AppID:        appID,
+    BindToDevice: boolPtr(true),
+}
+err := engine.SetAppSessionConfig(ctx, cfg)
+```
+
+This prevents session token theft from being useful across devices. Even if an attacker obtains a valid session token, they cannot use it from a different device.
+
+## List user devices
+
+Users can view all tracked devices:
+
+`GET /v1/auth/devices`
+
+```
+Authorization: Bearer <session_token>
+```
+
+**Response:**
+
+```json
+{
+  "devices": [
+    {
+      "id": "adev_01j9...",
+      "user_id": "ausr_01j9...",
+      "name": "Chrome on Mac",
+      "type": "desktop",
+      "browser": "Chrome",
+      "os": "macOS",
+      "ip_address": "192.168.1.1",
+      "trusted": true,
+      "last_seen_at": "2024-11-01T10:00:00Z",
+      "created_at": "2024-10-15T08:00:00Z"
+    },
+    {
+      "id": "adev_01jb...",
+      "user_id": "ausr_01j9...",
+      "name": "Safari on iPhone",
+      "type": "mobile",
+      "browser": "Safari",
+      "os": "iOS 17",
+      "ip_address": "10.0.0.5",
+      "trusted": false,
+      "last_seen_at": "2024-11-02T14:30:00Z",
+      "created_at": "2024-11-02T14:30:00Z"
+    }
+  ]
+}
+```
+
+## Get device details
+
+`GET /v1/auth/devices/:deviceId`
+
+Returns the full device record for a specific device.
+
+## Remove a device
+
+`DELETE /v1/auth/devices/:deviceId`
+
+```
+Authorization: Bearer <session_token>
+```
+
+Removing a device deletes the device record but does not automatically revoke sessions associated with it. To also sign out the device, revoke the associated session separately.
+
+### In Go
+
+```go
+// List devices
+devices, err := engine.ListUserDevices(ctx, userID)
+
+// Get a specific device
+device, err := engine.GetDevice(ctx, deviceID)
+
+// Delete a device
+err := engine.DeleteDevice(ctx, deviceID)
+```
+
+## Device store interface
+
+```go
+type Store interface {
+    CreateDevice(ctx context.Context, d *Device) error
+    GetDevice(ctx context.Context, deviceID id.DeviceID) (*Device, error)
+    GetDeviceByFingerprint(ctx context.Context, userID id.UserID, fingerprint string) (*Device, error)
+    UpdateDevice(ctx context.Context, d *Device) error
+    DeleteDevice(ctx context.Context, deviceID id.DeviceID) error
+    ListUserDevices(ctx context.Context, userID id.UserID) ([]*Device, error)
+}
+```
+
+## API routes
+
+All device routes are registered under `BasePath` (default `/v1/auth`):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/devices` | List all tracked devices for the current user |
+| `GET` | `/devices/:deviceId` | Get details of a specific device |
+| `DELETE` | `/devices/:deviceId` | Remove a tracked device |
+| `PATCH` | `/devices/:deviceId/trust` | Mark a device as trusted |

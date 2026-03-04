@@ -1,0 +1,163 @@
+---
+title: Passkey Plugin
+description: FIDO2/WebAuthn passkey registration and authentication with resident keys and platform authenticators.
+---
+
+The `passkey` plugin implements FIDO2/WebAuthn authentication, allowing users to register and authenticate with biometrics, security keys, or platform authenticators. It wraps the `go-webauthn/webauthn` library and manages credential storage, registration ceremonies, and authentication ceremonies.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/passkey"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(passkey.New(passkey.Config{
+        RPDisplayName:  "My App",
+        RPID:           "example.com",
+        RPOrigins:      []string{"https://example.com"},
+        SessionTimeout: 5 * time.Minute,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `RPDisplayName` | `string` | `"AuthSome"` | Relying party display name shown during WebAuthn ceremonies |
+| `RPID` | `string` | `"localhost"` | Relying party identifier, typically the domain name |
+| `RPOrigins` | `[]string` | `[]` | Allowed origins for WebAuthn ceremonies |
+| `SessionTimeout` | `time.Duration` | `5m` | How long a WebAuthn ceremony session remains valid |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"passkey"`) |
+| `OnInit` | Initializes the WebAuthn library and captures bridges |
+| `RouteProvider` | Registers registration and authentication endpoints |
+| `MigrationProvider` | Contributes the `passkey_credentials` table |
+| `AuthMethodContributor` | Reports registered passkeys as linked auth methods |
+
+## Registration ceremony
+
+The registration ceremony creates a new passkey credential for the authenticated user.
+
+### Step 1: Begin registration
+
+`POST /v1/auth/passkey/register/begin`
+
+The server generates a challenge and returns `PublicKeyCredentialCreationOptions` for the browser's `navigator.credentials.create()` API.
+
+```json
+{
+  "publicKey": {
+    "rp": {"name": "My App", "id": "example.com"},
+    "user": {"id": "base64...", "name": "alice", "displayName": "Alice"},
+    "challenge": "base64...",
+    "pubKeyCredParams": [
+      {"type": "public-key", "alg": -7},
+      {"type": "public-key", "alg": -257}
+    ],
+    "authenticatorSelection": {
+      "residentKey": "preferred",
+      "userVerification": "preferred"
+    }
+  }
+}
+```
+
+### Step 2: Complete registration
+
+`POST /v1/auth/passkey/register/finish`
+
+The client sends the `AuthenticatorAttestationResponse` from the browser. The server validates the attestation, extracts the public key, and stores the credential.
+
+```json
+{
+  "id": "base64-credential-id",
+  "rawId": "base64-raw-id",
+  "response": {
+    "clientDataJSON": "base64...",
+    "attestationObject": "base64..."
+  },
+  "type": "public-key"
+}
+```
+
+## Authentication ceremony
+
+The authentication ceremony verifies the user's passkey credential.
+
+### Step 1: Begin authentication
+
+`POST /v1/auth/passkey/login/begin`
+
+Returns `PublicKeyCredentialRequestOptions` for `navigator.credentials.get()`.
+
+### Step 2: Complete authentication
+
+`POST /v1/auth/passkey/login/finish`
+
+The client sends the `AuthenticatorAssertionResponse`. The server verifies the signature against the stored public key, updates the sign count, and creates a session.
+
+## Credential types
+
+### Resident keys (discoverable credentials)
+
+When `residentKey` is set to `"required"` or `"preferred"`, the authenticator stores the credential internally. Users can authenticate without entering a username first -- the authenticator presents all stored credentials for the relying party.
+
+### Non-resident keys
+
+The server must provide a list of allowed credential IDs during authentication. The user must first identify themselves (e.g., by entering an email) so the server can look up their credentials.
+
+### Platform vs roaming authenticators
+
+- **Platform authenticators** -- Built into the device (Touch ID, Face ID, Windows Hello). Use `authenticatorAttachment: "platform"` to prefer these.
+- **Roaming authenticators** -- External security keys (YubiKey, SoloKeys). Use `authenticatorAttachment: "cross-platform"`.
+
+## Credential storage
+
+Each registered credential stores:
+
+| Field | Description |
+|-------|-------------|
+| `CredentialID` | Unique identifier for the credential |
+| `PublicKey` | The credential's public key (used for signature verification) |
+| `AttestationType` | Attestation type from the registration response |
+| `Transport` | Supported transports (`usb`, `nfc`, `ble`, `internal`) |
+| `SignCount` | Monotonically increasing counter for clone detection |
+| `AAGUID` | Authenticator Attestation GUID |
+| `DisplayName` | User-provided label for the credential |
+
+## Auth method reporting
+
+The passkey plugin implements `AuthMethodContributor`, returning one entry per registered credential:
+
+```json
+{
+  "type": "passkey",
+  "provider": "passkey",
+  "label": "MacBook Pro Touch ID",
+  "linked_at": "2024-11-01T10:00:00Z"
+}
+```
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/passkey/register/begin` | Start passkey registration ceremony |
+| `POST` | `/v1/auth/passkey/register/finish` | Complete passkey registration |
+| `POST` | `/v1/auth/passkey/login/begin` | Start passkey authentication ceremony |
+| `POST` | `/v1/auth/passkey/login/finish` | Complete passkey authentication |
+| `GET` | `/v1/auth/passkey/credentials` | List user's registered passkeys |
+| `DELETE` | `/v1/auth/passkey/credentials/:id` | Remove a registered passkey |
+
+## Ceremony state management
+
+WebAuthn ceremonies require server-side state between the begin and finish steps. The passkey plugin uses the engine's ceremony store (defaulting to in-memory) to persist challenge data. For multi-instance deployments, configure a shared ceremony store (e.g., Redis-backed).

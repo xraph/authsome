@@ -1,0 +1,166 @@
+---
+title: IP Access Control
+description: IP whitelist and blacklist configuration for application-level access control, and session IP binding for session hijacking prevention.
+---
+
+Authsome provides two IP-based security controls: application-level IP whitelisting and blacklisting to allow or deny authentication from specific addresses or ranges, and session-level IP binding that rejects requests when the session is used from a different IP than the one that created it.
+
+## Application-level IP control
+
+IP control rules are applied before any authentication logic runs. A request from a blacklisted IP is rejected immediately with a `403 Forbidden` response without revealing whether credentials are valid.
+
+### Configuration
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/ipcontrol"
+)
+
+auth := authsome.New(
+    authsome.WithIPControl(ipcontrol.Config{
+        // Whitelist: when non-empty, ONLY these IPs/ranges can authenticate.
+        Whitelist: []string{
+            "10.0.0.0/8",         // internal network
+            "172.16.0.0/12",      // Docker network
+            "203.0.113.42",       // specific external IP
+        },
+
+        // Blacklist: these IPs are always denied, even if on the whitelist.
+        Blacklist: []string{
+            "10.0.99.0/24",       // specific internal subnet to deny
+        },
+
+        // TrustProxies: when true, read the client IP from X-Forwarded-For.
+        // Only enable this when Authsome runs behind a trusted reverse proxy.
+        TrustProxies: true,
+
+        // TrustedProxyRanges: only trust X-Forwarded-For from these proxy IPs.
+        TrustedProxyRanges: []string{
+            "127.0.0.1",
+            "10.0.0.0/8",
+        },
+    }),
+)
+```
+
+### Whitelist semantics
+
+When `Whitelist` is non-empty, Authsome applies an **allow-list** model:
+
+- Only IPs that match at least one whitelist entry are allowed to authenticate
+- Blacklist entries are still applied on top -- a blacklisted IP is denied even if it matches the whitelist
+- When `Whitelist` is empty, all IPs are allowed by default (deny-list model using only `Blacklist`)
+
+### Blacklist semantics
+
+Blacklisted entries are always denied regardless of whitelist status. The blacklist takes precedence over the whitelist. Use the blacklist to block known-bad IPs, Tor exit nodes, or datacenter IP ranges associated with abuse.
+
+### CIDR notation
+
+Both whitelist and blacklist entries support:
+- Single IPv4 addresses: `"203.0.113.42"`
+- Single IPv6 addresses: `"2001:db8::1"`
+- IPv4 CIDR ranges: `"192.168.0.0/16"`
+- IPv6 CIDR ranges: `"2001:db8::/32"`
+
+### Proxy header handling
+
+When running behind a reverse proxy (nginx, Cloudflare, AWS ALB), the `RemoteAddr` on the request is the proxy's IP, not the client's. Enable `TrustProxies: true` and configure `TrustedProxyRanges` to tell Authsome which proxy IPs are trusted to set `X-Forwarded-For`.
+
+<Callout type="warn">
+Never enable `TrustProxies: true` without configuring `TrustedProxyRanges`. Without it, a malicious client can send a forged `X-Forwarded-For` header to bypass IP controls by spoofing a whitelisted IP.
+</Callout>
+
+### Dynamic IP control
+
+You can update IP control rules at runtime without restarting the application:
+
+```go
+// Add a new blacklist entry (takes effect immediately).
+err := auth.IPControl().Block(ctx, "198.51.100.0/24")
+
+// Remove a blacklist entry.
+err := auth.IPControl().Unblock(ctx, "198.51.100.0/24")
+
+// Add a whitelist entry.
+err := auth.IPControl().Allow(ctx, "10.100.0.0/16")
+
+// Check if an IP is currently allowed.
+allowed, reason, err := auth.IPControl().Check(ctx, "203.0.113.42")
+if !allowed {
+    fmt.Printf("denied: %s\n", reason)
+}
+```
+
+## Session IP binding
+
+Session IP binding records the client IP at session creation time and rejects subsequent requests that use the session from a different IP. This prevents session hijacking attacks where an attacker captures a session token and uses it from a different network.
+
+### Configuration
+
+```go
+import "github.com/xraph/authsome/session"
+
+auth := authsome.New(
+    authsome.WithSessionConfig(session.Config{
+        IPBinding: session.IPBindingConfig{
+            Enabled: true,
+            Mode:    session.IPBindingStrict,  // reject on any IP change
+        },
+    }),
+)
+```
+
+### Binding modes
+
+| Mode | Constant | Description |
+|------|----------|-------------|
+| Disabled | `session.IPBindingDisabled` | No IP checking (default) |
+| Strict | `session.IPBindingStrict` | Reject requests from any IP that differs from the session's recorded IP |
+| Subnet | `session.IPBindingSubnet` | Allow requests from within the same /24 subnet (accommodates DHCP changes on the same network) |
+| Country | `session.IPBindingCountry` | Allow requests from IPs in the same country (requires IP geolocation) |
+
+```go
+// Subnet mode -- allows IP changes within the same /24.
+authsome.WithSessionConfig(session.Config{
+    IPBinding: session.IPBindingConfig{
+        Enabled: true,
+        Mode:    session.IPBindingSubnet,
+    },
+})
+```
+
+<Callout type="info">
+Strict IP binding can cause false positives for users on mobile networks or VPNs, where the IP address changes frequently. Subnet mode offers a good balance between security and usability for consumer applications. Strict mode is most appropriate for internal tools and high-security contexts.
+</Callout>
+
+### What happens on IP mismatch
+
+When a session is used from a mismatched IP:
+
+1. The session is not extended (the `UpdatedAt` timestamp is not refreshed).
+2. The request is rejected with `401 Unauthorized` and `error: "session_ip_mismatch"`.
+3. A `session.ip_mismatch` security event is recorded in the audit trail.
+4. If the mismatch happens more than a configurable number of times in a short window, the session is automatically revoked.
+
+```go
+// Configure automatic revocation on repeated IP mismatches.
+authsome.WithSessionConfig(session.Config{
+    IPBinding: session.IPBindingConfig{
+        Enabled:             true,
+        Mode:                session.IPBindingStrict,
+        AutoRevokeAfter:     3,                // revoke after 3 mismatches
+        AutoRevokeWindow:    5 * time.Minute,  // within this window
+    },
+})
+```
+
+### Reading the bound IP
+
+The session model exposes the bound IP:
+
+```go
+sess, err := auth.Sessions().Get(ctx, sessionID)
+fmt.Printf("session created from IP: %s\n", sess.CreatedIP)
+```

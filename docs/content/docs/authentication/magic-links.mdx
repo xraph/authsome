@@ -1,0 +1,150 @@
+---
+title: Magic Links
+description: Passwordless email sign-in with time-limited magic link tokens.
+---
+
+The `magiclink` plugin provides passwordless sign-in via a one-time link sent to the user's email address. No password is required. Users click the link and are immediately authenticated with a full session.
+
+Magic links are ideal for:
+- Applications where users sign in infrequently (reducing password friction)
+- B2B tools where users may not remember a password set months ago
+- Supplementing password auth as an alternative sign-in method
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/magiclink"
+    "github.com/xraph/authsome/bridge/maileradapter"
+)
+
+mailer := maileradapter.NewResend("re_your_resend_api_key")
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithMailer(mailer),         // required: magic links are sent via email
+    authsome.WithPlugin(magiclink.New(magiclink.Config{
+        TokenTTL:    15 * time.Minute,   // how long the link stays valid
+        AutoCreate:  true,               // create user on first sign-in if not found
+    })),
+)
+```
+
+<Callout type="warn">
+A `Mailer` bridge is required. If no mailer is configured, magic link requests succeed on the server side (the token is generated) but the email is never delivered. Always configure a mailer before deploying to production.
+</Callout>
+
+## How it works
+
+
+
+**Request a magic link**: The user submits their email address.
+
+`POST /v1/auth/magic-link/request`
+
+```json
+{"email": "alice@example.com", "app_id": "myapp"}
+```
+
+The engine:
+1. Looks up the user by email. If `AutoCreate: true` and the user does not exist, creates a new user account automatically.
+2. Generates a cryptographically random token.
+3. Stores the token with a TTL (default 15 minutes).
+4. Calls the `Mailer` bridge to deliver the email.
+
+The response is always `200 OK` regardless of whether the email exists, preventing email enumeration.
+
+
+**User clicks the link**: Your application receives the request with the token in the URL.
+
+The link format is determined by your application. A typical pattern:
+
+```
+https://myapp.com/auth/magic-link?token=ml_abc123xyz&app_id=myapp
+```
+
+Your frontend extracts the token and calls the confirm endpoint.
+
+
+**Confirm the token**: Exchange the token for a session.
+
+`POST /v1/auth/magic-link/confirm`
+
+```json
+{"token": "ml_abc123xyz", "app_id": "myapp"}
+```
+
+On success, a full user + session pair is returned:
+
+```json
+{
+  "user": {"id": "ausr_01j9...", "email": "alice@example.com", ...},
+  "session": {"token": "a3f8c9d4...", "refresh_token": "d72b1ef8...", ...}
+}
+```
+
+The token is consumed (one-time use) and invalidated after use.
+
+
+
+## Configuration
+
+```go
+type Config struct {
+    // TokenTTL is the lifetime of the magic link token (default: 15 minutes).
+    TokenTTL time.Duration
+
+    // AutoCreate creates a new user account if the email is not found.
+    // Default: false — returns 404 for unknown emails.
+    AutoCreate bool
+
+    // RedirectURL is the base URL for the magic link.
+    // The token is appended as a query parameter: RedirectURL + "?token=" + token.
+    // Required if you want the plugin to construct the link automatically.
+    RedirectURL string
+}
+```
+
+## Email template customization
+
+The magic link email is sent through the `Mailer` bridge. To customize the email content, implement the `bridge.Mailer` interface and return your own HTML/text for the `magic_link` template type:
+
+```go
+type myMailer struct{}
+
+func (m *myMailer) Send(ctx context.Context, msg bridge.MailMessage) error {
+    switch msg.Template {
+    case "magic_link":
+        // msg.Data["token"] contains the magic link token.
+        // msg.Data["link"]  contains the full redirect URL (if RedirectURL is configured).
+        return sendCustomEmail(msg.To, msg.Data)
+    }
+    return nil
+}
+```
+
+The `bridge.MailMessage` struct contains:
+
+```go
+type MailMessage struct {
+    To       string            // recipient email
+    Template string            // "magic_link", "verify_email", "reset_password"
+    Subject  string            // suggested subject line
+    Data     map[string]string // template variables
+}
+```
+
+## Security considerations
+
+- **Tokens are single-use.** Once a token is consumed, it cannot be reused. Re-requesting a magic link generates a new token and invalidates all previous tokens for that email.
+- **Tokens expire.** The default TTL is 15 minutes. Set a shorter TTL for higher-security applications.
+- **Tokens are not guessable.** Tokens are generated using `crypto/rand` and are URL-safe base64-encoded.
+- **Rate limiting.** Use `RateLimitConfig.SignInLimit` to prevent abuse. Magic link requests that succeed server-side but fail email delivery are counted toward the rate limit.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/magic-link/request` | Generate a magic link token and send email |
+| `POST` | `/magic-link/confirm` | Confirm the token and return a session |

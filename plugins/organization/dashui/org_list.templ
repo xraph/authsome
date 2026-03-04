@@ -1,0 +1,74 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/organization"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ OrganizationsPage(orgs []*organization.Organization) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center gap-3">
+			<h1 class="text-3xl font-bold tracking-tight">Organizations</h1>
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				{ strconv.Itoa(len(orgs)) }
+			}
+		</div>
+
+		<!-- Table -->
+		@card.Card() {
+			@card.Content() {
+				if len(orgs) == 0 {
+					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+						@icons.Building2(icons.WithSize(40))
+						<p class="mt-2 text-sm">No organizations found.</p>
+					</div>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Slug }
+								@table.Head() { Created }
+							}
+						}
+						@table.Body() {
+							for _, org := range orgs {
+								{{ created := org.CreatedAt.Format("Jan 02, 2006") }}
+								@table.Row() {
+									@table.Cell() {
+										<div
+											class="flex items-center gap-2 cursor-pointer"
+											hx-get={ "/organizations/detail?id=" + org.ID.String() }
+											hx-target="#main-content"
+											hx-swap="innerHTML"
+											hx-push-url="true"
+										>
+											if org.Logo != "" {
+												<img src={ org.Logo } alt={ org.Name } class="h-8 w-8 rounded-md object-cover"/>
+											} else {
+												<div class="flex h-8 w-8 items-center justify-center rounded-md bg-muted">
+													@icons.Building2(icons.WithSize(16))
+												</div>
+											}
+											<span class="font-medium hover:underline">{ org.Name }</span>
+										</div>
+									}
+									@table.Cell() {
+										<code class="text-xs">{ org.Slug }</code>
+									}
+									@table.Cell() { { created } }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}

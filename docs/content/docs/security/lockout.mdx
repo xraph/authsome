@@ -1,0 +1,238 @@
+---
+title: Account Lockout
+description: Configurable failed-attempt tracking and automatic account lockout to defend against brute-force attacks.
+---
+
+Authsome's account lockout system automatically suspends authentication for a user after too many consecutive failed sign-in attempts. When a lockout is triggered, further sign-in attempts are rejected regardless of whether the credentials are correct. This prevents brute-force and credential-stuffing attacks without requiring you to write custom rate-limiting code.
+
+## How it works
+
+On every failed authentication attempt (wrong password, expired MFA code, etc.), Authsome increments a failure counter for the user. When the counter reaches `MaxAttempts`, the account is locked for `LockoutDuration`. The counter resets to zero after `ResetAfter` without a new failure, so a single forgotten password doesn't permanently affect a user who guesses correctly on attempt N.
+
+```
+Attempt 1 (fail): counter = 1
+Attempt 2 (fail): counter = 2
+Attempt 3 (fail): counter = 3 → MaxAttempts reached → lock for LockoutDuration
+Attempt 4 (success during lockout): rejected with ErrAccountLocked
+...
+After LockoutDuration: lock lifted, counter reset to 0
+```
+
+## Configuration
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/lockout"
+)
+
+auth := authsome.New(
+    authsome.WithLockout(lockout.Config{
+        MaxAttempts:     5,
+        LockoutDuration: 15 * time.Minute,
+        ResetAfter:      1 * time.Hour,
+    }),
+)
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `MaxAttempts` | `int` | `5` | Number of consecutive failures before locking the account |
+| `LockoutDuration` | `time.Duration` | `15m` | How long the account stays locked after `MaxAttempts` is reached |
+| `ResetAfter` | `time.Duration` | `1h` | How long without a failure before the counter resets to zero |
+| `Enabled` | `bool` | `true` | Set to `false` to disable lockout globally |
+| `WhitelistIPs` | `[]string` | `nil` | IP addresses exempt from lockout (e.g., internal health check IPs) |
+
+### Recommended production settings
+
+For a general-purpose consumer application:
+
+```go
+lockout.Config{
+    MaxAttempts:     5,
+    LockoutDuration: 30 * time.Minute,
+    ResetAfter:      2 * time.Hour,
+}
+```
+
+For a high-security internal application:
+
+```go
+lockout.Config{
+    MaxAttempts:     3,
+    LockoutDuration: 24 * time.Hour,
+    ResetAfter:      4 * time.Hour,
+}
+```
+
+## The LockoutTracker interface
+
+Authsome tracks lockout state through the `LockoutTracker` interface. You can replace the built-in tracker with your own implementation backed by Redis, a database, or any other store.
+
+```go
+type LockoutTracker interface {
+    // Increment increments the failure counter for the user and returns the new count.
+    Increment(ctx context.Context, userID string) (int, error)
+
+    // Get returns the current failure count and whether the account is currently locked.
+    Get(ctx context.Context, userID string) (count int, lockedUntil *time.Time, err error)
+
+    // Lock locks the account for the given duration.
+    Lock(ctx context.Context, userID string, until time.Time) error
+
+    // Reset clears the failure counter and any active lock for the user.
+    Reset(ctx context.Context, userID string) error
+}
+```
+
+## Built-in: memory tracker
+
+The memory tracker is the default. It stores state in a Go map protected by a `sync.RWMutex`. It is suitable for single-instance applications, testing, and development.
+
+```go
+import "github.com/xraph/authsome/lockout"
+
+tracker := lockout.NewMemoryTracker()
+
+auth := authsome.New(
+    authsome.WithLockoutTracker(tracker),
+    authsome.WithLockout(lockout.Config{
+        MaxAttempts:     5,
+        LockoutDuration: 15 * time.Minute,
+        ResetAfter:      1 * time.Hour,
+    }),
+)
+```
+
+<Callout type="warn">
+The memory tracker does not persist state across restarts. An attacker can bypass lockout by triggering a process restart. For production deployments, use a Redis or database-backed tracker.
+</Callout>
+
+## Custom tracker: Redis example
+
+```go
+package redislockout
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    "github.com/redis/go-redis/v9"
+    "github.com/xraph/authsome/lockout"
+)
+
+type RedisTracker struct {
+    client *redis.Client
+    reset  time.Duration
+}
+
+func New(client *redis.Client, resetAfter time.Duration) lockout.LockoutTracker {
+    return &RedisTracker{client: client, reset: resetAfter}
+}
+
+func (r *RedisTracker) Increment(ctx context.Context, userID string) (int, error) {
+    key := fmt.Sprintf("lockout:count:%s", userID)
+    count, err := r.client.Incr(ctx, key).Result()
+    if err != nil {
+        return 0, err
+    }
+    // Set expiry only on first increment (reset window).
+    if count == 1 {
+        r.client.Expire(ctx, key, r.reset)
+    }
+    return int(count), nil
+}
+
+func (r *RedisTracker) Get(ctx context.Context, userID string) (int, *time.Time, error) {
+    countKey := fmt.Sprintf("lockout:count:%s", userID)
+    lockKey  := fmt.Sprintf("lockout:lock:%s", userID)
+
+    count, err := r.client.Get(ctx, countKey).Int()
+    if err == redis.Nil {
+        count = 0
+    } else if err != nil {
+        return 0, nil, err
+    }
+
+    ttl, err := r.client.TTL(ctx, lockKey).Result()
+    if err != nil || ttl <= 0 {
+        return count, nil, nil
+    }
+    until := time.Now().Add(ttl)
+    return count, &until, nil
+}
+
+func (r *RedisTracker) Lock(ctx context.Context, userID string, until time.Time) error {
+    key := fmt.Sprintf("lockout:lock:%s", userID)
+    return r.client.Set(ctx, key, "1", time.Until(until)).Err()
+}
+
+func (r *RedisTracker) Reset(ctx context.Context, userID string) error {
+    pipe := r.client.Pipeline()
+    pipe.Del(ctx, fmt.Sprintf("lockout:count:%s", userID))
+    pipe.Del(ctx, fmt.Sprintf("lockout:lock:%s", userID))
+    _, err := pipe.Exec(ctx)
+    return err
+}
+```
+
+Register the custom tracker:
+
+```go
+import (
+    redislockout "myapp/lockout/redis"
+    "github.com/redis/go-redis/v9"
+)
+
+rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+
+auth := authsome.New(
+    authsome.WithLockoutTracker(redislockout.New(rdb, time.Hour)),
+    authsome.WithLockout(lockout.Config{
+        MaxAttempts:     5,
+        LockoutDuration: 15 * time.Minute,
+        ResetAfter:      1 * time.Hour,
+    }),
+)
+```
+
+## Admin operations
+
+Administrators can manually unlock accounts and inspect lockout state:
+
+```go
+// Check if a user is locked out.
+count, lockedUntil, err := auth.Lockout().GetStatus(ctx, userID)
+if lockedUntil != nil {
+    fmt.Printf("user %s locked until %s (after %d failures)\n",
+        userID, lockedUntil.Format(time.RFC3339), count)
+}
+
+// Manually unlock an account (e.g., after verifying identity via support).
+err := auth.Lockout().Reset(ctx, userID)
+
+// Manually lock an account.
+until := time.Now().Add(24 * time.Hour)
+err := auth.Lockout().Lock(ctx, userID, until)
+```
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/users/:user_id/lockout` | Get the current lockout status for a user |
+| `DELETE` | `/admin/users/:user_id/lockout` | Manually unlock an account |
+| `POST` | `/admin/users/:user_id/lockout` | Manually lock an account |
+
+<Callout type="info">
+These admin endpoints require the `manage:user` RBAC permission. Expose them only to internal admin tooling.
+</Callout>
+
+## Events emitted
+
+| Event | Trigger |
+|-------|---------|
+| `auth.signin.failed` | A failed sign-in attempt was recorded (includes current count in metadata) |
+| `auth.lockout.triggered` | The account was locked after reaching `MaxAttempts` |
+| `auth.lockout.lifted` | The lockout expired or was manually cleared |

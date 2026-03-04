@@ -1,0 +1,235 @@
+---
+title: OAuth2 Provider Plugin
+description: Turn Authsome into an OAuth2 authorization server with Authorization Code + PKCE, Client Credentials, OIDC discovery, and client management.
+---
+
+The `oauth2provider` plugin turns Authsome into a full OAuth2 authorization server. It implements the Authorization Code grant with PKCE (RFC 7636), Client Credentials grant, token revocation (RFC 7009), OIDC UserInfo, and OpenID Connect Discovery.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/oauth2provider"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(oauth2provider.New(oauth2provider.Config{
+        Issuer:         "https://auth.example.com",
+        AuthCodeTTL:    10 * time.Minute,
+        AccessTokenTTL: 1 * time.Hour,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Issuer` | `string` | `"https://localhost"` | OAuth2 issuer URL used in OIDC discovery |
+| `AuthCodeTTL` | `time.Duration` | `10m` | Lifetime of authorization codes |
+| `AccessTokenTTL` | `time.Duration` | `1h` | Lifetime of issued access tokens |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"oauth2provider"`) |
+| `OnInit` | Captures store, logger, session config resolver, and token format resolver |
+| `RouteProvider` | Registers authorization, token, revoke, userinfo, discovery, and admin endpoints |
+| `MigrationProvider` | Contributes `oauth2_clients` and `oauth2_auth_codes` tables |
+
+## Authorization Code Grant with PKCE
+
+The Authorization Code flow with PKCE is the recommended grant type for both public and confidential clients.
+
+### Step 1: Authorization request
+
+`GET /v1/auth/oauth/authorize`
+
+```
+?response_type=code
+&client_id=abc123
+&redirect_uri=https://app.example.com/callback
+&scope=openid profile email
+&state=random-state
+&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+&code_challenge_method=S256
+```
+
+The user must be authenticated. The endpoint validates the client, redirect URI, and PKCE challenge, then redirects back with an authorization code.
+
+### Step 2: Token exchange
+
+`POST /v1/auth/oauth/token`
+
+```json
+{
+  "grant_type": "authorization_code",
+  "code": "the-authorization-code",
+  "redirect_uri": "https://app.example.com/callback",
+  "client_id": "abc123",
+  "client_secret": "secret",
+  "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+}
+```
+
+The plugin validates the code, checks PKCE, authenticates the client (for confidential clients), and issues tokens.
+
+**Response:**
+
+```json
+{
+  "access_token": "eyJhbGciOiJS...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "d72b1ef8...",
+  "scope": "openid profile email"
+}
+```
+
+### PKCE verification
+
+The plugin supports both `S256` and `plain` challenge methods. `S256` is the recommended method:
+
+- The client generates a random `code_verifier`
+- Computes `code_challenge = BASE64URL(SHA256(code_verifier))`
+- Sends `code_challenge` in the authorization request
+- Sends `code_verifier` in the token request
+- The server verifies that `BASE64URL(SHA256(code_verifier)) == code_challenge`
+
+## Client Credentials Grant
+
+Machine-to-machine authentication for confidential clients:
+
+`POST /v1/auth/oauth/token`
+
+```json
+{
+  "grant_type": "client_credentials",
+  "client_id": "abc123",
+  "client_secret": "secret"
+}
+```
+
+**Response:**
+
+```json
+{
+  "access_token": "a3f8c9d4...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "openid profile email"
+}
+```
+
+Client credentials tokens have no associated user. They are issued with an empty user ID for service-to-service communication.
+
+## Token revocation
+
+`POST /v1/auth/oauth/revoke`
+
+```json
+{
+  "token": "the-access-or-refresh-token",
+  "token_type_hint": "access_token"
+}
+```
+
+Follows RFC 7009. Always returns `200 OK` regardless of whether the token was found.
+
+## OIDC UserInfo
+
+`GET /v1/auth/oauth/userinfo`
+
+Returns claims about the authenticated user (requires a valid access token):
+
+```json
+{
+  "sub": "ausr_01j9...",
+  "email": "alice@example.com",
+  "email_verified": true,
+  "name": "Alice Liddell",
+  "phone": "+14155551234"
+}
+```
+
+## OpenID Connect Discovery
+
+`GET /.well-known/openid-configuration`
+
+Returns the OIDC discovery document:
+
+```json
+{
+  "issuer": "https://auth.example.com",
+  "authorization_endpoint": "https://auth.example.com/v1/auth/oauth/authorize",
+  "token_endpoint": "https://auth.example.com/v1/auth/oauth/token",
+  "userinfo_endpoint": "https://auth.example.com/v1/auth/oauth/userinfo",
+  "revocation_endpoint": "https://auth.example.com/v1/auth/oauth/revoke",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "client_credentials"],
+  "scopes_supported": ["openid", "profile", "email", "phone"],
+  "code_challenge_methods_supported": ["S256", "plain"]
+}
+```
+
+## Client management
+
+### Create a client
+
+`POST /v1/auth/admin/oauth/clients`
+
+```json
+{
+  "app_id": "aapp_01j9...",
+  "name": "My SPA",
+  "redirect_uris": ["https://app.example.com/callback"],
+  "scopes": ["openid", "profile", "email"],
+  "grant_types": ["authorization_code"],
+  "public": true
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "aocl_01j9...",
+  "client_id": "abc123def456...",
+  "client_secret": "secret-shown-only-once",
+  "name": "My SPA",
+  "redirect_uris": ["https://app.example.com/callback"],
+  "scopes": ["openid", "profile", "email"],
+  "grant_types": ["authorization_code"],
+  "public": true
+}
+```
+
+The `client_secret` is only returned at creation time. It is bcrypt-hashed before storage. Public clients (SPAs, mobile apps) do not receive a secret.
+
+### List clients
+
+`GET /v1/auth/admin/oauth/clients?app_id=aapp_01j9...`
+
+### Delete a client
+
+`DELETE /v1/auth/admin/oauth/clients/:clientId`
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/auth/oauth/authorize` | OAuth2 authorization endpoint |
+| `POST` | `/v1/auth/oauth/token` | Token endpoint (code exchange, client credentials) |
+| `POST` | `/v1/auth/oauth/revoke` | Token revocation |
+| `GET` | `/v1/auth/oauth/userinfo` | OIDC UserInfo |
+| `GET` | `/.well-known/openid-configuration` | OIDC Discovery |
+| `POST` | `/v1/auth/admin/oauth/clients` | Create OAuth2 client |
+| `GET` | `/v1/auth/admin/oauth/clients` | List OAuth2 clients |
+| `DELETE` | `/v1/auth/admin/oauth/clients/:clientId` | Delete OAuth2 client |
+
+## JWT access tokens
+
+When the engine has a JWT token format configured for the app, the plugin issues JWT access tokens instead of opaque tokens. The JWT includes `sub`, `app_id`, `session_id`, `scopes`, `iat`, and `exp` claims.

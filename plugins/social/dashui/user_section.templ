@@ -1,0 +1,65 @@
+package dashui
+
+import (
+	"strconv"
+	"time"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+)
+
+// ConnectionView is a display-only view of an OAuth connection.
+type ConnectionView struct {
+	Provider  string
+	Email     string
+	CreatedAt time.Time
+}
+
+// UserSection renders the social connections section for a specific user.
+templ UserSection(connections []ConnectionView) {
+	@card.Card() {
+		@card.Header() {
+			<div class="flex items-center gap-3">
+				@card.Title() {
+					Social Connections
+				}
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(connections)) }
+				}
+			</div>
+			@card.Description() {
+				Linked OAuth accounts for this user
+			}
+		}
+		@card.Content() {
+			if len(connections) == 0 {
+				<p class="text-sm text-muted-foreground py-4 text-center">No social connections.</p>
+			} else {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() { Provider }
+							@table.Head() { Email }
+							@table.Head() { Connected }
+						}
+					}
+					@table.Body() {
+						for _, c := range connections {
+							@table.Row() {
+								@table.Cell() {
+									<span class="font-medium capitalize">{ c.Provider }</span>
+								}
+								@table.Cell() { { c.Email } }
+								@table.Cell() {
+									{{ created := c.CreatedAt.Format("Jan 02, 2006") }}
+									{ created }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,218 @@
+---
+title: MongoDB
+description: MongoDB backend for teams operating a document-oriented data platform.
+---
+
+The MongoDB store (`store/mongo`) provides a document-oriented backend using Grove ORM with `mongodriver`. It implements the full `store.Store` composite interface and maps each Authsome sub-store to a dedicated MongoDB collection with automatic index creation.
+
+## Installation
+
+```bash
+go get github.com/xraph/authsome
+go get github.com/xraph/grove
+go get github.com/xraph/grove/drivers/mongodriver
+```
+
+## Creating a store
+
+```go
+import (
+    "os"
+
+    "github.com/xraph/grove"
+    "github.com/xraph/grove/drivers/mongodriver"
+    "github.com/xraph/authsome/store/mongo"
+)
+
+// Open a Grove DB backed by MongoDB.
+db := grove.Open(mongodriver.New(
+    mongodriver.WithURI(os.Getenv("MONGODB_URI")),
+    mongodriver.WithDatabase("authsome"),
+))
+
+// Create the Authsome store.
+mgoStore := mongo.New(db)
+```
+
+### Connection string format
+
+Standard MongoDB connection strings are supported:
+
+```
+mongodb://user:password@localhost:27017/authsome
+mongodb+srv://user:password@cluster.mongodb.net/authsome?retryWrites=true&w=majority
+mongodb://localhost:27017/authsome?authSource=admin
+```
+
+For MongoDB Atlas:
+
+```go
+db := grove.Open(mongodriver.New(
+    mongodriver.WithURI(os.Getenv("MONGODB_ATLAS_URI")),
+    mongodriver.WithDatabase("authsome"),
+    mongodriver.WithTLS(true),
+))
+```
+
+## Wiring into the engine
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "net/http"
+    "os"
+    "time"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/store/mongo"
+    "github.com/xraph/grove"
+    "github.com/xraph/grove/drivers/mongodriver"
+)
+
+func main() {
+    ctx := context.Background()
+
+    db := grove.Open(mongodriver.New(
+        mongodriver.WithURI(os.Getenv("MONGODB_URI")),
+        mongodriver.WithDatabase("authsome"),
+    ))
+    mgoStore := mongo.New(db)
+
+    eng, err := authsome.New(
+        authsome.WithStore(mgoStore),
+        authsome.WithPlugin(password.New()),
+        authsome.WithConfig(authsome.Config{
+            AppID:    "myapp",
+            BasePath: "/v1/auth",
+            Session: authsome.SessionConfig{
+                TokenTTL:        1 * time.Hour,
+                RefreshTokenTTL: 30 * 24 * time.Hour,
+            },
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer eng.Stop(ctx)
+
+    if err := eng.Start(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    mux := http.NewServeMux()
+    eng.RegisterRoutes(mux)
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+## Migrations
+
+The MongoDB store uses Grove's migration orchestrator to create collections and their required indexes when `eng.Start(ctx)` is called. Unlike relational databases, MongoDB is schema-less for field data — migrations only create indexes. No DDL is required for the collection structure itself.
+
+Migration history is tracked in a `grove_migrations` collection within the same database.
+
+Running migrations manually:
+
+```go
+if err := mgoStore.Migrate(ctx); err != nil {
+    log.Fatal("migration failed:", err)
+}
+```
+
+## Collection naming
+
+All Authsome collections use the `authsome_` prefix:
+
+| Collection | Purpose |
+|------------|---------|
+| `authsome_users` | User documents |
+| `authsome_sessions` | Active session documents |
+| `authsome_verifications` | Email verification token documents |
+| `authsome_password_resets` | Password reset token documents |
+| `authsome_apps` | Application registration documents |
+| `authsome_organizations` | Organization documents |
+| `authsome_members` | Membership documents |
+| `authsome_invitations` | Invitation documents |
+| `authsome_teams` | Team documents |
+| `authsome_devices` | Device fingerprint documents |
+| `authsome_webhooks` | Webhook endpoint documents |
+| `authsome_notifications` | Notification queue documents |
+| `authsome_api_keys` | API key documents |
+| `authsome_environments` | Environment documents |
+| `authsome_form_configs` | Form configuration documents |
+| `authsome_branding_configs` | Branding configuration documents |
+| `authsome_app_session_configs` | Per-app session config documents |
+
+## Indexes
+
+The migration system creates the following indexes automatically:
+
+### Users
+
+| Index | Fields | Type |
+|-------|--------|------|
+| Unique | `app_id, email` | Compound unique |
+| Unique (sparse) | `app_id, phone` | Compound unique, sparse |
+| Unique (sparse) | `app_id, username` | Compound unique, sparse |
+
+### Sessions
+
+| Index | Fields | Type |
+|-------|--------|------|
+| Unique | `token` | Unique |
+| Unique | `refresh_token` | Unique |
+| Standard | `user_id` | Standard |
+| TTL | `expires_at` | TTL index for automatic expiry |
+
+### API Keys
+
+| Index | Fields | Type |
+|-------|--------|------|
+| Standard | `app_id, key_prefix` | Compound |
+| Standard | `app_id, user_id` | Compound |
+
+### Other collections
+
+All collections are indexed on their primary `id` field. Lookup-heavy collections (verifications, password resets) are indexed on their `token` fields for O(log n) lookups.
+
+## BSON serialization
+
+Authsome's MongoDB store serializes all entities as BSON documents. TypeID fields (e.g., `ausr_01j...`) are stored as BSON strings. Timestamps are stored as BSON dates for native MongoDB date queries. Embedded maps (`metadata`, `settings`) are stored as BSON subdocuments.
+
+The BSON field names use snake_case matching Authsome's JSON field names:
+
+```json
+{
+  "_id": "ausr_01j8x9y7z...",
+  "app_id": "aapp_01j...",
+  "email": "user@example.com",
+  "email_verified": true,
+  "created_at": { "$date": "2024-01-15T10:30:00Z" },
+  "updated_at": { "$date": "2024-01-15T10:30:00Z" }
+}
+```
+
+## Lifecycle methods
+
+| Method | Behaviour |
+|--------|-----------|
+| `Migrate(ctx, extraGroups...)` | Creates collections and indexes via the Grove orchestrator. Idempotent. |
+| `Ping(ctx)` | Calls the MongoDB `ping` command to verify connectivity. |
+| `Close()` | Disconnects the MongoDB client. |
+
+## When to use
+
+- **Existing MongoDB clusters** — If your organisation already operates MongoDB (Atlas or self-hosted), Authsome can share the same cluster.
+- **Flexible schema evolution** — MongoDB's schema-less approach means adding fields to Authsome entities does not require ALTER TABLE statements.
+- **Document-oriented queries** — If your application already queries MongoDB and you want authentication data co-located with application data.
+- **Horizontal sharding** — MongoDB's built-in sharding capabilities can distribute Authsome data across multiple shards for very large user bases.
+
+## When not to use
+
+- **New projects without existing MongoDB** — PostgreSQL is simpler to operate and has better tooling for relational data like RBAC hierarchies.
+- **Complex relational queries** — Organisation hierarchy and RBAC role inheritance queries are more efficient in PostgreSQL with proper join support.
+- **Transactions across collections** — MongoDB multi-document transactions have higher overhead than PostgreSQL transactions.

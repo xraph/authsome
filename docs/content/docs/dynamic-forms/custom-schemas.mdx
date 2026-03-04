@@ -1,0 +1,349 @@
+---
+title: Custom Form Schemas
+description: Define dynamic signup forms with custom fields, validation rules, and per-app configuration using FormConfig.
+---
+
+Authsome supports dynamic form schemas that let you customize the signup experience per application. Instead of hardcoding form fields, you define a `FormConfig` that specifies which fields appear, their types, validation rules, and display order. Custom field values are stored in the user's `Metadata` map.
+
+## FormConfig entity
+
+```go
+type FormConfig struct {
+    ID        id.FormConfigID `json:"id"`
+    AppID     id.AppID        `json:"app_id"`
+    FormType  string          `json:"form_type"` // "signup"
+    Fields    []FormField     `json:"fields"`
+    Active    bool            `json:"active"`
+    Version   int             `json:"version"`
+    CreatedAt time.Time       `json:"created_at"`
+    UpdatedAt time.Time       `json:"updated_at"`
+}
+```
+
+- **`FormType`** — currently `"signup"` is supported. Future versions will add `"profile_edit"` and others.
+- **`Active`** — only one FormConfig per app/form-type combination can be active at a time. Creating a new active config deactivates the previous one.
+- **`Version`** — auto-incremented on each update, enabling form versioning.
+
+## Field types
+
+Authsome supports 11 field types, each mapped to an appropriate input control:
+
+| Type | Constant | Description | Example use |
+|------|----------|-------------|-------------|
+| `text` | `FieldText` | Single-line text input | Company name, job title |
+| `email` | `FieldEmail` | Email input with format validation | Work email |
+| `number` | `FieldNumber` | Numeric input | Employee count, age |
+| `tel` | `FieldTel` | Phone number input | Work phone |
+| `url` | `FieldURL` | URL input with format validation | Website, LinkedIn profile |
+| `date` | `FieldDate` | Date picker | Date of birth, start date |
+| `textarea` | `FieldTextarea` | Multi-line text input | Bio, description |
+| `select` | `FieldSelect` | Dropdown select | Country, department |
+| `checkbox` | `FieldCheckbox` | Checkbox (boolean or multi-select) | Terms acceptance, interests |
+| `radio` | `FieldRadio` | Radio button group | Plan selection, preference |
+| `switch` | `FieldSwitch` | Toggle switch | Newsletter opt-in |
+
+## FormField structure
+
+Each field in the form is defined by a `FormField`:
+
+```go
+type FormField struct {
+    Key         string         `json:"key"`
+    Label       string         `json:"label"`
+    Type        FieldType      `json:"type"`
+    Placeholder string         `json:"placeholder,omitempty"`
+    Description string         `json:"description,omitempty"`
+    Options     []SelectOption `json:"options,omitempty"`
+    Default     string         `json:"default,omitempty"`
+    Validation  Validation     `json:"validation,omitempty"`
+    Order       int            `json:"order"`
+}
+```
+
+- **`Key`** — the metadata key where the field value is stored in `User.Metadata`. Must be unique within the form.
+- **`Label`** — display label shown to the user.
+- **`Options`** — only used for `select`, `radio`, and `checkbox` types.
+- **`Order`** — controls the display order of fields (ascending).
+
+### SelectOption
+
+For fields with predefined choices:
+
+```go
+type SelectOption struct {
+    Label string `json:"label"`
+    Value string `json:"value"`
+}
+```
+
+## Validation rules
+
+Each field can define server-side validation rules:
+
+```go
+type Validation struct {
+    Required bool   `json:"required,omitempty"`
+    MinLen   int    `json:"min_len,omitempty"`
+    MaxLen   int    `json:"max_len,omitempty"`
+    Pattern  string `json:"pattern,omitempty"` // regex
+    Min      *int   `json:"min,omitempty"`     // for number fields
+    Max      *int   `json:"max,omitempty"`     // for number fields
+}
+```
+
+| Rule | Type | Description |
+|------|------|-------------|
+| `Required` | `bool` | Field must have a non-empty value |
+| `MinLen` | `int` | Minimum string length |
+| `MaxLen` | `int` | Maximum string length |
+| `Pattern` | `string` | Regex pattern the value must match |
+| `Min` | `*int` | Minimum numeric value (number fields only) |
+| `Max` | `*int` | Maximum numeric value (number fields only) |
+
+Validation is enforced at the engine level during signup. If any field fails validation, the signup request is rejected with a detailed error message indicating which field failed and why.
+
+## Creating a form configuration
+
+### Via HTTP API
+
+`POST /v1/auth/forms`
+
+```json
+{
+  "app_id": "myapp",
+  "form_type": "signup",
+  "active": true,
+  "fields": [
+    {
+      "key": "company",
+      "label": "Company Name",
+      "type": "text",
+      "placeholder": "Enter your company name",
+      "validation": {
+        "required": true,
+        "min_len": 2,
+        "max_len": 100
+      },
+      "order": 1
+    },
+    {
+      "key": "department",
+      "label": "Department",
+      "type": "select",
+      "options": [
+        {"label": "Engineering", "value": "engineering"},
+        {"label": "Marketing", "value": "marketing"},
+        {"label": "Sales", "value": "sales"},
+        {"label": "Other", "value": "other"}
+      ],
+      "validation": {"required": true},
+      "order": 2
+    },
+    {
+      "key": "employee_count",
+      "label": "Number of Employees",
+      "type": "number",
+      "validation": {
+        "required": false,
+        "min": 1,
+        "max": 100000
+      },
+      "order": 3
+    },
+    {
+      "key": "website",
+      "label": "Company Website",
+      "type": "url",
+      "placeholder": "https://example.com",
+      "validation": {
+        "required": false,
+        "pattern": "^https?://.+"
+      },
+      "order": 4
+    },
+    {
+      "key": "terms_accepted",
+      "label": "I agree to the Terms of Service",
+      "type": "checkbox",
+      "validation": {"required": true},
+      "order": 5
+    },
+    {
+      "key": "newsletter",
+      "label": "Subscribe to newsletter",
+      "type": "switch",
+      "default": "true",
+      "order": 6
+    }
+  ]
+}
+```
+
+### Via Go SDK
+
+```go
+import "github.com/xraph/authsome/formconfig"
+
+fc := &formconfig.FormConfig{
+    AppID:    appID,
+    FormType: formconfig.FormTypeSignup,
+    Active:   true,
+    Fields: []formconfig.FormField{
+        {
+            Key:         "company",
+            Label:       "Company Name",
+            Type:        formconfig.FieldText,
+            Placeholder: "Enter your company name",
+            Validation: formconfig.Validation{
+                Required: true,
+                MinLen:   2,
+                MaxLen:   100,
+            },
+            Order: 1,
+        },
+        {
+            Key:   "department",
+            Label: "Department",
+            Type:  formconfig.FieldSelect,
+            Options: []formconfig.SelectOption{
+                {Label: "Engineering", Value: "engineering"},
+                {Label: "Marketing", Value: "marketing"},
+                {Label: "Sales", Value: "sales"},
+            },
+            Validation: formconfig.Validation{Required: true},
+            Order:      2,
+        },
+    },
+}
+
+err := engine.CreateFormConfig(ctx, fc)
+```
+
+## How custom fields work during signup
+
+When a user signs up with an active FormConfig, the engine:
+
+1. Fetches the active FormConfig for the app and form type
+2. Validates each submitted custom field against the field's validation rules
+3. Rejects the request if any required field is missing or validation fails
+4. Stores valid field values in `User.Metadata` using the field's `Key`
+
+### Signup request with custom fields
+
+```json
+{
+  "email": "alice@example.com",
+  "password": "Secure!Pass99",
+  "name": "Alice Liddell",
+  "app_id": "myapp",
+  "metadata": {
+    "company": "Acme Corp",
+    "department": "engineering",
+    "employee_count": "150",
+    "terms_accepted": "true",
+    "newsletter": "true"
+  }
+}
+```
+
+### Validation error response
+
+If a custom field fails validation:
+
+```json
+{
+  "error": "form validation failed",
+  "code": "BAD_REQUEST",
+  "details": [
+    {
+      "field": "company",
+      "message": "company is required"
+    },
+    {
+      "field": "employee_count",
+      "message": "value must be between 1 and 100000"
+    }
+  ]
+}
+```
+
+## Form versioning
+
+Each FormConfig has a `Version` field that auto-increments when the form is updated. This enables:
+
+- **Audit trail** — know which version of the form a user signed up with
+- **Migration** — gradually roll out field changes without affecting existing users
+- **Rollback** — reactivate a previous version if needed
+
+To update a form, create a new FormConfig with `Active: true`. The engine deactivates the previous active config and activates the new one.
+
+### List form versions
+
+```go
+forms, err := engine.ListFormConfigs(ctx, appID, "signup")
+// Returns all versions, sorted by version descending
+```
+
+## Per-app form customization
+
+Each application can have its own form configuration. This is useful in multi-tenant setups where different applications or customers need different signup fields.
+
+```go
+// App A: B2B SaaS signup
+appAConfig := &formconfig.FormConfig{
+    AppID:    appAID,
+    FormType: "signup",
+    Fields: []formconfig.FormField{
+        {Key: "company", Label: "Company", Type: formconfig.FieldText},
+        {Key: "role", Label: "Role", Type: formconfig.FieldSelect},
+    },
+}
+
+// App B: Consumer signup
+appBConfig := &formconfig.FormConfig{
+    AppID:    appBID,
+    FormType: "signup",
+    Fields: []formconfig.FormField{
+        {Key: "birthday", Label: "Birthday", Type: formconfig.FieldDate},
+        {Key: "interests", Label: "Interests", Type: formconfig.FieldCheckbox},
+    },
+}
+```
+
+## Retrieving the active form
+
+Clients (including the Authsome UI) fetch the active form configuration to render the signup form dynamically:
+
+`GET /v1/auth/forms/active?app_id=myapp&form_type=signup`
+
+```json
+{
+  "id": "afcf_01jb...",
+  "app_id": "aapp_01j9...",
+  "form_type": "signup",
+  "fields": [
+    {
+      "key": "company",
+      "label": "Company Name",
+      "type": "text",
+      "placeholder": "Enter your company name",
+      "validation": {"required": true, "min_len": 2, "max_len": 100},
+      "order": 1
+    }
+  ],
+  "active": true,
+  "version": 3,
+  "created_at": "2024-11-01T10:00:00Z"
+}
+```
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/forms` | Create a new form configuration |
+| `GET` | `/forms/active` | Get the active form for an app/form-type |
+| `GET` | `/forms` | List all form configurations for an app |
+| `GET` | `/forms/:formId` | Get a specific form configuration |
+| `PATCH` | `/forms/:formId` | Update a form configuration |
+| `DELETE` | `/forms/:formId` | Delete a form configuration |

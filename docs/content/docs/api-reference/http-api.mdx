@@ -1,0 +1,915 @@
+---
+title: HTTP API Reference
+description: Complete reference for all Authsome REST endpoints — authentication, users, sessions, MFA, devices, organizations, RBAC, webhooks, and OAuth2.
+---
+
+All endpoints are registered under the configurable `BasePath` (default `/v1/auth`) and return JSON. Authentication is via `Authorization: Bearer <session_token>` header unless noted otherwise. Tenant resolution depends on your Forge middleware configuration.
+
+## Authentication
+
+### `POST /signup`
+
+Create a user account and return a session.
+
+**Request**
+
+```json
+{
+  "email": "string (required)",
+  "password": "string (required)",
+  "name": "string",
+  "username": "string",
+  "app_id": "string",
+  "metadata": {}
+}
+```
+
+**Response** `201 Created`
+
+```json
+{
+  "user": {
+    "id": "ausr_01j9...",
+    "email": "alice@example.com",
+    "username": "alice",
+    "name": "Alice Liddell",
+    "email_verified": false,
+    "app_id": "aapp_01j9...",
+    "metadata": {},
+    "created_at": "2024-11-01T10:00:00Z"
+  },
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "expires_at": "2024-11-01T11:00:00Z"
+}
+```
+
+---
+
+### `POST /signin`
+
+Authenticate with email/username and password.
+
+**Request**
+
+```json
+{
+  "email": "string",
+  "username": "string",
+  "password": "string (required)",
+  "app_id": "string"
+}
+```
+
+One of `email` or `username` is required.
+
+**Response** `200 OK` — same structure as signup response.
+
+If MFA is enabled for the user, returns an MFA challenge instead:
+
+```json
+{
+  "mfa_required": true,
+  "challenge_token": "chall_01jb...",
+  "methods": ["totp"],
+  "expires_at": "2024-11-01T10:05:00Z"
+}
+```
+
+---
+
+### `POST /signout`
+
+Terminate the current session. Requires `Authorization` header.
+
+**Response** `200 OK`
+
+```json
+{"status": "signed out"}
+```
+
+---
+
+### `POST /refresh`
+
+Exchange a refresh token for new session and refresh tokens.
+
+**Request**
+
+```json
+{
+  "refresh_token": "string (required)"
+}
+```
+
+**Response** `200 OK`
+
+```json
+{
+  "session_token": "new_token...",
+  "refresh_token": "new_refresh...",
+  "expires_at": "2024-11-01T12:00:00Z"
+}
+```
+
+---
+
+## Password Management
+
+### `POST /forgot-password`
+
+Initiate a password reset flow. Always returns success to prevent email enumeration.
+
+**Request**
+
+```json
+{
+  "email": "string (required)",
+  "app_id": "string"
+}
+```
+
+**Response** `200 OK`
+
+```json
+{"status": "ok"}
+```
+
+---
+
+### `POST /reset-password`
+
+Reset password using a reset token. Revokes all existing sessions.
+
+**Request**
+
+```json
+{
+  "token": "string (required)",
+  "new_password": "string (required)"
+}
+```
+
+**Response** `200 OK`
+
+```json
+{"status": "password reset"}
+```
+
+---
+
+### `POST /change-password`
+
+Change the authenticated user's password. Requires `Authorization` header.
+
+**Request**
+
+```json
+{
+  "current_password": "string (required)",
+  "new_password": "string (required)"
+}
+```
+
+**Response** `200 OK`
+
+```json
+{"status": "password changed"}
+```
+
+---
+
+### `POST /verify-email`
+
+Verify email address with a verification token.
+
+**Request**
+
+```json
+{
+  "token": "string (required)"
+}
+```
+
+**Response** `200 OK`
+
+```json
+{"status": "email verified"}
+```
+
+---
+
+## User Management
+
+### `GET /me`
+
+Return the authenticated user's profile. Requires `Authorization` header.
+
+**Response** `200 OK` — User object.
+
+---
+
+### `PATCH /me`
+
+Update the authenticated user's profile fields. Requires `Authorization` header.
+
+**Request**
+
+```json
+{
+  "name": "string",
+  "username": "string",
+  "image": "string"
+}
+```
+
+**Response** `200 OK` — Updated User object.
+
+---
+
+### `DELETE /me`
+
+Permanently delete the authenticated user's account (GDPR right to erasure). Requires `Authorization` header.
+
+**Response** `200 OK`
+
+```json
+{"status": "account deleted"}
+```
+
+---
+
+### `GET /me/export`
+
+Export all data associated with the authenticated user (GDPR data portability). Requires `Authorization` header.
+
+**Response** `200 OK` — JSON object containing user, sessions, devices, organizations, and MFA enrollments.
+
+---
+
+## Sessions
+
+### `GET /sessions`
+
+List all active sessions for the authenticated user. Requires `Authorization` header.
+
+**Response** `200 OK`
+
+```json
+{
+  "sessions": [
+    {
+      "id": "ases_01j9...",
+      "app_id": "aapp_01j9...",
+      "user_id": "ausr_01j9...",
+      "ip_address": "192.168.1.1",
+      "user_agent": "Mozilla/5.0...",
+      "device_id": "adev_01j9...",
+      "expires_at": "2024-11-01T11:00:00Z",
+      "created_at": "2024-11-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `DELETE /sessions/:sessionId`
+
+Revoke a specific session by ID. Requires `Authorization` header.
+
+**Response** `200 OK`
+
+```json
+{"status": "revoked"}
+```
+
+---
+
+## Multi-Factor Authentication
+
+### `POST /mfa/enroll`
+
+Start MFA enrollment for a method. Requires `Authorization` header.
+
+**Request**
+
+```json
+{
+  "method": "totp | sms",
+  "phone": "string (required for sms)"
+}
+```
+
+**Response** `201 Created` — Enrollment object with TOTP URI/secret (for TOTP) and recovery codes.
+
+---
+
+### `POST /mfa/verify`
+
+Verify MFA enrollment with a code. Requires `Authorization` header.
+
+**Request**
+
+```json
+{
+  "method": "totp | sms",
+  "code": "string (required)"
+}
+```
+
+**Response** `200 OK` — Updated enrollment with `verified: true`.
+
+---
+
+### `POST /mfa/challenge`
+
+Complete an MFA challenge during sign-in.
+
+**Request**
+
+```json
+{
+  "challenge_token": "string (required)",
+  "method": "totp | sms | recovery",
+  "code": "string (required)"
+}
+```
+
+**Response** `200 OK` — User object with session tokens.
+
+---
+
+### `DELETE /mfa/enrollment`
+
+Remove MFA enrollment and recovery codes. Requires `Authorization` header.
+
+**Response** `200 OK`
+
+---
+
+### `POST /mfa/recovery-codes/regenerate`
+
+Generate new recovery codes (invalidates old ones). Requires `Authorization` header.
+
+**Response** `200 OK` — Array of plaintext recovery codes.
+
+---
+
+### `GET /mfa/enrollments`
+
+List active MFA enrollments. Requires `Authorization` header.
+
+**Response** `200 OK` — Array of Enrollment objects.
+
+---
+
+## Phone Authentication
+
+### `POST /phone/send-code`
+
+Request an SMS OTP for phone sign-in.
+
+**Request**
+
+```json
+{
+  "phone": "string (required, E.164 format)",
+  "app_id": "string"
+}
+```
+
+**Response** `200 OK`
+
+```json
+{"status": "code_sent", "expires_at": "2024-11-01T10:05:00Z"}
+```
+
+---
+
+### `POST /phone/verify`
+
+Verify OTP and sign in (or sign up if new user).
+
+**Request**
+
+```json
+{
+  "phone": "string (required)",
+  "code": "string (required)",
+  "app_id": "string"
+}
+```
+
+**Response** `200 OK` — User object with session tokens.
+
+---
+
+## Devices
+
+### `GET /devices`
+
+List all tracked devices for the authenticated user. Requires `Authorization` header.
+
+**Response** `200 OK`
+
+```json
+{
+  "devices": [
+    {
+      "id": "adev_01j9...",
+      "name": "Chrome on Mac",
+      "type": "desktop",
+      "browser": "Chrome",
+      "os": "macOS",
+      "ip_address": "192.168.1.1",
+      "trusted": true,
+      "last_seen_at": "2024-11-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /devices/:deviceId`
+
+Get details of a specific device.
+
+---
+
+### `DELETE /devices/:deviceId`
+
+Remove a tracked device.
+
+---
+
+### `PATCH /devices/:deviceId/trust`
+
+Mark a device as trusted.
+
+**Response** `200 OK` — Updated Device object with `trusted: true`.
+
+---
+
+## RBAC (Roles & Permissions)
+
+### `POST /roles`
+
+Create a new RBAC role.
+
+**Request**
+
+```json
+{
+  "name": "string (required)",
+  "slug": "string (required)",
+  "description": "string",
+  "parent_id": "string",
+  "app_id": "string"
+}
+```
+
+**Response** `201 Created` — Role object.
+
+---
+
+### `GET /roles`
+
+List all roles for an app.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `app_id` | string | Filter by application |
+
+---
+
+### `GET /roles/:roleId`
+
+Get a role by ID.
+
+---
+
+### `PATCH /roles/:roleId`
+
+Update a role's name, description, or parent.
+
+---
+
+### `DELETE /roles/:roleId`
+
+Delete a role and its permissions and assignments.
+
+---
+
+### `POST /roles/:roleId/permissions`
+
+Add a permission (action + resource) to a role.
+
+**Request**
+
+```json
+{
+  "action": "string (required)",
+  "resource": "string (required)"
+}
+```
+
+**Response** `201 Created` — Permission object.
+
+---
+
+### `GET /roles/:roleId/permissions`
+
+List all permissions for a role.
+
+---
+
+### `DELETE /roles/:roleId/permissions/:permissionId`
+
+Remove a permission from a role.
+
+---
+
+### `POST /roles/:roleId/assign`
+
+Assign a role to a user, optionally scoped to an organization.
+
+**Request**
+
+```json
+{
+  "user_id": "string (required)",
+  "org_id": "string (optional)"
+}
+```
+
+---
+
+### `POST /roles/:roleId/unassign`
+
+Remove a role assignment from a user.
+
+**Request**
+
+```json
+{
+  "user_id": "string (required)"
+}
+```
+
+---
+
+### `GET /users/:userId/roles`
+
+List all roles assigned to a user.
+
+---
+
+## Webhooks
+
+### `POST /webhooks`
+
+Register a new webhook endpoint.
+
+**Request**
+
+```json
+{
+  "url": "string (required)",
+  "events": ["user.created", "auth.signin"],
+  "app_id": "string"
+}
+```
+
+**Response** `201 Created` — Webhook object including a generated `secret` for signature verification.
+
+---
+
+### `GET /webhooks`
+
+List all registered webhooks for an app.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `app_id` | string | Filter by application |
+
+---
+
+### `GET /webhooks/:webhookId`
+
+Get webhook details.
+
+---
+
+### `PATCH /webhooks/:webhookId`
+
+Update a webhook's URL, events, or active status.
+
+**Request**
+
+```json
+{
+  "url": "string",
+  "events": ["string"],
+  "active": true
+}
+```
+
+---
+
+### `DELETE /webhooks/:webhookId`
+
+Delete a webhook registration.
+
+---
+
+## Organizations
+
+### `POST /organizations`
+
+Create a new organization.
+
+**Request**
+
+```json
+{
+  "name": "string (required)",
+  "slug": "string (required)",
+  "app_id": "string",
+  "metadata": {}
+}
+```
+
+---
+
+### `GET /organizations`
+
+List organizations for an app.
+
+---
+
+### `GET /organizations/:orgId`
+
+Get organization details.
+
+---
+
+### `PATCH /organizations/:orgId`
+
+Update an organization.
+
+---
+
+### `DELETE /organizations/:orgId`
+
+Delete an organization.
+
+---
+
+### `POST /organizations/:orgId/members`
+
+Add a member to an organization.
+
+---
+
+### `GET /organizations/:orgId/members`
+
+List members of an organization.
+
+---
+
+### `PATCH /organizations/:orgId/members/:memberId`
+
+Update a member's role.
+
+---
+
+### `DELETE /organizations/:orgId/members/:memberId`
+
+Remove a member from an organization.
+
+---
+
+### `POST /organizations/:orgId/invitations`
+
+Create an invitation.
+
+---
+
+### `GET /organizations/:orgId/invitations`
+
+List invitations for an organization.
+
+---
+
+### `POST /organizations/:orgId/teams`
+
+Create a team within an organization.
+
+---
+
+### `GET /organizations/:orgId/teams`
+
+List teams.
+
+---
+
+## OAuth2 Provider
+
+### `GET /oauth2/authorize`
+
+Authorization endpoint. Redirects the user through the login/consent flow.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `response_type` | string | `code` |
+| `client_id` | string | OAuth2 client ID |
+| `redirect_uri` | string | Callback URL |
+| `scope` | string | Space-separated scopes |
+| `state` | string | CSRF token |
+| `code_challenge` | string | PKCE challenge |
+| `code_challenge_method` | string | `S256` |
+
+---
+
+### `POST /oauth2/token`
+
+Token endpoint for code exchange, client credentials, and refresh.
+
+**Authorization Code Exchange**
+
+```
+grant_type=authorization_code&code=...&redirect_uri=...&client_id=...&code_verifier=...
+```
+
+**Client Credentials**
+
+```
+grant_type=client_credentials&client_id=...&client_secret=...&scope=...
+```
+
+**Refresh Token**
+
+```
+grant_type=refresh_token&refresh_token=...&client_id=...
+```
+
+---
+
+### `POST /oauth2/introspect`
+
+Token introspection. Requires client authentication.
+
+---
+
+### `POST /oauth2/revoke`
+
+Token revocation. Always returns `200 OK`.
+
+---
+
+### `POST /oauth2/clients`
+
+Register a new OAuth2 client.
+
+---
+
+### `GET /oauth2/clients`
+
+List registered clients.
+
+---
+
+### `GET /oauth2/clients/:clientId`
+
+Get client details.
+
+---
+
+### `PATCH /oauth2/clients/:clientId`
+
+Update a client.
+
+---
+
+### `DELETE /oauth2/clients/:clientId`
+
+Delete a client.
+
+---
+
+## Well-Known Endpoints
+
+### `GET /.well-known/jwks.json`
+
+JSON Web Key Set for JWT verification.
+
+---
+
+### `GET /.well-known/openid-configuration`
+
+OpenID Connect discovery document.
+
+---
+
+## Forms & Branding
+
+### `POST /forms`
+
+Create a form configuration.
+
+---
+
+### `GET /forms/active`
+
+Get the active form for an app/form-type.
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `app_id` | string | Application ID |
+| `form_type` | string | `signup` |
+
+---
+
+### `GET /forms`
+
+List all form configurations.
+
+---
+
+### `PATCH /forms/:formId`
+
+Update a form configuration.
+
+---
+
+### `DELETE /forms/:formId`
+
+Delete a form configuration.
+
+---
+
+### `POST /branding`
+
+Create a branding configuration.
+
+---
+
+### `GET /branding`
+
+Get branding for an org/app.
+
+---
+
+### `PATCH /branding/:brandingId`
+
+Update branding fields.
+
+---
+
+### `DELETE /branding/:brandingId`
+
+Delete a branding configuration.
+
+---
+
+## Admin
+
+### `POST /admin/impersonate`
+
+Start an impersonation session. Requires admin role.
+
+**Request**
+
+```json
+{
+  "target_user_id": "string (required)",
+  "app_id": "string"
+}
+```
+
+**Response** `200 OK` — Session tokens for the target user with `impersonated_by` field set.
+
+---
+
+## Error format
+
+All error responses use a consistent JSON envelope:
+
+```json
+{
+  "error": "human-readable message",
+  "code": "ERROR_CODE"
+}
+```
+
+| HTTP status | `code` | Cause |
+|-------------|--------|-------|
+| `400` | `BAD_REQUEST` | Missing required field, validation error, weak password |
+| `401` | `UNAUTHORIZED` | Invalid credentials, expired session, missing auth header |
+| `403` | `FORBIDDEN` | User is banned, insufficient permissions |
+| `404` | `NOT_FOUND` | User, session, device, webhook, or role not found |
+| `409` | `CONFLICT` | Email already taken, username already taken |
+| `429` | `RATE_LIMITED` | Too many requests (rate limit exceeded) |
+| `500` | `INTERNAL_ERROR` | Store failure, unexpected server error |

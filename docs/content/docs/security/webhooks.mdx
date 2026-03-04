@@ -1,0 +1,324 @@
+---
+title: Webhooks
+description: Configure webhook endpoints to receive real-time notifications for all 31 Authsome events, with HMAC signing and Relay bridge integration.
+---
+
+Authsome delivers event notifications to your own HTTP endpoints via webhooks. Every significant event -- user creation, sign-in attempts, MFA enrollment, organization changes, environment lifecycle -- fires a webhook. You can configure multiple endpoints and subscribe each one to different event types.
+
+## The Webhook model
+
+```go
+import "github.com/xraph/authsome/webhook"
+
+type Webhook struct {
+    ID          id.ID      `json:"id"`          // awhk_ prefix
+    AppID       string     `json:"app_id"`
+    EnvID       string     `json:"env_id"`
+    OrgID       *id.ID     `json:"org_id,omitempty"` // nil for app-level webhooks
+    Name        string     `json:"name"`
+    URL         string     `json:"url"`
+    Secret      string     `json:"-"`           // HMAC signing secret -- never exposed after creation
+    SecretHash  string     `json:"-"`           // stored hash
+    Events      []string   `json:"events"`      // subscribed event types
+    IsActive    bool       `json:"is_active"`
+    Headers     map[string]string `json:"headers,omitempty"` // custom HTTP headers
+    MaxRetries  int        `json:"max_retries"` // 0-5, default 3
+    TimeoutMs   int        `json:"timeout_ms"`  // delivery timeout, default 5000
+    CreatedAt   time.Time  `json:"created_at"`
+    UpdatedAt   time.Time  `json:"updated_at"`
+}
+```
+
+## All event types
+
+Authsome emits 31 event types grouped by category:
+
+### User events
+
+| Event | Description |
+|-------|-------------|
+| `user.created` | A new user account was created |
+| `user.updated` | User profile information was updated |
+| `user.deleted` | A user account was permanently deleted |
+
+### Session events
+
+| Event | Description |
+|-------|-------------|
+| `session.created` | A new session was created (sign-in) |
+| `session.revoked` | A session was revoked (sign-out or forced termination) |
+
+### Auth events
+
+| Event | Description |
+|-------|-------------|
+| `auth.signin` | Successful sign-in |
+| `auth.signin.failed` | Failed sign-in attempt |
+| `auth.signout` | User signed out |
+| `auth.password.reset` | Password was reset |
+| `auth.mfa.enabled` | MFA was enabled on the account |
+| `auth.mfa.enrolled` | A specific MFA method was enrolled (TOTP, SMS, etc.) |
+| `auth.mfa.verified` | An MFA challenge was successfully verified |
+| `auth.mfa.challenged` | An MFA challenge was initiated |
+| `auth.mfa.disabled` | MFA was disabled on the account |
+
+### Passkey events
+
+| Event | Description |
+|-------|-------------|
+| `passkey.registered` | A new passkey (WebAuthn credential) was registered |
+| `passkey.authenticated` | Authentication via passkey succeeded |
+| `passkey.deleted` | A passkey credential was removed |
+
+### Social events
+
+| Event | Description |
+|-------|-------------|
+| `social.signin` | Sign-in via a social OAuth provider (Google, GitHub, etc.) |
+| `social.signup` | New account created via social OAuth |
+
+### SSO events
+
+| Event | Description |
+|-------|-------------|
+| `sso.signin` | Sign-in via enterprise SSO (OIDC or SAML) |
+| `sso.signup` | New account created via enterprise SSO |
+
+### Organization events
+
+| Event | Description |
+|-------|-------------|
+| `org.created` | A new organization was created |
+| `org.updated` | Organization details were updated |
+| `org.member.invited` | A user was invited to the organization |
+| `org.member.joined` | An invited user accepted and joined |
+| `org.member.removed` | A member was removed from the organization |
+| `org.member.role_changed` | A member's role was changed |
+
+### Environment events
+
+| Event | Description |
+|-------|-------------|
+| `environment.created` | A new environment was created |
+| `environment.updated` | Environment settings were updated |
+| `environment.deleted` | An environment was deleted |
+| `environment.cloned` | An environment was cloned from another |
+
+### API key events
+
+| Event | Description |
+|-------|-------------|
+| `apikey.created` | A new API key was created |
+| `apikey.revoked` | An API key was revoked |
+
+### Consent events
+
+| Event | Description |
+|-------|-------------|
+| `consent.granted` | A user granted consent |
+| `consent.revoked` | A user revoked a previously granted consent |
+
+## Creating a webhook
+
+```go
+import "github.com/xraph/authsome/webhook"
+
+result, err := auth.Webhooks().Create(ctx, &webhook.CreateInput{
+    Name: "My Backend Notifications",
+    URL:  "https://api.myapp.com/authsome/events",
+    Events: []string{
+        "user.created",
+        "user.deleted",
+        "auth.signin",
+        "auth.signin.failed",
+        "session.revoked",
+    },
+    Headers: map[string]string{
+        "X-Source": "authsome",
+    },
+    MaxRetries: 3,
+    TimeoutMs:  5000,
+})
+if err != nil {
+    return err
+}
+
+// result.Secret is the signing secret -- only available at creation time.
+fmt.Printf("webhook created: id=%s secret=%s\n", result.Webhook.ID, result.Secret)
+```
+
+<Callout type="warn">
+The webhook signing secret is returned only once at creation time and is not stored in plain text. Store it securely (e.g., in your secrets manager). If you lose it, rotate it using `auth.Webhooks().RotateSecret(ctx, webhookID)`.
+</Callout>
+
+## Listing and managing webhooks
+
+```go
+// List all webhooks.
+result, err := auth.Webhooks().List(ctx, &webhook.ListInput{Limit: 50})
+
+// Get a specific webhook.
+w, err := auth.Webhooks().GetByID(ctx, webhookID)
+
+// Update a webhook (e.g., change subscribed events).
+updated, err := auth.Webhooks().Update(ctx, webhookID, &webhook.UpdateInput{
+    Events: []string{"user.created", "user.deleted"},
+    IsActive: true,
+})
+
+// Deactivate (pause delivery without deleting).
+err := auth.Webhooks().Deactivate(ctx, webhookID)
+
+// Delete permanently.
+err := auth.Webhooks().Delete(ctx, webhookID)
+
+// Rotate the signing secret.
+result, err := auth.Webhooks().RotateSecret(ctx, webhookID)
+// result.NewSecret is the new secret -- only available here.
+```
+
+## Webhook payload
+
+Every webhook request is an HTTP POST with a JSON body:
+
+```json
+{
+  "id": "awhke_01h455vb4pex5vsknk084sn02q",
+  "event": "auth.signin",
+  "app_id": "myapp",
+  "env_id": "aenv_01h455vb...",
+  "occurred_at": "2024-03-15T14:30:00Z",
+  "data": {
+    "user": {
+      "id": "ausr_01h455vb...",
+      "email": "alice@example.com",
+      "display_name": "Alice Nguyen"
+    },
+    "session": {
+      "id": "ases_01h455vb...",
+      "ip": "203.0.113.42",
+      "user_agent": "Mozilla/5.0 ..."
+    }
+  }
+}
+```
+
+The `data` field shape varies by event type. Each event type's data schema is specific to what changed.
+
+## HMAC signature verification
+
+Every webhook request includes an `X-Authsome-Signature` header containing an HMAC-SHA256 signature of the raw request body. Verify this signature on your endpoint before processing the payload:
+
+```go
+package webhookhandler
+
+import (
+    "crypto/hmac"
+    "crypto/sha256"
+    "encoding/hex"
+    "io"
+    "net/http"
+)
+
+func HandleAuthsomeWebhook(secret string) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        body, err := io.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, "cannot read body", http.StatusBadRequest)
+            return
+        }
+
+        // Verify HMAC-SHA256 signature.
+        sig := r.Header.Get("X-Authsome-Signature")
+        mac := hmac.New(sha256.New, []byte(secret))
+        mac.Write(body)
+        expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+        if !hmac.Equal([]byte(sig), []byte(expected)) {
+            http.Error(w, "invalid signature", http.StatusUnauthorized)
+            return
+        }
+
+        // Process the verified payload.
+        var payload map[string]any
+        json.Unmarshal(body, &payload)
+        // ...
+
+        w.WriteHeader(http.StatusOK)
+    }
+}
+```
+
+### Signature headers
+
+| Header | Description |
+|--------|-------------|
+| `X-Authsome-Signature` | `sha256=<hex-encoded HMAC>` |
+| `X-Authsome-Event` | The event type string (e.g. `auth.signin`) |
+| `X-Authsome-Delivery` | A unique UUID for this delivery attempt |
+| `X-Authsome-Timestamp` | Unix timestamp of delivery (use to reject old replays) |
+
+## Delivery and retry
+
+When Authsome fires a webhook:
+
+1. The event payload is built and signed.
+2. An HTTP POST is sent to the endpoint URL with a configurable timeout (`TimeoutMs`, default 5000ms).
+3. Any 2xx response is considered a success.
+4. On failure (non-2xx, timeout, or connection error), delivery is retried up to `MaxRetries` times with exponential backoff.
+5. All delivery attempts (including failures) are logged in the webhook delivery log.
+
+```go
+// View delivery attempts for a webhook.
+deliveries, err := auth.Webhooks().ListDeliveries(ctx, webhookID, &webhook.ListDeliveriesInput{
+    Limit: 50,
+})
+
+for _, d := range deliveries {
+    fmt.Printf("  [%s] attempt=%d status=%d success=%v\n",
+        d.CreatedAt.Format(time.RFC3339),
+        d.Attempt,
+        d.ResponseStatus,
+        d.Success,
+    )
+}
+
+// Manually retry a failed delivery.
+err := auth.Webhooks().RetryDelivery(ctx, webhookID, deliveryID)
+```
+
+## Relay bridge integration
+
+[Relay](https://github.com/xraph/relay) is the Forge-ecosystem's event bus. When Relay is configured, Authsome publishes every event to Relay in addition to (or instead of) direct HTTP webhook delivery. This lets other services in your platform subscribe to authentication events without going through HTTP.
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/webhook/relay"
+)
+
+auth := authsome.New(
+    authsome.WithWebhookBridge(relay.NewBridge(
+        relay.WithEndpoint("https://relay.internal:8080"),
+        relay.WithAPIKey(os.Getenv("RELAY_API_KEY")),
+        relay.WithTopic("authsome.events"),
+        relay.WithAsync(true),
+    )),
+)
+```
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/webhooks` | Create a new webhook |
+| `GET` | `/webhooks` | List all webhooks |
+| `GET` | `/webhooks/:webhook_id` | Get a webhook by ID |
+| `PATCH` | `/webhooks/:webhook_id` | Update a webhook |
+| `DELETE` | `/webhooks/:webhook_id` | Delete a webhook |
+| `POST` | `/webhooks/:webhook_id/deactivate` | Pause webhook delivery |
+| `POST` | `/webhooks/:webhook_id/activate` | Resume webhook delivery |
+| `POST` | `/webhooks/:webhook_id/rotate-secret` | Rotate the signing secret |
+| `GET` | `/webhooks/:webhook_id/deliveries` | List delivery attempts |
+| `POST` | `/webhooks/:webhook_id/deliveries/:delivery_id/retry` | Retry a failed delivery |
+| `POST` | `/webhooks/test` | Send a test event to a webhook URL |

@@ -1,0 +1,30 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+)
+
+// CredentialsPage renders the passkey credentials overview.
+templ CredentialsPage() {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Passkeys</h1>
+			<p class="text-muted-foreground mt-1">WebAuthn/FIDO2 passkey credentials across your application.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Credentials
+				}
+				@card.Description() {
+					Passkey data is available on individual user detail pages
+				}
+			}
+			@card.Content() {
+				<p class="text-sm text-muted-foreground py-4 text-center">
+					Passkey credentials are scoped to individual users. Visit a user's detail page to manage their passkeys.
+				</p>
+			}
+		}
+	</div>
+}

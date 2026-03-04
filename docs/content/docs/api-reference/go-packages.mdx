@@ -1,0 +1,437 @@
+---
+title: Go Packages
+description: Quick reference for all Authsome Go packages and their public APIs.
+---
+
+All Authsome packages are importable from `github.com/xraph/authsome`.
+
+## Core packages
+
+### `github.com/xraph/authsome`
+
+Root package. Exports the engine constructor, configuration types, and functional options.
+
+| Export | Description |
+|--------|-------------|
+| `New(...Option) (*Engine, error)` | Create an Authsome engine |
+| `Config` | Engine configuration struct |
+| `PasswordConfig` | Password policy configuration |
+| `SessionConfig` | Session behavior configuration |
+| `MFAConfig` | Multi-factor authentication configuration |
+| `PhoneConfig` | Phone authentication configuration |
+| `OAuth2Config` | OAuth2 provider configuration |
+| `JWTConfig` | JWT signing configuration |
+| `RateLimitConfig` | Rate limiting configuration |
+| `WithStore(store.Store)` | Set the primary data store |
+| `WithPlugin(Plugin)` | Register an authentication plugin |
+| `WithConfig(Config)` | Set engine configuration |
+| `WithMFAStore(mfa.Store)` | Set the MFA enrollment store |
+| `WithSMSSender(bridge.SMSSender)` | Set the SMS bridge |
+| `WithMailer(bridge.Mailer)` | Set the email bridge |
+| `WithPasswordHistory(store)` | Set the password history store |
+| `WithRateLimiter(ratelimit.Limiter)` | Set the rate limiter |
+| `WithLockout(lockout.Lockout)` | Set the account lockout handler |
+| `WithLogger(logger)` | Set the logger |
+
+### `github.com/xraph/authsome/engine`
+
+The central engine with all authentication and management operations.
+
+| Export | Description |
+|--------|-------------|
+| `Engine.Start(ctx)` | Initialize the engine |
+| `Engine.Stop(ctx)` | Graceful shutdown |
+| `Engine.SignUp(ctx, req)` | Create user account and session |
+| `Engine.SignIn(ctx, req)` | Authenticate user |
+| `Engine.SignOut(ctx, sessionID)` | Revoke a session |
+| `Engine.Refresh(ctx, refreshToken)` | Refresh session tokens |
+| `Engine.GetMe(ctx, userID)` | Get user profile |
+| `Engine.UpdateMe(ctx, user)` | Update user profile |
+| `Engine.DeleteAccount(ctx, userID)` | Delete user account (GDPR) |
+| `Engine.ExportUserData(ctx, userID)` | Export all user data (GDPR) |
+| `Engine.ForgotPassword(ctx, appID, email)` | Initiate password reset |
+| `Engine.ResetPassword(ctx, token, newPassword)` | Complete password reset |
+| `Engine.ChangePassword(ctx, userID, current, new)` | Change password |
+| `Engine.VerifyEmail(ctx, token)` | Verify email address |
+| `Engine.Impersonate(ctx, adminID, targetID, appID)` | Create impersonation session |
+| `Engine.ListSessions(ctx, userID)` | List user sessions |
+| `Engine.RevokeSession(ctx, sessionID)` | Revoke a specific session |
+| `Engine.RevokeAllSessions(ctx, userID)` | Revoke all user sessions |
+| `Engine.ValidateToken(ctx, token)` | Validate a session token |
+| `Engine.ListUserDevices(ctx, userID)` | List tracked devices |
+| `Engine.GetDevice(ctx, deviceID)` | Get device by ID |
+| `Engine.DeleteDevice(ctx, deviceID)` | Remove a device |
+| `Engine.TrustDevice(ctx, deviceID)` | Mark device as trusted |
+| `Engine.CreateWebhook(ctx, webhook)` | Register a webhook |
+| `Engine.GetWebhook(ctx, webhookID)` | Get webhook by ID |
+| `Engine.UpdateWebhook(ctx, webhook)` | Update a webhook |
+| `Engine.DeleteWebhook(ctx, webhookID)` | Delete a webhook |
+| `Engine.ListWebhooks(ctx, appID)` | List webhooks for an app |
+| `Engine.CreateRole(ctx, role)` | Create an RBAC role |
+| `Engine.GetRole(ctx, roleID)` | Get role by ID |
+| `Engine.UpdateRole(ctx, role)` | Update a role |
+| `Engine.DeleteRole(ctx, roleID)` | Delete a role |
+| `Engine.ListRoles(ctx, appID)` | List roles for an app |
+| `Engine.AddPermission(ctx, perm)` | Add permission to a role |
+| `Engine.ListRolePermissions(ctx, roleID)` | List role permissions |
+| `Engine.RemovePermission(ctx, permID)` | Remove a permission |
+| `Engine.AssignUserRole(ctx, userRole)` | Assign role to user |
+| `Engine.UnassignUserRole(ctx, userID, roleID)` | Unassign role |
+| `Engine.ListUserRoles(ctx, userID)` | List user roles |
+
+## Entity packages
+
+### `github.com/xraph/authsome/user`
+
+User entity and store interface.
+
+| Export | Description |
+|--------|-------------|
+| `User` | User struct with all profile fields |
+| `Metadata` | `map[string]string` for custom fields |
+| `UserQuery` | Query parameters for listing/filtering users |
+| `UserList` | Paginated user list response |
+| `Store` | User persistence interface |
+
+### `github.com/xraph/authsome/session`
+
+Session entity and store interface.
+
+| Export | Description |
+|--------|-------------|
+| `Session` | Session struct with tokens and metadata |
+| `Store` | Session persistence interface |
+
+### `github.com/xraph/authsome/device`
+
+Device tracking entity and store interface.
+
+| Export | Description |
+|--------|-------------|
+| `Device` | Device struct with fingerprint and trust status |
+| `Store` | Device persistence interface |
+
+### `github.com/xraph/authsome/organization`
+
+Organization, member, invitation, and team entities.
+
+| Export | Description |
+|--------|-------------|
+| `Organization` | Organization struct |
+| `Member` | Membership struct with role |
+| `MemberRole` | Role type (`owner`, `admin`, `member`) |
+| `Invitation` | Invitation struct with status |
+| `InvitationStatus` | Status type (`pending`, `accepted`, `expired`, `declined`) |
+| `Team` | Team struct |
+| `Metadata` | `map[string]string` for org metadata |
+| `Store` | Organization persistence interface |
+
+### `github.com/xraph/authsome/webhook`
+
+Webhook entity and store interface.
+
+| Export | Description |
+|--------|-------------|
+| `Webhook` | Webhook struct with URL, events, and secret |
+| `Store` | Webhook persistence interface |
+
+### `github.com/xraph/authsome/app`
+
+Application entity and store interface.
+
+| Export | Description |
+|--------|-------------|
+| `App` | Application struct |
+| `Store` | App persistence interface |
+
+### `github.com/xraph/authsome/rbac`
+
+Role-based access control entities and store interface.
+
+| Export | Description |
+|--------|-------------|
+| `Role` | Role struct |
+| `Permission` | Permission struct (action + resource) |
+| `UserRole` | User-role assignment |
+| `Store` | RBAC persistence interface |
+
+## Authentication packages
+
+### `github.com/xraph/authsome/account`
+
+Account lifecycle operations: password hashing, validation, session creation.
+
+| Export | Description |
+|--------|-------------|
+| `SignUpRequest` | Signup request struct |
+| `SignInRequest` | Signin request struct |
+| `SessionConfig` | Session token configuration |
+| `NewSession(appID, userID, cfg)` | Create a new session |
+| `HashPasswordWithPolicy(password, policy)` | Hash a password |
+| `NeedsRehash(hash, policy)` | Check if hash needs migration |
+| `Store` | Account lifecycle store (verification, password reset) |
+| `Verification` | Email verification record |
+| `PasswordReset` | Password reset record |
+| `ErrInvalidCredentials` | Invalid email/password |
+| `ErrEmailTaken` | Email already registered |
+| `ErrUsernameTaken` | Username already registered |
+| `ErrUserBanned` | User is banned |
+| `ErrSessionExpired` | Session has expired |
+| `ErrWeakPassword` | Password fails policy |
+| `ErrPasswordReused` | Password matches history |
+
+### `github.com/xraph/authsome/strategy`
+
+Authentication strategy interface.
+
+| Export | Description |
+|--------|-------------|
+| `Strategy` | Strategy interface (`Name()`, `Authenticate()`) |
+| `Result` | Authentication result (user, session, is-new) |
+| `ErrStrategyNotApplicable` | Strategy does not apply to request |
+
+### `github.com/xraph/authsome/plugins/password`
+
+Password authentication plugin.
+
+| Export | Description |
+|--------|-------------|
+| `New(config ...Config) Strategy` | Create password strategy |
+| `Config` | Plugin config (allowed domains) |
+
+### `github.com/xraph/authsome/plugins/mfa`
+
+Multi-factor authentication plugin.
+
+| Export | Description |
+|--------|-------------|
+| `Enrollment` | MFA enrollment record |
+| `RecoveryCode` | Recovery code record |
+| `SMSChallenge` | Pending SMS challenge |
+| `TOTPConfig` | TOTP generation config |
+| `Store` | MFA persistence interface |
+| `GenerateTOTPKey(cfg)` | Generate TOTP secret |
+| `ValidateTOTP(code, secret)` | Validate TOTP code |
+| `GenerateTOTPCode(secret)` | Generate TOTP code (testing) |
+| `GenerateSMSCode(length)` | Generate random numeric code |
+| `SendSMSChallenge(ctx, sender, phone)` | Send SMS and return challenge |
+| `ValidateSMSCode(code, challenge)` | Validate SMS code |
+| `GenerateRecoveryCodes(userID, count)` | Generate recovery codes |
+| `VerifyRecoveryCode(plaintext, code)` | Verify a recovery code |
+| `DefaultRecoveryCodeCount` | Default: 8 |
+
+### `github.com/xraph/authsome/plugins/social`
+
+Social OAuth login plugin (Google, GitHub, Apple, Microsoft, etc.).
+
+### `github.com/xraph/authsome/plugins/sso`
+
+Enterprise SSO plugin (SAML, OIDC).
+
+### `github.com/xraph/authsome/plugins/passkey`
+
+WebAuthn/passkey authentication plugin.
+
+### `github.com/xraph/authsome/plugins/email`
+
+Magic link (email-based passwordless) plugin.
+
+## Configuration packages
+
+### `github.com/xraph/authsome/formconfig`
+
+Dynamic form configuration and branding.
+
+| Export | Description |
+|--------|-------------|
+| `FormConfig` | Form schema definition |
+| `FormField` | Individual field definition |
+| `FieldType` | Field type constants |
+| `Validation` | Field validation rules |
+| `SelectOption` | Option for select/radio/checkbox |
+| `BrandingConfig` | Per-org branding configuration |
+| `FormTypeSignup` | Constant: `"signup"` |
+
+### `github.com/xraph/authsome/appsessionconfig`
+
+Per-app session configuration overrides.
+
+| Export | Description |
+|--------|-------------|
+| `Config` | Per-app session config (TTL, format, binding) |
+| `Store` | Persistence interface |
+| `ErrNotFound` | No config exists for app |
+
+## Store packages
+
+### `github.com/xraph/authsome/store`
+
+Composite store interface embedding all subsystem stores.
+
+| Export | Description |
+|--------|-------------|
+| `Store` | Composite interface (user, session, device, org, webhook, etc.) |
+| `ErrNotFound` | Record not found |
+
+### `github.com/xraph/authsome/store/postgres`
+
+PostgreSQL backend via Grove ORM with embedded migrations.
+
+### `github.com/xraph/authsome/store/sqlite`
+
+SQLite backend via Grove ORM.
+
+### `github.com/xraph/authsome/store/mongo`
+
+MongoDB backend.
+
+### `github.com/xraph/authsome/store/memory`
+
+In-memory backend for testing.
+
+## Bridge packages
+
+### `github.com/xraph/authsome/bridge`
+
+Bridge interfaces for external integrations.
+
+| Export | Description |
+|--------|-------------|
+| `SMSSender` | SMS sending interface |
+| `SMSMessage` | SMS message struct |
+| `Mailer` | Email sending interface |
+| `ErrSMSNotAvailable` | No SMS bridge configured |
+
+### `github.com/xraph/authsome/bridge/smsadapter`
+
+SMS bridge implementations.
+
+| Export | Description |
+|--------|-------------|
+| `NewTwilioSender(sid, token, from)` | Twilio SMS sender |
+
+### `github.com/xraph/authsome/bridge/maileradapter`
+
+Email bridge implementations.
+
+| Export | Description |
+|--------|-------------|
+| `NewResendMailer(apiKey)` | Resend email sender |
+| `NewSMTPMailer(config)` | SMTP email sender |
+
+## Infrastructure packages
+
+### `github.com/xraph/authsome/middleware`
+
+HTTP middleware for authentication, rate limiting, and RBAC.
+
+| Export | Description |
+|--------|-------------|
+| `Auth(engine)` | Session validation middleware |
+| `RateLimit(limiter, cfg)` | Rate limiting middleware |
+| `RBAC(engine)` | Role-based access control middleware |
+| `UserIDFrom(ctx)` | Extract user ID from context |
+| `SessionIDFrom(ctx)` | Extract session ID from context |
+
+### `github.com/xraph/authsome/ratelimit`
+
+Rate limiting interfaces and implementations.
+
+| Export | Description |
+|--------|-------------|
+| `Limiter` | Rate limiter interface |
+| `NewMemoryLimiter()` | In-memory sliding window limiter |
+| `NewNoopLimiter()` | No-op limiter (disabled) |
+
+### `github.com/xraph/authsome/lockout`
+
+Account lockout interfaces and implementations.
+
+| Export | Description |
+|--------|-------------|
+| `Lockout` | Lockout interface |
+| `NewMemoryLockout()` | In-memory lockout tracker |
+| `NewNoopLockout()` | No-op lockout (disabled) |
+
+### `github.com/xraph/authsome/api`
+
+Forge-native HTTP handlers.
+
+| Export | Description |
+|--------|-------------|
+| `New(engine, router)` | Create the API handler |
+| `RegisterRoutes(router)` | Mount all HTTP endpoints |
+
+### `github.com/xraph/authsome/extension`
+
+Forge framework extension adapter.
+
+| Export | Description |
+|--------|-------------|
+| `New(...Option) *Extension` | Create the Forge extension |
+| `Extension.Name()` | Returns `"authsome"` |
+| `Extension.Version()` | Returns current version |
+| `Extension.Engine()` | Access the underlying engine |
+| `Extension.Middlewares()` | Returns auth middleware stack |
+
+### `github.com/xraph/authsome/ceremony`
+
+Temporary data store for multi-step flows (PKCE, WebAuthn).
+
+| Export | Description |
+|--------|-------------|
+| `Store` | Key-value store with TTL |
+
+## ID package
+
+### `github.com/xraph/authsome/id`
+
+TypeID-based identifiers (UUIDv7, K-sortable) for all entities.
+
+```go
+func NewUserID() UserID
+func NewSessionID() SessionID
+func NewAppID() AppID
+func NewDeviceID() DeviceID
+func NewOrgID() OrgID
+func NewMemberID() MemberID
+func NewInvitationID() InvitationID
+func NewTeamID() TeamID
+func NewWebhookID() WebhookID
+func NewRoleID() RoleID
+func NewPermissionID() PermissionID
+func NewMFAID() MFAID
+func NewRecoveryCodeID() RecoveryCodeID
+func NewFormConfigID() FormConfigID
+func NewBrandingConfigID() BrandingConfigID
+func NewAppSessionConfigID() AppSessionConfigID
+func NewEnvironmentID() EnvironmentID
+
+func ParseUserID(s string) (UserID, error)
+func ParseSessionID(s string) (SessionID, error)
+func ParseAppID(s string) (AppID, error)
+func ParseDeviceID(s string) (DeviceID, error)
+func ParseOrgID(s string) (OrgID, error)
+// ... Parse functions for all ID types
+```
+
+All IDs implement `String() string` and are based on TypeID (UUIDv7, K-sortable). Prefixes:
+
+| Prefix | Entity |
+|--------|--------|
+| `ausr_` | User |
+| `ases_` | Session |
+| `aapp_` | App |
+| `adev_` | Device |
+| `aorg_` | Organization |
+| `ambr_` | Member |
+| `ainv_` | Invitation |
+| `atm_` | Team |
+| `awhk_` | Webhook |
+| `arol_` | Role |
+| `aprm_` | Permission |
+| `amfa_` | MFA Enrollment |
+| `arc_` | Recovery Code |
+| `afcf_` | FormConfig |
+| `abrd_` | BrandingConfig |
+| `aenv_` | Environment |

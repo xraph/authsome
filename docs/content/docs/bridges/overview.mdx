@@ -1,0 +1,174 @@
+---
+title: Bridges
+description: Optional integration adapters that connect Authsome to the broader Forgery ecosystem.
+---
+
+Bridges are Authsome's extension point for optional third-party and Forgery ecosystem integrations. Each bridge is a thin Go interface defined in the `github.com/xraph/authsome/bridge` package. You implement the interface yourself, use one of the provided adapter packages, or use the built-in no-op stubs for local development.
+
+When a bridge is not configured, Authsome uses a sensible default: audit events go to `slog`, webhook delivery is dropped with a debug log, emails are logged and discarded. Your application always starts and runs — bridges are opt-in enhancements, not requirements.
+
+## The bridge pattern
+
+Each bridge follows the same pattern:
+
+1. **Interface** — defined in `github.com/xraph/authsome/bridge`. Narrow by design (1–4 methods).
+2. **Adapter package** — a thin translation layer in `github.com/xraph/authsome/bridge/<name>adapter` that wraps the real extension client.
+3. **Stub** — a no-op implementation in `bridge/stubs.go` used as a fallback when the bridge is not configured.
+4. **Option** — a `With*` function on the engine for registering the bridge.
+
+```
+authsome/
+├── bridge/
+│   ├── chronicle.go       ← Chronicle interface + AuditEvent type
+│   ├── relay.go           ← EventRelay interface + WebhookEvent type
+│   ├── herald.go          ← Herald interface
+│   ├── vault.go           ← Vault interface
+│   ├── dispatch.go        ← Dispatcher interface
+│   ├── ledger.go          ← Ledger interface
+│   ├── warden.go          ← Authorizer interface
+│   ├── keysmith.go        ← KeyManager interface
+│   ├── mailer.go          ← Mailer interface
+│   ├── sms.go             ← SMSSender interface
+│   ├── metrics.go         ← MetricsCollector interface
+│   └── stubs.go           ← No-op implementations for all bridges
+└── bridge/
+    ├── chronicleadapter/  ← Wraps *chronicle.Engine
+    ├── relayadapter/      ← Wraps *relay.Engine
+    ├── heraldadapter/     ← Wraps *herald.Engine
+    ├── vaultadapter/      ← Wraps *vault.Vault
+    ├── dispatchadapter/   ← Wraps *dispatch.Engine
+    ├── ledgeradapter/     ← Wraps *ledger.Engine
+    ├── wardenadapter/     ← Wraps *warden.Engine
+    ├── keysmithadapter/   ← Wraps *keysmith.Engine
+    ├── maileradapter/     ← Wraps email providers
+    └── smsadapter/        ← Wraps SMS providers
+```
+
+## Available bridges
+
+| Bridge | Option | Interface | What it does |
+|--------|--------|-----------|-------------|
+| **Chronicle** | `WithChronicle` | `bridge.Chronicle` | Records all auth events to an audit trail |
+| **Relay** | `WithEventRelay` | `bridge.EventRelay` | Delivers webhook payloads to subscribers |
+| **Herald** | `WithHerald` | `bridge.Herald` | Multi-channel notifications (email, SMS, push) |
+| **Vault** | `WithVault` | `bridge.Vault` | Secrets management and feature flags |
+| **Dispatch** | `WithDispatcher` | `bridge.Dispatcher` | Background job queue for async tasks |
+| **Ledger** | `WithLedger` | `bridge.Ledger` | Billing metering and entitlement checks |
+| **Warden** | `WithWarden` / `WithAuthorizer` | `bridge.Authorizer` | Advanced RBAC and policy evaluation |
+| **Keysmith** | `WithKeysmith` / `WithKeyManager` | `bridge.KeyManager` | Centralized API key management |
+| **Mailer** | `WithMailer` | `bridge.Mailer` | Transactional email delivery |
+| **SMS** | `WithSMSSender` | `bridge.SMSSender` | SMS delivery for OTP and MFA codes |
+| **Metrics** | `WithMetrics` | `bridge.MetricsCollector` | Observability metrics export |
+
+## Registering bridges
+
+Bridges are registered using the corresponding `With*` option when constructing the engine:
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/chronicleadapter"
+    "github.com/xraph/authsome/bridge/relayadapter"
+    "github.com/xraph/authsome/bridge/maileradapter"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithPlugin(password.New()),
+
+    // Chronicle: audit all auth events.
+    authsome.WithChronicle(chronicleadapter.New(chronicleClient)),
+
+    // Relay: deliver webhook events reliably.
+    authsome.WithEventRelay(relayadapter.New(relayClient)),
+
+    // Mailer: send verification and reset emails.
+    authsome.WithMailer(maileradapter.NewResend(os.Getenv("RESEND_API_KEY"))),
+)
+```
+
+## Using the Forgery first-class bridge options
+
+For Warden and Keysmith, Authsome provides dedicated `With*` options that accept the concrete extension engine directly — you do not need to import the adapter package separately:
+
+```go
+import (
+    "github.com/xraph/warden"
+    "github.com/xraph/keysmith"
+)
+
+wardenEng, _ := warden.New(...)
+keysmithEng, _ := keysmith.New(...)
+
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    // WithWarden accepts *warden.Engine directly.
+    authsome.WithWarden(wardenEng),
+    // WithKeysmith accepts *keysmith.Engine directly.
+    authsome.WithKeysmith(keysmithEng),
+)
+```
+
+Both options internally wrap the engine in the appropriate adapter package and also set the `bridge.Authorizer` / `bridge.KeyManager` for backward compatibility.
+
+## No-op stubs for development
+
+When developing locally without the full Forgery stack, you can use the built-in stubs:
+
+```go
+import "github.com/xraph/authsome/bridge"
+
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    // Log audit events to slog instead of Chronicle.
+    authsome.WithChronicle(bridge.NewSlogChronicle(slog.Default())),
+    // Drop webhook events silently.
+    authsome.WithEventRelay(bridge.NewNoopRelay(slog.Default())),
+    // Log emails to debug instead of sending them.
+    authsome.WithMailer(bridge.NewNoopMailer(slog.Default())),
+)
+```
+
+## Custom bridge implementations
+
+You can implement any bridge interface directly if you want to integrate with a system that does not have a Forgery adapter:
+
+```go
+// Custom Mailer using SendGrid.
+type SendGridMailer struct {
+    client *sendgrid.Client
+    from   string
+}
+
+func (m *SendGridMailer) SendEmail(ctx context.Context, msg *bridge.EmailMessage) error {
+    message := mail.NewSingleEmail(
+        mail.NewEmail("", m.from),
+        msg.Subject,
+        mail.NewEmail("", msg.To[0]),
+        msg.Text,
+        msg.HTML,
+    )
+    _, err := m.client.SendWithContext(ctx, message)
+    return err
+}
+
+// Register with the engine.
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithMailer(&SendGridMailer{
+        client: sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY")),
+        from:   "noreply@myapp.com",
+    }),
+)
+```
+
+## Where to go next
+
+<Cards>
+  <Card title="Chronicle" href="/docs/bridges/chronicle" description="Audit logging for all auth events." />
+  <Card title="Relay" href="/docs/bridges/relay" description="Reliable webhook delivery." />
+  <Card title="Herald" href="/docs/bridges/herald" description="Multi-channel notification delivery." />
+  <Card title="Mailer" href="/docs/bridges/mailer" description="Transactional email for verification and resets." />
+  <Card title="Warden" href="/docs/bridges/warden" description="Advanced RBAC and policy evaluation." />
+  <Card title="Keysmith" href="/docs/bridges/keysmith" description="Centralized API key management." />
+</Cards>

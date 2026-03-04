@@ -1,0 +1,234 @@
+---
+title: Organization-Scoped Roles
+description: RBAC role assignments scoped to a specific organization, layered on top of global roles.
+---
+
+Authsome's RBAC system supports two assignment scopes: global and organization-scoped. Global roles apply across all of a user's organizations; org-scoped roles apply only when the user is operating within a specific organization. This lets you implement nuanced permission models where, for example, a user is a `viewer` globally but a `billing_manager` within their company's organization.
+
+## How org-scoped roles work
+
+When Authsome evaluates a permission check for a user, it assembles the full set of effective permissions from two sources:
+
+1. **Global role assignments** -- Roles assigned to the user that apply everywhere
+2. **Org-scoped role assignments** -- Roles assigned to the user within the current organization context
+
+The resulting permission set is the union of both. This means org-scoped roles are additive -- they can grant additional permissions beyond what the global assignment gives, but they cannot revoke global permissions.
+
+```
+Effective permissions = global role permissions ∪ org-scoped role permissions
+```
+
+The organization context is extracted from the request context at permission-check time. You inject it using `authsome.WithOrgID(ctx, orgID)`.
+
+## Assigning an org-scoped role
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/rbac"
+)
+
+// Assign the "billing_manager" role to a user within a specific org.
+err := auth.RBAC().AssignOrgRole(ctx, &rbac.AssignOrgRoleInput{
+    UserID: userID,
+    OrgID:  orgID,
+    RoleID: billingManagerRoleID,
+})
+if err != nil {
+    return err
+}
+```
+
+The `AssignOrgRole` call is idempotent -- if the user already has the role in that org, it returns without error.
+
+## Revoking an org-scoped role
+
+```go
+err := auth.RBAC().RevokeOrgRole(ctx, &rbac.RevokeOrgRoleInput{
+    UserID: userID,
+    OrgID:  orgID,
+    RoleID: billingManagerRoleID,
+})
+```
+
+## Listing org-scoped roles for a user
+
+```go
+// All org-scoped role assignments for a user in a specific org.
+assignments, err := auth.RBAC().ListUserOrgRoles(ctx, userID, orgID)
+
+for _, a := range assignments {
+    fmt.Printf("  role=%s assigned_at=%s\n", a.Role.Name, a.AssignedAt)
+}
+```
+
+## Checking org-scoped permissions
+
+Use `authsome.WithOrgID` to inject the org context before performing permission checks. The RBAC middleware does this automatically when it extracts the org from a request header or JWT claim.
+
+```go
+// Inject org context.
+ctx = authsome.WithOrgID(ctx, orgID)
+
+// Check permission in the org context.
+allowed, err := auth.RBAC().Can(ctx, userID, "read", "billing")
+```
+
+The `Can` call evaluates both global and org-scoped assignments for the user and returns `true` if any of them grant `read:billing`.
+
+## RBAC middleware with org context
+
+When using the built-in HTTP middleware, the org context is automatically extracted from a configurable source:
+
+```go
+import "github.com/xraph/authsome/middleware"
+
+// Extract org ID from the "X-Org-ID" request header.
+router.Use(middleware.OrgContext(auth, middleware.OrgFromHeader("X-Org-ID")))
+
+// Or from a JWT claim.
+router.Use(middleware.OrgContext(auth, middleware.OrgFromClaim("org_id")))
+
+// Or from a URL path parameter (for routers that support it).
+router.Use(middleware.OrgContext(auth, middleware.OrgFromPathParam("org_id")))
+```
+
+After this middleware runs, all downstream `auth.RBAC().Can(ctx, ...)` calls automatically include org-scoped permissions.
+
+## Org role model
+
+Org-scoped role assignments are stored in the `OrgRoleAssignment` model:
+
+```go
+type OrgRoleAssignment struct {
+    ID         id.ID     `json:"id"`
+    UserID     id.ID     `json:"user_id"`
+    OrgID      id.ID     `json:"org_id"`
+    RoleID     id.ID     `json:"role_id"`
+    AssignedBy id.ID     `json:"assigned_by"`
+    AssignedAt time.Time `json:"assigned_at"`
+
+    // Populated when fetched with details.
+    Role *Role `json:"role,omitempty"`
+}
+```
+
+## Defining roles for org use
+
+Roles themselves are not org-specific -- you define them globally and assign them in any scope. A well-structured role schema for org-scoped use might look like:
+
+```go
+// Create an org-level billing manager role.
+billingRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
+    Name:        "billing_manager",
+    DisplayName: "Billing Manager",
+    Description: "Can view and manage billing settings for an organization",
+    Permissions: []rbac.PermissionInput{
+        {Action: "read",   Resource: "billing"},
+        {Action: "update", Resource: "billing"},
+        {Action: "read",   Resource: "invoices"},
+        {Action: "export", Resource: "invoices"},
+    },
+})
+
+// Create an org-level viewer role.
+viewerRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
+    Name:        "org_viewer",
+    DisplayName: "Organization Viewer",
+    Description: "Read-only access to organization resources",
+    Permissions: []rbac.PermissionInput{
+        {Action: "read", Resource: "org"},
+        {Action: "read", Resource: "members"},
+        {Action: "read", Resource: "teams"},
+    },
+})
+```
+
+## Permission inheritance with parent roles
+
+Roles support hierarchical parent-child relationships. When a role has a parent, it inherits all the parent's permissions. This lets you build role hierarchies where `org_admin` inherits from `org_viewer`:
+
+```go
+// Assign viewer as the parent of admin.
+adminRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
+    Name:     "org_admin",
+    ParentID: &viewerRoleID,   // inherits all org_viewer permissions
+    Permissions: []rbac.PermissionInput{
+        {Action: "update", Resource: "org"},
+        {Action: "manage", Resource: "members"},
+        {Action: "manage", Resource: "teams"},
+    },
+})
+```
+
+See [Role-Based Access Control](/docs/security/rbac) for the full role model and permission system documentation.
+
+## Full example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/rbac"
+)
+
+func setupOrgRBAC(auth *authsome.Authsome, ctx context.Context) error {
+    // 1. Create org-scoped roles.
+    viewerRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
+        Name:        "org_viewer",
+        DisplayName: "Org Viewer",
+        Permissions: []rbac.PermissionInput{
+            {Action: "read", Resource: "org"},
+            {Action: "read", Resource: "members"},
+        },
+    })
+    if err != nil {
+        return err
+    }
+
+    editorRole, err := auth.RBAC().CreateRole(ctx, &rbac.CreateRoleInput{
+        Name:        "org_editor",
+        DisplayName: "Org Editor",
+        ParentID:    &viewerRole.ID,
+        Permissions: []rbac.PermissionInput{
+            {Action: "update", Resource: "org"},
+            {Action: "manage", Resource: "members"},
+        },
+    })
+    if err != nil {
+        return err
+    }
+
+    // 2. Assign the editor role to a user within a specific org.
+    err = auth.RBAC().AssignOrgRole(ctx, &rbac.AssignOrgRoleInput{
+        UserID: userID,
+        OrgID:  orgID,
+        RoleID: editorRole.ID,
+    })
+    if err != nil {
+        return err
+    }
+
+    // 3. Check permission in the org context.
+    ctx = authsome.WithOrgID(ctx, orgID)
+    allowed, err := auth.RBAC().Can(ctx, userID, "manage", "members")
+    if err != nil {
+        return err
+    }
+    fmt.Printf("can manage members: %v\n", allowed) // true
+    return nil
+}
+```
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/orgs/:org_id/roles` | Assign a role to a user within an org |
+| `DELETE` | `/orgs/:org_id/roles/:assignment_id` | Revoke an org-scoped role assignment |
+| `GET` | `/orgs/:org_id/users/:user_id/roles` | List all org-scoped role assignments for a user |
+| `GET` | `/orgs/:org_id/roles/check` | Check if the current user has a permission in this org |

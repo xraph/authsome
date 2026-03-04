@@ -1,0 +1,294 @@
+---
+title: Next.js Integration
+description: Server sessions, Edge middleware, cookie storage, and pre-built pages for Next.js via @authsome/ui-nextjs.
+---
+
+`@authsome/ui-nextjs` extends the React package with server-side utilities for Next.js. It provides session validation in Server Components, Edge middleware for route protection, cookie-based token storage, and pre-built authentication pages.
+
+## Installation
+
+```bash
+npm install @authsome/ui-nextjs @authsome/ui-react @authsome/ui-core @authsome/ui-components
+```
+
+## Server-side features
+
+### getServerSession
+
+Read and validate the session cookie in Server Components or Route Handlers. Returns a `ServerSession` with the validated `User` and `sessionToken`, or `null` if there is no valid session.
+
+```tsx
+// app/dashboard/page.tsx
+import { getServerSession } from "@authsome/ui-nextjs";
+import { redirect } from "next/navigation";
+
+export default async function DashboardPage() {
+  const session = await getServerSession({
+    baseURL: process.env.AUTHSOME_API_URL!,
+  });
+
+  if (!session) {
+    redirect("/sign-in");
+  }
+
+  return (
+    <div>
+      <h1>Welcome, {session.user.name}</h1>
+      <p>Email: {session.user.email}</p>
+    </div>
+  );
+}
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | -- | Authsome API URL |
+| `cookieName` | `string` | `"authsome:session_token"` | Cookie name for the session token |
+
+### createCookieStorage
+
+Creates a `TokenStorage` implementation backed by `document.cookie`. Use this in the client-side `AuthProvider` so that session tokens are stored as cookies, making them accessible to both the Edge middleware and server components.
+
+```tsx
+// app/providers.tsx
+"use client";
+
+import { AuthProvider } from "@authsome/ui-nextjs";
+import { createCookieStorage } from "@authsome/ui-nextjs";
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider
+      baseURL={process.env.NEXT_PUBLIC_AUTHSOME_URL!}
+      storage={createCookieStorage()}
+    >
+      {children}
+    </AuthProvider>
+  );
+}
+```
+
+#### Cookie options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `path` | `string` | `"/"` | Cookie path |
+| `sameSite` | `"strict" \| "lax" \| "none"` | `"lax"` | SameSite attribute |
+| `secure` | `boolean` | `true` in HTTPS | Set the Secure flag |
+| `maxAge` | `number` | 30 days (seconds) | Cookie Max-Age in seconds |
+
+## Middleware
+
+### createAuthMiddleware
+
+Creates a Next.js Edge middleware that protects routes behind authentication. Unauthenticated users are redirected to the sign-in page. The middleware validates the session token against the Authsome API on every request.
+
+```ts
+// middleware.ts
+import { createAuthMiddleware } from "@authsome/ui-nextjs/middleware";
+
+export default createAuthMiddleware({
+  baseURL: process.env.AUTHSOME_API_URL!,
+  signInPage: "/sign-in",
+  publicPaths: ["/", "/sign-in", "/sign-up", "/forgot-password", "/api/public/*"],
+});
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
+```
+
+#### Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | -- | Authsome API URL |
+| `signInPage` | `string` | `"/sign-in"` | Redirect target for unauthenticated users |
+| `publicPaths` | `string[]` | `["/", signInPage]` | Paths that do not require authentication. Supports glob suffixes with `*` |
+| `cookieName` | `string` | `"authsome:session_token"` | Cookie name to read |
+
+The middleware appends a `?redirect=` query parameter to the sign-in URL so you can redirect users back after authentication.
+
+## Pre-built pages
+
+The package ships pre-built Next.js page components that combine the styled components with routing logic:
+
+| Page | Import path | Description |
+|------|------------|-------------|
+| `SignInPage` | `@authsome/ui-nextjs/pages` | Full-page sign-in with social providers |
+| `SignUpPage` | `@authsome/ui-nextjs/pages` | Full-page registration |
+| `ForgotPasswordPage` | `@authsome/ui-nextjs/pages` | Request password reset |
+| `ResetPasswordPage` | `@authsome/ui-nextjs/pages` | Set new password from token |
+| `MagicLinkPage` | `@authsome/ui-nextjs/pages` | Passwordless sign-in |
+| `MFAChallengePage` | `@authsome/ui-nextjs/pages` | MFA verification |
+| `UserProfilePage` | `@authsome/ui-nextjs/pages` | Profile management |
+
+### Using pre-built pages
+
+```tsx
+// app/sign-in/page.tsx
+import { SignInPage } from "@authsome/ui-nextjs/pages";
+
+export default function Page() {
+  return <SignInPage />;
+}
+```
+
+```tsx
+// app/sign-up/page.tsx
+import { SignUpPage } from "@authsome/ui-nextjs/pages";
+
+export default function Page() {
+  return <SignUpPage />;
+}
+```
+
+## Full setup (App Router)
+
+### 1. Environment variables
+
+```bash
+# .env.local
+NEXT_PUBLIC_AUTHSOME_URL=https://api.example.com
+AUTHSOME_API_URL=https://api.example.com
+```
+
+### 2. Root layout with providers
+
+```tsx
+// app/layout.tsx
+import { Providers } from "./providers";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+```
+
+### 3. Client providers
+
+```tsx
+// app/providers.tsx
+"use client";
+
+import { AuthProvider } from "@authsome/ui-nextjs";
+import { createCookieStorage } from "@authsome/ui-nextjs";
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider
+      baseURL={process.env.NEXT_PUBLIC_AUTHSOME_URL!}
+      storage={createCookieStorage()}
+    >
+      {children}
+    </AuthProvider>
+  );
+}
+```
+
+### 4. Middleware
+
+```ts
+// middleware.ts
+import { createAuthMiddleware } from "@authsome/ui-nextjs/middleware";
+
+export default createAuthMiddleware({
+  baseURL: process.env.AUTHSOME_API_URL!,
+  signInPage: "/sign-in",
+  publicPaths: ["/", "/sign-in", "/sign-up", "/forgot-password"],
+});
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
+```
+
+### 5. Protected server page
+
+```tsx
+// app/dashboard/page.tsx
+import { getServerSession } from "@authsome/ui-nextjs";
+import { redirect } from "next/navigation";
+
+export default async function DashboardPage() {
+  const session = await getServerSession({
+    baseURL: process.env.AUTHSOME_API_URL!,
+  });
+
+  if (!session) redirect("/sign-in");
+
+  return <h1>Dashboard for {session.user.name}</h1>;
+}
+```
+
+## Pages Router support
+
+For the Pages Router, use the same hooks and components inside `_app.tsx`:
+
+```tsx
+// pages/_app.tsx
+import { AuthProvider } from "@authsome/ui-nextjs";
+import { createCookieStorage } from "@authsome/ui-nextjs";
+import type { AppProps } from "next/app";
+
+export default function MyApp({ Component, pageProps }: AppProps) {
+  return (
+    <AuthProvider
+      baseURL={process.env.NEXT_PUBLIC_AUTHSOME_URL!}
+      storage={createCookieStorage()}
+    >
+      <Component {...pageProps} />
+    </AuthProvider>
+  );
+}
+```
+
+For server-side session validation in `getServerSideProps`, read the cookie manually and validate against the API:
+
+```tsx
+// pages/dashboard.tsx
+import type { GetServerSideProps } from "next";
+
+export const getServerSideProps: GetServerSideProps = async (ctx) => {
+  const token = ctx.req.cookies["authsome:session_token"];
+  if (!token) {
+    return { redirect: { destination: "/sign-in", permanent: false } };
+  }
+
+  const res = await fetch(`${process.env.AUTHSOME_API_URL}/v1/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    return { redirect: { destination: "/sign-in", permanent: false } };
+  }
+
+  const user = await res.json();
+  return { props: { user } };
+};
+```
+
+## Re-exported APIs
+
+`@authsome/ui-nextjs` re-exports everything from `@authsome/ui-react` for convenience, so you only need one import source in your Next.js application:
+
+```tsx
+import {
+  AuthProvider,
+  useAuth,
+  useUser,
+  useOrganizations,
+  useSessionToken,
+  SignInForm,
+  SignUpForm,
+  MFAChallengeForm,
+  AuthGuard,
+} from "@authsome/ui-nextjs";
+```

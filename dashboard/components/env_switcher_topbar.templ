@@ -1,0 +1,54 @@
+package components
+
+import (
+	"github.com/xraph/authsome/environment"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/dropdown"
+	"github.com/xraph/forgeui/icons"
+)
+
+// TopbarEnvSwitcher renders a compact environment switcher for the topbar.
+// Shows the current environment with a color dot and dropdown to switch.
+templ TopbarEnvSwitcher(current *environment.Environment, all []*environment.Environment, appSlug, currentPage, basePath string) {
+	if len(all) > 0 {
+		@dropdown.Dropdown() {
+			@dropdown.Trigger(dropdown.TriggerProps{
+				Class: "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-accent cursor-pointer",
+			}) {
+				<span class="inline-block w-2 h-2 rounded-full" style={ "background-color:" + current.Color }></span>
+				<span>{ current.Name }</span>
+				@icons.ChevronDown(icons.WithSize(12))
+			}
+			@dropdown.Content(dropdown.ContentProps{
+				Placement: dropdown.PlacementBottomEnd,
+				Class:     "min-w-44",
+			}) {
+				@dropdown.Label() {
+					Switch Environment
+				}
+				@dropdown.Separator()
+				for _, env := range all {
+					@dropdown.Item(dropdown.ItemProps{
+						Attributes: templ.Attributes{
+							"hx-get":      basePath + "/ext/authsome/pages/" + appSlug + "/" + env.Slug + currentPage,
+							"hx-target":   "#content",
+							"hx-swap":     "innerHTML",
+							"hx-push-url": "true",
+						},
+					}) {
+						<span class="inline-block w-2 h-2 rounded-full" style={ "background-color:" + env.Color }></span>
+						<span class="flex-1">{ env.Name }</span>
+						if env.IsDefault {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+								default
+							}
+						}
+						if env.ID == current.ID {
+							@icons.Check(icons.WithSize(14))
+						}
+					}
+				}
+			}
+		}
+	}
+}

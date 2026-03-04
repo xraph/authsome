@@ -1,0 +1,299 @@
+---
+title: Full Example
+description: Complete standalone Authsome server with PostgreSQL, all plugins, and bridge setup.
+---
+
+This guide builds a complete, production-ready Authsome authentication server from scratch. By the end you will have a standalone Go server with email/password auth, social login, MFA, organizations, and webhook delivery.
+
+## 1. Project setup
+
+```bash
+mkdir authsome-server && cd authsome-server
+go mod init myapp/authsome-server
+go get github.com/xraph/authsome
+go get github.com/xraph/grove
+```
+
+## 2. Docker Compose for dependencies
+
+```yaml
+# docker-compose.yml
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: authsome
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: authsome
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
+volumes:
+  pgdata:
+```
+
+Start the dependencies:
+
+```bash
+docker compose up -d
+```
+
+## 3. Full main.go
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/bridge/maileradapter"
+	"github.com/xraph/authsome/lockout"
+	"github.com/xraph/authsome/ratelimit"
+	pgstore "github.com/xraph/authsome/store/postgres"
+
+	"github.com/xraph/grove"
+)
+
+func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	// ── Database ──
+	db, err := grove.Open("pg", os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatal("open db:", err)
+	}
+	defer db.Close()
+
+	store := pgstore.New(db)
+
+	// ── Mailer (Mailpit for dev, Resend for production) ──
+	var mailer bridge.Mailer
+	if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
+		mailer = maileradapter.NewResendMailer(apiKey, os.Getenv("MAIL_FROM"))
+	} else {
+		mailer = maileradapter.NewSMTPMailer(
+			"localhost", 1025, "", "", "noreply@example.com",
+		)
+	}
+
+	// ── Build Engine ──
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(store),
+		authsome.WithMailer(mailer),
+		authsome.WithSMSSender(bridge.NewNoopSMSSender()),
+		authsome.WithConfig(authsome.Config{
+			BasePath: "/v1/auth",
+			Session: authsome.SessionConfig{
+				TokenTTL:        1 * time.Hour,
+				RefreshTokenTTL: 30 * 24 * time.Hour,
+			},
+			Password: authsome.PasswordConfig{
+				MinLength:        8,
+				RequireUppercase: true,
+				RequireLowercase: true,
+				RequireDigit:     true,
+				BcryptCost:       12,
+			},
+			RateLimit: authsome.RateLimitConfig{
+				Enabled:     true,
+				SignInLimit:  5,
+				SignUpLimit:  3,
+				WindowSeconds: 60,
+			},
+			Lockout: authsome.LockoutConfig{
+				Enabled:                true,
+				MaxAttempts:            5,
+				LockoutDurationSeconds: 900,
+			},
+		}),
+		authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()),
+		authsome.WithLockoutTracker(lockout.NewMemoryTracker()),
+		authsome.WithDriverName("pg"),
+	)
+	if err != nil {
+		log.Fatal("create engine:", err)
+	}
+
+	// ── Start (runs migrations) ──
+	if err := eng.Start(ctx); err != nil {
+		log.Fatal("start engine:", err)
+	}
+	defer eng.Stop(context.Background())
+
+	// ── HTTP API ──
+	apiHandler := api.New(eng)
+	mux := http.NewServeMux()
+	mux.Handle("/", apiHandler.Handler())
+
+	// Health check
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		if err := eng.Health(r.Context()); err != nil {
+			http.Error(w, "unhealthy", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ok")
+	})
+
+	addr := ":" + envOr("PORT", "8080")
+	srv := &http.Server{Addr: addr, Handler: mux}
+
+	go func() {
+		log.Printf("authsome listening on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("serve:", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("shutting down...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	srv.Shutdown(shutdownCtx)
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+```
+
+## 4. Environment variables
+
+```bash
+# .env
+DATABASE_URL=postgres://authsome:secret@localhost:5432/authsome?sslmode=disable
+PORT=8080
+
+# Production mailer (optional -- uses Mailpit in dev)
+# RESEND_API_KEY=re_xxxx
+# MAIL_FROM=noreply@yourdomain.com
+```
+
+## 5. Run the server
+
+```bash
+source .env
+go run main.go
+```
+
+## 6. Testing the server
+
+### Sign up
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane@example.com",
+    "password": "SecurePass1!",
+    "name": "Jane Doe"
+  }'
+```
+
+### Sign in
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane@example.com",
+    "password": "SecurePass1!"
+  }'
+```
+
+### Get current user
+
+```bash
+curl http://localhost:8080/v1/me \
+  -H "Authorization: Bearer <session_token>"
+```
+
+### Refresh token
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh_token>"}'
+```
+
+### Sign out
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/signout \
+  -H "Authorization: Bearer <session_token>"
+```
+
+### List organizations
+
+```bash
+curl http://localhost:8080/v1/organizations \
+  -H "Authorization: Bearer <session_token>"
+```
+
+## 7. Adding plugins
+
+Extend the engine with plugins for social login, MFA, passkeys, and more. Each plugin registers its own routes and migrations:
+
+```go
+import (
+	"github.com/xraph/authsome/plugins/social"
+	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/plugins/passkey"
+	"github.com/xraph/authsome/plugins/magiclink"
+)
+
+eng, err := authsome.NewEngine(
+	authsome.WithStore(store),
+	authsome.WithMailer(mailer),
+	// Plugins
+	authsome.WithPlugin(social.New(
+		social.WithGoogle(os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET")),
+		social.WithGitHub(os.Getenv("GITHUB_CLIENT_ID"), os.Getenv("GITHUB_CLIENT_SECRET")),
+	)),
+	authsome.WithPlugin(mfa.New()),
+	authsome.WithPlugin(passkey.New(passkey.Config{
+		RPName: "My App",
+		RPID:   "example.com",
+		Origin: "https://example.com",
+	})),
+	authsome.WithPlugin(magiclink.New()),
+	// ... rest of config
+)
+```
+
+## 8. Production considerations
+
+- Use a connection pooler (PgBouncer) for PostgreSQL in production
+- Replace the in-memory rate limiter and lockout tracker with Redis-backed implementations
+- Set `RESEND_API_KEY` and `MAIL_FROM` for transactional email
+- Add TLS termination via a reverse proxy (nginx, Caddy, or a cloud load balancer)
+- Set `SESSION_BIND_TO_IP=true` and `SESSION_BIND_TO_DEVICE=true` for stricter session security
+- For multi-service deployments, use the [Forge Extension](/docs/guides/forge-extension) instead

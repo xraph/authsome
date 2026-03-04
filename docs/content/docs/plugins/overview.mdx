@@ -1,0 +1,139 @@
+---
+title: Plugin Architecture
+description: How Authsome's plugin system extends the engine with authentication strategies, hooks, routes, and migrations.
+---
+
+Authsome is built around a composable plugin architecture. Every authentication method, lifecycle behavior, and integration point is implemented as a plugin that registers itself with the engine. The core engine provides session management, user storage, and the hook bus -- plugins add everything else.
+
+## The Plugin interface
+
+Every plugin must implement the base `Plugin` interface:
+
+```go
+type Plugin interface {
+    Name() string
+}
+```
+
+The `Name()` method returns a unique identifier used for logging, debugging, and registry deduplication. Beyond this single required method, plugins opt into capabilities by implementing additional interfaces.
+
+## Capability interfaces
+
+Plugins declare what they can do by implementing zero or more of the following interfaces:
+
+| Interface | Purpose |
+|-----------|---------|
+| `OnInit` | Called during `engine.Start()` to capture engine references |
+| `OnShutdown` | Called during graceful shutdown |
+| `RouteProvider` | Registers additional HTTP routes on the Forge router |
+| `MigrationProvider` | Contributes database migration groups for plugin tables |
+| `StrategyProvider` | Contributes an authentication strategy to the strategy registry |
+| `AuthMethodContributor` | Reports which auth methods are linked to a user |
+| `AuthMethodUnlinker` | Supports unlinking an auth method from a user account |
+| `DataExportContributor` | Contributes data to GDPR user exports |
+| `Extensible` | Accepts sub-plugins for compositional plugin design |
+
+## Hook interfaces
+
+Plugins can subscribe to lifecycle events by implementing hook interfaces. **Before-hooks** can abort the operation by returning an error. **After-hooks** are fire-and-forget -- errors are logged but never block the pipeline.
+
+### Auth event hooks
+
+| Interface | Trigger |
+|-----------|---------|
+| `BeforeSignUp` / `AfterSignUp` | User account creation |
+| `BeforeSignIn` / `AfterSignIn` | Authentication attempt |
+| `BeforeSignOut` / `AfterSignOut` | Session termination |
+
+### User lifecycle hooks
+
+| Interface | Trigger |
+|-----------|---------|
+| `BeforeUserCreate` / `AfterUserCreate` | User record creation |
+| `BeforeUserUpdate` / `AfterUserUpdate` | User record update |
+| `BeforeUserDelete` / `AfterUserDelete` | User record deletion |
+
+### Session lifecycle hooks
+
+| Interface | Trigger |
+|-----------|---------|
+| `BeforeSessionCreate` / `AfterSessionCreate` | Session creation |
+| `AfterSessionRefresh` | Token refresh |
+| `AfterSessionRevoke` | Session revocation |
+
+### Organization lifecycle hooks
+
+| Interface | Trigger |
+|-----------|---------|
+| `AfterOrgCreate` / `AfterOrgUpdate` / `AfterOrgDelete` | Organization CRUD |
+| `AfterMemberAdd` / `AfterMemberRemove` / `AfterMemberRoleChange` | Membership changes |
+
+## Plugin registry
+
+The `plugin.Registry` is the core dispatch mechanism. It type-caches plugins at registration time so that emit calls iterate only over plugins implementing the relevant hook -- there is no runtime type assertion on the hot path.
+
+```go
+registry := plugin.NewRegistry(logger)
+registry.Register(passwordPlugin)
+registry.Register(mfaPlugin)
+registry.Register(socialPlugin)
+
+// During sign-up, only plugins implementing BeforeSignUp are called:
+err := registry.EmitBeforeSignUp(ctx, req)
+```
+
+## Lifecycle
+
+When you call `engine.Start()`, the following sequence executes:
+
+1. **Registration** -- Plugins passed via `WithPlugin()` are registered with the plugin registry. Each plugin is type-asserted into all applicable hook caches.
+2. **Migration** -- The engine collects migration groups from all `MigrationProvider` plugins and runs them alongside core schema migrations.
+3. **Initialization** -- The registry calls `OnInit(ctx, engine)` on every plugin that implements `OnInit`. Plugins use this to capture store references, bridge handles, and other engine capabilities.
+4. **Strategy registration** -- Plugins implementing `StrategyProvider` have their strategies auto-registered with the strategy registry.
+5. **Route registration** -- Plugins implementing `RouteProvider` have their HTTP routes registered on the Forge router.
+
+## Built-in plugins
+
+Authsome ships with 14 built-in plugins:
+
+| Plugin | Package | Description |
+|--------|---------|-------------|
+| `password` | `plugins/password` | Email/password sign-up and sign-in with bcrypt or argon2id hashing |
+| `email` | `plugins/email` | Email notifications for welcome, verification, and password reset |
+| `magiclink` | `plugins/magiclink` | Passwordless authentication via emailed magic links |
+| `mfa` | `plugins/mfa` | Multi-factor authentication with TOTP, SMS OTP, and recovery codes |
+| `passkey` | `plugins/passkey` | FIDO2/WebAuthn passkey registration and authentication |
+| `social` | `plugins/social` | OAuth2 social login (Google, GitHub, Microsoft, Apple, custom) |
+| `sso` | `plugins/sso` | Enterprise SSO via OIDC and SAML |
+| `oauth2provider` | `plugins/oauth2provider` | OAuth2 authorization server (Authorization Code + PKCE, Client Credentials) |
+| `organization` | `plugins/organization` | Organization, member, and team management with invitations |
+| `consent` | `plugins/consent` | GDPR consent tracking with grant, revoke, and audit trail |
+| `phone` | `plugins/phone` | Phone number verification and OTP-based authentication |
+| `notification` | `plugins/notification` | Multi-channel notifications via Herald bridge |
+| `apikey` | `plugins/apikey` | API key generation, scoping, rotation, and authentication strategy |
+| `device` | `device` | Device fingerprinting, trust management, and session binding |
+
+## Example: registering plugins
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/plugins/mfa"
+    "github.com/xraph/authsome/plugins/social"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(mfa.New(mfa.Config{Issuer: "MyApp"})),
+    authsome.WithPlugin(social.New(social.Config{
+        Providers: []social.Provider{
+            social.NewGoogle(googleCfg),
+            social.NewGitHub(githubCfg),
+        },
+    })),
+)
+```
+
+Plugins are initialized in registration order. If plugin B depends on state set by plugin A during `OnInit`, register A first.

@@ -1,0 +1,217 @@
+---
+title: Teams
+description: Sub-groups within organizations for delegated access control and resource assignment.
+---
+
+Teams are sub-groups within an organization. They let you organize members into logical units — engineering, design, operations — and assign permissions or resources to the team as a whole rather than to individual users. Any organization member can be added to multiple teams.
+
+## The Team model
+
+```go
+import "github.com/xraph/authsome/org"
+
+type Team struct {
+    ID          id.ID             `json:"id"`          // atm_ prefix
+    OrgID       id.ID             `json:"org_id"`
+    AppID       string            `json:"app_id"`
+    EnvID       string            `json:"env_id"`
+    Name        string            `json:"name"`
+    Slug        string            `json:"slug"`
+    Description string            `json:"description,omitempty"`
+    IsDefault   bool              `json:"is_default"`  // auto-joined by new org members
+    Metadata    map[string]string `json:"metadata,omitempty"`
+    MemberCount int               `json:"member_count"`
+    CreatedBy   id.ID             `json:"created_by"`
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ID` | Globally unique identifier with `atm_` prefix |
+| `OrgID` | The organization this team belongs to |
+| `Name` | Display name for the team, e.g. `"Engineering"` |
+| `Slug` | URL-safe unique identifier within the org, e.g. `"engineering"` |
+| `IsDefault` | When `true`, all new organization members are automatically added to this team |
+| `MemberCount` | Denormalized count of current team members (updated on add/remove) |
+| `CreatedBy` | User ID of the team creator |
+
+## Team membership model
+
+```go
+type TeamMember struct {
+    ID        id.ID      `json:"id"`
+    TeamID    id.ID      `json:"team_id"`
+    OrgID     id.ID      `json:"org_id"`
+    UserID    id.ID      `json:"user_id"`
+    AddedBy   id.ID      `json:"added_by"`
+    JoinedAt  time.Time  `json:"joined_at"`
+
+    // Populated when fetched with user details.
+    User *user.User `json:"user,omitempty"`
+}
+```
+
+## Creating teams
+
+```go
+import "github.com/xraph/authsome/org"
+
+team, err := auth.Orgs().CreateTeam(ctx, &org.CreateTeamInput{
+    OrgID:       orgID,
+    Name:        "Backend Engineering",
+    Description: "Server-side engineers responsible for API and infrastructure",
+    IsDefault:   false,
+    Metadata: map[string]string{
+        "slack_channel": "#backend",
+        "oncall_rotation": "pagerduty-backend",
+    },
+})
+if err != nil {
+    return err
+}
+fmt.Printf("created team: id=%s slug=%s\n", team.ID, team.Slug)
+```
+
+Only `owner` and `admin` org members can create teams.
+
+## Fetching teams
+
+```go
+// By ID.
+team, err := auth.Orgs().GetTeam(ctx, orgID, teamID)
+
+// By slug within the organization.
+team, err := auth.Orgs().GetTeamBySlug(ctx, orgID, "backend-engineering")
+```
+
+## Updating teams
+
+```go
+updated, err := auth.Orgs().UpdateTeam(ctx, orgID, teamID, &org.UpdateTeamInput{
+    Name:        "Platform Engineering",
+    Description: "Formerly backend engineering",
+    IsDefault:   false,
+})
+```
+
+## Deleting teams
+
+```go
+err := auth.Orgs().DeleteTeam(ctx, orgID, teamID)
+```
+
+Deleting a team removes all `TeamMember` records for that team. It does not remove the users from the parent organization. The operation cannot be undone.
+
+## Listing teams
+
+```go
+// All teams in an organization.
+result, err := auth.Orgs().ListTeams(ctx, orgID, &org.ListTeamsInput{
+    Limit:  50,
+    Cursor: "",
+})
+
+for _, t := range result.Items {
+    fmt.Printf("  %s (slug=%s members=%d)\n", t.Name, t.Slug, t.MemberCount)
+}
+
+// Teams a specific user belongs to within an org.
+result, err := auth.Orgs().ListTeamsByUser(ctx, orgID, userID, &org.ListTeamsInput{
+    Limit: 50,
+})
+```
+
+## Adding members to a team
+
+A user must be an organization member before being added to a team. Adding them to the org first (or via invitation) is a prerequisite.
+
+```go
+// Add an org member to a team.
+teamMember, err := auth.Orgs().AddTeamMember(ctx, &org.AddTeamMemberInput{
+    OrgID:  orgID,
+    TeamID: teamID,
+    UserID: targetUserID,
+})
+if err != nil {
+    // org.ErrMemberNotFound -- user is not an org member
+    // org.ErrAlreadyTeamMember -- user is already on this team
+    return err
+}
+```
+
+```go
+// Add multiple members in a single call.
+err := auth.Orgs().AddTeamMembers(ctx, orgID, teamID, []id.ID{
+    userID1,
+    userID2,
+    userID3,
+})
+```
+
+## Removing members from a team
+
+```go
+// Remove a single member from a team.
+err := auth.Orgs().RemoveTeamMember(ctx, orgID, teamID, userID)
+```
+
+Removing a team member only removes the `TeamMember` record. The user remains a member of the parent organization.
+
+## Listing team members
+
+```go
+result, err := auth.Orgs().ListTeamMembers(ctx, orgID, teamID, &org.ListMembersInput{
+    Limit:           50,
+    Cursor:          "",
+    IncludeUserData: true,
+})
+
+for _, m := range result.Items {
+    fmt.Printf("  %s joined=%s\n", m.User.Email, m.JoinedAt.Format("2006-01-02"))
+}
+```
+
+## Default teams
+
+A team marked as `IsDefault: true` automatically adds every new organization member as a team member. This is useful for org-wide teams like `all-hands` or `announcements`:
+
+```go
+// Create an all-hands team.
+_, err := auth.Orgs().CreateTeam(ctx, &org.CreateTeamInput{
+    OrgID:     orgID,
+    Name:      "All Hands",
+    IsDefault: true,
+})
+```
+
+When a user joins the organization (through invitation acceptance or direct member addition), Authsome automatically adds them to every default team. This happens transactionally -- if the team join fails, the membership addition is rolled back.
+
+<Callout type="info">
+You can have multiple default teams. All of them receive new members automatically. Existing members are not retroactively added when a team is set to `IsDefault: true`.
+</Callout>
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/orgs/:org_id/teams` | Create a new team |
+| `GET` | `/orgs/:org_id/teams` | List all teams in an organization |
+| `GET` | `/orgs/:org_id/teams/:team_id` | Get a team by ID |
+| `GET` | `/orgs/:org_id/teams/slug/:slug` | Get a team by slug |
+| `PATCH` | `/orgs/:org_id/teams/:team_id` | Update a team |
+| `DELETE` | `/orgs/:org_id/teams/:team_id` | Delete a team |
+| `GET` | `/orgs/:org_id/teams/:team_id/members` | List team members |
+| `POST` | `/orgs/:org_id/teams/:team_id/members` | Add a member to a team |
+| `DELETE` | `/orgs/:org_id/teams/:team_id/members/:user_id` | Remove a member from a team |
+| `GET` | `/users/me/orgs/:org_id/teams` | List teams the current user belongs to |
+
+## Error reference
+
+| Error | Description |
+|-------|-------------|
+| `org.ErrTeamNotFound` | No team with the given ID exists in this organization |
+| `org.ErrTeamSlugTaken` | A team with that slug already exists in this organization |
+| `org.ErrAlreadyTeamMember` | The user is already a member of this team |
+| `org.ErrMemberNotFound` | The user is not a member of the parent organization |

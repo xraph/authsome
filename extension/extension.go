@@ -1,0 +1,825 @@
+// Package extension adapts AuthSome as a Forge extension.
+package extension
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+
+	log "github.com/xraph/go-utils/log"
+
+	"github.com/xraph/forge"
+	dashboard "github.com/xraph/forge/extensions/dashboard"
+	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
+	"github.com/xraph/forge/extensions/dashboard/contributor"
+	"github.com/xraph/forge/extensions/dashboard/ui/shell"
+	"github.com/xraph/vessel"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/appsessionconfig"
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/bridge/chronicleadapter"
+	"github.com/xraph/authsome/bridge/dispatchadapter"
+	"github.com/xraph/authsome/bridge/heraldadapter"
+	"github.com/xraph/authsome/bridge/ledgeradapter"
+	"github.com/xraph/authsome/bridge/maileradapter"
+	"github.com/xraph/authsome/bridge/relayadapter"
+	authdash "github.com/xraph/authsome/dashboard"
+	"github.com/xraph/authsome/environment"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/lockout"
+	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/ratelimit"
+	"github.com/xraph/authsome/store"
+	mongostore "github.com/xraph/authsome/store/mongo"
+	pgstore "github.com/xraph/authsome/store/postgres"
+	sqlitestore "github.com/xraph/authsome/store/sqlite"
+
+	"github.com/xraph/grove"
+
+	"github.com/xraph/chronicle"
+	dispatchengine "github.com/xraph/dispatch/engine"
+	"github.com/xraph/herald"
+	"github.com/xraph/keysmith"
+	"github.com/xraph/ledger"
+	"github.com/xraph/relay"
+	"github.com/xraph/vault"
+	"github.com/xraph/warden"
+)
+
+// ExtensionName is the name registered with Forge.
+const ExtensionName = "authsome"
+
+// ExtensionDescription is the human-readable description.
+const ExtensionDescription = "Pluggable authentication engine for identity, sessions, and multi-tenancy"
+
+// ExtensionVersion is the semantic version.
+const ExtensionVersion = "0.5.0"
+
+// Ensure Extension implements forge.Extension, forge.MiddlewareExtension,
+// dashboard.DashboardAware, dashboard.DashboardAuthAware, and
+// dashboard.DashboardFooterContributor at compile time.
+var (
+	_ forge.Extension                      = (*Extension)(nil)
+	_ forge.MiddlewareExtension            = (*Extension)(nil)
+	_ dashboard.DashboardAware             = (*Extension)(nil)
+	_ dashboard.DashboardAuthAware         = (*Extension)(nil)
+	_ dashboard.DashboardFooterContributor = (*Extension)(nil)
+)
+
+// Extension adapts AuthSome as a Forge extension.
+type Extension struct {
+	*forge.BaseExtension
+
+	config     Config
+	engine     *authsome.Engine
+	apiHandler *api.API
+	logger     log.Logger
+	opts       []authsome.Option
+	plugins    []plugin.Plugin
+	useGrove   bool
+}
+
+// New creates an AuthSome Forge extension with the given options.
+func New(opts ...ExtOption) *Extension {
+	e := &Extension{
+		BaseExtension: forge.NewBaseExtension(ExtensionName, ExtensionVersion, ExtensionDescription),
+	}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
+}
+
+// Engine returns the underlying authsome engine (nil until Register is called).
+func (e *Extension) Engine() *authsome.Engine { return e.engine }
+
+// Register implements forge.Extension. It loads configuration, auto-discovers
+// optional forgery bridges from the DI container, builds the engine, and
+// registers the engine in the container for other extensions to use.
+func (e *Extension) Register(fapp forge.App) error {
+	if err := e.BaseExtension.Register(fapp); err != nil {
+		return err
+	}
+
+	if err := e.loadConfiguration(); err != nil {
+		return err
+	}
+
+	if err := e.init(fapp); err != nil {
+		return err
+	}
+
+	// Register the engine in the DI container for other extensions.
+	if err := vessel.Provide(fapp.Container(), func() (*authsome.Engine, error) {
+		return e.engine, nil
+	}); err != nil {
+		return fmt.Errorf("authsome: register engine in container: %w", err)
+	}
+
+	return nil
+}
+
+// init builds the engine with auto-discovered dependencies.
+func (e *Extension) init(fapp forge.App) error {
+	logger := e.logger
+	if logger == nil {
+		logger = e.BaseExtension.Logger()
+	}
+	if logger == nil {
+		logger = log.NewNoopLogger()
+	}
+
+	opts := make([]authsome.Option, 0, len(e.opts)+10)
+	opts = append(opts, e.opts...)
+	opts = append(opts, authsome.WithLogger(logger)) //nolint:gocritic // can't combine with variadic spread above
+
+	// Map extension config to engine config.
+	opts = append(opts, authsome.WithConfig(e.buildEngineConfig()))
+
+	// Register plugins
+	for _, p := range e.plugins {
+		opts = append(opts, authsome.WithPlugin(p))
+	}
+
+	// ── Resolve store from grove DI ──
+	var driverName string
+	if e.useGrove {
+		// Explicit grove database configured -- resolve named or default DB.
+		groveDB, err := e.resolveGroveDB(fapp)
+		if err != nil {
+			return fmt.Errorf("authsome: %w", err)
+		}
+		s, err := e.buildStoreFromGroveDB(groveDB)
+		if err != nil {
+			return err
+		}
+		driverName = groveDB.Driver().Name()
+		opts = append(opts, authsome.WithStore(s), authsome.WithDriverName(driverName))
+		e.Logger().Info("authsome: resolved grove.DB from container (driver=" + driverName + ")")
+	} else if db, err := vessel.Inject[*grove.DB](fapp.Container()); err == nil {
+		// Backward-compatible silent auto-discovery of default grove.DB.
+		var s store.Store
+		driverName = db.Driver().Name()
+		switch driverName {
+		case "pg":
+			s = pgstore.New(db)
+		case "sqlite":
+			s = sqlitestore.New(db)
+		case "mongo":
+			s = mongostore.New(db)
+		default:
+			return fmt.Errorf("authsome: unsupported grove driver %q", driverName)
+		}
+		opts = append(opts, authsome.WithStore(s), authsome.WithDriverName(driverName))
+		e.Logger().Info("authsome: auto-discovered grove.DB from container (driver=" + driverName + ")")
+	}
+
+	// ── Auto-discover Chronicle (optional) ──
+	if emitter, err := vessel.Inject[chronicle.Emitter](fapp.Container()); err == nil {
+		opts = append(opts, authsome.WithChronicle(chronicleadapter.New(emitter)))
+		e.Logger().Info("authsome: auto-discovered chronicle emitter")
+	} else {
+		// Fallback to slog audit stub
+		opts = append(opts, authsome.WithChronicle(bridge.NewSlogChronicle(logger)))
+	}
+
+	// ── Auto-discover Warden (required authorization engine) ──
+	wardenEng, err := vessel.Inject[*warden.Engine](fapp.Container())
+	if err != nil {
+		return fmt.Errorf("authsome: warden extension is required but not found in DI container; register warden before authsome: %w", err)
+	}
+	opts = append(opts, authsome.WithWarden(wardenEng))
+	e.Logger().Info("authsome: auto-discovered warden engine (required)")
+
+	// ── Auto-discover Keysmith (first-class key management engine) ──
+	if ksEng, err := vessel.Inject[*keysmith.Engine](fapp.Container()); err == nil {
+		opts = append(opts, authsome.WithKeysmith(ksEng))
+		e.Logger().Info("authsome: auto-discovered keysmith engine (first-class)")
+	}
+
+	// ── Auto-discover Relay (optional) ──
+	if relayInst, err := vessel.Inject[*relay.Relay](fapp.Container()); err == nil {
+		opts = append(opts, authsome.WithEventRelay(relayadapter.New(relayInst)))
+		e.Logger().Info("authsome: auto-discovered relay")
+	} else {
+		opts = append(opts, authsome.WithEventRelay(bridge.NewNoopRelay(logger)))
+	}
+
+	// ── Auto-discover Vault (optional) ──
+	if _, err := vessel.Inject[*vault.Vault](fapp.Container()); err == nil {
+		// Vault extension detected but services are not yet individually
+		// accessible. Use NoopVault until vault exposes sub-services.
+		opts = append(opts, authsome.WithVault(bridge.NewNoopVault()))
+		e.Logger().Info("authsome: auto-discovered vault (noop bridge until services available)")
+	} else {
+		opts = append(opts, authsome.WithVault(bridge.NewNoopVault()))
+	}
+
+	// ── Auto-discover Dispatch (optional) ──
+	if dispatchEng, err := vessel.Inject[*dispatchengine.Engine](fapp.Container()); err == nil {
+		opts = append(opts, authsome.WithDispatcher(dispatchadapter.New(dispatchEng)))
+		e.Logger().Info("authsome: auto-discovered dispatch engine")
+	} else {
+		opts = append(opts, authsome.WithDispatcher(bridge.NewNoopDispatcher()))
+	}
+
+	// ── Auto-discover Ledger (optional) ──
+	if ledgerEng, err := vessel.Inject[*ledger.Ledger](fapp.Container()); err == nil {
+		opts = append(opts, authsome.WithLedger(ledgeradapter.New(ledgerEng)))
+		e.Logger().Info("authsome: auto-discovered ledger")
+	} else {
+		opts = append(opts, authsome.WithLedger(bridge.NewNoopLedger()))
+	}
+
+	// ── Auto-discover Herald (optional) ──
+	if heraldEng, err := vessel.Inject[*herald.Herald](fapp.Container()); err == nil {
+		opts = append(opts, authsome.WithHerald(heraldadapter.New(heraldEng)))
+		e.Logger().Info("authsome: auto-discovered herald notification engine")
+	} else {
+		opts = append(opts, authsome.WithHerald(bridge.NewNoopHerald(logger)))
+	}
+
+	// ── Auto-configure mailer from config ──
+	switch e.config.Mailer.Provider {
+	case "resend":
+		opts = append(opts, authsome.WithMailer(
+			maileradapter.NewResendMailer(e.config.Mailer.Resend.APIKey, e.config.Mailer.Resend.From),
+		))
+		e.Logger().Info("authsome: mailer configured (resend)")
+	case "smtp":
+		smtpCfg := e.config.Mailer.SMTP
+		smtpOpts := []maileradapter.SMTPOption{}
+		if smtpCfg.TLS {
+			smtpOpts = append(smtpOpts, maileradapter.WithSMTPTLS(true))
+		}
+		opts = append(opts, authsome.WithMailer(
+			maileradapter.NewSMTPMailer(smtpCfg.Host, smtpCfg.Port, smtpCfg.Username, smtpCfg.Password, smtpCfg.From, smtpOpts...),
+		))
+		e.Logger().Info("authsome: mailer configured (smtp)")
+	default:
+		opts = append(opts, authsome.WithMailer(bridge.NewNoopMailer(logger)))
+	}
+
+	// ── Auto-configure rate limiter (in-memory fallback) ──
+	if e.config.RateLimit.Enabled {
+		opts = append(opts, authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()))
+		e.Logger().Info("authsome: rate limiting enabled (in-memory)")
+	}
+
+	// ── Auto-configure account lockout (in-memory fallback) ──
+	if e.config.Lockout.Enabled {
+		opts = append(opts, authsome.WithLockoutTracker(
+			lockout.NewMemoryTracker(
+				lockout.WithMaxAttempts(e.config.Lockout.MaxAttempts),
+				lockout.WithLockoutDuration(e.config.Lockout.LockoutDuration()),
+				lockout.WithResetAfter(e.config.Lockout.ResetAfter()),
+			),
+		))
+		e.Logger().Info("authsome: account lockout enabled (in-memory)")
+	}
+
+	// ── Per-app session configuration from YAML ──
+	for appIDStr, appCfg := range e.config.Apps {
+		appID, err := id.ParseAppID(appIDStr)
+		if err != nil {
+			e.Logger().Warn("authsome: invalid app ID in per-app config, skipping",
+				forge.F("app_id", appIDStr),
+				forge.F("error", err.Error()),
+			)
+			continue
+		}
+		cfg := &appsessionconfig.Config{
+			ID:          id.NewAppSessionConfigID(),
+			AppID:       appID,
+			TokenFormat: appCfg.Session.TokenFormat,
+		}
+		if appCfg.Session.TokenTTL != 0 {
+			secs := int(appCfg.Session.TokenTTL.Seconds())
+			cfg.TokenTTLSeconds = &secs
+		}
+		if appCfg.Session.RefreshTokenTTL != 0 {
+			secs := int(appCfg.Session.RefreshTokenTTL.Seconds())
+			cfg.RefreshTokenTTLSeconds = &secs
+		}
+		cfg.MaxActiveSessions = appCfg.Session.MaxActiveSessions
+		cfg.RotateRefreshToken = appCfg.Session.RotateRefreshToken
+		cfg.BindToIP = appCfg.Session.BindToIP
+		cfg.BindToDevice = appCfg.Session.BindToDevice
+		opts = append(opts, authsome.WithAppSessionConfig(cfg))
+	}
+
+	// ── Bootstrap configuration ──
+	// Bootstrap is enabled by default when using the Forge extension,
+	// unless explicitly disabled via config.
+	if e.config.Bootstrap.Enabled == nil || *e.config.Bootstrap.Enabled {
+		bootstrapOpts := e.buildBootstrapOptions()
+		opts = append(opts, authsome.WithBootstrap(bootstrapOpts...))
+		e.Logger().Info("authsome: bootstrap enabled")
+	}
+
+	eng, err := authsome.NewEngine(opts...)
+	if err != nil {
+		return fmt.Errorf("authsome: create engine: %w", err)
+	}
+	e.engine = eng
+
+	// Create API handler (no router passed -- Handler() will create one on demand)
+	if !e.config.DisableRoutes {
+		e.apiHandler = api.New(eng)
+	}
+
+	// If Forge router is available from the container, register routes directly.
+	if router, err := forge.GetRouter(fapp.Container()); err == nil && !e.config.DisableRoutes {
+		apiHandler := api.New(eng)
+		if err := apiHandler.RegisterRoutes(router); err != nil {
+			return fmt.Errorf("authsome: register forge routes: %w", err)
+		}
+
+		// Register plugin routes on the Forge router.
+		for _, rp := range eng.Plugins().RouteProviders() {
+			if err := rp.RegisterRoutes(router); err != nil {
+				return fmt.Errorf("authsome: register plugin routes (%T): %w", rp, err)
+			}
+		}
+
+		e.Logger().Info("authsome: registered routes on forge router")
+	}
+
+	return nil
+}
+
+// Start begins the authsome engine and runs auto-migration if enabled.
+func (e *Extension) Start(ctx context.Context) error {
+	if e.engine == nil {
+		return errors.New("authsome: extension not initialized")
+	}
+	if err := e.engine.Start(ctx); err != nil {
+		return err
+	}
+	e.MarkStarted()
+	return nil
+}
+
+// Stop gracefully shuts down the authsome engine.
+func (e *Extension) Stop(ctx context.Context) error {
+	if e.engine == nil {
+		e.MarkStopped()
+		return nil
+	}
+	err := e.engine.Stop(ctx)
+	e.MarkStopped()
+	return err
+}
+
+// Health implements forge.Extension.
+func (e *Extension) Health(ctx context.Context) error {
+	if e.engine == nil {
+		return errors.New("authsome: extension not initialized")
+	}
+	return e.engine.Store().Ping(ctx)
+}
+
+// Handler returns the HTTP handler for standalone use outside Forge.
+// When used with Forge, routes are registered via the Forge router instead.
+func (e *Extension) Handler() http.Handler {
+	if e.apiHandler != nil {
+		return e.apiHandler.Handler()
+	}
+	return http.NotFoundHandler()
+}
+
+// Middlewares implements forge.MiddlewareExtension. It returns the auth
+// middleware so Forge auto-applies it globally to all routes.
+func (e *Extension) Middlewares() []forge.Middleware {
+	if e.engine == nil {
+		return nil
+	}
+	return []forge.Middleware{e.AuthMiddleware()}
+}
+
+// AuthMiddleware returns the authentication middleware that resolves sessions
+// and users from the Authorization header. When JWT is configured, JWT tokens
+// are validated stateless. When strategies are registered (e.g. API key plugin),
+// it uses layered auth that falls back to the strategy registry when session
+// resolution fails. This is the forge.Scope producer -- it resolves the
+// authenticated identity and sets AppID/OrgID on context for all downstream
+// extensions.
+func (e *Extension) AuthMiddleware() forge.Middleware {
+	// JWT-aware middleware (handles JWT + opaque + strategies)
+	if e.engine.HasJWT() {
+		return middleware.AuthMiddlewareWithJWT(
+			e.engine.ResolveSessionByToken,
+			e.engine.ResolveUser,
+			e.engine.Strategies(),
+			e.engine,
+			e.engine.Logger(),
+		)
+	}
+	if e.engine.HasStrategies() {
+		return middleware.AuthMiddlewareWithStrategies(
+			e.engine.ResolveSessionByToken,
+			e.engine.ResolveUser,
+			e.engine.Strategies(),
+			e.engine.Logger(),
+		)
+	}
+	return middleware.AuthMiddleware(
+		e.engine.ResolveSessionByToken,
+		e.engine.ResolveUser,
+		e.engine.Logger(),
+	)
+}
+
+// DashboardContributor implements dashboard.DashboardAware. It returns a
+// LocalContributor that renders authsome pages, widgets, and settings in the
+// Forge dashboard using templ + ForgeUI.
+func (e *Extension) DashboardContributor() contributor.LocalContributor {
+	return authdash.New(
+		authdash.NewManifest(e.engine, e.plugins),
+		e.engine,
+		e.plugins,
+	)
+}
+
+// RegisterDashboardAuth implements dashboard.DashboardAuthAware. It registers
+// authsome as the dashboard's auth page provider, auth checker, and tenant
+// resolver. Called automatically by the dashboard during Start() via discovery.
+func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
+	basePath := dashExt.ForgeUIApp().Config().BasePath
+	dashExt.SetAuthPageProvider(&authPages{engine: e.engine, basePath: basePath})
+	dashExt.SetAuthChecker(&authChecker{engine: e.engine})
+	dashExt.SetTenantResolver(dashauth.ScopeTenantResolver{})
+	dashExt.EnableAuth()
+	e.Logger().Info("authsome: registered as dashboard auth provider")
+}
+
+// DashboardUserDropdownActions implements dashboard.DashboardFooterContributor.
+// It contributes user-related actions (Profile, Security) to the sidebar footer
+// user dropdown menu.
+func (e *Extension) DashboardUserDropdownActions(basePath string) []shell.UserDropdownAction {
+	return []shell.UserDropdownAction{
+		{Label: "Profile", Icon: "user", Href: basePath + "/ext/authsome/pages/profile"},
+		{Label: "Security", Icon: "shield", Href: basePath + "/ext/authsome/pages/security"},
+	}
+}
+
+// --- Config Loading (mirrors grove extension pattern) ---
+
+// loadConfiguration loads config from YAML files or programmatic sources.
+func (e *Extension) loadConfiguration() error {
+	programmaticConfig := e.config
+
+	// Try loading from config file.
+	fileConfig, configLoaded := e.tryLoadFromConfigFile()
+
+	if !configLoaded {
+		if programmaticConfig.RequireConfig {
+			return errors.New("authsome: configuration is required but not found in config files; " +
+				"ensure 'extensions.authsome' or 'authsome' key exists in your config")
+		}
+
+		// Use programmatic config merged with defaults.
+		e.config = e.mergeWithDefaults(programmaticConfig)
+	} else {
+		// Config loaded from YAML -- merge with programmatic options.
+		e.config = e.mergeConfigurations(fileConfig, programmaticConfig)
+	}
+
+	// Enable grove resolution if YAML config specifies a grove database.
+	if e.config.GroveDatabase != "" {
+		e.useGrove = true
+	}
+
+	e.Logger().Debug("authsome: configuration loaded",
+		forge.F("disable_routes", e.config.DisableRoutes),
+		forge.F("disable_migrate", e.config.DisableMigrate),
+		forge.F("base_path", e.config.BasePath),
+		forge.F("grove_database", e.config.GroveDatabase),
+		forge.F("debug", e.config.Debug),
+	)
+
+	return nil
+}
+
+// tryLoadFromConfigFile attempts to load config from YAML files.
+func (e *Extension) tryLoadFromConfigFile() (Config, bool) {
+	cm := e.App().Config()
+	var cfg Config
+
+	// Try "extensions.authsome" first (namespaced pattern).
+	if cm.IsSet("extensions.authsome") {
+		if err := cm.Bind("extensions.authsome", &cfg); err == nil {
+			e.Logger().Debug("authsome: loaded config from file",
+				forge.F("key", "extensions.authsome"),
+			)
+			return cfg, true
+		}
+		e.Logger().Warn("authsome: failed to bind extensions.authsome config",
+			forge.F("error", "bind failed"),
+		)
+	}
+
+	// Try legacy "authsome" key.
+	if cm.IsSet("authsome") {
+		if err := cm.Bind("authsome", &cfg); err == nil {
+			e.Logger().Debug("authsome: loaded config from file",
+				forge.F("key", "authsome"),
+			)
+			return cfg, true
+		}
+		e.Logger().Warn("authsome: failed to bind authsome config",
+			forge.F("error", "bind failed"),
+		)
+	}
+
+	return Config{}, false
+}
+
+// mergeWithDefaults fills zero-valued fields with defaults.
+func (e *Extension) mergeWithDefaults(cfg Config) Config {
+	defaults := DefaultConfig()
+
+	if cfg.BasePath == "" {
+		cfg.BasePath = defaults.BasePath
+	}
+
+	// Session defaults.
+	if cfg.Session.TokenTTL == 0 {
+		cfg.Session.TokenTTL = defaults.Session.TokenTTL
+	}
+	if cfg.Session.RefreshTokenTTL == 0 {
+		cfg.Session.RefreshTokenTTL = defaults.Session.RefreshTokenTTL
+	}
+
+	// Password defaults.
+	if cfg.Password.MinLength == 0 {
+		cfg.Password.MinLength = defaults.Password.MinLength
+	}
+	if cfg.Password.BcryptCost == 0 {
+		cfg.Password.BcryptCost = defaults.Password.BcryptCost
+	}
+	// Bool defaults for password: use defaults only when both are false
+	// (i.e., nothing was explicitly set).
+	if !cfg.Password.RequireUppercase && defaults.Password.RequireUppercase {
+		cfg.Password.RequireUppercase = defaults.Password.RequireUppercase
+	}
+	if !cfg.Password.RequireLowercase && defaults.Password.RequireLowercase {
+		cfg.Password.RequireLowercase = defaults.Password.RequireLowercase
+	}
+	if !cfg.Password.RequireDigit && defaults.Password.RequireDigit {
+		cfg.Password.RequireDigit = defaults.Password.RequireDigit
+	}
+
+	return cfg
+}
+
+// mergeConfigurations merges YAML config with programmatic options.
+// YAML config takes precedence for most fields; programmatic bool flags fill gaps.
+func (e *Extension) mergeConfigurations(yamlConfig, programmaticConfig Config) Config {
+	// Programmatic bool flags override when true.
+	if programmaticConfig.DisableRoutes {
+		yamlConfig.DisableRoutes = true
+	}
+	if programmaticConfig.DisableMigrate {
+		yamlConfig.DisableMigrate = true
+	}
+	if programmaticConfig.Debug {
+		yamlConfig.Debug = true
+	}
+
+	// String fields: YAML takes precedence.
+	if yamlConfig.BasePath == "" && programmaticConfig.BasePath != "" {
+		yamlConfig.BasePath = programmaticConfig.BasePath
+	}
+	if yamlConfig.GroveDatabase == "" && programmaticConfig.GroveDatabase != "" {
+		yamlConfig.GroveDatabase = programmaticConfig.GroveDatabase
+	}
+
+	// Duration/int fields: YAML takes precedence, programmatic fills gaps.
+	if yamlConfig.Session.TokenTTL == 0 && programmaticConfig.Session.TokenTTL != 0 {
+		yamlConfig.Session.TokenTTL = programmaticConfig.Session.TokenTTL
+	}
+	if yamlConfig.Session.RefreshTokenTTL == 0 && programmaticConfig.Session.RefreshTokenTTL != 0 {
+		yamlConfig.Session.RefreshTokenTTL = programmaticConfig.Session.RefreshTokenTTL
+	}
+	if yamlConfig.Session.MaxActiveSessions == 0 && programmaticConfig.Session.MaxActiveSessions != 0 {
+		yamlConfig.Session.MaxActiveSessions = programmaticConfig.Session.MaxActiveSessions
+	}
+	if yamlConfig.Session.RotateRefreshToken == nil && programmaticConfig.Session.RotateRefreshToken != nil {
+		yamlConfig.Session.RotateRefreshToken = programmaticConfig.Session.RotateRefreshToken
+	}
+
+	// Password fields: YAML takes precedence, programmatic fills gaps.
+	if yamlConfig.Password.MinLength == 0 && programmaticConfig.Password.MinLength != 0 {
+		yamlConfig.Password.MinLength = programmaticConfig.Password.MinLength
+	}
+	if yamlConfig.Password.BcryptCost == 0 && programmaticConfig.Password.BcryptCost != 0 {
+		yamlConfig.Password.BcryptCost = programmaticConfig.Password.BcryptCost
+	}
+	if programmaticConfig.Password.RequireUppercase {
+		yamlConfig.Password.RequireUppercase = true
+	}
+	if programmaticConfig.Password.RequireLowercase {
+		yamlConfig.Password.RequireLowercase = true
+	}
+	if programmaticConfig.Password.RequireDigit {
+		yamlConfig.Password.RequireDigit = true
+	}
+	if programmaticConfig.Password.RequireSpecial {
+		yamlConfig.Password.RequireSpecial = true
+	}
+
+	// Fill remaining zeros with defaults.
+	return e.mergeWithDefaults(yamlConfig)
+}
+
+// buildEngineConfig maps the extension config to the core authsome.Config.
+func (e *Extension) buildEngineConfig() authsome.Config {
+	cfg := authsome.DefaultConfig()
+
+	if e.config.BasePath != "" {
+		cfg.BasePath = e.config.BasePath
+	}
+	cfg.Debug = e.config.Debug
+	cfg.DisableRoutes = e.config.DisableRoutes
+	cfg.DisableMigrate = e.config.DisableMigrate
+
+	// Session
+	if e.config.Session.TokenTTL != 0 {
+		cfg.Session.TokenTTL = e.config.Session.TokenTTL
+	}
+	if e.config.Session.RefreshTokenTTL != 0 {
+		cfg.Session.RefreshTokenTTL = e.config.Session.RefreshTokenTTL
+	}
+	if e.config.Session.MaxActiveSessions != 0 {
+		cfg.Session.MaxActiveSessions = e.config.Session.MaxActiveSessions
+	}
+	if e.config.Session.RotateRefreshToken != nil {
+		cfg.Session.RotateRefreshToken = e.config.Session.RotateRefreshToken
+	}
+
+	// Password
+	if e.config.Password.MinLength != 0 {
+		cfg.Password.MinLength = e.config.Password.MinLength
+	}
+	if e.config.Password.BcryptCost != 0 {
+		cfg.Password.BcryptCost = e.config.Password.BcryptCost
+	}
+	if e.config.Password.RequireUppercase {
+		cfg.Password.RequireUppercase = true
+	}
+	if e.config.Password.RequireLowercase {
+		cfg.Password.RequireLowercase = true
+	}
+	if e.config.Password.RequireDigit {
+		cfg.Password.RequireDigit = true
+	}
+	if e.config.Password.RequireSpecial {
+		cfg.Password.RequireSpecial = true
+	}
+	if e.config.Password.Algorithm != "" {
+		cfg.Password.Algorithm = e.config.Password.Algorithm
+	}
+	if e.config.Password.CheckBreached {
+		cfg.Password.CheckBreached = true
+	}
+	if e.config.Password.Argon2.Memory != 0 {
+		cfg.Password.Argon2.Memory = e.config.Password.Argon2.Memory
+	}
+	if e.config.Password.Argon2.Iterations != 0 {
+		cfg.Password.Argon2.Iterations = e.config.Password.Argon2.Iterations
+	}
+	if e.config.Password.Argon2.Parallelism != 0 {
+		cfg.Password.Argon2.Parallelism = e.config.Password.Argon2.Parallelism
+	}
+	if e.config.Password.Argon2.SaltLength != 0 {
+		cfg.Password.Argon2.SaltLength = e.config.Password.Argon2.SaltLength
+	}
+	if e.config.Password.Argon2.KeyLength != 0 {
+		cfg.Password.Argon2.KeyLength = e.config.Password.Argon2.KeyLength
+	}
+
+	// Rate limit
+	if e.config.RateLimit.Enabled {
+		cfg.RateLimit.Enabled = true
+	}
+	if e.config.RateLimit.SignInLimit != 0 {
+		cfg.RateLimit.SignInLimit = e.config.RateLimit.SignInLimit
+	}
+	if e.config.RateLimit.SignUpLimit != 0 {
+		cfg.RateLimit.SignUpLimit = e.config.RateLimit.SignUpLimit
+	}
+	if e.config.RateLimit.ForgotPasswordLimit != 0 {
+		cfg.RateLimit.ForgotPasswordLimit = e.config.RateLimit.ForgotPasswordLimit
+	}
+	if e.config.RateLimit.MFAChallengeLimit != 0 {
+		cfg.RateLimit.MFAChallengeLimit = e.config.RateLimit.MFAChallengeLimit
+	}
+	if e.config.RateLimit.WindowSeconds != 0 {
+		cfg.RateLimit.WindowSeconds = e.config.RateLimit.WindowSeconds
+	}
+
+	// Lockout
+	if e.config.Lockout.Enabled {
+		cfg.Lockout.Enabled = true
+	}
+	if e.config.Lockout.MaxAttempts != 0 {
+		cfg.Lockout.MaxAttempts = e.config.Lockout.MaxAttempts
+	}
+	if e.config.Lockout.LockoutDurationSeconds != 0 {
+		cfg.Lockout.LockoutDurationSeconds = e.config.Lockout.LockoutDurationSeconds
+	}
+	if e.config.Lockout.ResetAfterSeconds != 0 {
+		cfg.Lockout.ResetAfterSeconds = e.config.Lockout.ResetAfterSeconds
+	}
+
+	return cfg
+}
+
+// resolveGroveDB resolves a *grove.DB from the DI container.
+// If GroveDatabase is set, it looks up the named DB; otherwise it uses the default.
+func (e *Extension) resolveGroveDB(fapp forge.App) (*grove.DB, error) {
+	if e.config.GroveDatabase != "" {
+		db, err := vessel.InjectNamed[*grove.DB](fapp.Container(), e.config.GroveDatabase)
+		if err != nil {
+			return nil, fmt.Errorf("grove database %q not found in container: %w", e.config.GroveDatabase, err)
+		}
+		return db, nil
+	}
+	db, err := vessel.Inject[*grove.DB](fapp.Container())
+	if err != nil {
+		return nil, fmt.Errorf("default grove database not found in container: %w", err)
+	}
+	return db, nil
+}
+
+// buildStoreFromGroveDB constructs the appropriate store backend
+// based on the grove driver type (pg, sqlite, mongo).
+func (e *Extension) buildStoreFromGroveDB(db *grove.DB) (store.Store, error) {
+	driverName := db.Driver().Name()
+	switch driverName {
+	case "pg":
+		return pgstore.New(db), nil
+	case "sqlite":
+		return sqlitestore.New(db), nil
+	case "mongo":
+		return mongostore.New(db), nil
+	default:
+		return nil, fmt.Errorf("authsome: unsupported grove driver %q", driverName)
+	}
+}
+
+// buildBootstrapOptions converts YAML bootstrap config to authsome.BootstrapOption values.
+func (e *Extension) buildBootstrapOptions() []authsome.BootstrapOption {
+	cfg := e.config.Bootstrap
+	var opts []authsome.BootstrapOption
+
+	if cfg.AppName != "" {
+		opts = append(opts, authsome.WithBootstrapAppName(cfg.AppName))
+	}
+	if cfg.AppSlug != "" {
+		opts = append(opts, authsome.WithBootstrapAppSlug(cfg.AppSlug))
+	}
+	if cfg.AppLogo != "" {
+		opts = append(opts, authsome.WithBootstrapAppLogo(cfg.AppLogo))
+	}
+	if cfg.SkipDefaultEnvs {
+		opts = append(opts, authsome.WithSkipDefaultEnvs())
+	}
+	if cfg.SkipDefaultRoles {
+		opts = append(opts, authsome.WithSkipDefaultRoles())
+	}
+
+	// Override environments from YAML.
+	if len(cfg.Environments) > 0 {
+		envs := make([]authsome.BootstrapEnv, len(cfg.Environments))
+		for i, env := range cfg.Environments {
+			envs[i] = authsome.BootstrapEnv{
+				Name:      env.Name,
+				Slug:      env.Slug,
+				Type:      environment.Type(env.Type),
+				IsDefault: env.IsDefault,
+			}
+		}
+		opts = append(opts, authsome.WithBootstrapEnvs(envs))
+	}
+
+	// Override roles from YAML.
+	if len(cfg.Roles) > 0 {
+		roles := make([]authsome.BootstrapRole, len(cfg.Roles))
+		for i, role := range cfg.Roles {
+			roles[i] = authsome.BootstrapRole{
+				Name:        role.Name,
+				Slug:        role.Slug,
+				Description: role.Description,
+			}
+		}
+		opts = append(opts, authsome.WithBootstrapRoles(roles))
+	}
+
+	return opts
+}

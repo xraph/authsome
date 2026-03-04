@@ -1,0 +1,291 @@
+---
+title: Custom Store
+description: Implement a custom storage backend by satisfying the composite store.Store interface.
+---
+
+Every Authsome storage backend implements a single Go interface. This guide shows how to build a custom store for your preferred database or storage layer.
+
+## The composite interface
+
+Your store must implement the composite `store.Store` interface, which embeds 12 subsystem stores plus lifecycle methods:
+
+```go
+import "github.com/xraph/authsome/store"
+
+type Store interface {
+	user.Store
+	session.Store
+	account.Store
+	app.Store
+	organization.Store
+	device.Store
+	webhook.Store
+	notification.Store
+	apikey.Store
+	environment.Store
+	formconfig.Store
+	formconfig.BrandingStore
+	appsessionconfig.Store
+
+	Migrate(ctx context.Context, extraGroups ...*migrate.Group) error
+	Ping(ctx context.Context) error
+	Close() error
+}
+```
+
+## Key subsystem interfaces
+
+### user.Store
+
+```go
+type Store interface {
+	CreateUser(ctx context.Context, u *User) error
+	GetUser(ctx context.Context, userID id.UserID) (*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	UpdateUser(ctx context.Context, u *User) error
+	DeleteUser(ctx context.Context, userID id.UserID) error
+	ListUsers(ctx context.Context, filter *ListFilter) ([]*User, int64, error)
+}
+```
+
+### session.Store
+
+```go
+type Store interface {
+	CreateSession(ctx context.Context, s *Session) error
+	GetSession(ctx context.Context, sessionID id.SessionID) (*Session, error)
+	GetSessionByToken(ctx context.Context, token string) (*Session, error)
+	GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
+	UpdateSession(ctx context.Context, s *Session) error
+	DeleteSession(ctx context.Context, sessionID id.SessionID) error
+	DeleteUserSessions(ctx context.Context, userID id.UserID) error
+	ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
+	CountActiveSessions(ctx context.Context, userID id.UserID) (int64, error)
+}
+```
+
+### account.Store
+
+```go
+type Store interface {
+	CreateAccount(ctx context.Context, a *Account) error
+	GetAccountByProvider(ctx context.Context, provider, providerID string) (*Account, error)
+	GetAccountsByUserID(ctx context.Context, userID id.UserID) ([]*Account, error)
+	DeleteAccount(ctx context.Context, accountID id.AccountID) error
+}
+```
+
+### organization.Store
+
+```go
+type Store interface {
+	CreateOrganization(ctx context.Context, o *Organization) error
+	GetOrganization(ctx context.Context, orgID id.OrgID) (*Organization, error)
+	UpdateOrganization(ctx context.Context, o *Organization) error
+	DeleteOrganization(ctx context.Context, orgID id.OrgID) error
+	ListOrganizations(ctx context.Context, filter *ListFilter) ([]*Organization, int64, error)
+	ListUserOrganizations(ctx context.Context, userID id.UserID) ([]*Organization, error)
+	AddMember(ctx context.Context, m *Member) error
+	GetMember(ctx context.Context, memberID id.MemberID) (*Member, error)
+	UpdateMember(ctx context.Context, m *Member) error
+	RemoveMember(ctx context.Context, memberID id.MemberID) error
+	ListMembers(ctx context.Context, orgID id.OrgID) ([]*Member, error)
+}
+```
+
+## Compile-time check
+
+Use a compile-time assertion to verify your implementation satisfies all interfaces:
+
+```go
+var _ store.Store = (*MyStore)(nil)
+```
+
+This causes a compile error if any required method is missing, which is much faster than discovering it at runtime.
+
+## Migration handling
+
+The `Migrate` method accepts optional extra migration groups. These come from plugins that define their own tables. Your store must run both its own core migrations and any extra groups passed in.
+
+```go
+func (s *MyStore) Migrate(ctx context.Context, extraGroups ...*migrate.Group) error {
+	// Run core migrations first
+	if err := s.runCoreMigrations(ctx); err != nil {
+		return err
+	}
+
+	// Run plugin migration groups
+	for _, group := range extraGroups {
+		if err := group.Run(ctx, s.db); err != nil {
+			return fmt.Errorf("plugin migration: %w", err)
+		}
+	}
+
+	return nil
+}
+```
+
+## Complete example: DynamoDB store
+
+Below is a skeleton implementation targeting AWS DynamoDB. The pattern applies to any database.
+
+```go
+package dynamostore
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
+	"github.com/xraph/authsome/session"
+
+	"github.com/xraph/grove/migrate"
+)
+
+var _ store.Store = (*DynamoStore)(nil)
+
+type DynamoStore struct {
+	client    *dynamodb.Client
+	tableName string
+}
+
+func New(client *dynamodb.Client, tableName string) *DynamoStore {
+	return &DynamoStore{client: client, tableName: tableName}
+}
+
+// ── User methods ──
+
+func (s *DynamoStore) CreateUser(ctx context.Context, u *user.User) error {
+	// Marshal user to DynamoDB item and PutItem
+	return nil
+}
+
+func (s *DynamoStore) GetUser(ctx context.Context, userID id.UserID) (*user.User, error) {
+	// GetItem by PK = "USER#<userID>"
+	return nil, nil
+}
+
+func (s *DynamoStore) GetUserByEmail(ctx context.Context, email string) (*user.User, error) {
+	// Query GSI on email
+	return nil, nil
+}
+
+// ... implement remaining user.Store methods ...
+
+// ── Session methods ──
+
+func (s *DynamoStore) CreateSession(ctx context.Context, sess *session.Session) error {
+	// PutItem with PK = "SESSION#<sessionID>"
+	return nil
+}
+
+func (s *DynamoStore) GetSessionByToken(ctx context.Context, token string) (*session.Session, error) {
+	// Query GSI on session_token
+	return nil, nil
+}
+
+// ... implement remaining session.Store methods ...
+
+// ── Lifecycle ──
+
+func (s *DynamoStore) Migrate(ctx context.Context, extraGroups ...*migrate.Group) error {
+	// DynamoDB tables are created via CloudFormation/CDK, not in-app migrations.
+	// Plugin migrations may still need handling via a side-channel.
+	return nil
+}
+
+func (s *DynamoStore) Ping(ctx context.Context) error {
+	_, err := s.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+		TableName: &s.tableName,
+	})
+	return err
+}
+
+func (s *DynamoStore) Close() error {
+	return nil // DynamoDB client doesn't need explicit close
+}
+```
+
+## Testing your store
+
+Write tests against the store interface to verify correctness. The test pattern is the same for every backend:
+
+```go
+package dynamostore_test
+
+import (
+	"context"
+	"testing"
+
+	"myapp/dynamostore"
+	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/user"
+)
+
+func TestCreateAndGetUser(t *testing.T) {
+	s := dynamostore.New(testClient, "authsome-test")
+	ctx := context.Background()
+
+	u := &user.User{
+		ID:    id.NewUserID(),
+		Email: "test@example.com",
+		Name:  "Test User",
+	}
+
+	if err := s.CreateUser(ctx, u); err != nil {
+		t.Fatal("create:", err)
+	}
+
+	got, err := s.GetUser(ctx, u.ID)
+	if err != nil {
+		t.Fatal("get:", err)
+	}
+	if got.Email != u.Email {
+		t.Errorf("email = %q, want %q", got.Email, u.Email)
+	}
+}
+
+func TestGetUserNotFound(t *testing.T) {
+	s := dynamostore.New(testClient, "authsome-test")
+	ctx := context.Background()
+
+	_, err := s.GetUser(ctx, id.NewUserID())
+	if err == nil {
+		t.Fatal("expected error for non-existent user")
+	}
+}
+```
+
+## Registering with the engine
+
+Pass your custom store when building the engine:
+
+```go
+eng, err := authsome.NewEngine(
+	authsome.WithStore(dynamostore.New(client, "authsome")),
+)
+```
+
+Or when using the Forge extension:
+
+```go
+ext := extension.New(
+	extension.WithEngineOption(
+		authsome.WithStore(dynamostore.New(client, "authsome")),
+	),
+)
+```
+
+## Reference implementations
+
+Study the existing implementations for patterns:
+
+| Backend | Package | Notes |
+|---------|---------|-------|
+| PostgreSQL | `store/postgres` | Bun ORM, embedded SQL migrations, recommended for production |
+| SQLite | `store/sqlite` | Bun ORM, file-based, good for single-node deployments |
+| MongoDB | `store/mongo` | Native MongoDB driver, document-oriented |
+| Memory | `store/memory` | Hash maps with RWMutex, simplest reference |

@@ -1,0 +1,163 @@
+---
+title: Impersonation
+description: Admin impersonation of user accounts with full audit trail and security controls.
+---
+
+Impersonation allows administrators to create a session as another user without knowing their password. This is useful for debugging user-reported issues, providing customer support, and verifying what a user sees in the application. Every impersonation action is fully audited.
+
+## How impersonation works
+
+When an admin impersonates a user, the engine creates a new session for the target user with the `ImpersonatedBy` field set to the admin's user ID. The resulting session token behaves exactly like a normal session for the target user, except:
+
+1. The `ImpersonatedBy` field is populated on the session record
+2. An audit event is emitted with the admin's identity and the target user
+3. The session can be identified as impersonated in logs and audit trails
+
+```go
+type Session struct {
+    // ... other fields ...
+    ImpersonatedBy id.UserID `json:"impersonated_by,omitempty"`
+}
+```
+
+## Starting an impersonation session
+
+### Via Go SDK
+
+```go
+// Admin creates a session as another user
+sess, err := engine.Impersonate(ctx, adminUserID, targetUserID, appID)
+if err != nil {
+    // Not authorized, user not found, etc.
+}
+// sess.Token           → session token acting as the target user
+// sess.ImpersonatedBy  → adminUserID
+```
+
+### Via HTTP API
+
+`POST /v1/auth/admin/impersonate`
+
+```json
+{
+  "target_user_id": "ausr_01jb...",
+  "app_id": "myapp"
+}
+```
+
+```
+Authorization: Bearer <admin_session_token>
+```
+
+**Response:**
+
+```json
+{
+  "session_token": "imp_a3f8c9d4...",
+  "refresh_token": "imp_d72b1ef8...",
+  "expires_at": "2024-11-01T11:00:00Z",
+  "impersonated_by": "ausr_01j9...",
+  "target_user": {
+    "id": "ausr_01jb...",
+    "email": "bob@example.com",
+    "name": "Bob Smith"
+  }
+}
+```
+
+The admin can now use the returned `session_token` to make requests as the target user.
+
+## Ending an impersonation session
+
+Impersonation sessions are regular sessions and can be ended in the usual ways:
+
+- **Sign out**: `POST /v1/auth/signout` with the impersonation session token
+- **Token expiry**: The session expires based on the configured TTL
+- **Session revocation**: Delete the session via `DELETE /v1/auth/sessions/:sessionId`
+
+Impersonation sessions typically have a shorter TTL than regular sessions to limit the window of elevated access.
+
+## Authorization requirements
+
+Impersonation requires specific RBAC permissions. By default, only users with the `admin` role can impersonate other users. The engine checks:
+
+1. The requesting user has the `impersonate` permission on the `users` resource
+2. The target user exists and belongs to the same application
+3. The target user is not banned (impersonating a banned user is not allowed)
+4. The admin is not attempting to impersonate another admin (unless explicitly allowed)
+
+### RBAC configuration
+
+```go
+import "github.com/xraph/authsome/rbac"
+
+// Create an admin role with impersonation permission
+role := &rbac.Role{
+    Name: "Admin",
+    Slug: "admin",
+}
+engine.CreateRole(ctx, role)
+
+perm := &rbac.Permission{
+    RoleID:   role.ID,
+    Action:   "impersonate",
+    Resource: "users",
+}
+engine.AddPermission(ctx, perm)
+```
+
+## Audit trail
+
+Every impersonation event is recorded in the audit trail. The engine emits the following events:
+
+| Event | Description |
+|-------|-------------|
+| `impersonation.started` | Admin initiated impersonation of a user |
+| `impersonation.action` | An action performed while impersonating |
+| `impersonation.ended` | Impersonation session was terminated |
+
+### Audit event structure
+
+```json
+{
+  "event": "impersonation.started",
+  "admin_id": "ausr_01j9...",
+  "admin_email": "admin@example.com",
+  "target_user_id": "ausr_01jb...",
+  "target_user_email": "bob@example.com",
+  "session_id": "ases_01jb...",
+  "app_id": "aapp_01j9...",
+  "ip_address": "192.168.1.1",
+  "timestamp": "2024-11-01T10:00:00Z"
+}
+```
+
+If a [Chronicle bridge](/docs/bridges/chronicle) is configured, impersonation events are automatically sent to your audit logging service. If a [Ledger bridge](/docs/bridges/ledger) is configured, events are also recorded in the compliance ledger.
+
+### Querying impersonation sessions
+
+You can identify impersonation sessions by checking the `ImpersonatedBy` field:
+
+```go
+sessions, err := engine.ListSessions(ctx, targetUserID)
+for _, s := range sessions {
+    if s.ImpersonatedBy.String() != "" {
+        // This session was created via impersonation
+        fmt.Printf("Impersonated by: %s\n", s.ImpersonatedBy)
+    }
+}
+```
+
+## Security considerations
+
+- **Short TTL**: Impersonation sessions should use a shorter token TTL than regular sessions. Configure this via per-app session configuration or a dedicated impersonation TTL.
+- **No cascading impersonation**: An impersonation session cannot be used to impersonate another user. The engine rejects impersonation requests from sessions that are themselves impersonated.
+- **Notification**: Consider notifying users when their account is being impersonated. Use the webhook system to trigger notifications on `impersonation.started` events.
+- **Scope limitations**: Impersonation sessions can be restricted from performing sensitive operations (password changes, MFA enrollment changes, account deletion) depending on your configuration.
+- **Logging**: All actions performed during impersonation are tagged with the admin's identity in the audit log, providing a clear chain of responsibility.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/admin/impersonate` | Start an impersonation session (admin only) |

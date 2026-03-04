@@ -1,0 +1,284 @@
+package notification
+
+import (
+	"context"
+	log "github.com/xraph/go-utils/log"
+
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/user"
+)
+
+// Compile-time interface checks.
+var (
+	_ plugin.Plugin          = (*Plugin)(nil)
+	_ plugin.OnInit          = (*Plugin)(nil)
+	_ plugin.AfterSignUp     = (*Plugin)(nil)
+	_ plugin.AfterUserCreate = (*Plugin)(nil)
+)
+
+// Plugin is the Herald-backed notification plugin. It replaces the legacy
+// email plugin with a unified multi-channel notification system.
+type Plugin struct {
+	config   Config
+	herald   bridge.Herald
+	hooks    *hook.Bus
+	logger   log.Logger
+	mappings map[string]*Mapping
+}
+
+// New creates a new notification plugin with the given configuration.
+func New(cfg Config) *Plugin {
+	if cfg.AppName == "" {
+		cfg.AppName = "AuthSome"
+	}
+	if cfg.DefaultLocale == "" {
+		cfg.DefaultLocale = "en"
+	}
+
+	// Merge user-provided mappings with defaults.
+	mappings := DefaultMappings()
+	if cfg.Mappings != nil {
+		for action, m := range cfg.Mappings {
+			if m == nil {
+				// nil entry disables the mapping.
+				delete(mappings, action)
+			} else {
+				mappings[action] = m
+			}
+		}
+	}
+
+	return &Plugin{
+		config:   cfg,
+		mappings: mappings,
+	}
+}
+
+// Name returns the plugin name.
+func (p *Plugin) Name() string { return "notification" }
+
+// OnInit extracts the Herald bridge and hook bus from the engine during
+// initialization using duck-typing (same pattern as MFA plugin).
+func (p *Plugin) OnInit(_ context.Context, engine any) error {
+	// Discover Herald bridge.
+	type heraldGetter interface {
+		Herald() bridge.Herald
+	}
+	if hg, ok := engine.(heraldGetter); ok {
+		p.herald = hg.Herald()
+	}
+
+	// Discover hook bus.
+	type hooksGetter interface {
+		Hooks() *hook.Bus
+	}
+	if hg, ok := engine.(hooksGetter); ok {
+		p.hooks = hg.Hooks()
+	}
+
+	// Discover logger.
+	type loggerGetter interface {
+		Logger() log.Logger
+	}
+	if lg, ok := engine.(loggerGetter); ok {
+		p.logger = lg.Logger()
+	}
+	if p.logger == nil {
+		p.logger = log.NewNoopLogger()
+	}
+
+	// Register a global hook handler that auto-sends notifications for
+	// all mapped actions that aren't handled by direct plugin hooks.
+	if p.hooks != nil && p.herald != nil {
+		p.hooks.On("herald-notification", func(ctx context.Context, event *hook.Event) error {
+			return p.handleHookEvent(ctx, event)
+		})
+	}
+
+	return nil
+}
+
+// OnAfterSignUp sends a welcome notification to the newly registered user.
+func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, _ *session.Session) error {
+	if p.herald == nil {
+		return nil
+	}
+
+	m, ok := p.mappings[hook.ActionSignUp]
+	if !ok || !m.Enabled {
+		return nil
+	}
+
+	name := u.Name()
+	if name == "" {
+		name = u.Email
+	}
+
+	if err := p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+		Template: m.Template,
+		Channels: m.Channels,
+		To:       []string{u.Email},
+		UserID:   u.ID.String(),
+		Locale:   p.config.DefaultLocale,
+		Async:    p.config.Async,
+		Data: map[string]any{
+			"user_name": name,
+			"app_name":  p.config.AppName,
+			"login_url": p.config.BaseURL + "/login",
+		},
+	}); err != nil {
+		p.logger.Warn("notification plugin: failed to send welcome notification",
+			log.String("email", u.Email),
+			log.String("error", err.Error()),
+		)
+	}
+
+	return nil
+}
+
+// OnAfterUserCreate sends a verification notification to the newly created user.
+func (p *Plugin) OnAfterUserCreate(ctx context.Context, u *user.User) error {
+	if p.herald == nil {
+		return nil
+	}
+
+	// Only send if user has not yet verified their email.
+	if u.EmailVerified {
+		return nil
+	}
+
+	m, ok := p.mappings[hook.ActionUserCreate]
+	if !ok || !m.Enabled {
+		return nil
+	}
+
+	name := u.Name()
+	if name == "" {
+		name = u.Email
+	}
+
+	if err := p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+		Template: m.Template,
+		Channels: m.Channels,
+		To:       []string{u.Email},
+		UserID:   u.ID.String(),
+		Locale:   p.config.DefaultLocale,
+		Async:    p.config.Async,
+		Data: map[string]any{
+			"user_name":  name,
+			"app_name":   p.config.AppName,
+			"verify_url": p.config.BaseURL + "/verify-email",
+		},
+	}); err != nil {
+		p.logger.Warn("notification plugin: failed to send verification notification",
+			log.String("email", u.Email),
+			log.String("error", err.Error()),
+		)
+	}
+
+	return nil
+}
+
+// SendPasswordReset sends a password reset notification. This is typically
+// called by the engine's password reset flow.
+func (p *Plugin) SendPasswordReset(ctx context.Context, email, name, resetURL string) error {
+	if p.herald == nil {
+		return bridge.ErrHeraldNotAvailable
+	}
+
+	m, ok := p.mappings[hook.ActionPasswordReset]
+	if !ok || !m.Enabled {
+		return nil
+	}
+
+	if name == "" {
+		name = email
+	}
+
+	return p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+		Template: m.Template,
+		Channels: m.Channels,
+		To:       []string{email},
+		Locale:   p.config.DefaultLocale,
+		Async:    p.config.Async,
+		Data: map[string]any{
+			"user_name":  name,
+			"app_name":   p.config.AppName,
+			"reset_url":  resetURL,
+			"expires_in": "1 hour",
+		},
+	})
+}
+
+// SendInvitation sends an organization invitation notification.
+func (p *Plugin) SendInvitation(ctx context.Context, email, inviterName, orgName, acceptURL string) error {
+	if p.herald == nil {
+		return bridge.ErrHeraldNotAvailable
+	}
+
+	m, ok := p.mappings[hook.ActionInvitationAccept]
+	if !ok || !m.Enabled {
+		return nil
+	}
+
+	return p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+		Template: m.Template,
+		Channels: m.Channels,
+		To:       []string{email},
+		Locale:   p.config.DefaultLocale,
+		Async:    p.config.Async,
+		Data: map[string]any{
+			"inviter_name": inviterName,
+			"org_name":     orgName,
+			"app_name":     p.config.AppName,
+			"accept_url":   acceptURL,
+		},
+	})
+}
+
+// handleHookEvent is the global hook handler that catches actions not handled
+// by direct plugin hooks (e.g. password_change, account_locked).
+func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
+	// Skip actions that are handled by direct plugin hooks to avoid
+	// sending duplicate notifications.
+	switch event.Action {
+	case hook.ActionSignUp, hook.ActionUserCreate:
+		return nil
+	}
+
+	m, ok := p.mappings[event.Action]
+	if !ok || !m.Enabled {
+		return nil
+	}
+
+	// Build recipient list from event metadata.
+	var to []string
+	if email, ok := event.Metadata["email"]; ok && email != "" {
+		to = []string{email}
+	}
+	if len(to) == 0 {
+		// No recipient — skip silently.
+		return nil
+	}
+
+	// Build template data from event metadata.
+	data := make(map[string]any, len(event.Metadata)+2)
+	for k, v := range event.Metadata {
+		data[k] = v
+	}
+	data["app_name"] = p.config.AppName
+
+	return p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+		AppID:    event.Tenant,
+		Template: m.Template,
+		Channels: m.Channels,
+		To:       to,
+		UserID:   event.ActorID,
+		Locale:   p.config.DefaultLocale,
+		Async:    p.config.Async,
+		Data:     data,
+	})
+}

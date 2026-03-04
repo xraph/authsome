@@ -1,0 +1,30 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+)
+
+// KeysPage renders the API keys management page.
+templ KeysPage() {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">API Keys</h1>
+			<p class="text-muted-foreground mt-1">Manage API keys for machine-to-machine authentication.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Active Keys
+				}
+				@card.Description() {
+					API keys are scoped per application and user
+				}
+			}
+			@card.Content() {
+				<p class="text-sm text-muted-foreground py-4 text-center">
+					API key data is available on individual user detail pages.
+				</p>
+			}
+		}
+	</div>
+}

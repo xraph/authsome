@@ -1,0 +1,176 @@
+---
+title: Phone Plugin
+description: Phone number verification and OTP-based authentication with automatic user provisioning.
+---
+
+The `phone` plugin provides phone number authentication as a primary auth method. Users enter their phone number, receive an OTP via SMS, and verifying the code authenticates them. The plugin supports automatic user creation for new phone numbers.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/phone"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithSMSSender(smsBridge),
+    authsome.WithPlugin(phone.New(phone.Config{
+        CodeTTL:    5 * time.Minute,
+        AutoCreate: boolPtr(true),
+    })),
+)
+
+func boolPtr(v bool) *bool { return &v }
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `SMSSender` | `bridge.SMSSender` | engine SMS bridge | Override the engine-level SMS sender |
+| `CodeTTL` | `time.Duration` | `5m` | Lifetime of OTP codes |
+| `AutoCreate` | `*bool` | `true` | Create new users for unregistered phone numbers |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"phone"`) |
+| `OnInit` | Captures store, SMS sender, ceremony store, logger, and session config resolver |
+| `RouteProvider` | Registers `/v1/auth/phone/start` and `/verify` endpoints |
+| `AuthMethodContributor` | Reports `"phone"` as a linked auth method if the user has a verified phone |
+
+## Authentication flow
+
+
+
+**Send OTP**: The user submits their phone number in E.164 format.
+
+`POST /v1/auth/phone/start`
+
+```json
+{
+  "phone": "+14155551234",
+  "app_id": "myapp"
+}
+```
+
+The plugin validates the phone number format (E.164: `+` followed by 7-15 digits), generates a 6-digit OTP using the MFA SMS infrastructure, sends it via the SMS bridge, and stores the challenge in the ceremony store.
+
+**Response:**
+
+```json
+{
+  "status": "otp_sent",
+  "expires_in": 300
+}
+```
+
+
+**Verify OTP**: The user enters the received code.
+
+`POST /v1/auth/phone/verify`
+
+```json
+{
+  "phone": "+14155551234",
+  "code": "123456",
+  "app_id": "myapp"
+}
+```
+
+The plugin validates the code against the stored challenge, resolves or creates the user, marks the phone number as verified, and creates a session.
+
+**Response:**
+
+```json
+{
+  "user": {
+    "id": "ausr_01j9...",
+    "phone": "+14155551234",
+    "phone_verified": true
+  },
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "expires_at": "2024-11-01T11:00:00Z",
+  "new_user": true
+}
+```
+
+
+
+## Phone number validation
+
+The plugin validates phone numbers against the E.164 format using a regex pattern:
+
+```
+^\+[1-9]\d{6,14}$
+```
+
+Examples of valid phone numbers:
+- `+14155551234` (US)
+- `+442071234567` (UK)
+- `+81312345678` (Japan)
+
+Invalid formats are rejected with a `400 Bad Request` error.
+
+## Auto-creation behavior
+
+When `AutoCreate` is `true` (the default), the plugin creates new users automatically when an unregistered phone number is verified. The new user has:
+
+- A new user ID
+- The phone number set and marked as verified
+- No email, name, or password
+
+When `AutoCreate` is `false`, unregistered phone numbers receive a `401 Unauthorized` error. This is useful when phone auth should only work for existing users who have already linked their phone number.
+
+```go
+// Disable auto-creation:
+phone.New(phone.Config{
+    AutoCreate: boolPtr(false),
+})
+```
+
+## Integration with SMS bridge
+
+The phone plugin uses the SMS bridge interface:
+
+```go
+type SMSSender interface {
+    SendSMS(ctx context.Context, to, message string) error
+}
+```
+
+The OTP code generation and validation reuses the MFA plugin's SMS infrastructure (`mfa.SendSMSChallenge` and `mfa.ValidateSMSCode`).
+
+## Rate limiting
+
+OTP sends should be rate-limited to prevent abuse. Configure rate limiting at the engine level:
+
+```go
+authsome.WithRateLimiter(rateLimiter)
+```
+
+The engine applies rate limits to all authentication endpoints, including phone OTP sends.
+
+## Auth method reporting
+
+The phone plugin implements `AuthMethodContributor`, reporting phone as a linked method when the user has a verified phone number:
+
+```json
+{
+  "type": "phone",
+  "provider": "phone",
+  "label": "Phone (+14155551234)",
+  "linked_at": "2024-11-01T10:00:00Z"
+}
+```
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/phone/start` | Send OTP to phone number |
+| `POST` | `/v1/auth/phone/verify` | Verify OTP and authenticate |

@@ -1,0 +1,34 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/authsome/device"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ DevicesPage(devices []*device.Device) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center gap-3">
+			<h1 class="text-3xl font-bold tracking-tight">Devices</h1>
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				{ strconv.Itoa(len(devices)) }
+			}
+		</div>
+
+		<!-- Device Table -->
+		@card.Card() {
+			@card.Content() {
+				if len(devices) == 0 {
+					@emptyState("No devices registered.", icons.Smartphone(icons.WithSize(40)))
+				} else {
+					@components.DeviceTable(devices)
+				}
+			}
+		}
+	</div>
+}

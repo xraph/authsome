@@ -1,0 +1,72 @@
+package dashui
+
+import (
+	"time"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+)
+
+// APIKeyView is a display-only view of an API key.
+type APIKeyView struct {
+	Name      string
+	KeyPrefix string
+	Revoked   bool
+	CreatedAt time.Time
+}
+
+// UserSection renders the API keys section for a specific user detail page.
+templ UserSection(keys []APIKeyView) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				API Keys
+			}
+			@card.Description() {
+				API keys assigned to this user
+			}
+		}
+		@card.Content() {
+			if len(keys) == 0 {
+				<p class="text-sm text-muted-foreground py-4 text-center">No API keys.</p>
+			} else {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() { Name }
+							@table.Head() { Prefix }
+							@table.Head() { Status }
+							@table.Head() { Created }
+						}
+					}
+					@table.Body() {
+						for _, k := range keys {
+							@table.Row() {
+								@table.Cell() { { k.Name } }
+								@table.Cell() {
+									<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ k.KeyPrefix }...</code>
+								}
+								@table.Cell() {
+									if k.Revoked {
+										@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+											Revoked
+										}
+									} else {
+										@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+											Active
+										}
+									}
+								}
+								@table.Cell() {
+									{{ created := k.CreatedAt.Format("Jan 02, 2006") }}
+									{ created }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,40 @@
+package components
+
+import (
+	"github.com/xraph/authsome/organization"
+	"github.com/xraph/forgeui/components/table"
+)
+
+// OrgTable renders a table of organizations with Name, Slug, and Created columns.
+templ OrgTable(orgs []*organization.Organization) {
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() {
+					Name
+				}
+				@table.Head() {
+					Slug
+				}
+				@table.Head() {
+					Created
+				}
+			}
+		}
+		@table.Body() {
+			for _, org := range orgs {
+				@table.Row() {
+					@table.Cell() {
+						{ org.Name }
+					}
+					@table.Cell() {
+						<span class="text-muted-foreground font-mono text-xs">{ org.Slug }</span>
+					}
+					@table.Cell() {
+						{ org.CreatedAt.Format("Jan 02, 2006") }
+					}
+				}
+			}
+		}
+	}
+}

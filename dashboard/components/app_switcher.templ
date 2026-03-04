@@ -1,0 +1,50 @@
+package components
+
+import (
+	"github.com/xraph/authsome/app"
+	"github.com/xraph/forgeui/components/dropdown"
+	"github.com/xraph/forgeui/icons"
+)
+
+// AppSwitcher renders a dropdown for switching between apps in the sidebar header.
+// currentEnvSlug and currentPage are used to construct navigation URLs when switching apps.
+templ AppSwitcher(current *app.App, all []*app.App, currentEnvSlug, currentPage, basePath string) {
+	if len(all) > 1 {
+		<div class="px-2 pb-2">
+			@dropdown.Dropdown() {
+				@dropdown.Trigger(dropdown.TriggerProps{
+					Class: "w-full inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent cursor-pointer",
+				}) {
+					@icons.Building2(icons.WithSize(14))
+					<span class="flex-1 truncate text-left">{ current.Name }</span>
+					@icons.ChevronsUpDown(icons.WithSize(14), icons.WithClass("text-muted-foreground"))
+				}
+				@dropdown.Content(dropdown.ContentProps{
+					Placement: dropdown.PlacementBottomStart,
+					Class:     "w-[--radix-dropdown-trigger-width] min-w-48",
+				}) {
+					@dropdown.Label() {
+						Switch Application
+					}
+					@dropdown.Separator()
+					for _, a := range all {
+						@dropdown.Item(dropdown.ItemProps{
+							Attributes: templ.Attributes{
+								"hx-get":      basePath + "/ext/authsome/pages/" + a.Slug + "/" + currentEnvSlug + currentPage,
+								"hx-target":   "#content",
+								"hx-swap":     "innerHTML",
+								"hx-push-url": "true",
+							},
+						}) {
+							@icons.Building2(icons.WithSize(14))
+							<span class="flex-1">{ a.Name }</span>
+							if a.ID == current.ID {
+								@icons.Check(icons.WithSize(14))
+							}
+						}
+					}
+				}
+			}
+		</div>
+	}
+}

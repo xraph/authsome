@@ -1,0 +1,271 @@
+---
+title: Styled Components
+description: 40+ pre-styled authentication components built with Radix UI and Tailwind CSS via @authsome/ui-components.
+---
+
+`@authsome/ui-components` provides a library of 40+ production-ready, styled authentication components built on [Radix UI](https://www.radix-ui.com/) primitives and [Tailwind CSS](https://tailwindcss.com/). Drop them into your React app for a polished auth experience with minimal effort.
+
+## Installation
+
+```bash
+npm install @authsome/ui-components @authsome/ui-react @authsome/ui-core
+```
+
+Ensure Tailwind CSS is configured in your project. The components use Tailwind utility classes and CSS variables for theming.
+
+## Component catalog
+
+### Auth forms
+
+| Component | Description |
+|-----------|-------------|
+| `SignInForm` | Email/password sign-in with social login support |
+| `SignUpForm` | Registration form with name, email, password fields |
+| `ForgotPasswordForm` | Request a password reset email |
+| `ResetPasswordForm` | Set a new password with reset token |
+| `MagicLinkForm` | Passwordless sign-in via email link |
+| `MFAChallengeFormStyled` | TOTP or SMS code verification |
+| `ChangePasswordForm` | Current/new password form for authenticated users |
+
+### Passkey components
+
+| Component | Description |
+|-----------|-------------|
+| `PasskeyLoginButton` | Authenticate with a registered passkey |
+| `PasskeyRegisterButton` | Register a new passkey for the account |
+| `PasskeyList` | List and manage registered passkeys |
+
+### Device and session management
+
+| Component | Description |
+|-----------|-------------|
+| `SessionList` | View and revoke active sessions |
+| `DeviceList` | View and manage authorized devices |
+| `DeviceAuthorizationForm` | Authorize a new device via code |
+
+### User components
+
+| Component | Description |
+|-----------|-------------|
+| `UserAvatar` | User profile picture with fallback initials |
+| `UserButton` | Dropdown menu with user info and actions |
+| `UserProfileCard` | Display user details in a card layout |
+| `OrgSwitcher` | Switch between organizations the user belongs to |
+| `StyledAuthGuard` | AuthGuard with built-in loading spinner and sign-in form |
+
+### Shared components
+
+| Component | Description |
+|-----------|-------------|
+| `AuthCard` | Consistent card wrapper for auth forms |
+| `SocialButtons` | Social provider login buttons (Google, GitHub, etc.) |
+| `PasswordInput` | Password field with show/hide toggle |
+| `LoadingSpinner` | Animated loading indicator |
+| `ErrorDisplay` | Styled error message display |
+
+### Primitives
+
+All Radix-based primitives are exported for building custom components:
+
+`Button`, `Card`, `Input`, `Label`, `Alert`, `Avatar`, `Badge`, `Checkbox`, `Dialog`, `DropdownMenu`, `InputOTP`, `Select`, `Separator`, `Sheet`, `Skeleton`, `Switch`, `Tabs`, `Tooltip`
+
+## Usage examples
+
+### Sign-in page
+
+```tsx
+import { AuthProvider } from "@authsome/ui-react";
+import { SignInForm, AuthCard } from "@authsome/ui-components";
+
+function SignInPage() {
+  return (
+    <AuthProvider baseURL="https://api.example.com">
+      <div className="flex min-h-screen items-center justify-center">
+        <SignInForm
+          onSuccess={() => window.location.href = "/dashboard"}
+          socialProviders={[
+            { provider: "google", label: "Google" },
+            { provider: "github", label: "GitHub" },
+          ]}
+          showForgotPassword
+          signUpHref="/sign-up"
+        />
+      </div>
+    </AuthProvider>
+  );
+}
+```
+
+### User profile card
+
+```tsx
+import { UserProfileCard } from "@authsome/ui-components";
+import { useUser } from "@authsome/ui-react";
+
+function ProfilePage() {
+  const { user } = useUser();
+
+  return <UserProfileCard user={user} />;
+}
+```
+
+### Organization switcher
+
+```tsx
+import { OrgSwitcher } from "@authsome/ui-components";
+
+function Sidebar() {
+  return (
+    <nav>
+      <OrgSwitcher
+        onOrgChange={(orgId) => {
+          console.log("Switched to org:", orgId);
+        }}
+      />
+    </nav>
+  );
+}
+```
+
+### Session management
+
+```tsx
+import { SessionList } from "@authsome/ui-components";
+
+function SecuritySettings() {
+  return (
+    <div>
+      <h2>Active Sessions</h2>
+      <SessionList
+        onRevoke={(sessionId) => {
+          console.log("Revoked session:", sessionId);
+        }}
+      />
+    </div>
+  );
+}
+```
+
+### Passkey registration
+
+```tsx
+import { PasskeyRegisterButton, PasskeyList } from "@authsome/ui-components";
+
+function PasskeySettings() {
+  return (
+    <div>
+      <h2>Passkeys</h2>
+      <PasskeyList />
+      <PasskeyRegisterButton label="Add a passkey" />
+    </div>
+  );
+}
+```
+
+### User button with dropdown
+
+```tsx
+import { UserButton } from "@authsome/ui-components";
+
+function Header() {
+  return (
+    <header className="flex items-center justify-between p-4">
+      <h1>My App</h1>
+      <UserButton />
+    </header>
+  );
+}
+```
+
+## Theming and customization
+
+### CSS variables
+
+Components use CSS variables for colors, radii, and spacing. Override them in your global CSS to match your brand:
+
+```css
+:root {
+  --authsome-primary: 220 90% 56%;
+  --authsome-primary-foreground: 0 0% 100%;
+  --authsome-background: 0 0% 100%;
+  --authsome-foreground: 222 47% 11%;
+  --authsome-muted: 210 40% 96%;
+  --authsome-muted-foreground: 215 16% 47%;
+  --authsome-border: 214 32% 91%;
+  --authsome-radius: 0.5rem;
+}
+```
+
+### Dark mode
+
+Add dark mode variables under a `.dark` class or `data-theme="dark"` attribute:
+
+```css
+.dark {
+  --authsome-background: 222 47% 11%;
+  --authsome-foreground: 210 40% 98%;
+  --authsome-primary: 217 91% 60%;
+  --authsome-muted: 217 33% 17%;
+  --authsome-border: 217 33% 17%;
+}
+```
+
+### className overrides
+
+Every component accepts a `className` prop for additional Tailwind classes:
+
+```tsx
+<SignInForm className="max-w-md mx-auto shadow-xl" />
+<Button className="bg-brand-500 hover:bg-brand-600">Custom Button</Button>
+```
+
+## Accessibility
+
+All components follow WAI-ARIA guidelines:
+
+- Form inputs have associated `<label>` elements
+- Error messages are linked via `aria-describedby`
+- Focus management is handled by Radix UI primitives
+- Keyboard navigation works across all interactive components (Tab, Enter, Escape)
+- Loading states are announced to screen readers via `aria-busy`
+- Color contrast meets WCAG 2.1 AA standards
+
+## Responsive design
+
+Components are mobile-first and adapt to screen width:
+
+- Auth forms stack vertically on small screens
+- `AuthCard` adjusts padding for mobile devices
+- `OrgSwitcher` and `UserButton` collapse gracefully on narrow viewports
+- Social login buttons switch between horizontal and vertical layouts based on available space
+
+## TypeScript
+
+All component props are fully typed and exported:
+
+```tsx
+import type {
+  SignInFormComponentProps,
+  SignUpFormComponentProps,
+  ForgotPasswordFormProps,
+  ResetPasswordFormProps,
+  MagicLinkFormProps,
+  MFAChallengeFormStyledProps,
+  ChangePasswordFormProps,
+  PasskeyLoginButtonProps,
+  PasskeyRegisterButtonProps,
+  PasskeyListProps,
+  SessionListProps,
+  DeviceListProps,
+  DeviceAuthorizationFormProps,
+  UserAvatarProps,
+  UserButtonProps,
+  UserProfileCardProps,
+  OrgSwitcherProps,
+  StyledAuthGuardProps,
+  AuthCardProps,
+  SocialButtonsProps,
+  LoadingSpinnerProps,
+  ErrorDisplayProps,
+} from "@authsome/ui-components";
+```

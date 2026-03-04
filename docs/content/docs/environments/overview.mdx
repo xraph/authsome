@@ -1,0 +1,233 @@
+---
+title: Environments Overview
+description: Application environments for isolating development, staging, and production authentication data and configuration.
+---
+
+Environments let you run multiple isolated authentication contexts within a single Authsome application. Each environment has its own users, sessions, organizations, configuration, and API keys. A production environment's data is completely isolated from the development environment -- you can safely test authentication flows, schema changes, and plugin configurations in dev without touching production.
+
+## The Environment model
+
+```go
+import "github.com/xraph/authsome/env"
+
+type Environment struct {
+    ID          id.ID             `json:"id"`         // aenv_ prefix
+    AppID       string            `json:"app_id"`
+    Name        string            `json:"name"`       // e.g. "Production"
+    Slug        string            `json:"slug"`       // e.g. "production"
+    Type        EnvironmentType   `json:"type"`
+    Description string            `json:"description,omitempty"`
+    Color       string            `json:"color,omitempty"`    // hex color for dashboard
+    IsDefault   bool              `json:"is_default"`
+    IsActive    bool              `json:"is_active"`
+    Settings    EnvironmentSettings `json:"settings"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ID` | Globally unique identifier with `aenv_` prefix |
+| `Name` | Human-readable name, e.g. `"Production"`, `"Staging"`, `"Development"` |
+| `Slug` | URL-safe identifier used in API calls and environment switching, e.g. `"production"` |
+| `Type` | One of the built-in types or `"custom"` |
+| `Color` | Hex color code for visual identification in the dashboard (`#EF4444` for prod, `#F59E0B` for staging) |
+| `IsDefault` | When `true`, this environment is used when no environment is specified in API calls |
+| `IsActive` | When `false`, the environment is suspended and no authentication operations can complete |
+| `Settings` | Per-environment configuration overrides |
+
+## Environment types
+
+```go
+const (
+    EnvironmentTypeDevelopment EnvironmentType = "development"
+    EnvironmentTypeStaging     EnvironmentType = "staging"
+    EnvironmentTypeProduction  EnvironmentType = "production"
+    EnvironmentTypeCustom      EnvironmentType = "custom"
+)
+```
+
+| Type | Default color | Typical use |
+|------|--------------|-------------|
+| `development` | `#3B82F6` (blue) | Local development and unit testing |
+| `staging` | `#F59E0B` (amber) | Pre-production QA and integration testing |
+| `production` | `#EF4444` (red) | Live user-facing environment |
+| `custom` | `#8B5CF6` (purple) | Additional environments (preview, canary, region-specific) |
+
+<Callout type="warn">
+Production environments are marked with a red indicator in the Authsome dashboard. Authsome will also show a confirmation dialog before performing destructive operations (like deleting users or revoking all sessions) in production environments.
+</Callout>
+
+## Environment settings
+
+Each environment carries its own settings that override the application defaults:
+
+```go
+type EnvironmentSettings struct {
+    // Session settings.
+    SessionTTL            time.Duration `json:"session_ttl"`              // default 7d
+    RefreshTokenTTL       time.Duration `json:"refresh_token_ttl"`        // default 30d
+    MaxSessionsPerUser    int           `json:"max_sessions_per_user"`    // 0 = unlimited
+    IdleSessionTimeout    time.Duration `json:"idle_session_timeout"`     // 0 = disabled
+
+    // Password settings.
+    MinPasswordLength     int           `json:"min_password_length"`      // default 8
+    RequireSpecialChars   bool          `json:"require_special_chars"`
+    RequireUppercase      bool          `json:"require_uppercase"`
+    RequireNumbers        bool          `json:"require_numbers"`
+
+    // Auth settings.
+    MFARequired           bool          `json:"mfa_required"`
+    AllowedAuthMethods    []string      `json:"allowed_auth_methods"`    // nil = all enabled plugins
+    SelfRegistration      bool          `json:"self_registration"`       // default true
+
+    // Security settings.
+    IPBinding             string        `json:"ip_binding"`              // "disabled", "subnet", "strict"
+    LockoutEnabled        bool          `json:"lockout_enabled"`
+    LockoutMaxAttempts    int           `json:"lockout_max_attempts"`
+    LockoutDuration       time.Duration `json:"lockout_duration"`
+}
+```
+
+## CRUD operations
+
+### Create an environment
+
+```go
+import "github.com/xraph/authsome/env"
+
+environment, err := auth.Environments().Create(ctx, &env.CreateInput{
+    Name:        "Preview",
+    Type:        env.EnvironmentTypeCustom,
+    Description: "Short-lived preview environments for pull requests",
+    Color:       "#10B981",
+    Settings: env.EnvironmentSettings{
+        SessionTTL:         2 * time.Hour,
+        SelfRegistration:   false,
+        MFARequired:        false,
+        LockoutEnabled:     false,
+    },
+})
+if err != nil {
+    return err
+}
+fmt.Printf("created environment: id=%s slug=%s\n", environment.ID, environment.Slug)
+```
+
+### Get an environment
+
+```go
+// By ID.
+e, err := auth.Environments().GetByID(ctx, envID)
+
+// By slug.
+e, err := auth.Environments().GetBySlug(ctx, "production")
+
+// The default environment for the app.
+e, err := auth.Environments().GetDefault(ctx)
+```
+
+### Update an environment
+
+```go
+updated, err := auth.Environments().Update(ctx, envID, &env.UpdateInput{
+    Name:  "Production (US East)",
+    Color: "#DC2626",
+    Settings: &env.EnvironmentSettings{
+        SessionTTL:         14 * 24 * time.Hour,
+        MFARequired:        true,
+        LockoutMaxAttempts: 5,
+        LockoutDuration:    30 * time.Minute,
+    },
+})
+```
+
+### Set the default environment
+
+```go
+// Make this environment the default for the application.
+err := auth.Environments().SetDefault(ctx, envID)
+```
+
+Only one environment can be the default at a time. Setting a new default automatically clears the flag from the previous default.
+
+### Delete an environment
+
+```go
+err := auth.Environments().Delete(ctx, envID)
+```
+
+<Callout type="warn">
+Deleting an environment permanently removes all users, sessions, organizations, API keys, and audit events associated with it. This cannot be undone. The production and default environments cannot be deleted.
+</Callout>
+
+### Deactivate / activate
+
+```go
+// Suspend an environment -- no authentication operations can complete.
+err := auth.Environments().Deactivate(ctx, envID)
+
+// Reactivate a suspended environment.
+err := auth.Environments().Activate(ctx, envID)
+```
+
+Deactivating an environment is useful for shutting down a preview environment without deleting its data -- you can reactivate it later.
+
+### List environments
+
+```go
+environments, err := auth.Environments().List(ctx)
+
+for _, e := range environments {
+    fmt.Printf("  %s (type=%s default=%v active=%v)\n",
+        e.Name, e.Type, e.IsDefault, e.IsActive)
+}
+```
+
+## Switching environments in API calls
+
+When making API calls, specify the target environment using the `X-Authsome-Environment` header or the `env` query parameter:
+
+```http
+POST /api/v1/auth/signin
+X-Authsome-Environment: staging
+```
+
+```http
+POST /api/v1/auth/signin?env=staging
+```
+
+When neither is provided, the default environment is used.
+
+In Go code, inject the environment ID into the context:
+
+```go
+ctx = authsome.WithEnvID(ctx, envID)
+// All subsequent auth.* calls use this environment.
+user, err := auth.Users().GetByEmail(ctx, "alice@example.com")
+```
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/environments` | Create a new environment |
+| `GET` | `/environments` | List all environments |
+| `GET` | `/environments/:env_id` | Get an environment by ID |
+| `GET` | `/environments/slug/:slug` | Get an environment by slug |
+| `PATCH` | `/environments/:env_id` | Update an environment |
+| `DELETE` | `/environments/:env_id` | Delete an environment |
+| `POST` | `/environments/:env_id/activate` | Activate a suspended environment |
+| `POST` | `/environments/:env_id/deactivate` | Suspend an environment |
+| `POST` | `/environments/:env_id/set-default` | Make an environment the default |
+
+## Events emitted
+
+| Event | Trigger |
+|-------|---------|
+| `environment.created` | A new environment was created |
+| `environment.updated` | Environment settings or details were changed |
+| `environment.deleted` | An environment was permanently deleted |
+| `environment.cloned` | An environment was cloned from another |

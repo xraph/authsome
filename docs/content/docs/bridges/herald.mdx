@@ -1,0 +1,146 @@
+---
+title: Herald Bridge
+description: Advanced multi-channel notification delivery via Herald, replacing the separate Mailer and SMS bridges.
+---
+
+The Herald bridge connects Authsome to the Herald notification system. Herald provides unified, multi-channel notification delivery with template management, user preference handling, locale support, and async delivery. When configured, Herald replaces the separate Mailer and SMSSender bridges — all transactional notification delivery is routed through a single integration point.
+
+## Interface
+
+The `bridge.Herald` interface is defined in `github.com/xraph/authsome/bridge`:
+
+```go
+type Herald interface {
+    Send(ctx context.Context, req *HeraldSendRequest) error
+    Notify(ctx context.Context, req *HeraldNotifyRequest) error
+}
+```
+
+### HeraldSendRequest
+
+Used to send a notification on a specific channel (email, SMS, or push):
+
+```go
+type HeraldSendRequest struct {
+    AppID    string            `json:"app_id"`
+    EnvID    string            `json:"env_id,omitempty"`
+    OrgID    string            `json:"org_id,omitempty"`
+    UserID   string            `json:"user_id,omitempty"`
+    Channel  string            `json:"channel"`          // "email", "sms", "push"
+    Template string            `json:"template"`
+    Locale   string            `json:"locale,omitempty"` // BCP 47, e.g. "en-US"
+    To       []string          `json:"to"`               // email addresses or phone numbers
+    Data     map[string]any    `json:"data,omitempty"`   // template variables
+    Async    bool              `json:"async,omitempty"`
+    Metadata map[string]string `json:"metadata,omitempty"`
+}
+```
+
+### HeraldNotifyRequest
+
+Used to send a notification across multiple channels simultaneously using a single template:
+
+```go
+type HeraldNotifyRequest struct {
+    AppID    string            `json:"app_id"`
+    EnvID    string            `json:"env_id,omitempty"`
+    OrgID    string            `json:"org_id,omitempty"`
+    UserID   string            `json:"user_id,omitempty"`
+    Template string            `json:"template"`
+    Locale   string            `json:"locale,omitempty"`
+    To       []string          `json:"to"`
+    Data     map[string]any    `json:"data,omitempty"`
+    Channels []string          `json:"channels"`         // ["email", "sms"]
+    Async    bool              `json:"async,omitempty"`
+    Metadata map[string]string `json:"metadata,omitempty"`
+}
+```
+
+## Setup with the Herald adapter
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/heraldadapter"
+    "github.com/xraph/herald"
+)
+
+// Build the Herald engine (see Herald docs for full setup).
+heraldEng, err := herald.New(
+    herald.WithStore(heraldStore),
+    herald.WithMailer(resendMailer),
+    herald.WithSMS(twilioSMS),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Wrap in the Authsome adapter.
+heraldBridge := heraldadapter.New(heraldEng)
+
+// Register with Authsome.
+// When WithHerald is set, it takes precedence over WithMailer and WithSMSSender.
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(mfa.New()),
+    authsome.WithHerald(heraldBridge),
+)
+```
+
+<Callout type="info">
+When `WithHerald` is configured, Authsome routes all notification delivery through Herald. The `WithMailer` and `WithSMSSender` options are ignored. Herald takes ownership of both email and SMS channels.
+</Callout>
+
+## Templates used by Authsome
+
+Authsome sends notifications using the following Herald template keys. Create these templates in your Herald instance before deploying:
+
+| Template Key | Channel | Purpose | Data variables |
+|-------------|---------|---------|----------------|
+| `authsome.email.verification` | `email` | Email address verification | `verification_url`, `user_name`, `expires_in` |
+| `authsome.password.reset` | `email` | Password reset link | `reset_url`, `user_name`, `expires_in` |
+| `authsome.magic_link` | `email` | Magic link sign-in | `magic_url`, `user_name`, `expires_in` |
+| `authsome.org.invitation` | `email` | Organisation member invitation | `invite_url`, `org_name`, `invited_by`, `role` |
+| `authsome.mfa.otp` | `sms` | MFA one-time password | `otp_code`, `expires_in` |
+| `authsome.phone.verification` | `sms` | Phone number verification | `otp_code`, `expires_in` |
+| `authsome.welcome` | `email` | Welcome email after sign-up | `user_name`, `app_name` |
+
+## Locale support
+
+Herald delivers notifications in the locale specified in the request. Authsome sets the locale from the user's profile or the Accept-Language header when available. To ensure all locales are handled, configure fallback templates in Herald:
+
+```
+authsome.email.verification          ← default (en)
+authsome.email.verification.fr       ← French
+authsome.email.verification.de       ← German
+authsome.email.verification.es       ← Spanish
+```
+
+## Async delivery
+
+Set `Async: true` in the request to have Herald enqueue the notification rather than delivering it synchronously. This reduces auth operation latency when email delivery is not on the critical path (e.g., welcome emails, notification-only events).
+
+Auth-critical notifications (email verification, password reset, MFA OTP) should always use synchronous delivery to ensure the user receives the notification before they expect it.
+
+## Standalone development stub
+
+During development, use the built-in `NoopHerald` stub:
+
+```go
+import (
+    "log/slog"
+    "github.com/xraph/authsome/bridge"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    authsome.WithHerald(bridge.NewNoopHerald(slog.Default())),
+)
+```
+
+The stub logs all notification requests at debug level:
+
+```
+DEBUG authsome herald (noop) template=authsome.email.verification channel=email
+```

@@ -1,0 +1,319 @@
+---
+title: React Integration
+description: AuthProvider, hooks, and headless components for React applications using @authsome/ui-react.
+---
+
+`@authsome/ui-react` provides React hooks and headless render-prop components for integrating Authsome authentication into any React application. It builds on `@authsome/ui-core` and gives you full control over your UI while managing auth state automatically.
+
+## Installation
+
+```bash
+npm install @authsome/ui-react @authsome/ui-core
+```
+
+If you also want pre-styled components, add `@authsome/ui-components`:
+
+```bash
+npm install @authsome/ui-react @authsome/ui-core @authsome/ui-components
+```
+
+## AuthProvider
+
+Wrap your application with `AuthProvider` to provide authentication state to all child components. The provider creates an `AuthManager` instance, hydrates session tokens from storage on mount, and subscribes to state changes.
+
+```tsx
+import { AuthProvider } from "@authsome/ui-react";
+
+function App() {
+  return (
+    <AuthProvider baseURL="https://api.example.com">
+      <Router />
+    </AuthProvider>
+  );
+}
+```
+
+### Configuration options
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `baseURL` | `string` | -- | Base URL of your Authsome API |
+| `storage` | `TokenStorage` | `localStorage` | Where to persist session tokens |
+| `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation |
+| `onStateChange` | `(state: AuthState) => void` | -- | Callback when auth state changes |
+| `onError` | `(error: APIError) => void` | -- | Callback on auth errors |
+
+## Core hooks
+
+### useAuth
+
+The primary hook. Returns the full authentication context including state, user, session, and action methods.
+
+```tsx
+import { useAuth } from "@authsome/ui-react";
+
+function Dashboard() {
+  const {
+    user,
+    session,
+    isAuthenticated,
+    isLoading,
+    state,
+    signIn,
+    signUp,
+    signOut,
+    submitMFACode,
+    submitRecoveryCode,
+    client,
+    manager,
+  } = useAuth();
+
+  if (isLoading) return <p>Loading...</p>;
+  if (!isAuthenticated) return <p>Please sign in.</p>;
+
+  return (
+    <div>
+      <h1>Welcome, {user?.name}</h1>
+      <button onClick={signOut}>Sign out</button>
+    </div>
+  );
+}
+```
+
+#### Return value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `state` | `AuthState` | Full state object (`idle`, `loading`, `authenticated`, `unauthenticated`, `mfa_required`, `error`) |
+| `user` | `User \| null` | Current authenticated user |
+| `session` | `Session \| null` | Current session with tokens |
+| `isAuthenticated` | `boolean` | Whether the user is authenticated |
+| `isLoading` | `boolean` | Whether auth is initializing |
+| `signIn` | `(email, password) => Promise<void>` | Sign in with credentials |
+| `signUp` | `(email, password, name?) => Promise<void>` | Create a new account |
+| `signOut` | `() => Promise<void>` | End the session |
+| `submitMFACode` | `(enrollmentId, code) => Promise<void>` | Submit a TOTP or SMS code |
+| `submitRecoveryCode` | `(code) => Promise<void>` | Submit an MFA recovery code |
+| `client` | `AuthClient` | Underlying HTTP client for custom API calls |
+| `manager` | `AuthManager` | The core state machine |
+
+### useUser
+
+Returns the current user profile with a `reload` function to refresh it from the API.
+
+```tsx
+import { useUser } from "@authsome/ui-react";
+
+function ProfilePage() {
+  const { user, isLoading, reload } = useUser();
+
+  return (
+    <div>
+      <p>{user?.email}</p>
+      <button onClick={reload}>Refresh profile</button>
+    </div>
+  );
+}
+```
+
+### useOrganizations
+
+Fetches the list of organizations the current user belongs to. Automatically loads on mount when authenticated.
+
+```tsx
+import { useOrganizations } from "@authsome/ui-react";
+
+function OrgSelector() {
+  const { organizations, total, isLoading, reload } = useOrganizations();
+
+  return (
+    <select>
+      {organizations.map((org) => (
+        <option key={org.id} value={org.id}>{org.name}</option>
+      ))}
+    </select>
+  );
+}
+```
+
+### useSessionToken
+
+Returns the raw session token string, useful for passing to custom API calls.
+
+```tsx
+import { useSessionToken } from "@authsome/ui-react";
+
+function ApiCaller() {
+  const token = useSessionToken();
+
+  async function fetchData() {
+    const res = await fetch("/api/data", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.json();
+  }
+
+  return <button onClick={fetchData}>Fetch data</button>;
+}
+```
+
+## Headless form components
+
+These components manage form state and auth logic but render nothing themselves. You provide the UI through a render function (children prop), giving you complete control over styling and layout.
+
+### SignInForm
+
+```tsx
+import { SignInForm } from "@authsome/ui-react";
+
+function LoginPage() {
+  return (
+    <SignInForm onSuccess={() => navigate("/dashboard")}>
+      {({ email, password, setEmail, setPassword, submit, isLoading, error }) => (
+        <form onSubmit={submit}>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+          {error && <p className="text-red-500">{error}</p>}
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+      )}
+    </SignInForm>
+  );
+}
+```
+
+### SignUpForm
+
+```tsx
+import { SignUpForm } from "@authsome/ui-react";
+
+function RegisterPage() {
+  return (
+    <SignUpForm onSuccess={() => navigate("/onboarding")}>
+      {({ email, password, name, setEmail, setPassword, setName, submit, isLoading, error }) => (
+        <form onSubmit={submit}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+          {error && <p className="text-red-500">{error}</p>}
+          <button type="submit" disabled={isLoading}>Create account</button>
+        </form>
+      )}
+    </SignUpForm>
+  );
+}
+```
+
+### MFAChallengeForm
+
+```tsx
+import { MFAChallengeForm } from "@authsome/ui-react";
+
+function MFAPage({ enrollmentId }: { enrollmentId: string }) {
+  return (
+    <MFAChallengeForm enrollmentId={enrollmentId} onSuccess={() => navigate("/dashboard")}>
+      {({ code, setCode, submit, isLoading, error }) => (
+        <form onSubmit={submit}>
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Enter 6-digit code" />
+          {error && <p className="text-red-500">{error}</p>}
+          <button type="submit" disabled={isLoading}>Verify</button>
+        </form>
+      )}
+    </MFAChallengeForm>
+  );
+}
+```
+
+### AuthGuard
+
+Conditionally renders children only when the user is authenticated. Shows a fallback for unauthenticated users and a loading state during initialization.
+
+```tsx
+import { AuthGuard } from "@authsome/ui-react";
+
+function ProtectedArea() {
+  return (
+    <AuthGuard fallback={<SignInPage />} loading={<Spinner />}>
+      <Dashboard />
+    </AuthGuard>
+  );
+}
+```
+
+## Integration with React Router
+
+```tsx
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth, AuthGuard } from "@authsome/ui-react";
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthGuard
+      fallback={<Navigate to="/sign-in" />}
+      loading={<div>Loading...</div>}
+    >
+      {children}
+    </AuthGuard>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider baseURL={import.meta.env.VITE_AUTHSOME_URL}>
+        <Routes>
+          <Route path="/sign-in" element={<SignInPage />} />
+          <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+```
+
+## TypeScript types
+
+All core types are re-exported from `@authsome/ui-react` for convenience:
+
+```tsx
+import type {
+  AuthState,
+  AuthConfig,
+  User,
+  Session,
+  Organization,
+  Member,
+  MFAEnrollment,
+  APIError,
+  TokenStorage,
+  AuthProviderProps,
+  AuthContextValue,
+  SignInFormProps,
+  SignUpFormProps,
+  MFAChallengeFormProps,
+  AuthGuardProps,
+} from "@authsome/ui-react";
+```
+
+## Handling MFA state
+
+When `state.status` is `"mfa_required"`, the user has authenticated with valid credentials but must complete an MFA challenge before the session becomes fully active.
+
+```tsx
+function AuthFlow() {
+  const { state, signIn, submitMFACode } = useAuth();
+
+  if (state.status === "mfa_required") {
+    return <MFAChallengePage session={state.session} />;
+  }
+
+  if (state.status === "authenticated") {
+    return <Dashboard />;
+  }
+
+  return <SignInPage />;
+}
+```

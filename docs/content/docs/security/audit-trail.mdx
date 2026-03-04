@@ -1,0 +1,222 @@
+---
+title: Audit Trail
+description: Append-only security event log with IP and user agent recording, time-range queries, cursor pagination, and Chronicle bridge integration.
+---
+
+Authsome records every significant authentication and authorization event to an append-only audit trail. The audit trail is the authoritative record for security investigations, compliance reporting, and user activity monitoring. Events are immutable -- there is no update or delete operation on the audit store.
+
+## The SecurityEvent model
+
+```go
+import "github.com/xraph/authsome/audit"
+
+type SecurityEvent struct {
+    ID          id.ID             `json:"id"`           // asec_ prefix
+    AppID       string            `json:"app_id"`
+    EnvID       string            `json:"env_id"`
+    UserID      *id.ID            `json:"user_id,omitempty"`
+    SessionID   *id.ID            `json:"session_id,omitempty"`
+    OrgID       *id.ID            `json:"org_id,omitempty"`
+    Action      string            `json:"action"`       // e.g. "auth.signin"
+    Outcome     string            `json:"outcome"`      // "success" or "failure"
+    IP          string            `json:"ip,omitempty"`
+    UserAgent   string            `json:"user_agent,omitempty"`
+    Country     string            `json:"country,omitempty"`
+    City        string            `json:"city,omitempty"`
+    DeviceType  string            `json:"device_type,omitempty"`
+    Reason      string            `json:"reason,omitempty"`     // on failure
+    Metadata    map[string]any    `json:"metadata,omitempty"`
+    CreatedAt   time.Time         `json:"created_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `Action` | The event type string, e.g. `"auth.signin"`, `"auth.mfa.verified"`, `"passkey.registered"` |
+| `Outcome` | `"success"` or `"failure"` |
+| `IP` | Client IP address extracted from the request context |
+| `UserAgent` | Full user agent string from the request |
+| `Country` / `City` | Geo-location data if IP geolocation is configured |
+| `DeviceType` | Parsed device type: `"desktop"`, `"mobile"`, `"tablet"`, `"bot"` |
+| `Reason` | Human-readable failure reason, e.g. `"invalid_password"`, `"token_expired"` |
+| `Metadata` | Additional context key-value pairs (e.g. MFA method, SSO provider name) |
+
+## Event types
+
+Authsome records events across all authentication methods:
+
+| Action | Category | Description |
+|--------|----------|-------------|
+| `auth.signin` | Auth | Successful sign-in |
+| `auth.signin.failed` | Auth | Failed sign-in attempt |
+| `auth.signout` | Auth | User signed out |
+| `auth.password.reset` | Auth | Password was reset |
+| `auth.mfa.enabled` | MFA | MFA was enabled for the account |
+| `auth.mfa.disabled` | MFA | MFA was disabled for the account |
+| `auth.mfa.enrolled` | MFA | MFA method was enrolled (e.g., TOTP added) |
+| `auth.mfa.verified` | MFA | MFA challenge was verified successfully |
+| `auth.mfa.challenged` | MFA | MFA challenge was initiated |
+| `passkey.registered` | Passkey | A new passkey credential was registered |
+| `passkey.authenticated` | Passkey | Authentication via passkey succeeded |
+| `passkey.deleted` | Passkey | A passkey credential was removed |
+| `social.signin` | Social | OAuth social sign-in |
+| `social.signup` | Social | Account created via social OAuth |
+| `sso.signin` | SSO | Enterprise SSO sign-in |
+| `sso.signup` | SSO | Account created via SSO |
+| `session.created` | Session | A new session was created |
+| `session.revoked` | Session | A session was explicitly revoked |
+| `apikey.created` | API Key | A new API key was created |
+| `apikey.revoked` | API Key | An API key was revoked |
+| `org.member.invited` | Org | A user was invited to an organization |
+| `org.member.joined` | Org | A user accepted an org invitation |
+| `org.member.removed` | Org | A user was removed from an organization |
+
+## The SecurityEventStore interface
+
+```go
+type SecurityEventStore interface {
+    // Record appends a new security event. Errors are logged but do not fail the auth operation.
+    Record(ctx context.Context, event *SecurityEvent) error
+
+    // List returns events for an app within a time range, with cursor pagination.
+    List(ctx context.Context, opts ListEventsOpts) ([]*SecurityEvent, string, error)
+
+    // ListByUser returns events for a specific user.
+    ListByUser(ctx context.Context, userID id.ID, opts ListEventsOpts) ([]*SecurityEvent, string, error)
+
+    // ListBySession returns events for a specific session.
+    ListBySession(ctx context.Context, sessionID id.ID, opts ListEventsOpts) ([]*SecurityEvent, string, error)
+}
+```
+
+### ListEventsOpts
+
+```go
+type ListEventsOpts struct {
+    AppID     string
+    EnvID     string
+    Limit     int        // default 50, max 500
+    Cursor    string     // opaque cursor from previous NextCursor
+    Since     *time.Time // return events after this time
+    Until     *time.Time // return events before this time
+    Actions   []string   // filter by action strings
+    Outcomes  []string   // filter by "success" or "failure"
+    IPFilter  string     // exact IP match
+}
+```
+
+The list methods return `(events, nextCursor, error)`. Pass `nextCursor` as the `Cursor` in the next call to get the next page. An empty `nextCursor` means you have reached the last page.
+
+## Querying the audit trail
+
+### List recent events for the app
+
+```go
+import "github.com/xraph/authsome/audit"
+
+since := time.Now().Add(-24 * time.Hour)
+events, nextCursor, err := auth.Audit().List(ctx, audit.ListEventsOpts{
+    Since: &since,
+    Limit: 100,
+})
+if err != nil {
+    return err
+}
+
+for _, e := range events {
+    fmt.Printf("  [%s] %s %s ip=%s user=%s\n",
+        e.CreatedAt.Format(time.RFC3339),
+        e.Action,
+        e.Outcome,
+        e.IP,
+        e.UserID,
+    )
+}
+```
+
+### List events for a specific user
+
+```go
+// Last 30 days of events for a user.
+since := time.Now().Add(-30 * 24 * time.Hour)
+events, nextCursor, err := auth.Audit().ListByUser(ctx, userID, audit.ListEventsOpts{
+    Since: &since,
+    Limit: 50,
+})
+```
+
+### Filter by action and outcome
+
+```go
+// All failed sign-ins in the last 7 days.
+since := time.Now().Add(-7 * 24 * time.Hour)
+events, _, err := auth.Audit().List(ctx, audit.ListEventsOpts{
+    Since:    &since,
+    Actions:  []string{"auth.signin", "auth.signin.failed"},
+    Outcomes: []string{"failure"},
+    Limit:    200,
+})
+```
+
+### Paginating through results
+
+```go
+opts := audit.ListEventsOpts{
+    Since: &since,
+    Limit: 100,
+}
+
+for {
+    events, nextCursor, err := auth.Audit().List(ctx, opts)
+    if err != nil {
+        return err
+    }
+    process(events)
+
+    if nextCursor == "" {
+        break
+    }
+    opts.Cursor = nextCursor
+}
+```
+
+## Chronicle bridge integration
+
+[Chronicle](https://github.com/xraph/chronicle) is the Forge-ecosystem's dedicated append-only event log service. When Chronicle is configured, Authsome forwards every security event to Chronicle in addition to the local audit store, giving you centralized cross-service audit logging.
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/audit/chronicle"
+)
+
+auth := authsome.New(
+    authsome.WithAuditBridge(chronicle.NewBridge(
+        chronicle.WithEndpoint("https://chronicle.internal:8080"),
+        chronicle.WithAPIKey(os.Getenv("CHRONICLE_API_KEY")),
+        chronicle.WithAsync(true),        // non-blocking delivery
+        chronicle.WithBufferSize(1000),   // in-flight event buffer
+    )),
+)
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `WithEndpoint` | required | Chronicle service endpoint |
+| `WithAPIKey` | required | API key for Chronicle authentication |
+| `WithAsync` | `false` | When `true`, events are delivered asynchronously -- sign-in is not blocked by delivery failures |
+| `WithBufferSize` | `500` | Size of the async delivery buffer. Events are dropped (and logged) if the buffer is full. |
+| `WithActions` | all | When set, only the specified action strings are forwarded to Chronicle |
+
+<Callout type="info">
+With `WithAsync(true)`, a temporary Chronicle outage will not affect authentication. Events in the buffer are delivered when Chronicle recovers. Events that overflow the buffer are written to the application log with `level=warn`.
+</Callout>
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/audit` | List all security events with filters |
+| `GET` | `/admin/audit/users/:user_id` | List security events for a specific user |
+| `GET` | `/admin/audit/sessions/:session_id` | List security events for a specific session |
+| `GET` | `/users/me/security-events` | User-facing: list the current user's own security events |

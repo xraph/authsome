@@ -1,0 +1,150 @@
+package auth
+
+import (
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/label"
+	"github.com/xraph/forgeui/icons"
+)
+
+// SetupPageLinks holds navigation paths for the setup page (currently empty, extensible).
+type SetupPageLinks struct{}
+
+// SetupPage renders the "Create First User" form shown on first launch.
+templ SetupPage(links SetupPageLinks) {
+	<div class="flex items-center justify-center mb-2">
+		@icons.ShieldCheck(icons.WithSize(32), icons.WithClass("text-primary"))
+	</div>
+	<h2 class="text-lg font-semibold text-center">Welcome</h2>
+	<p class="text-sm text-muted-foreground text-center mb-4">Create your admin account to get started</p>
+	<form method="POST" class="space-y-4">
+		<div class="grid grid-cols-2 gap-3">
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "first_name"}) {
+					First name
+				}
+				@input.Input(input.Props{
+					ID:          "first_name",
+					Name:        "first_name",
+					Type:        input.TypeText,
+					Placeholder: "First name",
+					Attributes:  templ.Attributes{"required": "true", "autocomplete": "given-name"},
+				})
+			</div>
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "last_name"}) {
+					Last name
+				}
+				@input.Input(input.Props{
+					ID:          "last_name",
+					Name:        "last_name",
+					Type:        input.TypeText,
+					Placeholder: "Last name",
+					Attributes:  templ.Attributes{"autocomplete": "family-name"},
+				})
+			</div>
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "admin@example.com",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "password"}) {
+				Password
+			}
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Choose a strong password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "new-password"},
+			})
+		</div>
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Create Account
+		}
+	</form>
+}
+
+// SetupError renders the setup page with an error message.
+templ SetupError(errorMsg string, links SetupPageLinks) {
+	<div class="flex items-center justify-center mb-2">
+		@icons.ShieldCheck(icons.WithSize(32), icons.WithClass("text-primary"))
+	</div>
+	<h2 class="text-lg font-semibold text-center">Welcome</h2>
+	<p class="text-sm text-muted-foreground text-center mb-4">Create your admin account to get started</p>
+	<form method="POST" class="space-y-4">
+		if errorMsg != "" {
+			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+				{ errorMsg }
+			</div>
+		}
+		<div class="grid grid-cols-2 gap-3">
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "first_name"}) {
+					First name
+				}
+				@input.Input(input.Props{
+					ID:          "first_name",
+					Name:        "first_name",
+					Type:        input.TypeText,
+					Placeholder: "First name",
+					Attributes:  templ.Attributes{"required": "true", "autocomplete": "given-name"},
+				})
+			</div>
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "last_name"}) {
+					Last name
+				}
+				@input.Input(input.Props{
+					ID:          "last_name",
+					Name:        "last_name",
+					Type:        input.TypeText,
+					Placeholder: "Last name",
+					Attributes:  templ.Attributes{"autocomplete": "family-name"},
+				})
+			</div>
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "admin@example.com",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "password"}) {
+				Password
+			}
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Choose a strong password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "new-password"},
+			})
+		</div>
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Create Account
+		}
+	</form>
+}

@@ -1,0 +1,4 @@
+{
+  "title": "Authentication",
+  "pages": ["overview", "password", "magic-links", "social-login", "sso", "passkeys", "mfa", "phone-auth", "oauth2-provider"]
+}

@@ -1,0 +1,81 @@
+package dashui
+
+import (
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+)
+
+// CredentialView is a display-only view of a passkey credential.
+type CredentialView struct {
+	DisplayName string
+	Transport   []string
+	SignCount   uint32
+	CreatedAt   time.Time
+}
+
+// UserSection renders the passkey section for a specific user detail page.
+templ UserSection(credentials []CredentialView) {
+	@card.Card() {
+		@card.Header() {
+			<div class="flex items-center gap-3">
+				@card.Title() {
+					Passkeys
+				}
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(credentials)) }
+				}
+			</div>
+			@card.Description() {
+				WebAuthn credentials registered by this user
+			}
+		}
+		@card.Content() {
+			if len(credentials) == 0 {
+				<p class="text-sm text-muted-foreground py-4 text-center">No passkeys registered.</p>
+			} else {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() { Name }
+							@table.Head() { Transport }
+							@table.Head() { Sign Count }
+							@table.Head() { Registered }
+						}
+					}
+					@table.Body() {
+						for _, c := range credentials {
+							@table.Row() {
+								@table.Cell() {
+									if c.DisplayName != "" {
+										{ c.DisplayName }
+									} else {
+										<span class="text-muted-foreground">Unnamed</span>
+									}
+								}
+								@table.Cell() {
+									if len(c.Transport) > 0 {
+										{ strings.Join(c.Transport, ", ") }
+									} else {
+										<span class="text-muted-foreground">—</span>
+									}
+								}
+								@table.Cell() {
+									{ strconv.FormatUint(uint64(c.SignCount), 10) }
+								}
+								@table.Cell() {
+									{{ created := c.CreatedAt.Format("Jan 02, 2006") }}
+									{ created }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

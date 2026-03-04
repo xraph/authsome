@@ -1,0 +1,354 @@
+---
+title: OAuth2 Provider
+description: Run Authsome as an OAuth2 authorization server with Authorization Code, PKCE, and Client Credentials flows.
+---
+
+Authsome can act as a full OAuth2 authorization server, allowing third-party applications to authenticate users and obtain access tokens through standard OAuth2 flows. This is distinct from [Social Login](/docs/authentication/social-login) (where Authsome is an OAuth2 *client*) — here, Authsome issues its own tokens on behalf of your users.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/oauth2provider"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(oauth2provider.New()),
+    authsome.WithConfig(authsome.Config{
+        AppID: "myapp",
+        OAuth2: authsome.OAuth2Config{
+            Enabled:                true,
+            Issuer:                 "https://auth.myapp.com",
+            AuthorizationEndpoint:  "/oauth2/authorize",
+            TokenEndpoint:          "/oauth2/token",
+            IntrospectionEndpoint:  "/oauth2/introspect",
+            RevocationEndpoint:     "/oauth2/revoke",
+            JWKSEndpoint:           "/.well-known/jwks.json",
+            AccessTokenTTL:         "1h",
+            RefreshTokenTTL:        "30d",
+            AuthorizationCodeTTL:   "10m",
+            RequirePKCE:            true,
+            AllowedScopes:          []string{"openid", "profile", "email", "offline_access"},
+        },
+    }),
+)
+```
+
+## Client registration
+
+OAuth2 clients must be registered before they can request tokens. Clients represent third-party applications or services that consume your authentication API.
+
+### Create a client
+
+`POST /v1/auth/oauth2/clients`
+
+```json
+{
+  "name": "My Mobile App",
+  "type": "public",
+  "redirect_uris": ["myapp://callback", "https://myapp.com/callback"],
+  "scopes": ["openid", "profile", "email"],
+  "grant_types": ["authorization_code"],
+  "app_id": "myapp"
+}
+```
+
+**Response:**
+
+```json
+{
+  "client_id": "aoc2_01jb...",
+  "client_secret": "sec_a3f8c9d4e5f2g7h1...",
+  "name": "My Mobile App",
+  "type": "public",
+  "redirect_uris": ["myapp://callback", "https://myapp.com/callback"],
+  "scopes": ["openid", "profile", "email"],
+  "grant_types": ["authorization_code"],
+  "created_at": "2024-11-01T10:00:00Z"
+}
+```
+
+> **Important:** The `client_secret` is only returned once at creation time. Store it securely. Public clients (mobile/SPA apps) should use PKCE instead of a client secret.
+
+### Client types
+
+| Type | Description | Use case |
+|------|-------------|----------|
+| `confidential` | Can securely store a client secret | Server-side applications, backend services |
+| `public` | Cannot securely store a client secret | Mobile apps, single-page applications, CLI tools |
+
+### In Go
+
+```go
+client := &oauth2provider.Client{
+    Name:         "My Mobile App",
+    Type:         "public",
+    RedirectURIs: []string{"myapp://callback"},
+    Scopes:       []string{"openid", "profile", "email"},
+    GrantTypes:   []string{"authorization_code"},
+}
+
+err := engine.CreateOAuth2Client(ctx, appID, client)
+// client.ID and client.Secret are now populated
+```
+
+## Authorization Code flow with PKCE
+
+The Authorization Code flow with PKCE (Proof Key for Code Exchange) is the recommended flow for all client types. It is required for public clients and strongly recommended for confidential clients.
+
+
+
+**Generate PKCE challenge**: The client generates a random `code_verifier` and derives a `code_challenge` from it.
+
+```go
+// Client-side
+import "crypto/sha256"
+import "encoding/base64"
+
+codeVerifier := generateRandomString(64)
+hash := sha256.Sum256([]byte(codeVerifier))
+codeChallenge := base64.RawURLEncoding.EncodeToString(hash[:])
+```
+
+
+**Authorization request**: Redirect the user to the authorization endpoint.
+
+```
+GET /v1/auth/oauth2/authorize?
+  response_type=code&
+  client_id=aoc2_01jb...&
+  redirect_uri=https://myapp.com/callback&
+  scope=openid+profile+email&
+  state=random_state_value&
+  code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&
+  code_challenge_method=S256
+```
+
+If the user is not already signed in, they are redirected to the Authsome login page. After authentication (and MFA if enabled), the user is shown a consent screen listing the requested scopes. On approval, the user is redirected back to the client with an authorization code.
+
+```
+HTTP/1.1 302 Found
+Location: https://myapp.com/callback?code=auth_01jb...&state=random_state_value
+```
+
+
+**Token exchange**: The client exchanges the authorization code for tokens.
+
+`POST /v1/auth/oauth2/token`
+
+```
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&
+code=auth_01jb...&
+redirect_uri=https://myapp.com/callback&
+client_id=aoc2_01jb...&
+code_verifier=the_original_code_verifier_string
+```
+
+**Response:**
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "rt_d72b1ef8...",
+  "scope": "openid profile email",
+  "id_token": "eyJhbGciOiJSUzI1NiIs..."
+}
+```
+
+
+
+## Client Credentials grant
+
+The Client Credentials grant is used for machine-to-machine authentication where no user context is needed. Only confidential clients can use this grant type.
+
+`POST /v1/auth/oauth2/token`
+
+```
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&
+client_id=aoc2_01jb...&
+client_secret=sec_a3f8c9d4e5f2g7h1...&
+scope=api:read api:write
+```
+
+**Response:**
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "api:read api:write"
+}
+```
+
+No refresh token is issued for client credentials grants — the client simply requests a new token when the current one expires.
+
+## Token introspection
+
+Resource servers can verify tokens by calling the introspection endpoint. This is useful for opaque tokens or when the resource server does not have access to the signing keys.
+
+`POST /v1/auth/oauth2/introspect`
+
+```
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic base64(client_id:client_secret)
+
+token=eyJhbGciOiJSUzI1NiIs...
+```
+
+**Response (active token):**
+
+```json
+{
+  "active": true,
+  "sub": "ausr_01j9...",
+  "client_id": "aoc2_01jb...",
+  "scope": "openid profile email",
+  "iat": 1730451600,
+  "exp": 1730455200,
+  "iss": "https://auth.myapp.com",
+  "token_type": "Bearer"
+}
+```
+
+**Response (expired or revoked token):**
+
+```json
+{
+  "active": false
+}
+```
+
+## Token revocation
+
+Clients can revoke tokens when they are no longer needed (e.g., on user logout):
+
+`POST /v1/auth/oauth2/revoke`
+
+```
+Content-Type: application/x-www-form-urlencoded
+
+token=eyJhbGciOiJSUzI1NiIs...&
+token_type_hint=access_token&
+client_id=aoc2_01jb...&
+client_secret=sec_a3f8c9d4e5f2g7h1...
+```
+
+The endpoint always returns `200 OK` regardless of whether the token was found, to prevent token enumeration.
+
+## Scopes and consent
+
+### Built-in scopes
+
+| Scope | Description |
+|-------|-------------|
+| `openid` | Required for OIDC. Returns an ID token with the `sub` claim |
+| `profile` | Access to user's name, username, and profile image |
+| `email` | Access to user's email address and email verification status |
+| `phone` | Access to user's phone number and phone verification status |
+| `offline_access` | Request a refresh token for long-lived access |
+
+### Custom scopes
+
+Register custom scopes in the configuration:
+
+```go
+OAuth2: authsome.OAuth2Config{
+    AllowedScopes: []string{
+        "openid", "profile", "email",
+        "api:read", "api:write", "admin",
+    },
+},
+```
+
+### Consent screen
+
+When a third-party client requests authorization, the user is shown a consent screen listing the requested scopes. The consent decision is remembered per user-client pair. To force re-consent:
+
+```
+GET /v1/auth/oauth2/authorize?...&prompt=consent
+```
+
+## JWKS endpoint
+
+The JSON Web Key Set (JWKS) endpoint publishes the public keys used to verify JWT access tokens and ID tokens:
+
+`GET /.well-known/jwks.json`
+
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "key-2024-01",
+      "use": "sig",
+      "alg": "RS256",
+      "n": "0vx7agoebGc...",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+Resource servers should cache the JWKS and refresh it periodically or when they encounter a token signed with an unknown `kid`.
+
+## OpenID Connect discovery
+
+Authsome publishes an OpenID Connect discovery document:
+
+`GET /.well-known/openid-configuration`
+
+```json
+{
+  "issuer": "https://auth.myapp.com",
+  "authorization_endpoint": "https://auth.myapp.com/v1/auth/oauth2/authorize",
+  "token_endpoint": "https://auth.myapp.com/v1/auth/oauth2/token",
+  "introspection_endpoint": "https://auth.myapp.com/v1/auth/oauth2/introspect",
+  "revocation_endpoint": "https://auth.myapp.com/v1/auth/oauth2/revoke",
+  "jwks_uri": "https://auth.myapp.com/.well-known/jwks.json",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "client_credentials", "refresh_token"],
+  "subject_types_supported": ["public"],
+  "id_token_signing_alg_values_supported": ["RS256"],
+  "scopes_supported": ["openid", "profile", "email", "phone", "offline_access"],
+  "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
+  "code_challenge_methods_supported": ["S256"]
+}
+```
+
+## Configuration reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Enabled` | `bool` | `false` | Enable OAuth2 provider functionality |
+| `Issuer` | `string` | `""` | Issuer identifier URL (must be HTTPS in production) |
+| `AccessTokenTTL` | `string` | `"1h"` | Access token lifetime |
+| `RefreshTokenTTL` | `string` | `"30d"` | Refresh token lifetime |
+| `AuthorizationCodeTTL` | `string` | `"10m"` | Authorization code validity |
+| `RequirePKCE` | `bool` | `true` | Require PKCE for all authorization code grants |
+| `AllowedScopes` | `[]string` | `["openid", "profile", "email"]` | Scopes that clients can request |
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/oauth2/authorize` | Authorization endpoint (redirects user) |
+| `POST` | `/oauth2/token` | Token endpoint (code exchange, client credentials, refresh) |
+| `POST` | `/oauth2/introspect` | Token introspection |
+| `POST` | `/oauth2/revoke` | Token revocation |
+| `POST` | `/oauth2/clients` | Register a new OAuth2 client |
+| `GET` | `/oauth2/clients` | List registered clients |
+| `GET` | `/oauth2/clients/:clientId` | Get client details |
+| `PATCH` | `/oauth2/clients/:clientId` | Update a client |
+| `DELETE` | `/oauth2/clients/:clientId` | Delete a client |
+| `GET` | `/.well-known/jwks.json` | JWKS endpoint |
+| `GET` | `/.well-known/openid-configuration` | OIDC discovery document |

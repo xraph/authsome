@@ -1,0 +1,361 @@
+---
+title: Next.js App Guide
+description: Build a complete Next.js application with Authsome UI -- authentication, route protection, and user management.
+---
+
+This guide walks through building a full Next.js application with Authsome authentication from scratch. You will set up the provider, add middleware for route protection, create sign-in and sign-up pages, build a dashboard with user profile management, and add organization switching.
+
+## 1. Create a Next.js app
+
+```bash
+npx create-next-app@latest my-authsome-app --typescript --tailwind --app --src-dir
+cd my-authsome-app
+```
+
+## 2. Install Authsome packages
+
+```bash
+npm install @authsome/ui-nextjs @authsome/ui-react @authsome/ui-core @authsome/ui-components
+```
+
+## 3. Environment variables
+
+```bash
+# .env.local
+NEXT_PUBLIC_AUTHSOME_URL=http://localhost:8080
+AUTHSOME_API_URL=http://localhost:8080
+```
+
+`NEXT_PUBLIC_AUTHSOME_URL` is used by client components. `AUTHSOME_API_URL` is used by server components and middleware (never exposed to the browser).
+
+## 4. Set up AuthProvider
+
+Create a client-side providers component that wraps your app with `AuthProvider` and cookie-based storage:
+
+```tsx
+// src/app/providers.tsx
+"use client";
+
+import { AuthProvider } from "@authsome/ui-nextjs";
+import { createCookieStorage } from "@authsome/ui-nextjs";
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider
+      baseURL={process.env.NEXT_PUBLIC_AUTHSOME_URL!}
+      storage={createCookieStorage()}
+    >
+      {children}
+    </AuthProvider>
+  );
+}
+```
+
+Update the root layout to use the providers:
+
+```tsx
+// src/app/layout.tsx
+import type { Metadata } from "next";
+import { Providers } from "./providers";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "My Authsome App",
+  description: "Next.js app with Authsome authentication",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+```
+
+## 5. Add middleware for route protection
+
+Create the middleware file at the project root. All routes except the ones listed in `publicPaths` will require authentication.
+
+```ts
+// src/middleware.ts
+import { createAuthMiddleware } from "@authsome/ui-nextjs/middleware";
+
+export default createAuthMiddleware({
+  baseURL: process.env.AUTHSOME_API_URL!,
+  signInPage: "/sign-in",
+  publicPaths: [
+    "/",
+    "/sign-in",
+    "/sign-up",
+    "/forgot-password",
+    "/reset-password",
+    "/api/public/*",
+  ],
+});
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+};
+```
+
+## 6. Create the sign-in page
+
+```tsx
+// src/app/sign-in/page.tsx
+"use client";
+
+import { useRouter, useSearchParams } from "next/navigation";
+import { SignInForm } from "@authsome/ui-components";
+
+export default function SignInPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "/dashboard";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md">
+        <SignInForm
+          onSuccess={() => router.push(redirect)}
+          showForgotPassword
+          forgotPasswordHref="/forgot-password"
+          signUpHref="/sign-up"
+          socialProviders={[
+            { provider: "google", label: "Continue with Google" },
+            { provider: "github", label: "Continue with GitHub" },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+## 7. Create the sign-up page
+
+```tsx
+// src/app/sign-up/page.tsx
+"use client";
+
+import { useRouter } from "next/navigation";
+import { SignUpForm } from "@authsome/ui-components";
+
+export default function SignUpPage() {
+  const router = useRouter();
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md">
+        <SignUpForm
+          onSuccess={() => router.push("/dashboard")}
+          signInHref="/sign-in"
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+## 8. Create the dashboard
+
+### Server component with session validation
+
+```tsx
+// src/app/dashboard/page.tsx
+import { getServerSession } from "@authsome/ui-nextjs";
+import { redirect } from "next/navigation";
+import { DashboardClient } from "./dashboard-client";
+
+export default async function DashboardPage() {
+  const session = await getServerSession({
+    baseURL: process.env.AUTHSOME_API_URL!,
+  });
+
+  if (!session) {
+    redirect("/sign-in");
+  }
+
+  return <DashboardClient initialUser={session.user} />;
+}
+```
+
+### Client component with user profile
+
+```tsx
+// src/app/dashboard/dashboard-client.tsx
+"use client";
+
+import { useAuth, useUser } from "@authsome/ui-nextjs";
+import {
+  UserProfileCard,
+  UserButton,
+  OrgSwitcher,
+  SessionList,
+} from "@authsome/ui-components";
+import type { User } from "@authsome/ui-core";
+
+export function DashboardClient({ initialUser }: { initialUser: User }) {
+  const { signOut } = useAuth();
+  const { user } = useUser();
+
+  const displayUser = user || initialUser;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="border-b bg-white px-6 py-4 flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <OrgSwitcher onOrgChange={(orgId) => console.log("Switched:", orgId)} />
+          <UserButton />
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="max-w-4xl mx-auto p-6 space-y-8">
+        <section>
+          <h2 className="text-lg font-medium mb-4">Profile</h2>
+          <UserProfileCard user={displayUser} />
+        </section>
+
+        <section>
+          <h2 className="text-lg font-medium mb-4">Active Sessions</h2>
+          <SessionList />
+        </section>
+
+        <button
+          onClick={signOut}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+        >
+          Sign out
+        </button>
+      </main>
+    </div>
+  );
+}
+```
+
+## 9. Add organization switching
+
+Create an organization settings page:
+
+```tsx
+// src/app/dashboard/organizations/page.tsx
+"use client";
+
+import { useOrganizations } from "@authsome/ui-nextjs";
+import { OrgSwitcher } from "@authsome/ui-components";
+
+export default function OrganizationsPage() {
+  const { organizations, total, isLoading, reload } = useOrganizations();
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Organizations</h1>
+
+      <div className="mb-6">
+        <OrgSwitcher onOrgChange={(orgId) => console.log("Active:", orgId)} />
+      </div>
+
+      <div className="space-y-4">
+        {organizations.map((org) => (
+          <div key={org.id} className="border rounded-lg p-4">
+            <h3 className="font-medium">{org.name}</h3>
+            <p className="text-sm text-gray-500">{org.id}</p>
+          </div>
+        ))}
+      </div>
+
+      {total === 0 && !isLoading && (
+        <p className="text-gray-500">You are not a member of any organizations.</p>
+      )}
+    </div>
+  );
+}
+```
+
+## 10. Add a forgot-password page
+
+```tsx
+// src/app/forgot-password/page.tsx
+"use client";
+
+import { ForgotPasswordForm } from "@authsome/ui-components";
+
+export default function ForgotPasswordPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md">
+        <ForgotPasswordForm signInHref="/sign-in" />
+      </div>
+    </div>
+  );
+}
+```
+
+## 11. Project structure
+
+After completing the guide, your project should look like this:
+
+```
+src/
+  app/
+    layout.tsx              # Root layout with Providers
+    providers.tsx           # AuthProvider + cookie storage
+    page.tsx                # Landing page (public)
+    sign-in/page.tsx        # Sign-in page (public)
+    sign-up/page.tsx        # Sign-up page (public)
+    forgot-password/page.tsx # Forgot password (public)
+    dashboard/
+      page.tsx              # Dashboard (protected, server component)
+      dashboard-client.tsx  # Dashboard (client component)
+      organizations/
+        page.tsx            # Organization management
+  middleware.ts             # Auth middleware
+```
+
+## 12. Deploy considerations
+
+### Vercel
+
+- Set `AUTHSOME_API_URL` and `NEXT_PUBLIC_AUTHSOME_URL` in the Vercel dashboard environment variables
+- The middleware runs on Vercel's Edge Network, so token validation happens close to the user
+- Ensure your Authsome API is reachable from Vercel's Edge functions
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+ENV AUTHSOME_API_URL=http://authsome:8080
+ENV NEXT_PUBLIC_AUTHSOME_URL=https://auth.example.com
+
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+### Security checklist
+
+- Set `secure: true` in `createCookieStorage()` for production (HTTPS)
+- Use `sameSite: "strict"` if your auth API is on the same domain
+- Never expose `AUTHSOME_API_URL` (without `NEXT_PUBLIC_` prefix) to the client
+- Consider adding CSP headers to prevent XSS attacks
+- Enable rate limiting and account lockout on your Authsome server

@@ -1,0 +1,134 @@
+---
+title: Magic Link Plugin
+description: Passwordless authentication via time-limited magic links delivered by email.
+---
+
+The `magiclink` plugin provides passwordless authentication. Users enter their email address, receive a one-time link, and clicking it authenticates them instantly -- no password required.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/magiclink"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(magiclink.New(magiclink.Config{
+        Mailer: magiclink.MailerFunc(func(ctx context.Context, email, token string) error {
+            link := fmt.Sprintf("https://example.com/auth/magic?token=%s", token)
+            return mailer.Send(ctx, email, "Sign in to My App", link)
+        }),
+        TokenTTL:          10 * time.Minute,
+        SessionTokenTTL:   1 * time.Hour,
+        SessionRefreshTTL: 30 * 24 * time.Hour,
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Mailer` | `magiclink.Mailer` | required | Sends the magic link email |
+| `TokenTTL` | `time.Duration` | `10m` | How long the magic link token is valid |
+| `SessionTokenTTL` | `time.Duration` | `1h` | Lifetime of sessions created via magic link |
+| `SessionRefreshTTL` | `time.Duration` | `30d` | Lifetime of refresh tokens for magic link sessions |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"magiclink"`) |
+| `OnInit` | Captures the store reference from the engine |
+| `RouteProvider` | Registers `/v1/auth/magic-link/send` and `/verify` endpoints |
+
+## Authentication flow
+
+
+
+**Request magic link**: The user submits their email address.
+
+`POST /v1/auth/magic-link/send`
+
+```json
+{"email": "alice@example.com", "app_id": "myapp"}
+```
+
+The plugin creates a verification record with a random token, stores it in the database with the configured TTL, and calls the `Mailer` to deliver the link.
+
+**Response:**
+
+```json
+{"status": "magic link sent"}
+```
+
+The response is always successful regardless of whether the email exists. This prevents email enumeration.
+
+
+**Verify magic link**: The user clicks the link, which sends the token to the verify endpoint.
+
+`POST /v1/auth/magic-link/verify`
+
+```json
+{"token": "the-token-from-email", "app_id": "myapp"}
+```
+
+The plugin validates the token, checks expiration, ensures it has not been consumed, looks up the user, creates a session, and returns the authentication result.
+
+**Response:**
+
+```json
+{
+  "user": { "id": "ausr_01j9...", "email": "alice@example.com" },
+  "session_token": "a3f8c9d4...",
+  "refresh_token": "d72b1ef8...",
+  "expires_at": "2024-11-01T11:00:00Z"
+}
+```
+
+
+
+## Token security
+
+Magic link tokens are:
+
+- **Cryptographically random** -- generated using `crypto/rand`
+- **One-time use** -- consumed immediately on verification
+- **Time-limited** -- expire after `TokenTTL` (default 10 minutes)
+- **Stored server-side** -- tokens are verification records in the database, not JWTs
+
+If a token is expired or already consumed, the verify endpoint returns `401 Unauthorized`.
+
+## Custom Mailer implementation
+
+The `Mailer` interface requires a single method:
+
+```go
+type Mailer interface {
+    SendMagicLink(ctx context.Context, email, token string) error
+}
+```
+
+Use `MailerFunc` to adapt a plain function:
+
+```go
+magiclink.Config{
+    Mailer: magiclink.MailerFunc(func(ctx context.Context, email, token string) error {
+        link := fmt.Sprintf("https://example.com/auth/magic?token=%s", token)
+        return sendEmail(ctx, email, "Sign in", link)
+    }),
+}
+```
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/auth/magic-link/send` | Send a magic link to the given email |
+| `POST` | `/v1/auth/magic-link/verify` | Verify a magic link token and create a session |
+
+## Per-app session configuration
+
+When the engine has per-app session configuration (via `AppSessionConfig`), the magic link plugin uses it to determine token and refresh token TTLs. The plugin-level `SessionTokenTTL` and `SessionRefreshTTL` are used as fallbacks.

@@ -1,0 +1,242 @@
+---
+title: PostgreSQL
+description: Production-grade PostgreSQL backend using Grove ORM with pgdriver.
+---
+
+The PostgreSQL store (`store/postgres`) is the recommended backend for all production Authsome deployments. It uses the Grove ORM with `pgdriver` for high-performance, pooled connections and ships with programmatic migrations that create all required tables automatically when `eng.Start(ctx)` is called.
+
+## Installation
+
+```bash
+go get github.com/xraph/authsome
+go get github.com/xraph/grove
+go get github.com/xraph/grove/drivers/pgdriver
+```
+
+## Creating a store
+
+```go
+import (
+    "os"
+
+    "github.com/xraph/grove"
+    "github.com/xraph/grove/drivers/pgdriver"
+    "github.com/xraph/authsome/store/postgres"
+)
+
+// Open a Grove DB backed by PostgreSQL.
+db := grove.Open(pgdriver.New(os.Getenv("DATABASE_URL")))
+
+// Create the Authsome store.
+pgStore := postgres.New(db)
+```
+
+`postgres.New` accepts a `*grove.DB` and returns a `*postgres.Store` that satisfies the full `store.Store` interface. The `pgdriver.New` constructor accepts a DSN string or `pgdriver.Option` functional options.
+
+### Connection string format
+
+```
+postgres://user:password@host:5432/dbname?sslmode=disable
+postgres://user:password@host:5432/dbname?sslmode=require&sslrootcert=/path/to/ca.pem
+```
+
+### Advanced pgdriver options
+
+```go
+import "github.com/xraph/grove/drivers/pgdriver"
+
+db := grove.Open(pgdriver.New(
+    pgdriver.WithDSN(os.Getenv("DATABASE_URL")),
+    pgdriver.WithMaxOpenConns(25),
+    pgdriver.WithMaxIdleConns(5),
+    pgdriver.WithConnMaxLifetime(5 * time.Minute),
+))
+```
+
+### Accessing the underlying DB
+
+```go
+pgStore := postgres.New(db)
+rawDB := pgStore.DB() // *grove.DB — for advanced use cases
+```
+
+## Wiring into the engine
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "net/http"
+    "os"
+    "time"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/plugins/social"
+    "github.com/xraph/authsome/store/postgres"
+    "github.com/xraph/grove"
+    "github.com/xraph/grove/drivers/pgdriver"
+)
+
+func main() {
+    ctx := context.Background()
+
+    db := grove.Open(pgdriver.New(os.Getenv("DATABASE_URL")))
+    pgStore := postgres.New(db)
+
+    eng, err := authsome.New(
+        authsome.WithStore(pgStore),
+        authsome.WithPlugin(password.New()),
+        authsome.WithPlugin(social.New(social.WithGitHub(
+            os.Getenv("GITHUB_CLIENT_ID"),
+            os.Getenv("GITHUB_CLIENT_SECRET"),
+            "https://myapp.example.com/v1/auth/social/github/callback",
+        ))),
+        authsome.WithConfig(authsome.Config{
+            AppID:    "myapp",
+            BasePath: "/v1/auth",
+            Session: authsome.SessionConfig{
+                TokenTTL:        1 * time.Hour,
+                RefreshTokenTTL: 30 * 24 * time.Hour,
+            },
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer eng.Stop(ctx)
+
+    // Start runs migrations automatically.
+    if err := eng.Start(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    mux := http.NewServeMux()
+    eng.RegisterRoutes(mux)
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+## Migrations
+
+Migrations run automatically when `eng.Start(ctx)` is called. You never need to manage schema evolution manually.
+
+The PostgreSQL store uses Grove's programmatic migration system (`migrate.Group`). Each migration is a Go function that calls Grove ORM methods (`CreateTable`, `AddColumn`, etc.) rather than raw SQL strings. This makes migrations database-portable and testable.
+
+The core migration group creates all tables for the built-in subsystems. Plugin migration groups are merged and executed in the same orchestrator run, so all tables are created atomically.
+
+### Migration tracking
+
+Grove creates a `grove_migrations` table to track which migrations have been applied. On subsequent `Start` calls, already-applied migrations are skipped. The orchestrator is fully idempotent — calling `Start` on every application boot is safe and expected.
+
+### Running migrations manually
+
+If you need to run migrations outside the engine lifecycle (e.g., in a one-off migration script):
+
+```go
+import "github.com/xraph/grove/migrate"
+
+if err := pgStore.Migrate(ctx); err != nil {
+    log.Fatal("migration failed:", err)
+}
+```
+
+To also run plugin migrations:
+
+```go
+pwPlugin := password.New()
+if err := pgStore.Migrate(ctx, pwPlugin.MigrationGroup()); err != nil {
+    log.Fatal("migration failed:", err)
+}
+```
+
+## Table naming
+
+All Authsome tables use the `authsome_` prefix to avoid collisions with application tables in a shared database:
+
+| Table | Purpose |
+|-------|---------|
+| `authsome_users` | User records |
+| `authsome_sessions` | Active sessions |
+| `authsome_verifications` | Email verification tokens |
+| `authsome_password_resets` | Password reset tokens |
+| `authsome_apps` | Application registrations |
+| `authsome_organizations` | Organization records |
+| `authsome_members` | Organization membership |
+| `authsome_invitations` | Pending invitations |
+| `authsome_teams` | Teams within organizations |
+| `authsome_devices` | Device fingerprint records |
+| `authsome_webhooks` | Webhook endpoints |
+| `authsome_notifications` | Notification queue |
+| `authsome_api_keys` | API key records |
+| `authsome_environments` | Environment isolation records |
+| `authsome_form_configs` | Dynamic form field configurations |
+| `authsome_branding_configs` | Per-org branding settings |
+| `authsome_app_session_configs` | Per-app session token overrides |
+
+Plugin tables follow their own naming conventions. The `password` plugin creates `authsome_password_hashes`. The `mfa` plugin creates `authsome_mfa_enrollments`. The `passkey` plugin creates `authsome_passkeys`. Refer to each plugin's documentation for its table list.
+
+## Grove ORM patterns
+
+The PostgreSQL store uses Grove ORM's query builder throughout. Key patterns used internally:
+
+### Insert
+
+```go
+_, err := s.pg.NewInsert(model).Exec(ctx)
+```
+
+### Select by primary key
+
+```go
+err := s.pg.NewSelect(model).Where("id = ?", id.String()).Scan(ctx)
+```
+
+### Soft delete (users)
+
+Users are soft-deleted — a `deleted_at` timestamp is set rather than removing the row:
+
+```go
+_, err := s.pg.NewUpdate((*UserModel)(nil)).
+    Set("deleted_at = ?", time.Now()).
+    Where("id = ?", userID.String()).
+    Where("deleted_at IS NULL").
+    Exec(ctx)
+```
+
+All user lookups include `WHERE deleted_at IS NULL` to exclude deleted users.
+
+### Cursor-based pagination
+
+`ListUsers` and similar list methods use cursor-based pagination for O(1) page navigation regardless of result set size:
+
+```go
+query := s.pg.NewSelect(&models).
+    Where("app_id = ?", appID.String()).
+    Where("deleted_at IS NULL")
+
+if q.Cursor != "" {
+    query = query.Where("id < ?", q.Cursor)
+}
+
+query = query.OrderExpr("id DESC").Limit(limit + 1)
+```
+
+The response includes a `NextCursor` field set to the last-seen ID when more results are available.
+
+## Lifecycle methods
+
+| Method | Behaviour |
+|--------|-----------|
+| `Migrate(ctx, extraGroups...)` | Creates all tables via Grove's migration orchestrator. Idempotent. |
+| `Ping(ctx)` | Calls `db.Ping(ctx)` to verify database connectivity. |
+| `Close()` | Calls `db.Close()` to release all pooled connections. |
+
+## When to use
+
+- **Production deployments** — ACID-compliant, connection-pooled, supports all Authsome features including RBAC with hierarchical roles.
+- **Staging environments** — Mirror production behaviour exactly.
+- **Multi-instance deployments** — All application instances share the same database; no sticky sessions required.
+- **High-traffic applications** — pgdriver's connection pool handles hundreds of concurrent authentication requests efficiently.

@@ -1,0 +1,157 @@
+---
+title: Store Backends
+description: How Authsome persists authentication data across PostgreSQL, SQLite, MongoDB, and Memory backends.
+---
+
+Authsome separates its persistence layer behind a single composite interface — `store.Store` — defined in `github.com/xraph/authsome/store`. Every backend (PostgreSQL, SQLite, MongoDB, and the in-memory test store) implements this interface in full. You configure the backend once at engine startup and never touch it again; every plugin, service, and strategy reads and writes through the same interface.
+
+## The composite store interface
+
+The `store.Store` interface in `github.com/xraph/authsome/store` composes 13 sub-store interfaces plus three lifecycle methods:
+
+```go
+package store
+
+import (
+    "context"
+
+    "github.com/xraph/authsome/account"
+    "github.com/xraph/authsome/apikey"
+    "github.com/xraph/authsome/app"
+    "github.com/xraph/authsome/appsessionconfig"
+    "github.com/xraph/authsome/device"
+    "github.com/xraph/authsome/environment"
+    "github.com/xraph/authsome/formconfig"
+    "github.com/xraph/authsome/notification"
+    "github.com/xraph/authsome/organization"
+    "github.com/xraph/authsome/session"
+    "github.com/xraph/authsome/user"
+    "github.com/xraph/authsome/webhook"
+
+    "github.com/xraph/grove/migrate"
+)
+
+type Store interface {
+    user.Store
+    session.Store
+    account.Store
+    app.Store
+    organization.Store
+    device.Store
+    webhook.Store
+    notification.Store
+    apikey.Store
+    environment.Store
+    formconfig.Store
+    formconfig.BrandingStore
+    appsessionconfig.Store
+
+    Migrate(ctx context.Context, extraGroups ...*migrate.Group) error
+    Ping(ctx context.Context) error
+    Close() error
+}
+```
+
+## Sub-store interfaces
+
+Each sub-store covers one Authsome domain. The table below summarises what each one manages:
+
+| Interface | Package | Domain |
+|-----------|---------|--------|
+| `user.Store` | `github.com/xraph/authsome/user` | User CRUD, lookup by email/phone/username |
+| `session.Store` | `github.com/xraph/authsome/session` | Session lifecycle, token and refresh-token lookup |
+| `account.Store` | `github.com/xraph/authsome/account` | Email verifications, password resets |
+| `app.Store` | `github.com/xraph/authsome/app` | Multi-app management |
+| `organization.Store` | `github.com/xraph/authsome/organization` | Orgs, members, invitations, teams |
+| `device.Store` | `github.com/xraph/authsome/device` | Device fingerprint tracking |
+| `webhook.Store` | `github.com/xraph/authsome/webhook` | Webhook endpoint CRUD |
+| `notification.Store` | `github.com/xraph/authsome/notification` | Notification queuing and delivery status |
+| `apikey.Store` | `github.com/xraph/authsome/apikey` | API key storage and prefix lookup |
+| `environment.Store` | `github.com/xraph/authsome/environment` | Environment (prod/staging/dev) isolation |
+| `formconfig.Store` | `github.com/xraph/authsome/formconfig` | Dynamic sign-up form configuration |
+| `formconfig.BrandingStore` | `github.com/xraph/authsome/formconfig` | Per-org branding configuration |
+| `appsessionconfig.Store` | `github.com/xraph/authsome/appsessionconfig` | Per-app session token configuration overrides |
+
+## Lifecycle methods
+
+Every backend implements three lifecycle methods:
+
+| Method | Signature | Behaviour |
+|--------|-----------|-----------|
+| `Migrate` | `Migrate(ctx context.Context, extraGroups ...*migrate.Group) error` | Runs all schema migrations. Extra groups passed here are merged with the core migrations and executed in a single orchestrator run. Plugins supply their own migration groups via this mechanism. |
+| `Ping` | `Ping(ctx context.Context) error` | Verifies database connectivity. Useful for health checks and readiness probes. |
+| `Close` | `Close() error` | Releases all database connections and frees resources. |
+
+The `Migrate` method accepts variadic `*migrate.Group` arguments from the Grove ORM migration system (`github.com/xraph/grove/migrate`). When the Authsome engine starts, it collects migration groups from all registered plugins and passes them to `Migrate` in a single call. This guarantees that core and plugin tables are always created together in the correct order.
+
+## Migration system
+
+Authsome's migration system is built on Grove ORM's `migrate.Group` and `migrate.Orchestrator`. Each backend registers a `Migrations` variable — a `*migrate.Group` — that describes all the model-level schema operations (create table, add index, etc.).
+
+At engine start, the sequence is:
+
+1. The engine calls `eng.Start(ctx)`.
+2. Each registered plugin is asked for its `MigrationGroup() *migrate.Group`.
+3. All plugin groups plus the core group are passed to `store.Migrate(ctx, pluginGroups...)`.
+4. The Grove orchestrator creates a `migrate_history` tracking table (if not present), then executes any pending migrations.
+5. Already-applied migrations are skipped. The orchestrator is idempotent and safe to call on every startup.
+
+```go
+// Engine calls this internally:
+eng.store.Migrate(ctx,
+    passwordPlugin.MigrationGroup(),
+    socialPlugin.MigrationGroup(),
+    mfaPlugin.MigrationGroup(),
+)
+```
+
+You should never need to call `Migrate` yourself — `eng.Start(ctx)` handles it. However, you can call it directly if you manage schema evolution outside the engine lifecycle.
+
+## Choosing a backend
+
+| Backend | When to use |
+|---------|-------------|
+| **PostgreSQL** | Production. ACID-compliant, connection-pooled, supports all Authsome features. Recommended default. |
+| **SQLite** | Single-process deployments, local development, CLI tools, embedded applications. |
+| **MongoDB** | Document-oriented workloads, teams already operating a Mongo cluster, flexible schema migrations. |
+| **Memory** | Unit tests, integration tests, CI pipelines with no external database. |
+
+## Wiring a store into the engine
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/store/postgres"
+    "github.com/xraph/grove"
+    "github.com/xraph/grove/drivers/pgdriver"
+)
+
+db := grove.Open(pgdriver.New(os.Getenv("DATABASE_URL")))
+pgStore := postgres.New(db)
+
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    // ... other options
+)
+```
+
+The store is the only required option — without `WithStore`, the engine returns an error on `New`.
+
+## Compile-time interface checks
+
+Every backend file declares compile-time assertions to ensure the concrete type satisfies `store.Store`. The PostgreSQL backend, for example, includes:
+
+```go
+var _ store.Store = (*Store)(nil)
+```
+
+If you implement a custom store and miss any method, the build fails immediately rather than panicking at runtime.
+
+## Where to go next
+
+<Cards>
+  <Card title="PostgreSQL" href="/docs/stores/postgres" description="Production backend using Grove ORM with pgdriver. Recommended for all production deployments." />
+  <Card title="SQLite" href="/docs/stores/sqlite" description="Lightweight embedded backend for local development and single-process deployments." />
+  <Card title="MongoDB" href="/docs/stores/mongodb" description="Document store backend for teams operating a MongoDB cluster." />
+  <Card title="Memory Store" href="/docs/stores/memory" description="In-memory backend for unit tests and CI pipelines." />
+</Cards>

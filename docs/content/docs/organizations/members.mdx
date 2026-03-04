@@ -1,0 +1,194 @@
+---
+title: Members
+description: Manage organization membership with three built-in roles and full CRUD operations.
+---
+
+Every user who belongs to an organization is represented by a `Member` record. Members are scoped to an organization and carry one of three built-in roles that control what actions they can perform within that organization.
+
+## The Member model
+
+```go
+import "github.com/xraph/authsome/org"
+
+type Member struct {
+    ID        id.ID      `json:"id"`         // amem_ prefix
+    OrgID     id.ID      `json:"org_id"`
+    UserID    id.ID      `json:"user_id"`
+    Role      MemberRole `json:"role"`
+    AddedBy   id.ID      `json:"added_by"`   // user who added this member
+    JoinedAt  time.Time  `json:"joined_at"`
+    UpdatedAt time.Time  `json:"updated_at"`
+
+    // Populated when the member is fetched with user details.
+    User *user.User `json:"user,omitempty"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ID` | Unique member record identifier with `amem_` prefix |
+| `OrgID` | The organization this membership belongs to |
+| `UserID` | The user who is a member |
+| `Role` | One of `owner`, `admin`, or `member` |
+| `AddedBy` | The user who performed the add operation (audit trail) |
+| `JoinedAt` | When the membership was created (may differ from invitation acceptance time if added directly) |
+
+## Member roles
+
+Authsome defines three built-in member roles with a clear hierarchy:
+
+| Role | Constant | Description |
+|------|----------|-------------|
+| Owner | `org.RoleOwner` | Full control over the organization. Can manage all members (including other owners), delete the org, change billing settings, and perform all admin actions. Every organization must have at least one owner. |
+| Admin | `org.RoleAdmin` | Can manage members and teams, configure integrations, update org settings, and invite new members. Cannot change other admins' roles or remove owners. |
+| Member | `org.RoleMember` | Read access to organization resources the application grants them. Cannot manage other members, change org settings, or invite users. |
+
+```go
+const (
+    RoleOwner  MemberRole = "owner"
+    RoleAdmin  MemberRole = "admin"
+    RoleMember MemberRole = "member"
+)
+```
+
+<Callout type="info">
+These three roles are the built-in org-level roles. You can layer additional fine-grained permissions on top using the RBAC system. See [Org-Scoped Roles](/docs/organizations/org-scoped-roles) for details.
+</Callout>
+
+## Adding members
+
+Members are typically added through the invitation flow (see [Invitations](/docs/organizations/invitations)), but you can also add them directly if the user already exists in your system:
+
+```go
+import "github.com/xraph/authsome/org"
+
+// Add an existing user as a member directly.
+member, err := auth.Orgs().AddMember(ctx, &org.AddMemberInput{
+    OrgID:  orgID,
+    UserID: targetUserID,
+    Role:   org.RoleMember,
+})
+if err != nil {
+    return err
+}
+fmt.Printf("added member: id=%s role=%s\n", member.ID, member.Role)
+```
+
+<Callout type="warn">
+Direct membership addition bypasses the invitation flow and does not send a notification email to the user. Use the invitation flow when you want to notify users and require their explicit acceptance before granting access.
+</Callout>
+
+The calling user must have the `owner` or `admin` role in the organization to add members. Admins can add `member`-role users only; adding an `admin` or `owner` requires the `owner` role.
+
+## Removing members
+
+```go
+// Remove a member from an organization.
+err := auth.Orgs().RemoveMember(ctx, orgID, memberID)
+```
+
+Removing a member:
+- Deletes the `Member` record
+- Removes the user from all teams within the organization
+- Revokes all org-scoped role assignments for that user
+- Emits the `org.member.removed` webhook event
+
+The calling user must be an `owner` or `admin`. Owners cannot remove other owners — they must first change the other owner's role to `admin`, then remove them.
+
+A user can also remove themselves (leave the organization):
+
+```go
+err := auth.Orgs().LeaveOrg(ctx, orgID, currentUserID)
+```
+
+<Callout type="warn">
+An organization must always have at least one `owner`. If the last owner tries to leave or be removed, the operation returns `ErrLastOwner`. Transfer ownership to another member first.
+</Callout>
+
+## Changing roles
+
+```go
+// Promote a member to admin.
+updated, err := auth.Orgs().UpdateMemberRole(ctx, orgID, memberID, org.RoleAdmin)
+
+// Promote an admin to owner.
+updated, err := auth.Orgs().UpdateMemberRole(ctx, orgID, memberID, org.RoleOwner)
+
+// Demote an admin to member.
+updated, err := auth.Orgs().UpdateMemberRole(ctx, orgID, memberID, org.RoleMember)
+```
+
+Role change rules:
+- Only `owner` role users can change roles at the `admin` and `owner` levels
+- `admin` role users can change roles at the `member` level only
+- Changing a user's role emits the `org.member.role_changed` webhook event
+
+## Listing members
+
+```go
+// List all members of an organization.
+result, err := auth.Orgs().ListMembers(ctx, orgID, &org.ListMembersInput{
+    Limit:           50,
+    Cursor:          "",
+    IncludeUserData: true,   // populate the User field on each Member
+    RoleFilter:      "",     // optional: filter by "owner", "admin", or "member"
+})
+if err != nil {
+    return err
+}
+
+for _, m := range result.Items {
+    fmt.Printf("  %s (%s) role=%s joined=%s\n",
+        m.User.Email, m.ID, m.Role, m.JoinedAt.Format("2006-01-02"))
+}
+
+if result.HasMore {
+    // Fetch next page using result.NextCursor
+}
+```
+
+### Filter options
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Limit` | `int` | Maximum members per page (default: 50, max: 200) |
+| `Cursor` | `string` | Pagination cursor from the previous `NextCursor` |
+| `IncludeUserData` | `bool` | Whether to populate the `User` field on each `Member` record |
+| `RoleFilter` | `string` | When non-empty, returns only members with that role |
+| `Search` | `string` | Filter by display name or email (prefix match) |
+
+## Checking membership
+
+```go
+// Check if a user is a member of an organization.
+member, err := auth.Orgs().GetMember(ctx, orgID, userID)
+if errors.Is(err, org.ErrMemberNotFound) {
+    // user is not a member
+}
+
+// Check if a user has at least a given role.
+hasRole, err := auth.Orgs().UserHasRole(ctx, orgID, userID, org.RoleAdmin)
+```
+
+## HTTP API endpoints
+
+The organization plugin registers these member-related routes:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/orgs/:org_id/members` | List all members of an organization |
+| `GET` | `/orgs/:org_id/members/:member_id` | Get a specific member record |
+| `POST` | `/orgs/:org_id/members` | Add a user as a member directly |
+| `PATCH` | `/orgs/:org_id/members/:member_id` | Update a member's role |
+| `DELETE` | `/orgs/:org_id/members/:member_id` | Remove a member from the organization |
+| `DELETE` | `/orgs/:org_id/leave` | Leave the organization (self-removal) |
+
+## Error reference
+
+| Error | Description |
+|-------|-------------|
+| `org.ErrMemberNotFound` | No member record with the given ID exists in this org |
+| `org.ErrAlreadyMember` | The user is already a member of this organization |
+| `org.ErrLastOwner` | Cannot remove or demote the last owner of an organization |
+| `org.ErrInsufficientRole` | The calling user does not have the required role to perform this action |
+| `org.ErrCannotManageOwner` | An admin attempted to modify an owner's role or remove them |

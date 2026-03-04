@@ -1,0 +1,169 @@
+package auth
+
+import (
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/label"
+	"github.com/xraph/forgeui/icons"
+)
+
+// RegisterPageLinks holds navigation paths for the register page.
+type RegisterPageLinks struct {
+	LoginPath string
+}
+
+// RegisterPage renders the dashboard signup form.
+// The auth layout already provides centering, card wrapper, and padding.
+templ RegisterPage(links RegisterPageLinks) {
+	<div class="flex items-center justify-center mb-2">
+		@icons.UserPlus(icons.WithSize(32), icons.WithClass("text-primary"))
+	</div>
+	<h2 class="text-lg font-semibold text-center">Create account</h2>
+	<p class="text-sm text-muted-foreground text-center mb-4">Enter your details to create a new account</p>
+	<form method="POST" class="space-y-4">
+		<div class="grid grid-cols-2 gap-3">
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "first_name"}) {
+					First name
+				}
+				@input.Input(input.Props{
+					ID:          "first_name",
+					Name:        "first_name",
+					Type:        input.TypeText,
+					Placeholder: "First name",
+					Attributes:  templ.Attributes{"required": "true", "autocomplete": "given-name"},
+				})
+			</div>
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "last_name"}) {
+					Last name
+				}
+				@input.Input(input.Props{
+					ID:          "last_name",
+					Name:        "last_name",
+					Type:        input.TypeText,
+					Placeholder: "Last name",
+					Attributes:  templ.Attributes{"autocomplete": "family-name"},
+				})
+			</div>
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "name@example.com",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "password"}) {
+				Password
+			}
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Choose a password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "new-password"},
+			})
+		</div>
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Create account
+		}
+	</form>
+	if links.LoginPath != "" {
+		<p class="text-sm text-center text-muted-foreground mt-4">
+			Already have an account?{ " " }
+			<a href={ templ.SafeURL(links.LoginPath) } class="text-primary hover:underline font-medium">
+				Sign in
+			</a>
+		</p>
+	}
+}
+
+// RegisterError renders the signup page with an error message.
+templ RegisterError(errorMsg string, links RegisterPageLinks) {
+	<div class="flex items-center justify-center mb-2">
+		@icons.UserPlus(icons.WithSize(32), icons.WithClass("text-primary"))
+	</div>
+	<h2 class="text-lg font-semibold text-center">Create account</h2>
+	<p class="text-sm text-muted-foreground text-center mb-4">Enter your details to create a new account</p>
+	<form method="POST" class="space-y-4">
+		if errorMsg != "" {
+			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+				{ errorMsg }
+			</div>
+		}
+		<div class="grid grid-cols-2 gap-3">
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "first_name"}) {
+					First name
+				}
+				@input.Input(input.Props{
+					ID:          "first_name",
+					Name:        "first_name",
+					Type:        input.TypeText,
+					Placeholder: "First name",
+					Attributes:  templ.Attributes{"required": "true", "autocomplete": "given-name"},
+				})
+			</div>
+			<div class="space-y-2">
+				@label.Label(label.Props{For: "last_name"}) {
+					Last name
+				}
+				@input.Input(input.Props{
+					ID:          "last_name",
+					Name:        "last_name",
+					Type:        input.TypeText,
+					Placeholder: "Last name",
+					Attributes:  templ.Attributes{"autocomplete": "family-name"},
+				})
+			</div>
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "email"}) {
+				Email
+			}
+			@input.Input(input.Props{
+				ID:          "email",
+				Name:        "email",
+				Type:        input.TypeEmail,
+				Placeholder: "name@example.com",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "email"},
+			})
+		</div>
+		<div class="space-y-2">
+			@label.Label(label.Props{For: "password"}) {
+				Password
+			}
+			@input.Input(input.Props{
+				ID:          "password",
+				Name:        "password",
+				Type:        input.TypePassword,
+				Placeholder: "Choose a password",
+				Attributes:  templ.Attributes{"required": "true", "autocomplete": "new-password"},
+			})
+		</div>
+		@button.Button(button.Props{
+			Type:      button.TypeSubmit,
+			FullWidth: true,
+		}) {
+			Create account
+		}
+	</form>
+	if links.LoginPath != "" {
+		<p class="text-sm text-center text-muted-foreground mt-4">
+			Already have an account?{ " " }
+			<a href={ templ.SafeURL(links.LoginPath) } class="text-primary hover:underline font-medium">
+				Sign in
+			</a>
+		</p>
+	}
+}

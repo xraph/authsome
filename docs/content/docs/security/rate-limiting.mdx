@@ -1,0 +1,231 @@
+---
+title: Rate Limiting
+description: Per-endpoint rate limits with configurable windows, memory and noop built-in limiters, and a pluggable interface for Redis or custom backends.
+---
+
+Authsome applies rate limits to sensitive authentication endpoints to prevent abuse. Each endpoint has its own limit configured independently, so you can set strict limits on password reset and MFA verification while keeping sign-in limits more permissive. A pluggable `RateLimiter` interface lets you swap in a Redis-backed or distributed limiter for multi-instance deployments.
+
+## Architecture
+
+```
+HTTP request
+  → Rate limit middleware
+      → RateLimiter.Allow(ctx, key, limit, window) → allowed or ErrRateLimitExceeded
+          → 429 Too Many Requests (when denied)
+```
+
+The rate limit `key` is a composite of the endpoint name and a scoping value -- by default the client IP address. You can customize the key function to scope by user ID, API key, or any other identifier.
+
+## Built-in limiters
+
+### Memory limiter
+
+A fixed-window rate limiter backed by an in-memory map with a background ticker that prunes expired entries.
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/ratelimit"
+)
+
+auth := authsome.New(
+    authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()),
+)
+```
+
+The memory limiter uses fixed windows (not sliding). All counters for a window expire at the same time, which means a burst of requests at the end of one window and the start of the next can exceed the limit by up to 2x. For most applications this is acceptable. Use a Redis-backed sliding window limiter for strict enforcement.
+
+### Noop limiter
+
+The noop limiter allows all requests unconditionally. Use it in development environments or when you want to disable rate limiting without changing code:
+
+```go
+auth := authsome.New(
+    authsome.WithRateLimiter(ratelimit.NewNoopLimiter()),
+)
+```
+
+## Per-endpoint configuration
+
+Configure rate limits for each endpoint category:
+
+```go
+import "github.com/xraph/authsome/ratelimit"
+
+auth := authsome.New(
+    authsome.WithRateLimiter(ratelimit.NewMemoryLimiter()),
+    authsome.WithRateLimits(ratelimit.EndpointLimits{
+        SignIn:          ratelimit.Limit{Requests: 10, Window: time.Minute},
+        SignUp:          ratelimit.Limit{Requests: 5,  Window: time.Minute},
+        PasswordReset:   ratelimit.Limit{Requests: 3,  Window: 10 * time.Minute},
+        MFAVerify:       ratelimit.Limit{Requests: 10, Window: time.Minute},
+        MagicLink:       ratelimit.Limit{Requests: 5,  Window: 10 * time.Minute},
+        OTPVerify:       ratelimit.Limit{Requests: 10, Window: time.Minute},
+        APIKeyAuth:      ratelimit.Limit{Requests: 100, Window: time.Minute},
+        PasskeyRegister: ratelimit.Limit{Requests: 5,  Window: time.Minute},
+    }),
+)
+```
+
+| Endpoint key | Default | Description |
+|-------------|---------|-------------|
+| `SignIn` | 10/min | Password-based and social sign-in |
+| `SignUp` | 5/min | User registration |
+| `PasswordReset` | 3/10min | Password reset request and token verification |
+| `MFAVerify` | 10/min | TOTP and SMS OTP verification |
+| `MagicLink` | 5/10min | Magic link request |
+| `OTPVerify` | 10/min | Phone OTP and email OTP verification |
+| `APIKeyAuth` | 100/min | API key authentication (typically higher) |
+| `PasskeyRegister` | 5/min | Passkey credential registration |
+| `SSOInit` | 10/min | SSO flow initiation |
+| `TokenRefresh` | 20/min | Session token refresh |
+
+## The RateLimiter interface
+
+```go
+type RateLimiter interface {
+    // Allow checks whether the request with the given key should be allowed.
+    // limit is the maximum number of requests, window is the time window.
+    // Returns (true, nil) if allowed, (false, nil) if rate-limited,
+    // or (false, err) on internal error.
+    Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
+
+    // Reset clears the rate limit counter for the given key.
+    Reset(ctx context.Context, key string) error
+}
+```
+
+## Custom limiter: Redis sliding window example
+
+```go
+package redislimiter
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    "github.com/redis/go-redis/v9"
+    "github.com/xraph/authsome/ratelimit"
+)
+
+// RedisSlidingWindowLimiter implements ratelimit.RateLimiter using Redis sorted sets.
+type RedisSlidingWindowLimiter struct {
+    client *redis.Client
+}
+
+func New(client *redis.Client) ratelimit.RateLimiter {
+    return &RedisSlidingWindowLimiter{client: client}
+}
+
+func (r *RedisSlidingWindowLimiter) Allow(
+    ctx context.Context,
+    key string,
+    limit int,
+    window time.Duration,
+) (bool, error) {
+    now := time.Now().UnixMilli()
+    windowStart := now - window.Milliseconds()
+
+    pipe := r.client.Pipeline()
+
+    // Remove expired entries.
+    pipe.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", windowStart))
+    // Count current requests in window.
+    countCmd := pipe.ZCard(ctx, key)
+    // Add this request.
+    pipe.ZAdd(ctx, key, redis.Z{Score: float64(now), Member: now})
+    // Set expiry.
+    pipe.Expire(ctx, key, window)
+
+    if _, err := pipe.Exec(ctx); err != nil {
+        return false, err
+    }
+
+    count := countCmd.Val()
+    return count < int64(limit), nil
+}
+
+func (r *RedisSlidingWindowLimiter) Reset(ctx context.Context, key string) error {
+    return r.client.Del(ctx, key).Err()
+}
+```
+
+Register it:
+
+```go
+import (
+    redislimiter "myapp/ratelimit/redis"
+    "github.com/redis/go-redis/v9"
+)
+
+rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+
+auth := authsome.New(
+    authsome.WithRateLimiter(redislimiter.New(rdb)),
+    authsome.WithRateLimits(ratelimit.EndpointLimits{
+        SignIn:        ratelimit.Limit{Requests: 10, Window: time.Minute},
+        PasswordReset: ratelimit.Limit{Requests: 3,  Window: 10 * time.Minute},
+    }),
+)
+```
+
+## Key functions
+
+The default key function scopes rate limits to the client IP address and endpoint name:
+
+```
+key = "authsome:ratelimit:{endpoint}:{ip}"
+```
+
+You can supply a custom key function to scope by user, API key, or any other dimension:
+
+```go
+auth := authsome.New(
+    authsome.WithRateLimitKeyFunc(func(ctx context.Context, endpoint string, r *http.Request) string {
+        // Scope by user ID when authenticated, fall back to IP when not.
+        if userID := authsome.UserIDFromContext(ctx); userID != "" {
+            return fmt.Sprintf("rl:%s:%s", endpoint, userID)
+        }
+        return fmt.Sprintf("rl:%s:%s", endpoint, r.RemoteAddr)
+    }),
+)
+```
+
+## Rate limit middleware
+
+You can apply rate limits to your own custom endpoints using the middleware directly:
+
+```go
+import "github.com/xraph/authsome/middleware"
+
+// Apply a 30 requests/minute limit to a custom endpoint.
+router.With(
+    middleware.RateLimit(auth, "my-endpoint", 30, time.Minute),
+).Post("/api/expensive-operation", handler)
+```
+
+## Rate limit response
+
+When a rate limit is exceeded, Authsome returns:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 45
+X-RateLimit-Limit: 10
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1717500000
+
+{
+  "error": "rate_limit_exceeded",
+  "message": "Too many requests. Please try again in 45 seconds.",
+  "retry_after": 45
+}
+```
+
+The `Retry-After` header and `retry_after` body field tell the client how many seconds to wait before retrying. The `X-RateLimit-*` headers follow the standard draft specification.
+
+<Callout type="info">
+`X-RateLimit-Remaining` and `X-RateLimit-Reset` are only populated when the limiter implementation supports returning current window state. The memory limiter and the noop limiter do not return this data; a Redis implementation can.
+</Callout>

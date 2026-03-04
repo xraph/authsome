@@ -1,0 +1,165 @@
+---
+title: Flutter SDK
+description: Native Flutter SDK for Authsome authentication -- currently under active development.
+---
+
+The Authsome Flutter SDK will bring native authentication support to Flutter applications across all platforms. The SDK is currently under active development and is expected to enter public beta soon.
+
+> **Status:** Under active development. The API surface described on this page is preliminary and subject to change.
+
+## Planned features
+
+### AuthProvider widget
+
+A top-level `InheritedWidget` that manages authentication state and provides it to the widget tree:
+
+```dart
+// Planned API
+void main() {
+  runApp(
+    AuthProvider(
+      config: AuthConfig(
+        baseURL: 'https://api.example.com',
+        storage: SecureTokenStorage(),
+      ),
+      child: const MyApp(),
+    ),
+  );
+}
+```
+
+### Pre-built auth screens
+
+Material Design 3 screens for every authentication flow:
+
+| Screen | Description |
+|--------|-------------|
+| `SignInScreen` | Email/password sign-in with social provider buttons |
+| `SignUpScreen` | Registration with name, email, and password fields |
+| `ForgotPasswordScreen` | Password reset request |
+| `ResetPasswordScreen` | New password entry with token from deep link |
+| `MFAChallengeScreen` | TOTP or SMS code entry with pin input |
+| `UserProfileScreen` | View and edit user profile |
+| `SessionListScreen` | View and revoke active sessions |
+
+All screens will follow Material Design 3 guidelines and support custom theming through Flutter's `ThemeData`.
+
+### Secure token storage
+
+Integration with `flutter_secure_storage` for platform-appropriate credential persistence:
+
+| Platform | Storage backend |
+|----------|----------------|
+| iOS | Keychain Services |
+| Android | EncryptedSharedPreferences (API 23+) / Keystore |
+| Web | Encrypted localStorage |
+| macOS | Keychain Services |
+| Windows | Windows Credential Manager |
+| Linux | libsecret |
+
+### Biometric authentication
+
+Optional biometric gate before retrieving stored tokens:
+
+```dart
+// Planned API
+AuthProvider(
+  config: AuthConfig(
+    baseURL: 'https://api.example.com',
+    storage: SecureTokenStorage(
+      biometric: BiometricConfig(
+        enabled: true,
+        reason: 'Authenticate to access your account',
+      ),
+    ),
+  ),
+  child: const MyApp(),
+);
+```
+
+### Deep link handling
+
+Built-in support for deep links used by magic link sign-in and OAuth callbacks:
+
+```dart
+// Planned API
+AuthProvider(
+  config: AuthConfig(
+    baseURL: 'https://api.example.com',
+    deepLinkScheme: 'myapp',
+    deepLinkHost: 'auth',
+  ),
+  child: const MyApp(),
+);
+```
+
+This will handle URLs like `myapp://auth/callback?token=...` and `myapp://auth/magic-link?code=...` automatically.
+
+## Platform support
+
+| Platform | Status |
+|----------|--------|
+| iOS | Planned |
+| Android | Planned |
+| Web | Planned |
+| macOS | Planned |
+| Windows | Planned |
+| Linux | Planned |
+
+## Expected API surface
+
+### State management
+
+```dart
+// Planned API
+class AuthState {
+  final AuthStatus status; // loading, authenticated, unauthenticated, mfaRequired, error
+  final User? user;
+  final Session? session;
+  final String? error;
+}
+```
+
+### Hooks (via flutter_hooks or Riverpod)
+
+```dart
+// Planned API -- flutter_hooks style
+Widget build(BuildContext context) {
+  final auth = useAuth();
+  final user = useUser();
+  final orgs = useOrganizations();
+
+  if (auth.isLoading) return const CircularProgressIndicator();
+  if (!auth.isAuthenticated) return const SignInScreen();
+
+  return Text('Welcome, ${user.value?.name}');
+}
+```
+
+### Programmatic API
+
+```dart
+// Planned API
+final authManager = AuthManager(config: AuthConfig(baseURL: '...'));
+await authManager.initialize();
+
+await authManager.signIn(email: 'user@example.com', password: 'secret');
+await authManager.signOut();
+
+final user = authManager.state.user;
+```
+
+## Roadmap
+
+1. **Core SDK** -- AuthManager, AuthClient, token storage, state management
+2. **Material Design 3 screens** -- Sign-in, sign-up, MFA, profile screens
+3. **Deep link handler** -- Magic links and OAuth callbacks
+4. **Biometric support** -- Biometric gating for token retrieval
+5. **Riverpod integration** -- First-class Riverpod providers
+6. **Platform plugins** -- Native passkey support (iOS 16+, Android 9+)
+
+## Stay updated
+
+The Flutter SDK is part of the Authsome UI family. Sign up for release notifications by watching the [Authsome repository](https://github.com/xraph/authsome) on GitHub or joining the community Discord.
+
+If you are interested in early access or want to contribute, open an issue on GitHub with the label `flutter-sdk`.

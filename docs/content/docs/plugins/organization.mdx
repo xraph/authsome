@@ -1,0 +1,203 @@
+---
+title: Organization Plugin
+description: Multi-tenant organization management with members, teams, invitations, and role-based access control.
+---
+
+The `organization` plugin provides multi-tenant organization management for Authsome. It handles organization CRUD, member management, team hierarchies, invitation workflows, and organization-scoped roles.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/organization"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(organization.New(store, organization.Config{
+        PathPrefix: "/v1/auth",
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `PathPrefix` | `string` | engine `BasePath` | HTTP path prefix for organization routes |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"organization"`) |
+| `OnInit` | Captures the full engine reference for plugins, hooks, relay, chronicle, and logger |
+| `RouteProvider` | Registers organization, member, team, and invitation endpoints |
+| `DataExportContributor` | Exports user's organization memberships for GDPR compliance |
+
+## Organization CRUD
+
+### Create organization
+
+`POST /v1/auth/organizations`
+
+```json
+{
+  "name": "Acme Corp",
+  "slug": "acme-corp",
+  "metadata": {"plan": "enterprise"}
+}
+```
+
+### Get organization
+
+`GET /v1/auth/organizations/:orgId`
+
+### Update organization
+
+`PUT /v1/auth/organizations/:orgId`
+
+```json
+{
+  "name": "Acme Corporation",
+  "metadata": {"plan": "enterprise", "seats": 100}
+}
+```
+
+### Delete organization
+
+`DELETE /v1/auth/organizations/:orgId`
+
+## Member management
+
+### Add member
+
+`POST /v1/auth/organizations/:orgId/members`
+
+```json
+{
+  "user_id": "ausr_01j9...",
+  "role": "admin"
+}
+```
+
+### List members
+
+`GET /v1/auth/organizations/:orgId/members`
+
+### Update member role
+
+`PUT /v1/auth/organizations/:orgId/members/:memberId`
+
+```json
+{"role": "owner"}
+```
+
+### Remove member
+
+`DELETE /v1/auth/organizations/:orgId/members/:memberId`
+
+## Team management
+
+Teams provide sub-grouping within organizations:
+
+### Create team
+
+`POST /v1/auth/organizations/:orgId/teams`
+
+```json
+{
+  "name": "Engineering",
+  "description": "Product engineering team"
+}
+```
+
+### Add team member
+
+`POST /v1/auth/organizations/:orgId/teams/:teamId/members`
+
+```json
+{"user_id": "ausr_01j9..."}
+```
+
+## Invitation system
+
+Invite users to join an organization by email:
+
+### Send invitation
+
+`POST /v1/auth/organizations/:orgId/invitations`
+
+```json
+{
+  "email": "bob@example.com",
+  "role": "member"
+}
+```
+
+The engine creates an invitation record and, if the email plugin or notification plugin is registered, sends an invitation email automatically.
+
+### Accept invitation
+
+`POST /v1/auth/invitations/:token/accept`
+
+The user clicks the invitation link, which resolves the token and adds them as a member with the specified role.
+
+### List pending invitations
+
+`GET /v1/auth/organizations/:orgId/invitations`
+
+### Revoke invitation
+
+`DELETE /v1/auth/organizations/:orgId/invitations/:invitationId`
+
+## Organization-scoped roles
+
+The organization plugin supports role-based access within organizations:
+
+| Role | Description |
+|------|-------------|
+| `owner` | Full control over the organization, members, and billing |
+| `admin` | Can manage members, teams, and settings |
+| `member` | Standard access to organization resources |
+| `viewer` | Read-only access to organization resources |
+
+Roles are stored on the member record and can be customized per organization.
+
+## Multi-tenancy support
+
+The organization plugin integrates with the engine's tenant isolation:
+
+- Each organization has a unique ID used as the tenant identifier
+- Sessions can be scoped to an organization context
+- API operations filter by the current tenant
+- Organization lifecycle hooks notify other plugins of tenant changes
+
+## GDPR data export
+
+The plugin implements `DataExportContributor` to include organization memberships in user data exports:
+
+```go
+func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (string, any, error) {
+    orgs, err := p.store.ListUserOrganizations(ctx, userID)
+    return "organizations", orgs, err
+}
+```
+
+## Lifecycle hooks
+
+The organization plugin emits hooks that other plugins can subscribe to:
+
+| Hook | Trigger |
+|------|---------|
+| `AfterOrgCreate` | Organization created |
+| `AfterOrgUpdate` | Organization updated |
+| `AfterOrgDelete` | Organization deleted |
+| `AfterMemberAdd` | Member added to organization |
+| `AfterMemberRemove` | Member removed from organization |
+| `AfterMemberRoleChange` | Member role changed |
+
+## Observability
+
+Events are emitted to Chronicle (audit log), Relay (webhooks), and the global hook bus for all organization and membership operations.

@@ -1,0 +1,48 @@
+package widgets
+
+import "github.com/xraph/authsome/user"
+
+templ RecentSignupsWidget(users []*user.User) {
+	<div class="space-y-3">
+		if len(users) == 0 {
+			<p class="text-sm text-muted-foreground py-4 text-center">No recent signups</p>
+		} else {
+			for i, u := range users {
+				if i >= 5 {
+					break
+				}
+				<div class="flex items-center justify-between py-2">
+					<div class="flex items-center gap-3">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">
+							{ initials(u) }
+						</div>
+						<div>
+							<p class="text-sm font-medium leading-none">{ displayName(u) }</p>
+							if u.Name() != "" {
+								<p class="text-xs text-muted-foreground mt-0.5">{ u.Email }</p>
+							}
+						</div>
+					</div>
+					<span class="text-xs text-muted-foreground">{ u.CreatedAt.Format("Jan 02") }</span>
+				</div>
+			}
+		}
+	</div>
+}
+
+func displayName(u *user.User) string {
+	if n := u.Name(); n != "" {
+		return n
+	}
+	return u.Email
+}
+
+func initials(u *user.User) string {
+	if u.FirstName != "" {
+		return string([]rune(u.FirstName)[:1])
+	}
+	if u.Email != "" {
+		return string([]rune(u.Email)[:1])
+	}
+	return "?"
+}

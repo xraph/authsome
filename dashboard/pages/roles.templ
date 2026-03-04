@@ -1,0 +1,66 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/rbac"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ RolesPage(roles []*rbac.Role) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center gap-3">
+			<h1 class="text-3xl font-bold tracking-tight">Roles &amp; Permissions</h1>
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				{ strconv.Itoa(len(roles)) }
+			}
+		</div>
+
+		<!-- Table -->
+		@card.Card() {
+			@card.Content() {
+				if len(roles) == 0 {
+					@emptyState("No roles defined.", icons.Shield(icons.WithSize(40)))
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Slug }
+								@table.Head() { Description }
+								@table.Head() { Created }
+							}
+						}
+						@table.Body() {
+							for _, role := range roles {
+								@table.Row() {
+									@table.Cell() {
+										<span class="font-medium">{ role.Name }</span>
+									}
+									@table.Cell() {
+										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ role.Slug }</code>
+									}
+									@table.Cell() {
+										if role.Description != "" {
+											<span class="text-sm text-muted-foreground">{ role.Description }</span>
+										} else {
+											<span class="text-sm text-muted-foreground italic">No description</span>
+										}
+									}
+									@table.Cell() {
+										{{ created := role.CreatedAt.Format("Jan 02, 2006") }}
+										{ created }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}

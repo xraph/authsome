@@ -1,0 +1,99 @@
+package components
+
+import (
+	"github.com/xraph/authsome/device"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// deviceTypeIcon returns the appropriate lucide icon for the device type.
+func deviceTypeIcon(deviceType string) templ.Component {
+	switch deviceType {
+	case "desktop":
+		return icons.Monitor(icons.WithSize(16))
+	case "mobile":
+		return icons.Smartphone(icons.WithSize(16))
+	case "tablet":
+		return icons.Tablet(icons.WithSize(16))
+	default:
+		return icons.Globe(icons.WithSize(16))
+	}
+}
+
+// deviceOSBrowser returns a combined "OS / Browser" string for display.
+func deviceOSBrowser(d *device.Device) string {
+	if d.OS != "" && d.Browser != "" {
+		return d.OS + " / " + d.Browser
+	}
+	if d.OS != "" {
+		return d.OS
+	}
+	if d.Browser != "" {
+		return d.Browser
+	}
+	return "-"
+}
+
+// DeviceTable renders a table of devices with Name, Type, OS/Browser, Trusted, and Last Seen columns.
+templ DeviceTable(devices []*device.Device) {
+	@table.Table() {
+		@table.Header() {
+			@table.Row() {
+				@table.Head() {
+					Name
+				}
+				@table.Head() {
+					Type
+				}
+				@table.Head() {
+					OS / Browser
+				}
+				@table.Head() {
+					Trusted
+				}
+				@table.Head() {
+					Last Seen
+				}
+			}
+		}
+		@table.Body() {
+			for _, d := range devices {
+				@table.Row() {
+					@table.Cell() {
+						if d.Name != "" {
+							{ d.Name }
+						} else {
+							<span class="text-muted-foreground">-</span>
+						}
+					}
+					@table.Cell() {
+						<div class="flex items-center gap-2">
+							<span class="text-muted-foreground">
+								@deviceTypeIcon(d.Type)
+							</span>
+							<span class="capitalize text-sm">{ d.Type }</span>
+						</div>
+					}
+					@table.Cell() {
+						{ deviceOSBrowser(d) }
+					}
+					@table.Cell() {
+						if d.Trusted {
+							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+								Trusted
+							}
+						} else {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+								Untrusted
+							}
+						}
+					}
+					@table.Cell() {
+						{ d.LastSeenAt.Format("Jan 02, 2006 15:04") }
+					}
+				}
+			}
+		}
+	}
+}

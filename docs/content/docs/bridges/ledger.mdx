@@ -1,0 +1,88 @@
+---
+title: Ledger Bridge
+description: Billing and metering integration — tracks auth usage events and checks feature entitlements via Ledger.
+---
+
+The Ledger bridge connects Authsome to the Ledger billing and metering extension. When configured, Authsome records usage events (monthly active users, API key validations, MFA enrollments) to Ledger's metering system and checks feature entitlements before allowing certain operations.
+
+## Interface
+
+The `bridge.Ledger` interface is defined in `github.com/xraph/authsome/bridge`:
+
+```go
+type Ledger interface {
+    RecordUsage(ctx context.Context, featureKey string, quantity int64) error
+    CheckEntitlement(ctx context.Context, featureKey string) (allowed bool, err error)
+}
+```
+
+## Setup with the Ledger adapter
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/bridge/ledgeradapter"
+    "github.com/xraph/ledger"
+)
+
+// Build the Ledger engine (see Ledger docs for full setup).
+ledgerEng, err := ledger.New(
+    ledger.WithStore(ledgerStore),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Wrap in the Authsome adapter.
+ledgerBridge := ledgeradapter.New(ledgerEng)
+
+// Register with Authsome.
+eng, err := authsome.New(
+    authsome.WithStore(pgStore),
+    authsome.WithLedger(ledgerBridge),
+)
+```
+
+## Usage events recorded by Authsome
+
+When a Ledger bridge is configured, Authsome records the following usage events:
+
+| Feature key | Event | Quantity |
+|-------------|-------|---------|
+| `authsome.users.active` | Successful sign-in | `1` |
+| `authsome.users.created` | User registered | `1` |
+| `authsome.mfa.enrollments` | MFA method enrolled | `1` |
+| `authsome.apikeys.validated` | API key validated | `1` |
+| `authsome.orgs.members` | Member added to org | `1` |
+| `authsome.sessions.created` | Session created | `1` |
+
+## Entitlement checks
+
+Before allowing certain operations, Authsome checks entitlements with Ledger. If the entitlement check returns `allowed: false`, the operation is rejected with an appropriate error:
+
+| Feature key | Checked before |
+|-------------|----------------|
+| `authsome.feature.mfa` | MFA enrollment |
+| `authsome.feature.sso` | SSO configuration |
+| `authsome.feature.orgs` | Organization creation |
+| `authsome.feature.passkeys` | Passkey registration |
+| `authsome.feature.custom_domains` | Custom auth domain |
+
+This allows you to implement plan-based feature gating at the Ledger level without modifying Authsome's plugin configuration. A "Starter" plan can disable SSO and custom domains while a "Business" plan enables them.
+
+## Standalone development stub
+
+During development, use the built-in `NoopLedger` stub. The noop ledger returns `allowed: true` for all entitlement checks (fail-open), meaning all features are available in development:
+
+```go
+import "github.com/xraph/authsome/bridge"
+
+eng, err := authsome.New(
+    authsome.WithStore(memory.New()),
+    authsome.WithLedger(bridge.NewNoopLedger()),
+)
+```
+
+<Callout type="info">
+The `NoopLedger` always returns `allowed=true` from `CheckEntitlement`. This is intentional — in development and testing, you want all features available. In production, the real Ledger implementation enforces plan limits.
+</Callout>

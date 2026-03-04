@@ -1,0 +1,65 @@
+package components
+
+// ContextScript injects a hidden element with app/env context and registers an HTMX
+// interceptor that rewrites sidebar nav links to include the current app/env slugs.
+// This eliminates the double-request that would otherwise occur when clicking sidebar
+// links (which use bare paths like /users).
+templ ContextScript(appSlug, envSlug string) {
+	<div
+		id="auth-context"
+		data-app-slug={ appSlug }
+		data-env-slug={ envSlug }
+		style="display:none"
+	></div>
+	@contextInterceptorScript()
+}
+
+// contextInterceptorScript registers the one-time HTMX interceptor.
+// It reads app/env slugs from the #auth-context element.
+templ contextInterceptorScript() {
+	<script>
+		(function() {
+			if (window.__authCtxInterceptorRegistered) return;
+			window.__authCtxInterceptorRegistered = true;
+
+			function getAuthCtx() {
+				var el = document.getElementById('auth-context');
+				if (!el) return null;
+				return {
+					appSlug: el.getAttribute('data-app-slug'),
+					envSlug: el.getAttribute('data-env-slug')
+				};
+			}
+
+			var knownRoutes = ['/users', '/sessions', '/devices', '/roles',
+				'/webhooks', '/environments', '/signup-forms'];
+
+			function isKnownRoute(segment) {
+				return knownRoutes.indexOf(segment) !== -1;
+			}
+
+			document.addEventListener('htmx:configRequest', function(evt) {
+				var ctx = getAuthCtx();
+				if (!ctx || !ctx.appSlug || !ctx.envSlug) return;
+
+				var path = evt.detail.path;
+				var pagesPrefix = '/ext/authsome/pages/';
+				var idx = path.indexOf(pagesPrefix);
+				if (idx === -1) return;
+
+				var after = path.substring(idx + pagesPrefix.length);
+				if (after === '' || after === '/') {
+					evt.detail.path = path.substring(0, idx + pagesPrefix.length) +
+						ctx.appSlug + '/' + ctx.envSlug + '/';
+					return;
+				}
+
+				var firstSeg = '/' + after.split('/')[0];
+				if (!isKnownRoute(firstSeg)) return;
+
+				evt.detail.path = path.substring(0, idx + pagesPrefix.length) +
+					ctx.appSlug + '/' + ctx.envSlug + '/' + after;
+			});
+		})();
+	</script>
+}

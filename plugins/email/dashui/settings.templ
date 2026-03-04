@@ -1,0 +1,30 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+)
+
+templ SettingsPanel(from string, appName string, baseURL string) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				Email Notifications
+			}
+			@card.Description() {
+				Transactional email configuration
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">From Address</dt>
+				<dd class="font-medium">{ from }</dd>
+				<dt class="text-muted-foreground">App Name</dt>
+				<dd class="font-medium">{ appName }</dd>
+				if baseURL != "" {
+					<dt class="text-muted-foreground">Base URL</dt>
+					<dd class="font-medium">{ baseURL }</dd>
+				}
+			</dl>
+		}
+	}
+}

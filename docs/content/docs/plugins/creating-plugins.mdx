@@ -1,0 +1,316 @@
+---
+title: Creating Custom Plugins
+description: Step-by-step guide to building custom Authsome plugins with strategies, hooks, migrations, and routes.
+---
+
+This guide walks through building a custom Authsome plugin from scratch. By the end, you will have a plugin that implements the core interface, hooks into the authentication lifecycle, contributes database migrations, and registers HTTP routes.
+
+## Step 1: Implement the Plugin interface
+
+Every plugin must implement `plugin.Plugin` with a `Name()` method:
+
+```go
+package auditlog
+
+import "github.com/xraph/authsome/plugin"
+
+// Compile-time interface check.
+var _ plugin.Plugin = (*Plugin)(nil)
+
+type Plugin struct {
+    store AuditStore
+}
+
+func New(store AuditStore) *Plugin {
+    return &Plugin{store: store}
+}
+
+func (p *Plugin) Name() string { return "auditlog" }
+```
+
+The name must be unique across all registered plugins. Use a short, lowercase identifier.
+
+## Step 2: Capture engine references with OnInit
+
+Most plugins need access to the engine's store, bridges, or configuration. Implement `plugin.OnInit` to capture these during startup:
+
+```go
+var _ plugin.OnInit = (*Plugin)(nil)
+
+func (p *Plugin) OnInit(_ context.Context, engine any) error {
+    // Use duck-typing to avoid import cycles with the engine package.
+    type storeGetter interface {
+        Store() store.Store
+    }
+    if sg, ok := engine.(storeGetter); ok {
+        p.coreStore = sg.Store()
+    }
+
+    type loggerGetter interface {
+        Logger() log.Logger
+    }
+    if lg, ok := engine.(loggerGetter); ok {
+        p.logger = lg.Logger()
+    }
+
+    return nil
+}
+```
+
+The `engine` parameter is typed as `any` to avoid circular imports. Use small interface assertions to extract what you need.
+
+## Step 3: Subscribe to lifecycle hooks
+
+Implement any combination of before/after hook interfaces to react to authentication events:
+
+```go
+var _ plugin.AfterSignIn = (*Plugin)(nil)
+
+func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Session) error {
+    return p.store.RecordLogin(ctx, &AuditEntry{
+        UserID:    u.ID,
+        SessionID: s.ID,
+        Action:    "signin",
+        Timestamp: time.Now(),
+    })
+}
+```
+
+### Before-hooks vs after-hooks
+
+**Before-hooks** run synchronously before the operation. They can abort the operation by returning an error:
+
+```go
+var _ plugin.BeforeSignUp = (*Plugin)(nil)
+
+func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest) error {
+    if p.isBlockedDomain(req.Email) {
+        return fmt.Errorf("registration from this domain is not allowed")
+    }
+    return nil
+}
+```
+
+**After-hooks** run after the operation completes. Errors are logged but never propagated -- they must not block the pipeline.
+
+## Step 4: Add database migrations
+
+If your plugin needs its own tables, implement `plugin.MigrationProvider`:
+
+```go
+import "github.com/xraph/grove/migrate"
+
+var _ plugin.MigrationProvider = (*Plugin)(nil)
+
+var PostgresMigrations = &migrate.Group{
+    Name: "auditlog",
+    Migrations: []*migrate.Migration{
+        {
+            Version: 1,
+            Up: `CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                session_id TEXT,
+                action TEXT NOT NULL,
+                metadata JSONB,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX idx_audit_log_user ON audit_log(user_id);`,
+            Down: `DROP TABLE IF EXISTS audit_log;`,
+        },
+    },
+}
+
+func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
+    switch driverName {
+    case "pg":
+        return []*migrate.Group{PostgresMigrations}
+    default:
+        return nil
+    }
+}
+```
+
+The engine collects migration groups from all plugins and runs them alongside core schema migrations during `engine.Start()`.
+
+## Step 5: Register HTTP routes
+
+If your plugin exposes an API, implement `plugin.RouteProvider`:
+
+```go
+import "github.com/xraph/forge"
+
+var _ plugin.RouteProvider = (*Plugin)(nil)
+
+func (p *Plugin) RegisterRoutes(r any) error {
+    router, ok := r.(forge.Router)
+    if !ok {
+        return fmt.Errorf("auditlog: expected forge.Router, got %T", r)
+    }
+
+    g := router.Group("/v1/auth/audit", forge.WithGroupTags("Audit Log"))
+
+    return g.GET("/events", p.handleListEvents,
+        forge.WithSummary("List audit events"),
+        forge.WithOperationID("listAuditEvents"),
+        forge.WithErrorResponses(),
+    )
+}
+```
+
+Routes are registered after `OnInit`, so you can safely use engine references in your handlers.
+
+## Step 6: Contribute an authentication strategy
+
+If your plugin provides a new way to authenticate requests, implement `plugin.StrategyProvider`:
+
+```go
+var _ plugin.StrategyProvider = (*Plugin)(nil)
+
+func (p *Plugin) Strategy() strategy.Strategy {
+    return &customStrategy{store: p.store}
+}
+
+func (p *Plugin) StrategyPriority() int {
+    return 200 // Higher numbers = evaluated later
+}
+```
+
+The strategy registry evaluates strategies in priority order. Session-based auth typically has priority 0, API key auth 100.
+
+## Step 7: Support GDPR data export
+
+If your plugin stores user-specific data, implement `plugin.DataExportContributor`:
+
+```go
+var _ plugin.DataExportContributor = (*Plugin)(nil)
+
+func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (string, any, error) {
+    entries, err := p.store.GetUserEntries(ctx, userID)
+    if err != nil {
+        return "", nil, err
+    }
+    return "audit_log", entries, nil
+}
+```
+
+## Step 8: Register the plugin
+
+Add your plugin to the engine during construction:
+
+```go
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithPlugin(password.New()),
+    authsome.WithPlugin(auditlog.New(auditStore)),
+)
+```
+
+## Testing plugins
+
+Test plugins in isolation by calling their hook methods directly:
+
+```go
+func TestAuditLogPlugin(t *testing.T) {
+    mockStore := &MockAuditStore{}
+    p := auditlog.New(mockStore)
+
+    u := &user.User{ID: id.NewUserID(), Email: "test@example.com"}
+    s := &session.Session{ID: id.NewSessionID()}
+
+    err := p.OnAfterSignIn(context.Background(), u, s)
+    require.NoError(t, err)
+
+    entries := mockStore.Entries()
+    require.Len(t, entries, 1)
+    assert.Equal(t, "signin", entries[0].Action)
+}
+```
+
+For integration tests, create a full engine with your plugin and exercise it through the API:
+
+```go
+func TestAuditLogIntegration(t *testing.T) {
+    eng, err := authsome.NewEngine(
+        authsome.WithStore(memoryStore),
+        authsome.WithPlugin(auditlog.New(memoryAuditStore)),
+    )
+    require.NoError(t, err)
+    require.NoError(t, eng.Start(context.Background()))
+
+    // Sign in and verify audit entries were created
+    sess, err := eng.SignIn(ctx, &account.SignInRequest{
+        Email:    "alice@example.com",
+        Password: "password123",
+    })
+    require.NoError(t, err)
+
+    entries := memoryAuditStore.Entries()
+    require.NotEmpty(t, entries)
+}
+```
+
+## Complete example
+
+Here is the full plugin in one file:
+
+```go
+package auditlog
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    "github.com/xraph/authsome/plugin"
+    "github.com/xraph/authsome/session"
+    "github.com/xraph/authsome/user"
+    log "github.com/xraph/go-utils/log"
+)
+
+var (
+    _ plugin.Plugin      = (*Plugin)(nil)
+    _ plugin.OnInit      = (*Plugin)(nil)
+    _ plugin.AfterSignIn = (*Plugin)(nil)
+    _ plugin.AfterSignUp = (*Plugin)(nil)
+)
+
+type Plugin struct {
+    store  AuditStore
+    logger log.Logger
+}
+
+func New(store AuditStore) *Plugin {
+    return &Plugin{store: store}
+}
+
+func (p *Plugin) Name() string { return "auditlog" }
+
+func (p *Plugin) OnInit(_ context.Context, engine any) error {
+    type loggerGetter interface{ Logger() log.Logger }
+    if lg, ok := engine.(loggerGetter); ok {
+        p.logger = lg.Logger()
+    }
+    return nil
+}
+
+func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Session) error {
+    return p.record(ctx, u.ID.String(), s.ID.String(), "signin")
+}
+
+func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, s *session.Session) error {
+    return p.record(ctx, u.ID.String(), s.ID.String(), "signup")
+}
+
+func (p *Plugin) record(ctx context.Context, userID, sessionID, action string) error {
+    if err := p.store.RecordLogin(ctx, userID, sessionID, action, time.Now()); err != nil {
+        if p.logger != nil {
+            p.logger.Warn("auditlog: failed to record",
+                log.String("action", action),
+                log.String("error", err.Error()),
+            )
+        }
+    }
+    return nil
+}
+```

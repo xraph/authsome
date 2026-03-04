@@ -1,0 +1,207 @@
+---
+title: Passkeys (WebAuthn)
+description: FIDO2/WebAuthn-based passwordless authentication with biometrics and hardware security keys.
+---
+
+The `passkey` plugin implements the [WebAuthn specification](https://www.w3.org/TR/webauthn-2/) (FIDO2), enabling authentication with biometrics (Face ID, Touch ID, Windows Hello) or hardware security keys (YubiKey). Passkeys are phishing-resistant and require no password.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/passkey"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(passkey.New(passkey.Config{
+        // Relying Party ID — must match the effective domain of your origin.
+        RPID: "myapp.com",
+
+        // Relying Party display name — shown in the browser passkey UI.
+        RPName: "My Application",
+
+        // Allowed origins — must include your frontend's exact origin.
+        Origins: []string{
+            "https://myapp.com",
+            "https://www.myapp.com",
+        },
+
+        // Store for in-progress WebAuthn ceremony state.
+        // Required — use memory.New() for development.
+        CeremonyStore: ceremonyStore,
+    })),
+)
+```
+
+<Callout type="info">
+The `passkey` plugin requires a `ceremony.Store` to hold in-progress registration and authentication state between the challenge and response calls. Configure one with `WithCeremonyStore` or pass it directly to the plugin.
+</Callout>
+
+## FIDO2/WebAuthn overview
+
+WebAuthn uses public-key cryptography:
+
+1. During **registration**, the authenticator generates a key pair. The public key is stored on the server. The private key never leaves the device.
+2. During **authentication**, the server sends a challenge. The authenticator signs it with the private key. The server verifies the signature with the stored public key.
+
+Because the private key is device-bound and the challenge is domain-scoped, passkeys are immune to phishing — a fake site cannot obtain a valid authentication signature.
+
+## Registration ceremony
+
+The registration flow runs when an existing user wants to add a passkey to their account.
+
+
+
+**Begin registration**: The server generates a challenge and public key credential creation options.
+
+`POST /v1/auth/passkey/register/begin`
+
+Request headers must include `Authorization: Bearer {session_token}` (user must be authenticated).
+
+Response includes the WebAuthn `PublicKeyCredentialCreationOptions` JSON:
+
+```json
+{
+  "challenge": "base64url-encoded-random-challenge",
+  "rp": {"id": "myapp.com", "name": "My Application"},
+  "user": {"id": "base64url-user-id", "name": "alice@example.com", "displayName": "Alice"},
+  "pubKeyCredParams": [{"type": "public-key", "alg": -7}],
+  "timeout": 60000,
+  "attestation": "none",
+  "excludeCredentials": [...]
+}
+```
+
+
+**Create passkey on device**: Your JavaScript calls `navigator.credentials.create(options)`. The browser/OS prompts the user for biometric or PIN confirmation. On success, a `PublicKeyCredential` is returned.
+
+
+**Finish registration**: Submit the credential to the server.
+
+`POST /v1/auth/passkey/register/finish`
+
+```json
+{
+  "credential": {
+    "id": "base64url-credential-id",
+    "rawId": "base64url-raw-id",
+    "type": "public-key",
+    "response": {
+      "attestationObject": "base64url-attestation",
+      "clientDataJSON": "base64url-client-data"
+    }
+  }
+}
+```
+
+The engine verifies the attestation, stores the `Passkey` credential (ID prefix: `apsk_`), and returns the credential metadata.
+
+
+
+## Authentication ceremony
+
+The authentication flow allows users to sign in without a password.
+
+
+
+**Begin authentication**: The server generates a challenge.
+
+`POST /v1/auth/passkey/authenticate/begin`
+
+```json
+{"email": "alice@example.com", "app_id": "myapp"}
+```
+
+Response includes the WebAuthn `PublicKeyCredentialRequestOptions`:
+
+```json
+{
+  "challenge": "base64url-random-challenge",
+  "timeout": 60000,
+  "rpId": "myapp.com",
+  "allowCredentials": [
+    {"type": "public-key", "id": "base64url-credential-id"}
+  ],
+  "userVerification": "required"
+}
+```
+
+
+**Sign the challenge on device**: Your JavaScript calls `navigator.credentials.get(options)`. The browser prompts biometric confirmation and signs the challenge.
+
+
+**Finish authentication**: Submit the assertion.
+
+`POST /v1/auth/passkey/authenticate/finish`
+
+```json
+{
+  "credential": {
+    "id": "base64url-credential-id",
+    "rawId": "base64url-raw-id",
+    "type": "public-key",
+    "response": {
+      "authenticatorData": "base64url-auth-data",
+      "clientDataJSON": "base64url-client-data",
+      "signature": "base64url-signature",
+      "userHandle": "base64url-user-id"
+    }
+  }
+}
+```
+
+The engine verifies the signature, updates the passkey's `SignCount`, and creates a session. Returns user + session.
+
+
+
+## Credential management
+
+Retrieve all passkeys for a user:
+
+```go
+passkeys, err := engine.ListUserPasskeys(ctx, userID)
+```
+
+Each `Passkey` record:
+
+```go
+type Passkey struct {
+    ID           id.PasskeyID  `json:"id"`
+    UserID       id.UserID     `json:"user_id"`
+    AppID        id.AppID      `json:"app_id"`
+    CredentialID []byte        `json:"credential_id"`
+    PublicKey    []byte        `json:"-"`        // never serialized
+    AAGUID       string        `json:"aaguid"`   // authenticator model ID
+    Name         string        `json:"name"`     // user-assigned name
+    SignCount     uint32        `json:"sign_count"`
+    Transports   []string      `json:"transports"` // "internal", "usb", "nfc", "ble"
+    BackupEligible bool        `json:"backup_eligible"`
+    BackupState    bool        `json:"backup_state"`
+    LastUsedAt   time.Time     `json:"last_used_at"`
+    CreatedAt    time.Time     `json:"created_at"`
+}
+```
+
+Let users rename or delete their passkeys:
+
+```go
+// Rename a passkey
+engine.UpdatePasskeyName(ctx, passkeyID, "MacBook Touch ID")
+
+// Remove a passkey (the user must have another sign-in method)
+engine.DeletePasskey(ctx, passkeyID)
+```
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/passkey/register/begin` | Begin passkey registration ceremony |
+| `POST` | `/passkey/register/finish` | Finish passkey registration |
+| `POST` | `/passkey/authenticate/begin` | Begin passkey authentication ceremony |
+| `POST` | `/passkey/authenticate/finish` | Finish authentication and return session |
+| `GET` | `/passkey` | List all passkeys for the current user |
+| `PATCH` | `/passkey/{id}` | Rename a passkey |
+| `DELETE` | `/passkey/{id}` | Delete a passkey |

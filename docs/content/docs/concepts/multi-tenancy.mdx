@@ -1,0 +1,169 @@
+---
+title: Multi-Tenancy
+description: How Authsome scopes every entity to an app, and how organizations and environments add further isolation layers.
+---
+
+Authsome supports multi-tenancy at multiple levels. Understanding the isolation model helps you design applications that serve multiple customers securely.
+
+## App-scoped isolation
+
+The primary isolation unit in Authsome is the **App**. Every entity — users, sessions, organizations, webhooks, roles, form configs — is scoped to an `AppID`. The store layer enforces this: every query includes the `AppID` as a mandatory filter.
+
+```go
+// Users from app-1 are completely isolated from users in app-2.
+u1, _ := engine.Store().GetUserByEmail(ctx, appID1, "alice@example.com")
+u2, _ := engine.Store().GetUserByEmail(ctx, appID2, "alice@example.com")
+// u1 and u2 are independent records. Same email, different apps.
+```
+
+Cross-app data access is structurally impossible at the store level. There is no API that returns users across multiple apps in a single call.
+
+### What is an "app"?
+
+Depending on your product design, an App might be:
+
+- **A single product** — one Authsome App per SaaS product
+- **A per-customer isolated environment** — one App per customer in a white-label scenario
+- **A multi-environment setup** — one App with multiple Environments (production, staging, development)
+
+Most products use a small number of Apps (often one) and use **Organizations** within that App to represent customer tenants.
+
+## Organization-level scoping within apps
+
+Organizations provide a second level of isolation within a single App. Users belong to an App and may be members of one or more Organizations within that App.
+
+```go
+// User alice is a member of two organizations within the same app.
+orgs, _ := engine.ListUserOrganizations(ctx, alice.ID)
+// orgs = [{"id": "aorg_acme...", "name": "Acme Corp"}, {"id": "aorg_globex...", "name": "Globex"}]
+```
+
+Organization-scoped operations act on members and resources within that organization:
+
+```go
+// List only the users who are members of Acme Corp.
+members, _ := engine.ListOrganizationMembers(ctx, acmeOrgID)
+
+// Assign a role scoped to the organization.
+engine.AssignUserRole(ctx, &rbac.UserRole{
+    UserID: alice.ID.String(),
+    RoleID: adminRoleID.String(),
+    AppID:  appID.String(),
+    OrgID:  acmeOrgID.String(), // scoped to Acme only
+})
+```
+
+### B2B SaaS pattern
+
+A typical B2B SaaS uses a single App with one Organization per customer:
+
+```
+App (myapp)
+├── Organization: Acme Corp  (aorg_acme...)
+│   ├── Member: alice@acme.com  (owner)
+│   ├── Member: bob@acme.com   (admin)
+│   └── Member: carol@acme.com (member)
+└── Organization: Globex       (aorg_globex...)
+    ├── Member: dave@globex.com (owner)
+    └── Member: eve@globex.com  (member)
+```
+
+Users can sign up to the app independently and then create or be invited into organizations.
+
+## Environment-level isolation
+
+Environments provide a third level of isolation for configuration and secrets. Production, staging, and development environments within the same App are fully isolated from each other.
+
+```go
+envs, _ := engine.ListEnvironments(ctx, appID)
+// [
+//   {"id": "aenv_prod...", "slug": "production", "is_default": true},
+//   {"id": "aenv_stag...", "slug": "staging"},
+//   {"id": "aenv_dev...", "slug": "development"}
+// ]
+```
+
+### What environments isolate
+
+| Resource | Isolated per environment |
+|----------|--------------------------|
+| Session config (TTL, rotation) | Yes — via `EnvironmentSettings` |
+| Webhook endpoints | Yes — webhooks are scoped to an `EnvID` |
+| RBAC roles and permissions | Yes — roles carry an `EnvID` |
+| User data | No — users are shared across environments within an app |
+
+Sessions carry an `EnvID` which determines which environment-level session config applies:
+
+```go
+// Short-lived tokens in development, long-lived in production.
+devEnvSettings := &environment.EnvironmentSettings{
+    SessionOverrides: &SessionOverrides{
+        TokenTTL: ptr(15 * time.Minute),
+    },
+}
+```
+
+### Cloning environments
+
+Clone an environment's configuration (roles, permissions, webhooks) to bootstrap a new environment:
+
+```go
+result, err := engine.CloneEnvironment(ctx, environment.CloneRequest{
+    AppID:       appID,
+    SourceEnvID: productionEnvID,
+    Name:        "Staging",
+    Slug:        "staging",
+    Type:        environment.TypeStaging,
+})
+// result.RolesCloned, result.PermissionsCloned, result.WebhooksCloned
+```
+
+User data is never cloned — only structural configuration is copied.
+
+## Cross-app guarantees
+
+The following properties hold regardless of which store backend is in use:
+
+1. **No cross-app user lookup** — `GetUserByEmail(ctx, appID1, email)` never returns a user from `appID2`, even if both have a user with the same email.
+2. **No cross-app session validation** — A session token from App 1 cannot authenticate a request scoped to App 2.
+3. **No cross-app role inheritance** — Roles from App 1 have no effect on permission checks in App 2.
+4. **Webhook isolation** — Webhooks registered for App 1 do not fire for events in App 2.
+
+## Scoping requests in middleware
+
+When using the Authsome HTTP middleware, the authenticated user's `AppID` is extracted from the session and made available in the request context:
+
+```go
+import "github.com/xraph/authsome/middleware"
+
+// middleware.RequireAuth extracts the Bearer token, validates it, and
+// injects the user and session into the request context.
+mux.Handle("/api/", middleware.RequireAuth(engine)(func(w http.ResponseWriter, r *http.Request) {
+    user := middleware.UserFromContext(r.Context())
+    sess := middleware.SessionFromContext(r.Context())
+
+    // user.AppID tells you which app this request belongs to.
+    // Use it to scope any downstream data access.
+    items, err := myStore.ListItems(r.Context(), user.AppID)
+}))
+```
+
+## Identifying the requesting organization
+
+For B2B applications where API requests are scoped to an organization, pass the `X-Organization-ID` header and validate membership in your handler:
+
+```go
+orgIDStr := r.Header.Get("X-Organization-ID")
+orgID, err := id.ParseOrganizationID(orgIDStr)
+if err != nil {
+    http.Error(w, "invalid organization ID", http.StatusBadRequest)
+    return
+}
+
+// Verify the authenticated user is a member of this organization.
+member, err := engine.GetOrganizationMember(r.Context(), orgID, user.ID)
+if errors.Is(err, store.ErrNotFound) {
+    http.Error(w, "not a member", http.StatusForbidden)
+    return
+}
+```

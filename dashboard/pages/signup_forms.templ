@@ -1,0 +1,81 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ SignupFormsPage(configs []*formconfig.FormConfig) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">Signup Forms</h1>
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(configs)) }
+				}
+			</div>
+			<a href="signup-forms/edit">
+				@button.Button(button.Props{}) {
+					@icons.Plus(icons.WithSize(16))
+					New Form
+				}
+			</a>
+		</div>
+
+		<!-- Table -->
+		@card.Card() {
+			@card.Content() {
+				if len(configs) == 0 {
+					@emptyState("No signup form configurations yet. Create one to enable custom signup fields.", icons.FilePen(icons.WithSize(40)))
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Form Type }
+								@table.Head() { Fields }
+								@table.Head() { Status }
+								@table.Head() { Version }
+								@table.Head() { Updated }
+							}
+						}
+						@table.Body() {
+							for _, fc := range configs {
+								{{ fieldCount := strconv.Itoa(len(fc.Fields)) }}
+								{{ version := "v" + strconv.Itoa(fc.Version) }}
+								{{ updated := fc.UpdatedAt.Format("Jan 02, 2006") }}
+								@table.Row() {
+									@table.Cell() {
+										<span class="font-medium">{ fc.FormType }</span>
+									}
+									@table.Cell() {
+										{ fieldCount } fields
+									}
+									@table.Cell() {
+										if fc.Active {
+											@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+												Active
+											}
+										} else {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												Inactive
+											}
+										}
+									}
+									@table.Cell() { { version } }
+									@table.Cell() { { updated } }
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}

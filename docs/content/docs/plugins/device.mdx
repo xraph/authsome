@@ -1,0 +1,204 @@
+---
+title: Device Plugin
+description: Device fingerprinting, trust management, session-device binding, and suspicious device detection.
+---
+
+The `device` plugin tracks user devices across sessions. It records device fingerprints, manages trusted devices, binds sessions to specific devices, and enables suspicious device detection for security-sensitive applications.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/device"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithDeviceStore(deviceStore),
+)
+```
+
+The device tracking functionality is built into the core engine and uses the `device.Store` interface for persistence. It does not require a separate plugin registration -- configure a device store to enable it.
+
+## Device model
+
+Each tracked device stores the following information:
+
+```go
+type Device struct {
+    ID          id.DeviceID      `json:"id"`
+    UserID      id.UserID        `json:"user_id"`
+    AppID       id.AppID         `json:"app_id"`
+    EnvID       id.EnvironmentID `json:"env_id"`
+    Name        string           `json:"name,omitempty"`
+    Type        string           `json:"type,omitempty"`
+    Browser     string           `json:"browser,omitempty"`
+    OS          string           `json:"os,omitempty"`
+    IPAddress   string           `json:"ip_address,omitempty"`
+    Fingerprint string           `json:"fingerprint,omitempty"`
+    Trusted     bool             `json:"trusted"`
+    LastSeenAt  time.Time        `json:"last_seen_at"`
+    CreatedAt   time.Time        `json:"created_at"`
+    UpdatedAt   time.Time        `json:"updated_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ID` | Unique device identifier |
+| `UserID` | The user this device belongs to |
+| `AppID` | The application context |
+| `EnvID` | The environment (production, staging, etc.) |
+| `Name` | User-assigned device name (e.g., "Work Laptop") |
+| `Type` | Device type (e.g., "desktop", "mobile", "tablet") |
+| `Browser` | Browser name and version |
+| `OS` | Operating system name and version |
+| `IPAddress` | Last known IP address |
+| `Fingerprint` | Device fingerprint hash |
+| `Trusted` | Whether the device is marked as trusted |
+| `LastSeenAt` | Last activity timestamp |
+
+## Device fingerprinting
+
+Device fingerprints are generated client-side and sent with authentication requests. The fingerprint is a hash derived from browser and device characteristics:
+
+- User-Agent string
+- Screen resolution
+- Timezone offset
+- Installed fonts
+- WebGL renderer
+- Canvas fingerprint
+
+The server stores the fingerprint hash and uses it to identify returning devices.
+
+## Device registration and trust
+
+### Automatic registration
+
+When a user signs in from a new device (unrecognized fingerprint), the device is automatically registered:
+
+```json
+{
+  "id": "adev_01j9...",
+  "user_id": "ausr_01j9...",
+  "browser": "Chrome 120",
+  "os": "macOS 14.0",
+  "ip_address": "192.168.1.1",
+  "fingerprint": "a3f8c9d4...",
+  "trusted": false,
+  "last_seen_at": "2024-11-01T10:00:00Z"
+}
+```
+
+New devices start as untrusted.
+
+### Marking a device as trusted
+
+Users can mark a device as trusted to skip additional verification steps (like MFA) on subsequent sign-ins:
+
+`PUT /v1/auth/devices/:deviceId/trust`
+
+```json
+{"trusted": true}
+```
+
+### Listing user devices
+
+`GET /v1/auth/devices`
+
+Returns all devices registered for the authenticated user:
+
+```json
+[
+  {
+    "id": "adev_01j9...",
+    "name": "Work Laptop",
+    "browser": "Chrome 120",
+    "os": "macOS 14.0",
+    "trusted": true,
+    "last_seen_at": "2024-11-15T14:30:00Z"
+  },
+  {
+    "id": "adev_01j9...",
+    "name": null,
+    "browser": "Safari 17",
+    "os": "iOS 17.0",
+    "trusted": false,
+    "last_seen_at": "2024-11-10T08:00:00Z"
+  }
+]
+```
+
+### Removing a device
+
+`DELETE /v1/auth/devices/:deviceId`
+
+Removes the device record. Any sessions bound to this device are not automatically revoked.
+
+## Session-device binding
+
+When device tracking is enabled, sessions are associated with the device they were created on. This allows:
+
+- Showing "active sessions" with device information
+- Detecting when a session token is used from a different device
+- Requiring re-authentication when the device changes
+
+## Suspicious device detection
+
+The engine can detect potentially suspicious device activity:
+
+- **New device sign-in** -- A user signs in from a device not seen before
+- **IP address change** -- A known device appears from a different IP
+- **Multiple devices** -- An unusual number of new devices in a short period
+- **Impossible travel** -- Sign-ins from geographically distant locations in a short timeframe
+
+When suspicious activity is detected, the engine can:
+
+1. Send a notification (via the notification plugin)
+2. Require MFA challenge (via the MFA plugin)
+3. Block the sign-in attempt
+4. Log the event to Chronicle
+
+## Trusted device management
+
+Trusted devices can bypass certain security checks:
+
+```go
+// Check if the current device is trusted during sign-in:
+// If trusted, skip MFA challenge
+// If untrusted, require MFA
+
+device, err := deviceStore.GetDeviceByFingerprint(ctx, userID, fingerprint)
+if err == nil && device.Trusted {
+    // Skip MFA
+}
+```
+
+## Device store interface
+
+The device store implements the following interface:
+
+```go
+type Store interface {
+    CreateDevice(ctx context.Context, d *Device) error
+    GetDevice(ctx context.Context, deviceID id.DeviceID) (*Device, error)
+    GetDeviceByFingerprint(ctx context.Context, userID id.UserID, fingerprint string) (*Device, error)
+    UpdateDevice(ctx context.Context, d *Device) error
+    DeleteDevice(ctx context.Context, deviceID id.DeviceID) error
+    ListUserDevices(ctx context.Context, userID id.UserID) ([]*Device, error)
+}
+```
+
+## Configuration options
+
+Device tracking behavior is configured at the engine level:
+
+| Option | Description |
+|--------|-------------|
+| `WithDeviceStore(store)` | Enable device tracking with the given store |
+| `DeviceTracking.Enabled` | Master switch for device tracking |
+| `DeviceTracking.TrustDuration` | How long a device remains trusted before re-verification |
+| `DeviceTracking.MaxDevicesPerUser` | Maximum number of tracked devices per user |
+| `DeviceTracking.NotifyNewDevice` | Send notification on new device sign-in |
+| `DeviceTracking.RequireMFANewDevice` | Require MFA for new device sign-ins |

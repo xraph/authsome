@@ -1,0 +1,104 @@
+package settings
+
+import (
+	"strconv"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+)
+
+templ ConfigPanel(cfg authsome.Config, pluginNames []string) {
+	<div class="space-y-6">
+		// Session Configuration
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Session Configuration
+				}
+				@card.Description() {
+					Token lifetimes and session behavior
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Session TTL</dt>
+					<dd class="font-medium">{ cfg.Session.TokenTTL.String() }</dd>
+					<dt class="text-muted-foreground">Refresh TTL</dt>
+					<dd class="font-medium">{ cfg.Session.RefreshTokenTTL.String() }</dd>
+					if cfg.Session.MaxActiveSessions > 0 {
+						<dt class="text-muted-foreground">Max Active Sessions</dt>
+						<dd class="font-medium">{ strconv.Itoa(cfg.Session.MaxActiveSessions) }</dd>
+					}
+				</dl>
+			}
+		}
+		// Security
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Security
+				}
+				@card.Description() {
+					Rate limiting and account lockout settings
+				}
+			}
+			@card.Content() {
+				<div class="space-y-4">
+					<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+						<dt class="text-muted-foreground">Sign-In Rate Limit</dt>
+						<dd class="font-medium">{ strconv.Itoa(cfg.RateLimit.SignInLimit) } attempts/window</dd>
+						<dt class="text-muted-foreground">Sign-Up Rate Limit</dt>
+						<dd class="font-medium">{ strconv.Itoa(cfg.RateLimit.SignUpLimit) } attempts/window</dd>
+					</dl>
+					@separator.Separator()
+					<div class="flex items-center justify-between text-sm">
+						<span class="text-muted-foreground">Account Lockout</span>
+						if cfg.Lockout.Enabled {
+							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+								Enabled
+							}
+						} else {
+							@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+								Disabled
+							}
+						}
+					</div>
+					if cfg.Lockout.Enabled {
+						<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mt-2">
+							<dt class="text-muted-foreground">Max Attempts</dt>
+							<dd class="font-medium">{ strconv.Itoa(cfg.Lockout.MaxAttempts) }</dd>
+							<dt class="text-muted-foreground">Lockout Duration</dt>
+							<dd class="font-medium">{ strconv.Itoa(cfg.Lockout.LockoutDurationSeconds) }s</dd>
+						</dl>
+					}
+				</div>
+			}
+		}
+		// Enabled Plugins
+		if len(pluginNames) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Enabled Plugins
+					}
+					@card.Description() {
+						Active authentication plugins
+					}
+				}
+				@card.Content() {
+					<div class="flex flex-wrap gap-2">
+						for _, name := range pluginNames {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+								{ name }
+							}
+						}
+					</div>
+				}
+			}
+		}
+		// Plugin-contributed settings slot
+		{ children... }
+	</div>
+}

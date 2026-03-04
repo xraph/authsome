@@ -1,0 +1,240 @@
+---
+title: Invitations
+description: Email-based invitation flow for adding members to organizations, with token lifecycle and status tracking.
+---
+
+Invitations let you add users to an organization through an email-based ceremony. The inviting user sends an invitation to an email address; the recipient receives a link containing a time-limited token, follows it to accept or decline, and (if accepted) is added to the organization as a member. Invitations support pending, accepted, expired, and declined statuses.
+
+## The Invitation model
+
+```go
+import "github.com/xraph/authsome/org"
+
+type Invitation struct {
+    ID             id.ID            `json:"id"`           // ainv_ prefix
+    OrgID          id.ID            `json:"org_id"`
+    AppID          string           `json:"app_id"`
+    EnvID          string           `json:"env_id"`
+    Email          string           `json:"email"`
+    Role           MemberRole       `json:"role"`
+    Status         InvitationStatus `json:"status"`
+    Token          string           `json:"token"`         // never exposed after creation
+    TokenHash      string           `json:"-"`             // bcrypt hash, stored in DB
+    InvitedBy      id.ID            `json:"invited_by"`
+    AcceptedBy     *id.ID           `json:"accepted_by,omitempty"`
+    ExpiresAt      time.Time        `json:"expires_at"`
+    AcceptedAt     *time.Time       `json:"accepted_at,omitempty"`
+    DeclinedAt     *time.Time       `json:"declined_at,omitempty"`
+    CreatedAt      time.Time        `json:"created_at"`
+    UpdatedAt      time.Time        `json:"updated_at"`
+    Metadata       map[string]string `json:"metadata,omitempty"`
+
+    // Populated when fetched with org details.
+    Org *Organization `json:"org,omitempty"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ID` | Globally unique identifier with `ainv_` prefix |
+| `Email` | Email address of the person being invited |
+| `Role` | The role the invitee will receive upon acceptance (`owner`, `admin`, or `member`) |
+| `Status` | Current lifecycle state (see below) |
+| `Token` | Plain-text token included in the invitation link. Only available at creation time -- not stored. |
+| `TokenHash` | Bcrypt hash of the token, stored in the database for verification |
+| `InvitedBy` | User ID of the person who sent the invitation |
+| `AcceptedBy` | User ID of the user who accepted (may differ from invitee if email changed) |
+| `ExpiresAt` | When the invitation token becomes invalid |
+
+## Invitation statuses
+
+```go
+const (
+    InvitationStatusPending  InvitationStatus = "pending"
+    InvitationStatusAccepted InvitationStatus = "accepted"
+    InvitationStatusDeclined InvitationStatus = "declined"
+    InvitationStatusExpired  InvitationStatus = "expired"
+    InvitationStatusRevoked  InvitationStatus = "revoked"
+)
+```
+
+| Status | Description |
+|--------|-------------|
+| `pending` | The invitation was sent and is awaiting a response. The token is still valid if not past `ExpiresAt`. |
+| `accepted` | The invitee accepted the invitation and is now a member of the organization |
+| `declined` | The invitee explicitly declined the invitation |
+| `expired` | The invitation was not acted upon before `ExpiresAt`. Authsome marks these during background sweeps. |
+| `revoked` | An admin or owner manually cancelled the invitation before it was acted upon |
+
+## Sending an invitation
+
+```go
+import "github.com/xraph/authsome/org"
+
+result, err := auth.Orgs().InviteMember(ctx, &org.InviteInput{
+    OrgID:   orgID,
+    Email:   "alice@example.com",
+    Role:    org.RoleMember,
+    Message: "Hi Alice, please join our org on Acme!",   // optional personal note
+})
+if err != nil {
+    return err
+}
+
+// result.Token is the raw token -- it is only available here.
+// Store it or embed it in the invitation URL before this call returns.
+inviteURL := fmt.Sprintf("https://app.example.com/invites/%s", result.Token)
+fmt.Printf("invitation sent: id=%s url=%s expires=%s\n",
+    result.Invitation.ID, inviteURL, result.Invitation.ExpiresAt)
+```
+
+<Callout type="warn">
+The raw invitation token is returned exactly once — at creation time. After the response is returned, only the bcrypt hash is stored. You must embed the token in the invitation URL before it is lost. If a token is lost, revoke the invitation and send a new one.
+</Callout>
+
+### What happens on invite
+
+1. Authsome generates a cryptographically random token (32 bytes, hex-encoded).
+2. The token is bcrypt-hashed and the hash is stored in the database.
+3. The plain token is embedded in the return value so your application can send the invitation email.
+4. If the `notification` plugin is configured, Authsome triggers an invitation email automatically.
+5. The `org.member.invited` webhook event is emitted.
+
+### Expiry configuration
+
+The invitation expiry is set by the organization plugin's `WithInvitationExpiry` option (default: 72 hours). Each invitation's `ExpiresAt` field records the exact deadline.
+
+```go
+auth := authsome.New(
+    authsome.WithPlugin(organization.New(
+        organization.WithInvitationExpiry(7 * 24 * time.Hour), // 7 days
+    )),
+)
+```
+
+## Accepting an invitation
+
+The acceptance flow handles both existing users and new users:
+
+```go
+// Accept using the raw token from the invitation URL.
+member, err := auth.Orgs().AcceptInvitation(ctx, &org.AcceptInvitationInput{
+    Token:  "7f3a2b...",   // raw token from the URL parameter
+    UserID: acceptingUserID,
+})
+if err != nil {
+    // org.ErrInvitationNotFound -- token does not match any pending invitation
+    // org.ErrInvitationExpired  -- token is past ExpiresAt
+    // org.ErrInvitationNotPending -- already accepted, declined, or revoked
+    // org.ErrAlreadyMember      -- user is already a member of this org
+    return err
+}
+
+fmt.Printf("welcome! member id=%s role=%s\n", member.ID, member.Role)
+```
+
+### Acceptance with sign-up
+
+When a new user receives an invitation to an email address that has no existing account, you can create the account and accept the invitation atomically:
+
+```go
+member, err := auth.Orgs().AcceptInvitationWithSignUp(ctx, &org.AcceptWithSignUpInput{
+    Token:       "7f3a2b...",
+    DisplayName: "Alice Nguyen",
+    Password:    "correct-horse-battery-staple",
+})
+```
+
+This creates the user account, signs them in, and adds them to the organization in a single transaction.
+
+### What happens on acceptance
+
+1. Authsome looks up the pending invitation by hashing the provided token and comparing against stored hashes.
+2. It verifies the invitation is in `pending` status and `ExpiresAt` is in the future.
+3. The invitation status is updated to `accepted` and `AcceptedAt` is set.
+4. A `Member` record is created with the invitation's `Role`.
+5. The user is added to any default teams in the organization.
+6. The `org.member.joined` webhook event is emitted.
+
+## Declining an invitation
+
+```go
+err := auth.Orgs().DeclineInvitation(ctx, &org.DeclineInvitationInput{
+    Token:  "7f3a2b...",
+})
+```
+
+Declining marks the invitation as `declined` and emits no events. The inviting user is not notified (though you can subscribe to webhook events to build this).
+
+## Revoking an invitation
+
+Organization owners and admins can cancel a pending invitation:
+
+```go
+err := auth.Orgs().RevokeInvitation(ctx, orgID, invitationID)
+```
+
+Revocation changes the status to `revoked` and invalidates the token. If the invitee tries to use the link afterward, they receive `ErrInvitationNotPending`.
+
+## Listing invitations
+
+```go
+// All invitations for an organization.
+result, err := auth.Orgs().ListInvitations(ctx, orgID, &org.ListInvitationsInput{
+    Limit:        50,
+    Cursor:       "",
+    StatusFilter: org.InvitationStatusPending,   // optional
+})
+
+for _, inv := range result.Items {
+    fmt.Printf("  %s role=%s status=%s expires=%s\n",
+        inv.Email, inv.Role, inv.Status, inv.ExpiresAt.Format("2006-01-02"))
+}
+```
+
+```go
+// All pending invitations for a specific email address across all orgs.
+invitations, err := auth.Orgs().ListInvitationsByEmail(ctx, "alice@example.com")
+```
+
+## Resending an invitation
+
+If the original email was lost or the link expired, revoke the old invitation and create a new one:
+
+```go
+// Revoke the expired one.
+err := auth.Orgs().RevokeInvitation(ctx, orgID, oldInvitationID)
+
+// Send a fresh invitation.
+result, err := auth.Orgs().InviteMember(ctx, &org.InviteInput{
+    OrgID: orgID,
+    Email: "alice@example.com",
+    Role:  org.RoleMember,
+})
+```
+
+<Callout type="info">
+There is no `ResendInvitation` method because resending would require re-exposing a token that is no longer stored in plain text. Revoke and re-invite is the correct pattern.
+</Callout>
+
+## HTTP API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/orgs/:org_id/invitations` | Send an invitation |
+| `GET` | `/orgs/:org_id/invitations` | List invitations for an organization |
+| `GET` | `/orgs/:org_id/invitations/:inv_id` | Get a specific invitation |
+| `DELETE` | `/orgs/:org_id/invitations/:inv_id` | Revoke a pending invitation |
+| `POST` | `/invitations/accept` | Accept an invitation by token |
+| `POST` | `/invitations/decline` | Decline an invitation by token |
+| `GET` | `/invitations/:token` | Get invitation details by token (for pre-filling the accept form) |
+
+## Error reference
+
+| Error | Description |
+|-------|-------------|
+| `org.ErrInvitationNotFound` | No invitation matches the provided token |
+| `org.ErrInvitationExpired` | The invitation's `ExpiresAt` has passed |
+| `org.ErrInvitationNotPending` | The invitation is not in `pending` status |
+| `org.ErrAlreadyMember` | The user accepting the invitation is already a member of the organization |
+| `org.ErrInvitationLimitReached` | The organization has too many pending invitations (configurable limit) |

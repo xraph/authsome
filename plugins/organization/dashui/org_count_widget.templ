@@ -1,0 +1,11 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+)
+
+templ OrgCountWidget(totalOrgs int) {
+	@components.StatCard("building-2", "Organizations", strconv.Itoa(totalOrgs), "Active organizations")
+}

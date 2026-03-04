@@ -1,0 +1,326 @@
+---
+title: Entities
+description: Core data types used across Authsome — users, sessions, organizations, devices, and more.
+---
+
+Authsome defines a set of entity types across its packages. Understanding these types helps you work effectively with the engine API, store interfaces, and HTTP responses.
+
+## User
+
+**Package:** `github.com/xraph/authsome/user`
+**ID prefix:** `ausr_`
+
+A `User` represents an authenticated identity within an app.
+
+```go
+type User struct {
+    ID              id.UserID         `json:"id"`
+    AppID           id.AppID          `json:"app_id"`
+    Email           string            `json:"email"`
+    EmailVerified   bool              `json:"email_verified"`
+    Phone           string            `json:"phone,omitempty"`
+    PhoneVerified   bool              `json:"phone_verified"`
+    Username        string            `json:"username,omitempty"`
+    DisplayUsername string            `json:"display_username,omitempty"`
+    Name            string            `json:"name,omitempty"`
+    Image           string            `json:"image,omitempty"`
+    PasswordHash    string            `json:"-"` // never serialized
+    PasswordChangedAt *time.Time      `json:"password_changed_at,omitempty"`
+    Metadata        map[string]string `json:"metadata,omitempty"`
+    Banned          bool              `json:"banned"`
+    BanReason       string            `json:"ban_reason,omitempty"`
+    BanExpires      *time.Time        `json:"ban_expires,omitempty"`
+    DeletedAt       *time.Time        `json:"deleted_at,omitempty"`
+    CreatedAt       time.Time         `json:"created_at"`
+    UpdatedAt       time.Time         `json:"updated_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ID` | Unique identifier with `ausr_` prefix. K-sortable by creation time. |
+| `AppID` | The application this user belongs to. Users are isolated per app. |
+| `Email` | Primary email address. Unique within an app. |
+| `EmailVerified` | Set to `true` when the user clicks the verification link. |
+| `Phone` | Optional E.164-formatted phone number. |
+| `PhoneVerified` | Set to `true` after OTP verification. |
+| `Username` | Optional unique username within the app. |
+| `PasswordHash` | bcrypt or argon2id hash. Never included in JSON responses. |
+| `Metadata` | Arbitrary `map[string]string` for application-specific data (e.g., plan, company). |
+| `Banned` | When `true`, sign-in is rejected. Combined with `BanExpires` for temporary bans. |
+| `DeletedAt` | Soft-delete timestamp. Set during GDPR account deletion. |
+
+---
+
+## Session
+
+**Package:** `github.com/xraph/authsome/session`
+**ID prefix:** `ases_`
+
+A `Session` represents an authenticated session for a user.
+
+```go
+type Session struct {
+    ID                    id.SessionID  `json:"id"`
+    UserID                id.UserID     `json:"user_id"`
+    AppID                 id.AppID      `json:"app_id"`
+    EnvID                 id.EnvironmentID `json:"env_id,omitempty"`
+    Token                 string        `json:"token"`
+    RefreshToken          string        `json:"refresh_token"`
+    ExpiresAt             time.Time     `json:"expires_at"`
+    RefreshTokenExpiresAt time.Time     `json:"refresh_token_expires_at"`
+    IPAddress             string        `json:"ip_address,omitempty"`
+    UserAgent             string        `json:"user_agent,omitempty"`
+    DeviceID              id.DeviceID   `json:"device_id,omitempty"`
+    ImpersonatedBy        id.UserID     `json:"impersonated_by,omitempty"`
+    CreatedAt             time.Time     `json:"created_at"`
+    UpdatedAt             time.Time     `json:"updated_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `Token` | Opaque 64-char hex access token (or signed JWT if JWT format is configured). |
+| `RefreshToken` | Opaque refresh token. Used to obtain a new access token. |
+| `ExpiresAt` | Expiry of the access token (default: 1 hour from creation). |
+| `RefreshTokenExpiresAt` | Expiry of the refresh token (default: 30 days). |
+| `IPAddress` | Client IP at session creation. Used for `BindToIP` enforcement. |
+| `UserAgent` | User-Agent at session creation. Used for `BindToDevice` enforcement. |
+| `ImpersonatedBy` | Non-nil when this is an admin impersonation session. Contains the admin's UserID. |
+
+---
+
+## App
+
+**Package:** `github.com/xraph/authsome/app`
+**ID prefix:** `aapp_`
+
+An `App` represents an application registered in Authsome. All entities are scoped to an app.
+
+```go
+type App struct {
+    ID          id.AppID          `json:"id"`
+    Name        string            `json:"name"`
+    Slug        string            `json:"slug"`
+    Description string            `json:"description,omitempty"`
+    Logo        string            `json:"logo,omitempty"`
+    Settings    *AppSettings      `json:"settings,omitempty"`
+    Active      bool              `json:"active"`
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+```
+
+---
+
+## Organization
+
+**Package:** `github.com/xraph/authsome/organization`
+**ID prefix:** `aorg_`
+
+An `Organization` is a multi-user tenant within an app. Members belong to organizations and can have organization-scoped roles.
+
+```go
+type Organization struct {
+    ID          id.OrganizationID `json:"id"`
+    AppID       id.AppID          `json:"app_id"`
+    Name        string            `json:"name"`
+    Slug        string            `json:"slug"`
+    Logo        string            `json:"logo,omitempty"`
+    Description string            `json:"description,omitempty"`
+    Metadata    map[string]string `json:"metadata,omitempty"`
+    Active      bool              `json:"active"`
+    CreatedAt   time.Time         `json:"created_at"`
+    UpdatedAt   time.Time         `json:"updated_at"`
+}
+```
+
+### Member
+
+**ID prefix:** `amem_`
+
+```go
+type Member struct {
+    ID             id.MemberID       `json:"id"`
+    OrganizationID id.OrganizationID `json:"organization_id"`
+    UserID         id.UserID         `json:"user_id"`
+    AppID          id.AppID          `json:"app_id"`
+    Role           string            `json:"role"` // "owner", "admin", "member"
+    JoinedAt       time.Time         `json:"joined_at"`
+    CreatedAt      time.Time         `json:"created_at"`
+    UpdatedAt      time.Time         `json:"updated_at"`
+}
+```
+
+### Invitation
+
+**ID prefix:** `ainv_`
+
+```go
+type Invitation struct {
+    ID             id.InvitationID   `json:"id"`
+    OrganizationID id.OrganizationID `json:"organization_id"`
+    AppID          id.AppID          `json:"app_id"`
+    Email          string            `json:"email"`
+    Role           string            `json:"role"`
+    Token          string            `json:"-"` // sent via email
+    InvitedBy      id.UserID         `json:"invited_by"`
+    ExpiresAt      time.Time         `json:"expires_at"`
+    AcceptedAt     *time.Time        `json:"accepted_at,omitempty"`
+    CreatedAt      time.Time         `json:"created_at"`
+}
+```
+
+---
+
+## Device
+
+**Package:** `github.com/xraph/authsome/device`
+**ID prefix:** `adev_`
+
+A `Device` represents a browser, mobile app, or other client that has authenticated. Devices are identified by a fingerprint hash.
+
+```go
+type Device struct {
+    ID          id.DeviceID `json:"id"`
+    UserID      id.UserID   `json:"user_id"`
+    AppID       id.AppID    `json:"app_id"`
+    Fingerprint string      `json:"fingerprint"`
+    Name        string      `json:"name,omitempty"` // "Chrome on macOS"
+    Browser     string      `json:"browser,omitempty"`
+    OS          string      `json:"os,omitempty"`
+    IPAddress   string      `json:"ip_address,omitempty"`
+    Trusted     bool        `json:"trusted"`
+    LastSeenAt  time.Time   `json:"last_seen_at"`
+    CreatedAt   time.Time   `json:"created_at"`
+    UpdatedAt   time.Time   `json:"updated_at"`
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `Fingerprint` | Hash of browser/device characteristics used for upsert on sign-in. |
+| `Trusted` | Set to `true` by an admin or the user to skip MFA challenges from this device. |
+| `LastSeenAt` | Updated every time the device is seen on a sign-in. |
+
+---
+
+## Webhook
+
+**Package:** `github.com/xraph/authsome/webhook`
+**ID prefix:** `awhk_`
+
+A `Webhook` is a registered endpoint that receives event notifications.
+
+```go
+type Webhook struct {
+    ID        id.WebhookID      `json:"id"`
+    AppID     id.AppID          `json:"app_id"`
+    EnvID     id.EnvironmentID  `json:"env_id,omitempty"`
+    URL       string            `json:"url"`
+    Events    []string          `json:"events"` // ["user.created", "auth.signin"]
+    Secret    string            `json:"-"`       // HMAC-SHA256 signing secret
+    Active    bool              `json:"active"`
+    CreatedAt time.Time         `json:"created_at"`
+    UpdatedAt time.Time         `json:"updated_at"`
+}
+```
+
+The signing secret is prefixed with `whsec_` and auto-generated at creation time. Authsome signs the request body using HMAC-SHA256 and sends the signature in the `X-Authsome-Signature` header.
+
+---
+
+## Environment
+
+**Package:** `github.com/xraph/authsome/environment`
+**ID prefix:** `aenv_`
+
+An `Environment` isolates auth configuration within an app. Production, staging, and development environments within the same app share no user data.
+
+```go
+type Environment struct {
+    ID          id.EnvironmentID `json:"id"`
+    AppID       id.AppID         `json:"app_id"`
+    Name        string           `json:"name"`
+    Slug        string           `json:"slug"`
+    Type        EnvironmentType  `json:"type"` // "production", "staging", "development"
+    Color       string           `json:"color"` // UI hint: "#22c55e"
+    IsDefault   bool             `json:"is_default"`
+    Settings    *EnvironmentSettings `json:"settings,omitempty"`
+    CreatedAt   time.Time        `json:"created_at"`
+    UpdatedAt   time.Time        `json:"updated_at"`
+}
+```
+
+`EnvironmentSettings` holds per-environment session overrides (e.g., shorter `TokenTTL` for staging).
+
+---
+
+## Role and Permission
+
+**Package:** `github.com/xraph/authsome/rbac`
+**ID prefixes:** `arol_` (role), `aprm_` (permission)
+
+```go
+type Role struct {
+    ID          string    `json:"id"`  // arol_...
+    AppID       string    `json:"app_id"`
+    EnvID       string    `json:"env_id,omitempty"`
+    ParentID    string    `json:"parent_id,omitempty"` // role hierarchy
+    Name        string    `json:"name"`
+    Slug        string    `json:"slug"` // unique within app
+    Description string    `json:"description,omitempty"`
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type Permission struct {
+    ID       string `json:"id"`  // aprm_...
+    RoleID   string `json:"role_id"`
+    Action   string `json:"action"`   // e.g. "delete"
+    Resource string `json:"resource"` // e.g. "users"
+}
+
+type UserRole struct {
+    UserID     string    `json:"user_id"`
+    RoleID     string    `json:"role_id"`
+    AppID      string    `json:"app_id"`
+    AssignedAt time.Time `json:"assigned_at"`
+    AssignedBy string    `json:"assigned_by,omitempty"`
+}
+```
+
+Roles form a hierarchy via `ParentID`. Permissions from parent roles are inherited. The engine evaluates the full hierarchy when checking `HasPermission`.
+
+---
+
+## FormConfig
+
+**Package:** `github.com/xraph/authsome/formconfig`
+**ID prefix:** `afcf_`
+
+A `FormConfig` defines custom fields added to the sign-up form (or other flows). Field values are captured in the user's `Metadata` map.
+
+```go
+type FormConfig struct {
+    ID       id.FormConfigID `json:"id"`
+    AppID    id.AppID        `json:"app_id"`
+    FormType FormType        `json:"form_type"` // "signup", "signin", "profile"
+    Fields   []Field         `json:"fields"`
+    Active   bool            `json:"active"`
+    CreatedAt time.Time      `json:"created_at"`
+    UpdatedAt time.Time      `json:"updated_at"`
+}
+
+type Field struct {
+    Name        string      `json:"name"`        // metadata key
+    Label       string      `json:"label"`       // UI label
+    Type        FieldType   `json:"type"`        // "text", "email", "select", "checkbox"
+    Required    bool        `json:"required"`
+    Placeholder string      `json:"placeholder,omitempty"`
+    Options     []string    `json:"options,omitempty"` // for select fields
+    Validation  *Validation `json:"validation,omitempty"`
+}
+```
+
+When a `FormConfig` is active for the `signup` form type, the engine validates incoming `metadata` fields on the signup request against the field definitions before creating the user.

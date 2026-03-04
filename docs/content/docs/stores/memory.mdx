@@ -1,0 +1,269 @@
+---
+title: Memory Store
+description: In-memory store for unit tests, integration tests, and local development without a database.
+---
+
+The memory store (`store/memory`) is a fully in-memory implementation of `store.Store`. All data is held in Go maps protected by a `sync.RWMutex`, making it safe for concurrent access. No external dependencies or configuration are required — creating a store is a single function call.
+
+## Installation
+
+The memory store is included in the core Authsome module. No additional packages are needed.
+
+```go
+import "github.com/xraph/authsome/store/memory"
+```
+
+## Creating a store
+
+```go
+memStore := memory.New()
+```
+
+`memory.New()` returns a `*memory.Store` with all internal maps initialised and ready to use. The zero value is not valid — always use `New()`.
+
+## Wiring into the engine
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "net/http"
+    "time"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/store/memory"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // In-memory store: no database required.
+    memStore := memory.New()
+
+    eng, err := authsome.New(
+        authsome.WithStore(memStore),
+        authsome.WithPlugin(password.New()),
+        authsome.WithConfig(authsome.Config{
+            AppID:    "testapp",
+            BasePath: "/v1/auth",
+            Session: authsome.SessionConfig{
+                TokenTTL:        1 * time.Hour,
+                RefreshTokenTTL: 24 * time.Hour,
+            },
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer eng.Stop(ctx)
+
+    if err := eng.Start(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    mux := http.NewServeMux()
+    eng.RegisterRoutes(mux)
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+## Implemented interfaces
+
+The memory store satisfies every interface in the `store.Store` composite:
+
+| Interface | Internal map |
+|-----------|-------------|
+| `user.Store` | `map[string]*user.User` (keyed by TypeID string) |
+| `session.Store` | `map[string]*session.Session` (keyed by TypeID string) |
+| `account.Store` | `map[string]*account.Verification`, `map[string]*account.PasswordReset` (keyed by token) |
+| `app.Store` | `map[string]*app.App` (keyed by TypeID string) |
+| `organization.Store` | `map[string]*organization.Organization`, `map[string]*organization.Member`, `map[string]*organization.Invitation`, `map[string]*organization.Team` |
+| `device.Store` | `map[string]*device.Device` (keyed by TypeID string) |
+| `webhook.Store` | `map[string]*webhook.Webhook` (keyed by TypeID string) |
+| `notification.Store` | `map[string]*notification.Notification` (keyed by TypeID string) |
+| `apikey.Store` | `map[string]*apikey.APIKey` (keyed by TypeID string) |
+| `environment.Store` | `map[string]*environment.Environment` (keyed by TypeID string) |
+| `formconfig.Store` | `map[string]*formconfig.FormConfig` (keyed by TypeID string) |
+| `formconfig.BrandingStore` | `map[string]*formconfig.BrandingConfig` (keyed by TypeID string) |
+| `appsessionconfig.Store` | `map[string]*appsessionconfig.Config` (keyed by AppID string) |
+
+The compile-time assertion at the top of the package guarantees this:
+
+```go
+var _ store.Store = (*Store)(nil)
+```
+
+## Concurrency safety
+
+All methods acquire either a read lock (`sync.RWMutex.RLock`) or a write lock (`sync.RWMutex.Lock`) before accessing internal maps. Read operations (all `Get*` and `List*` methods) acquire a read lock, allowing multiple concurrent readers. Write operations acquire an exclusive lock.
+
+This makes the memory store safe for use in concurrent test scenarios where multiple goroutines sign in and sign out simultaneously.
+
+## Lifecycle methods
+
+| Method | Behaviour |
+|--------|-----------|
+| `Migrate(ctx, extraGroups...)` | No-op. Always returns `nil`. |
+| `Ping(ctx)` | Always returns `nil`. |
+| `Close()` | No-op. Always returns `nil`. |
+
+The memory store has no schema to create and no connection to verify, so all lifecycle methods succeed immediately.
+
+## Lookup behaviour
+
+### User lookups
+
+The memory store scans all users linearly for lookups by email, phone, and username. This is acceptable for test datasets but would not scale to production volumes:
+
+```go
+func (s *Store) GetUserByEmail(_ context.Context, appID id.AppID, email string) (*user.User, error) {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    for _, u := range s.users {
+        if u.AppID.String() == appID.String() && u.Email == email {
+            return u, nil
+        }
+    }
+    return nil, store.ErrNotFound
+}
+```
+
+In production stores (PostgreSQL, SQLite, MongoDB), this lookup uses an indexed column and is O(log n).
+
+### Session token lookups
+
+Session tokens and refresh tokens are also looked up by linear scan:
+
+```go
+func (s *Store) GetSessionByToken(_ context.Context, token string) (*session.Session, error) {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    for _, sess := range s.sessions {
+        if sess.Token == token {
+            return sess, nil
+        }
+    }
+    return nil, store.ErrNotFound
+}
+```
+
+For test suites with hundreds of sessions, this remains fast. For performance benchmarking of the authentication hot path, use a real database backend.
+
+## RBAC in the memory store
+
+The memory store also implements `rbac.Store` and includes a full in-memory RBAC evaluator with hierarchical role support. `HasPermission` walks the role parent chain (up to depth 20 to prevent infinite loops) to evaluate inherited permissions:
+
+```go
+// HasPermission checks if userID has action+resource permission,
+// including permissions inherited from parent roles.
+func (s *Store) HasPermission(ctx context.Context, userID string, action, resource string) (bool, error)
+```
+
+This allows you to test complex RBAC scenarios — role hierarchies, wildcard permissions (`*`), resource-level checks — without any database setup.
+
+## Error handling
+
+The memory store returns `store.ErrNotFound` for all "not found" cases, matching the behaviour of all production store backends:
+
+```go
+var ErrNotFound = errors.New("authsome: not found")
+```
+
+Use `errors.Is(err, store.ErrNotFound)` to detect missing entities consistently across all backends.
+
+## Using the memory store in tests
+
+```go
+package auth_test
+
+import (
+    "context"
+    "testing"
+    "time"
+
+    "github.com/stretchr/testify/require"
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/password"
+    "github.com/xraph/authsome/store/memory"
+)
+
+func newTestEngine(t *testing.T) *authsome.Engine {
+    t.Helper()
+
+    memStore := memory.New()
+
+    eng, err := authsome.New(
+        authsome.WithStore(memStore),
+        authsome.WithPlugin(password.New()),
+        authsome.WithConfig(authsome.Config{
+            AppID:    "testapp",
+            BasePath: "/v1/auth",
+            Session: authsome.SessionConfig{
+                TokenTTL:        5 * time.Minute,
+                RefreshTokenTTL: 1 * time.Hour,
+            },
+            Password: authsome.PasswordConfig{
+                MinLength: 8,
+            },
+        }),
+    )
+    require.NoError(t, err)
+
+    ctx := context.Background()
+    require.NoError(t, eng.Start(ctx))
+    t.Cleanup(func() { eng.Stop(ctx) })
+
+    return eng
+}
+
+func TestSignUpAndSignIn(t *testing.T) {
+    eng := newTestEngine(t)
+    ctx := context.Background()
+
+    // Sign up
+    signupResult, err := eng.SignUp(ctx, &authsome.SignUpRequest{
+        Email:    "alice@example.com",
+        Password: "securepassword123",
+    })
+    require.NoError(t, err)
+    require.NotEmpty(t, signupResult.Token)
+
+    // Sign in
+    signinResult, err := eng.SignIn(ctx, &authsome.SignInRequest{
+        Email:    "alice@example.com",
+        Password: "securepassword123",
+    })
+    require.NoError(t, err)
+    require.Equal(t, signupResult.User.ID, signinResult.User.ID)
+}
+```
+
+## Swapping to a production backend
+
+The memory store implements the same `store.Store` interface as all production backends. Switching is a single-line change:
+
+```go
+// Testing
+memStore := memory.New()
+
+// Production (PostgreSQL)
+pgStore := postgres.New(grove.Open(pgdriver.New(os.Getenv("DATABASE_URL"))))
+```
+
+Pass either value to `authsome.WithStore(...)` — no other code changes are required.
+
+## When to use
+
+- **Unit tests** — No setup, no teardown, zero dependencies. Every test starts with a clean empty store.
+- **Integration tests** — Test full request/response cycles without a database.
+- **CI pipelines** — Fast, deterministic, no database container required.
+- **Local prototyping** — Explore Authsome's API without configuring any infrastructure.
+
+## When not to use
+
+- **Production** — All data is lost on process restart. There is no persistence.
+- **Multi-instance deployments** — Each process has an isolated store. Sign-in on instance A cannot be validated on instance B.
+- **Performance benchmarking** — Linear scans do not reflect production database performance characteristics.

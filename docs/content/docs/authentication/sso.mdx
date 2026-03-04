@@ -1,0 +1,222 @@
+---
+title: Enterprise SSO
+description: OIDC and SAML-based enterprise single sign-on with JIT user provisioning.
+---
+
+The `sso` plugin enables enterprise customers to sign in using their company's identity provider (IdP) through OpenID Connect (OIDC) or SAML 2.0. Each enterprise connection is a separate `SSOConnection` scoped to an organization within your app.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/sso"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(sso.New(sso.Config{
+        // Default OIDC callback URL pattern.
+        // {connection_id} is replaced with the SSO connection ID.
+        OIDCCallbackURL: "https://myapp.com/v1/auth/sso/{connection_id}/callback",
+
+        // Default SAML ACS URL pattern.
+        SAMLCallbackURL: "https://myapp.com/v1/auth/sso/{connection_id}/acs",
+
+        // JIT provisioning: create users automatically on first SSO sign-in.
+        JITProvision: true,
+
+        // Attribute mapping from IdP claims to Authsome user fields.
+        AttributeMapping: sso.AttributeMapping{
+            Email:     "email",
+            Name:      "name",
+            FirstName: "given_name",
+            LastName:  "family_name",
+        },
+    })),
+)
+```
+
+## OIDC provider configuration
+
+Create an SSO connection for an OIDC provider (Okta, Azure AD, Google Workspace, etc.):
+
+```go
+conn := &sso.Connection{
+    ID:             id.NewSSOConnectionID(),
+    AppID:          appID,
+    OrganizationID: orgID,           // scoped to a specific org (optional)
+    Type:           sso.TypeOIDC,
+    Name:           "Acme Corp - Okta",
+    Slug:           "acme-okta",
+    Active:         true,
+    OIDC: &sso.OIDCConfig{
+        Issuer:       "https://acme.okta.com",
+        ClientID:     "0oa1abcdef123456",
+        ClientSecret: "OIDC_CLIENT_SECRET",
+        Scopes:       []string{"openid", "email", "profile", "groups"},
+        // Discovery URL is auto-derived from Issuer: {Issuer}/.well-known/openid-configuration
+    },
+}
+
+if err := engine.CreateSSOConnection(ctx, conn); err != nil {
+    log.Fatal(err)
+}
+```
+
+For providers that don't support OIDC discovery, specify endpoints explicitly:
+
+```go
+OIDC: &sso.OIDCConfig{
+    Issuer:        "https://login.example.com",
+    ClientID:      "my-client-id",
+    ClientSecret:  "my-secret",
+    AuthURL:       "https://login.example.com/oauth2/authorize",
+    TokenURL:      "https://login.example.com/oauth2/token",
+    UserInfoURL:   "https://login.example.com/oauth2/userinfo",
+    JWKSURL:       "https://login.example.com/.well-known/jwks.json",
+}
+```
+
+## SAML provider configuration
+
+```go
+conn := &sso.Connection{
+    ID:    id.NewSSOConnectionID(),
+    AppID: appID,
+    Type:  sso.TypeSAML,
+    Name:  "Acme Corp - SAML IdP",
+    Slug:  "acme-saml",
+    SAML: &sso.SAMLConfig{
+        // Metadata URL (preferred — auto-fetches IdP certificate and endpoints)
+        MetadataURL: "https://idp.acme.com/saml/metadata",
+
+        // Or specify manually:
+        IDPSSOSURL:        "https://idp.acme.com/saml/sso",
+        IDPEntityID:       "https://idp.acme.com",
+        IDPCertificate:    "-----BEGIN CERTIFICATE-----\n...",
+
+        // Your SP entity ID (must match what's registered in the IdP)
+        SPEntityID:        "https://myapp.com",
+        AttributeMapping: map[string]string{
+            "email":      "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+            "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+            "last_name":  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+        },
+    },
+}
+```
+
+## Enterprise SSO flow
+
+
+
+**Identify the connection**: The user enters their email and the engine looks up the SSO connection by email domain.
+
+`POST /v1/auth/sso/identify`
+
+```json
+{"email": "alice@acme.com", "app_id": "myapp"}
+```
+
+Response:
+
+```json
+{
+  "connection_id": "asso_01j9...",
+  "connection_name": "Acme Corp - Okta",
+  "type": "oidc"
+}
+```
+
+Alternatively, the connection can be identified by slug (for direct SSO links):
+
+`GET /v1/auth/sso/{slug}/authorize?app_id=myapp`
+
+
+**Redirect to IdP**: The engine generates the authorization URL (OIDC) or a SAML AuthnRequest (SAML) and redirects the user.
+
+
+**IdP callback**: The user authenticates at the IdP and is redirected back to the Authsome callback URL.
+
+For OIDC: `GET /v1/auth/sso/{connection_id}/callback?code=...&state=...`
+For SAML: `POST /v1/auth/sso/{connection_id}/acs` (with `SAMLResponse` body)
+
+
+**JIT provisioning (first sign-in)**: If `JITProvision: true` and the user doesn't have an Authsome account, one is created automatically using attributes from the IdP assertion.
+
+
+**Session created**: A full user + session is returned to the client.
+
+
+
+## JIT provisioning
+
+Just-in-time provisioning creates Authsome user accounts automatically on first SSO sign-in. The user's attributes are mapped from the IdP token or assertion to Authsome user fields using the `AttributeMapping` configuration.
+
+```go
+// Users created via JIT provisioning:
+// - Have email_verified: true (IdP has already verified the email)
+// - Have no password (can only sign in via SSO)
+// - Are automatically added to the organization linked to the SSO connection
+```
+
+To disable JIT provisioning and require pre-created accounts:
+
+```go
+sso.New(sso.Config{
+    JITProvision: false,
+})
+```
+
+When `JITProvision: false`, signing in with an unknown email returns `ErrInvalidCredentials`.
+
+## SSO connection management
+
+```go
+// Create
+engine.CreateSSOConnection(ctx, conn)
+
+// Get by ID
+conn, err := engine.GetSSOConnection(ctx, connID)
+
+// Get by slug (for URL-based routing)
+conn, err := engine.GetSSOConnectionBySlug(ctx, appID, "acme-okta")
+
+// Get by email domain (for auto-identification)
+conn, err := engine.GetSSOConnectionByDomain(ctx, appID, "acme.com")
+
+// List all connections for an app
+conns, err := engine.ListSSOConnections(ctx, appID)
+
+// Update (e.g., rotate client secret)
+engine.UpdateSSOConnection(ctx, conn)
+
+// Deactivate (disables sign-in but preserves config)
+engine.DeactivateSSOConnection(ctx, connID)
+```
+
+## Domain-based connection routing
+
+Associate email domains with SSO connections to enable automatic IdP identification:
+
+```go
+conn.DomainMappings = []string{"acme.com", "acmecorp.com"}
+engine.UpdateSSOConnection(ctx, conn)
+```
+
+When a user enters `alice@acme.com` on the sign-in page, the engine automatically identifies the Acme Corp OIDC connection and redirects to Okta — no manual selection required.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/sso/identify` | Identify SSO connection by email |
+| `GET` | `/sso/{slug}/authorize` | Initiate SSO flow by connection slug |
+| `GET` | `/sso/{id}/callback` | OIDC callback handler |
+| `POST` | `/sso/{id}/acs` | SAML ACS (Assertion Consumer Service) handler |
+| `GET` | `/sso/{id}/metadata` | SAML SP metadata XML |
+| `POST` | `/admin/sso/connections` | Create SSO connection (admin) |
+| `GET` | `/admin/sso/connections` | List SSO connections (admin) |
+| `PUT` | `/admin/sso/connections/{id}` | Update SSO connection (admin) |
+| `DELETE` | `/admin/sso/connections/{id}` | Delete SSO connection (admin) |

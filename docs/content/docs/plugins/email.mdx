@@ -1,0 +1,136 @@
+---
+title: Email Plugin
+description: Email verification and transactional email notifications via the Mailer bridge.
+---
+
+The `email` plugin sends transactional emails for authentication events -- welcome emails on sign-up, verification emails for new users, password reset emails, and organization invitation emails. It integrates with the Mailer bridge to deliver emails through any configured provider.
+
+## Setup
+
+```go
+import (
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/email"
+)
+
+eng, err := authsome.NewEngine(
+    authsome.WithStore(store),
+    authsome.WithMailer(mailerBridge),
+    authsome.WithPlugin(email.New(email.Config{
+        From:    "noreply@example.com",
+        AppName: "My App",
+        BaseURL: "https://example.com",
+    })),
+)
+```
+
+## Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `From` | `string` | `"noreply@authsome.local"` | Default sender email address |
+| `AppName` | `string` | `"AuthSome"` | Application name used in email subjects and bodies |
+| `BaseURL` | `string` | `""` | Root URL for building links in emails |
+
+## Implemented interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `Plugin` | Base plugin identity (`"email"`) |
+| `OnInit` | Extracts the Mailer bridge and logger from the engine |
+| `AfterSignUp` | Sends a welcome email to newly registered users |
+| `AfterUserCreate` | Sends a verification email to unverified users |
+
+## Email verification flow
+
+When a new user is created with an unverified email, the plugin sends a verification email automatically via the `AfterUserCreate` hook:
+
+1. The engine creates the user record
+2. The `email` plugin receives the `OnAfterUserCreate` callback
+3. If `EmailVerified` is `false`, the plugin sends a verification email with a link to `{BaseURL}/verify-email`
+4. The user clicks the link, which calls `POST /v1/auth/verify-email` with the verification token
+
+```go
+// The verification email includes a link like:
+// https://example.com/verify-email?token=abc123
+```
+
+If the user's email is already verified (for example, via SSO), no verification email is sent.
+
+## Welcome email
+
+On sign-up, the plugin sends a welcome email via the `AfterSignUp` hook. The welcome email is separate from the verification email and is sent regardless of verification status.
+
+```go
+// The plugin resolves the user's display name:
+name := u.Name
+if name == "" {
+    name = u.Email
+}
+
+subject, html, text := WelcomeEmail(name, cfg.AppName)
+```
+
+## Password reset email
+
+The `SendPasswordReset` method is called by the engine's password reset flow. It is not a hook -- the engine calls it directly when a password reset is requested:
+
+```go
+err := emailPlugin.SendPasswordReset(ctx, email, name, resetURL)
+```
+
+The reset URL includes the token so the user can complete the reset process.
+
+## Invitation email
+
+The `SendInvitation` method sends organization invitation emails:
+
+```go
+err := emailPlugin.SendInvitation(ctx, email, inviterName, orgName, acceptURL)
+```
+
+## Email templates
+
+The plugin includes built-in HTML and text templates for each email type:
+
+| Template | Trigger | Subject |
+|----------|---------|---------|
+| Welcome | `AfterSignUp` | "Welcome to \{AppName\}" |
+| Verification | `AfterUserCreate` | "Verify your email" |
+| Password Reset | `SendPasswordReset` | "Reset your password" |
+| Invitation | `SendInvitation` | "You've been invited to \{OrgName\}" |
+
+Templates are defined in the `templates.go` file within the email plugin package.
+
+## Integration with Mailer bridge
+
+The email plugin requires a Mailer bridge to be configured on the engine. If no mailer is available, the plugin silently skips all email operations -- it never returns an error from hook callbacks.
+
+```go
+// The bridge interface:
+type Mailer interface {
+    SendEmail(ctx context.Context, msg *EmailMessage) error
+}
+
+// EmailMessage structure:
+type EmailMessage struct {
+    To      []string
+    From    string
+    Subject string
+    HTML    string
+    Text    string
+}
+```
+
+## Testing
+
+For testing, inject a mock mailer directly:
+
+```go
+p := email.New(email.Config{
+    From:    "test@example.com",
+    AppName: "TestApp",
+    BaseURL: "https://test.example.com",
+})
+p.SetMailer(mockMailer)
+```

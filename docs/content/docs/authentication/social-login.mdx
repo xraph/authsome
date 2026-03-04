@@ -1,0 +1,198 @@
+---
+title: Social Login
+description: OAuth2 social sign-in with Google, GitHub, Microsoft, and Apple.
+---
+
+The `social` plugin provides OAuth2-based sign-in with external identity providers. Users are redirected to the provider's authorization page, consent, and are redirected back with a code that is exchanged for user information.
+
+Supported providers out of the box: **Google**, **GitHub**, **Microsoft**, and **Apple**.
+
+## Setup
+
+```go
+import (
+    "os"
+
+    "github.com/xraph/authsome"
+    "github.com/xraph/authsome/plugins/social"
+)
+
+eng, err := authsome.New(
+    authsome.WithStore(store),
+    authsome.WithPlugin(social.New(social.Config{
+        Providers: []social.Provider{
+            {
+                Name:         "google",
+                ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+                ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+                RedirectURL:  "https://myapp.com/v1/auth/social/google/callback",
+                Scopes:       []string{"openid", "email", "profile"},
+            },
+            {
+                Name:         "github",
+                ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+                ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+                RedirectURL:  "https://myapp.com/v1/auth/social/github/callback",
+                Scopes:       []string{"read:user", "user:email"},
+            },
+            {
+                Name:         "microsoft",
+                ClientID:     os.Getenv("MICROSOFT_CLIENT_ID"),
+                ClientSecret: os.Getenv("MICROSOFT_CLIENT_SECRET"),
+                RedirectURL:  "https://myapp.com/v1/auth/social/microsoft/callback",
+                Tenant:       "common", // or specific tenant ID for AAD
+            },
+            {
+                Name:         "apple",
+                ClientID:     os.Getenv("APPLE_CLIENT_ID"),
+                ClientSecret: os.Getenv("APPLE_CLIENT_SECRET"),
+                RedirectURL:  "https://myapp.com/v1/auth/social/apple/callback",
+                TeamID:       os.Getenv("APPLE_TEAM_ID"),
+                KeyID:        os.Getenv("APPLE_KEY_ID"),
+                PrivateKey:   os.Getenv("APPLE_PRIVATE_KEY"),
+            },
+        },
+    })),
+)
+```
+
+## Provider configuration
+
+### Provider struct
+
+```go
+type Provider struct {
+    // Name is the provider identifier ("google", "github", "microsoft", "apple").
+    Name string
+
+    // ClientID is the OAuth2 application client ID from the provider.
+    ClientID string
+
+    // ClientSecret is the OAuth2 application client secret.
+    ClientSecret string
+
+    // RedirectURL is the callback URL registered with the provider.
+    // Must exactly match the redirect URI configured in the provider's dashboard.
+    RedirectURL string
+
+    // Scopes overrides the default scopes for this provider.
+    // Defaults: google=["openid","email","profile"], github=["read:user","user:email"]
+    Scopes []string
+
+    // Tenant is used by Microsoft providers to restrict to a specific Azure AD tenant.
+    // Use "common" for multi-tenant, or a specific tenant ID.
+    Tenant string
+
+    // Apple-specific fields (required when Name = "apple")
+    TeamID     string
+    KeyID      string
+    PrivateKey string // PEM-encoded P-256 private key
+}
+```
+
+## OAuth2 callback flow
+
+
+
+**Initiate the flow**: Your frontend redirects the user to the Authsome authorization URL.
+
+`GET /v1/auth/social/{provider}/authorize?app_id=myapp&state=optional-state`
+
+The engine generates a PKCE challenge, stores the state in the ceremony store, and returns a redirect to the provider's authorization page.
+
+
+**Provider redirects back**: After the user consents, the provider redirects to your callback URL with a `code` and `state` parameter.
+
+`GET https://myapp.com/v1/auth/social/{provider}/callback?code=...&state=...`
+
+The Authsome callback handler:
+1. Validates the `state` parameter against the ceremony store.
+2. Exchanges the authorization code for an access token with the provider.
+3. Fetches the user's profile from the provider's userinfo endpoint.
+4. Looks up an existing `OAuthAccount` linked to this provider + provider user ID.
+
+
+**User creation or lookup**:
+
+- If an `OAuthAccount` exists: load the linked Authsome user.
+- If no `OAuthAccount` exists but a user has the same email: link the accounts.
+- If neither exists: create a new user with the provider's profile data.
+
+Then create a session and return the `token` + `refresh_token`.
+
+
+
+## Auto user creation
+
+By default, new users are created automatically on their first social sign-in. The user record is populated from the provider's profile:
+
+| Authsome field | Google | GitHub | Microsoft | Apple |
+|----------------|--------|--------|-----------|-------|
+| `email` | `email` | primary email | `mail` | `email` |
+| `name` | `name` | `name` | `displayName` | `name.firstName + lastName` |
+| `image` | `picture` | `avatar_url` | — | — |
+| `email_verified` | `email_verified` | always `true` | — | — |
+
+## Account linking
+
+If a user already has a password account with the same email and then signs in with Google, Authsome automatically links the Google account to the existing user. The user can then sign in with either method.
+
+To prevent automatic account linking (e.g., to require explicit confirmation), you can disable it:
+
+```go
+social.New(social.Config{
+    AutoLink: false, // default: true
+    Providers: []social.Provider{...},
+})
+```
+
+When `AutoLink: false`, signing in with a provider whose email matches an existing account returns an error. Your UI can then prompt the user to sign in with their existing method first, then explicitly link the account.
+
+## The OAuthAccount entity
+
+**ID prefix:** `aoau_`
+
+Each linked social account is stored as an `OAuthAccount`:
+
+```go
+type OAuthAccount struct {
+    ID             id.OAuthAccountID `json:"id"`
+    UserID         id.UserID         `json:"user_id"`
+    AppID          id.AppID          `json:"app_id"`
+    Provider       string            `json:"provider"`       // "google", "github"
+    ProviderUserID string            `json:"provider_user_id"` // provider's user ID
+    Email          string            `json:"email"`
+    AccessToken    string            `json:"-"`              // never serialized
+    RefreshToken   string            `json:"-"`
+    ExpiresAt      *time.Time        `json:"expires_at,omitempty"`
+    CreatedAt      time.Time         `json:"created_at"`
+    UpdatedAt      time.Time         `json:"updated_at"`
+}
+```
+
+A user can have multiple `OAuthAccount` records (one per provider). Retrieve them:
+
+```go
+accounts, err := engine.ListUserOAuthAccounts(ctx, userID)
+```
+
+## Unlinking a provider
+
+Users can unlink a social account as long as they have another sign-in method (password or another provider):
+
+`DELETE /v1/auth/social/{provider}/unlink`
+
+```go
+err := engine.UnlinkSocialAccount(ctx, userID, "github")
+```
+
+The engine prevents unlinking when it would leave the user with no way to sign in.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/social/{provider}/authorize` | Redirect to provider authorization page |
+| `GET` | `/social/{provider}/callback` | Handle provider callback and return session |
+| `DELETE` | `/social/{provider}/unlink` | Unlink a social account |
+| `GET` | `/social/accounts` | List all linked social accounts for the current user |

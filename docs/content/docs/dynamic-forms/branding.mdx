@@ -1,0 +1,214 @@
+---
+title: Branding
+description: Customize auth page appearance with logos, colors, fonts, and CSS overrides per organization.
+---
+
+The branding system allows you to customize the visual appearance of Authsome's authentication pages on a per-organization basis. Each organization can define its own logo, color scheme, fonts, and custom CSS, creating a white-labeled experience for their users.
+
+## BrandingConfig entity
+
+```go
+type BrandingConfig struct {
+    ID              id.BrandingConfigID `json:"id"`
+    OrgID           id.OrgID            `json:"org_id"`
+    AppID           id.AppID            `json:"app_id"`
+    LogoURL         string              `json:"logo_url,omitempty"`
+    PrimaryColor    string              `json:"primary_color,omitempty"`
+    BackgroundColor string              `json:"background_color,omitempty"`
+    AccentColor     string              `json:"accent_color,omitempty"`
+    FontFamily      string              `json:"font_family,omitempty"`
+    CustomCSS       string              `json:"custom_css,omitempty"`
+    CompanyName     string              `json:"company_name,omitempty"`
+    Tagline         string              `json:"tagline,omitempty"`
+    CreatedAt       time.Time           `json:"created_at"`
+    UpdatedAt       time.Time           `json:"updated_at"`
+}
+```
+
+- **`OrgID`** — the organization this branding applies to. Each organization can have one branding config per app.
+- **`AppID`** — the application this branding is scoped to.
+- All color fields accept standard CSS color values (hex, rgb, hsl).
+- Branding config IDs have the prefix `abrd_`.
+
+## Configuration fields
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `LogoURL` | `string` | URL to the organization's logo image | `https://cdn.example.com/logo.svg` |
+| `PrimaryColor` | `string` | Primary brand color (buttons, links) | `#2563eb` |
+| `BackgroundColor` | `string` | Page background color | `#f8fafc` |
+| `AccentColor` | `string` | Accent color (highlights, focus rings) | `#7c3aed` |
+| `FontFamily` | `string` | Font family for text | `"Inter", sans-serif` |
+| `CustomCSS` | `string` | Raw CSS overrides | See below |
+| `CompanyName` | `string` | Organization name displayed on auth pages | `Acme Corp` |
+| `Tagline` | `string` | Short tagline under the logo | `Secure. Simple. Fast.` |
+
+## Creating a branding config
+
+### Via HTTP API
+
+`POST /v1/auth/branding`
+
+```json
+{
+  "org_id": "aorg_01jb...",
+  "app_id": "myapp",
+  "logo_url": "https://cdn.acme.com/logo.svg",
+  "primary_color": "#2563eb",
+  "background_color": "#ffffff",
+  "accent_color": "#7c3aed",
+  "font_family": "\"Inter\", system-ui, sans-serif",
+  "company_name": "Acme Corp",
+  "tagline": "Welcome to Acme"
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "abrd_01jb...",
+  "org_id": "aorg_01jb...",
+  "app_id": "aapp_01j9...",
+  "logo_url": "https://cdn.acme.com/logo.svg",
+  "primary_color": "#2563eb",
+  "background_color": "#ffffff",
+  "accent_color": "#7c3aed",
+  "font_family": "\"Inter\", system-ui, sans-serif",
+  "company_name": "Acme Corp",
+  "tagline": "Welcome to Acme",
+  "created_at": "2024-11-01T10:00:00Z",
+  "updated_at": "2024-11-01T10:00:00Z"
+}
+```
+
+### Via Go SDK
+
+```go
+import "github.com/xraph/authsome/formconfig"
+
+branding := &formconfig.BrandingConfig{
+    OrgID:           orgID,
+    AppID:           appID,
+    LogoURL:         "https://cdn.acme.com/logo.svg",
+    PrimaryColor:    "#2563eb",
+    BackgroundColor: "#ffffff",
+    AccentColor:     "#7c3aed",
+    FontFamily:      `"Inter", system-ui, sans-serif`,
+    CompanyName:     "Acme Corp",
+    Tagline:         "Welcome to Acme",
+}
+
+err := engine.CreateBrandingConfig(ctx, branding)
+```
+
+## CSS variable overrides
+
+The Authsome UI renders auth pages using CSS custom properties. When a branding config is applied, these variables are set on the page root:
+
+```css
+:root {
+  --authsome-primary: #2563eb;
+  --authsome-background: #ffffff;
+  --authsome-accent: #7c3aed;
+  --authsome-font-family: "Inter", system-ui, sans-serif;
+}
+```
+
+### Available CSS variables
+
+| Variable | Maps to | Default |
+|----------|---------|---------|
+| `--authsome-primary` | `PrimaryColor` | `#18181b` |
+| `--authsome-primary-foreground` | Auto-computed | `#ffffff` |
+| `--authsome-background` | `BackgroundColor` | `#ffffff` |
+| `--authsome-accent` | `AccentColor` | `#7c3aed` |
+| `--authsome-accent-foreground` | Auto-computed | `#ffffff` |
+| `--authsome-font-family` | `FontFamily` | `system-ui, sans-serif` |
+| `--authsome-border-radius` | N/A (use CustomCSS) | `0.5rem` |
+| `--authsome-input-background` | N/A (use CustomCSS) | `#f4f4f5` |
+| `--authsome-input-border` | N/A (use CustomCSS) | `#e4e4e7` |
+| `--authsome-error` | N/A (use CustomCSS) | `#dc2626` |
+
+### Custom CSS
+
+For more granular control, use the `CustomCSS` field to inject arbitrary CSS:
+
+```json
+{
+  "custom_css": ":root { --authsome-border-radius: 0.75rem; --authsome-input-background: #f0f9ff; } .authsome-card { box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .authsome-logo { max-height: 48px; }"
+}
+```
+
+> **Note:** Custom CSS is sanitized to prevent XSS. `<script>` tags, `url()` with data URIs, `expression()`, and other potentially dangerous patterns are stripped.
+
+## Per-organization branding
+
+In a multi-tenant setup, different organizations see different branding when their users sign in. The Authsome UI resolves branding by:
+
+1. Checking the URL for an organization slug (e.g., `auth.myapp.com/org/acme/login`)
+2. Looking up the organization by slug
+3. Fetching the BrandingConfig for that organization and app
+4. Applying the CSS variables and logo to the auth page
+
+If no branding config exists for the organization, the default app styling is used.
+
+### Example: two organizations, different branding
+
+```go
+// Acme Corp branding (blue theme)
+acmeBranding := &formconfig.BrandingConfig{
+    OrgID:        acmeOrgID,
+    AppID:        appID,
+    PrimaryColor: "#2563eb",
+    LogoURL:      "https://cdn.acme.com/logo.svg",
+    CompanyName:  "Acme Corp",
+}
+
+// Globex branding (green theme)
+globexBranding := &formconfig.BrandingConfig{
+    OrgID:        globexOrgID,
+    AppID:        appID,
+    PrimaryColor: "#16a34a",
+    LogoURL:      "https://cdn.globex.com/logo.svg",
+    CompanyName:  "Globex Corporation",
+}
+```
+
+## Updating branding
+
+`PATCH /v1/auth/branding/:brandingId`
+
+```json
+{
+  "primary_color": "#dc2626",
+  "tagline": "New tagline here"
+}
+```
+
+Only fields included in the request are updated. Other fields remain unchanged.
+
+## Retrieving branding
+
+### By organization
+
+`GET /v1/auth/branding?org_id=aorg_01jb...&app_id=myapp`
+
+Returns the branding config for the specified organization and app.
+
+### Active branding for auth page
+
+`GET /v1/auth/branding/resolve?org_slug=acme&app_id=myapp`
+
+Used by the Authsome UI to resolve branding when rendering auth pages.
+
+## API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/branding` | Create a branding configuration |
+| `GET` | `/branding` | Get branding for an org/app |
+| `GET` | `/branding/resolve` | Resolve branding by org slug (for UI) |
+| `GET` | `/branding/:brandingId` | Get branding by ID |
+| `PATCH` | `/branding/:brandingId` | Update branding fields |
+| `DELETE` | `/branding/:brandingId` | Delete a branding configuration |
