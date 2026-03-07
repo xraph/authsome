@@ -44,8 +44,9 @@ type ssoConnectionDoc struct {
 	Protocol    string    `bson:"protocol"`
 	Domain      string    `bson:"domain"`
 	MetadataURL string    `bson:"metadata_url"`
-	ClientID    string    `bson:"client_id"`
-	Issuer      string    `bson:"issuer"`
+	ClientID     string    `bson:"client_id"`
+	ClientSecret string    `bson:"client_secret"`
+	Issuer       string    `bson:"issuer"`
 	Active      bool      `bson:"active"`
 	CreatedAt   time.Time `bson:"created_at"`
 	UpdatedAt   time.Time `bson:"updated_at"`
@@ -72,8 +73,9 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*SSOConnection, error) {
 		Protocol:    d.Protocol,
 		Domain:      d.Domain,
 		MetadataURL: d.MetadataURL,
-		ClientID:    d.ClientID,
-		Issuer:      d.Issuer,
+		ClientID:     d.ClientID,
+		ClientSecret: d.ClientSecret,
+		Issuer:       d.Issuer,
 		Active:      d.Active,
 		CreatedAt:   d.CreatedAt,
 		UpdatedAt:   d.UpdatedAt,
@@ -98,8 +100,9 @@ func ssoConnectionToDoc(c *SSOConnection) *ssoConnectionDoc {
 		Protocol:    c.Protocol,
 		Domain:      c.Domain,
 		MetadataURL: c.MetadataURL,
-		ClientID:    c.ClientID,
-		Issuer:      c.Issuer,
+		ClientID:     c.ClientID,
+		ClientSecret: c.ClientSecret,
+		Issuer:       c.Issuer,
 		Active:      c.Active,
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,
@@ -207,8 +210,9 @@ func (s *MongoStore) UpdateSSOConnection(ctx context.Context, c *SSOConnection) 
 			"protocol":     doc.Protocol,
 			"domain":       doc.Domain,
 			"metadata_url": doc.MetadataURL,
-			"client_id":    doc.ClientID,
-			"issuer":       doc.Issuer,
+			"client_id":     doc.ClientID,
+			"client_secret": doc.ClientSecret,
+			"issuer":        doc.Issuer,
 			"active":       doc.Active,
 			"updated_at":   doc.UpdatedAt,
 		}},

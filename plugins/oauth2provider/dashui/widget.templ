@@ -1,0 +1,23 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+// ClientsWidget displays the OAuth2 clients summary.
+templ ClientsWidget() {
+	@card.Card() {
+		@card.Content() {
+			<div class="flex items-center gap-3">
+				<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+					@icons.KeyRound(icons.WithSize(20), icons.WithClass("text-primary"))
+				</div>
+				<div>
+					<p class="text-sm font-medium text-muted-foreground">OAuth2 Clients</p>
+					<p class="text-lg font-bold">Active</p>
+				</div>
+			</div>
+		}
+	}
+}

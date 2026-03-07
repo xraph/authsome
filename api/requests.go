@@ -459,3 +459,41 @@ type SetAppSessionConfigRequest struct {
 type DeleteAppSessionConfigRequest struct {
 	AppID string `path:"appId" description:"Application identifier"`
 }
+
+// ---------------------------------------------------------------------------
+// App client config requests
+// ---------------------------------------------------------------------------
+
+// GetAppClientConfigRequest binds the path for GET /admin/apps/:appId/client-config.
+type GetAppClientConfigRequest struct {
+	AppID string `path:"appId" description:"Application identifier"`
+}
+
+// SetAppClientConfigRequest binds the path + body for PUT /admin/apps/:appId/client-config.
+type SetAppClientConfigRequest struct {
+	AppID            string   `path:"appId" description:"Application identifier"`
+	PasswordEnabled  *bool    `json:"password_enabled,omitempty" description:"Enable password auth (nil = inherit)"`
+	PasskeyEnabled   *bool    `json:"passkey_enabled,omitempty" description:"Enable passkey auth (nil = inherit)"`
+	MagicLinkEnabled *bool    `json:"magic_link_enabled,omitempty" description:"Enable magic link auth (nil = inherit)"`
+	MFAEnabled       *bool    `json:"mfa_enabled,omitempty" description:"Enable MFA (nil = inherit)"`
+	SSOEnabled       *bool    `json:"sso_enabled,omitempty" description:"Enable SSO (nil = inherit)"`
+	SocialEnabled    *bool    `json:"social_enabled,omitempty" description:"Enable social auth (nil = inherit)"`
+	SocialProviders  []string `json:"social_providers,omitempty" description:"Allowed social providers"`
+	MFAMethods       []string `json:"mfa_methods,omitempty" description:"Allowed MFA methods"`
+	AppName          *string  `json:"app_name,omitempty" description:"Branding app name override"`
+	LogoURL          *string  `json:"logo_url,omitempty" description:"Branding logo URL override"`
+}
+
+// DeleteAppClientConfigRequest binds the path for DELETE /admin/apps/:appId/client-config.
+type DeleteAppClientConfigRequest struct {
+	AppID string `path:"appId" description:"Application identifier"`
+}
+
+// ---------------------------------------------------------------------------
+// Public client config requests
+// ---------------------------------------------------------------------------
+
+// GetClientConfigRequest binds query params for GET /client-config.
+type GetClientConfigRequest struct {
+	Key string `query:"key" description:"Publishable key to resolve the app"`
+}

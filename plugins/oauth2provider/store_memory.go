@@ -3,22 +3,25 @@ package oauth2provider
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/xraph/authsome/id"
 )
 
 // MemoryStore is an in-memory implementation of the OAuth2 Store for testing.
 type MemoryStore struct {
-	mu      sync.RWMutex
-	clients map[string]*OAuth2Client  // keyed by ClientID (the OAuth2 client_id string)
-	codes   map[string]*AuthorizationCode // keyed by Code
+	mu          sync.RWMutex
+	clients     map[string]*OAuth2Client      // keyed by ClientID (the OAuth2 client_id string)
+	codes       map[string]*AuthorizationCode // keyed by Code
+	deviceCodes map[string]*DeviceCode        // keyed by DeviceCode
 }
 
 // NewMemoryStore creates a new in-memory OAuth2 store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		clients: make(map[string]*OAuth2Client),
-		codes:   make(map[string]*AuthorizationCode),
+		clients:     make(map[string]*OAuth2Client),
+		codes:       make(map[string]*AuthorizationCode),
+		deviceCodes: make(map[string]*DeviceCode),
 	}
 }
 
@@ -101,3 +104,60 @@ func (s *MemoryStore) ConsumeAuthCode(_ context.Context, code string) error {
 	c.Consumed = true
 	return nil
 }
+
+// ──────────────────────────────────────────────────
+// Device code methods (RFC 8628)
+// ──────────────────────────────────────────────────
+
+func (s *MemoryStore) CreateDeviceCode(_ context.Context, dc *DeviceCode) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deviceCodes[dc.DeviceCode] = dc
+	return nil
+}
+
+func (s *MemoryStore) GetDeviceCodeByDeviceCode(_ context.Context, deviceCode string) (*DeviceCode, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	dc, ok := s.deviceCodes[deviceCode]
+	if !ok {
+		return nil, ErrDeviceCodeNotFound
+	}
+	return dc, nil
+}
+
+func (s *MemoryStore) GetDeviceCodeByUserCode(_ context.Context, userCode string) (*DeviceCode, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, dc := range s.deviceCodes {
+		if dc.UserCode == userCode {
+			return dc, nil
+		}
+	}
+	return nil, ErrDeviceCodeNotFound
+}
+
+func (s *MemoryStore) UpdateDeviceCode(_ context.Context, dc *DeviceCode) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.deviceCodes[dc.DeviceCode]; !ok {
+		return ErrDeviceCodeNotFound
+	}
+	s.deviceCodes[dc.DeviceCode] = dc
+	return nil
+}
+
+func (s *MemoryStore) DeleteExpiredDeviceCodes(_ context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for key, dc := range s.deviceCodes {
+		if now.After(dc.ExpiresAt) {
+			delete(s.deviceCodes, key)
+		}
+	}
+	return nil
+}
+
+// Compile-time interface check.
+var _ Store = (*MemoryStore)(nil)

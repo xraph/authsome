@@ -29,27 +29,43 @@ templ SessionsPage(sessions []*session.Session) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
-								@table.Head() { ID }
-								@table.Head() { User ID }
+								@table.Head() { Session }
+								@table.Head() { User }
 								@table.Head() { IP Address }
 								@table.Head() { User Agent }
-								@table.Head() { Expires }
+								@table.Head() { Status }
 								@table.Head() { Created }
 							}
 						}
 						@table.Body() {
 							for _, s := range sessions {
 								{{ sessionID := truncateString(s.ID.String(), 12) }}
-								{{ userID := truncateString(s.UserID.String(), 12) }}
+								{{ userID := truncateString(s.UserID.String(), 16) }}
 								{{ ua := truncateString(s.UserAgent, 30) }}
-								{{ expires := s.ExpiresAt.Format("Jan 02, 2006 15:04") }}
 								{{ created := s.CreatedAt.Format("Jan 02, 2006 15:04") }}
-								@table.Row() {
+								@table.Row(table.RowProps{
+									Class: "cursor-pointer hover:bg-muted/50",
+									Attributes: templ.Attributes{
+										"hx-get":      "./sessions/detail?id=" + s.ID.String(),
+										"hx-target":   "#content",
+										"hx-push-url": "true",
+										"hx-swap":     "innerHTML",
+									},
+								}) {
 									@table.Cell() {
 										<code class="text-xs">{ sessionID }</code>
 									}
 									@table.Cell() {
-										<code class="text-xs">{ userID }</code>
+										<a
+											class="text-xs font-mono text-primary hover:underline"
+											hx-get={ "./users/detail?id=" + s.UserID.String() }
+											hx-target="#content"
+											hx-push-url="true"
+											hx-swap="innerHTML"
+											onclick="event.stopPropagation()"
+										>
+											{ userID }
+										</a>
 									}
 									@table.Cell() { { s.IPAddress } }
 									@table.Cell() {
@@ -57,7 +73,17 @@ templ SessionsPage(sessions []*session.Session) {
 											{ ua }
 										</span>
 									}
-									@table.Cell() { { expires } }
+									@table.Cell() {
+										if isSessionActive(s) {
+											@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+												Active
+											}
+										} else {
+											@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+												Expired
+											}
+										}
+									}
 									@table.Cell() { { created } }
 								}
 							}

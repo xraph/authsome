@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
 )
@@ -19,7 +21,52 @@ var (
 	_ plugin.RouteProvider         = (*Plugin)(nil)
 	_ plugin.OnInit                = (*Plugin)(nil)
 	_ plugin.AuthMethodContributor = (*Plugin)(nil)
+	_ plugin.SettingsProvider      = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingMinLength controls the minimum password length.
+	SettingMinLength = settings.Define("password.min_length", 8,
+		settings.WithDisplayName("Minimum Password Length"),
+		settings.WithDescription("Minimum number of characters required for passwords"),
+		settings.WithCategory("Password Policy"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(4), Max: intPtr(128)}),
+		settings.WithHelpText("Minimum number of characters required. Default: 8"),
+		settings.WithOrder(10),
+	)
+
+	// SettingRequireSpecial controls whether special characters are required.
+	SettingRequireSpecial = settings.Define("password.require_special", false,
+		settings.WithDisplayName("Require Special Character"),
+		settings.WithDescription("Require at least one special character in passwords"),
+		settings.WithCategory("Password Policy"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, passwords must contain at least one special character"),
+		settings.WithOrder(20),
+	)
+
+	// SettingAllowedDomains restricts signup to specific email domains.
+	SettingAllowedDomains = settings.Define("password.allowed_domains", "",
+		settings.WithDisplayName("Allowed Email Domains"),
+		settings.WithDescription("Comma-separated list of allowed email domains for signup (empty = all allowed)"),
+		settings.WithCategory("Password Policy"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldTextarea),
+		settings.WithPlaceholder("example.com, mycompany.org"),
+		settings.WithHelpText("Leave empty to allow all domains. Separate multiple domains with commas."),
+		settings.WithOrder(30),
+	)
+)
+
+func intPtr(v int) *int { return &v }
 
 // Config configures the password plugin.
 type Config struct {
@@ -52,6 +99,17 @@ func New(cfg ...Config) *Plugin {
 
 // Name returns the plugin name.
 func (p *Plugin) Name() string { return "password" }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "password", SettingMinLength); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "password", SettingRequireSpecial); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "password", SettingAllowedDomains)
+}
 
 // OnBeforeSignUp validates the signup request against the password plugin's rules.
 func (p *Plugin) OnBeforeSignUp(_ context.Context, req *account.SignUpRequest) error {

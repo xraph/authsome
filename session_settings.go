@@ -1,0 +1,212 @@
+package authsome
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/xraph/authsome/formconfig"
+	"github.com/xraph/authsome/settings"
+)
+
+// ──────────────────────────────────────────────────
+// Core session settings (registered as "session" namespace)
+// ──────────────────────────────────────────────────
+
+// Category: Token Lifetimes
+
+var (
+	// SettingTokenTTLSeconds controls the access token lifetime in seconds.
+	SettingTokenTTLSeconds = settings.Define("session.token_ttl_seconds", 3600,
+		settings.WithDisplayName("Access Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of access tokens in seconds"),
+		settings.WithCategory("Token Lifetimes"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(86400)}),
+		settings.WithHelpText("How long access tokens remain valid. Default: 3600 (1 hour)"),
+		settings.WithOrder(10),
+		settings.WithValidation(validateTokenTTL),
+	)
+
+	// SettingRefreshTokenTTLSeconds controls the refresh token lifetime in seconds.
+	SettingRefreshTokenTTLSeconds = settings.Define("session.refresh_token_ttl_seconds", 2592000,
+		settings.WithDisplayName("Refresh Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of refresh tokens in seconds"),
+		settings.WithCategory("Token Lifetimes"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(3600), Max: intPtr(7776000)}),
+		settings.WithHelpText("How long refresh tokens remain valid. Default: 2592000 (30 days)"),
+		settings.WithOrder(20),
+		settings.WithValidation(validateRefreshTokenTTL),
+	)
+)
+
+// Category: Session Behavior
+
+var (
+	// SettingRotateRefreshToken controls whether refresh operations issue a new refresh token.
+	SettingRotateRefreshToken = settings.Define("session.rotate_refresh_token", true,
+		settings.WithDisplayName("Rotate Refresh Token"),
+		settings.WithDescription("Issue a new refresh token on each refresh, invalidating the old one"),
+		settings.WithCategory("Session Behavior"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, each token refresh issues a new refresh token. Prevents replay attacks."),
+		settings.WithOrder(30),
+	)
+
+	// SettingBindToIP controls whether sessions are locked to the originating IP.
+	SettingBindToIP = settings.Define("session.bind_to_ip", false,
+		settings.WithDisplayName("Bind Session to IP"),
+		settings.WithDescription("Reject requests from a different IP than the one that created the session"),
+		settings.WithCategory("Session Behavior"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, sessions are locked to the original client IP address"),
+		settings.WithOrder(40),
+	)
+
+	// SettingBindToDevice controls whether sessions are locked to the originating device.
+	SettingBindToDevice = settings.Define("session.bind_to_device", false,
+		settings.WithDisplayName("Bind Session to Device"),
+		settings.WithDescription("Reject requests from a different device/user-agent than the one that created the session"),
+		settings.WithCategory("Session Behavior"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, sessions are locked to the original device fingerprint or user-agent"),
+		settings.WithOrder(50),
+	)
+
+	// SettingCleanupIntervalSeconds controls how often expired sessions are cleaned up.
+	SettingCleanupIntervalSeconds = settings.Define("session.cleanup_interval_seconds", 3600,
+		settings.WithDisplayName("Cleanup Interval (seconds)"),
+		settings.WithDescription("Interval between expired session cleanup runs"),
+		settings.WithCategory("Session Behavior"),
+		settings.WithScopes(settings.ScopeGlobal),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(86400)}),
+		settings.WithHelpText("How often the engine removes expired sessions. Default: 3600 (1 hour)"),
+		settings.WithOrder(60),
+	)
+)
+
+// Category: Multi-Session
+
+var (
+	// SettingMultiSessionEnabled controls whether users can have multiple concurrent sessions.
+	SettingMultiSessionEnabled = settings.Define("session.multi_session_enabled", true,
+		settings.WithDisplayName("Allow Multiple Sessions"),
+		settings.WithDescription("Whether users can have multiple concurrent sessions"),
+		settings.WithCategory("Multi-Session"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When disabled, signing in from a new device revokes all existing sessions first"),
+		settings.WithOrder(70),
+	)
+
+	// SettingMaxActiveSessions controls the maximum number of concurrent sessions per user.
+	SettingMaxActiveSessions = settings.Define("session.max_active_sessions", 0,
+		settings.WithDisplayName("Maximum Active Sessions"),
+		settings.WithDescription("Maximum concurrent sessions per user. 0 means unlimited."),
+		settings.WithCategory("Multi-Session"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Min: intPtr(0), Max: intPtr(100)}),
+		settings.WithHelpText("When set, oldest sessions are evicted when the limit is reached. 0 = unlimited."),
+		settings.WithOrder(80),
+		settings.WithVisibleWhen("session.multi_session_enabled", true),
+	)
+)
+
+// Category: Auto-Refresh
+
+var (
+	// SettingAutoRefreshEnabled controls whether near-expiry tokens are auto-refreshed in middleware.
+	SettingAutoRefreshEnabled = settings.Define("session.auto_refresh_enabled", false,
+		settings.WithDisplayName("Auto-Refresh Tokens"),
+		settings.WithDescription("Automatically refresh near-expiry access tokens in middleware"),
+		settings.WithCategory("Auto-Refresh"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, the middleware transparently refreshes access tokens approaching expiry and returns new tokens in response headers"),
+		settings.WithOrder(90),
+	)
+
+	// SettingAutoRefreshThresholdSeconds controls the time window before expiry to trigger auto-refresh.
+	SettingAutoRefreshThresholdSeconds = settings.Define("session.auto_refresh_threshold_seconds", 300,
+		settings.WithDisplayName("Auto-Refresh Threshold (seconds)"),
+		settings.WithDescription("Time before expiry to trigger auto-refresh"),
+		settings.WithCategory("Auto-Refresh"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(30), Max: intPtr(3600)}),
+		settings.WithHelpText("Access tokens within this many seconds of expiry will be auto-refreshed. Default: 300 (5 minutes)"),
+		settings.WithOrder(100),
+		settings.WithVisibleWhen("session.auto_refresh_enabled", true),
+	)
+)
+
+// registerCoreSessionSettings registers all core session settings under the "session" namespace.
+func registerCoreSessionSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "session", SettingTokenTTLSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingRefreshTokenTTLSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingRotateRefreshToken); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingBindToIP); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingBindToDevice); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingCleanupIntervalSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingMultiSessionEnabled); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingMaxActiveSessions); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingAutoRefreshEnabled); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "session", SettingAutoRefreshThresholdSeconds)
+}
+
+// intPtr returns a pointer to the given int.
+func intPtr(v int) *int { return &v }
+
+// ──────────────────────────────────────────────────
+// Validators
+// ──────────────────────────────────────────────────
+
+func validateTokenTTL(val json.RawMessage) error {
+	var v int
+	if err := json.Unmarshal(val, &v); err != nil {
+		return fmt.Errorf("invalid value: %w", err)
+	}
+	if v < 60 || v > 86400 {
+		return fmt.Errorf("token TTL must be between 60 and 86400 seconds")
+	}
+	return nil
+}
+
+func validateRefreshTokenTTL(val json.RawMessage) error {
+	var v int
+	if err := json.Unmarshal(val, &v); err != nil {
+		return fmt.Errorf("invalid value: %w", err)
+	}
+	if v < 3600 || v > 7776000 {
+		return fmt.Errorf("refresh token TTL must be between 3600 and 7776000 seconds")
+	}
+	return nil
+}

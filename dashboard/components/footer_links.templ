@@ -1,0 +1,17 @@
+package components
+
+import (
+	"github.com/xraph/forgeui/components/sidebar"
+	"github.com/xraph/forgeui/icons"
+)
+
+// FooterAPIDocsLink renders an API Docs link for the sidebar footer.
+templ FooterAPIDocsLink(href string) {
+	@sidebar.MenuButton(sidebar.MenuButtonProps{
+		Href:    href,
+		Tooltip: "API Documentation",
+	}) {
+		@icons.FileText(icons.WithSize(16))
+		<span>API Docs</span>
+	}
+}

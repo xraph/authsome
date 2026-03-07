@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/a-h/templ"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugins/organization/dashui"
 )
 
@@ -78,7 +80,7 @@ func (p *Plugin) DashboardNavItems() []contributor.NavItem {
 func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params contributor.Params) (templ.Component, error) {
 	switch route {
 	case "/organizations":
-		return p.renderOrgList(ctx)
+		return p.renderOrgList(ctx, params)
 	case "/organizations/detail":
 		return p.renderOrgDetail(ctx, params)
 	default:
@@ -90,17 +92,68 @@ func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params c
 // Dashboard render helpers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) renderOrgList(ctx context.Context) (templ.Component, error) {
+func (p *Plugin) renderOrgList(ctx context.Context, params contributor.Params) (templ.Component, error) {
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
 		appID, _ = id.ParseAppID(p.defaultAppID)
 	}
+
+	var data dashui.OrgsPageData
+
+	// Handle form actions (POST).
+	action := params.FormData["action"]
+	switch action {
+	case "create":
+		nonce := params.FormData["nonce"]
+		if dashboard.ConsumeNonce(nonce) {
+			data.CreatedOrg, data.Error = p.handleDashboardCreateOrg(ctx, appID, params)
+		}
+	}
+
+	// Generate a fresh nonce for the next form render.
+	data.FormNonce = dashboard.GenerateNonce()
+
 	orgs, err := p.AdminListOrganizations(ctx, appID)
 	if err != nil {
 		orgs = nil
 	}
+	data.Orgs = orgs
 
-	return dashui.OrganizationsPage(orgs), nil
+	return dashui.OrganizationsPage(data), nil
+}
+
+// handleDashboardCreateOrg creates a new organization from form data.
+func (p *Plugin) handleDashboardCreateOrg(ctx context.Context, appID id.AppID, params contributor.Params) (*organization.Organization, string) {
+	name := strings.TrimSpace(params.FormData["name"])
+	slug := strings.TrimSpace(params.FormData["slug"])
+	logo := strings.TrimSpace(params.FormData["logo"])
+
+	if name == "" || slug == "" {
+		return nil, "Name and slug are required."
+	}
+
+	// Check slug availability.
+	available, err := p.IsOrgSlugAvailable(ctx, appID, slug)
+	if err != nil {
+		return nil, fmt.Sprintf("Failed to check slug availability: %v", err)
+	}
+	if !available {
+		return nil, fmt.Sprintf("Slug %q is already in use. Please choose a different one.", slug)
+	}
+
+	org := &organization.Organization{
+		ID:    id.NewOrgID(),
+		AppID: appID,
+		Name:  name,
+		Slug:  slug,
+		Logo:  logo,
+	}
+
+	if err := p.CreateOrganization(ctx, org); err != nil {
+		return nil, fmt.Sprintf("Failed to create organization: %v", err)
+	}
+
+	return org, ""
 }
 
 func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params) (templ.Component, error) {

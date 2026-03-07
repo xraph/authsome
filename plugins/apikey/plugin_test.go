@@ -26,9 +26,11 @@ import (
 // mockEngine provides the interfaces that apikey.Plugin.OnInit expects.
 type mockEngine struct {
 	logger log.Logger
+	store  apikey.Store
 }
 
-func (m *mockEngine) Logger() log.Logger { return m.logger }
+func (m *mockEngine) Logger() log.Logger          { return m.logger }
+func (m *mockEngine) APIKeyStore() apikey.Store    { return m.store }
 func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {
@@ -39,7 +41,9 @@ func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
 
 func newTestPlugin(cfg ...apikeyPlugin.Config) (*apikeyPlugin.Plugin, *memoryStore.Store) {
 	s := memoryStore.New()
-	return apikeyPlugin.New(s, cfg...), s
+	p := apikeyPlugin.New(cfg...)
+	p.SetStore(s)
+	return p, s
 }
 
 func TestPlugin_Name(t *testing.T) {
@@ -104,12 +108,23 @@ func TestPlugin_CreateKey(t *testing.T) {
 	assert.NotEmpty(t, resp["id"])
 	assert.NotEmpty(t, resp["key"])
 	assert.NotEmpty(t, resp["key_prefix"])
+	assert.NotEmpty(t, resp["public_key"])
+	assert.NotEmpty(t, resp["public_key_prefix"])
 	assert.Equal(t, "Test Key", resp["name"])
 
-	// The raw key should start with ask_
-	rawKey := resp["key"].(string)
-	assert.True(t, len(rawKey) > 12, "raw key should be at least 12 chars")
-	assert.Equal(t, "ask_", rawKey[:4])
+	// The secret key should be recognized as a secret key (sk_* or ask_)
+	secretKey := resp["key"].(string)
+	assert.True(t, apikey.IsSecretKey(secretKey), "key should be a secret key, got: %s", secretKey)
+	assert.True(t, len(secretKey) > 12, "secret key should be at least 12 chars")
+
+	// The public key should be recognized as a public key (pk_*)
+	publicKey := resp["public_key"].(string)
+	assert.True(t, apikey.IsPublicKey(publicKey), "public_key should be a public key, got: %s", publicKey)
+	assert.True(t, len(publicKey) > 12, "public key should be at least 12 chars")
+
+	// Prefixes should match
+	publicKeyPrefix := resp["public_key_prefix"].(string)
+	assert.True(t, len(publicKeyPrefix) > 0, "public_key_prefix should not be empty")
 }
 
 func TestPlugin_CreateKey_ValidationErrors(t *testing.T) {
@@ -323,7 +338,7 @@ func TestPlugin_Strategy_NotApplicable(t *testing.T) {
 
 func TestPlugin_Strategy_Authenticate(t *testing.T) {
 	p, store := newTestPlugin()
-	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger()}))
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store}))
 	s := p.Strategy()
 
 	appID := id.NewAppID()
@@ -357,7 +372,7 @@ func TestPlugin_Strategy_Authenticate(t *testing.T) {
 
 func TestPlugin_Strategy_Authenticate_XAPIKey(t *testing.T) {
 	p, store := newTestPlugin()
-	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger()}))
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store}))
 	s := p.Strategy()
 
 	appID := id.NewAppID()
@@ -471,6 +486,61 @@ func TestPlugin_Strategy_Authenticate_ExpiredKey(t *testing.T) {
 	_, err = s.Authenticate(context.Background(), req)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "revoked or expired")
+}
+
+func TestPlugin_Strategy_Authenticate_RejectsPublicKey(t *testing.T) {
+	p, store := newTestPlugin()
+	require.NoError(t, p.OnInit(context.Background(), &mockEngine{logger: log.NewNoopLogger(), store: store}))
+	s := p.Strategy()
+
+	appID := id.NewAppID()
+	userID := id.NewUserID()
+
+	publicKey, secretKey, secretHash, publicPrefix, secretPrefix, err := apikey.GenerateKeyPair()
+	require.NoError(t, err)
+	_ = secretKey
+
+	now := time.Now()
+	err = store.CreateAPIKey(context.Background(), &apikey.APIKey{
+		ID: id.NewAPIKeyID(), AppID: appID, UserID: userID,
+		Name: "KeyPair Test", KeyHash: secretHash, KeyPrefix: secretPrefix,
+		PublicKey: publicKey, PublicKeyPrefix: publicPrefix,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+
+	// Attempting to authenticate with a public key should fail
+	req := httptest.NewRequest("GET", "/api/data", nil)
+	req.Header.Set("Authorization", "Bearer "+publicKey)
+	req.Header.Set("X-App-ID", appID.String())
+
+	_, err = s.Authenticate(context.Background(), req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "public key")
+}
+
+func TestAPIKey_GenerateKeyPair(t *testing.T) {
+	publicKey, secretKey, secretHash, publicPrefix, secretPrefix, err := apikey.GenerateKeyPair()
+	require.NoError(t, err)
+
+	assert.True(t, apikey.IsPublicKey(publicKey), "public key should start with pk_")
+	assert.True(t, apikey.IsSecretKey(secretKey), "secret key should start with sk_")
+	assert.NotEmpty(t, secretHash)
+	assert.NotEmpty(t, publicPrefix)
+	assert.NotEmpty(t, secretPrefix)
+
+	// Secret key should verify against its hash
+	assert.True(t, apikey.VerifyKey(secretKey, secretHash))
+	assert.False(t, apikey.VerifyKey(publicKey, secretHash), "public key should not match secret hash")
+
+	// Detect environment types
+	envType, ok := apikey.DetectEnvironmentType(publicKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, envType)
+
+	envType, ok = apikey.DetectEnvironmentType(secretKey)
+	assert.True(t, ok)
+	assert.NotEmpty(t, envType)
 }
 
 func TestAPIKey_GenerateKey(t *testing.T) {

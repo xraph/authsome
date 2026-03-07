@@ -8,6 +8,7 @@ import (
 	"fmt"
 	log "github.com/xraph/go-utils/log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -16,9 +17,11 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 
@@ -35,7 +38,71 @@ var (
 	_ plugin.MigrationProvider     = (*Plugin)(nil)
 	_ plugin.AuthMethodContributor = (*Plugin)(nil)
 	_ plugin.AuthMethodUnlinker    = (*Plugin)(nil)
+	_ plugin.SettingsProvider      = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingSessionTokenTTLSeconds controls the session token lifetime for social sign-in.
+	SettingSessionTokenTTLSeconds = settings.Define("social.session_token_ttl_seconds", 3600,
+		settings.WithDisplayName("Session Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of sessions created via social sign-in in seconds"),
+		settings.WithCategory("Social OAuth"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(300), Max: intPtr(86400)}),
+		settings.WithHelpText("How long sessions created via social login remain valid. Default: 3600 (1 hour)"),
+		settings.WithOrder(10),
+	)
+
+	// SettingSessionRefreshTTLSeconds controls the refresh token lifetime for social sessions.
+	SettingSessionRefreshTTLSeconds = settings.Define("social.session_refresh_ttl_seconds", 2592000,
+		settings.WithDisplayName("Refresh Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of refresh tokens for social sign-in sessions in seconds"),
+		settings.WithCategory("Social OAuth"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(3600), Max: intPtr(7776000)}),
+		settings.WithHelpText("How long refresh tokens remain valid. Default: 2592000 (30 days)"),
+		settings.WithOrder(20),
+	)
+)
+
+// SocialProviderSetting represents a social provider configured via the dashboard.
+type SocialProviderSetting struct {
+	Name         string   `json:"name"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	RedirectURL  string   `json:"redirect_url"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      bool     `json:"enabled"`
+}
+
+// SettingSocialProviders stores dashboard-configured social providers.
+var SettingSocialProviders = settings.Define("social.providers", []SocialProviderSetting{},
+	settings.WithDisplayName("Social Providers"),
+	settings.WithDescription("Social OAuth providers configured via dashboard"),
+	settings.WithCategory("Social OAuth"),
+	settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+	settings.WithSensitive(),
+	settings.WithOrder(30),
+)
+
+func intPtr(v int) *int { return &v }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "social", SettingSessionTokenTTLSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "social", SettingSessionRefreshTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "social", SettingSocialProviders)
+}
 
 // Config configures the social OAuth plugin.
 type Config struct {
@@ -62,6 +129,7 @@ type Plugin struct {
 	oauthStore    Store       // OAuth-specific store (for connections)
 	appID         string
 	sessionConfig sessionConfigResolver
+	settingsMgr   *settings.Manager
 
 	chronicle  bridge.Chronicle
 	relay      bridge.EventRelay
@@ -71,21 +139,25 @@ type Plugin struct {
 }
 
 // New creates a new social OAuth plugin.
-func New(cfg Config) *Plugin {
-	if cfg.SessionTokenTTL == 0 {
-		cfg.SessionTokenTTL = 1 * time.Hour
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.SessionRefreshTTL == 0 {
-		cfg.SessionRefreshTTL = 30 * 24 * time.Hour
+	if c.SessionTokenTTL == 0 {
+		c.SessionTokenTTL = 1 * time.Hour
+	}
+	if c.SessionRefreshTTL == 0 {
+		c.SessionRefreshTTL = 30 * 24 * time.Hour
 	}
 
-	providers := make(map[string]Provider, len(cfg.Providers))
-	for _, p := range cfg.Providers {
+	providers := make(map[string]Provider, len(c.Providers))
+	for _, p := range c.Providers {
 		providers[p.Name()] = p
 	}
 
 	return &Plugin{
-		config:     cfg,
+		config:     c,
 		providers:  providers,
 		ceremonies: ceremony.NewMemory(),
 	}
@@ -145,6 +217,13 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 		p.sessionConfig = scr
 	}
 
+	type settingsGetter interface {
+		Settings() *settings.Manager
+	}
+	if sg, ok := engine.(settingsGetter); ok {
+		p.settingsMgr = sg.Settings()
+	}
+
 	return nil
 }
 
@@ -175,13 +254,132 @@ func (p *Plugin) SetAppID(appID string) {
 	p.appID = appID
 }
 
-// Providers returns the list of configured provider names.
+// Providers returns the list of all active provider names (code + DB).
 func (p *Plugin) Providers() []string {
-	names := make([]string, 0, len(p.providers))
-	for name := range p.providers {
-		names = append(names, name)
+	return p.allProviderNames(context.Background())
+}
+
+// resolveProvider resolves a provider by name. Code-configured providers
+// take precedence over dashboard-configured ones.
+func (p *Plugin) resolveProvider(ctx context.Context, name string) (Provider, bool) {
+	// Code providers always win.
+	if prov, ok := p.providers[name]; ok {
+		return prov, true
 	}
-	return names
+	// Check DB-configured providers.
+	dbProviders := p.loadDBProviderSettings(ctx)
+	for _, s := range dbProviders {
+		if s.Name == name && s.Enabled {
+			prov := providerFromSetting(s)
+			if prov != nil {
+				return prov, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// loadDBProviderSettings reads dynamic providers from the settings store.
+func (p *Plugin) loadDBProviderSettings(ctx context.Context) []SocialProviderSetting {
+	if p.settingsMgr == nil {
+		return nil
+	}
+	providers, err := settings.Get(ctx, p.settingsMgr, SettingSocialProviders, settings.ResolveOpts{})
+	if err != nil {
+		return nil
+	}
+	return providers
+}
+
+// saveDBProviderSettings writes dynamic providers to the settings store.
+func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []SocialProviderSetting) error {
+	if p.settingsMgr == nil {
+		return fmt.Errorf("social: settings manager not available")
+	}
+	raw, err := json.Marshal(providers)
+	if err != nil {
+		return err
+	}
+	return p.settingsMgr.Set(ctx, SettingSocialProviders.Def.Key, raw,
+		settings.ScopeGlobal, "", "", "", "dashboard")
+}
+
+// providerFromSetting creates a Provider from a SocialProviderSetting.
+func providerFromSetting(s SocialProviderSetting) Provider {
+	cfg := ProviderConfig{
+		ClientID:     s.ClientID,
+		ClientSecret: s.ClientSecret,
+		RedirectURL:  s.RedirectURL,
+		Scopes:       s.Scopes,
+	}
+	switch strings.ToLower(s.Name) {
+	case "google":
+		return NewGoogleProvider(cfg)
+	case "github":
+		return NewGitHubProvider(cfg)
+	case "apple":
+		return NewAppleProvider(cfg)
+	case "microsoft":
+		return NewMicrosoftProvider(cfg)
+	case "facebook":
+		return NewFacebookProvider(cfg)
+	case "linkedin":
+		return NewLinkedInProvider(cfg)
+	case "discord":
+		return NewDiscordProvider(cfg)
+	case "slack":
+		return NewSlackProvider(cfg)
+	case "twitter":
+		return NewTwitterProvider(cfg)
+	case "spotify":
+		return NewSpotifyProvider(cfg)
+	case "twitch":
+		return NewTwitchProvider(cfg)
+	case "gitlab":
+		return NewGitLabProvider(cfg)
+	case "bitbucket":
+		return NewBitbucketProvider(cfg)
+	case "dropbox":
+		return NewDropboxProvider(cfg)
+	case "yahoo":
+		return NewYahooProvider(cfg)
+	case "amazon":
+		return NewAmazonProvider(cfg)
+	case "zoom":
+		return NewZoomProvider(cfg)
+	case "pinterest":
+		return NewPinterestProvider(cfg)
+	case "strava":
+		return NewStravaProvider(cfg)
+	case "patreon":
+		return NewPatreonProvider(cfg)
+	case "instagram":
+		return NewInstagramProvider(cfg)
+	case "line":
+		return NewLineProvider(cfg)
+	default:
+		return nil
+	}
+}
+
+// allProviderNames returns names of all providers (code + enabled DB).
+func (p *Plugin) allProviderNames(ctx context.Context) []string {
+	names := make(map[string]struct{})
+	for name := range p.providers {
+		names[name] = struct{}{}
+	}
+	dbProviders := p.loadDBProviderSettings(ctx)
+	for _, s := range dbProviders {
+		if s.Enabled {
+			names[s.Name] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 // RegisterRoutes registers social OAuth HTTP endpoints on a forge.Router.
@@ -248,7 +446,7 @@ type CallbackResponse struct {
 
 // handleStart initiates the OAuth flow by returning the authorization URL.
 func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartResponse, error) {
-	provider, ok := p.providers[req.Provider]
+	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
 	}
@@ -271,7 +469,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 // handleCallback processes the OAuth callback, exchanges the code for a token,
 // fetches the user profile, and either links to an existing user or creates a new one.
 func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*CallbackResponse, error) {
-	provider, ok := p.providers[req.Provider]
+	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
 	}
@@ -466,8 +664,8 @@ func (p *Plugin) ListUserAuthMethods(ctx context.Context, userID id.UserID) ([]*
 
 // CanUnlink implements plugin.AuthMethodUnlinker.
 // It returns true if the given provider is one managed by this plugin.
-func (p *Plugin) CanUnlink(_ context.Context, _ id.UserID, provider string) bool {
-	_, ok := p.providers[provider]
+func (p *Plugin) CanUnlink(ctx context.Context, _ id.UserID, provider string) bool {
+	_, ok := p.resolveProvider(ctx, provider)
 	return ok
 }
 

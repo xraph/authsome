@@ -8,16 +8,81 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin          = (*Plugin)(nil)
-	_ plugin.OnInit          = (*Plugin)(nil)
-	_ plugin.AfterSignUp     = (*Plugin)(nil)
-	_ plugin.AfterUserCreate = (*Plugin)(nil)
+	_ plugin.Plugin           = (*Plugin)(nil)
+	_ plugin.OnInit           = (*Plugin)(nil)
+	_ plugin.AfterSignUp      = (*Plugin)(nil)
+	_ plugin.AfterUserCreate  = (*Plugin)(nil)
+	_ plugin.SettingsProvider = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingAppName controls the application name used in notification templates.
+	SettingAppName = settings.Define("notification.app_name", "AuthSome",
+		settings.WithDisplayName("Application Name"),
+		settings.WithDescription("Application name used in notification templates"),
+		settings.WithCategory("Notifications"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("My App"),
+		settings.WithHelpText("Used in notification templates for branding"),
+		settings.WithOrder(10),
+	)
+
+	// SettingBaseURL controls the application root URL for notification links.
+	SettingBaseURL = settings.Define("notification.base_url", "",
+		settings.WithDisplayName("Base URL"),
+		settings.WithDescription("Application root URL for building links in notifications"),
+		settings.WithCategory("Notifications"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("https://example.com"),
+		settings.WithHelpText("Used to build action links in notifications"),
+		settings.WithOrder(20),
+	)
+
+	// SettingDefaultLocale controls the default locale for notifications.
+	SettingDefaultLocale = settings.Define("notification.default_locale", "en",
+		settings.WithDisplayName("Default Locale"),
+		settings.WithDescription("Default locale for notification templates"),
+		settings.WithCategory("Notifications"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("en"),
+		settings.WithHelpText("Language/locale for notification content. Default: en"),
+		settings.WithOrder(30),
+	)
+
+	// SettingAsync controls whether notifications are sent asynchronously.
+	SettingAsync = settings.Define("notification.async", false,
+		settings.WithDisplayName("Async Delivery"),
+		settings.WithDescription("Send notifications asynchronously via dispatch queue"),
+		settings.WithCategory("Notifications"),
+		settings.WithScopes(settings.ScopeGlobal),
+		settings.WithHelpText("When enabled, notifications are queued for async delivery"),
+		settings.WithOrder(40),
+	)
+)
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "notification", SettingAppName); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "notification", SettingBaseURL); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "notification", SettingDefaultLocale); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "notification", SettingAsync)
+}
 
 // Plugin is the Herald-backed notification plugin. It replaces the legacy
 // email plugin with a unified multi-channel notification system.

@@ -59,6 +59,10 @@ type SessionConfig struct {
 	// BindToDevice rejects requests when the User-Agent differs from
 	// the one recorded at session creation. Default: false.
 	BindToDevice bool `json:"bind_to_device"`
+
+	// CleanupInterval is the interval at which expired sessions are
+	// automatically purged. 0 = disabled.
+	CleanupInterval time.Duration `json:"cleanup_interval"`
 }
 
 // ShouldRotateRefreshToken returns whether refresh token rotation is enabled.

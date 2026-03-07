@@ -1,0 +1,300 @@
+package pages
+
+import (
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	switchcomp "github.com/xraph/forgeui/components/switch"
+	"github.com/xraph/forgeui/components/tabs"
+	"github.com/xraph/forgeui/components/textarea"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ SettingsEditorPage(data SettingsEditorData) {
+	@settingsEditorScript(data.BasePath, data.Scope, data.AppID, data.OrgID)
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div>
+				<h1 class="text-3xl font-bold tracking-tight">Plugin Settings</h1>
+				<p class="text-muted-foreground mt-1">
+					Configure plugin settings. Changes are saved per scope.
+				</p>
+			</div>
+			<div class="flex items-center gap-3">
+				<!-- Scope selector -->
+				<div class="flex items-center gap-2 text-sm">
+					<span class="text-muted-foreground">Scope:</span>
+					<select
+						id="settings-scope-select"
+						class="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+						onchange="handleScopeChange(this.value)"
+					>
+						<option value="global" selected?={ data.Scope == "global" }>Global</option>
+						if data.AppID != "" {
+							<option value="app" selected?={ data.Scope == "app" }>This Application</option>
+						}
+						if data.OrgID != "" {
+							<option value="org" selected?={ data.Scope == "org" }>Organization</option>
+						}
+					</select>
+				</div>
+			</div>
+		</div>
+
+		if len(data.Namespaces) == 0 {
+			@card.Card() {
+				@card.Content() {
+					<div class="flex flex-col items-center justify-center py-12 text-center">
+						@icons.Settings(icons.WithSize(48), icons.WithClass("text-muted-foreground mb-4"))
+						<h3 class="text-lg font-semibold">No Plugin Settings</h3>
+						<p class="text-muted-foreground mt-1 max-w-sm">
+							No plugins have registered configurable settings. Settings will appear here when plugins declare them.
+						</p>
+					</div>
+				}
+			}
+		} else {
+			<!-- Namespace tabs -->
+			@tabs.Tabs(tabs.Props{ID: "settings-ns-tabs"}) {
+				@tabs.List(tabs.ListProps{Class: "mb-4"}) {
+					for i, ns := range data.Namespaces {
+						@tabs.Trigger(tabs.TriggerProps{
+							Value:    ns.Name,
+							IsActive: i == 0,
+						}) {
+							{ NamespaceDisplayName(ns.Name) }
+						}
+					}
+				}
+				for i, ns := range data.Namespaces {
+					@tabs.Content(tabs.ContentProps{
+						Value:    ns.Name,
+						IsActive: i == 0,
+					}) {
+						<div class="space-y-6">
+							for _, cat := range ns.Categories {
+								@settingsCategoryCard(cat, data.Scope, data.AppID, data.OrgID)
+							}
+						</div>
+					}
+				}
+			}
+			@tabs.Script()
+		}
+
+		<!-- Toast notification -->
+		<div id="settings-toast" class="fixed bottom-4 right-4 z-50 hidden">
+			<div class="rounded-lg border bg-background px-4 py-3 shadow-lg">
+				<div class="flex items-center gap-2">
+					<span id="settings-toast-icon"></span>
+					<span id="settings-toast-message" class="text-sm font-medium"></span>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ SettingsEditorEmpty() {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Plugin Settings</h1>
+			<p class="text-muted-foreground mt-1">Configure plugin settings.</p>
+		</div>
+		@card.Card() {
+			@card.Content() {
+				<div class="flex flex-col items-center justify-center py-12 text-center">
+					@icons.Settings(icons.WithSize(48), icons.WithClass("text-muted-foreground mb-4"))
+					<h3 class="text-lg font-semibold">Settings Not Available</h3>
+					<p class="text-muted-foreground mt-1 max-w-sm">
+						The settings manager is not enabled. Settings require a database store to be configured.
+					</p>
+				</div>
+			}
+		}
+	</div>
+}
+
+templ settingsCategoryCard(cat SettingsCategory, scope string, appID string, orgID string) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				{ cat.Name }
+			}
+		}
+		@card.Content() {
+			<form
+				class="space-y-6"
+				data-settings-form
+				onsubmit="return handleSettingsSubmit(event)"
+			>
+				<input type="hidden" name="_scope" value={ scope }/>
+				<input type="hidden" name="_app_id" value={ appID }/>
+				<input type="hidden" name="_org_id" value={ orgID }/>
+				for _, field := range cat.Settings {
+					@settingsFieldRenderer(field)
+				}
+				<div class="flex items-center justify-end gap-2 pt-2 border-t">
+					@button.Button(button.Props{
+						Type:    button.TypeSubmit,
+						Size:    button.SizeSm,
+					}) {
+						@icons.Save(icons.WithSize(16))
+						Save Changes
+					}
+				</div>
+			</form>
+		}
+	}
+}
+
+templ settingsFieldRenderer(field SettingsField) {
+	<div
+		class="space-y-2"
+		data-setting-key={ field.Key }
+		data-setting-type={ field.ValueType }
+	>
+		<!-- Label row with badges -->
+		<div class="flex items-center gap-2">
+			<label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" for={ fieldID(field.Key) }>
+				{ field.DisplayName }
+			</label>
+			if field.IsOverridden {
+				@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "text-xs"}) {
+					Customized
+				}
+			}
+			if field.IsEnforced {
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary, Class: "text-xs"}) {
+					Enforced
+				}
+			}
+			if field.IsOverridden && !field.IsEnforced {
+				<button
+					type="button"
+					class="text-xs text-muted-foreground hover:text-foreground underline"
+					onclick={ resetSettingScript(field.Key) }
+				>
+					Reset to default
+				</button>
+			}
+		</div>
+		<!-- Field input -->
+		if field.InputType == "switch" {
+			@settingsSwitch(field)
+		} else if field.InputType == "number" {
+			@settingsNumber(field)
+		} else if field.InputType == "select" {
+			@settingsSelect(field)
+		} else if field.InputType == "textarea" {
+			@settingsTextarea(field)
+		} else {
+			@settingsText(field)
+		}
+		<!-- Help text -->
+		if field.HelpText != "" {
+			<p class="text-xs text-muted-foreground">{ field.HelpText }</p>
+		}
+		if field.DefaultValue != "" && field.DefaultValue != field.EffectiveValue {
+			<p class="text-xs text-muted-foreground">
+				Default: { field.DefaultValue }
+			</p>
+		}
+	</div>
+}
+
+templ settingsSwitch(field SettingsField) {
+	<div class="flex items-center gap-3">
+		@switchcomp.Switch(switchcomp.Props{
+			ID:       fieldID(field.Key),
+			Name:     field.Key,
+			Value:    "true",
+			Checked:  field.EffectiveValue == "true",
+			Disabled: !field.CanOverride || field.ReadOnly,
+		})
+		<span class="text-sm text-muted-foreground">
+			if field.EffectiveValue == "true" {
+				Enabled
+			} else {
+				Disabled
+			}
+		</span>
+	</div>
+}
+
+templ settingsNumber(field SettingsField) {
+	@input.Input(input.Props{
+		ID:          fieldID(field.Key),
+		Name:        field.Key,
+		Type:        input.TypeNumber,
+		Value:       field.EffectiveValue,
+		Placeholder: field.Placeholder,
+		Disabled:    !field.CanOverride || field.ReadOnly,
+		Attributes:  numberAttributes(field),
+	})
+}
+
+templ settingsSelect(field SettingsField) {
+	<select
+		id={ fieldID(field.Key) }
+		name={ field.Key }
+		class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+		disabled?={ !field.CanOverride || field.ReadOnly }
+	>
+		for _, opt := range field.Options {
+			<option
+				value={ opt.Value }
+				selected?={ opt.Value == field.EffectiveValue }
+			>
+				{ opt.Label }
+			</option>
+		}
+	</select>
+}
+
+templ settingsTextarea(field SettingsField) {
+	@textarea.Textarea(textarea.Props{
+		ID:          fieldID(field.Key),
+		Name:        field.Key,
+		Value:       field.EffectiveValue,
+		Placeholder: field.Placeholder,
+		Rows:        3,
+		Disabled:    !field.CanOverride || field.ReadOnly,
+	})
+	if field.ValueType == "array" {
+		<p class="text-xs text-muted-foreground">One value per line</p>
+	}
+}
+
+templ settingsText(field SettingsField) {
+	@input.Input(input.Props{
+		ID:          fieldID(field.Key),
+		Name:        field.Key,
+		Type:        input.TypeText,
+		Value:       field.EffectiveValue,
+		Placeholder: field.Placeholder,
+		Disabled:    !field.CanOverride || field.ReadOnly,
+	})
+}
+
+script resetSettingScript(key string) {
+	resetSetting(key)
+}
+
+func fieldID(key string) string {
+	return "setting-" + key
+}
+
+func numberAttributes(field SettingsField) templ.Attributes {
+	attrs := templ.Attributes{}
+	if field.Validation != nil {
+		if field.Validation.Min != nil {
+			attrs["min"] = *field.Validation.Min
+		}
+		if field.Validation.Max != nil {
+			attrs["max"] = *field.Validation.Max
+		}
+	}
+	return attrs
+}

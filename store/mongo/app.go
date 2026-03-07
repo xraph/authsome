@@ -59,6 +59,24 @@ func (s *Store) GetAppBySlug(ctx context.Context, slug string) (*app.App, error)
 	return fromAppModel(&m)
 }
 
+// GetAppByPublishableKey returns an app by its publishable key.
+func (s *Store) GetAppByPublishableKey(ctx context.Context, key string) (*app.App, error) {
+	var m appModel
+
+	err := s.mdb.NewFind(&m).
+		Filter(bson.M{"publishable_key": key}).
+		Scan(ctx)
+	if err != nil {
+		if isNoDocuments(err) {
+			return nil, store.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("authsome/mongo: get app by publishable key: %w", err)
+	}
+
+	return fromAppModel(&m)
+}
+
 // UpdateApp modifies an existing app.
 func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 	m := toAppModel(a)

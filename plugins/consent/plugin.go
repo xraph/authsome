@@ -39,16 +39,12 @@ type Plugin struct {
 	roleChecker middleware.RoleChecker
 }
 
-// New creates a new consent plugin with an optional store. If no store is
-// provided, an in-memory store is used.
-func New(stores ...Store) *Plugin {
-	p := &Plugin{}
-	if len(stores) > 0 {
-		p.store = stores[0]
-	} else {
-		p.store = NewMemoryStore()
+// New creates a new consent plugin. An in-memory consent store is used by
+// default. Use SetConsentStore to inject a persistent store.
+func New() *Plugin {
+	return &Plugin{
+		store: NewMemoryStore(),
 	}
-	return p
 }
 
 // Name returns the plugin name.
@@ -71,17 +67,44 @@ func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 
 // OnInit captures engine capabilities.
 func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	e, ok := engine.(*authsome.Engine)
-	if !ok {
-		return fmt.Errorf("consent: expected *authsome.Engine, got %T", engine)
+	type hooksGetter interface {
+		Hooks() *hook.Bus
+	}
+	if hg, ok := engine.(hooksGetter); ok {
+		p.hooks = hg.Hooks()
 	}
 
-	p.hooks = e.Hooks()
-	p.relay = e.Relay()
-	p.chronicle = e.Chronicle()
-	p.logger = e.Logger()
-	p.basePath = e.Config().BasePath
-	p.roleChecker = e
+	type relayGetter interface {
+		Relay() bridge.EventRelay
+	}
+	if rg, ok := engine.(relayGetter); ok {
+		p.relay = rg.Relay()
+	}
+
+	type chronicleGetter interface {
+		Chronicle() bridge.Chronicle
+	}
+	if cg, ok := engine.(chronicleGetter); ok {
+		p.chronicle = cg.Chronicle()
+	}
+
+	type loggerGetter interface {
+		Logger() log.Logger
+	}
+	if lg, ok := engine.(loggerGetter); ok {
+		p.logger = lg.Logger()
+	}
+
+	type configGetter interface {
+		Config() authsome.Config
+	}
+	if cg, ok := engine.(configGetter); ok {
+		p.basePath = cg.Config().BasePath
+	}
+
+	if rc, ok := engine.(middleware.RoleChecker); ok {
+		p.roleChecker = rc
+	}
 
 	return nil
 }

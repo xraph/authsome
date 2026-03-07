@@ -150,3 +150,26 @@ func (s *Store) ListUserSessions(ctx context.Context, userID id.UserID) ([]*sess
 
 	return result, nil
 }
+
+func (s *Store) ListSessions(ctx context.Context, limit int) ([]*session.Session, error) {
+	var models []sessionModel
+
+	q := s.mdb.NewFind(&models).
+		Sort(bson.D{{Key: "created_at", Value: -1}})
+	if limit > 0 {
+		q = q.Limit(int64(limit))
+	}
+	if err := q.Scan(ctx); err != nil {
+		return nil, fmt.Errorf("authsome/mongo: list sessions: %w", err)
+	}
+
+	result := make([]*session.Session, 0, len(models))
+	for i := range models {
+		sess, err := fromSessionModel(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, sess)
+	}
+	return result, nil
+}

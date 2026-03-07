@@ -5,18 +5,73 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin          = (*Plugin)(nil)
-	_ plugin.OnInit          = (*Plugin)(nil)
-	_ plugin.AfterSignUp     = (*Plugin)(nil)
-	_ plugin.AfterUserCreate = (*Plugin)(nil)
+	_ plugin.Plugin           = (*Plugin)(nil)
+	_ plugin.OnInit           = (*Plugin)(nil)
+	_ plugin.AfterSignUp      = (*Plugin)(nil)
+	_ plugin.AfterUserCreate  = (*Plugin)(nil)
+	_ plugin.SettingsProvider = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingFromAddress controls the default sender email address.
+	SettingFromAddress = settings.Define("email.from_address", "noreply@authsome.local",
+		settings.WithDisplayName("From Address"),
+		settings.WithDescription("Default sender email address for outgoing emails"),
+		settings.WithCategory("Email"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldEmail),
+		settings.WithPlaceholder("noreply@example.com"),
+		settings.WithHelpText("The sender address shown in outgoing emails"),
+		settings.WithOrder(10),
+	)
+
+	// SettingAppName controls the application name used in email templates.
+	SettingAppName = settings.Define("email.app_name", "AuthSome",
+		settings.WithDisplayName("Application Name"),
+		settings.WithDescription("Application name used in email subjects and bodies"),
+		settings.WithCategory("Email"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("My App"),
+		settings.WithHelpText("Used in email templates for branding"),
+		settings.WithOrder(20),
+	)
+
+	// SettingBaseURL controls the application root URL for email links.
+	SettingBaseURL = settings.Define("email.base_url", "",
+		settings.WithDisplayName("Base URL"),
+		settings.WithDescription("Application root URL for building links in emails"),
+		settings.WithCategory("Email"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldURL),
+		settings.WithPlaceholder("https://example.com"),
+		settings.WithHelpText("Used to build verification and action links in emails"),
+		settings.WithOrder(30),
+	)
+)
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "email", SettingFromAddress); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "email", SettingAppName); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "email", SettingBaseURL)
+}
 
 // Config configures the email notification plugin.
 type Config struct {

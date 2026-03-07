@@ -102,14 +102,26 @@ func NewManifest(engine *authsome.Engine, plugins []plugin.Plugin) *contributor.
 // baseNav returns the core navigation items for the authsome dashboard.
 func baseNav() []contributor.NavItem {
 	return []contributor.NavItem{
+		// Authsome
 		{Label: "Overview", Path: "/", Icon: "layout-dashboard", Group: "Authsome", Priority: 0},
-		{Label: "Users", Path: "/users", Icon: "users", Group: "Authsome", Priority: 1},
-		{Label: "Sessions", Path: "/sessions", Icon: "key-round", Group: "Authsome", Priority: 2},
-		{Label: "Devices", Path: "/devices", Icon: "monitor-smartphone", Group: "Authsome", Priority: 3},
-		{Label: "Roles", Path: "/roles", Icon: "shield", Group: "Authsome", Priority: 4},
-		{Label: "Webhooks", Path: "/webhooks", Icon: "webhook", Group: "Authsome", Priority: 5},
-		{Label: "Environments", Path: "/environments", Icon: "globe", Group: "Authsome", Priority: 6},
-		{Label: "Signup Forms", Path: "/signup-forms", Icon: "file-edit", Group: "Authsome", Priority: 7},
+
+		// User Management
+		{Label: "Users", Path: "/users", Icon: "users", Group: "User Management", Priority: 0},
+		{Label: "Sessions", Path: "/sessions", Icon: "key-round", Group: "User Management", Priority: 1},
+		{Label: "Devices", Path: "/devices", Icon: "monitor-smartphone", Group: "User Management", Priority: 2},
+
+		// Access Control
+		{Label: "Roles", Path: "/roles", Icon: "shield", Group: "Access Control", Priority: 0},
+
+		// Configuration
+		{Label: "Settings", Path: "/settings", Icon: "settings", Group: "Configuration", Priority: 0},
+		{Label: "Environments", Path: "/environments", Icon: "globe", Group: "Configuration", Priority: 1},
+		{Label: "Signup Forms", Path: "/signup-forms", Icon: "file-edit", Group: "Configuration", Priority: 2},
+
+		// Developer
+		{Label: "Credentials", Path: "/credentials", Icon: "key", Group: "Developer", Priority: 0},
+		{Label: "Webhooks", Path: "/webhooks", Icon: "webhook", Group: "Developer", Priority: 1},
+		{Label: "Plugins", Path: "/plugins", Icon: "puzzle", Group: "Developer", Priority: 2},
 	}
 }
 

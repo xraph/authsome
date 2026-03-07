@@ -1,14 +1,18 @@
 package components
 
+import "github.com/xraph/forgeui/components/separator"
+
 // PluginSections renders a list of plugin-contributed sections separated by
-// horizontal rules. If sections is empty, nothing is rendered.
+// ForgeUI separators. If sections is empty, nothing is rendered.
 templ PluginSections(sections []templ.Component) {
 	if len(sections) > 0 {
-		for i, section := range sections {
-			if i > 0 {
-				<hr class="my-6 border-border"/>
+		<div class="space-y-8">
+			for i, section := range sections {
+				if i > 0 {
+					@separator.Separator()
+				}
+				@section
 			}
-			@section
-		}
+		</div>
 	}
 }

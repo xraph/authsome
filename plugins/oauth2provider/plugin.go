@@ -47,6 +47,18 @@ type Config struct {
 
 	// AccessTokenTTL is the lifetime of access tokens (default: 1 hour).
 	AccessTokenTTL time.Duration
+
+	// DeviceCodeTTL is the lifetime of device authorization codes (default: 10 minutes).
+	DeviceCodeTTL time.Duration
+
+	// DeviceCodeInterval is the minimum polling interval in seconds (default: 5).
+	DeviceCodeInterval int
+
+	// VerificationURI is the customizable user verification URL for the device flow.
+	// If empty, defaults to "{issuer}/v1/auth/oauth/device".
+	// Set this to a custom URL (e.g. "https://myapp.com/device") when using
+	// an external UI like authsome-ui to host the verification page.
+	VerificationURI string
 }
 
 // sessionConfigResolver resolves per-app session configuration.
@@ -76,6 +88,12 @@ func New(cfg Config) *Plugin {
 	}
 	if cfg.AccessTokenTTL == 0 {
 		cfg.AccessTokenTTL = time.Hour
+	}
+	if cfg.DeviceCodeTTL == 0 {
+		cfg.DeviceCodeTTL = 10 * time.Minute
+	}
+	if cfg.DeviceCodeInterval == 0 {
+		cfg.DeviceCodeInterval = 5
 	}
 	return &Plugin{config: cfg}
 }
@@ -180,6 +198,27 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return err
 	}
 
+	// Device Authorization Grant (RFC 8628)
+	if err := g.POST("/device/authorize", p.handleDeviceAuthorize,
+		forge.WithSummary("Device Authorization"),
+		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
+		forge.WithOperationID("oauth2DeviceAuthorize"),
+		forge.WithResponseSchema(http.StatusOK, "Device authorization response", DeviceAuthResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := g.POST("/device/complete", p.handleDeviceComplete,
+		forge.WithSummary("Complete device authorization"),
+		forge.WithDescription("Approve or deny a device authorization request. Requires authenticated user. Used by external verification UIs (e.g. authsome-ui)."),
+		forge.WithOperationID("oauth2DeviceComplete"),
+		forge.WithResponseSchema(http.StatusOK, "Device completion response", DeviceCompleteResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	// Well-known OIDC discovery
 	if err := router.GET("/.well-known/openid-configuration", p.handleDiscovery,
 		forge.WithSummary("OpenID Connect Discovery"),
@@ -240,6 +279,7 @@ type TokenRequest struct {
 	ClientID     string `json:"client_id,omitempty" form:"client_id"`
 	ClientSecret string `json:"client_secret,omitempty" form:"client_secret"`
 	CodeVerifier string `json:"code_verifier,omitempty" form:"code_verifier"`
+	DeviceCode   string `json:"device_code,omitempty" form:"device_code"`
 }
 
 // RevokeRequest is the OAuth2 revocation request.
@@ -294,6 +334,39 @@ type DeleteClientRequest struct {
 // DeleteClientResponse is the response after deleting a client.
 type DeleteClientResponse struct {
 	Status string `json:"status"`
+}
+
+// DeviceAuthRequest is the device authorization request (RFC 8628 Section 3.1).
+type DeviceAuthRequest struct {
+	ClientID string `json:"client_id" form:"client_id"`
+	Scope    string `json:"scope,omitempty" form:"scope,omitempty"`
+}
+
+// DeviceAuthResponse is the device authorization response (RFC 8628 Section 3.2).
+type DeviceAuthResponse struct {
+	DeviceCode              string `json:"device_code"`
+	UserCode                string `json:"user_code"`
+	VerificationURI         string `json:"verification_uri"`
+	VerificationURIComplete string `json:"verification_uri_complete,omitempty"`
+	ExpiresIn               int    `json:"expires_in"`
+	Interval                int    `json:"interval"`
+}
+
+// DeviceCompleteRequest allows an authenticated user to approve or deny a device code.
+type DeviceCompleteRequest struct {
+	UserCode string `json:"user_code" form:"user_code"`
+	Action   string `json:"action" form:"action"` // "approve" or "deny"
+}
+
+// DeviceCompleteResponse is the response after completing device authorization.
+type DeviceCompleteResponse struct {
+	Status string `json:"status"` // "authorized" or "denied"
+}
+
+// OAuth2Error is an RFC 6749 / RFC 8628 error response.
+type OAuth2Error struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -365,6 +438,8 @@ func (p *Plugin) handleToken(ctx forge.Context, req *TokenRequest) (*TokenRespon
 		return p.handleAuthorizationCodeGrant(ctx, req)
 	case "client_credentials":
 		return p.handleClientCredentialsGrant(ctx, req)
+	case "urn:ietf:params:oauth:grant-type:device_code":
+		return p.handleDeviceCodeGrant(ctx, req)
 	default:
 		return nil, forge.BadRequest("unsupported grant_type")
 	}
@@ -494,9 +569,10 @@ func (p *Plugin) handleDiscovery(ctx forge.Context, _ *DiscoveryRequest) (*map[s
 		"token_endpoint":                        issuer + "/v1/auth/oauth/token",
 		"userinfo_endpoint":                     issuer + "/v1/auth/oauth/userinfo",
 		"revocation_endpoint":                   issuer + "/v1/auth/oauth/revoke",
+		"device_authorization_endpoint":         issuer + "/v1/auth/oauth/device/authorize",
 		"jwks_uri":                              issuer + "/.well-known/jwks.json",
 		"response_types_supported":              []string{"code"},
-		"grant_types_supported":                 []string{"authorization_code", "client_credentials"},
+		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256", "ES256"},
 		"scopes_supported":                      []string{"openid", "profile", "email", "phone"},
@@ -706,6 +782,231 @@ func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client) (*T
 }
 
 // ──────────────────────────────────────────────────
+// Device Authorization Grant (RFC 8628)
+// ──────────────────────────────────────────────────
+
+// deviceCodeGrantType is the full IANA grant type for device authorization.
+const deviceCodeGrantType = "urn:ietf:params:oauth:grant-type:device_code"
+
+func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest) (*DeviceAuthResponse, error) {
+	if req.ClientID == "" {
+		return nil, forge.BadRequest("client_id required")
+	}
+
+	// Validate client.
+	client, err := p.oauth2Store.GetClient(ctx.Context(), req.ClientID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid client_id")
+	}
+
+	// Check that client supports device_code grant type.
+	if !p.clientSupportsGrant(client, deviceCodeGrantType) && !p.clientSupportsGrant(client, "device_code") {
+		return nil, forge.BadRequest("client does not support device authorization grant")
+	}
+
+	// Generate device code (256-bit, hex-encoded).
+	deviceCodeStr, err := generateSecureToken(32)
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: generate device_code: %w", err))
+	}
+
+	// Generate human-readable user code (XXXX-XXXX format).
+	userCodeStr, err := generateUserCode()
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: generate user_code: %w", err))
+	}
+
+	// Compute verification URI.
+	verificationURI := p.config.VerificationURI
+	if verificationURI == "" {
+		issuer := p.config.Issuer
+		if issuer == "" {
+			issuer = "https://localhost"
+		}
+		verificationURI = issuer + "/v1/auth/oauth/device"
+	}
+
+	scopes := strings.Fields(req.Scope)
+
+	dc := &DeviceCode{
+		ID:              id.NewDeviceCodeID(),
+		DeviceCode:      deviceCodeStr,
+		UserCode:        userCodeStr,
+		ClientID:        req.ClientID,
+		AppID:           client.AppID,
+		Scopes:          scopes,
+		VerificationURI: verificationURI,
+		ExpiresAt:       time.Now().Add(p.config.DeviceCodeTTL),
+		Interval:        p.config.DeviceCodeInterval,
+		Status:          DeviceCodeStatusPending,
+		CreatedAt:       time.Now(),
+	}
+
+	if err := p.oauth2Store.CreateDeviceCode(ctx.Context(), dc); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: store device code: %w", err))
+	}
+
+	resp := &DeviceAuthResponse{
+		DeviceCode:              deviceCodeStr,
+		UserCode:                userCodeStr,
+		VerificationURI:         verificationURI,
+		VerificationURIComplete: verificationURI + "?code=" + userCodeStr,
+		ExpiresIn:               int(p.config.DeviceCodeTTL.Seconds()),
+		Interval:                p.config.DeviceCodeInterval,
+	}
+
+	return resp, nil
+}
+
+func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*TokenResponse, error) {
+	if req.DeviceCode == "" {
+		return nil, forge.BadRequest("device_code required")
+	}
+	if req.ClientID == "" {
+		return nil, forge.BadRequest("client_id required")
+	}
+
+	// Look up the device code.
+	dc, err := p.oauth2Store.GetDeviceCodeByDeviceCode(ctx.Context(), req.DeviceCode)
+	if err != nil {
+		// Return standard OAuth2 error JSON with HTTP 400 per RFC 8628.
+		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+			Error:            "invalid_grant",
+			ErrorDescription: "invalid device_code",
+		})
+	}
+
+	// Validate client_id matches.
+	if dc.ClientID != req.ClientID {
+		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+			Error:            "invalid_grant",
+			ErrorDescription: "client_id mismatch",
+		})
+	}
+
+	// Check expiration.
+	if time.Now().After(dc.ExpiresAt) {
+		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+			Error:            "expired_token",
+			ErrorDescription: "the device code has expired",
+		})
+	}
+
+	// RFC 8628 Section 3.5: enforce polling interval (slow_down).
+	now := time.Now()
+	if !dc.LastPolledAt.IsZero() {
+		minNextPoll := dc.LastPolledAt.Add(time.Duration(dc.Interval) * time.Second)
+		if now.Before(minNextPoll) {
+			// Client is polling too fast. Per RFC 8628, increase the interval by 5 seconds.
+			dc.Interval += 5
+			dc.LastPolledAt = now
+			_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc)
+			return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+				Error:            "slow_down",
+				ErrorDescription: "polling too frequently, please slow down",
+			})
+		}
+	}
+	// Record this poll timestamp.
+	dc.LastPolledAt = now
+
+	// Check status.
+	switch dc.Status {
+	case DeviceCodeStatusPending:
+		// Persist the updated LastPolledAt.
+		_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc)
+		// RFC 8628 Section 3.5: authorization_pending is expected during polling.
+		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+			Error:            "authorization_pending",
+			ErrorDescription: "the user has not yet completed authorization",
+		})
+
+	case DeviceCodeStatusDenied:
+		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+			Error:            "access_denied",
+			ErrorDescription: "the user denied the authorization request",
+		})
+
+	case DeviceCodeStatusAuthorized:
+		// Success! Issue tokens.
+		client, err := p.oauth2Store.GetClient(ctx.Context(), dc.ClientID)
+		if err != nil {
+			return nil, forge.InternalError(fmt.Errorf("oauth2: get client for device code: %w", err))
+		}
+
+		// Mark as consumed before issuing tokens (one-time use).
+		// If this update fails, do NOT issue tokens to prevent double-use.
+		dc.Status = DeviceCodeStatusConsumed
+		if err := p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc); err != nil {
+			return nil, forge.InternalError(fmt.Errorf("oauth2: consume device code: %w", err))
+		}
+
+		return p.issueTokens(ctx.Context(), client, dc.UserID, dc.AppID, dc.Scopes)
+
+	default:
+		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
+			Error:            "invalid_grant",
+			ErrorDescription: "unexpected device code status",
+		})
+	}
+}
+
+func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequest) (*DeviceCompleteResponse, error) {
+	if req.UserCode == "" {
+		return nil, forge.BadRequest("user_code required")
+	}
+	if req.Action != "approve" && req.Action != "deny" {
+		return nil, forge.BadRequest("action must be 'approve' or 'deny'")
+	}
+
+	// Require authenticated user.
+	userID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required to complete device authorization")
+	}
+
+	// Look up device code by user code.
+	dc, err := p.oauth2Store.GetDeviceCodeByUserCode(ctx.Context(), req.UserCode)
+	if err != nil {
+		return nil, forge.NotFound("invalid or expired user code")
+	}
+
+	// Check expiration.
+	if time.Now().After(dc.ExpiresAt) {
+		return nil, forge.BadRequest("device code expired")
+	}
+
+	// Must be in pending state.
+	if dc.Status != DeviceCodeStatusPending {
+		return nil, forge.BadRequest("device code already " + dc.Status)
+	}
+
+	// Apply the user's decision.
+	if req.Action == "approve" {
+		dc.Status = DeviceCodeStatusAuthorized
+		dc.UserID = userID
+	} else {
+		dc.Status = DeviceCodeStatusDenied
+	}
+
+	if err := p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("oauth2: update device code: %w", err))
+	}
+
+	return &DeviceCompleteResponse{Status: dc.Status}, nil
+}
+
+// clientSupportsGrant checks if a client has the given grant type registered.
+func (p *Plugin) clientSupportsGrant(client *OAuth2Client, grantType string) bool {
+	for _, gt := range client.GrantTypes {
+		if gt == grantType {
+			return true
+		}
+	}
+	return false
+}
+
+// ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
 
@@ -743,4 +1044,31 @@ func generateSecureToken(length int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// userCodeCharset is a set of unambiguous consonant-like characters for user codes.
+// Excludes vowels (to avoid words), and ambiguous chars (I, L, O, 0, 1).
+const userCodeCharset = "BCDFGHJKMNPQRSTVWXYZ"
+
+// generateUserCode creates a human-readable user code in XXXX-XXXX format.
+// Uses rejection sampling to avoid modulo bias.
+func generateUserCode() (string, error) {
+	const n = len(userCodeCharset) // 20
+	// Accept only random byte values below the largest multiple of n that fits in a byte.
+	// This ensures uniform distribution across the charset.
+	const maxAcceptable = (256 / n) * n // 240
+
+	chars := make([]byte, 0, 8)
+	buf := make([]byte, 1)
+	for len(chars) < 8 {
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
+		if int(buf[0]) < maxAcceptable {
+			chars = append(chars, userCodeCharset[int(buf[0])%n])
+		}
+	}
+
+	// Format: XXXX-XXXX
+	return string(chars[:4]) + "-" + string(chars[4:]), nil
 }

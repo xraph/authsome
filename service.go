@@ -388,6 +388,11 @@ func (e *Engine) ListSessions(ctx context.Context, userID id.UserID) ([]*session
 	return e.store.ListUserSessions(ctx, userID)
 }
 
+// ListAllSessions returns the most recent sessions across all users, up to limit.
+func (e *Engine) ListAllSessions(ctx context.Context, limit int) ([]*session.Session, error) {
+	return e.store.ListSessions(ctx, limit)
+}
+
 // RevokeSession deletes a specific session.
 func (e *Engine) RevokeSession(ctx context.Context, sessionID id.SessionID) error {
 	sess, err := e.store.GetSession(ctx, sessionID)
@@ -824,6 +829,11 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 // ListUserDevices returns all devices for a user.
 func (e *Engine) ListUserDevices(ctx context.Context, userID id.UserID) ([]*device.Device, error) {
 	return e.store.ListUserDevices(ctx, userID)
+}
+
+// ListAllDevices returns the most recent devices across all users, up to limit.
+func (e *Engine) ListAllDevices(ctx context.Context, limit int) ([]*device.Device, error) {
+	return e.store.ListDevices(ctx, limit)
 }
 
 // GetDevice returns a device by ID.

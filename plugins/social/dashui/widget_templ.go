@@ -9,9 +9,15 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"strconv"
+
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/icons"
 )
+
+func lenStr(s []string) string {
+	return strconv.Itoa(len(s))
+}
 
 // ConnectionsWidget displays the social connections summary.
 func ConnectionsWidget(providerNames []string) templ.Component {
@@ -74,7 +80,7 @@ func ConnectionsWidget(providerNames []string) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(lenStr(providerNames))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/widget.templ`, Line: 18, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/widget.templ`, Line: 24, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {

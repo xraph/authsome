@@ -1,9 +1,15 @@
 package dashui
 
 import (
+	"strconv"
+
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/icons"
 )
+
+func lenStr(s []string) string {
+	return strconv.Itoa(len(s))
+}
 
 // ConnectionsWidget displays the social connections summary.
 templ ConnectionsWidget(providerNames []string) {

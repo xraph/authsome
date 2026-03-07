@@ -1,0 +1,239 @@
+package oauth2provider
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/a-h/templ"
+
+	"github.com/xraph/forge/extensions/dashboard/contributor"
+
+	"github.com/xraph/authsome/dashboard"
+	"github.com/xraph/authsome/id"
+	o2dash "github.com/xraph/authsome/plugins/oauth2provider/dashui"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+// Compile-time interface checks.
+var (
+	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
+	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
+)
+
+// ──────────────────────────────────────────────────
+// DashboardPlugin implementation
+// ──────────────────────────────────────────────────
+
+// DashboardWidgets returns OAuth2 provider widgets.
+func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
+	return []dashboard.PluginWidget{
+		{
+			ID:         "oauth2-clients",
+			Title:      "OAuth2 Clients",
+			Size:       "sm",
+			RefreshSec: 60,
+			Render: func(ctx context.Context) templ.Component {
+				return o2dash.ClientsWidget()
+			},
+		},
+	}
+}
+
+// DashboardSettingsPanel returns the OAuth2 provider settings panel.
+func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
+	return o2dash.SettingsPanel(
+		p.config.Issuer,
+		p.config.AuthCodeTTL.String(),
+		p.config.AccessTokenTTL.String(),
+	)
+}
+
+// DashboardPages returns nil — pages are handled via DashboardPageContributor.
+func (p *Plugin) DashboardPages() []dashboard.PluginPage {
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// DashboardPageContributor implementation
+// ──────────────────────────────────────────────────
+
+// DashboardNavItems returns navigation items.
+func (p *Plugin) DashboardNavItems() []contributor.NavItem {
+	return []contributor.NavItem{
+		{
+			Label:    "OAuth2 Clients",
+			Path:     "/oauth2-clients",
+			Icon:     "key-round",
+			Group:    "Developer",
+			Priority: 10,
+		},
+	}
+}
+
+// DashboardRenderPage renders the OAuth2 clients management page.
+func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params contributor.Params) (templ.Component, error) {
+	if route != "/oauth2-clients" {
+		return nil, contributor.ErrPageNotFound
+	}
+	return p.renderClientsPage(ctx, params)
+}
+
+// ──────────────────────────────────────────────────
+// Dashboard render helpers
+// ──────────────────────────────────────────────────
+
+func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Params) (templ.Component, error) {
+	if p.oauth2Store == nil {
+		return o2dash.ClientsPage(o2dash.ClientsPageData{
+			Error: "OAuth2 client store is not configured.",
+		}), nil
+	}
+
+	appID, _ := dashboard.AppIDFromContext(ctx)
+
+	var data o2dash.ClientsPageData
+
+	// Handle form actions (POST).
+	action := params.FormData["action"]
+	switch action {
+	case "create":
+		data.CreatedClient = p.handleDashboardCreateClient(ctx, appID, params)
+		if data.CreatedClient == nil {
+			data.Error = "Failed to create OAuth2 client. Please provide a name."
+		}
+	case "delete":
+		p.handleDashboardDeleteClient(ctx, params)
+	}
+
+	// Fetch all clients for the app.
+	clients, err := p.oauth2Store.ListClients(ctx, appID)
+	if err != nil {
+		clients = nil
+	}
+
+	data.Clients = make([]o2dash.OAuth2ClientView, 0, len(clients))
+	for _, c := range clients {
+		data.Clients = append(data.Clients, o2dash.OAuth2ClientView{
+			ID:           c.ID.String(),
+			Name:         c.Name,
+			ClientID:     c.ClientID,
+			RedirectURIs: c.RedirectURIs,
+			Scopes:       c.Scopes,
+			GrantTypes:   c.GrantTypes,
+			Public:       c.Public,
+			CreatedAt:    c.CreatedAt,
+		})
+	}
+
+	return o2dash.ClientsPage(data), nil
+}
+
+// handleDashboardCreateClient creates a new OAuth2 client from form data.
+func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID, params contributor.Params) *o2dash.CreatedClientView {
+	name := params.FormData["name"]
+	if name == "" {
+		return nil
+	}
+
+	// Parse redirect URIs from textarea (newline-separated).
+	redirectURIsRaw := params.FormData["redirect_uris"]
+	var redirectURIs []string
+	for _, uri := range strings.Split(redirectURIsRaw, "\n") {
+		uri = strings.TrimSpace(uri)
+		if uri != "" {
+			redirectURIs = append(redirectURIs, uri)
+		}
+	}
+
+	// Parse scopes (comma or space separated).
+	scopesRaw := params.FormData["scopes"]
+	var scopes []string
+	for _, s := range strings.FieldsFunc(scopesRaw, func(r rune) bool { return r == ',' || r == ' ' }) {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			scopes = append(scopes, s)
+		}
+	}
+	if len(scopes) == 0 {
+		scopes = []string{"openid", "profile", "email"}
+	}
+
+	// Parse grant types (comma or space separated).
+	grantTypesRaw := params.FormData["grant_types"]
+	var grantTypes []string
+	for _, g := range strings.FieldsFunc(grantTypesRaw, func(r rune) bool { return r == ',' || r == ' ' }) {
+		g = strings.TrimSpace(g)
+		if g != "" {
+			grantTypes = append(grantTypes, g)
+		}
+	}
+	if len(grantTypes) == 0 {
+		grantTypes = []string{"authorization_code"}
+	}
+
+	// Check if public client.
+	isPublic := params.FormData["public"] == "on"
+
+	// Generate client credentials.
+	clientIDStr, err := generateSecureToken(16)
+	if err != nil {
+		return nil
+	}
+
+	var rawSecret string
+	var hashedSecret string
+	if !isPublic {
+		rawSecret, err = generateSecureToken(32)
+		if err != nil {
+			return nil
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
+		if err != nil {
+			return nil
+		}
+		hashedSecret = string(hash)
+	}
+
+	now := time.Now()
+	client := &OAuth2Client{
+		ID:           id.NewOAuth2ClientID(),
+		AppID:        appID,
+		Name:         name,
+		ClientID:     clientIDStr,
+		ClientSecret: hashedSecret,
+		RedirectURIs: redirectURIs,
+		Scopes:       scopes,
+		GrantTypes:   grantTypes,
+		Public:       isPublic,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+
+	if err := p.oauth2Store.CreateClient(ctx, client); err != nil {
+		return nil
+	}
+
+	return &o2dash.CreatedClientView{
+		Name:         name,
+		ClientID:     clientIDStr,
+		ClientSecret: rawSecret,
+		Public:       isPublic,
+	}
+}
+
+// handleDashboardDeleteClient deletes an OAuth2 client from form data.
+func (p *Plugin) handleDashboardDeleteClient(ctx context.Context, params contributor.Params) {
+	clientIDStr := params.FormData["client_id"]
+	if clientIDStr == "" {
+		return
+	}
+
+	clientID, err := id.ParseOAuth2ClientID(clientIDStr)
+	if err != nil {
+		return
+	}
+
+	_ = p.oauth2Store.DeleteClient(ctx, clientID)
+}

@@ -4,31 +4,68 @@ import (
 	"strconv"
 
 	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/components/table"
 )
 
-// ProvidersPage renders the SSO providers overview.
-templ ProvidersPage(providerNames []string) {
+// ProvidersPageData holds all data for the SSO providers management page.
+type ProvidersPageData struct {
+	CodeProviders []string
+	DBConnections []DBConnectionView
+	Error         string
+	Success       string
+	FormNonce     string
+}
+
+// DBConnectionView holds the display data for a database-managed SSO connection.
+type DBConnectionView struct {
+	ID          string
+	Provider    string
+	Protocol    string
+	Domain      string
+	ClientID    string // masked
+	Issuer      string
+	MetadataURL string
+	Active      bool
+}
+
+// ProvidersPage renders the SSO providers management page.
+templ ProvidersPage(data ProvidersPageData) {
 	<div class="space-y-6">
 		<div>
 			<h1 class="text-3xl font-bold tracking-tight">SSO Providers</h1>
 			<p class="text-muted-foreground mt-1">Enterprise single sign-on provider configuration.</p>
 		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		// ── Code-configured providers (read-only) ──
 		@card.Card() {
 			@card.Header() {
 				<div class="flex items-center gap-3">
 					@card.Title() {
-						Providers
+						Code-Configured Providers
 					}
 					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-						{ strconv.Itoa(len(providerNames)) }
+						{ strconv.Itoa(len(data.CodeProviders)) }
 					}
 				</div>
+				@card.Description() {
+					Providers registered in application code (read-only).
+				}
 			}
 			@card.Content() {
-				if len(providerNames) == 0 {
-					<p class="text-sm text-muted-foreground py-4 text-center">No SSO providers configured.</p>
+				if len(data.CodeProviders) == 0 {
+					<p class="text-sm text-muted-foreground py-4 text-center">No code-configured providers.</p>
 				} else {
 					@table.Table() {
 						@table.Header() {
@@ -38,7 +75,7 @@ templ ProvidersPage(providerNames []string) {
 							}
 						}
 						@table.Body() {
-							for _, name := range providerNames {
+							for _, name := range data.CodeProviders {
 								@table.Row() {
 									@table.Cell() {
 										<span class="font-medium">{ name }</span>
@@ -53,6 +90,200 @@ templ ProvidersPage(providerNames []string) {
 						}
 					}
 				}
+			}
+		}
+		// ── Database-managed connections ──
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					@card.Title() {
+						Managed Connections
+					}
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.DBConnections)) }
+					}
+				</div>
+				@card.Description() {
+					SSO connections created from the dashboard.
+				}
+			}
+			@card.Content() {
+				if len(data.DBConnections) == 0 {
+					<p class="text-sm text-muted-foreground py-4 text-center">No managed connections yet.</p>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Provider }
+								@table.Head() { Protocol }
+								@table.Head() { Domain }
+								@table.Head() { Status }
+								@table.Head() { }
+							}
+						}
+						@table.Body() {
+							for _, c := range data.DBConnections {
+								@table.Row() {
+									@table.Cell() {
+										<span class="font-medium">{ c.Provider }</span>
+									}
+									@table.Cell() {
+										<span class="uppercase text-xs">{ c.Protocol }</span>
+									}
+									@table.Cell() {
+										{ c.Domain }
+									}
+									@table.Cell() {
+										if c.Active {
+											@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+												Active
+											}
+										} else {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												Inactive
+											}
+										}
+									}
+									@table.Cell() {
+										<div class="flex items-center gap-2">
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="toggle"/>
+												<input type="hidden" name="conn_id" value={ c.ID }/>
+												<input type="hidden" name="nonce" value={ data.FormNonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantOutline,
+													Size:    button.SizeSm,
+												}) {
+													if c.Active {
+														Disable
+													} else {
+														Enable
+													}
+												}
+											</form>
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="delete"/>
+												<input type="hidden" name="conn_id" value={ c.ID }/>
+												<input type="hidden" name="nonce" value={ data.FormNonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantDestructive,
+													Size:    button.SizeSm,
+												}) {
+													Delete
+												}
+											</form>
+										</div>
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		// ── Add Connection form ──
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Add Connection
+				}
+				@card.Description() {
+					Create a new OIDC or SAML SSO connection.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="add"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1 block">Protocol</label>
+							<select name="protocol" id="sso-protocol-select" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+								<option value="oidc">OIDC</option>
+								<option value="saml">SAML</option>
+							</select>
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1 block">Provider Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "provider",
+								Placeholder: "e.g. okta, azure-ad",
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1 block">Domain</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "domain",
+								Placeholder: "e.g. company.com",
+							})
+						</div>
+					</div>
+					// OIDC-specific fields
+					<div id="oidc-fields" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1 block">Client ID</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "client_id",
+								Placeholder: "OAuth client ID",
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1 block">Client Secret</label>
+							@input.Input(input.Props{
+								Type:        "password",
+								Name:        "client_secret",
+								Placeholder: "OAuth client secret",
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1 block">Issuer URL</label>
+							@input.Input(input.Props{
+								Type:        "url",
+								Name:        "issuer",
+								Placeholder: "https://issuer.example.com",
+							})
+						</div>
+					</div>
+					// SAML-specific fields
+					<div id="saml-fields" class="hidden grid grid-cols-1 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1 block">Metadata URL</label>
+							@input.Input(input.Props{
+								Type:        "url",
+								Name:        "metadata_url",
+								Placeholder: "https://idp.example.com/metadata",
+							})
+						</div>
+					</div>
+					<div>
+						@button.Button(button.Props{Type: "submit"}) {
+							Add Connection
+						}
+					</div>
+				</form>
+				<script>
+					(function() {
+						var sel = document.getElementById('sso-protocol-select');
+						var oidc = document.getElementById('oidc-fields');
+						var saml = document.getElementById('saml-fields');
+						if (sel && oidc && saml) {
+							sel.addEventListener('change', function() {
+								if (sel.value === 'saml') {
+									oidc.classList.add('hidden');
+									saml.classList.remove('hidden');
+								} else {
+									oidc.classList.remove('hidden');
+									saml.classList.add('hidden');
+								}
+							});
+						}
+					})();
+				</script>
 			}
 		}
 	</div>

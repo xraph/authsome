@@ -16,9 +16,11 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 
@@ -31,7 +33,48 @@ var (
 	_ plugin.RouteProvider     = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
+	_ plugin.SettingsProvider  = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingSessionTokenTTLSeconds controls the session token lifetime for SSO sign-in.
+	SettingSessionTokenTTLSeconds = settings.Define("sso.session_token_ttl_seconds", 3600,
+		settings.WithDisplayName("Session Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of sessions created via SSO sign-in in seconds"),
+		settings.WithCategory("SSO"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(300), Max: intPtr(86400)}),
+		settings.WithHelpText("How long sessions created via SSO remain valid. Default: 3600 (1 hour)"),
+		settings.WithOrder(10),
+	)
+
+	// SettingSessionRefreshTTLSeconds controls the refresh token lifetime for SSO sessions.
+	SettingSessionRefreshTTLSeconds = settings.Define("sso.session_refresh_ttl_seconds", 2592000,
+		settings.WithDisplayName("Refresh Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of refresh tokens for SSO sessions in seconds"),
+		settings.WithCategory("SSO"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(3600), Max: intPtr(7776000)}),
+		settings.WithHelpText("How long refresh tokens remain valid. Default: 2592000 (30 days)"),
+		settings.WithOrder(20),
+	)
+)
+
+func intPtr(v int) *int { return &v }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "sso", SettingSessionTokenTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "sso", SettingSessionRefreshTTLSeconds)
+}
 
 // Config configures the SSO plugin.
 type Config struct {
@@ -67,21 +110,25 @@ type Plugin struct {
 }
 
 // New creates a new SSO plugin.
-func New(cfg Config) *Plugin {
-	if cfg.SessionTokenTTL == 0 {
-		cfg.SessionTokenTTL = 1 * time.Hour
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.SessionRefreshTTL == 0 {
-		cfg.SessionRefreshTTL = 30 * 24 * time.Hour
+	if c.SessionTokenTTL == 0 {
+		c.SessionTokenTTL = 1 * time.Hour
+	}
+	if c.SessionRefreshTTL == 0 {
+		c.SessionRefreshTTL = 30 * 24 * time.Hour
 	}
 
-	providers := make(map[string]Provider, len(cfg.Providers))
-	for _, p := range cfg.Providers {
+	providers := make(map[string]Provider, len(c.Providers))
+	for _, p := range c.Providers {
 		providers[p.Name()] = p
 	}
 
 	return &Plugin{
-		config:     cfg,
+		config:     c,
 		providers:  providers,
 		ceremonies: ceremony.NewMemory(),
 	}
@@ -180,6 +227,49 @@ func (p *Plugin) ProviderNames() []string {
 	return names
 }
 
+// resolveProvider looks up a provider by name — first from code-configured
+// providers, then from database-managed SSO connections.
+func (p *Plugin) resolveProvider(ctx context.Context, name string) (Provider, bool) {
+	// Check code-configured providers first.
+	if prov, ok := p.providers[name]; ok {
+		return prov, true
+	}
+
+	// Fall back to DB-managed connections.
+	if p.ssoStore == nil {
+		return nil, false
+	}
+	appID, err := id.ParseAppID(p.appID)
+	if err != nil {
+		return nil, false
+	}
+	conn, err := p.ssoStore.GetSSOConnectionByProvider(ctx, appID, name)
+	if err != nil || conn == nil || !conn.Active {
+		return nil, false
+	}
+	return p.connectionToProvider(conn), true
+}
+
+// connectionToProvider creates a Provider from a stored SSOConnection.
+func (p *Plugin) connectionToProvider(conn *SSOConnection) Provider {
+	switch conn.Protocol {
+	case "oidc":
+		return NewOIDCProvider(OIDCConfig{
+			Name:         conn.Provider,
+			Issuer:       conn.Issuer,
+			ClientID:     conn.ClientID,
+			ClientSecret: conn.ClientSecret,
+		})
+	case "saml":
+		return NewSAMLProvider(SAMLConfig{
+			Name:        conn.Provider,
+			MetadataURL: conn.MetadataURL,
+		})
+	default:
+		return nil
+	}
+}
+
 // RegisterRoutes registers SSO HTTP endpoints on a forge.Router.
 func (p *Plugin) RegisterRoutes(r any) error {
 	router, ok := r.(forge.Router)
@@ -261,7 +351,7 @@ type CallbackResponse struct {
 
 // handleLogin initiates the SSO flow by returning the IdP login URL.
 func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginResponse, error) {
-	provider, ok := p.providers[req.Provider]
+	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported SSO provider: %s", req.Provider))
 	}
@@ -288,7 +378,7 @@ func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginRespon
 
 // handleCallback processes the OIDC callback.
 func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*CallbackResponse, error) {
-	provider, ok := p.providers[req.Provider]
+	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported SSO provider: %s", req.Provider))
 	}
@@ -319,7 +409,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 
 // handleACS processes the SAML Assertion Consumer Service callback.
 func (p *Plugin) handleACS(ctx forge.Context, req *ACSRequest) (*CallbackResponse, error) {
-	provider, ok := p.providers[req.Provider]
+	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported SSO provider: %s", req.Provider))
 	}

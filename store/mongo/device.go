@@ -122,3 +122,26 @@ func (s *Store) ListUserDevices(ctx context.Context, userID id.UserID) ([]*devic
 
 	return result, nil
 }
+
+func (s *Store) ListDevices(ctx context.Context, limit int) ([]*device.Device, error) {
+	var models []deviceModel
+
+	q := s.mdb.NewFind(&models).
+		Sort(bson.D{{Key: "last_seen_at", Value: -1}})
+	if limit > 0 {
+		q = q.Limit(int64(limit))
+	}
+	if err := q.Scan(ctx); err != nil {
+		return nil, fmt.Errorf("authsome/mongo: list devices: %w", err)
+	}
+
+	result := make([]*device.Device, 0, len(models))
+	for i := range models {
+		d, err := fromDeviceModel(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, d)
+	}
+	return result, nil
+}

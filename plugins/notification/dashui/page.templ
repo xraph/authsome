@@ -1,0 +1,126 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+// ConfigPage renders the notification configuration page.
+templ ConfigPage(appName string, baseURL string, locale string, async bool, mappingNames []string) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Notifications</h1>
+			<p class="text-muted-foreground mt-1">Multi-channel notification configuration powered by Herald.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Bell(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Configuration
+						}
+						@card.Description() {
+							Current notification delivery settings.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">App Name</dt>
+					<dd class="font-medium">{ appName }</dd>
+					<dt class="text-muted-foreground">Base URL</dt>
+					<dd class="font-medium">
+						if baseURL != "" {
+							{ baseURL }
+						} else {
+							<span class="text-muted-foreground italic">Not configured</span>
+						}
+					</dd>
+					<dt class="text-muted-foreground">Default Locale</dt>
+					<dd class="font-medium">{ locale }</dd>
+					<dt class="text-muted-foreground">Async Delivery</dt>
+					<dd>
+						if async {
+							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+								Enabled
+							}
+						} else {
+							@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+								Disabled
+							}
+						}
+					</dd>
+				</dl>
+			}
+		}
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Layers(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Template Mappings
+						}
+						@card.Description() {
+							Hook actions mapped to Herald notification templates.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<div class="mt-4">
+					if len(mappingNames) == 0 {
+						<p class="text-sm text-muted-foreground py-4 text-center">No template mappings configured.</p>
+					} else {
+						<div class="space-y-2">
+							for _, name := range mappingNames {
+								<div class="flex items-center gap-3 rounded-sm border p-3">
+									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+										@icons.Zap(icons.WithSize(14))
+									</div>
+									<div class="flex-1">
+										<p class="text-sm font-medium font-mono">{ name }</p>
+									</div>
+									@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+										Active
+									}
+								</div>
+							}
+						</div>
+					}
+				</div>
+			}
+		}
+		<!-- Settings link -->
+		@card.Card() {
+			@card.Content() {
+				<div class="flex items-center justify-between py-2">
+					<div class="flex items-center gap-3">
+						@icons.Settings(icons.WithSize(16), icons.WithClass("text-muted-foreground"))
+						<div>
+							<p class="text-sm font-medium">Notification Settings</p>
+							<p class="text-xs text-muted-foreground">Configure app name, base URL, locale, and async delivery.</p>
+						</div>
+					</div>
+					<a
+						href="settings/editor?scope=app&namespace=notification"
+						class="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+					>
+						@icons.ExternalLink(icons.WithSize(12))
+						Edit Settings
+					</a>
+				</div>
+			}
+		}
+	</div>
+}

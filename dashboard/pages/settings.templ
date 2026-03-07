@@ -1,0 +1,297 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+// SettingsPageData holds all data needed by the settings page.
+type SettingsPageData struct {
+	Config      authsome.Config
+	PluginNames []string
+}
+
+templ SettingsPage(data SettingsPageData) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div>
+				<h1 class="text-3xl font-bold tracking-tight">Settings</h1>
+				<p class="text-muted-foreground mt-1">Current engine configuration. Changes are applied through code or environment variables.</p>
+			</div>
+			<a
+				href="./settings/editor"
+				class="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+				hx-get="./settings/editor"
+				hx-target="#content"
+				hx-push-url="true"
+				hx-swap="innerHTML"
+			>
+				@icons.SlidersHorizontal(icons.WithSize(16))
+				Edit Plugin Settings
+			</a>
+		</div>
+
+		<!-- General -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-2">
+					@icons.Settings(icons.WithSize(18))
+					@card.Title() {
+						General
+					}
+				</div>
+				@card.Description() {
+					Base path, driver, and debug settings
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+					@settingRow("Base Path", data.Config.BasePath)
+					@settingRow("Driver", driverLabel(data.Config.DriverName))
+					@settingRowBool("Debug Mode", data.Config.Debug)
+					@settingRowBool("Routes Disabled", data.Config.DisableRoutes)
+					@settingRowBool("Migration Disabled", data.Config.DisableMigrate)
+				</dl>
+			}
+		}
+
+		<!-- Session Configuration -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-2">
+					@icons.Key(icons.WithSize(18))
+					@card.Title() {
+						Session Configuration
+					}
+				</div>
+				@card.Description() {
+					Token lifetimes, rotation, and session binding behavior
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+					@settingRow("Session TTL", data.Config.Session.TokenTTL.String())
+					@settingRow("Refresh Token TTL", data.Config.Session.RefreshTokenTTL.String())
+					if data.Config.Session.MaxActiveSessions > 0 {
+						@settingRow("Max Active Sessions", strconv.Itoa(data.Config.Session.MaxActiveSessions))
+					} else {
+						@settingRow("Max Active Sessions", "Unlimited")
+					}
+					@settingRowBool("Rotate Refresh Token", data.Config.Session.ShouldRotateRefreshToken())
+					@settingRowBool("Bind to IP", data.Config.Session.BindToIP)
+					@settingRowBool("Bind to Device", data.Config.Session.BindToDevice)
+					if data.Config.Session.CleanupInterval > 0 {
+						@settingRow("Cleanup Interval", data.Config.Session.CleanupInterval.String())
+					} else {
+						@settingRow("Cleanup Interval", "Disabled")
+					}
+				</dl>
+			}
+		}
+
+		<!-- Password Policy -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-2">
+					@icons.Lock(icons.WithSize(18))
+					@card.Title() {
+						Password Policy
+					}
+				</div>
+				@card.Description() {
+					Password validation, hashing, and rotation settings
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+					@settingRow("Min Length", strconv.Itoa(data.Config.Password.MinLength))
+					@settingRowBool("Require Uppercase", data.Config.Password.RequireUppercase)
+					@settingRowBool("Require Lowercase", data.Config.Password.RequireLowercase)
+					@settingRowBool("Require Digit", data.Config.Password.RequireDigit)
+					@settingRowBool("Require Special", data.Config.Password.RequireSpecial)
+					@settingRow("Algorithm", algorithmLabel(data.Config.Password.Algorithm))
+					if data.Config.Password.Algorithm == "bcrypt" || data.Config.Password.Algorithm == "" {
+						@settingRow("Bcrypt Cost", strconv.Itoa(data.Config.Password.BcryptCost))
+					}
+					@settingRowBool("Breach Check (HIBP)", data.Config.Password.CheckBreached)
+					if data.Config.Password.HistoryCount > 0 {
+						@settingRow("Password History", fmt.Sprintf("Last %d passwords", data.Config.Password.HistoryCount))
+					} else {
+						@settingRow("Password History", "Disabled")
+					}
+					if data.Config.Password.MaxAgeDays > 0 {
+						@settingRow("Max Password Age", fmt.Sprintf("%d days", data.Config.Password.MaxAgeDays))
+					} else {
+						@settingRow("Max Password Age", "No expiry")
+					}
+				</dl>
+			}
+		}
+
+		<!-- Rate Limiting -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						@icons.Gauge(icons.WithSize(18))
+						@card.Title() {
+							Rate Limiting
+						}
+					</div>
+					if data.Config.RateLimit.Enabled {
+						@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+							Enabled
+						}
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							Disabled
+						}
+					}
+				</div>
+				@card.Description() {
+					Per-endpoint request throttling
+				}
+			}
+			@card.Content() {
+				if data.Config.RateLimit.Enabled {
+					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+						@settingRow("Sign-In Limit", fmt.Sprintf("%d/window", data.Config.RateLimit.SignInLimit))
+						@settingRow("Sign-Up Limit", fmt.Sprintf("%d/window", data.Config.RateLimit.SignUpLimit))
+						@settingRow("Forgot Password Limit", fmt.Sprintf("%d/window", data.Config.RateLimit.ForgotPasswordLimit))
+						@settingRow("MFA Challenge Limit", fmt.Sprintf("%d/window", data.Config.RateLimit.MFAChallengeLimit))
+						@settingRow("Window Duration", fmt.Sprintf("%ds", data.Config.RateLimit.WindowSeconds))
+					</dl>
+				} else {
+					<p class="text-sm text-muted-foreground">Rate limiting is currently disabled.</p>
+				}
+			}
+		}
+
+		<!-- Account Lockout -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						@icons.ShieldAlert(icons.WithSize(18))
+						@card.Title() {
+							Account Lockout
+						}
+					</div>
+					if data.Config.Lockout.Enabled {
+						@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+							Enabled
+						}
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							Disabled
+						}
+					}
+				</div>
+				@card.Description() {
+					Automatic lockout after failed authentication attempts
+				}
+			}
+			@card.Content() {
+				if data.Config.Lockout.Enabled {
+					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+						@settingRow("Max Attempts", strconv.Itoa(data.Config.Lockout.MaxAttempts))
+						@settingRow("Lockout Duration", data.Config.Lockout.LockoutDuration().String())
+						@settingRow("Reset After", data.Config.Lockout.ResetAfter().String())
+					</dl>
+				} else {
+					<p class="text-sm text-muted-foreground">Account lockout is currently disabled.</p>
+				}
+			}
+		}
+
+		<!-- Enabled Plugins -->
+		if len(data.PluginNames) > 0 {
+			@card.Card() {
+				@card.Header() {
+					<div class="flex items-center gap-2">
+						@icons.Puzzle(icons.WithSize(18))
+						@card.Title() {
+							Enabled Plugins
+						}
+					</div>
+					@card.Description() {
+						Active authentication and security plugins
+					}
+				}
+				@card.Content() {
+					<div class="flex flex-wrap gap-2">
+						for _, name := range data.PluginNames {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+								{ name }
+							}
+						}
+					</div>
+				}
+			}
+		}
+
+		<!-- Plugin-contributed settings slot -->
+		{ children... }
+	</div>
+}
+
+// settingRow renders a label-value pair for a setting.
+templ settingRow(label string, value string) {
+	<div>
+		<dt class="text-muted-foreground">{ label }</dt>
+		<dd class="font-medium mt-0.5">{ value }</dd>
+	</div>
+}
+
+// settingRowBool renders a boolean setting with an Enabled/Disabled badge.
+templ settingRowBool(label string, enabled bool) {
+	<div>
+		<dt class="text-muted-foreground">{ label }</dt>
+		<dd class="mt-0.5">
+			if enabled {
+				@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+					Enabled
+				}
+			} else {
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					Disabled
+				}
+			}
+		</dd>
+	</div>
+}
+
+func driverLabel(d string) string {
+	switch d {
+	case "pg":
+		return "PostgreSQL"
+	case "sqlite":
+		return "SQLite"
+	case "mongo":
+		return "MongoDB"
+	case "memory":
+		return "In-Memory"
+	default:
+		if d == "" {
+			return "Not configured"
+		}
+		return d
+	}
+}
+
+func algorithmLabel(a string) string {
+	switch a {
+	case "argon2id":
+		return "Argon2id"
+	case "bcrypt", "":
+		return "bcrypt"
+	default:
+		return a
+	}
+}

@@ -1,0 +1,82 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ ConfigPage(notifyOnNewDevice bool, challengeTTL string) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Device Verification</h1>
+			<p class="text-muted-foreground mt-1">New device detection and challenge-response verification for sign-in events.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.MonitorSmartphone(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Configuration
+						}
+						@card.Description() {
+							Current settings for device verification.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Notify on New Device</dt>
+					<dd>
+						if notifyOnNewDevice {
+							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+								Enabled
+							}
+						} else {
+							@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+								Disabled
+							}
+						}
+					</dd>
+					<dt class="text-muted-foreground">Challenge TTL</dt>
+					<dd class="font-medium">{ challengeTTL }</dd>
+				</dl>
+			}
+		}
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					How It Works
+				}
+			}
+			@card.Content() {
+				<p class="text-sm text-muted-foreground">
+					The device verification plugin detects when a user signs in from a new or unrecognized device. When a new device is detected, the plugin records an audit event, sends a webhook notification, and optionally notifies the user via email about the new device login. The challenge TTL controls how long a device verification challenge remains valid.
+				</p>
+			}
+		}
+		@card.Card() {
+			@card.Content() {
+				<div class="flex items-center justify-between py-2">
+					<div class="flex items-center gap-3">
+						@icons.Settings(icons.WithSize(16), icons.WithClass("text-muted-foreground"))
+						<div>
+							<p class="text-sm font-medium">Edit Settings</p>
+							<p class="text-xs text-muted-foreground">Configure device verification through the settings editor.</p>
+						</div>
+					</div>
+					<a href="settings/editor?scope=app&namespace=deviceverify" class="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
+						@icons.ExternalLink(icons.WithSize(12))
+						Edit Settings
+					</a>
+				</div>
+			}
+		}
+	</div>
+}

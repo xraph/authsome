@@ -9,7 +9,15 @@ import (
 	"github.com/xraph/forgeui/components/table"
 )
 
-templ OverviewPage(totalUsers int, recentUsers []*user.User) {
+// OverviewStats holds aggregate stats for the overview page.
+type OverviewStats struct {
+	TotalUsers        int
+	ActiveSessions    int
+	RegisteredDevices int
+	ActivePlugins     int
+}
+
+templ OverviewPage(stats OverviewStats, recentUsers []*user.User) {
 	<div class="space-y-8">
 		<!-- Page Header -->
 		<div>
@@ -19,15 +27,29 @@ templ OverviewPage(totalUsers int, recentUsers []*user.User) {
 
 		<!-- Stats Grid -->
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-			@components.StatCard("users", "Total Users", strconv.Itoa(totalUsers), "Registered accounts")
+			@components.StatCard("users", "Total Users", strconv.Itoa(stats.TotalUsers), "Registered accounts")
+			@components.StatCard("key-round", "Active Sessions", strconv.Itoa(stats.ActiveSessions), "Current sessions")
+			@components.StatCard("monitor-smartphone", "Devices", strconv.Itoa(stats.RegisteredDevices), "Registered devices")
+			@components.StatCard("puzzle", "Plugins", strconv.Itoa(stats.ActivePlugins), "Active plugins")
 		</div>
 
 		<!-- Recent Users Section -->
 		@card.Card() {
 			@card.Header() {
-				@card.Title() {
-					Recent Signups
-				}
+				<div class="flex items-center justify-between">
+					@card.Title() {
+						Recent Signups
+					}
+					<a
+						class="text-sm text-primary hover:underline cursor-pointer"
+						hx-get="./users"
+						hx-target="#content"
+						hx-push-url="true"
+						hx-swap="innerHTML"
+					>
+						View all
+					</a>
+				</div>
 				@card.Description() {
 					The last 5 users who signed up.
 				}
@@ -41,14 +63,30 @@ templ OverviewPage(totalUsers int, recentUsers []*user.User) {
 							@table.Row() {
 								@table.Head() { Name }
 								@table.Head() { Email }
+								@table.Head() { Status }
 								@table.Head() { Created }
 							}
 						}
 						@table.Body() {
 							for _, u := range recentUsers {
-								@table.Row() {
+								@table.Row(table.RowProps{
+									Class: "cursor-pointer hover:bg-muted/50",
+									Attributes: templ.Attributes{
+										"hx-get":      "./users/detail?id=" + u.ID.String(),
+										"hx-target":   "#content",
+										"hx-push-url": "true",
+										"hx-swap":     "innerHTML",
+									},
+								}) {
 									@table.Cell() { { u.Name() } }
 									@table.Cell() { { u.Email } }
+									@table.Cell() {
+										if u.EmailVerified {
+											<span class="text-xs text-green-600">Verified</span>
+										} else {
+											<span class="text-xs text-muted-foreground">Unverified</span>
+										}
+									}
 									@table.Cell() {
 										{{ created := u.CreatedAt.Format("Jan 02, 2006") }}
 										{ created }

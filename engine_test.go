@@ -13,12 +13,17 @@ import (
 
 	"github.com/xraph/keysmith"
 	ksmemory "github.com/xraph/keysmith/store/memory"
+
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 )
 
 func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
-	allOpts := append([]authsome.Option{authsome.WithStore(s), authsome.WithDisableMigrate()}, opts...)
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	allOpts := append([]authsome.Option{authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate()}, opts...)
 	eng, err := authsome.NewEngine(allOpts...)
 	require.NoError(t, err)
 	return eng, s
@@ -85,9 +90,9 @@ func TestEngine_Accessors(t *testing.T) {
 	assert.NotNil(t, eng.Strategies())
 	assert.NotNil(t, eng.Logger())
 
-	// Optional bridges should be nil by default
+	// Optional bridges should be nil by default (except authorizer, set by warden)
 	assert.Nil(t, eng.Chronicle())
-	assert.Nil(t, eng.Authorizer())
+	assert.NotNil(t, eng.Authorizer()) // Warden is required and sets the authorizer
 	assert.Nil(t, eng.KeyManager())
 	assert.Nil(t, eng.Relay())
 

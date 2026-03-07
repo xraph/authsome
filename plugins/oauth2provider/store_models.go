@@ -51,6 +51,28 @@ type authCodeModel struct {
 }
 
 // ──────────────────────────────────────────────────
+// Device code model (shared across SQL stores)
+// ──────────────────────────────────────────────────
+
+type deviceCodeModel struct {
+	grove.BaseModel `grove:"table:authsome_oauth2_device_codes,alias:dc"`
+
+	ID              string          `grove:"id,pk"`
+	DeviceCode      string          `grove:"device_code,notnull"`
+	UserCode        string          `grove:"user_code,notnull"`
+	ClientID        string          `grove:"client_id,notnull"`
+	AppID           string          `grove:"app_id,notnull"`
+	Scopes          json.RawMessage `grove:"scopes,type:jsonb"`
+	VerificationURI string          `grove:"verification_uri,notnull"`
+	ExpiresAt       time.Time       `grove:"expires_at,notnull"`
+	Interval        int             `grove:"interval,notnull"`
+	Status          string          `grove:"status,notnull"`
+	UserID          string          `grove:"user_id"`
+	LastPolledAt    time.Time       `grove:"last_polled_at"`
+	CreatedAt       time.Time       `grove:"created_at,notnull,default:now()"`
+}
+
+// ──────────────────────────────────────────────────
 // OAuth2 client converters
 // ──────────────────────────────────────────────────
 
@@ -179,6 +201,73 @@ func fromAuthCode(c *AuthorizationCode) *authCodeModel {
 		ExpiresAt:           c.ExpiresAt,
 		Consumed:            c.Consumed,
 		CreatedAt:           c.CreatedAt,
+	}
+}
+
+// ──────────────────────────────────────────────────
+// Device code converters
+// ──────────────────────────────────────────────────
+
+func toDeviceCode(m *deviceCodeModel) (*DeviceCode, error) {
+	dcID, err := id.ParseDeviceCodeID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	var userID id.UserID
+	if m.UserID != "" {
+		userID, err = id.ParseUserID(m.UserID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var scopes []string
+	if len(m.Scopes) > 0 {
+		_ = json.Unmarshal(m.Scopes, &scopes)
+	}
+
+	return &DeviceCode{
+		ID:              dcID,
+		DeviceCode:      m.DeviceCode,
+		UserCode:        m.UserCode,
+		ClientID:        m.ClientID,
+		AppID:           appID,
+		Scopes:          scopes,
+		VerificationURI: m.VerificationURI,
+		ExpiresAt:       m.ExpiresAt,
+		Interval:        m.Interval,
+		Status:          m.Status,
+		UserID:          userID,
+		LastPolledAt:    m.LastPolledAt,
+		CreatedAt:       m.CreatedAt,
+	}, nil
+}
+
+func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
+	scopes, _ := json.Marshal(dc.Scopes)
+	if len(scopes) == 0 {
+		scopes = []byte("[]")
+	}
+
+	return &deviceCodeModel{
+		ID:              dc.ID.String(),
+		DeviceCode:      dc.DeviceCode,
+		UserCode:        dc.UserCode,
+		ClientID:        dc.ClientID,
+		AppID:           dc.AppID.String(),
+		Scopes:          scopes,
+		VerificationURI: dc.VerificationURI,
+		ExpiresAt:       dc.ExpiresAt,
+		Interval:        dc.Interval,
+		Status:          dc.Status,
+		UserID:          dc.UserID.String(),
+		LastPolledAt:    dc.LastPolledAt,
+		CreatedAt:       dc.CreatedAt,
 	}
 }
 

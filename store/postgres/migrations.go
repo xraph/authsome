@@ -747,5 +747,26 @@ ALTER TABLE authsome_users RENAME COLUMN first_name TO name;
 				return err
 			},
 		},
+		// Migration 11: Add public_key and public_key_prefix columns to API keys
+		&migrate.Migration{
+			Name:    "add_api_key_public_key",
+			Version: "20240101000011",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_api_keys ADD COLUMN IF NOT EXISTS public_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE authsome_api_keys ADD COLUMN IF NOT EXISTS public_key_prefix TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_authsome_api_keys_public_key ON authsome_api_keys (app_id, public_key);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_api_keys_public_key;
+ALTER TABLE authsome_api_keys DROP COLUMN IF EXISTS public_key_prefix;
+ALTER TABLE authsome_api_keys DROP COLUMN IF EXISTS public_key;
+`)
+				return err
+			},
+		},
 	)
 }

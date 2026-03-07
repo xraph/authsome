@@ -8,6 +8,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/strategy"
@@ -171,7 +172,7 @@ func AuthMiddlewareWithStrategies(
 			token := extractBearerToken(ctx.Request())
 
 			// Try bearer session resolution first (skip if token looks like an API key).
-			if token != "" && !strings.HasPrefix(token, "ask_") {
+			if token != "" && !isAPIKeyToken(token) {
 				if resolved := trySessionAuth(ctx, token, resolveSession, resolveUser, logger, bindCfg); resolved {
 					return next(ctx)
 				}
@@ -219,7 +220,7 @@ func AuthMiddlewareWithJWT(
 				}
 
 				// Try opaque session resolution (skip API key prefixed tokens).
-				if !strings.HasPrefix(token, "ask_") {
+				if !isAPIKeyToken(token) {
 					if resolved := trySessionAuth(ctx, token, resolveSession, resolveUser, logger, bindCfg); resolved {
 						return next(ctx)
 					}
@@ -441,6 +442,11 @@ func RequireAuth() forge.Middleware {
 			return next(ctx)
 		}
 	}
+}
+
+// isAPIKeyToken returns true if the token has an API key prefix (ask_, sk_*, pk_*).
+func isAPIKeyToken(token string) bool {
+	return apikey.IsAPIKey(token)
 }
 
 func extractBearerToken(r *http.Request) string {

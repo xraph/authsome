@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
@@ -18,6 +19,7 @@ import (
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 	"github.com/xraph/authsome/webhook"
 
@@ -44,6 +46,8 @@ type Store interface {
 	formconfig.Store
 	formconfig.BrandingStore
 	appsessionconfig.Store
+	appclientconfig.Store
+	settings.Store
 
 	// Migrate runs all schema migrations. Extra migration groups (e.g. from
 	// plugins) are appended to the core group and orchestrated together.

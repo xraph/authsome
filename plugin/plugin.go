@@ -13,6 +13,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/user"
 
@@ -224,6 +225,13 @@ type Extensible interface {
 // and data is the payload that will be included in the export.
 type DataExportContributor interface {
 	ExportUserData(ctx context.Context, userID id.UserID) (key string, data any, err error)
+}
+
+// SettingsProvider is implemented by plugins that declare configurable
+// settings via the dynamic settings system. The engine calls DeclareSettings
+// during initialization so the settings are registered before use.
+type SettingsProvider interface {
+	DeclareSettings(m *settings.Manager) error
 }
 
 // StrategyProvider is implemented by plugins that contribute an authentication

@@ -9,8 +9,10 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 )
 
@@ -19,10 +21,66 @@ const VerificationTypeMagicLink account.VerificationType = "magic_link"
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin        = (*Plugin)(nil)
-	_ plugin.RouteProvider = (*Plugin)(nil)
-	_ plugin.OnInit        = (*Plugin)(nil)
+	_ plugin.Plugin           = (*Plugin)(nil)
+	_ plugin.RouteProvider    = (*Plugin)(nil)
+	_ plugin.OnInit           = (*Plugin)(nil)
+	_ plugin.SettingsProvider = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingTokenTTLSeconds controls the magic link token lifetime in seconds.
+	SettingTokenTTLSeconds = settings.Define("magiclink.token_ttl_seconds", 600,
+		settings.WithDisplayName("Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of magic link tokens in seconds"),
+		settings.WithCategory("Magic Link"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(3600)}),
+		settings.WithHelpText("How long magic link tokens remain valid. Default: 600 (10 minutes)"),
+		settings.WithOrder(10),
+	)
+
+	// SettingSessionTokenTTLSeconds controls the session token lifetime for magic link sessions.
+	SettingSessionTokenTTLSeconds = settings.Define("magiclink.session_token_ttl_seconds", 3600,
+		settings.WithDisplayName("Session Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of sessions created via magic link in seconds"),
+		settings.WithCategory("Magic Link"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(300), Max: intPtr(86400)}),
+		settings.WithHelpText("How long sessions created via magic link remain valid. Default: 3600 (1 hour)"),
+		settings.WithOrder(20),
+	)
+
+	// SettingSessionRefreshTTLSeconds controls the refresh token lifetime for magic link sessions.
+	SettingSessionRefreshTTLSeconds = settings.Define("magiclink.session_refresh_ttl_seconds", 2592000,
+		settings.WithDisplayName("Refresh Token TTL (seconds)"),
+		settings.WithDescription("Lifetime of refresh tokens for magic link sessions in seconds"),
+		settings.WithCategory("Magic Link"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(3600), Max: intPtr(7776000)}),
+		settings.WithHelpText("How long refresh tokens remain valid. Default: 2592000 (30 days)"),
+		settings.WithOrder(30),
+	)
+)
+
+func intPtr(v int) *int { return &v }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "magiclink", SettingTokenTTLSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "magiclink", SettingSessionTokenTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "magiclink", SettingSessionRefreshTTLSeconds)
+}
 
 // Mailer sends magic link emails.
 type Mailer interface {

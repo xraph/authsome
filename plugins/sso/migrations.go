@@ -54,6 +54,23 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sso_connections_provider
 		},
 	)
 
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_client_secret",
+			Version: "20240201000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sso_connections ADD COLUMN IF NOT EXISTS client_secret TEXT NOT NULL DEFAULT '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections DROP COLUMN IF EXISTS client_secret;`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -91,6 +108,21 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sso_connections_provider
 			Down: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_sso_connections;`)
 				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "add_client_secret",
+			Version: "20240201000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN client_secret TEXT NOT NULL DEFAULT '';`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				// SQLite does not support DROP COLUMN in older versions; best-effort.
+				return nil
 			},
 		},
 	)

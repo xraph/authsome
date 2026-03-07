@@ -21,9 +21,11 @@ type APIKey struct {
 	EnvID      id.EnvironmentID `json:"env_id"`
 	UserID     id.UserID        `json:"user_id"`
 	Name       string           `json:"name"`
-	KeyHash    string           `json:"-"`
-	KeyPrefix  string           `json:"key_prefix"` // first 8 chars of the raw key for identification
-	Scopes     []string         `json:"scopes,omitempty"`
+	KeyHash         string           `json:"-"`
+	KeyPrefix       string           `json:"key_prefix"`
+	PublicKey       string           `json:"public_key,omitempty"`
+	PublicKeyPrefix string           `json:"public_key_prefix,omitempty"`
+	Scopes          []string         `json:"scopes,omitempty"`
 	ExpiresAt  *time.Time       `json:"expires_at,omitempty"`
 	LastUsedAt *time.Time       `json:"last_used_at,omitempty"`
 	Revoked    bool             `json:"revoked"`
@@ -55,6 +57,9 @@ type Store interface {
 	// GetAPIKeyByPrefix returns an API key by its prefix.
 	// Used during authentication to look up the key.
 	GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix string) (*APIKey, error)
+
+	// GetAPIKeyByPublicKey returns an API key by its public key.
+	GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*APIKey, error)
 
 	// UpdateAPIKey updates an existing API key.
 	UpdateAPIKey(ctx context.Context, key *APIKey) error

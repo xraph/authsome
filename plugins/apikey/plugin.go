@@ -11,12 +11,15 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/user"
@@ -28,7 +31,49 @@ var (
 	_ plugin.RouteProvider    = (*Plugin)(nil)
 	_ plugin.OnInit           = (*Plugin)(nil)
 	_ plugin.StrategyProvider = (*Plugin)(nil)
+	_ plugin.SettingsProvider = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingMaxKeysPerUser controls the maximum number of active API keys per user.
+	SettingMaxKeysPerUser = settings.Define("apikey.max_keys_per_user", 0,
+		settings.WithDisplayName("Max Keys Per User"),
+		settings.WithDescription("Maximum number of active API keys per user (0 = unlimited)"),
+		settings.WithCategory("API Keys"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Min: intPtr(0), Max: intPtr(100)}),
+		settings.WithHelpText("Set to 0 for unlimited keys. Default: 0"),
+		settings.WithOrder(10),
+	)
+
+	// SettingDefaultExpirySeconds controls the default TTL for newly created keys.
+	SettingDefaultExpirySeconds = settings.Define("apikey.default_expiry_seconds", 0,
+		settings.WithDisplayName("Default Key Expiry (seconds)"),
+		settings.WithDescription("Default TTL for newly created API keys in seconds (0 = no expiry)"),
+		settings.WithCategory("API Keys"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Min: intPtr(0)}),
+		settings.WithHelpText("Set to 0 for keys that never expire. Default: 0"),
+		settings.WithOrder(20),
+	)
+)
+
+func intPtr(v int) *int { return &v }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "apikey", SettingMaxKeysPerUser); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "apikey", SettingDefaultExpirySeconds)
+}
 
 // Config configures the API key plugin.
 type Config struct {
@@ -50,8 +95,9 @@ type UserResolver func(userID string) (*user.User, error)
 
 // Plugin is the API key authentication plugin.
 type Plugin struct {
-	config Config
-	store  apikey.Store
+	config       Config
+	store        apikey.Store
+	defaultAppID string
 
 	resolveUser UserResolver
 	chronicle   bridge.Chronicle
@@ -61,7 +107,8 @@ type Plugin struct {
 }
 
 // New creates a new API key plugin with the given configuration.
-func New(s apikey.Store, cfg ...Config) *Plugin {
+// The API key store is resolved automatically from the engine during OnInit.
+func New(cfg ...Config) *Plugin {
 	var c Config
 	if len(cfg) > 0 {
 		c = cfg[0]
@@ -69,14 +116,24 @@ func New(s apikey.Store, cfg ...Config) *Plugin {
 	if c.PathPrefix == "" {
 		c.PathPrefix = "/v1/auth/keys"
 	}
-	return &Plugin{config: c, store: s}
+	return &Plugin{config: c}
 }
 
 // Name returns the plugin name.
 func (p *Plugin) Name() string { return "apikey" }
 
+// SetStore allows direct API key store injection for testing.
+func (p *Plugin) SetStore(s apikey.Store) { p.store = s }
+
 // OnInit captures bridge references from the engine.
 func (p *Plugin) OnInit(_ context.Context, engine any) error {
+	type apiKeyStoreGetter interface {
+		APIKeyStore() apikey.Store
+	}
+	if asg, ok := engine.(apiKeyStoreGetter); ok {
+		p.store = asg.APIKeyStore()
+	}
+
 	type chronicleGetter interface {
 		Chronicle() bridge.Chronicle
 	}
@@ -110,6 +167,13 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	}
 	if ur, ok := engine.(userResolver); ok {
 		p.resolveUser = ur.ResolveUser
+	}
+
+	type configGetter interface {
+		Config() authsome.Config
+	}
+	if cg, ok := engine.(configGetter); ok {
+		p.defaultAppID = cg.Config().AppID
 	}
 
 	return nil
@@ -177,13 +241,15 @@ type CreateKeyRequest struct {
 
 // CreateKeyResponse is returned when a key is created.
 type CreateKeyResponse struct {
-	ID        string   `json:"id"`
-	Key       string   `json:"key"`
-	KeyPrefix string   `json:"key_prefix"`
-	Name      string   `json:"name"`
-	Scopes    []string `json:"scopes,omitempty"`
-	ExpiresAt *string  `json:"expires_at,omitempty"`
-	CreatedAt string   `json:"created_at"`
+	ID              string   `json:"id"`
+	Key             string   `json:"key"`
+	KeyPrefix       string   `json:"key_prefix"`
+	PublicKey       string   `json:"public_key"`
+	PublicKeyPrefix string   `json:"public_key_prefix"`
+	Name            string   `json:"name"`
+	Scopes          []string `json:"scopes,omitempty"`
+	ExpiresAt       *string  `json:"expires_at,omitempty"`
+	CreatedAt       string   `json:"created_at"`
 }
 
 // ListKeysRequest contains query parameters for listing API keys.
@@ -200,14 +266,15 @@ type ListKeysResponse struct {
 
 // KeyListItem represents an API key in list responses (no raw key).
 type KeyListItem struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	KeyPrefix  string   `json:"key_prefix"`
-	Scopes     []string `json:"scopes,omitempty"`
-	ExpiresAt  *string  `json:"expires_at,omitempty"`
-	LastUsedAt *string  `json:"last_used_at,omitempty"`
-	Revoked    bool     `json:"revoked"`
-	CreatedAt  string   `json:"created_at"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	KeyPrefix       string   `json:"key_prefix"`
+	PublicKeyPrefix string   `json:"public_key_prefix,omitempty"`
+	Scopes          []string `json:"scopes,omitempty"`
+	ExpiresAt       *string  `json:"expires_at,omitempty"`
+	LastUsedAt      *string  `json:"last_used_at,omitempty"`
+	Revoked         bool     `json:"revoked"`
+	CreatedAt       string   `json:"created_at"`
 }
 
 // RevokeKeyRequest contains the path parameter for revoking an API key.
@@ -250,23 +317,25 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 		}
 	}
 
-	// Generate key
-	raw, hash, prefix, err := apikey.GenerateKey()
+	// Generate key pair (public + secret).
+	publicKey, secretKey, secretHash, publicPrefix, secretPrefix, err := apikey.GenerateKeyPair()
 	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to generate key: %w", err))
+		return nil, forge.InternalError(fmt.Errorf("failed to generate key pair: %w", err))
 	}
 
 	now := time.Now()
 	key := &apikey.APIKey{
-		ID:        id.NewAPIKeyID(),
-		AppID:     appID,
-		UserID:    userID,
-		Name:      req.Name,
-		KeyHash:   hash,
-		KeyPrefix: prefix,
-		Scopes:    req.Scopes,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:              id.NewAPIKeyID(),
+		AppID:           appID,
+		UserID:          userID,
+		Name:            req.Name,
+		KeyHash:         secretHash,
+		KeyPrefix:       secretPrefix,
+		PublicKey:       publicKey,
+		PublicKeyPrefix: publicPrefix,
+		Scopes:          req.Scopes,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if p.config.DefaultExpiry > 0 {
@@ -283,12 +352,14 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 	p.emitHook(ctx.Context(), hook.ActionAPIKeyCreate, hook.ResourceAPIKey, key.ID.String(), userID.String(), "")
 
 	resp := &CreateKeyResponse{
-		ID:        key.ID.String(),
-		Key:       raw,
-		KeyPrefix: key.KeyPrefix,
-		Name:      key.Name,
-		Scopes:    key.Scopes,
-		CreatedAt: key.CreatedAt.Format(time.RFC3339),
+		ID:              key.ID.String(),
+		Key:             secretKey,
+		KeyPrefix:       key.KeyPrefix,
+		PublicKey:       publicKey,
+		PublicKeyPrefix: publicPrefix,
+		Name:            key.Name,
+		Scopes:          key.Scopes,
+		CreatedAt:       key.CreatedAt.Format(time.RFC3339),
 	}
 	if key.ExpiresAt != nil {
 		s := key.ExpiresAt.Format(time.RFC3339)
@@ -328,12 +399,13 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 	items := make([]KeyListItem, 0, len(keys))
 	for _, k := range keys {
 		item := KeyListItem{
-			ID:        k.ID.String(),
-			Name:      k.Name,
-			KeyPrefix: k.KeyPrefix,
-			Scopes:    k.Scopes,
-			Revoked:   k.Revoked,
-			CreatedAt: k.CreatedAt.Format(time.RFC3339),
+			ID:              k.ID.String(),
+			Name:            k.Name,
+			KeyPrefix:       k.KeyPrefix,
+			PublicKeyPrefix: k.PublicKeyPrefix,
+			Scopes:          k.Scopes,
+			Revoked:         k.Revoked,
+			CreatedAt:       k.CreatedAt.Format(time.RFC3339),
 		}
 		if k.ExpiresAt != nil {
 			s := k.ExpiresAt.Format(time.RFC3339)
@@ -397,11 +469,17 @@ var _ strategy.Strategy = (*apikeyStrategy)(nil)
 func (s *apikeyStrategy) Name() string { return "apikey" }
 
 // Authenticate checks for an API key in the Authorization or X-API-Key header.
-// API keys are identified by the "ask_" marker prefix.
+// API keys are identified by their marker prefix (ask_, sk_*, pk_*).
+// Public keys (pk_*) are rejected — only secret keys can authenticate.
 func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*strategy.Result, error) {
 	rawKey := extractAPIKey(r)
 	if rawKey == "" {
 		return nil, strategy.ErrStrategyNotApplicable{}
+	}
+
+	// Reject public keys — they are not for authentication.
+	if apikey.IsPublicKey(rawKey) {
+		return nil, fmt.Errorf("apikey: public keys (pk_*) cannot be used for authentication; use the secret key (sk_*) instead")
 	}
 
 	// Extract the app_id from query or X-App-ID header
@@ -466,13 +544,14 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 }
 
 // extractAPIKey extracts the API key from the request.
+// Recognizes ask_, sk_*, and pk_* prefixed Bearer tokens.
 func extractAPIKey(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if auth != "" {
 		parts := strings.SplitN(auth, " ", 2)
 		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 			token := strings.TrimSpace(parts[1])
-			if strings.HasPrefix(token, "ask_") {
+			if apikey.IsAPIKey(token) {
 				return token
 			}
 		}
@@ -486,14 +565,24 @@ func extractAPIKey(r *http.Request) string {
 }
 
 // extractPrefix returns the visible prefix of a raw API key.
+// Handles ask_, sk_*, and pk_* markers by computing marker length + prefixLen.
 func extractPrefix(raw string) string {
-	if !strings.HasPrefix(raw, "ask_") {
-		return ""
+	// Determine the marker used.
+	markers := []string{
+		"sk_test_", "sk_stg_", "sk_live_",
+		"pk_test_", "pk_stg_", "pk_live_",
+		"ask_",
 	}
-	if len(raw) < 12 {
-		return ""
+	for _, m := range markers {
+		if strings.HasPrefix(raw, m) {
+			need := len(m) + 8 // marker + prefixLen hex chars
+			if len(raw) < need {
+				return ""
+			}
+			return raw[:need]
+		}
 	}
-	return raw[:12]
+	return ""
 }
 
 // ──────────────────────────────────────────────────

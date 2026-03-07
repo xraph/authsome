@@ -30,14 +30,15 @@ import (
 type AppModel struct {
 	grove.BaseModel `grove:"table:authsome_apps,alias:a"`
 
-	ID         string          `grove:"id,pk"`
-	Name       string          `grove:"name,notnull"`
-	Slug       string          `grove:"slug,notnull"`
-	Logo       string          `grove:"logo"`
-	IsPlatform bool            `grove:"is_platform"`
-	Metadata   json.RawMessage `grove:"metadata,type:jsonb"`
-	CreatedAt  time.Time       `grove:"created_at,notnull,default:now()"`
-	UpdatedAt  time.Time       `grove:"updated_at,notnull,default:now()"`
+	ID             string          `grove:"id,pk"`
+	Name           string          `grove:"name,notnull"`
+	Slug           string          `grove:"slug,notnull"`
+	Logo           string          `grove:"logo"`
+	PublishableKey string          `grove:"publishable_key"`
+	IsPlatform     bool            `grove:"is_platform"`
+	Metadata       json.RawMessage `grove:"metadata,type:jsonb"`
+	CreatedAt      time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt      time.Time       `grove:"updated_at,notnull,default:now()"`
 }
 
 func toApp(m *AppModel) (*app.App, error) {
@@ -50,28 +51,30 @@ func toApp(m *AppModel) (*app.App, error) {
 		_ = json.Unmarshal(m.Metadata, &md)
 	}
 	return &app.App{
-		ID:         appID,
-		Name:       m.Name,
-		Slug:       m.Slug,
-		Logo:       m.Logo,
-		IsPlatform: m.IsPlatform,
-		Metadata:   md,
-		CreatedAt:  m.CreatedAt,
-		UpdatedAt:  m.UpdatedAt,
+		ID:             appID,
+		Name:           m.Name,
+		Slug:           m.Slug,
+		Logo:           m.Logo,
+		PublishableKey: m.PublishableKey,
+		IsPlatform:     m.IsPlatform,
+		Metadata:       md,
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
 	}, nil
 }
 
 func fromApp(a *app.App) *AppModel {
 	md, _ := json.Marshal(a.Metadata)
 	return &AppModel{
-		ID:         a.ID.String(),
-		Name:       a.Name,
-		Slug:       a.Slug,
-		Logo:       a.Logo,
-		IsPlatform: a.IsPlatform,
-		Metadata:   md,
-		CreatedAt:  a.CreatedAt,
-		UpdatedAt:  a.UpdatedAt,
+		ID:             a.ID.String(),
+		Name:           a.Name,
+		Slug:           a.Slug,
+		Logo:           a.Logo,
+		PublishableKey: a.PublishableKey,
+		IsPlatform:     a.IsPlatform,
+		Metadata:       md,
+		CreatedAt:      a.CreatedAt,
+		UpdatedAt:      a.UpdatedAt,
 	}
 }
 
@@ -851,19 +854,21 @@ func fromNotification(n *notification.Notification) *NotificationModel {
 type APIKeyModel struct {
 	grove.BaseModel `grove:"table:authsome_api_keys,alias:ak"`
 
-	ID         string       `grove:"id,pk"`
-	AppID      string       `grove:"app_id,notnull"`
-	EnvID      string       `grove:"env_id,notnull"`
-	UserID     string       `grove:"user_id,notnull"`
-	Name       string       `grove:"name,notnull"`
-	KeyHash    string       `grove:"key_hash,notnull"`
-	KeyPrefix  string       `grove:"key_prefix,notnull"`
-	Scopes     string       `grove:"scopes"` // comma-separated
-	ExpiresAt  sql.NullTime `grove:"expires_at"`
-	LastUsedAt sql.NullTime `grove:"last_used_at"`
-	Revoked    bool         `grove:"revoked"`
-	CreatedAt  time.Time    `grove:"created_at,notnull,default:now()"`
-	UpdatedAt  time.Time    `grove:"updated_at,notnull,default:now()"`
+	ID              string       `grove:"id,pk"`
+	AppID           string       `grove:"app_id,notnull"`
+	EnvID           string       `grove:"env_id,notnull"`
+	UserID          string       `grove:"user_id,notnull"`
+	Name            string       `grove:"name,notnull"`
+	KeyHash         string       `grove:"key_hash,notnull"`
+	KeyPrefix       string       `grove:"key_prefix,notnull"`
+	PublicKey       string       `grove:"public_key,notnull"`
+	PublicKeyPrefix string       `grove:"public_key_prefix,notnull"`
+	Scopes          string       `grove:"scopes"` // comma-separated
+	ExpiresAt       sql.NullTime `grove:"expires_at"`
+	LastUsedAt      sql.NullTime `grove:"last_used_at"`
+	Revoked         bool         `grove:"revoked"`
+	CreatedAt       time.Time    `grove:"created_at,notnull,default:now()"`
+	UpdatedAt       time.Time    `grove:"updated_at,notnull,default:now()"`
 }
 
 func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
@@ -884,16 +889,18 @@ func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
 		return nil, err
 	}
 	k := &apikey.APIKey{
-		ID:        keyID,
-		AppID:     appID,
-		EnvID:     envID,
-		UserID:    userID,
-		Name:      m.Name,
-		KeyHash:   m.KeyHash,
-		KeyPrefix: m.KeyPrefix,
-		Revoked:   m.Revoked,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		ID:              keyID,
+		AppID:           appID,
+		EnvID:           envID,
+		UserID:          userID,
+		Name:            m.Name,
+		KeyHash:         m.KeyHash,
+		KeyPrefix:       m.KeyPrefix,
+		PublicKey:       m.PublicKey,
+		PublicKeyPrefix: m.PublicKeyPrefix,
+		Revoked:         m.Revoked,
+		CreatedAt:       m.CreatedAt,
+		UpdatedAt:       m.UpdatedAt,
 	}
 	if m.Scopes != "" {
 		k.Scopes = strings.Split(m.Scopes, ",")
@@ -909,16 +916,18 @@ func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
 
 func fromAPIKey(k *apikey.APIKey) *APIKeyModel {
 	m := &APIKeyModel{
-		ID:        k.ID.String(),
-		AppID:     k.AppID.String(),
-		EnvID:     k.EnvID.String(),
-		UserID:    k.UserID.String(),
-		Name:      k.Name,
-		KeyHash:   k.KeyHash,
-		KeyPrefix: k.KeyPrefix,
-		Revoked:   k.Revoked,
-		CreatedAt: k.CreatedAt,
-		UpdatedAt: k.UpdatedAt,
+		ID:              k.ID.String(),
+		AppID:           k.AppID.String(),
+		EnvID:           k.EnvID.String(),
+		UserID:          k.UserID.String(),
+		Name:            k.Name,
+		KeyHash:         k.KeyHash,
+		KeyPrefix:       k.KeyPrefix,
+		PublicKey:       k.PublicKey,
+		PublicKeyPrefix: k.PublicKeyPrefix,
+		Revoked:         k.Revoked,
+		CreatedAt:       k.CreatedAt,
+		UpdatedAt:       k.UpdatedAt,
 	}
 	if len(k.Scopes) > 0 {
 		m.Scopes = strings.Join(k.Scopes, ",")

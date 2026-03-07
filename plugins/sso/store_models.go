@@ -22,8 +22,9 @@ type ssoConnectionModel struct {
 	Protocol    string    `grove:"protocol,notnull"`
 	Domain      string    `grove:"domain,notnull"`
 	MetadataURL string    `grove:"metadata_url,notnull"`
-	ClientID    string    `grove:"client_id,notnull"`
-	Issuer      string    `grove:"issuer,notnull"`
+	ClientID     string    `grove:"client_id,notnull"`
+	ClientSecret string    `grove:"client_secret,notnull"`
+	Issuer       string    `grove:"issuer,notnull"`
 	Active      bool      `grove:"active,notnull"`
 	CreatedAt   time.Time `grove:"created_at,notnull,default:now()"`
 	UpdatedAt   time.Time `grove:"updated_at,notnull,default:now()"`
@@ -50,8 +51,9 @@ func toSSOConnection(m *ssoConnectionModel) (*SSOConnection, error) {
 		Protocol:    m.Protocol,
 		Domain:      m.Domain,
 		MetadataURL: m.MetadataURL,
-		ClientID:    m.ClientID,
-		Issuer:      m.Issuer,
+		ClientID:     m.ClientID,
+		ClientSecret: m.ClientSecret,
+		Issuer:       m.Issuer,
 		Active:      m.Active,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
@@ -76,8 +78,9 @@ func fromSSOConnection(c *SSOConnection) *ssoConnectionModel {
 		Protocol:    c.Protocol,
 		Domain:      c.Domain,
 		MetadataURL: c.MetadataURL,
-		ClientID:    c.ClientID,
-		Issuer:      c.Issuer,
+		ClientID:     c.ClientID,
+		ClientSecret: c.ClientSecret,
+		Issuer:       c.Issuer,
 		Active:      c.Active,
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,

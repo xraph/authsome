@@ -42,21 +42,25 @@ type PasswordReset struct {
 
 // SignUpRequest is the input for account registration.
 type SignUpRequest struct {
-	AppID    id.AppID         `json:"app_id"`
-	EnvID    id.EnvironmentID `json:"env_id"`
-	Email    string           `json:"email"`
-	Password string           `json:"password"`
-	FirstName string           `json:"first_name,omitempty"`
-	LastName  string           `json:"last_name,omitempty"`
-	Username  string           `json:"username,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"` // custom form fields
+	AppID     id.AppID          `json:"app_id"`
+	EnvID     id.EnvironmentID  `json:"env_id"`
+	Email     string            `json:"email"`
+	Password  string            `json:"password"`
+	FirstName string            `json:"first_name,omitempty"`
+	LastName  string            `json:"last_name,omitempty"`
+	Username  string            `json:"username,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"` // custom form fields
+	IPAddress string            `json:"ip_address,omitempty"`
+	UserAgent string            `json:"user_agent,omitempty"`
 }
 
 // SignInRequest is the input for account authentication.
 type SignInRequest struct {
-	AppID    id.AppID         `json:"app_id"`
-	EnvID    id.EnvironmentID `json:"env_id"`
-	Email    string           `json:"email,omitempty"`
-	Username string           `json:"username,omitempty"`
-	Password string           `json:"password"`
+	AppID     id.AppID         `json:"app_id"`
+	EnvID     id.EnvironmentID `json:"env_id"`
+	Email     string           `json:"email,omitempty"`
+	Username  string           `json:"username,omitempty"`
+	Password  string           `json:"password"`
+	IPAddress string           `json:"ip_address,omitempty"`
+	UserAgent string           `json:"user_agent,omitempty"`
 }

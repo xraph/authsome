@@ -13,8 +13,9 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
-	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/appclientconfig"
+	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
@@ -22,6 +23,7 @@ import (
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 	"github.com/xraph/authsome/webhook"
@@ -102,6 +104,15 @@ func (s *Store) GetApp(ctx context.Context, appID id.AppID) (*app.App, error) {
 func (s *Store) GetAppBySlug(ctx context.Context, slug string) (*app.App, error) {
 	m := new(AppModel)
 	err := s.pg.NewSelect(m).Where("slug = ?", slug).Scan(ctx)
+	if err != nil {
+		return nil, pgError(err)
+	}
+	return toApp(m)
+}
+
+func (s *Store) GetAppByPublishableKey(ctx context.Context, key string) (*app.App, error) {
+	m := new(AppModel)
+	err := s.pg.NewSelect(m).Where("publishable_key = ?", key).Scan(ctx)
 	if err != nil {
 		return nil, pgError(err)
 	}
@@ -321,6 +332,27 @@ func (s *Store) ListUserSessions(ctx context.Context, userID id.UserID) ([]*sess
 		OrderExpr("created_at DESC").
 		Scan(ctx)
 	if err != nil {
+		return nil, pgError(err)
+	}
+	result := make([]*session.Session, 0, len(models))
+	for i := range models {
+		sess, err := toSession(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, sess)
+	}
+	return result, nil
+}
+
+func (s *Store) ListSessions(ctx context.Context, limit int) ([]*session.Session, error) {
+	var models []SessionModel
+	q := s.pg.NewSelect(&models).
+		OrderExpr("created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if err := q.Scan(ctx); err != nil {
 		return nil, pgError(err)
 	}
 	result := make([]*session.Session, 0, len(models))
@@ -697,6 +729,27 @@ func (s *Store) ListUserDevices(ctx context.Context, userID id.UserID) ([]*devic
 	return result, nil
 }
 
+func (s *Store) ListDevices(ctx context.Context, limit int) ([]*device.Device, error) {
+	var models []DeviceModel
+	q := s.pg.NewSelect(&models).
+		OrderExpr("last_seen_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if err := q.Scan(ctx); err != nil {
+		return nil, pgError(err)
+	}
+	result := make([]*device.Device, 0, len(models))
+	for i := range models {
+		d, err := toDevice(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, d)
+	}
+	return result, nil
+}
+
 // ──────────────────────────────────────────────────
 // Webhook store
 // ──────────────────────────────────────────────────
@@ -821,6 +874,18 @@ func (s *Store) GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix st
 	err := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
 		Where("key_prefix = ?", prefix).
+		Scan(ctx)
+	if err != nil {
+		return nil, pgError(err)
+	}
+	return toAPIKey(m)
+}
+
+func (s *Store) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*apikey.APIKey, error) {
+	m := new(APIKeyModel)
+	err := s.pg.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Where("public_key = ?", publicKey).
 		Scan(ctx)
 	if err != nil {
 		return nil, pgError(err)
@@ -1113,6 +1178,54 @@ func (s *Store) SetAppSessionConfig(ctx context.Context, cfg *appsessionconfig.C
 func (s *Store) DeleteAppSessionConfig(ctx context.Context, appID id.AppID) error {
 	_, err := s.pg.NewDelete((*AppSessionConfigModel)(nil)).Where("app_id = ?", appID.String()).Exec(ctx)
 	return pgError(err)
+}
+
+// ──────────────────────────────────────────────────
+// App Client Config Store
+// ──────────────────────────────────────────────────
+
+func (s *Store) GetAppClientConfig(_ context.Context, _ id.AppID) (*appclientconfig.Config, error) {
+	return nil, appclientconfig.ErrNotFound
+}
+
+func (s *Store) SetAppClientConfig(_ context.Context, _ *appclientconfig.Config) error {
+	return fmt.Errorf("postgres: app client config not implemented")
+}
+
+func (s *Store) DeleteAppClientConfig(_ context.Context, _ id.AppID) error {
+	return appclientconfig.ErrNotFound
+}
+
+// ──────────────────────────────────────────────────
+// Settings Store
+// ──────────────────────────────────────────────────
+
+func (s *Store) GetSetting(_ context.Context, _ string, _ settings.Scope, _ string) (*settings.Setting, error) {
+	return nil, store.ErrNotFound
+}
+
+func (s *Store) SetSetting(_ context.Context, _ *settings.Setting) error {
+	return fmt.Errorf("postgres: settings not implemented")
+}
+
+func (s *Store) DeleteSetting(_ context.Context, _ string, _ settings.Scope, _ string) error {
+	return nil
+}
+
+func (s *Store) ListSettings(_ context.Context, _ settings.ListOpts) ([]*settings.Setting, error) {
+	return nil, nil
+}
+
+func (s *Store) ResolveSettings(_ context.Context, _ string, _ settings.ResolveOpts) ([]*settings.Setting, error) {
+	return nil, nil
+}
+
+func (s *Store) BatchResolve(_ context.Context, _ []string, _ settings.ResolveOpts) (map[string][]*settings.Setting, error) {
+	return nil, nil
+}
+
+func (s *Store) DeleteSettingsByNamespace(_ context.Context, _ string) error {
+	return nil
 }
 
 // ──────────────────────────────────────────────────

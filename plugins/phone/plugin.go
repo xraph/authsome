@@ -16,9 +16,11 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 )
@@ -29,7 +31,47 @@ var (
 	_ plugin.RouteProvider         = (*Plugin)(nil)
 	_ plugin.OnInit                = (*Plugin)(nil)
 	_ plugin.AuthMethodContributor = (*Plugin)(nil)
+	_ plugin.SettingsProvider      = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingCodeTTLSeconds controls the lifetime of OTP codes in seconds.
+	SettingCodeTTLSeconds = settings.Define("phone.code_ttl_seconds", 300,
+		settings.WithDisplayName("OTP Code TTL (seconds)"),
+		settings.WithDescription("Lifetime of OTP verification codes in seconds"),
+		settings.WithCategory("Phone Auth"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(900)}),
+		settings.WithHelpText("How long OTP codes remain valid. Default: 300 (5 minutes)"),
+		settings.WithOrder(10),
+	)
+
+	// SettingAutoCreate controls whether to create new users for unknown phone numbers.
+	SettingAutoCreate = settings.Define("phone.auto_create", true,
+		settings.WithDisplayName("Auto-Create Users"),
+		settings.WithDescription("Automatically create new users when an unregistered phone number is used"),
+		settings.WithCategory("Phone Auth"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When disabled, only existing users can authenticate via phone"),
+		settings.WithOrder(20),
+	)
+)
+
+func intPtr(v int) *int { return &v }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "phone", SettingCodeTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "phone", SettingAutoCreate)
+}
 
 // phoneRegex is a basic E.164 phone number pattern.
 var phoneRegex = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)

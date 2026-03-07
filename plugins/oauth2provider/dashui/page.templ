@@ -1,0 +1,318 @@
+package dashui
+
+import (
+	"strings"
+	"time"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// ClientsPageData holds all data for the OAuth2 clients management page.
+type ClientsPageData struct {
+	Clients       []OAuth2ClientView
+	CreatedClient *CreatedClientView // non-nil only after creation (secret shown once)
+	Error         string             // validation/creation error message
+}
+
+// OAuth2ClientView is a display-only view of an OAuth2 client.
+type OAuth2ClientView struct {
+	ID           string
+	Name         string
+	ClientID     string
+	RedirectURIs []string
+	Scopes       []string
+	GrantTypes   []string
+	Public       bool
+	CreatedAt    time.Time
+}
+
+// CreatedClientView holds the result of a newly created OAuth2 client.
+type CreatedClientView struct {
+	Name         string
+	ClientID     string
+	ClientSecret string // shown only once (empty for public clients)
+	Public       bool
+}
+
+// ClientsPage renders the full OAuth2 client management page.
+templ ClientsPage(data ClientsPageData) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">OAuth2 Clients</h1>
+			<p class="text-muted-foreground mt-1">Create and manage OAuth2 client applications.</p>
+		</div>
+		<!-- Created Client Banner (shown once after creation) -->
+		if data.CreatedClient != nil {
+			<div class="rounded-sm border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4 space-y-3">
+				<div class="flex items-start gap-3">
+					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 mt-0.5">
+						@icons.TriangleAlert(icons.WithSize(18))
+					</div>
+					<div class="flex-1 space-y-1">
+						<p class="text-sm font-semibold text-amber-800 dark:text-amber-300">
+							Save your client credentials now
+						</p>
+						<p class="text-xs text-amber-700 dark:text-amber-400">
+							if data.CreatedClient.Public {
+								This is a public client. No client secret was generated.
+							} else {
+								This is the only time you will see the client secret. Copy it and store it securely.
+							}
+						</p>
+					</div>
+				</div>
+				<div class="space-y-2">
+					<div class="text-xs text-amber-700 dark:text-amber-400 font-medium">
+						{ data.CreatedClient.Name }
+					</div>
+					<!-- Client ID -->
+					<div class="space-y-1">
+						<p class="text-[10px] text-amber-600 dark:text-amber-500 font-medium uppercase tracking-wider">Client ID</p>
+						<div class="flex items-center gap-2">
+							<div class="flex-1 rounded-sm border border-amber-300 dark:border-amber-700 bg-white dark:bg-zinc-900 px-3 py-2 font-mono text-sm select-all break-all">
+								{ data.CreatedClient.ClientID }
+							</div>
+							<button
+								type="button"
+								class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-amber-300 dark:border-amber-700 bg-white dark:bg-zinc-900 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+								onclick={ o2CopyToClipboard(data.CreatedClient.ClientID) }
+								title="Copy to clipboard"
+							>
+								@icons.Copy(icons.WithSize(14))
+							</button>
+						</div>
+					</div>
+					<!-- Client Secret (only for confidential clients) -->
+					if !data.CreatedClient.Public && data.CreatedClient.ClientSecret != "" {
+						<div class="space-y-1">
+							<p class="text-[10px] text-amber-600 dark:text-amber-500 font-medium uppercase tracking-wider">Client Secret</p>
+							<div class="flex items-center gap-2">
+								<div class="flex-1 rounded-sm border border-amber-300 dark:border-amber-700 bg-white dark:bg-zinc-900 px-3 py-2 font-mono text-sm select-all break-all">
+									{ data.CreatedClient.ClientSecret }
+								</div>
+								<button
+									type="button"
+									class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-amber-300 dark:border-amber-700 bg-white dark:bg-zinc-900 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+									onclick={ o2CopyToClipboard(data.CreatedClient.ClientSecret) }
+									title="Copy to clipboard"
+								>
+									@icons.Copy(icons.WithSize(14))
+								</button>
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+		}
+		<!-- Error Banner -->
+		if data.Error != "" {
+			<div class="flex items-start gap-3 rounded-sm border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 p-4">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 mt-0.5">
+					@icons.CircleX(icons.WithSize(18))
+				</div>
+				<p class="text-sm text-red-800 dark:text-red-300">{ data.Error }</p>
+			</div>
+		}
+		<!-- Create Client Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Plus(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Create OAuth2 Client
+						}
+						@card.Description() {
+							Register a new OAuth2 client application.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<form method="POST" class="mt-4 space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<div class="grid gap-4 md:grid-cols-2">
+						<div class="space-y-1.5">
+							<label for="client-name" class="text-sm font-medium">Client Name</label>
+							<input
+								id="client-name"
+								name="name"
+								type="text"
+								required
+								placeholder="e.g. My Web App, Mobile Client"
+								class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							/>
+						</div>
+						<div class="space-y-1.5">
+							<label for="client-scopes" class="text-sm font-medium">Scopes</label>
+							<input
+								id="client-scopes"
+								name="scopes"
+								type="text"
+								placeholder="openid profile email (space-separated)"
+								class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							/>
+							<p class="text-[10px] text-muted-foreground">Defaults to: openid profile email</p>
+						</div>
+					</div>
+					<div class="space-y-1.5">
+						<label for="redirect-uris" class="text-sm font-medium">Redirect URIs</label>
+						<textarea
+							id="redirect-uris"
+							name="redirect_uris"
+							rows="3"
+							placeholder="https://app.example.com/callback&#10;https://localhost:3000/callback"
+							class="flex w-full rounded-sm border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						></textarea>
+						<p class="text-[10px] text-muted-foreground">One URI per line</p>
+					</div>
+					<div class="grid gap-4 md:grid-cols-2">
+						<div class="space-y-1.5">
+							<label for="grant-types" class="text-sm font-medium">Grant Types</label>
+							<input
+								id="grant-types"
+								name="grant_types"
+								type="text"
+								placeholder="authorization_code client_credentials"
+								class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							/>
+							<p class="text-[10px] text-muted-foreground">Defaults to: authorization_code</p>
+						</div>
+						<div class="flex items-end pb-1">
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="checkbox"
+									name="public"
+									class="h-4 w-4 rounded border-input"
+								/>
+								<span class="font-medium">Public Client</span>
+								<span class="text-muted-foreground text-xs">(no client secret)</span>
+							</label>
+						</div>
+					</div>
+					<div class="flex justify-end">
+						<button
+							type="submit"
+							class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-sm bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors"
+						>
+							@icons.KeyRound(icons.WithSize(14))
+							Create Client
+						</button>
+					</div>
+				</form>
+			}
+		}
+		<!-- Clients Table -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.KeyRound(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Registered Clients
+						}
+						@card.Description() {
+							All OAuth2 clients for this application.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<div class="mt-4">
+					if len(data.Clients) == 0 {
+						<p class="text-sm text-muted-foreground py-8 text-center">No OAuth2 clients have been created yet.</p>
+					} else {
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() { Name }
+									@table.Head() { Client ID }
+									@table.Head() { Type }
+									@table.Head() { Grant Types }
+									@table.Head() { Created }
+									@table.Head() {
+										<span class="sr-only">Actions</span>
+									}
+								}
+							}
+							@table.Body() {
+								for _, c := range data.Clients {
+									@table.Row() {
+										@table.Cell() {
+											<span class="font-medium">{ c.Name }</span>
+										}
+										@table.Cell() {
+											<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ truncateClientID(c.ClientID) }</code>
+										}
+										@table.Cell() {
+											if c.Public {
+												@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+													Public
+												}
+											} else {
+												@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+													Confidential
+												}
+											}
+										}
+										@table.Cell() {
+											<span class="text-xs text-muted-foreground">{ strings.Join(c.GrantTypes, ", ") }</span>
+										}
+										@table.Cell() {
+											{{ created := c.CreatedAt.Format("Jan 02, 2006") }}
+											<span class="text-muted-foreground text-xs">{ created }</span>
+										}
+										@table.Cell() {
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="delete"/>
+												<input type="hidden" name="client_id" value={ c.ID }/>
+												<button
+													type="submit"
+													class="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border border-destructive/30 bg-destructive/10 px-3 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
+													onclick="return confirm('Are you sure you want to delete this OAuth2 client? This action cannot be undone.')"
+												>
+													@icons.Trash2(icons.WithSize(12))
+													Delete
+												</button>
+											</form>
+										}
+									}
+								}
+							}
+						}
+					}
+				</div>
+			}
+		}
+	</div>
+}
+
+// truncateClientID truncates a client ID for display.
+func truncateClientID(clientID string) string {
+	if len(clientID) <= 12 {
+		return clientID
+	}
+	return clientID[:8] + "..." + clientID[len(clientID)-4:]
+}
+
+script o2CopyToClipboard(text string) {
+	navigator.clipboard.writeText(text).then(function() {
+		var btn = document.activeElement;
+		if (btn) {
+			var originalTitle = btn.title;
+			btn.title = "Copied!";
+			setTimeout(function() { btn.title = originalTitle; }, 2000);
+		}
+	});
+}

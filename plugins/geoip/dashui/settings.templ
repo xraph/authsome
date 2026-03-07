@@ -1,0 +1,41 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+)
+
+templ SettingsPanel(databasePath string, cacheTTL string, providerConfigured bool) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				GeoIP
+			}
+			@card.Description() {
+				IP geolocation resolution for security plugins
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">Provider</dt>
+				<dd class="font-medium">
+					if providerConfigured {
+						@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+							Configured
+						}
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							Not configured
+						}
+					}
+				</dd>
+				if databasePath != "" {
+					<dt class="text-muted-foreground">Database Path</dt>
+					<dd class="font-medium truncate" title={ databasePath }>{ databasePath }</dd>
+				}
+				<dt class="text-muted-foreground">Cache TTL</dt>
+				<dd class="font-medium">{ cacheTTL }</dd>
+			</dl>
+		}
+	}
+}

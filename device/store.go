@@ -14,4 +14,6 @@ type Store interface {
 	UpdateDevice(ctx context.Context, d *Device) error
 	DeleteDevice(ctx context.Context, deviceID id.DeviceID) error
 	ListUserDevices(ctx context.Context, userID id.UserID) ([]*Device, error)
+	// ListDevices returns the most recent devices across all users, up to limit.
+	ListDevices(ctx context.Context, limit int) ([]*Device, error)
 }

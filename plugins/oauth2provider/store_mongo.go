@@ -193,13 +193,97 @@ func authCodeToDoc(c *AuthorizationCode) *authCodeDoc {
 	}
 }
 
+type deviceCodeDoc struct {
+	ID              string    `bson:"_id"`
+	DeviceCode      string    `bson:"device_code"`
+	UserCode        string    `bson:"user_code"`
+	ClientID        string    `bson:"client_id"`
+	AppID           string    `bson:"app_id"`
+	Scopes          []string  `bson:"scopes"`
+	VerificationURI string    `bson:"verification_uri"`
+	ExpiresAt       time.Time `bson:"expires_at"`
+	Interval        int       `bson:"interval"`
+	Status          string    `bson:"status"`
+	UserID          string    `bson:"user_id"`
+	LastPolledAt    time.Time `bson:"last_polled_at,omitempty"`
+	CreatedAt       time.Time `bson:"created_at"`
+}
+
+// ──────────────────────────────────────────────────
+// Device code converters
+// ──────────────────────────────────────────────────
+
+func deviceCodeDocToModel(d *deviceCodeDoc) (*DeviceCode, error) {
+	dcID, err := id.ParseDeviceCodeID(d.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(d.AppID)
+	if err != nil {
+		return nil, err
+	}
+
+	var userID id.UserID
+	if d.UserID != "" {
+		userID, err = id.ParseUserID(d.UserID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	scopes := d.Scopes
+	if scopes == nil {
+		scopes = []string{}
+	}
+
+	return &DeviceCode{
+		ID:              dcID,
+		DeviceCode:      d.DeviceCode,
+		UserCode:        d.UserCode,
+		ClientID:        d.ClientID,
+		AppID:           appID,
+		Scopes:          scopes,
+		VerificationURI: d.VerificationURI,
+		ExpiresAt:       d.ExpiresAt,
+		Interval:        d.Interval,
+		Status:          d.Status,
+		UserID:          userID,
+		LastPolledAt:    d.LastPolledAt,
+		CreatedAt:       d.CreatedAt,
+	}, nil
+}
+
+func deviceCodeToDoc(dc *DeviceCode) *deviceCodeDoc {
+	scopes := dc.Scopes
+	if scopes == nil {
+		scopes = []string{}
+	}
+
+	return &deviceCodeDoc{
+		ID:              dc.ID.String(),
+		DeviceCode:      dc.DeviceCode,
+		UserCode:        dc.UserCode,
+		ClientID:        dc.ClientID,
+		AppID:           dc.AppID.String(),
+		Scopes:          scopes,
+		VerificationURI: dc.VerificationURI,
+		ExpiresAt:       dc.ExpiresAt,
+		Interval:        dc.Interval,
+		Status:          dc.Status,
+		UserID:          dc.UserID.String(),
+		LastPolledAt:    dc.LastPolledAt,
+		CreatedAt:       dc.CreatedAt,
+	}
+}
+
 // ──────────────────────────────────────────────────
 // Collection names
 // ──────────────────────────────────────────────────
 
 const (
-	oauth2ClientsColl   = "authsome_oauth2_clients"
-	oauth2AuthCodesColl = "authsome_oauth2_auth_codes"
+	oauth2ClientsColl     = "authsome_oauth2_clients"
+	oauth2AuthCodesColl   = "authsome_oauth2_auth_codes"
+	oauth2DeviceCodesColl = "authsome_oauth2_device_codes"
 )
 
 // ──────────────────────────────────────────────────
@@ -303,6 +387,66 @@ func (s *MongoStore) ConsumeAuthCode(ctx context.Context, code string) error {
 		bson.M{"code": code},
 		bson.M{"$set": bson.M{"consumed": true}},
 	)
+	return oauth2MongoError(err)
+}
+
+// ──────────────────────────────────────────────────
+// Device code methods (RFC 8628)
+// ──────────────────────────────────────────────────
+
+func (s *MongoStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) error {
+	if dc.CreatedAt.IsZero() {
+		dc.CreatedAt = time.Now()
+	}
+	doc := deviceCodeToDoc(dc)
+	_, err := s.mdb.Collection(oauth2DeviceCodesColl).InsertOne(ctx, doc)
+	return oauth2MongoError(err)
+}
+
+func (s *MongoStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
+	doc := new(deviceCodeDoc)
+	err := s.mdb.Collection(oauth2DeviceCodesColl).FindOne(ctx, bson.M{
+		"device_code": deviceCode,
+	}).Decode(doc)
+	if err != nil {
+		if oauth2IsNoDocuments(err) {
+			return nil, ErrDeviceCodeNotFound
+		}
+		return nil, oauth2MongoError(err)
+	}
+	return deviceCodeDocToModel(doc)
+}
+
+func (s *MongoStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
+	doc := new(deviceCodeDoc)
+	err := s.mdb.Collection(oauth2DeviceCodesColl).FindOne(ctx, bson.M{
+		"user_code": userCode,
+	}).Decode(doc)
+	if err != nil {
+		if oauth2IsNoDocuments(err) {
+			return nil, ErrDeviceCodeNotFound
+		}
+		return nil, oauth2MongoError(err)
+	}
+	return deviceCodeDocToModel(doc)
+}
+
+func (s *MongoStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {
+	_, err := s.mdb.Collection(oauth2DeviceCodesColl).UpdateOne(ctx,
+		bson.M{"_id": dc.ID.String()},
+		bson.M{"$set": bson.M{
+			"status":         dc.Status,
+			"user_id":        dc.UserID.String(),
+			"last_polled_at": dc.LastPolledAt,
+		}},
+	)
+	return oauth2MongoError(err)
+}
+
+func (s *MongoStore) DeleteExpiredDeviceCodes(ctx context.Context) error {
+	_, err := s.mdb.Collection(oauth2DeviceCodesColl).DeleteMany(ctx, bson.M{
+		"expires_at": bson.M{"$lt": time.Now()},
+	})
 	return oauth2MongoError(err)
 }
 

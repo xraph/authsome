@@ -51,6 +51,9 @@ const (
 	PrefixAppSessionCfg   Prefix = "ascf"
 	PrefixOAuth2Client    Prefix = "ao2c"
 	PrefixAuthCode        Prefix = "aaco"
+	PrefixSetting         Prefix = "aset"
+	PrefixAppClientConfig Prefix = "aacf"
+	PrefixDeviceCode     Prefix = "advc"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -150,6 +153,15 @@ type OAuth2ClientID = ID
 
 // AuthCodeID is a type-safe identifier for authorization codes (prefix: "aaco").
 type AuthCodeID = ID
+
+// SettingID is a type-safe identifier for settings (prefix: "aset").
+type SettingID = ID
+
+// AppClientConfigID is a type-safe identifier for app client configs (prefix: "aacf").
+type AppClientConfigID = ID
+
+// DeviceCodeID is a type-safe identifier for OAuth2 device codes (prefix: "advc").
+type DeviceCodeID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
@@ -304,6 +316,15 @@ func NewOAuth2ClientID() ID { return New(PrefixOAuth2Client) }
 // NewAuthCodeID generates a new unique authorization code ID.
 func NewAuthCodeID() ID { return New(PrefixAuthCode) }
 
+// NewSettingID generates a new unique setting ID.
+func NewSettingID() ID { return New(PrefixSetting) }
+
+// NewAppClientConfigID generates a new unique app client config ID.
+func NewAppClientConfigID() ID { return New(PrefixAppClientConfig) }
+
+// NewDeviceCodeID generates a new unique device code ID.
+func NewDeviceCodeID() ID { return New(PrefixDeviceCode) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -390,6 +411,15 @@ func ParseOAuth2ClientID(s string) (ID, error) { return ParseWithPrefix(s, Prefi
 
 // ParseAuthCodeID parses a string and validates the "aaco" prefix.
 func ParseAuthCodeID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAuthCode) }
+
+// ParseSettingID parses a string and validates the "aset" prefix.
+func ParseSettingID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSetting) }
+
+// ParseAppClientConfigID parses a string and validates the "aacf" prefix.
+func ParseAppClientConfigID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAppClientConfig) }
+
+// ParseDeviceCodeID parses a string and validates the "advc" prefix.
+func ParseDeviceCodeID(s string) (ID, error) { return ParseWithPrefix(s, PrefixDeviceCode) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }

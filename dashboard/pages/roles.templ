@@ -32,23 +32,48 @@ templ RolesPage(roles []*rbac.Role) {
 								@table.Head() { Name }
 								@table.Head() { Slug }
 								@table.Head() { Description }
+								@table.Head() { Type }
 								@table.Head() { Created }
 							}
 						}
 						@table.Body() {
 							for _, role := range roles {
-								@table.Row() {
+								@table.Row(table.RowProps{
+									Class: "cursor-pointer hover:bg-muted/50",
+									Attributes: templ.Attributes{
+										"hx-get":      "./roles/detail?id=" + role.ID,
+										"hx-target":   "#content",
+										"hx-push-url": "true",
+										"hx-swap":     "innerHTML",
+									},
+								}) {
 									@table.Cell() {
-										<span class="font-medium">{ role.Name }</span>
+										<div class="flex items-center gap-2">
+											<span class="text-muted-foreground">
+												@icons.Shield(icons.WithSize(14))
+											</span>
+											<span class="font-medium">{ role.Name }</span>
+										</div>
 									}
 									@table.Cell() {
 										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ role.Slug }</code>
 									}
 									@table.Cell() {
 										if role.Description != "" {
-											<span class="text-sm text-muted-foreground">{ role.Description }</span>
+											<span class="text-sm text-muted-foreground">{ truncateString(role.Description, 50) }</span>
 										} else {
 											<span class="text-sm text-muted-foreground italic">No description</span>
+										}
+									}
+									@table.Cell() {
+										if role.ParentID != "" {
+											@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+												Child
+											}
+										} else {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												Root
+											}
 										}
 									}
 									@table.Cell() {

@@ -1,0 +1,89 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+// ConfigPage renders the magic link configuration overview.
+templ ConfigPage(tokenTTL string, sessionTokenTTL string, sessionRefreshTTL string) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Magic Link</h1>
+			<p class="text-muted-foreground mt-1">Passwordless authentication via email magic links.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Wand(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Configuration
+						}
+						@card.Description() {
+							Token and session lifetime settings for magic link authentication.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Token TTL</dt>
+					<dd class="font-medium">{ tokenTTL }</dd>
+					<dt class="text-muted-foreground">Session Token TTL</dt>
+					<dd class="font-medium">{ sessionTokenTTL }</dd>
+					<dt class="text-muted-foreground">Refresh Token TTL</dt>
+					<dd class="font-medium">{ sessionRefreshTTL }</dd>
+				</dl>
+			}
+		}
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Mail(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							How It Works
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<ol class="mt-4 space-y-2 text-sm text-muted-foreground list-decimal list-inside">
+					<li>User enters their email address</li>
+					<li>A unique magic link token is generated and sent via email</li>
+					<li>User clicks the link within the token TTL window</li>
+					<li>A session is created with the configured session TTL</li>
+				</ol>
+			}
+		}
+		<!-- Settings link -->
+		@card.Card() {
+			@card.Content() {
+				<div class="flex items-center justify-between py-2">
+					<div class="flex items-center gap-3">
+						@icons.Settings(icons.WithSize(16), icons.WithClass("text-muted-foreground"))
+						<div>
+							<p class="text-sm font-medium">Magic Link Settings</p>
+							<p class="text-xs text-muted-foreground">Configure token and session lifetimes.</p>
+						</div>
+					</div>
+					<a
+						href="settings/editor?scope=app&namespace=magiclink"
+						class="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+					>
+						@icons.ExternalLink(icons.WithSize(12))
+						Edit Settings
+					</a>
+				</div>
+			}
+		}
+	</div>
+}

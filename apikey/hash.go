@@ -20,10 +20,15 @@ const (
 	// keyMarker is the legacy prefix for all raw API keys (treated as production).
 	keyMarker = "ask_"
 
-	// Environment-specific key markers.
+	// Environment-specific secret key markers.
 	keyMarkerTest = "sk_test_" // development
 	keyMarkerStg  = "sk_stg_"  // staging
 	keyMarkerLive = "sk_live_" // production
+
+	// Environment-specific public key markers.
+	pkMarkerTest = "pk_test_" // development
+	pkMarkerStg  = "pk_stg_"  // staging
+	pkMarkerLive = "pk_live_" // production
 )
 
 // GenerateKey creates a new API key, returning the raw key (shown to user once)
@@ -92,11 +97,11 @@ func GenerateKeyForEnvironment(envType environment.Type) (raw string, hash strin
 // recognized, or empty and false for unknown keys.
 func DetectEnvironmentType(rawKey string) (environment.Type, bool) {
 	switch {
-	case strings.HasPrefix(rawKey, keyMarkerTest):
+	case strings.HasPrefix(rawKey, keyMarkerTest), strings.HasPrefix(rawKey, pkMarkerTest):
 		return environment.TypeDevelopment, true
-	case strings.HasPrefix(rawKey, keyMarkerStg):
+	case strings.HasPrefix(rawKey, keyMarkerStg), strings.HasPrefix(rawKey, pkMarkerStg):
 		return environment.TypeStaging, true
-	case strings.HasPrefix(rawKey, keyMarkerLive):
+	case strings.HasPrefix(rawKey, keyMarkerLive), strings.HasPrefix(rawKey, pkMarkerLive):
 		return environment.TypeProduction, true
 	case strings.HasPrefix(rawKey, keyMarker):
 		// Legacy keys are treated as production.
@@ -109,10 +114,76 @@ func DetectEnvironmentType(rawKey string) (environment.Type, bool) {
 // StripKeyMarker removes the environment/legacy marker prefix from a raw key,
 // returning just the hex-encoded random part. Useful for prefix extraction.
 func StripKeyMarker(rawKey string) string {
-	for _, marker := range []string{keyMarkerTest, keyMarkerStg, keyMarkerLive, keyMarker} {
+	for _, marker := range []string{
+		keyMarkerTest, keyMarkerStg, keyMarkerLive,
+		pkMarkerTest, pkMarkerStg, pkMarkerLive,
+		keyMarker,
+	} {
 		if strings.HasPrefix(rawKey, marker) {
 			return rawKey[len(marker):]
 		}
 	}
 	return rawKey
+}
+
+// PublicKeyMarker returns the public key prefix marker for a given environment type.
+func PublicKeyMarker(envType environment.Type) string {
+	switch envType {
+	case environment.TypeDevelopment:
+		return pkMarkerTest
+	case environment.TypeStaging:
+		return pkMarkerStg
+	case environment.TypeProduction:
+		return pkMarkerLive
+	default:
+		return pkMarkerLive
+	}
+}
+
+// GenerateKeyPair creates a Clerk-style key pair: a publishable key (pk_*)
+// for frontend use and a secret key (sk_*) for server-side auth.
+// The secret key is hashed; the public key is stored in plaintext.
+func GenerateKeyPair() (publicKey, secretKey, secretHash, publicPrefix, secretPrefix string, err error) {
+	return GenerateKeyPairForEnvironment(environment.TypeProduction)
+}
+
+// GenerateKeyPairForEnvironment creates an environment-aware key pair.
+func GenerateKeyPairForEnvironment(envType environment.Type) (publicKey, secretKey, secretHash, publicPrefix, secretPrefix string, err error) {
+	// Generate secret key.
+	skBytes := make([]byte, rawKeyLen)
+	if _, err := rand.Read(skBytes); err != nil {
+		return "", "", "", "", "", fmt.Errorf("apikey: generate secret key: %w", err)
+	}
+	skMarker := EnvironmentKeyMarker(envType)
+	skHex := hex.EncodeToString(skBytes)
+	secretKey = skMarker + skHex
+	secretPrefix = secretKey[:prefixLen+len(skMarker)]
+	secretHash = HashKey(secretKey)
+
+	// Generate public key.
+	pkBytes := make([]byte, rawKeyLen)
+	if _, err := rand.Read(pkBytes); err != nil {
+		return "", "", "", "", "", fmt.Errorf("apikey: generate public key: %w", err)
+	}
+	pkMarker := PublicKeyMarker(envType)
+	pkHex := hex.EncodeToString(pkBytes)
+	publicKey = pkMarker + pkHex
+	publicPrefix = publicKey[:prefixLen+len(pkMarker)]
+
+	return publicKey, secretKey, secretHash, publicPrefix, secretPrefix, nil
+}
+
+// IsPublicKey returns true if the key has a publishable key prefix (pk_*).
+func IsPublicKey(key string) bool {
+	return strings.HasPrefix(key, "pk_")
+}
+
+// IsSecretKey returns true if the key has a secret key prefix (sk_* or ask_).
+func IsSecretKey(key string) bool {
+	return strings.HasPrefix(key, "sk_") || strings.HasPrefix(key, keyMarker)
+}
+
+// IsAPIKey returns true if the string looks like an API key (pk_*, sk_*, or ask_).
+func IsAPIKey(key string) bool {
+	return IsPublicKey(key) || IsSecretKey(key)
 }

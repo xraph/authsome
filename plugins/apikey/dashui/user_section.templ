@@ -10,10 +10,14 @@ import (
 
 // APIKeyView is a display-only view of an API key.
 type APIKeyView struct {
-	Name      string
-	KeyPrefix string
-	Revoked   bool
-	CreatedAt time.Time
+	ID              string
+	Name            string
+	KeyPrefix       string
+	PublicKey       string
+	PublicKeyPrefix string
+	Revoked         bool
+	CreatedAt       time.Time
+	LastUsedAt      *time.Time
 }
 
 // UserSection renders the API keys section for a specific user detail page.
@@ -36,6 +40,7 @@ templ UserSection(keys []APIKeyView) {
 						@table.Row() {
 							@table.Head() { Name }
 							@table.Head() { Prefix }
+							@table.Head() { Public Key }
 							@table.Head() { Status }
 							@table.Head() { Created }
 						}
@@ -46,6 +51,23 @@ templ UserSection(keys []APIKeyView) {
 								@table.Cell() { { k.Name } }
 								@table.Cell() {
 									<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ k.KeyPrefix }...</code>
+								}
+								@table.Cell() {
+									if k.PublicKey != "" {
+										<div class="flex items-center gap-1.5 max-w-xs">
+											<code class="text-xs font-mono bg-muted px-1.5 py-0.5 rounded truncate select-all" title={ k.PublicKey }>{ k.PublicKey }</code>
+											<button
+												type="button"
+												class="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+												title="Copy public key"
+												onclick={ copyToClipboard(k.PublicKey) }
+											>
+												@clipboardIcon()
+											</button>
+										</div>
+									} else {
+										<span class="text-muted-foreground text-xs">—</span>
+									}
 								}
 								@table.Cell() {
 									if k.Revoked {

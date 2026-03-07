@@ -20,6 +20,7 @@ type Session struct {
 	UserAgent             string           `json:"user_agent,omitempty"`
 	DeviceID              id.DeviceID      `json:"device_id,omitempty"`
 	ImpersonatedBy        id.UserID        `json:"impersonated_by,omitempty"`
+	LastActivityAt        time.Time        `json:"last_activity_at,omitempty"`
 	ExpiresAt             time.Time        `json:"expires_at"`
 	RefreshTokenExpiresAt time.Time        `json:"refresh_token_expires_at"`
 	CreatedAt             time.Time        `json:"created_at"`

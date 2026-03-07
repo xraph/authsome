@@ -1,0 +1,24 @@
+# Flutter
+flutter/**/.dart_tool/
+flutter/**/.packages
+flutter/**/build/
+flutter/**/.flutter-plugins
+flutter/**/.flutter-plugins-dependencies
+flutter/**/pubspec.lock
+flutter/**/generated_plugin_registrant.dart
+
+# UI / React / Node
+ui/node_modules/
+ui/**/node_modules/
+ui/.turbo/
+ui/**/.turbo/
+ui/**/dist/
+ui/**/.next/
+ui/**/storybook-static/
+ui/**/coverage/
+ui/**/*.tsbuildinfo
+
+# General
+.DS_Store
+*.pem
+.env*.local

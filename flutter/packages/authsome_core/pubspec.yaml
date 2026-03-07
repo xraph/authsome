@@ -1,0 +1,13 @@
+name: authsome_core
+description: AuthSome authentication SDK for Dart — framework-agnostic core with auto-config support.
+version: 0.1.0
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  http: ^1.2.0
+  meta: ^1.9.0
+
+dev_dependencies:
+  lints: ^4.0.0

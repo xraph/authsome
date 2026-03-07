@@ -106,7 +106,7 @@ func run(outPath, title, version string) error {
 		authsome.WithPlugin(mfa.New(mfa.Config{})),
 
 		// API keys
-		authsome.WithPlugin(apikey.New(store)),
+		authsome.WithPlugin(apikey.New()),
 
 		// Magic link (zero-config — no mailer, but routes are still registered)
 		authsome.WithPlugin(magiclink.New(magiclink.Config{})),
@@ -118,7 +118,7 @@ func run(outPath, title, version string) error {
 		authsome.WithPlugin(passkey.New(passkey.Config{})),
 
 		// Organizations (opt-in)
-		authsome.WithPlugin(orgplugin.New(store)),
+		authsome.WithPlugin(orgplugin.New()),
 	)
 	if err != nil {
 		return fmt.Errorf("create engine: %w", err)

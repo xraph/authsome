@@ -58,9 +58,10 @@ type SSOConnection struct {
 	Protocol    string             `json:"protocol"`
 	Domain      string             `json:"domain"`
 	MetadataURL string             `json:"metadata_url,omitempty"`
-	ClientID    string             `json:"client_id,omitempty"`
-	Issuer      string             `json:"issuer,omitempty"`
-	Active      bool               `json:"active"`
+	ClientID     string             `json:"client_id,omitempty"`
+	ClientSecret string             `json:"-"`
+	Issuer       string             `json:"issuer,omitempty"`
+	Active       bool               `json:"active"`
 	CreatedAt   time.Time          `json:"created_at"`
 	UpdatedAt   time.Time          `json:"updated_at"`
 }

@@ -16,4 +16,6 @@ type Store interface {
 	DeleteSession(ctx context.Context, sessionID id.SessionID) error
 	DeleteUserSessions(ctx context.Context, userID id.UserID) error
 	ListUserSessions(ctx context.Context, userID id.UserID) ([]*Session, error)
+	// ListSessions returns the most recent sessions across all users, up to limit.
+	ListSessions(ctx context.Context, limit int) ([]*Session, error)
 }

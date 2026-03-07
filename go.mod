@@ -5,19 +5,20 @@ go 1.25.7
 require (
 	github.com/a-h/templ v0.3.1001
 	github.com/go-webauthn/webauthn v0.15.0
+	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pquerna/otp v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	github.com/xraph/chronicle v0.0.0
-	github.com/xraph/forge v1.0.0
-	github.com/xraph/forgeui v1.1.0
-	github.com/xraph/grove v0.0.5
-	github.com/xraph/grove/drivers/mongodriver v0.0.5
-	github.com/xraph/grove/drivers/pgdriver v0.0.5
-	github.com/xraph/grove/drivers/sqlitedriver v0.0.5
+	github.com/xraph/forge v1.2.0
+	github.com/xraph/forgeui v1.2.0
+	github.com/xraph/grove v1.0.0
+	github.com/xraph/grove/drivers/mongodriver v1.0.0
+	github.com/xraph/grove/drivers/pgdriver v1.0.0
+	github.com/xraph/grove/drivers/sqlitedriver v1.0.0
 	github.com/xraph/herald v0.0.0
 	github.com/xraph/keysmith v0.0.0
-	github.com/xraph/relay v0.0.1
+	github.com/xraph/relay v0.2.0
 	github.com/xraph/vessel v1.0.0
 	github.com/xraph/warden v0.0.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
@@ -32,10 +33,10 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.19.1 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.48.0 // indirect
-	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/prometheus/client_golang v1.23.2 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
+	github.com/prometheus/common v0.66.1 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect

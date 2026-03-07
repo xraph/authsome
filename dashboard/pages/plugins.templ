@@ -1,0 +1,210 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+// PluginPageInfo holds display data for a plugin-contributed page.
+type PluginPageInfo struct {
+	Route string
+	Label string
+	Icon  string
+}
+
+// PluginWidgetInfo holds display data for a plugin-contributed widget.
+type PluginWidgetInfo struct {
+	Title string
+	Size  string
+}
+
+// PluginInfo holds display data for a single registered plugin.
+type PluginInfo struct {
+	Name                 string
+	Pages                []PluginPageInfo
+	Widgets              []PluginWidgetInfo
+	HasSettingsPanel     bool
+	HasUserDetailSection bool
+	HasPageContributor   bool
+}
+
+templ PluginsPage(plugins []PluginInfo) {
+	<div class="space-y-6">
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">Plugins</h1>
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(plugins)) }
+				}
+			</div>
+		</div>
+
+		if len(plugins) == 0 {
+			@card.Card() {
+				@card.Content() {
+					<div class="flex flex-col items-center justify-center py-12 text-center">
+						<div class="flex h-12 w-12 items-center justify-center rounded-sm bg-muted text-muted-foreground mb-4">
+							@icons.Puzzle(icons.WithSize(24))
+						</div>
+						<h3 class="text-lg font-semibold mb-1">No plugins installed</h3>
+						<p class="text-sm text-muted-foreground max-w-sm">
+							Plugins extend authsome with additional authentication methods, dashboard pages, and features.
+						</p>
+					</div>
+				}
+			}
+		} else {
+			<div class="grid gap-4 md:grid-cols-2">
+				for _, p := range plugins {
+					@pluginCard(p)
+				}
+			</div>
+		}
+	</div>
+}
+
+templ pluginCard(p PluginInfo) {
+	@card.Card() {
+		@card.Header() {
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Puzzle(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							{ p.Name }
+						}
+						@card.Description() {
+							{ pluginSummary(p) }
+						}
+					</div>
+				</div>
+				@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+					Active
+				}
+			</div>
+		}
+		@card.Content() {
+			<!-- Capability Badges -->
+			<div class="flex flex-wrap gap-2 mb-4">
+				if len(p.Pages) > 0 {
+					@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+						@icons.FileText(icons.WithSize(12))
+						<span class="ml-1">{ strconv.Itoa(len(p.Pages)) } { pluralize(len(p.Pages), "page", "pages") }</span>
+					}
+				}
+				if len(p.Widgets) > 0 {
+					@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+						@icons.LayoutDashboard(icons.WithSize(12))
+						<span class="ml-1">{ strconv.Itoa(len(p.Widgets)) } { pluralize(len(p.Widgets), "widget", "widgets") }</span>
+					}
+				}
+				if p.HasSettingsPanel {
+					@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+						@icons.Settings(icons.WithSize(12))
+						<span class="ml-1">Settings</span>
+					}
+				}
+				if p.HasUserDetailSection {
+					@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+						@icons.User(icons.WithSize(12))
+						<span class="ml-1">User Detail</span>
+					}
+				}
+				if p.HasPageContributor {
+					@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+						@icons.Route(icons.WithSize(12))
+						<span class="ml-1">Custom Routes</span>
+					}
+				}
+			</div>
+
+			<!-- Pages list -->
+			if len(p.Pages) > 0 {
+				<div class="space-y-1">
+					<h4 class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pages</h4>
+					<div class="space-y-1">
+						for _, page := range p.Pages {
+							<div class="flex items-center gap-2 text-sm py-1 px-2 rounded-sm hover:bg-muted/50 cursor-pointer"
+								hx-get={ "." + page.Route }
+								hx-target="#content"
+								hx-push-url="true"
+								hx-swap="innerHTML">
+								@pluginPageIcon(page.Icon)
+								<span>{ page.Label }</span>
+							</div>
+						}
+					</div>
+				</div>
+			}
+
+			<!-- Widgets list -->
+			if len(p.Widgets) > 0 {
+				<div class="space-y-1 mt-3">
+					<h4 class="text-xs font-medium text-muted-foreground uppercase tracking-wider">Widgets</h4>
+					<div class="space-y-1">
+						for _, w := range p.Widgets {
+							<div class="flex items-center justify-between text-sm py-1 px-2">
+								<span>{ w.Title }</span>
+								@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+									{ w.Size }
+								}
+							</div>
+						}
+					</div>
+				</div>
+			}
+		}
+	}
+}
+
+// pluginPageIcon renders a small icon for a plugin page based on its icon name.
+templ pluginPageIcon(iconName string) {
+	<span class="text-muted-foreground">
+		switch iconName {
+			case "users":
+				@icons.Users(icons.WithSize(14))
+			case "shield":
+				@icons.Shield(icons.WithSize(14))
+			case "key-round":
+				@icons.KeyRound(icons.WithSize(14))
+			case "building-2":
+				@icons.Building2(icons.WithSize(14))
+			case "smartphone":
+				@icons.Smartphone(icons.WithSize(14))
+			default:
+				@icons.FileText(icons.WithSize(14))
+		}
+	</span>
+}
+
+// pluginSummary returns a short summary string for a plugin.
+func pluginSummary(p PluginInfo) string {
+	parts := 0
+	if len(p.Pages) > 0 {
+		parts++
+	}
+	if len(p.Widgets) > 0 {
+		parts++
+	}
+	if p.HasSettingsPanel {
+		parts++
+	}
+	if parts == 0 {
+		return "Registered plugin"
+	}
+	return strconv.Itoa(parts) + " " + pluralize(parts, "contribution", "contributions")
+}
+
+// pluralize returns singular or plural based on count.
+func pluralize(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
+}

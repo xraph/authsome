@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: hsl(var(--authsome-background));
+  --color-foreground: hsl(var(--authsome-foreground));
+  --color-card: hsl(var(--authsome-card));
+  --color-card-foreground: hsl(var(--authsome-card-foreground));
+  --color-popover: hsl(var(--authsome-popover));
+  --color-popover-foreground: hsl(var(--authsome-popover-foreground));
+  --color-primary: hsl(var(--authsome-primary));
+  --color-primary-foreground: hsl(var(--authsome-primary-foreground));
+  --color-secondary: hsl(var(--authsome-secondary));
+  --color-secondary-foreground: hsl(var(--authsome-secondary-foreground));
+  --color-muted: hsl(var(--authsome-muted));
+  --color-muted-foreground: hsl(var(--authsome-muted-foreground));
+  --color-accent: hsl(var(--authsome-accent));
+  --color-accent-foreground: hsl(var(--authsome-accent-foreground));
+  --color-destructive: hsl(var(--authsome-destructive));
+  --color-destructive-foreground: hsl(var(--authsome-destructive-foreground));
+  --color-border: hsl(var(--authsome-border));
+  --color-input: hsl(var(--authsome-input));
+  --color-ring: hsl(var(--authsome-ring));
+  --radius-sm: calc(var(--authsome-radius) - 4px);
+  --radius-md: calc(var(--authsome-radius) - 2px);
+  --radius-lg: var(--authsome-radius);
+  --radius-xl: calc(var(--authsome-radius) + 4px);
+}
+
+@layer base {
+  :root {
+    --authsome-background: 0 0% 100%;
+    --authsome-foreground: 240 10% 3.9%;
+    --authsome-card: 0 0% 100%;
+    --authsome-card-foreground: 240 10% 3.9%;
+    --authsome-popover: 0 0% 100%;
+    --authsome-popover-foreground: 240 10% 3.9%;
+    --authsome-primary: 240 5.9% 10%;
+    --authsome-primary-foreground: 0 0% 98%;
+    --authsome-secondary: 240 4.8% 95.9%;
+    --authsome-secondary-foreground: 240 5.9% 10%;
+    --authsome-muted: 240 4.8% 95.9%;
+    --authsome-muted-foreground: 240 3.8% 46.1%;
+    --authsome-accent: 240 4.8% 95.9%;
+    --authsome-accent-foreground: 240 5.9% 10%;
+    --authsome-destructive: 0 84.2% 60.2%;
+    --authsome-destructive-foreground: 0 0% 98%;
+    --authsome-border: 240 5.9% 90%;
+    --authsome-input: 240 5.9% 90%;
+    --authsome-ring: 240 5.9% 10%;
+    --authsome-radius: 0.5rem;
+  }
+
+  .dark {
+    --authsome-background: 240 10% 3.9%;
+    --authsome-foreground: 0 0% 98%;
+    --authsome-card: 240 10% 3.9%;
+    --authsome-card-foreground: 0 0% 98%;
+    --authsome-popover: 240 10% 3.9%;
+    --authsome-popover-foreground: 0 0% 98%;
+    --authsome-primary: 0 0% 98%;
+    --authsome-primary-foreground: 240 5.9% 10%;
+    --authsome-secondary: 240 3.7% 15.9%;
+    --authsome-secondary-foreground: 0 0% 98%;
+    --authsome-muted: 240 3.7% 15.9%;
+    --authsome-muted-foreground: 240 5% 64.9%;
+    --authsome-accent: 240 3.7% 15.9%;
+    --authsome-accent-foreground: 0 0% 98%;
+    --authsome-destructive: 0 62.8% 30.6%;
+    --authsome-destructive-foreground: 0 0% 98%;
+    --authsome-border: 240 3.7% 15.9%;
+    --authsome-input: 240 3.7% 15.9%;
+    --authsome-ring: 240 4.9% 83.9%;
+  }
+}

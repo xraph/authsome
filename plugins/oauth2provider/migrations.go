@@ -70,6 +70,44 @@ DROP TABLE IF EXISTS authsome_oauth2_clients;
 		},
 	)
 
+	PostgresMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "create_device_codes_table",
+			Version: "20240301000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_oauth2_device_codes (
+    id               TEXT PRIMARY KEY,
+    device_code      TEXT NOT NULL UNIQUE,
+    user_code        TEXT NOT NULL,
+    client_id        TEXT NOT NULL,
+    app_id           TEXT NOT NULL REFERENCES authsome_apps(id),
+    scopes           JSONB NOT NULL DEFAULT '[]',
+    verification_uri TEXT NOT NULL DEFAULT '',
+    expires_at       TIMESTAMPTZ NOT NULL,
+    interval         INTEGER NOT NULL DEFAULT 5,
+    status           TEXT NOT NULL DEFAULT 'pending',
+    user_id          TEXT DEFAULT '',
+    last_polled_at   TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_device_code
+    ON authsome_oauth2_device_codes (device_code);
+
+CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_user_code
+    ON authsome_oauth2_device_codes (user_code)
+    WHERE status = 'pending';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_device_codes;`)
+				return err
+			},
+		},
+	)
+
 	// ──────────────────────────────────────────────────
 	// SQLite migrations
 	// ──────────────────────────────────────────────────
@@ -122,6 +160,43 @@ CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_auth_codes_code
 DROP TABLE IF EXISTS authsome_oauth2_auth_codes;
 DROP TABLE IF EXISTS authsome_oauth2_clients;
 `)
+				return err
+			},
+		},
+	)
+
+	SqliteMigrations.MustRegister(
+		&migrate.Migration{
+			Name:    "create_device_codes_table",
+			Version: "20240301000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_oauth2_device_codes (
+    id               TEXT PRIMARY KEY,
+    device_code      TEXT NOT NULL UNIQUE,
+    user_code        TEXT NOT NULL,
+    client_id        TEXT NOT NULL,
+    app_id           TEXT NOT NULL REFERENCES authsome_apps(id),
+    scopes           TEXT NOT NULL DEFAULT '[]',
+    verification_uri TEXT NOT NULL DEFAULT '',
+    expires_at       TEXT NOT NULL,
+    interval         INTEGER NOT NULL DEFAULT 5,
+    status           TEXT NOT NULL DEFAULT 'pending',
+    user_id          TEXT DEFAULT '',
+    last_polled_at   TEXT DEFAULT '',
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_device_code
+    ON authsome_oauth2_device_codes (device_code);
+
+CREATE INDEX IF NOT EXISTS idx_authsome_oauth2_device_codes_user_code
+    ON authsome_oauth2_device_codes (user_code);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_oauth2_device_codes;`)
 				return err
 			},
 		},

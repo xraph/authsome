@@ -1,0 +1,302 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/xraph/authsome/device"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/user"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+// SessionDetailData holds all data needed for the session detail page.
+type SessionDetailData struct {
+	Session *session.Session
+	User    *user.User
+	Device  *device.Device // nil if no device bound
+}
+
+templ SessionDetailPage(data SessionDetailData) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../sessions",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Sessions
+		}
+
+		<!-- Session Info Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-3">
+						<div class="flex h-12 w-12 items-center justify-center rounded-sm bg-primary/10 text-primary">
+							@icons.Key(icons.WithSize(24))
+						</div>
+						<div>
+							@card.Title() {
+								Session
+							}
+							@card.Description() {
+								<code class="text-xs">{ data.Session.ID.String() }</code>
+							}
+						</div>
+					</div>
+					<div class="flex items-center gap-2">
+						if isSessionActive(data.Session) {
+							<div class="flex items-center gap-1.5">
+								<span class="h-2.5 w-2.5 rounded-full bg-green-500"></span>
+								@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+									Active
+								}
+							</div>
+							@button.Button(button.Props{
+								Variant: button.VariantDestructive,
+								Size:    button.SizeSm,
+								Attributes: templ.Attributes{
+									"hx-get":      "./detail?session_id=" + data.Session.ID.String() + "&action=revoke",
+									"hx-target":   "#content",
+									"hx-swap":     "innerHTML",
+									"hx-confirm":  "Are you sure you want to revoke this session?",
+								},
+							}) {
+								@icons.X(icons.WithSize(14))
+								Revoke Session
+							}
+						} else {
+							<div class="flex items-center gap-1.5">
+								<span class="h-2.5 w-2.5 rounded-full bg-muted-foreground/40"></span>
+								@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+									Expired
+								}
+							</div>
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<!-- Timeline Bar -->
+				<div class="mt-4 mb-6">
+					<div class="flex items-center justify-between text-xs text-muted-foreground mb-2">
+						<span>Created</span>
+						if !data.Session.LastActivityAt.IsZero() {
+							<span>Last Active</span>
+						}
+						<span>Expires</span>
+					</div>
+					<div class="relative h-2 w-full rounded-full bg-muted overflow-hidden">
+						if isSessionActive(data.Session) {
+							{{ pct := sessionProgressPct(data.Session) }}
+							<div class="absolute inset-y-0 left-0 rounded-full bg-green-500" style={ "width:" + pct + "%" }></div>
+						} else {
+							<div class="absolute inset-y-0 left-0 rounded-full bg-muted-foreground/40 w-full"></div>
+						}
+					</div>
+					<div class="flex items-center justify-between text-xs text-muted-foreground mt-1">
+						<span>{ data.Session.CreatedAt.Format("Jan 02, 15:04") }</span>
+						if !data.Session.LastActivityAt.IsZero() {
+							<span>{ formatTimeAgo(data.Session.LastActivityAt) }</span>
+						}
+						if isSessionActive(data.Session) {
+							<span>{ formatTimeRemaining(data.Session.ExpiresAt) }</span>
+						} else {
+							<span>{ data.Session.ExpiresAt.Format("Jan 02, 15:04") }</span>
+						}
+					</div>
+				</div>
+
+				<!-- Session Fields in two columns -->
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<!-- Left Column: Connection Info -->
+					<div class="space-y-4">
+						<h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Connection</h3>
+						<dl class="space-y-3">
+							if data.Session.IPAddress != "" {
+								@userField("IP Address", data.Session.IPAddress)
+							}
+							{{ browser, os, devType := device.ParseUserAgent(data.Session.UserAgent) }}
+							@userField("Browser", browser)
+							@userField("OS", os)
+							@userField("Device Type", devType)
+							if data.Session.UserAgent != "" {
+								<div>
+									<dt class="text-sm font-medium text-muted-foreground">Raw User Agent</dt>
+									<dd class="mt-1 text-xs text-muted-foreground break-all">{ data.Session.UserAgent }</dd>
+								</div>
+							}
+						</dl>
+					</div>
+
+					<!-- Right Column: Session Details -->
+					<div class="space-y-4">
+						<h3 class="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Details</h3>
+						<dl class="space-y-3">
+							@userField("Session ID", data.Session.ID.String())
+							if data.Session.UserID.String() != "" {
+								<div>
+									<dt class="text-sm font-medium text-muted-foreground">User ID</dt>
+									<dd class="mt-1 text-sm">
+										<a
+											href={ templ.SafeURL("../users/detail?user_id=" + data.Session.UserID.String()) }
+											class="text-primary hover:underline"
+											hx-get={ "../users/detail?user_id=" + data.Session.UserID.String() }
+											hx-target="#content"
+											hx-push-url="true"
+											hx-swap="innerHTML"
+										>
+											{ data.Session.UserID.String() }
+										</a>
+									</dd>
+								</div>
+							}
+							@userField("Created", data.Session.CreatedAt.Format("Jan 02, 2006 15:04"))
+							@userField("Expires", data.Session.ExpiresAt.Format("Jan 02, 2006 15:04"))
+							if !data.Session.LastActivityAt.IsZero() {
+								@userField("Last Activity", data.Session.LastActivityAt.Format("Jan 02, 2006 15:04"))
+							}
+							if data.Session.DeviceID.String() != "" {
+								<div>
+									<dt class="text-sm font-medium text-muted-foreground">Device ID</dt>
+									<dd class="mt-1 text-sm">
+										<a
+											href={ templ.SafeURL("../devices/detail?device_id=" + data.Session.DeviceID.String()) }
+											class="text-primary hover:underline"
+											hx-get={ "../devices/detail?device_id=" + data.Session.DeviceID.String() }
+											hx-target="#content"
+											hx-push-url="true"
+											hx-swap="innerHTML"
+										>
+											{ data.Session.DeviceID.String() }
+										</a>
+									</dd>
+								</div>
+							}
+						</dl>
+					</div>
+				</div>
+			}
+		}
+
+		<!-- Related: User + Device side-by-side -->
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+			<!-- User Mini Card -->
+			if data.User != nil {
+				@card.Card() {
+					@card.Header() {
+						@card.Title() {
+							User
+						}
+					}
+					@card.Content() {
+						<div class="flex items-center gap-3">
+							if data.User.Image != "" {
+								<img src={ data.User.Image } alt={ data.User.Name() } class="h-10 w-10 rounded-full object-cover"/>
+							} else {
+								<div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
+									{ initials(data.User) }
+								</div>
+							}
+							<div class="flex-1 min-w-0">
+								<p class="font-medium text-sm truncate">{ data.User.Name() }</p>
+								<p class="text-xs text-muted-foreground truncate">{ data.User.Email }</p>
+							</div>
+							<a
+								href={ templ.SafeURL("../users/detail?user_id=" + data.User.ID.String()) }
+								class="text-xs text-primary hover:underline"
+								hx-get={ "../users/detail?user_id=" + data.User.ID.String() }
+								hx-target="#content"
+								hx-push-url="true"
+								hx-swap="innerHTML"
+							>
+								View Profile
+							</a>
+						</div>
+					}
+				}
+			}
+
+			<!-- Device Info Card -->
+			if data.Device != nil {
+				@card.Card() {
+					@card.Header() {
+						<div class="flex items-center justify-between">
+							@card.Title() {
+								Device
+							}
+							if data.Device.Trusted {
+								@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+									Trusted
+								}
+							} else {
+								@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+									Untrusted
+								}
+							}
+						</div>
+					}
+					@card.Content() {
+						<div class="flex items-center gap-3 mb-3">
+							<div class="flex h-8 w-8 items-center justify-center rounded-sm bg-muted text-muted-foreground">
+								@deviceDetailIcon(data.Device.Type)
+							</div>
+							<div>
+								if data.Device.Name != "" {
+									<p class="text-sm font-medium">{ data.Device.Name }</p>
+								}
+								<p class="text-xs text-muted-foreground">
+									if data.Device.Browser != "" {
+										{ data.Device.Browser }
+									}
+									if data.Device.OS != "" {
+										{ " on " + data.Device.OS }
+									}
+								</p>
+							</div>
+						</div>
+						<a
+							href={ templ.SafeURL("../devices/detail?device_id=" + data.Device.ID.String()) }
+							class="text-xs text-primary hover:underline"
+							hx-get={ "../devices/detail?device_id=" + data.Device.ID.String() }
+							hx-target="#content"
+							hx-push-url="true"
+							hx-swap="innerHTML"
+						>
+							View Device
+						</a>
+					}
+				}
+			}
+		</div>
+	</div>
+}
+
+// sessionProgressPct returns the percentage of session lifetime elapsed.
+func sessionProgressPct(s *session.Session) string {
+	total := s.ExpiresAt.Sub(s.CreatedAt)
+	elapsed := time.Since(s.CreatedAt)
+	if total <= 0 {
+		return "100"
+	}
+	pct := int(float64(elapsed) / float64(total) * 100)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	return fmt.Sprintf("%d", pct)
+}

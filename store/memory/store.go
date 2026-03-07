@@ -4,12 +4,14 @@ package memory
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
@@ -18,6 +20,7 @@ import (
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 	"github.com/xraph/authsome/webhook"
@@ -49,7 +52,9 @@ type Store struct {
 	environments   map[string]*environment.Environment
 	formConfigs       map[string]*formconfig.FormConfig
 	brandingConfigs   map[string]*formconfig.BrandingConfig
-	appSessionConfigs map[string]*appsessionconfig.Config
+	appSessionConfigs  map[string]*appsessionconfig.Config
+	appClientConfigs   map[string]*appclientconfig.Config
+	settingsMap        map[string]*settings.Setting
 }
 
 // New creates a new in-memory store.
@@ -71,7 +76,9 @@ func New() *Store {
 		environments:    make(map[string]*environment.Environment),
 		formConfigs:       make(map[string]*formconfig.FormConfig),
 		brandingConfigs:   make(map[string]*formconfig.BrandingConfig),
-		appSessionConfigs: make(map[string]*appsessionconfig.Config),
+		appSessionConfigs:  make(map[string]*appsessionconfig.Config),
+		appClientConfigs:   make(map[string]*appclientconfig.Config),
+		settingsMap:        make(map[string]*settings.Setting),
 	}
 }
 
@@ -259,6 +266,23 @@ func (s *Store) ListUserSessions(_ context.Context, userID id.UserID) ([]*sessio
 	return result, nil
 }
 
+func (s *Store) ListSessions(_ context.Context, limit int) ([]*session.Session, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]*session.Session, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		result = append(result, sess)
+	}
+	// Sort by created_at descending.
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
 // ──────────────────────────────────────────────────
 // Account Store (Verification + PasswordReset)
 // ──────────────────────────────────────────────────
@@ -349,6 +373,17 @@ func (s *Store) GetAppBySlug(_ context.Context, slug string) (*app.App, error) {
 	defer s.mu.RUnlock()
 	for _, a := range s.apps {
 		if a.Slug == slug {
+			return a, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
+func (s *Store) GetAppByPublishableKey(_ context.Context, key string) (*app.App, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, a := range s.apps {
+		if a.PublishableKey == key {
 			return a, nil
 		}
 	}
@@ -699,6 +734,22 @@ func (s *Store) ListUserDevices(_ context.Context, userID id.UserID) ([]*device.
 	return result, nil
 }
 
+func (s *Store) ListDevices(_ context.Context, limit int) ([]*device.Device, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]*device.Device, 0, len(s.devices))
+	for _, d := range s.devices {
+		result = append(result, d)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].LastSeenAt.After(result[j].LastSeenAt)
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
 // ──────────────────────────────────────────────────
 // Webhook Store
 // ──────────────────────────────────────────────────
@@ -833,6 +884,17 @@ func (s *Store) GetAPIKeyByPrefix(_ context.Context, appID id.AppID, prefix stri
 	defer s.mu.RUnlock()
 	for _, k := range s.apikeys {
 		if k.AppID.String() == appID.String() && k.KeyPrefix == prefix {
+			return k, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
+func (s *Store) GetAPIKeyByPublicKey(_ context.Context, appID id.AppID, publicKey string) (*apikey.APIKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, k := range s.apikeys {
+		if k.AppID.String() == appID.String() && k.PublicKey == publicKey {
 			return k, nil
 		}
 	}
@@ -1125,5 +1187,44 @@ func (s *Store) DeleteAppSessionConfig(_ context.Context, appID id.AppID) error 
 		return appsessionconfig.ErrNotFound
 	}
 	delete(s.appSessionConfigs, appID.String())
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// App Client Config Store
+// ──────────────────────────────────────────────────
+
+func (s *Store) GetAppClientConfig(_ context.Context, appID id.AppID) (*appclientconfig.Config, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfg, ok := s.appClientConfigs[appID.String()]
+	if !ok {
+		return nil, appclientconfig.ErrNotFound
+	}
+	return cfg, nil
+}
+
+func (s *Store) SetAppClientConfig(_ context.Context, cfg *appclientconfig.Config) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cfg.ID.IsNil() {
+		cfg.ID = id.NewAppClientConfigID()
+	}
+	now := time.Now()
+	if cfg.CreatedAt.IsZero() {
+		cfg.CreatedAt = now
+	}
+	cfg.UpdatedAt = now
+	s.appClientConfigs[cfg.AppID.String()] = cfg
+	return nil
+}
+
+func (s *Store) DeleteAppClientConfig(_ context.Context, appID id.AppID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.appClientConfigs[appID.String()]; !ok {
+		return appclientconfig.ErrNotFound
+	}
+	delete(s.appClientConfigs, appID.String())
 	return nil
 }

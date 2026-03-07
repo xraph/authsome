@@ -43,33 +43,78 @@ type Plugin struct {
 	roleChecker  middleware.RoleChecker
 }
 
-// New creates a new organization plugin with the given store and optional configuration.
-func New(s store.Store, cfg ...Config) *Plugin {
+// New creates a new organization plugin with optional configuration.
+// The store is resolved automatically from the engine during OnInit.
+func New(cfg ...Config) *Plugin {
 	var c Config
 	if len(cfg) > 0 {
 		c = cfg[0]
 	}
-	return &Plugin{config: c, store: s}
+	return &Plugin{config: c}
 }
 
 // Name returns the plugin name.
 func (p *Plugin) Name() string { return "organization" }
 
+// SetStore allows direct store injection for testing.
+func (p *Plugin) SetStore(s store.Store) { p.store = s }
+
 // OnInit captures engine capabilities for use by the plugin's service layer.
 func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	e, ok := engine.(*authsome.Engine)
-	if !ok {
-		return fmt.Errorf("organization: expected *authsome.Engine, got %T", engine)
+	type storeGetter interface {
+		Store() store.Store
+	}
+	if sg, ok := engine.(storeGetter); ok {
+		p.store = sg.Store()
 	}
 
-	p.plugins = e.Plugins()
-	p.hooks = e.Hooks()
-	p.relay = e.Relay()
-	p.chronicle = e.Chronicle()
-	p.logger = e.Logger()
-	p.basePath = e.Config().BasePath
-	p.defaultAppID = e.Config().AppID
-	p.roleChecker = e
+	type pluginsGetter interface {
+		Plugins() *plugin.Registry
+	}
+	if pg, ok := engine.(pluginsGetter); ok {
+		p.plugins = pg.Plugins()
+	}
+
+	type hooksGetter interface {
+		Hooks() *hook.Bus
+	}
+	if hg, ok := engine.(hooksGetter); ok {
+		p.hooks = hg.Hooks()
+	}
+
+	type relayGetter interface {
+		Relay() bridge.EventRelay
+	}
+	if rg, ok := engine.(relayGetter); ok {
+		p.relay = rg.Relay()
+	}
+
+	type chronicleGetter interface {
+		Chronicle() bridge.Chronicle
+	}
+	if cg, ok := engine.(chronicleGetter); ok {
+		p.chronicle = cg.Chronicle()
+	}
+
+	type loggerGetter interface {
+		Logger() log.Logger
+	}
+	if lg, ok := engine.(loggerGetter); ok {
+		p.logger = lg.Logger()
+	}
+
+	type configGetter interface {
+		Config() authsome.Config
+	}
+	if cg, ok := engine.(configGetter); ok {
+		cfg := cg.Config()
+		p.basePath = cfg.BasePath
+		p.defaultAppID = cfg.AppID
+	}
+
+	if rc, ok := engine.(middleware.RoleChecker); ok {
+		p.roleChecker = rc
+	}
 
 	if p.config.PathPrefix == "" {
 		p.config.PathPrefix = p.basePath

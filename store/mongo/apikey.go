@@ -62,6 +62,27 @@ func (s *Store) GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix st
 	return fromAPIKeyModel(&m)
 }
 
+// GetAPIKeyByPublicKey returns an API key by app ID and public key.
+func (s *Store) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*apikey.APIKey, error) {
+	var m apiKeyModel
+
+	err := s.mdb.NewFind(&m).
+		Filter(bson.M{
+			"app_id":     appID.String(),
+			"public_key": publicKey,
+		}).
+		Scan(ctx)
+	if err != nil {
+		if isNoDocuments(err) {
+			return nil, store.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("authsome/mongo: get api key by public key: %w", err)
+	}
+
+	return fromAPIKeyModel(&m)
+}
+
 // UpdateAPIKey modifies an existing API key.
 func (s *Store) UpdateAPIKey(ctx context.Context, k *apikey.APIKey) error {
 	m := toAPIKeyModel(k)

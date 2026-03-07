@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
@@ -18,6 +19,7 @@ import (
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 	"github.com/xraph/authsome/webhook"
 )
@@ -29,27 +31,29 @@ import (
 type appModel struct {
 	grove.BaseModel `grove:"table:authsome_apps"`
 
-	ID         string          `grove:"id,pk"        bson:"_id"`
-	Name       string          `grove:"name"         bson:"name"`
-	Slug       string          `grove:"slug"         bson:"slug"`
-	Logo       string          `grove:"logo"         bson:"logo"`
-	IsPlatform bool            `grove:"is_platform"  bson:"is_platform"`
-	Metadata   json.RawMessage `grove:"metadata"     bson:"metadata,omitempty"`
-	CreatedAt  time.Time       `grove:"created_at"   bson:"created_at"`
-	UpdatedAt  time.Time       `grove:"updated_at"   bson:"updated_at"`
+	ID             string          `grove:"id,pk"             bson:"_id"`
+	Name           string          `grove:"name"              bson:"name"`
+	Slug           string          `grove:"slug"              bson:"slug"`
+	Logo           string          `grove:"logo"              bson:"logo"`
+	PublishableKey string          `grove:"publishable_key"   bson:"publishable_key,omitempty"`
+	IsPlatform     bool            `grove:"is_platform"       bson:"is_platform"`
+	Metadata       json.RawMessage `grove:"metadata"          bson:"metadata,omitempty"`
+	CreatedAt      time.Time       `grove:"created_at"        bson:"created_at"`
+	UpdatedAt      time.Time       `grove:"updated_at"        bson:"updated_at"`
 }
 
 func toAppModel(a *app.App) *appModel {
 	md, _ := json.Marshal(a.Metadata)
 	return &appModel{
-		ID:         a.ID.String(),
-		Name:       a.Name,
-		Slug:       a.Slug,
-		Logo:       a.Logo,
-		IsPlatform: a.IsPlatform,
-		Metadata:   md,
-		CreatedAt:  a.CreatedAt,
-		UpdatedAt:  a.UpdatedAt,
+		ID:             a.ID.String(),
+		Name:           a.Name,
+		Slug:           a.Slug,
+		Logo:           a.Logo,
+		PublishableKey: a.PublishableKey,
+		IsPlatform:     a.IsPlatform,
+		Metadata:       md,
+		CreatedAt:      a.CreatedAt,
+		UpdatedAt:      a.UpdatedAt,
 	}
 }
 
@@ -63,14 +67,15 @@ func fromAppModel(m *appModel) (*app.App, error) {
 		_ = json.Unmarshal(m.Metadata, &md)
 	}
 	return &app.App{
-		ID:         appID,
-		Name:       m.Name,
-		Slug:       m.Slug,
-		Logo:       m.Logo,
-		IsPlatform: m.IsPlatform,
-		Metadata:   md,
-		CreatedAt:  m.CreatedAt,
-		UpdatedAt:  m.UpdatedAt,
+		ID:             appID,
+		Name:           m.Name,
+		Slug:           m.Slug,
+		Logo:           m.Logo,
+		PublishableKey: m.PublishableKey,
+		IsPlatform:     m.IsPlatform,
+		Metadata:       md,
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
 	}, nil
 }
 
@@ -810,9 +815,11 @@ type apiKeyModel struct {
 	EnvID      string     `grove:"env_id"         bson:"env_id"`
 	UserID     string     `grove:"user_id"        bson:"user_id"`
 	Name       string     `grove:"name"           bson:"name"`
-	KeyHash    string     `grove:"key_hash"       bson:"key_hash"`
-	KeyPrefix  string     `grove:"key_prefix"     bson:"key_prefix"`
-	Scopes     string     `grove:"scopes"         bson:"scopes"`
+	KeyHash         string     `grove:"key_hash"            bson:"key_hash"`
+	KeyPrefix       string     `grove:"key_prefix"          bson:"key_prefix"`
+	PublicKey       string     `grove:"public_key"          bson:"public_key"`
+	PublicKeyPrefix string     `grove:"public_key_prefix"   bson:"public_key_prefix"`
+	Scopes          string     `grove:"scopes"              bson:"scopes"`
 	ExpiresAt  *time.Time `grove:"expires_at"     bson:"expires_at,omitempty"`
 	LastUsedAt *time.Time `grove:"last_used_at"   bson:"last_used_at,omitempty"`
 	Revoked    bool       `grove:"revoked"        bson:"revoked"`
@@ -822,18 +829,20 @@ type apiKeyModel struct {
 
 func toAPIKeyModel(k *apikey.APIKey) *apiKeyModel {
 	m := &apiKeyModel{
-		ID:         k.ID.String(),
-		AppID:      k.AppID.String(),
-		EnvID:      k.EnvID.String(),
-		UserID:     k.UserID.String(),
-		Name:       k.Name,
-		KeyHash:    k.KeyHash,
-		KeyPrefix:  k.KeyPrefix,
-		Revoked:    k.Revoked,
-		ExpiresAt:  k.ExpiresAt,
-		LastUsedAt: k.LastUsedAt,
-		CreatedAt:  k.CreatedAt,
-		UpdatedAt:  k.UpdatedAt,
+		ID:              k.ID.String(),
+		AppID:           k.AppID.String(),
+		EnvID:           k.EnvID.String(),
+		UserID:          k.UserID.String(),
+		Name:            k.Name,
+		KeyHash:         k.KeyHash,
+		KeyPrefix:       k.KeyPrefix,
+		PublicKey:       k.PublicKey,
+		PublicKeyPrefix: k.PublicKeyPrefix,
+		Revoked:         k.Revoked,
+		ExpiresAt:       k.ExpiresAt,
+		LastUsedAt:      k.LastUsedAt,
+		CreatedAt:       k.CreatedAt,
+		UpdatedAt:       k.UpdatedAt,
 	}
 	if len(k.Scopes) > 0 {
 		m.Scopes = strings.Join(k.Scopes, ",")
@@ -856,18 +865,20 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 		return nil, err
 	}
 	k := &apikey.APIKey{
-		ID:         keyID,
-		AppID:      appID,
-		EnvID:      envID,
-		UserID:     userID,
-		Name:       m.Name,
-		KeyHash:    m.KeyHash,
-		KeyPrefix:  m.KeyPrefix,
-		Revoked:    m.Revoked,
-		ExpiresAt:  m.ExpiresAt,
-		LastUsedAt: m.LastUsedAt,
-		CreatedAt:  m.CreatedAt,
-		UpdatedAt:  m.UpdatedAt,
+		ID:              keyID,
+		AppID:           appID,
+		EnvID:           envID,
+		UserID:          userID,
+		Name:            m.Name,
+		KeyHash:         m.KeyHash,
+		KeyPrefix:       m.KeyPrefix,
+		PublicKey:       m.PublicKey,
+		PublicKeyPrefix: m.PublicKeyPrefix,
+		Revoked:         m.Revoked,
+		ExpiresAt:       m.ExpiresAt,
+		LastUsedAt:      m.LastUsedAt,
+		CreatedAt:       m.CreatedAt,
+		UpdatedAt:       m.UpdatedAt,
 	}
 	if m.Scopes != "" {
 		k.Scopes = strings.Split(m.Scopes, ",")
@@ -1145,5 +1156,146 @@ func fromAppSessionConfigModel(m *appSessionConfigModel) (*appsessionconfig.Conf
 		TokenFormat:            m.TokenFormat,
 		CreatedAt:              m.CreatedAt,
 		UpdatedAt:              m.UpdatedAt,
+	}, nil
+}
+
+// ──────────────────────────────────────────────────
+// AppClientConfig model
+// ──────────────────────────────────────────────────
+
+type appClientConfigModel struct {
+	grove.BaseModel `grove:"table:authsome_app_client_configs"`
+
+	ID               string          `grove:"id,pk"               bson:"_id"`
+	AppID            string          `grove:"app_id"              bson:"app_id"`
+	PasswordEnabled  *bool           `grove:"password_enabled"    bson:"password_enabled,omitempty"`
+	PasskeyEnabled   *bool           `grove:"passkey_enabled"     bson:"passkey_enabled,omitempty"`
+	MagicLinkEnabled *bool           `grove:"magic_link_enabled"  bson:"magic_link_enabled,omitempty"`
+	MFAEnabled       *bool           `grove:"mfa_enabled"         bson:"mfa_enabled,omitempty"`
+	SSOEnabled       *bool           `grove:"sso_enabled"         bson:"sso_enabled,omitempty"`
+	SocialEnabled    *bool           `grove:"social_enabled"      bson:"social_enabled,omitempty"`
+	SocialProviders  json.RawMessage `grove:"social_providers"    bson:"social_providers,omitempty"`
+	MFAMethods       json.RawMessage `grove:"mfa_methods"         bson:"mfa_methods,omitempty"`
+	AppName          *string         `grove:"app_name"            bson:"app_name,omitempty"`
+	LogoURL          *string         `grove:"logo_url"            bson:"logo_url,omitempty"`
+	CreatedAt        time.Time       `grove:"created_at"          bson:"created_at"`
+	UpdatedAt        time.Time       `grove:"updated_at"          bson:"updated_at"`
+}
+
+func toAppClientConfigModel(c *appclientconfig.Config) *appClientConfigModel {
+	sp, _ := json.Marshal(c.SocialProviders)
+	mm, _ := json.Marshal(c.MFAMethods)
+	return &appClientConfigModel{
+		ID:               c.ID.String(),
+		AppID:            c.AppID.String(),
+		PasswordEnabled:  c.PasswordEnabled,
+		PasskeyEnabled:   c.PasskeyEnabled,
+		MagicLinkEnabled: c.MagicLinkEnabled,
+		MFAEnabled:       c.MFAEnabled,
+		SSOEnabled:       c.SSOEnabled,
+		SocialEnabled:    c.SocialEnabled,
+		SocialProviders:  sp,
+		MFAMethods:       mm,
+		AppName:          c.AppName,
+		LogoURL:          c.LogoURL,
+		CreatedAt:        c.CreatedAt,
+		UpdatedAt:        c.UpdatedAt,
+	}
+}
+
+func fromAppClientConfigModel(m *appClientConfigModel) (*appclientconfig.Config, error) {
+	cfgID, err := id.ParseAppClientConfigID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	var sp []string
+	if len(m.SocialProviders) > 0 {
+		_ = json.Unmarshal(m.SocialProviders, &sp)
+	}
+	var mm []string
+	if len(m.MFAMethods) > 0 {
+		_ = json.Unmarshal(m.MFAMethods, &mm)
+	}
+	return &appclientconfig.Config{
+		ID:               cfgID,
+		AppID:            appID,
+		PasswordEnabled:  m.PasswordEnabled,
+		PasskeyEnabled:   m.PasskeyEnabled,
+		MagicLinkEnabled: m.MagicLinkEnabled,
+		MFAEnabled:       m.MFAEnabled,
+		SSOEnabled:       m.SSOEnabled,
+		SocialEnabled:    m.SocialEnabled,
+		SocialProviders:  sp,
+		MFAMethods:       mm,
+		AppName:          m.AppName,
+		LogoURL:          m.LogoURL,
+		CreatedAt:        m.CreatedAt,
+		UpdatedAt:        m.UpdatedAt,
+	}, nil
+}
+
+// ──────────────────────────────────────────────────
+// Setting model
+// ──────────────────────────────────────────────────
+
+type settingModel struct {
+	grove.BaseModel `grove:"table:authsome_settings"`
+
+	ID        string          `grove:"id,pk"        bson:"_id"`
+	Key       string          `grove:"key"          bson:"key"`
+	Value     json.RawMessage `grove:"value"        bson:"value"`
+	Scope     string          `grove:"scope"        bson:"scope"`
+	ScopeID   string          `grove:"scope_id"     bson:"scope_id"`
+	AppID     string          `grove:"app_id"       bson:"app_id,omitempty"`
+	OrgID     string          `grove:"org_id"       bson:"org_id,omitempty"`
+	Enforced  bool            `grove:"enforced"     bson:"enforced"`
+	Namespace string          `grove:"namespace"    bson:"namespace,omitempty"`
+	Version   int64           `grove:"version"      bson:"version"`
+	UpdatedBy string          `grove:"updated_by"   bson:"updated_by,omitempty"`
+	CreatedAt time.Time       `grove:"created_at"   bson:"created_at"`
+	UpdatedAt time.Time       `grove:"updated_at"   bson:"updated_at"`
+}
+
+func toSettingModel(s *settings.Setting) *settingModel {
+	return &settingModel{
+		ID:        s.ID.String(),
+		Key:       s.Key,
+		Value:     s.Value,
+		Scope:     string(s.Scope),
+		ScopeID:   s.ScopeID,
+		AppID:     s.AppID,
+		OrgID:     s.OrgID,
+		Enforced:  s.Enforced,
+		Namespace: s.Namespace,
+		Version:   s.Version,
+		UpdatedBy: s.UpdatedBy,
+		CreatedAt: s.CreatedAt,
+		UpdatedAt: s.UpdatedAt,
+	}
+}
+
+func fromSettingModel(m *settingModel) (*settings.Setting, error) {
+	sID, err := id.ParseSettingID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &settings.Setting{
+		ID:        sID,
+		Key:       m.Key,
+		Value:     m.Value,
+		Scope:     settings.Scope(m.Scope),
+		ScopeID:   m.ScopeID,
+		AppID:     m.AppID,
+		OrgID:     m.OrgID,
+		Enforced:  m.Enforced,
+		Namespace: m.Namespace,
+		Version:   m.Version,
+		UpdatedBy: m.UpdatedBy,
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
 	}, nil
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/settings"
 
 	"github.com/xraph/grove/migrate"
 )
@@ -26,7 +27,30 @@ var (
 	_ plugin.RouteProvider     = (*Plugin)(nil)
 	_ plugin.OnInit            = (*Plugin)(nil)
 	_ plugin.MigrationProvider = (*Plugin)(nil)
+	_ plugin.SettingsProvider  = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingIssuer controls the issuer name shown in authenticator apps.
+	SettingIssuer = settings.Define("mfa.issuer", "AuthSome",
+		settings.WithDisplayName("Issuer Name"),
+		settings.WithDescription("Name shown in authenticator apps (e.g. Google Authenticator)"),
+		settings.WithCategory("Multi-Factor Auth"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("AuthSome"),
+		settings.WithHelpText("The issuer label users see in their authenticator app"),
+		settings.WithOrder(10),
+	)
+)
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	return settings.RegisterTyped(m, "mfa", SettingIssuer)
+}
 
 // Config configures the MFA plugin.
 type Config struct {

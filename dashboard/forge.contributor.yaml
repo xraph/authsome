@@ -7,41 +7,70 @@ build:
   mode: local
 
 nav:
+  # Authsome
   - label: Overview
     path: /
     icon: layout-dashboard
     group: Authsome
     priority: 0
+
+  # User Management
   - label: Users
     path: /users
     icon: users
-    group: Authsome
-    priority: 1
-  - label: Organizations
-    path: /organizations
-    icon: building-2
-    group: Authsome
-    priority: 2
+    group: User Management
+    priority: 0
   - label: Sessions
     path: /sessions
     icon: key-round
-    group: Authsome
-    priority: 3
+    group: User Management
+    priority: 1
   - label: Devices
     path: /devices
     icon: monitor-smartphone
-    group: Authsome
-    priority: 4
+    group: User Management
+    priority: 2
+
+  # Access Control
   - label: Roles
     path: /roles
     icon: shield
-    group: Authsome
-    priority: 5
+    group: Access Control
+    priority: 0
+
+  # Configuration
+  - label: Settings
+    path: /settings
+    icon: settings
+    group: Configuration
+    priority: 0
+  - label: Environments
+    path: /environments
+    icon: globe
+    group: Configuration
+    priority: 1
+  - label: Signup Forms
+    path: /signup-forms
+    icon: file-edit
+    group: Configuration
+    priority: 2
+
+  # Developer
+  - label: Credentials
+    path: /credentials
+    icon: key
+    group: Developer
+    priority: 0
   - label: Webhooks
     path: /webhooks
     icon: webhook
-    group: Authsome
-    priority: 6
+    group: Developer
+    priority: 1
+  - label: Plugins
+    path: /plugins
+    icon: puzzle
+    group: Developer
+    priority: 2
 
 widgets:
   - id: authsome-stats

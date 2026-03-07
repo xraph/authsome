@@ -19,6 +19,9 @@ import (
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/webhook"
+
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 )
 
 // ──────────────────────────────────────────────────
@@ -35,8 +38,11 @@ func e2eAppID(t *testing.T) id.AppID {
 func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
 	baseOpts := []authsome.Option{
 		authsome.WithStore(s),
+		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 	}
@@ -113,9 +119,12 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin.Plugin) {
 	t.Helper()
 	s := memory.New()
-	op := orgplugin.New(s)
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	op := orgplugin.New()
 	eng, err := authsome.NewEngine(
 		authsome.WithStore(s),
+		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 		authsome.WithPlugin(op),

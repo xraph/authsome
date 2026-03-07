@@ -46,6 +46,31 @@ type TokenResponse struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
+// DeviceCode represents an OAuth2 device authorization code (RFC 8628).
+type DeviceCode struct {
+	ID              id.DeviceCodeID `json:"id"`
+	DeviceCode      string          `json:"-"`                  // opaque polling token (256-bit hex)
+	UserCode        string          `json:"user_code"`          // short human-readable code, e.g. "BCDF-GHJK"
+	ClientID        string          `json:"client_id"`          // OAuth2 client_id
+	AppID           id.AppID        `json:"app_id"`
+	Scopes          []string        `json:"scopes"`
+	VerificationURI string          `json:"verification_uri"`   // where the user goes
+	ExpiresAt       time.Time       `json:"expires_at"`
+	Interval        int             `json:"interval"`           // polling interval in seconds
+	Status          string          `json:"status"`             // "pending", "authorized", "denied", "consumed"
+	UserID          id.UserID       `json:"user_id,omitempty"`  // set when user authorizes
+	LastPolledAt    time.Time       `json:"last_polled_at,omitempty"` // last time the CLI polled for this code
+	CreatedAt       time.Time       `json:"created_at"`
+}
+
+// Device code status constants.
+const (
+	DeviceCodeStatusPending    = "pending"
+	DeviceCodeStatusAuthorized = "authorized"
+	DeviceCodeStatusDenied     = "denied"
+	DeviceCodeStatusConsumed   = "consumed"
+)
+
 // UserInfo is the OIDC userinfo response.
 type UserInfo struct {
 	Sub           string `json:"sub"`

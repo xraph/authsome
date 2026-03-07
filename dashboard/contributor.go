@@ -23,9 +23,10 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/rbac"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
-
 )
 
 // Ensure Contributor implements the required interfaces at compile time.
@@ -39,18 +40,50 @@ var (
 // interfaces for the authsome extension. It renders pages, widgets, and settings
 // using templ components and ForgeUI, and supports plugin-contributed UI sections.
 type Contributor struct {
-	manifest *contributor.Manifest
-	engine   *authsome.Engine
-	plugins  []plugin.Plugin
+	manifest   *contributor.Manifest
+	engine     *authsome.Engine
+	plugins    []plugin.Plugin
+	pageRoutes map[string]bool // core + plugin page routes for URL parsing
 }
 
 // New creates a new authsome dashboard contributor.
 func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plugin.Plugin) *Contributor {
-	return &Contributor{
+	c := &Contributor{
 		manifest: manifest,
 		engine:   engine,
 		plugins:  plugins,
 	}
+	c.pageRoutes = c.buildPageRoutes()
+	return c
+}
+
+// buildPageRoutes merges core knownPageRoutes with routes contributed by
+// plugins (via DashboardPageContributor and DashboardPlugin). This ensures
+// parseAppEnvRoute correctly identifies plugin routes as page routes rather
+// than misinterpreting them as app/env slugs.
+func (c *Contributor) buildPageRoutes() map[string]bool {
+	routes := make(map[string]bool, len(knownPageRoutes))
+	for k, v := range knownPageRoutes {
+		routes[k] = v
+	}
+
+	for _, p := range c.plugins {
+		// DashboardPageContributor plugins declare nav items with paths.
+		if dpc, ok := p.(DashboardPageContributor); ok {
+			for _, nav := range dpc.DashboardNavItems() {
+				routes[nav.Path] = true
+			}
+		}
+
+		// DashboardPlugin plugins declare pages with routes.
+		if dp, ok := p.(DashboardPlugin); ok {
+			for _, pp := range dp.DashboardPages() {
+				routes[pp.Route] = true
+			}
+		}
+	}
+
+	return routes
 }
 
 // Manifest returns the contributor manifest.
@@ -60,7 +93,7 @@ func (c *Contributor) Manifest() *contributor.Manifest { return c.manifest }
 // slugs from the route and enriches the context so layout components
 // (app switcher, env switcher) can access them during rendering.
 func (c *Contributor) PrepareContext(ctx context.Context, route string) context.Context {
-	appSlug, envSlug, _ := parseAppEnvRoute(route)
+	appSlug, envSlug, _ := c.parseAppEnvRoute(route)
 	if appSlug == "" || envSlug == "" {
 		// Fall back to default app/env so layout components (switchers) render.
 		defaultApp, defaultEnv := c.resolveDefaults(ctx)
@@ -90,9 +123,9 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 
 	pageRoute := route
 	if appSlug == "" || envSlug == "" {
-		appSlug, envSlug, pageRoute = parseAppEnvRoute(route)
+		appSlug, envSlug, pageRoute = c.parseAppEnvRoute(route)
 	} else {
-		_, _, pageRoute = parseAppEnvRoute(route)
+		_, _, pageRoute = c.parseAppEnvRoute(route)
 	}
 
 	// If no app/env, redirect to default app/env URL.
@@ -130,9 +163,15 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 // renderPageRoute dispatches to the correct page renderer based on the page route.
 func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, appID id.AppID, params contributor.Params) (templ.Component, error) {
 	// Check plugin-contributed pages first (DashboardPageContributor for parameterized routes).
+	// Plugins return (nil, ErrPageNotFound) for routes they don't handle; real errors
+	// are propagated so the dashboard can surface them instead of silently swallowing.
 	for _, p := range c.plugins {
 		if dpc, ok := p.(DashboardPageContributor); ok {
-			if comp, err := dpc.DashboardRenderPage(ctx, pageRoute, params); err == nil && comp != nil {
+			comp, err := dpc.DashboardRenderPage(ctx, pageRoute, params)
+			if err != nil && !errors.Is(err, contributor.ErrPageNotFound) {
+				return nil, err // propagate real errors
+			}
+			if comp != nil {
 				return comp, nil
 			}
 		}
@@ -170,6 +209,20 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 		return c.renderSignupForms(ctx, appID)
 	case "/signup-forms/edit":
 		return c.renderSignupFormEditor(ctx, appID)
+	case "/credentials":
+		return c.renderCredentials(ctx, appID, params)
+	case "/plugins":
+		return c.renderPlugins(ctx)
+	case "/settings":
+		return c.renderSettingsPage(ctx)
+	case "/settings/editor":
+		return c.renderSettingsEditor(ctx, appID, params)
+	case "/sessions/detail":
+		return c.renderSessionDetail(ctx, params)
+	case "/devices/detail":
+		return c.renderDeviceDetail(ctx, params)
+	case "/roles/detail":
+		return c.renderRoleDetail(ctx, appID, params)
 	default:
 		return nil, contributor.ErrPageNotFound
 	}
@@ -274,12 +327,17 @@ func (c *Contributor) renderOverview(ctx context.Context, appID id.AppID) (templ
 		recent = recentUsers.Users
 	}
 
+	stats := pages.OverviewStats{
+		TotalUsers:    totalUsers,
+		ActivePlugins: len(c.plugins),
+	}
+
 	// Collect plugin-contributed sections for the overview.
 	pluginSections := c.collectPluginSections(ctx)
 
 	return templ.ComponentFunc(func(tCtx context.Context, w io.Writer) error {
 		childCtx := templ.WithChildren(tCtx, components.PluginSections(pluginSections))
-		return pages.OverviewPage(totalUsers, recent).Render(childCtx, w)
+		return pages.OverviewPage(stats, recent).Render(childCtx, w)
 	}), nil
 }
 
@@ -314,21 +372,44 @@ func (c *Contributor) renderUserDetail(ctx context.Context, params contributor.P
 		return nil, fmt.Errorf("dashboard: resolve user: %w", err)
 	}
 
+	data := pages.UserDetailPageData{
+		User: u,
+	}
+
+	// Fetch sessions for this user.
+	if sessions, err := c.engine.ListSessions(ctx, userID); err == nil {
+		data.Sessions = sessions
+	}
+
+	// Fetch devices for this user.
+	if devices, err := c.engine.ListUserDevices(ctx, userID); err == nil {
+		data.Devices = devices
+	}
+
+	// Fetch role slugs for this user.
+	if roleSlugs, err := c.engine.ListUserRoleSlugs(ctx, userID); err == nil {
+		data.Roles = roleSlugs
+	}
+
 	// Collect plugin-contributed sections for user detail.
 	pluginSections := c.collectUserDetailSections(ctx, userID)
 
 	return templ.ComponentFunc(func(tCtx context.Context, w io.Writer) error {
 		childCtx := templ.WithChildren(tCtx, components.PluginSections(pluginSections))
-		return pages.UserDetailPage(u).Render(childCtx, w)
+		return pages.UserDetailPage(data).Render(childCtx, w)
 	}), nil
 }
 
 func (c *Contributor) renderSessions(ctx context.Context, params contributor.Params) (templ.Component, error) {
-	// ListSessions requires a user ID. If provided via query param, use it;
-	// otherwise show an empty state prompting the admin to select a user.
 	userIDStr := params.QueryParams["user_id"]
+
+	// When no user_id is provided, list all recent sessions.
 	if userIDStr == "" {
-		return pages.SessionsPage(nil), nil
+		sessions, err := c.engine.ListAllSessions(ctx, 100)
+		if err != nil {
+			sessions = nil
+		}
+		return pages.SessionsPage(sessions), nil
 	}
 
 	userID, err := id.ParseUserID(userIDStr)
@@ -345,10 +426,15 @@ func (c *Contributor) renderSessions(ctx context.Context, params contributor.Par
 }
 
 func (c *Contributor) renderDevices(ctx context.Context, params contributor.Params) (templ.Component, error) {
-	// ListUserDevices requires a user ID. Same pattern as sessions.
 	userIDStr := params.QueryParams["user_id"]
+
+	// When no user_id is provided, list all recent devices.
 	if userIDStr == "" {
-		return pages.DevicesPage(nil), nil
+		devices, err := c.engine.ListAllDevices(ctx, 100)
+		if err != nil {
+			devices = nil
+		}
+		return pages.DevicesPage(devices), nil
 	}
 
 	userID, err := id.ParseUserID(userIDStr)
@@ -446,6 +532,231 @@ func (c *Contributor) renderSignupFormEditor(ctx context.Context, appID id.AppID
 	}
 
 	return pages.SignupFormEditorPage(fc), nil
+}
+
+func (c *Contributor) renderCredentials(ctx context.Context, appID id.AppID, params contributor.Params) (templ.Component, error) {
+	a, err := c.engine.GetApp(ctx, appID)
+	if err != nil {
+		return nil, fmt.Errorf("dashboard: render credentials: %w", err)
+	}
+
+	envID, _ := EnvIDFromContext(ctx)
+	var env *environment.Environment
+	if !envID.IsNil() {
+		env, _ = c.engine.GetEnvironment(ctx, envID)
+	}
+
+	data := pages.CredentialsPageData{
+		App:         a,
+		Environment: env,
+		BasePath:    c.engine.Config().BasePath,
+	}
+
+	return pages.CredentialsPage(data), nil
+}
+
+func (c *Contributor) renderPlugins(_ context.Context) (templ.Component, error) {
+	var infos []pages.PluginInfo
+	for _, p := range c.plugins {
+		info := pages.PluginInfo{
+			Name: p.Name(),
+		}
+
+		if dp, ok := p.(DashboardPlugin); ok {
+			for _, pp := range dp.DashboardPages() {
+				info.Pages = append(info.Pages, pages.PluginPageInfo{
+					Route: pp.Route,
+					Label: pp.Label,
+					Icon:  pp.Icon,
+				})
+			}
+			for _, w := range dp.DashboardWidgets(context.Background()) {
+				info.Widgets = append(info.Widgets, pages.PluginWidgetInfo{
+					Title: w.Title,
+					Size:  w.Size,
+				})
+			}
+			if dp.DashboardSettingsPanel(context.Background()) != nil {
+				info.HasSettingsPanel = true
+			}
+		}
+
+		if _, ok := p.(DashboardPageContributor); ok {
+			info.HasPageContributor = true
+		}
+
+		if _, ok := p.(UserDetailContributor); ok {
+			info.HasUserDetailSection = true
+		}
+
+		infos = append(infos, info)
+	}
+
+	return pages.PluginsPage(infos), nil
+}
+
+func (c *Contributor) renderSettingsPage(ctx context.Context) (templ.Component, error) {
+	cfg := c.engine.Config()
+
+	pluginNames := make([]string, 0, len(c.plugins))
+	for _, p := range c.plugins {
+		pluginNames = append(pluginNames, p.Name())
+	}
+
+	data := pages.SettingsPageData{
+		Config:      cfg,
+		PluginNames: pluginNames,
+	}
+
+	pluginSettings := c.collectPluginSettings(ctx)
+
+	return templ.ComponentFunc(func(tCtx context.Context, w io.Writer) error {
+		childCtx := templ.WithChildren(tCtx, components.PluginSections(pluginSettings))
+		return pages.SettingsPage(data).Render(childCtx, w)
+	}), nil
+}
+
+func (c *Contributor) renderSettingsEditor(_ context.Context, appID id.AppID, params contributor.Params) (templ.Component, error) {
+	mgr := c.engine.Settings()
+	if mgr == nil {
+		return pages.SettingsEditorEmpty(), nil
+	}
+
+	// Allow scope override via query param (global, app, org).
+	scope := params.QueryParams["scope"]
+	if scope == "" {
+		scope = "global"
+		if !appID.IsNil() {
+			scope = "app"
+		}
+	}
+
+	appIDStr := ""
+	if !appID.IsNil() {
+		appIDStr = appID.String()
+	}
+
+	orgIDStr := params.QueryParams["org_id"]
+
+	data := pages.BuildSettingsEditorData(context.Background(), mgr, scope, appIDStr, orgIDStr, c.engine.Config().BasePath)
+
+	return pages.SettingsEditorPage(data), nil
+}
+
+func (c *Contributor) renderSessionDetail(ctx context.Context, params contributor.Params) (templ.Component, error) {
+	sessionIDStr := params.PathParams["id"]
+	if sessionIDStr == "" {
+		sessionIDStr = params.QueryParams["id"]
+	}
+	if sessionIDStr == "" {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	sessionID, err := id.ParseSessionID(sessionIDStr)
+	if err != nil {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	sess, err := c.engine.Store().GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("dashboard: resolve session: %w", err)
+	}
+
+	data := pages.SessionDetailData{
+		Session: sess,
+	}
+
+	// Resolve the user associated with this session.
+	if !sess.UserID.IsNil() {
+		if u, err := c.engine.ResolveUser(sess.UserID.String()); err == nil {
+			data.User = u
+		}
+	}
+
+	// Resolve the device if bound.
+	if !sess.DeviceID.IsNil() {
+		if d, err := c.engine.GetDevice(ctx, sess.DeviceID); err == nil {
+			data.Device = d
+		}
+	}
+
+	return pages.SessionDetailPage(data), nil
+}
+
+func (c *Contributor) renderDeviceDetail(ctx context.Context, params contributor.Params) (templ.Component, error) {
+	deviceIDStr := params.PathParams["id"]
+	if deviceIDStr == "" {
+		deviceIDStr = params.QueryParams["id"]
+	}
+	if deviceIDStr == "" {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	deviceID, err := id.ParseDeviceID(deviceIDStr)
+	if err != nil {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	d, err := c.engine.GetDevice(ctx, deviceID)
+	if err != nil {
+		return nil, fmt.Errorf("dashboard: resolve device: %w", err)
+	}
+
+	data := pages.DeviceDetailData{
+		Device: d,
+	}
+
+	// Resolve the user who owns this device.
+	if !d.UserID.IsNil() {
+		if u, err := c.engine.ResolveUser(d.UserID.String()); err == nil {
+			data.User = u
+		}
+		// List sessions for this device's user.
+		if sessions, err := c.engine.ListSessions(ctx, d.UserID); err == nil {
+			// Filter to sessions using this device.
+			var deviceSessions []*session.Session
+			for _, s := range sessions {
+				if s.DeviceID == deviceID {
+					deviceSessions = append(deviceSessions, s)
+				}
+			}
+			data.Sessions = deviceSessions
+		}
+	}
+
+	return pages.DeviceDetailPage(data), nil
+}
+
+func (c *Contributor) renderRoleDetail(ctx context.Context, _ id.AppID, params contributor.Params) (templ.Component, error) {
+	roleIDStr := params.PathParams["id"]
+	if roleIDStr == "" {
+		roleIDStr = params.QueryParams["id"]
+	}
+	if roleIDStr == "" {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	roleID, err := id.ParseRoleID(roleIDStr)
+	if err != nil {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	role, err := c.engine.GetRole(ctx, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("dashboard: resolve role: %w", err)
+	}
+
+	var permissions []*rbac.Permission
+	if perms, err := c.engine.ListRolePermissions(ctx, roleID); err == nil {
+		permissions = perms
+	}
+
+	data := pages.RoleDetailData{
+		Role:        role,
+		Permissions: permissions,
+	}
+
+	return pages.RoleDetailPage(data), nil
 }
 
 // ─── Widget Render Helpers ───────────────────────────────────────────────────
@@ -600,23 +911,35 @@ func (c *Contributor) collectUserDetailSections(ctx context.Context, userID id.U
 // knownPageRoutes is the set of top-level page routes that the dashboard handles.
 // Used to distinguish page routes from app slug segments in URL parsing.
 var knownPageRoutes = map[string]bool{
-	"/":                  true,
-	"/users":             true,
-	"/users/detail":      true,
-	"/sessions":          true,
-	"/devices":           true,
-	"/roles":             true,
-	"/webhooks":          true,
-	"/environments":      true,
+	"/":                    true,
+	"/users":               true,
+	"/users/detail":        true,
+	"/sessions":            true,
+	"/sessions/detail":     true,
+	"/devices":             true,
+	"/devices/detail":      true,
+	"/roles":               true,
+	"/roles/detail":        true,
+	"/webhooks":            true,
+	"/environments":        true,
 	"/environments/detail": true,
-	"/signup-forms":      true,
-	"/signup-forms/edit": true,
+	"/signup-forms":        true,
+	"/signup-forms/edit":   true,
+	"/credentials":         true,
+	"/plugins":             true,
+	"/settings":            true,
+	"/settings/editor":     true,
 }
 
 // parseAppEnvRoute extracts app slug, env slug, and page route from a route string.
 // Routes with app/env: "/{appSlug}/{envSlug}/users" → ("platform", "development", "/users")
 // Bare routes: "/users" → ("", "", "/users")
-func parseAppEnvRoute(route string) (appSlug, envSlug, pageRoute string) {
+//
+// Uses the contributor's pageRoutes map (core + plugin routes) to distinguish
+// page routes from app/env slug segments. Without this, plugin routes like
+// "/social-providers/detail" would be misinterpreted as appSlug="social-providers",
+// envSlug="detail".
+func (c *Contributor) parseAppEnvRoute(route string) (appSlug, envSlug, pageRoute string) {
 	trimmed := strings.TrimPrefix(route, "/")
 	if trimmed == "" {
 		return "", "", "/"
@@ -625,12 +948,14 @@ func parseAppEnvRoute(route string) (appSlug, envSlug, pageRoute string) {
 	parts := strings.SplitN(trimmed, "/", 3)
 
 	// If the full route is a known page route, it's a bare route.
-	if knownPageRoutes[route] {
+	if c.pageRoutes[route] {
 		return "", "", route
 	}
 
-	// If first segment starts with a known page route prefix, it's bare.
-	if len(parts) >= 1 && knownPageRoutes["/"+parts[0]] {
+	// If first segment matches a known page route prefix, it's a bare route.
+	// This catches sub-routes like "/social-providers/detail" when
+	// "/social-providers" is registered.
+	if len(parts) >= 1 && c.pageRoutes["/"+parts[0]] {
 		return "", "", route
 	}
 

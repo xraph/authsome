@@ -1,0 +1,174 @@
+package pages
+
+import (
+	"sort"
+	"strconv"
+
+	"github.com/xraph/authsome/rbac"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+// RoleDetailData holds all data needed for the role detail page.
+type RoleDetailData struct {
+	Role        *rbac.Role
+	Permissions []*rbac.Permission
+}
+
+templ RoleDetailPage(data RoleDetailData) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../roles",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Roles
+		}
+
+		<!-- Role Info Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-3">
+						<div class="flex h-12 w-12 items-center justify-center rounded-sm bg-primary/10 text-primary">
+							@icons.Shield(icons.WithSize(24))
+						</div>
+						<div>
+							@card.Title() {
+								{ data.Role.Name }
+							}
+							@card.Description() {
+								<code class="text-xs">{ data.Role.Slug }</code>
+							}
+						</div>
+					</div>
+					<div class="flex items-center gap-2">
+						if data.Role.ParentID != "" {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+								Inherits from parent
+							}
+						}
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							{ strconv.Itoa(len(data.Permissions)) } permissions
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+					@userField("Role ID", data.Role.ID)
+					if data.Role.Description != "" {
+						@userField("Description", data.Role.Description)
+					}
+					if data.Role.ParentID != "" {
+						@userField("Parent Role ID", data.Role.ParentID)
+					}
+					@userField("Created", data.Role.CreatedAt.Format("Jan 02, 2006 15:04"))
+					@userField("Updated", data.Role.UpdatedAt.Format("Jan 02, 2006 15:04"))
+				</dl>
+			}
+		}
+
+		<!-- Permissions Section (grouped by resource) -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-2">
+					@icons.Lock(icons.WithSize(18))
+					@card.Title() {
+						Permissions
+					}
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Permissions)) }
+					}
+				</div>
+				@card.Description() {
+					Actions grouped by resource
+				}
+			}
+			@card.Content() {
+				if len(data.Permissions) == 0 {
+					<p class="text-sm text-muted-foreground py-4 text-center">No permissions defined for this role.</p>
+				} else {
+					<div class="space-y-4">
+						for _, group := range groupPermissionsByResource(data.Permissions) {
+							<div class="rounded-sm border p-4">
+								<div class="flex items-center justify-between mb-3">
+									<div class="flex items-center gap-2">
+										@icons.Folder(icons.WithSize(16))
+										<h4 class="text-sm font-semibold">{ group.Resource }</h4>
+									</div>
+									<span class="text-xs text-muted-foreground">
+										{ strconv.Itoa(len(group.Actions)) } { actionWord(len(group.Actions)) }
+									</span>
+								</div>
+								<div class="flex flex-wrap gap-2">
+									for _, action := range group.Actions {
+										@badge.Badge(badge.Props{Variant: actionBadgeVariant(action)}) {
+											{ action }
+										}
+									}
+								</div>
+							</div>
+						}
+					</div>
+				}
+			}
+		}
+	</div>
+}
+
+// permissionGroup represents a resource and its associated actions.
+type permissionGroup struct {
+	Resource string
+	Actions  []string
+}
+
+// groupPermissionsByResource groups permissions by their resource field
+// and returns them sorted alphabetically by resource name.
+func groupPermissionsByResource(perms []*rbac.Permission) []permissionGroup {
+	m := make(map[string][]string)
+	for _, p := range perms {
+		m[p.Resource] = append(m[p.Resource], p.Action)
+	}
+
+	groups := make([]permissionGroup, 0, len(m))
+	for res, actions := range m {
+		sort.Strings(actions)
+		groups = append(groups, permissionGroup{Resource: res, Actions: actions})
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].Resource < groups[j].Resource
+	})
+	return groups
+}
+
+// actionBadgeVariant returns a badge variant based on the action type.
+func actionBadgeVariant(action string) badge.Variant {
+	switch action {
+	case "admin", "delete":
+		return badge.VariantDestructive
+	case "write", "create", "update":
+		return badge.VariantDefault
+	default:
+		return badge.VariantSecondary
+	}
+}
+
+// actionWord returns "action" or "actions" based on count.
+func actionWord(count int) string {
+	if count == 1 {
+		return "action"
+	}
+	return "actions"
+}

@@ -1,0 +1,75 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/icons"
+)
+
+templ ConfigPage(maxSpeed string, minDistance string, lookbackWindow string, action string) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Impossible Travel</h1>
+			<p class="text-muted-foreground mt-1">Detect geographically impossible login location changes based on time and distance.</p>
+		</div>
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					<div class="flex h-10 w-10 items-center justify-center rounded-sm bg-primary/10 text-primary">
+						@icons.Plane(icons.WithSize(20))
+					</div>
+					<div>
+						@card.Title() {
+							Configuration
+						}
+						@card.Description() {
+							Current settings for impossible travel detection.
+						}
+					</div>
+				</div>
+			}
+			@card.Content() {
+				@separator.Separator()
+				<dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Max Speed</dt>
+					<dd class="font-medium">{ maxSpeed }</dd>
+					<dt class="text-muted-foreground">Min Distance</dt>
+					<dd class="font-medium">{ minDistance }</dd>
+					<dt class="text-muted-foreground">Lookback Window</dt>
+					<dd class="font-medium">{ lookbackWindow }</dd>
+					<dt class="text-muted-foreground">Action</dt>
+					<dd class="font-medium capitalize">{ action }</dd>
+				</dl>
+			}
+		}
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					How It Works
+				}
+			}
+			@card.Content() {
+				<p class="text-sm text-muted-foreground">
+					The impossible travel plugin compares consecutive login locations for each user. Using the GeoIP plugin to resolve IP addresses to coordinates, it calculates the distance between logins and the time elapsed. If the required travel speed exceeds the configured maximum (e.g., faster than a commercial airplane), the login is flagged or blocked depending on the configured action. Risk levels are assigned based on how much the required speed exceeds the threshold.
+				</p>
+			}
+		}
+		@card.Card() {
+			@card.Content() {
+				<div class="flex items-center justify-between py-2">
+					<div class="flex items-center gap-3">
+						@icons.Settings(icons.WithSize(16), icons.WithClass("text-muted-foreground"))
+						<div>
+							<p class="text-sm font-medium">Edit Settings</p>
+							<p class="text-xs text-muted-foreground">Configure impossible travel detection through the settings editor.</p>
+						</div>
+					</div>
+					<a href="settings/editor?scope=app&namespace=impossibletravel" class="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
+						@icons.ExternalLink(icons.WithSize(12))
+						Edit Settings
+					</a>
+				</div>
+			}
+		}
+	</div>
+}

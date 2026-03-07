@@ -128,6 +128,62 @@ func (s *SqliteStore) ConsumeAuthCode(ctx context.Context, code string) error {
 }
 
 // ──────────────────────────────────────────────────
+// Device code methods (RFC 8628)
+// ──────────────────────────────────────────────────
+
+func (s *SqliteStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) error {
+	if dc.CreatedAt.IsZero() {
+		dc.CreatedAt = time.Now()
+	}
+	m := fromDeviceCode(dc)
+	_, err := s.sdb.NewInsert(m).Exec(ctx)
+	return oauth2SqliteError(err)
+}
+
+func (s *SqliteStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
+	m := new(deviceCodeModel)
+	err := s.sdb.NewSelect(m).
+		Where("device_code = ?", deviceCode).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrDeviceCodeNotFound
+		}
+		return nil, oauth2SqliteError(err)
+	}
+	return toDeviceCode(m)
+}
+
+func (s *SqliteStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
+	m := new(deviceCodeModel)
+	err := s.sdb.NewSelect(m).
+		Where("user_code = ?", userCode).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrDeviceCodeNotFound
+		}
+		return nil, oauth2SqliteError(err)
+	}
+	return toDeviceCode(m)
+}
+
+func (s *SqliteStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {
+	m := fromDeviceCode(dc)
+	_, err := s.sdb.NewUpdate(m).
+		WherePK().
+		Exec(ctx)
+	return oauth2SqliteError(err)
+}
+
+func (s *SqliteStore) DeleteExpiredDeviceCodes(ctx context.Context) error {
+	_, err := s.sdb.NewDelete((*deviceCodeModel)(nil)).
+		Where("expires_at < ?", time.Now()).
+		Exec(ctx)
+	return oauth2SqliteError(err)
+}
+
+// ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
 

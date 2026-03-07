@@ -128,6 +128,62 @@ func (s *PostgresStore) ConsumeAuthCode(ctx context.Context, code string) error 
 }
 
 // ──────────────────────────────────────────────────
+// Device code methods (RFC 8628)
+// ──────────────────────────────────────────────────
+
+func (s *PostgresStore) CreateDeviceCode(ctx context.Context, dc *DeviceCode) error {
+	if dc.CreatedAt.IsZero() {
+		dc.CreatedAt = time.Now()
+	}
+	m := fromDeviceCode(dc)
+	_, err := s.pg.NewInsert(m).Exec(ctx)
+	return oauth2PgError(err)
+}
+
+func (s *PostgresStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode string) (*DeviceCode, error) {
+	m := new(deviceCodeModel)
+	err := s.pg.NewSelect(m).
+		Where("device_code = ?", deviceCode).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrDeviceCodeNotFound
+		}
+		return nil, oauth2PgError(err)
+	}
+	return toDeviceCode(m)
+}
+
+func (s *PostgresStore) GetDeviceCodeByUserCode(ctx context.Context, userCode string) (*DeviceCode, error) {
+	m := new(deviceCodeModel)
+	err := s.pg.NewSelect(m).
+		Where("user_code = ?", userCode).
+		Scan(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrDeviceCodeNotFound
+		}
+		return nil, oauth2PgError(err)
+	}
+	return toDeviceCode(m)
+}
+
+func (s *PostgresStore) UpdateDeviceCode(ctx context.Context, dc *DeviceCode) error {
+	m := fromDeviceCode(dc)
+	_, err := s.pg.NewUpdate(m).
+		WherePK().
+		Exec(ctx)
+	return oauth2PgError(err)
+}
+
+func (s *PostgresStore) DeleteExpiredDeviceCodes(ctx context.Context) error {
+	_, err := s.pg.NewDelete((*deviceCodeModel)(nil)).
+		Where("expires_at < ?", time.Now()).
+		Exec(ctx)
+	return oauth2PgError(err)
+}
+
+// ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
 

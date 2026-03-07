@@ -5,25 +5,97 @@ import (
 
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/components/table"
 	"github.com/xraph/forgeui/icons"
 )
 
-templ OrganizationsPage(orgs []*organization.Organization) {
+// OrgsPageData holds all data for the organizations page.
+type OrgsPageData struct {
+	Orgs       []*organization.Organization
+	CreatedOrg *organization.Organization
+	Error      string
+	FormNonce  string
+}
+
+templ OrganizationsPage(data OrgsPageData) {
 	<div class="space-y-6">
 		<!-- Header -->
 		<div class="flex items-center gap-3">
 			<h1 class="text-3xl font-bold tracking-tight">Organizations</h1>
 			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-				{ strconv.Itoa(len(orgs)) }
+				{ strconv.Itoa(len(data.Orgs)) }
 			}
 		</div>
-
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.CreatedOrg != nil {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">
+					Organization "{ data.CreatedOrg.Name }" created successfully.
+				</p>
+			</div>
+		}
+		<!-- Create form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Create Organization
+				}
+				@card.Description() {
+					Add a new organization to this application.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1.5 block">Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "name",
+								Placeholder: "My Organization",
+								Attributes:  templ.Attributes{"required": true},
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block">Slug</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "slug",
+								Placeholder: "my-organization",
+								Attributes:  templ.Attributes{"required": true},
+							})
+							<p class="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and hyphens only.</p>
+						</div>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">Logo URL (optional)</label>
+						@input.Input(input.Props{
+							Type:        "url",
+							Name:        "logo",
+							Placeholder: "https://example.com/logo.png",
+						})
+					</div>
+					<div>
+						@button.Button(button.Props{Type: "submit"}) {
+							Create Organization
+						}
+					</div>
+				</form>
+			}
+		}
 		<!-- Table -->
 		@card.Card() {
 			@card.Content() {
-				if len(orgs) == 0 {
+				if len(data.Orgs) == 0 {
 					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
 						@icons.Building2(icons.WithSize(40))
 						<p class="mt-2 text-sm">No organizations found.</p>
@@ -38,7 +110,7 @@ templ OrganizationsPage(orgs []*organization.Organization) {
 							}
 						}
 						@table.Body() {
-							for _, org := range orgs {
+							for _, org := range data.Orgs {
 								{{ created := org.CreatedAt.Format("Jan 02, 2006") }}
 								@table.Row() {
 									@table.Cell() {

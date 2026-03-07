@@ -1,0 +1,17 @@
+name: authsome_flutter
+description: AuthSome authentication SDK for Flutter — AuthProvider, SecureTokenStorage, and auto-config support.
+version: 0.1.0
+
+environment:
+  sdk: ^3.0.0
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  authsome_core:
+    path: ../authsome_core
+  flutter_secure_storage: ^9.0.0
+
+dev_dependencies:
+  flutter_lints: ^4.0.0

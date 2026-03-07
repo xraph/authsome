@@ -20,6 +20,9 @@ import (
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
+
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 )
 
 // ──────────────────────────────────────────────────
@@ -31,9 +34,12 @@ import (
 func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
-	akPlugin := apikeyPlugin.New(s)
+	akPlugin := apikeyPlugin.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
 		authsome.WithStore(s),
+		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID("aapp_01jf0000000000000000000000"),
 		authsome.WithPlugin(akPlugin),

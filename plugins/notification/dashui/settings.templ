@@ -1,0 +1,44 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+)
+
+// SettingsPanel renders the notification plugin settings panel.
+templ SettingsPanel(appName string, baseURL string, locale string, async bool) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				Notifications
+			}
+			@card.Description() {
+				Multi-channel notification configuration
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">App Name</dt>
+				<dd class="font-medium">{ appName }</dd>
+				if baseURL != "" {
+					<dt class="text-muted-foreground">Base URL</dt>
+					<dd class="font-medium">{ baseURL }</dd>
+				}
+				<dt class="text-muted-foreground">Locale</dt>
+				<dd class="font-medium">{ locale }</dd>
+				<dt class="text-muted-foreground">Async</dt>
+				<dd>
+					if async {
+						@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+							Enabled
+						}
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							Disabled
+						}
+					}
+				</dd>
+			</dl>
+		}
+	}
+}

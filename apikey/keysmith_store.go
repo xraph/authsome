@@ -64,6 +64,27 @@ func (s *KeysmithStore) GetAPIKeyByPrefix(ctx context.Context, _ id.AppID, prefi
 	return fromKeysmithKey(k)
 }
 
+func (s *KeysmithStore) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*APIKey, error) {
+	// Public key is stored in keysmith metadata. List keys for the tenant
+	// and find the matching one by comparing the public key field.
+	keys, err := s.engine.Store().Keys().List(ctx, &key.ListFilter{
+		TenantID: appID.String(),
+	})
+	if err != nil {
+		return nil, keysmithError(err)
+	}
+	for _, k := range keys {
+		ak, err := fromKeysmithKey(k)
+		if err != nil {
+			continue
+		}
+		if ak.PublicKey == publicKey || ak.PublicKeyPrefix == publicKey {
+			return ak, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 func (s *KeysmithStore) UpdateAPIKey(ctx context.Context, ak *APIKey) error {
 	k := toKeysmithKey(ak)
 	if err := s.engine.Store().Keys().Update(ctx, k); err != nil {
@@ -134,6 +155,14 @@ func toKeysmithKey(ak *APIKey) *key.Key {
 		UpdatedAt:   ak.UpdatedAt,
 	}
 
+	// Store public key fields in metadata.
+	if ak.PublicKey != "" || ak.PublicKeyPrefix != "" {
+		k.Metadata = map[string]any{
+			"public_key":        ak.PublicKey,
+			"public_key_prefix": ak.PublicKeyPrefix,
+		}
+	}
+
 	return k
 }
 
@@ -162,28 +191,40 @@ func fromKeysmithKey(kk *key.Key) (*APIKey, error) {
 		UpdatedAt: kk.UpdatedAt,
 	}
 
-	// Parse UserID from CreatedBy (graceful fallback for empty).
+	// Parse UserID from CreatedBy (graceful fallback for empty or invalid).
 	if kk.CreatedBy != "" {
 		userID, err := id.ParseUserID(kk.CreatedBy)
-		if err != nil {
-			return nil, fmt.Errorf("apikey: parse user id from created_by: %w", err)
+		if err == nil {
+			ak.UserID = userID
 		}
-		ak.UserID = userID
+		// Invalid CreatedBy is non-fatal; leave UserID as zero value.
+		// This can happen with keys created from the dashboard without user context.
 	}
 
 	// Copy LastUsedAt.
 	ak.LastUsedAt = kk.LastUsedAt
 
+	// Read public key fields from metadata.
+	if kk.Metadata != nil {
+		if v, ok := kk.Metadata["public_key"].(string); ok {
+			ak.PublicKey = v
+		}
+		if v, ok := kk.Metadata["public_key_prefix"].(string); ok {
+			ak.PublicKeyPrefix = v
+		}
+	}
+
 	return ak, nil
 }
 
 // convertKeyList converts a slice of Keysmith keys to AuthSome API keys.
+// Keys that fail conversion are skipped rather than failing the entire list.
 func convertKeyList(keys []*key.Key) ([]*APIKey, error) {
 	result := make([]*APIKey, 0, len(keys))
 	for _, kk := range keys {
 		ak, err := fromKeysmithKey(kk)
 		if err != nil {
-			return nil, err
+			continue // skip unconvertible keys
 		}
 		result = append(result, ak)
 	}

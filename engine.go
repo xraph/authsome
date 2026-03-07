@@ -14,7 +14,6 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/appsessionconfig"
-	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/hook"
@@ -24,8 +23,10 @@ import (
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/securityevent"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
+	"github.com/xraph/authsome/tokenformat"
 
 	"github.com/xraph/keysmith"
 	"github.com/xraph/warden"
@@ -78,6 +79,9 @@ type Engine struct {
 	passwordHistory account.PasswordHistoryStore
 	securityEvents  securityevent.Store
 
+	// Dynamic settings manager (optional).
+	settingsMgr *settings.Manager
+
 	// Bootstrap configuration (nil = disabled).
 	bootstrapCfg  *BootstrapConfig
 	platformAppID id.AppID
@@ -107,6 +111,14 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	e.plugins = plugin.NewRegistry(e.logger)
 	e.hooks = hook.NewBus(e.logger)
 	e.strategies = strategy.NewRegistry(e.logger)
+
+	// Initialize the dynamic settings manager.
+	e.settingsMgr = settings.NewManager(e.store, e.logger)
+
+	// Register core session settings.
+	if err := registerCoreSessionSettings(e.settingsMgr); err != nil {
+		return nil, fmt.Errorf("authsome: failed to register core session settings: %w", err)
+	}
 
 	// Register pending plugins
 	for _, p := range e.pendingPlugins {
@@ -166,6 +178,18 @@ func (e *Engine) Start(ctx context.Context) error {
 				log.String("plugin", p.Name()),
 				log.String("strategy", sp.Strategy().Name()),
 			)
+		}
+	}
+
+	// Auto-register settings from plugins implementing SettingsProvider.
+	for _, p := range e.plugins.Plugins() {
+		if sp, ok := p.(plugin.SettingsProvider); ok {
+			if err := sp.DeclareSettings(e.settingsMgr); err != nil {
+				e.logger.Warn("authsome: failed to register plugin settings",
+					log.String("plugin", p.Name()),
+					log.String("error", err.Error()),
+				)
+			}
 		}
 	}
 
@@ -317,6 +341,16 @@ func (e *Engine) Warden() *warden.Engine { return e.warden_ }
 
 // Keysmith returns the first-class key management engine (may be nil).
 func (e *Engine) Keysmith() *keysmith.Engine { return e.keysmith_ }
+
+// Settings returns the dynamic settings manager (may be nil).
+func (e *Engine) Settings() *settings.Manager { return e.settingsMgr }
+
+// ClientConfig returns the merged client-facing configuration for an app.
+// This aggregates plugin-level defaults with per-app overrides.
+func (e *Engine) ClientConfig(_ context.Context, _ id.AppID) map[string]any {
+	// Stub: return an empty config map. Full implementation pending.
+	return map[string]any{}
+}
 
 // APIKeyStore returns the API key store. When Keysmith is available,
 // operations delegate to Keysmith's full key management engine (gaining

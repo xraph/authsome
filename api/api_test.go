@@ -17,6 +17,9 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/store/memory"
+
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 )
 
 // testAppIDStr is a valid TypeID string for tests.
@@ -25,8 +28,11 @@ const testAppIDStr = "aapp_01jf0000000000000000000000"
 func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	t.Helper()
 	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
 		authsome.WithStore(s),
+		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID(testAppIDStr),
 	)

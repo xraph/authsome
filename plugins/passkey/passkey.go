@@ -10,9 +10,11 @@ import (
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/grove/migrate"
@@ -25,7 +27,61 @@ var (
 	_ plugin.RouteProvider         = (*Plugin)(nil)
 	_ plugin.MigrationProvider     = (*Plugin)(nil)
 	_ plugin.AuthMethodContributor = (*Plugin)(nil)
+	_ plugin.SettingsProvider      = (*Plugin)(nil)
 )
+
+// ──────────────────────────────────────────────────
+// Dynamic setting definitions
+// ──────────────────────────────────────────────────
+
+var (
+	// SettingRPDisplayName controls the relying party display name.
+	SettingRPDisplayName = settings.Define("passkey.rp_display_name", "AuthSome",
+		settings.WithDisplayName("RP Display Name"),
+		settings.WithDescription("Relying party display name shown to users during WebAuthn ceremonies"),
+		settings.WithCategory("Passkey / WebAuthn"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("AuthSome"),
+		settings.WithHelpText("The name users see when registering or authenticating with passkeys"),
+		settings.WithOrder(10),
+	)
+
+	// SettingRPID controls the relying party identifier.
+	SettingRPID = settings.Define("passkey.rp_id", "localhost",
+		settings.WithDisplayName("RP ID"),
+		settings.WithDescription("Relying party identifier (typically the domain name)"),
+		settings.WithCategory("Passkey / WebAuthn"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithPlaceholder("example.com"),
+		settings.WithHelpText("Must match the domain where passkeys are used"),
+		settings.WithOrder(20),
+	)
+
+	// SettingSessionTimeoutSeconds controls the WebAuthn ceremony timeout.
+	SettingSessionTimeoutSeconds = settings.Define("passkey.session_timeout_seconds", 300,
+		settings.WithDisplayName("Ceremony Timeout (seconds)"),
+		settings.WithDescription("How long a WebAuthn ceremony session lives in seconds"),
+		settings.WithCategory("Passkey / WebAuthn"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(30), Max: intPtr(600)}),
+		settings.WithHelpText("Time allowed to complete a passkey ceremony. Default: 300 (5 minutes)"),
+		settings.WithOrder(30),
+	)
+)
+
+func intPtr(v int) *int { return &v }
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "passkey", SettingRPDisplayName); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "passkey", SettingRPID); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "passkey", SettingSessionTimeoutSeconds)
+}
 
 // Config configures the passkey/WebAuthn plugin.
 type Config struct {
