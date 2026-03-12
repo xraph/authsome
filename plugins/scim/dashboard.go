@@ -329,7 +329,7 @@ func (p *Plugin) renderSCIMDetail(ctx context.Context, params contributor.Params
 	}
 
 	// Fetch recent logs.
-	if logs, err := p.service.ListLogs(ctx, configID, 20); err == nil {
+	if logs, logErr := p.service.ListLogs(ctx, configID, 20); logErr == nil {
 		data.RecentLogs = make([]scimdash.SCIMLogView, 0, len(logs))
 		for _, l := range logs {
 			data.RecentLogs = append(data.RecentLogs, toLogView(l, cfg.Name))
@@ -351,7 +351,7 @@ func (p *Plugin) renderSCIMLogsPage(ctx context.Context, _ contributor.Params) (
 		} else {
 			// Build config name map.
 			configNames := make(map[string]string)
-			if configs, err := p.scimStore.ListConfigs(ctx, appID); err == nil {
+			if configs, cfgErr := p.scimStore.ListConfigs(ctx, appID); cfgErr == nil {
 				for _, c := range configs {
 					configNames[c.ID.String()] = c.Name
 				}
