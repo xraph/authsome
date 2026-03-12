@@ -10,10 +10,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"strings"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
 

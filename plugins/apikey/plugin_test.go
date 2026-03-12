@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,8 +30,8 @@ type mockEngine struct {
 	store  apikey.Store
 }
 
-func (m *mockEngine) Logger() log.Logger          { return m.logger }
-func (m *mockEngine) APIKeyStore() apikey.Store    { return m.store }
+func (m *mockEngine) Logger() log.Logger        { return m.logger }
+func (m *mockEngine) APIKeyStore() apikey.Store { return m.store }
 func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {

@@ -63,9 +63,9 @@ func (p *dropboxProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*
 	}
 
 	var info struct {
-		AccountID    string `json:"account_id"`
-		Email        string `json:"email"`
-		Name         struct {
+		AccountID string `json:"account_id"`
+		Email     string `json:"email"`
+		Name      struct {
 			GivenName   string `json:"given_name"`
 			Surname     string `json:"surname"`
 			DisplayName string `json:"display_name"`

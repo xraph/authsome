@@ -3,10 +3,11 @@ package middleware_test
 import (
 	"context"
 	"errors"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,9 +51,9 @@ func newTestFixtures() (id.UserID, id.AppID, id.SessionID, *session.Session, *us
 		Token:  "valid-token",
 	}
 	u := &user.User{
-		ID:    userID,
-		AppID: appID,
-		Email: "test@example.com",
+		ID:        userID,
+		AppID:     appID,
+		Email:     "test@example.com",
 		FirstName: "Test User",
 	}
 
@@ -89,18 +90,18 @@ func TestStrategyMiddleware_ValidBearerSession(t *testing.T) {
 	)
 
 	var (
-		gotUser      *user.User
-		gotSessID    id.SessionID
-		gotUserID    id.UserID
-		gotAppID     id.AppID
-		gotScope     forge.Scope
-		gotMethod    string
-		userOK       bool
-		sessIDOK     bool
-		userIDOK     bool
-		appIDOK      bool
-		scopeOK      bool
-		methodOK     bool
+		gotUser   *user.User
+		gotSessID id.SessionID
+		gotUserID id.UserID
+		gotAppID  id.AppID
+		gotScope  forge.Scope
+		gotMethod string
+		userOK    bool
+		sessIDOK  bool
+		userIDOK  bool
+		appIDOK   bool
+		scopeOK   bool
+		methodOK  bool
 	)
 
 	router := forge.NewRouter()
@@ -141,9 +142,9 @@ func TestStrategyMiddleware_InvalidBearerFallsBackToStrategy(t *testing.T) {
 	strategySessID := id.NewSessionID()
 
 	strategyUser := &user.User{
-		ID:    strategyUserID,
-		AppID: strategyAppID,
-		Email: "strategy@example.com",
+		ID:        strategyUserID,
+		AppID:     strategyAppID,
+		Email:     "strategy@example.com",
 		FirstName: "Strategy User",
 	}
 	strategySess := &session.Session{
@@ -245,9 +246,9 @@ func TestStrategyMiddleware_APIKeyOnly(t *testing.T) {
 	strategySessID := id.NewSessionID()
 
 	strategyUser := &user.User{
-		ID:    strategyUserID,
-		AppID: strategyAppID,
-		Email: "apikey@example.com",
+		ID:        strategyUserID,
+		AppID:     strategyAppID,
+		Email:     "apikey@example.com",
 		FirstName: "API Key User",
 	}
 	strategySess := &session.Session{
@@ -313,9 +314,9 @@ func TestStrategyMiddleware_BearerWithAskPrefix(t *testing.T) {
 	strategySessID := id.NewSessionID()
 
 	strategyUser := &user.User{
-		ID:    strategyUserID,
-		AppID: strategyAppID,
-		Email: "askprefix@example.com",
+		ID:        strategyUserID,
+		AppID:     strategyAppID,
+		Email:     "askprefix@example.com",
 		FirstName: "Ask Prefix User",
 	}
 	strategySess := &session.Session{
@@ -346,10 +347,10 @@ func TestStrategyMiddleware_BearerWithAskPrefix(t *testing.T) {
 	)
 
 	var (
-		gotUser  *user.User
+		gotUser   *user.User
 		gotMethod string
-		userOK   bool
-		methodOK bool
+		userOK    bool
+		methodOK  bool
 	)
 
 	router := forge.NewRouter()
@@ -486,9 +487,9 @@ func TestStrategyMiddleware_RequireAuth_WithStrategy(t *testing.T) {
 	strategySessID := id.NewSessionID()
 
 	strategyUser := &user.User{
-		ID:    strategyUserID,
-		AppID: strategyAppID,
-		Email: "protected@example.com",
+		ID:        strategyUserID,
+		AppID:     strategyAppID,
+		Email:     "protected@example.com",
 		FirstName: "Protected User",
 	}
 	strategySess := &session.Session{
@@ -541,9 +542,9 @@ func TestStrategyMiddleware_StrategyResultSetsScope(t *testing.T) {
 	strategySessID := id.NewSessionID()
 
 	strategyUser := &user.User{
-		ID:    strategyUserID,
-		AppID: strategyAppID,
-		Email: "org-scope@example.com",
+		ID:        strategyUserID,
+		AppID:     strategyAppID,
+		Email:     "org-scope@example.com",
 		FirstName: "Org Scope User",
 	}
 	strategySess := &session.Session{

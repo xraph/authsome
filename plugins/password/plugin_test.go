@@ -2,8 +2,9 @@ package password_test
 
 import (
 	"context"
-	log "github.com/xraph/go-utils/log"
 	"testing"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,9 +38,9 @@ func TestPlugin_BeforeSignUp_NoRestrictions(t *testing.T) {
 	ctx := context.Background()
 
 	err := p.OnBeforeSignUp(ctx, &account.SignUpRequest{
-		AppID:    id.NewAppID(),
-		Email:    "anyone@anydomain.com",
-		Password: "SecureP@ss1",
+		AppID:     id.NewAppID(),
+		Email:     "anyone@anydomain.com",
+		Password:  "SecureP@ss1",
 		FirstName: "Anyone",
 	})
 

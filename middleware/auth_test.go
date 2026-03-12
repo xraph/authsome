@@ -3,10 +3,11 @@ package middleware_test
 import (
 	"context"
 	"errors"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,8 +25,8 @@ import (
 
 func TestWithUser_UserFrom(t *testing.T) {
 	u := &user.User{
-		ID:    id.NewUserID(),
-		Email: "test@example.com",
+		ID:        id.NewUserID(),
+		Email:     "test@example.com",
 		FirstName: "Test User",
 	}
 
@@ -156,9 +157,9 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 		Token:  "valid-token",
 	}
 	testUser := &user.User{
-		ID:    testUserID,
-		AppID: testAppID,
-		Email: "test@test.com",
+		ID:        testUserID,
+		AppID:     testAppID,
+		Email:     "test@test.com",
 		FirstName: "Test",
 	}
 
@@ -237,9 +238,9 @@ func TestAuthMiddleware_ValidToken_OrgScope(t *testing.T) {
 		Token:  "org-token",
 	}
 	testUser := &user.User{
-		ID:    testUserID,
-		AppID: testAppID,
-		Email: "org@test.com",
+		ID:        testUserID,
+		AppID:     testAppID,
+		Email:     "org@test.com",
 		FirstName: "Org User",
 	}
 

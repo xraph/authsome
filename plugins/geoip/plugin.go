@@ -215,12 +215,12 @@ func (p *Plugin) auditGeo(ctx context.Context, action string, userID id.UserID, 
 		return
 	}
 	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
-		Action:     action,
-		Resource:   "session",
-		ActorID:    userID.String(),
-		Tenant:     appID.String(),
-		Outcome:    bridge.OutcomeSuccess,
-		Severity:   bridge.SeverityInfo,
+		Action:   action,
+		Resource: "session",
+		ActorID:  userID.String(),
+		Tenant:   appID.String(),
+		Outcome:  bridge.OutcomeSuccess,
+		Severity: bridge.SeverityInfo,
 		Metadata: map[string]string{
 			"country":      loc.Country,
 			"country_name": loc.CountryName,

@@ -90,4 +90,3 @@ func envSwitcherFromContext(engine *authsome.Engine) templ.Component {
 		return components.TopbarEnvSwitcher(currentEnv, allEnvs, appSlug, currentPage, "").Render(ctx, w)
 	})
 }
-

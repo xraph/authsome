@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	log "github.com/xraph/go-utils/log"
 	"net/http"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
 

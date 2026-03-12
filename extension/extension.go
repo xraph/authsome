@@ -16,12 +16,13 @@ import (
 	"github.com/xraph/forge/extensions/dashboard/ui/shell"
 	"github.com/xraph/vessel"
 
+	fuibridge "github.com/xraph/forgeui/bridge"
+
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
-	fuibridge "github.com/xraph/forgeui/bridge"
 	"github.com/xraph/authsome/bridge/chronicleadapter"
 	"github.com/xraph/authsome/bridge/dispatchadapter"
 	"github.com/xraph/authsome/bridge/heraldadapter"

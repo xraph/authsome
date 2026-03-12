@@ -8,9 +8,9 @@ import "github.com/xraph/authsome/environment"
 
 // SignUpRequest binds the body for POST /signup.
 type SignUpRequest struct {
-	AppID    string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
-	Email    string `json:"email" description:"User email address"`
-	Password string `json:"password" description:"User password"`
+	AppID     string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email     string `json:"email" description:"User email address"`
+	Password  string `json:"password" description:"User password"`
 	FirstName string `json:"first_name,omitempty" description:"First/given name"`
 	LastName  string `json:"last_name,omitempty" description:"Last/family name"`
 	Username  string `json:"username,omitempty" description:"Unique username"`
@@ -71,7 +71,7 @@ type UpdateMeRequest struct {
 	FirstName *string `json:"first_name,omitempty" description:"First/given name"`
 	LastName  *string `json:"last_name,omitempty" description:"Last/family name"`
 	Image     *string `json:"image,omitempty" description:"Profile image URL"`
-	Username *string `json:"username,omitempty" description:"Unique username"`
+	Username  *string `json:"username,omitempty" description:"Unique username"`
 }
 
 // ---------------------------------------------------------------------------

@@ -2,9 +2,10 @@ package middleware
 
 import (
 	"context"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"strings"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
 

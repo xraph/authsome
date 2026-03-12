@@ -1232,7 +1232,7 @@ func toInvoiceView(inv *invoice.Invoice) subdash.InvoiceView {
 	return subdash.InvoiceView{
 		ID: inv.ID.String(), TenantID: inv.TenantID,
 		SubscriptionID: inv.SubscriptionID.String(),
-		Status: string(inv.Status), Currency: inv.Currency,
+		Status:         string(inv.Status), Currency: inv.Currency,
 		Subtotal: inv.Subtotal.FormatMajor(), TaxAmount: inv.TaxAmount.FormatMajor(),
 		DiscountAmount: inv.DiscountAmount.FormatMajor(), Total: inv.Total.FormatMajor(),
 		PeriodStart: inv.PeriodStart, PeriodEnd: inv.PeriodEnd,

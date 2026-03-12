@@ -2,8 +2,9 @@ package bridge_test
 
 import (
 	"context"
-	log "github.com/xraph/go-utils/log"
 	"testing"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

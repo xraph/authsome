@@ -3,9 +3,10 @@ package hook_test
 import (
 	"context"
 	"errors"
-	log "github.com/xraph/go-utils/log"
 	"sync/atomic"
 	"testing"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 

@@ -37,19 +37,19 @@ var _ Store = (*MongoStore)(nil)
 // ──────────────────────────────────────────────────
 
 type ssoConnectionDoc struct {
-	ID          string    `bson:"_id"`
-	AppID       string    `bson:"app_id"`
-	OrgID       string    `bson:"org_id"`
-	Provider    string    `bson:"provider"`
-	Protocol    string    `bson:"protocol"`
-	Domain      string    `bson:"domain"`
-	MetadataURL string    `bson:"metadata_url"`
+	ID           string    `bson:"_id"`
+	AppID        string    `bson:"app_id"`
+	OrgID        string    `bson:"org_id"`
+	Provider     string    `bson:"provider"`
+	Protocol     string    `bson:"protocol"`
+	Domain       string    `bson:"domain"`
+	MetadataURL  string    `bson:"metadata_url"`
 	ClientID     string    `bson:"client_id"`
 	ClientSecret string    `bson:"client_secret"`
 	Issuer       string    `bson:"issuer"`
-	Active      bool      `bson:"active"`
-	CreatedAt   time.Time `bson:"created_at"`
-	UpdatedAt   time.Time `bson:"updated_at"`
+	Active       bool      `bson:"active"`
+	CreatedAt    time.Time `bson:"created_at"`
+	UpdatedAt    time.Time `bson:"updated_at"`
 }
 
 // ──────────────────────────────────────────────────
@@ -67,18 +67,18 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*SSOConnection, error) {
 	}
 
 	c := &SSOConnection{
-		ID:          connID,
-		AppID:       appID,
-		Provider:    d.Provider,
-		Protocol:    d.Protocol,
-		Domain:      d.Domain,
-		MetadataURL: d.MetadataURL,
+		ID:           connID,
+		AppID:        appID,
+		Provider:     d.Provider,
+		Protocol:     d.Protocol,
+		Domain:       d.Domain,
+		MetadataURL:  d.MetadataURL,
 		ClientID:     d.ClientID,
 		ClientSecret: d.ClientSecret,
 		Issuer:       d.Issuer,
-		Active:      d.Active,
-		CreatedAt:   d.CreatedAt,
-		UpdatedAt:   d.UpdatedAt,
+		Active:       d.Active,
+		CreatedAt:    d.CreatedAt,
+		UpdatedAt:    d.UpdatedAt,
 	}
 
 	if d.OrgID != "" {
@@ -94,18 +94,18 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*SSOConnection, error) {
 
 func ssoConnectionToDoc(c *SSOConnection) *ssoConnectionDoc {
 	doc := &ssoConnectionDoc{
-		ID:          c.ID.String(),
-		AppID:       c.AppID.String(),
-		Provider:    c.Provider,
-		Protocol:    c.Protocol,
-		Domain:      c.Domain,
-		MetadataURL: c.MetadataURL,
+		ID:           c.ID.String(),
+		AppID:        c.AppID.String(),
+		Provider:     c.Provider,
+		Protocol:     c.Protocol,
+		Domain:       c.Domain,
+		MetadataURL:  c.MetadataURL,
 		ClientID:     c.ClientID,
 		ClientSecret: c.ClientSecret,
 		Issuer:       c.Issuer,
-		Active:      c.Active,
-		CreatedAt:   c.CreatedAt,
-		UpdatedAt:   c.UpdatedAt,
+		Active:       c.Active,
+		CreatedAt:    c.CreatedAt,
+		UpdatedAt:    c.UpdatedAt,
 	}
 	if c.OrgID.Prefix() != "" {
 		doc.OrgID = c.OrgID.String()
@@ -204,17 +204,17 @@ func (s *MongoStore) UpdateSSOConnection(ctx context.Context, c *SSOConnection) 
 	_, err := s.mdb.Collection(ssoConnectionsColl).UpdateOne(ctx,
 		bson.M{"_id": c.ID.String()},
 		bson.M{"$set": bson.M{
-			"app_id":       doc.AppID,
-			"org_id":       doc.OrgID,
-			"provider":     doc.Provider,
-			"protocol":     doc.Protocol,
-			"domain":       doc.Domain,
-			"metadata_url": doc.MetadataURL,
+			"app_id":        doc.AppID,
+			"org_id":        doc.OrgID,
+			"provider":      doc.Provider,
+			"protocol":      doc.Protocol,
+			"domain":        doc.Domain,
+			"metadata_url":  doc.MetadataURL,
 			"client_id":     doc.ClientID,
 			"client_secret": doc.ClientSecret,
 			"issuer":        doc.Issuer,
-			"active":       doc.Active,
-			"updated_at":   doc.UpdatedAt,
+			"active":        doc.Active,
+			"updated_at":    doc.UpdatedAt,
 		}},
 	)
 	return ssoMongoError(err)

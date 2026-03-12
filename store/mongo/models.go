@@ -810,21 +810,21 @@ func fromNotificationModel(m *notificationModel) (*notification.Notification, er
 type apiKeyModel struct {
 	grove.BaseModel `grove:"table:authsome_api_keys"`
 
-	ID         string     `grove:"id,pk"          bson:"_id"`
-	AppID      string     `grove:"app_id"         bson:"app_id"`
-	EnvID      string     `grove:"env_id"         bson:"env_id"`
-	UserID     string     `grove:"user_id"        bson:"user_id"`
-	Name       string     `grove:"name"           bson:"name"`
+	ID              string     `grove:"id,pk"          bson:"_id"`
+	AppID           string     `grove:"app_id"         bson:"app_id"`
+	EnvID           string     `grove:"env_id"         bson:"env_id"`
+	UserID          string     `grove:"user_id"        bson:"user_id"`
+	Name            string     `grove:"name"           bson:"name"`
 	KeyHash         string     `grove:"key_hash"            bson:"key_hash"`
 	KeyPrefix       string     `grove:"key_prefix"          bson:"key_prefix"`
 	PublicKey       string     `grove:"public_key"          bson:"public_key"`
 	PublicKeyPrefix string     `grove:"public_key_prefix"   bson:"public_key_prefix"`
 	Scopes          string     `grove:"scopes"              bson:"scopes"`
-	ExpiresAt  *time.Time `grove:"expires_at"     bson:"expires_at,omitempty"`
-	LastUsedAt *time.Time `grove:"last_used_at"   bson:"last_used_at,omitempty"`
-	Revoked    bool       `grove:"revoked"        bson:"revoked"`
-	CreatedAt  time.Time  `grove:"created_at"     bson:"created_at"`
-	UpdatedAt  time.Time  `grove:"updated_at"     bson:"updated_at"`
+	ExpiresAt       *time.Time `grove:"expires_at"     bson:"expires_at,omitempty"`
+	LastUsedAt      *time.Time `grove:"last_used_at"   bson:"last_used_at,omitempty"`
+	Revoked         bool       `grove:"revoked"        bson:"revoked"`
+	CreatedAt       time.Time  `grove:"created_at"     bson:"created_at"`
+	UpdatedAt       time.Time  `grove:"updated_at"     bson:"updated_at"`
 }
 
 func toAPIKeyModel(k *apikey.APIKey) *apiKeyModel {

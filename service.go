@@ -1523,9 +1523,9 @@ func (e *Engine) AdminDeleteUser(ctx context.Context, adminID, userID id.UserID)
 
 // BulkImportResult holds the results of a bulk user import operation.
 type BulkImportResult struct {
-	Created int            `json:"created"`
-	Skipped int            `json:"skipped"`
-	Errors  []BulkError    `json:"errors,omitempty"`
+	Created int         `json:"created"`
+	Skipped int         `json:"skipped"`
+	Errors  []BulkError `json:"errors,omitempty"`
 }
 
 // BulkError records an error for a single item in a bulk operation.
@@ -1712,10 +1712,10 @@ func (e *Engine) DeleteAccount(ctx context.Context, userID id.UserID) error {
 
 // UserExport is the complete data export for a user (GDPR data portability).
 type UserExport struct {
-	User     *user.User        `json:"user"`
+	User     *user.User         `json:"user"`
 	Sessions []*session.Session `json:"sessions"`
-	Devices  []*device.Device  `json:"devices"`
-	Extra    map[string]any    `json:"extra,omitempty"`
+	Devices  []*device.Device   `json:"devices"`
+	Extra    map[string]any     `json:"extra,omitempty"`
 }
 
 // ExportUserData returns all data associated with a user for GDPR data portability.

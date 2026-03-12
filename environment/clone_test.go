@@ -337,10 +337,10 @@ func TestClone_WithSettingsOverride(t *testing.T) {
 
 	cloner := NewCloner(store, source, target)
 	result, err := cloner.Clone(context.Background(), CloneRequest{
-		SourceEnvID:     srcEnv.ID,
-		Name:            "Dev",
-		Slug:            "development",
-		Type:            TypeDevelopment,
+		SourceEnvID:      srcEnv.ID,
+		Name:             "Dev",
+		Slug:             "development",
+		Type:             TypeDevelopment,
 		SettingsOverride: &Settings{RateLimitEnabled: boolPtr(false)},
 	})
 	require.NoError(t, err)

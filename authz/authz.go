@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/xraph/warden"
+
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
-	"github.com/xraph/warden"
 )
 
 // ErrForbidden is returned when an authorization check fails.

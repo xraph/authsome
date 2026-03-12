@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 	"fmt"
+
 	log "github.com/xraph/go-utils/log"
 
 	authsome "github.com/xraph/authsome"
@@ -16,9 +17,9 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin              = (*Plugin)(nil)
-	_ plugin.OnInit              = (*Plugin)(nil)
-	_ plugin.RouteProvider       = (*Plugin)(nil)
+	_ plugin.Plugin                = (*Plugin)(nil)
+	_ plugin.OnInit                = (*Plugin)(nil)
+	_ plugin.RouteProvider         = (*Plugin)(nil)
 	_ plugin.DataExportContributor = (*Plugin)(nil)
 )
 

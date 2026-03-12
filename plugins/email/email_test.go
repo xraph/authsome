@@ -73,8 +73,8 @@ func TestOnAfterSignUp_SendsWelcomeEmail(t *testing.T) {
 	p.SetMailer(mailer)
 
 	u := &user.User{
-		ID:    id.NewUserID(),
-		Email: "alice@example.com",
+		ID:        id.NewUserID(),
+		Email:     "alice@example.com",
 		FirstName: "Alice",
 	}
 
@@ -104,8 +104,8 @@ func TestOnAfterSignUp_FallsBackToEmail(t *testing.T) {
 	p.SetMailer(mailer)
 
 	u := &user.User{
-		ID:    id.NewUserID(),
-		Email: "bob@example.com",
+		ID:        id.NewUserID(),
+		Email:     "bob@example.com",
 		FirstName: "", // empty name
 	}
 

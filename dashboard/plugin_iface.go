@@ -120,10 +120,10 @@ type OrgDetailContributor interface {
 
 // OrgDetailTab describes a tab contributed by a plugin to the organization detail page.
 type OrgDetailTab struct {
-	ID       string                                              // unique tab identifier (e.g., "billing", "scim")
-	Label    string                                              // display label (e.g., "Billing", "SCIM")
-	Icon     string                                              // lucide icon name (e.g., "credit-card", "key")
-	Priority int                                                 // ordering priority (lower = earlier)
+	ID       string                                                    // unique tab identifier (e.g., "billing", "scim")
+	Label    string                                                    // display label (e.g., "Billing", "SCIM")
+	Icon     string                                                    // lucide icon name (e.g., "credit-card", "key")
+	Priority int                                                       // ordering priority (lower = earlier)
 	Render   func(ctx context.Context, orgID id.OrgID) templ.Component // renders tab content
 }
 

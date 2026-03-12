@@ -55,10 +55,10 @@ func (p *pinterestProvider) FetchUser(ctx context.Context, token *oauth2.Token) 
 	}
 
 	var info struct {
-		Username         string `json:"username"`
-		ProfileImage     string `json:"profile_image"`
-		BusinessName     string `json:"business_name"`
-		WebsiteURL       string `json:"website_url"`
+		Username     string `json:"username"`
+		ProfileImage string `json:"profile_image"`
+		BusinessName string `json:"business_name"`
+		WebsiteURL   string `json:"website_url"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, fmt.Errorf("social: pinterest: decode user: %w", err)

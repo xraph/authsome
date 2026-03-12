@@ -4,20 +4,20 @@ import "time"
 
 // SCIMConfigView is a display-only view of a SCIM configuration.
 type SCIMConfigView struct {
-	ID          string
-	Name        string
-	Enabled     bool
-	AutoCreate  bool
-	AutoSuspend bool
-	GroupSync   bool
-	DefaultRole string
-	OrgID       string
-	OrgName     string // resolved org name
-	AppID       string
-	TokenCount  int
+	ID           string
+	Name         string
+	Enabled      bool
+	AutoCreate   bool
+	AutoSuspend  bool
+	GroupSync    bool
+	DefaultRole  string
+	OrgID        string
+	OrgName      string // resolved org name
+	AppID        string
+	TokenCount   int
 	LastActivity string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // SCIMTokenView is a display-only view of a SCIM bearer token.
@@ -49,14 +49,14 @@ type SCIMLogView struct {
 
 // SCIMListPageData holds data for the SCIM configurations list page.
 type SCIMListPageData struct {
-	Configs        []SCIMConfigView
-	TotalConfigs   int
-	ActiveTokens   int
+	Configs          []SCIMConfigView
+	TotalConfigs     int
+	ActiveTokens     int
 	ProvisionedUsers int
-	RecentActivity int
-	Error          string
-	Success        string
-	FormNonce      string
+	RecentActivity   int
+	Error            string
+	Success          string
+	FormNonce        string
 }
 
 // SCIMDetailPageData holds data for the SCIM config detail page.
@@ -91,35 +91,35 @@ type SCIMLogsPageData struct {
 
 // OverviewWidgetData holds data for the SCIM dashboard overview widget.
 type OverviewWidgetData struct {
-	ConfigCount  int
-	TokenCount   int
-	RecentCount  int
+	ConfigCount int
+	TokenCount  int
+	RecentCount int
 }
 
 // SettingsPanelData holds data for the SCIM settings panel.
 type SettingsPanelData struct {
-	Enabled        bool
-	AutoCreate     bool
-	AutoSuspend    bool
-	GroupSync      bool
-	DefaultRole    string
+	Enabled         bool
+	AutoCreate      bool
+	AutoSuspend     bool
+	GroupSync       bool
+	DefaultRole     string
 	TokenExpiryDays int
 }
 
 // OrgTabData holds data for the org detail SCIM tab.
 type OrgTabData struct {
-	Configs        []SCIMConfigView
+	Configs          []SCIMConfigView
 	ProvisionedUsers int
-	RecentCount    int
-	RecentLogs     []SCIMLogView
-	OrgID          string
-	FormNonce      string
+	RecentCount      int
+	RecentLogs       []SCIMLogView
+	OrgID            string
+	FormNonce        string
 }
 
 // OrgSectionData holds compact SCIM data for the org detail overview section.
 type OrgSectionData struct {
-	HasConfig    bool
-	ConfigCount  int
-	Enabled      bool
-	LastSync     string
+	HasConfig   bool
+	ConfigCount int
+	Enabled     bool
+	LastSync    string
 }

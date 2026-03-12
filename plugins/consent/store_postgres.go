@@ -127,7 +127,7 @@ func (s *PostgresStore) ListConsents(ctx context.Context, q *Query) ([]*Consent,
 	var models []consentModel
 	err := query.
 		OrderExpr("id ASC").
-		Limit(limit + 1).
+		Limit(limit+1).
 		Scan(ctx, &models)
 	if err != nil {
 		return nil, "", consentPgError(err)

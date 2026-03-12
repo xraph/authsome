@@ -16,7 +16,7 @@ type OAuth2Client struct {
 	RedirectURIs []string          `json:"redirect_uris"`
 	Scopes       []string          `json:"scopes"`
 	GrantTypes   []string          `json:"grant_types"` // "authorization_code", "client_credentials"
-	Public       bool              `json:"public"`       // Public clients (SPAs, mobile) don't have a secret
+	Public       bool              `json:"public"`      // Public clients (SPAs, mobile) don't have a secret
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
@@ -49,16 +49,16 @@ type TokenResponse struct {
 // DeviceCode represents an OAuth2 device authorization code (RFC 8628).
 type DeviceCode struct {
 	ID              id.DeviceCodeID `json:"id"`
-	DeviceCode      string          `json:"-"`                  // opaque polling token (256-bit hex)
-	UserCode        string          `json:"user_code"`          // short human-readable code, e.g. "BCDF-GHJK"
-	ClientID        string          `json:"client_id"`          // OAuth2 client_id
+	DeviceCode      string          `json:"-"`         // opaque polling token (256-bit hex)
+	UserCode        string          `json:"user_code"` // short human-readable code, e.g. "BCDF-GHJK"
+	ClientID        string          `json:"client_id"` // OAuth2 client_id
 	AppID           id.AppID        `json:"app_id"`
 	Scopes          []string        `json:"scopes"`
-	VerificationURI string          `json:"verification_uri"`   // where the user goes
+	VerificationURI string          `json:"verification_uri"` // where the user goes
 	ExpiresAt       time.Time       `json:"expires_at"`
-	Interval        int             `json:"interval"`           // polling interval in seconds
-	Status          string          `json:"status"`             // "pending", "authorized", "denied", "consumed"
-	UserID          id.UserID       `json:"user_id,omitempty"`  // set when user authorizes
+	Interval        int             `json:"interval"`                 // polling interval in seconds
+	Status          string          `json:"status"`                   // "pending", "authorized", "denied", "consumed"
+	UserID          id.UserID       `json:"user_id,omitempty"`        // set when user authorizes
 	LastPolledAt    time.Time       `json:"last_polled_at,omitempty"` // last time the CLI polled for this code
 	CreatedAt       time.Time       `json:"created_at"`
 }

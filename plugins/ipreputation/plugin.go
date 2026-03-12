@@ -79,13 +79,13 @@ var (
 
 // IPReputation represents the reputation score for an IP address.
 type IPReputation struct {
-	IP            string   `json:"ip"`
-	Score         int      `json:"score"` // 0 (clean) to 100 (malicious)
-	Categories    []string `json:"categories,omitempty"`
-	ISP           string   `json:"isp,omitempty"`
-	ASN           int      `json:"asn,omitempty"`
-	IsBlacklisted bool     `json:"is_blacklisted"`
-	Source        string   `json:"source"`
+	IP            string    `json:"ip"`
+	Score         int       `json:"score"` // 0 (clean) to 100 (malicious)
+	Categories    []string  `json:"categories,omitempty"`
+	ISP           string    `json:"isp,omitempty"`
+	ASN           int       `json:"asn,omitempty"`
+	IsBlacklisted bool      `json:"is_blacklisted"`
+	Source        string    `json:"source"`
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 

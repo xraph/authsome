@@ -270,4 +270,3 @@ func fromDeviceCode(dc *DeviceCode) *deviceCodeModel {
 		CreatedAt:       dc.CreatedAt,
 	}
 }
-

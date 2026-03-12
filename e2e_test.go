@@ -67,9 +67,9 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 
 	// Step 1: Sign up
 	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "alice@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "alice@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "Alice",
 		Username:  "alice",
 	})
@@ -145,18 +145,18 @@ func TestE2E_OrgInvitationFlow(t *testing.T) {
 
 	// Step 1: Create owner user
 	owner, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "owner@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "owner@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "Owner",
 	})
 	require.NoError(t, err)
 
 	// Step 2: Create invitee user
 	_, _, err = eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "invitee@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "invitee@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "Invitee",
 	})
 	require.NoError(t, err)
@@ -226,9 +226,9 @@ func TestE2E_DeviceTracking(t *testing.T) {
 
 	// Step 1: Create user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "device-user@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "device-user@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "DeviceUser",
 	})
 	require.NoError(t, err)
@@ -348,9 +348,9 @@ func TestE2E_PasswordResetFlow(t *testing.T) {
 
 	// Step 1: Create user
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "reset-user@example.com",
-		Password: "OldP@ssword1",
+		AppID:     appID,
+		Email:     "reset-user@example.com",
+		Password:  "OldP@ssword1",
 		FirstName: "ResetUser",
 	})
 	require.NoError(t, err)
@@ -402,9 +402,9 @@ func TestE2E_SessionManagement(t *testing.T) {
 
 	// Step 1: Create user
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "session-user@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "session-user@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "SessionUser",
 	})
 	require.NoError(t, err)
@@ -471,9 +471,9 @@ func TestE2E_ChangePassword(t *testing.T) {
 
 	// Step 1: Create user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "change-pw@example.com",
-		Password: "OldP@ssword1",
+		AppID:     appID,
+		Email:     "change-pw@example.com",
+		Password:  "OldP@ssword1",
 		FirstName: "ChangePW",
 	})
 	require.NoError(t, err)
@@ -514,9 +514,9 @@ func TestE2E_OrgTeamManagement(t *testing.T) {
 
 	// Step 1: Create user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "team-owner@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "team-owner@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "TeamOwner",
 	})
 	require.NoError(t, err)
@@ -601,9 +601,9 @@ func TestE2E_RBACPermissionFlow(t *testing.T) {
 
 	// Step 1: Create user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "rbac-user@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "rbac-user@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "RBACUser",
 	})
 	require.NoError(t, err)
@@ -743,9 +743,9 @@ func TestE2E_UserUpdateFlow(t *testing.T) {
 
 	// Step 1: Create user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "update-user@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "update-user@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "Original Name",
 	})
 	require.NoError(t, err)
@@ -780,9 +780,9 @@ func TestE2E_DeclineInvitation(t *testing.T) {
 
 	// Create owner
 	owner, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "org-owner@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "org-owner@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "OrgOwner",
 	})
 	require.NoError(t, err)

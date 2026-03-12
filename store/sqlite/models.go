@@ -854,21 +854,21 @@ func fromNotification(n *notification.Notification) *NotificationModel {
 type APIKeyModel struct {
 	grove.BaseModel `grove:"table:authsome_api_keys,alias:ak"`
 
-	ID         string       `grove:"id,pk"`
-	AppID      string       `grove:"app_id,notnull"`
-	EnvID      string       `grove:"env_id,notnull"`
-	UserID     string       `grove:"user_id,notnull"`
-	Name       string       `grove:"name,notnull"`
+	ID              string       `grove:"id,pk"`
+	AppID           string       `grove:"app_id,notnull"`
+	EnvID           string       `grove:"env_id,notnull"`
+	UserID          string       `grove:"user_id,notnull"`
+	Name            string       `grove:"name,notnull"`
 	KeyHash         string       `grove:"key_hash,notnull"`
 	KeyPrefix       string       `grove:"key_prefix,notnull"`
 	PublicKey       string       `grove:"public_key,notnull"`
 	PublicKeyPrefix string       `grove:"public_key_prefix,notnull"`
 	Scopes          string       `grove:"scopes"` // comma-separated
-	ExpiresAt  sql.NullTime `grove:"expires_at"`
-	LastUsedAt sql.NullTime `grove:"last_used_at"`
-	Revoked    bool         `grove:"revoked"`
-	CreatedAt  time.Time    `grove:"created_at,notnull,default:now()"`
-	UpdatedAt  time.Time    `grove:"updated_at,notnull,default:now()"`
+	ExpiresAt       sql.NullTime `grove:"expires_at"`
+	LastUsedAt      sql.NullTime `grove:"last_used_at"`
+	Revoked         bool         `grove:"revoked"`
+	CreatedAt       time.Time    `grove:"created_at,notnull,default:now()"`
+	UpdatedAt       time.Time    `grove:"updated_at,notnull,default:now()"`
 }
 
 func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
@@ -1161,17 +1161,17 @@ func fromBrandingConfig(b *formconfig.BrandingConfig) *BrandingConfigModel {
 type AppSessionConfigModel struct {
 	grove.BaseModel `grove:"table:authsome_app_session_configs,alias:asc"`
 
-	ID                     string       `grove:"id,pk"`
-	AppID                  string       `grove:"app_id,notnull"`
+	ID                     string        `grove:"id,pk"`
+	AppID                  string        `grove:"app_id,notnull"`
 	TokenTTLSeconds        sql.NullInt64 `grove:"token_ttl_seconds"`
 	RefreshTokenTTLSeconds sql.NullInt64 `grove:"refresh_token_ttl_seconds"`
 	MaxActiveSessions      sql.NullInt64 `grove:"max_active_sessions"`
-	RotateRefreshToken     sql.NullBool `grove:"rotate_refresh_token"`
-	BindToIP               sql.NullBool `grove:"bind_to_ip"`
-	BindToDevice           sql.NullBool `grove:"bind_to_device"`
-	TokenFormat            string       `grove:"token_format"`
-	CreatedAt              time.Time    `grove:"created_at,notnull,default:now()"`
-	UpdatedAt              time.Time    `grove:"updated_at,notnull,default:now()"`
+	RotateRefreshToken     sql.NullBool  `grove:"rotate_refresh_token"`
+	BindToIP               sql.NullBool  `grove:"bind_to_ip"`
+	BindToDevice           sql.NullBool  `grove:"bind_to_device"`
+	TokenFormat            string        `grove:"token_format"`
+	CreatedAt              time.Time     `grove:"created_at,notnull,default:now()"`
+	UpdatedAt              time.Time     `grove:"updated_at,notnull,default:now()"`
 }
 
 func toAppSessionConfig(m *AppSessionConfigModel) (*appsessionconfig.Config, error) {

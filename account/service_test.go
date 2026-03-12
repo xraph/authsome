@@ -115,9 +115,9 @@ func TestNewSession(t *testing.T) {
 func TestNewUser(t *testing.T) {
 	appID := id.NewAppID()
 	req := &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "  Alice@Example.COM  ",
-		Password: "pass",
+		AppID:     appID,
+		Email:     "  Alice@Example.COM  ",
+		Password:  "pass",
 		FirstName: "Alice",
 		Username:  "alice",
 	}

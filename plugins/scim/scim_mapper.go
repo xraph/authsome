@@ -55,12 +55,12 @@ type SCIMMeta struct {
 
 // SCIMGroupResource represents a SCIM 2.0 Group resource.
 type SCIMGroupResource struct {
-	Schemas     []string         `json:"schemas"`
-	ID          string           `json:"id,omitempty"`
-	ExternalID  string           `json:"externalId,omitempty"`
-	DisplayName string           `json:"displayName"`
-	Members     []SCIMMemberRef  `json:"members,omitempty"`
-	Meta        *SCIMMeta        `json:"meta,omitempty"`
+	Schemas     []string        `json:"schemas"`
+	ID          string          `json:"id,omitempty"`
+	ExternalID  string          `json:"externalId,omitempty"`
+	DisplayName string          `json:"displayName"`
+	Members     []SCIMMemberRef `json:"members,omitempty"`
+	Meta        *SCIMMeta       `json:"meta,omitempty"`
 }
 
 // SCIMMemberRef is a member reference within a SCIM Group.
@@ -72,11 +72,11 @@ type SCIMMemberRef struct {
 
 // SCIMListResponse is a SCIM list response (RFC 7644 Section 3.4.2).
 type SCIMListResponse struct {
-	Schemas      []string    `json:"schemas"`
-	TotalResults int         `json:"totalResults"`
-	StartIndex   int         `json:"startIndex"`
-	ItemsPerPage int         `json:"itemsPerPage"`
-	Resources    []any       `json:"Resources"`
+	Schemas      []string `json:"schemas"`
+	TotalResults int      `json:"totalResults"`
+	StartIndex   int      `json:"startIndex"`
+	ItemsPerPage int      `json:"itemsPerPage"`
+	Resources    []any    `json:"Resources"`
 }
 
 // SCIMError represents a SCIM error response (RFC 7644 Section 3.12).

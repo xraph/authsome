@@ -3,10 +3,11 @@ package middleware_test
 import (
 	"context"
 	"errors"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

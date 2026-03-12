@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xraph/forge"
+
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/user"
-	"github.com/xraph/forge"
 )
 
 // ──────────────────────────────────────────────────
@@ -35,7 +36,7 @@ func (p *Plugin) handleServiceProviderConfig(ctx forge.Context, _ *struct{}) (*m
 			"supported": true,
 		},
 		"bulk": map[string]any{
-			"supported":  false,
+			"supported":      false,
 			"maxPayloadSize": 0,
 		},
 		"filter": map[string]any{

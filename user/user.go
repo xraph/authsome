@@ -10,27 +10,27 @@ import (
 
 // User represents an authenticated identity within an application.
 type User struct {
-	ID              id.UserID        `json:"id"`
-	AppID           id.AppID         `json:"app_id"`
-	EnvID           id.EnvironmentID `json:"env_id"`
-	Email           string           `json:"email"`
-	EmailVerified   bool             `json:"email_verified"`
-	FirstName       string           `json:"first_name"`
-	LastName        string           `json:"last_name"`
-	Image           string           `json:"image,omitempty"`
-	Username        string           `json:"username,omitempty"`
-	DisplayUsername string           `json:"display_username,omitempty"`
-	Phone           string           `json:"phone,omitempty"`
-	PhoneVerified   bool             `json:"phone_verified"`
+	ID                id.UserID        `json:"id"`
+	AppID             id.AppID         `json:"app_id"`
+	EnvID             id.EnvironmentID `json:"env_id"`
+	Email             string           `json:"email"`
+	EmailVerified     bool             `json:"email_verified"`
+	FirstName         string           `json:"first_name"`
+	LastName          string           `json:"last_name"`
+	Image             string           `json:"image,omitempty"`
+	Username          string           `json:"username,omitempty"`
+	DisplayUsername   string           `json:"display_username,omitempty"`
+	Phone             string           `json:"phone,omitempty"`
+	PhoneVerified     bool             `json:"phone_verified"`
 	PasswordHash      string           `json:"-"`
 	PasswordChangedAt *time.Time       `json:"password_changed_at,omitempty"`
 	Banned            bool             `json:"banned"`
-	BanReason       string           `json:"ban_reason,omitempty"`
-	BanExpires      *time.Time       `json:"ban_expires,omitempty"`
-	Metadata        Metadata         `json:"metadata,omitempty"`
-	CreatedAt       time.Time        `json:"created_at"`
-	UpdatedAt       time.Time        `json:"updated_at"`
-	DeletedAt       *time.Time       `json:"deleted_at,omitempty"`
+	BanReason         string           `json:"ban_reason,omitempty"`
+	BanExpires        *time.Time       `json:"ban_expires,omitempty"`
+	Metadata          Metadata         `json:"metadata,omitempty"`
+	CreatedAt         time.Time        `json:"created_at"`
+	UpdatedAt         time.Time        `json:"updated_at"`
+	DeletedAt         *time.Time       `json:"deleted_at,omitempty"`
 }
 
 // Name returns the full name by joining FirstName and LastName.

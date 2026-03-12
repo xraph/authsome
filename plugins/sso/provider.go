@@ -51,19 +51,19 @@ type SSOUser struct {
 
 // SSOConnection represents a stored SSO connection for a tenant.
 type SSOConnection struct {
-	ID          id.SSOConnectionID `json:"id"`
-	AppID       id.AppID           `json:"app_id"`
-	OrgID       id.OrgID           `json:"org_id,omitempty"`
-	Provider    string             `json:"provider"`
-	Protocol    string             `json:"protocol"`
-	Domain      string             `json:"domain"`
-	MetadataURL string             `json:"metadata_url,omitempty"`
+	ID           id.SSOConnectionID `json:"id"`
+	AppID        id.AppID           `json:"app_id"`
+	OrgID        id.OrgID           `json:"org_id,omitempty"`
+	Provider     string             `json:"provider"`
+	Protocol     string             `json:"protocol"`
+	Domain       string             `json:"domain"`
+	MetadataURL  string             `json:"metadata_url,omitempty"`
 	ClientID     string             `json:"client_id,omitempty"`
 	ClientSecret string             `json:"-"`
 	Issuer       string             `json:"issuer,omitempty"`
 	Active       bool               `json:"active"`
-	CreatedAt   time.Time          `json:"created_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
+	CreatedAt    time.Time          `json:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at"`
 }
 
 // Store persists SSO connections.

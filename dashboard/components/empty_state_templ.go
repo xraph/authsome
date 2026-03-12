@@ -5,10 +5,11 @@ package components
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import "github.com/a-h/templ"
-import templruntime "github.com/a-h/templ/runtime"
-
-import "github.com/xraph/forgeui/icons"
+import (
+	"github.com/a-h/templ"
+	templruntime "github.com/a-h/templ/runtime"
+	"github.com/xraph/forgeui/icons"
+)
 
 // EmptyState renders a centered placeholder with a large muted icon, title, and description.
 func EmptyState(iconName string, title string, description string) templ.Component {

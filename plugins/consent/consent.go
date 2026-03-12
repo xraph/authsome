@@ -13,11 +13,11 @@ type Consent struct {
 	UserID    id.UserID    `json:"user_id"`
 	AppID     id.AppID     `json:"app_id"`
 	Purpose   string       `json:"purpose"`              // e.g. "marketing", "analytics", "essential"
-	Granted   bool         `json:"granted"`               // true = granted, false = revoked
-	Version   string       `json:"version"`               // policy version this consent applies to
-	IPAddress string       `json:"ip_address"`            // IP at time of consent action
-	GrantedAt time.Time    `json:"granted_at"`            // when consent was granted
-	RevokedAt *time.Time   `json:"revoked_at,omitempty"`  // when consent was revoked (nil if active)
+	Granted   bool         `json:"granted"`              // true = granted, false = revoked
+	Version   string       `json:"version"`              // policy version this consent applies to
+	IPAddress string       `json:"ip_address"`           // IP at time of consent action
+	GrantedAt time.Time    `json:"granted_at"`           // when consent was granted
+	RevokedAt *time.Time   `json:"revoked_at,omitempty"` // when consent was revoked (nil if active)
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
 }

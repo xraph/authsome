@@ -2,8 +2,9 @@ package passkey
 
 import (
 	"context"
-	log "github.com/xraph/go-utils/log"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"

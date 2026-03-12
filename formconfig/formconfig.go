@@ -15,15 +15,15 @@ type FieldType string
 
 // Supported field types.
 const (
-	FieldText     FieldType = "text"
-	FieldEmail    FieldType = "email"
-	FieldNumber   FieldType = "number"
-	FieldTel      FieldType = "tel"
-	FieldURL      FieldType = "url"
-	FieldDate     FieldType = "date"
-	FieldTextarea FieldType = "textarea"
-	FieldSelect   FieldType = "select"
-	FieldCheckbox FieldType = "checkbox"
+	FieldText        FieldType = "text"
+	FieldEmail       FieldType = "email"
+	FieldNumber      FieldType = "number"
+	FieldTel         FieldType = "tel"
+	FieldURL         FieldType = "url"
+	FieldDate        FieldType = "date"
+	FieldTextarea    FieldType = "textarea"
+	FieldSelect      FieldType = "select"
+	FieldCheckbox    FieldType = "checkbox"
 	FieldRadio       FieldType = "radio"
 	FieldSwitch      FieldType = "switch"
 	FieldObjectArray FieldType = "object_array"
@@ -47,7 +47,7 @@ type Validation struct {
 
 // FormField defines a single custom field in a form configuration.
 type FormField struct {
-	Key         string         `json:"key"`                   // stored as key in User.Metadata
+	Key         string         `json:"key"` // stored as key in User.Metadata
 	Label       string         `json:"label"`
 	Type        FieldType      `json:"type"`
 	Placeholder string         `json:"placeholder,omitempty"`

@@ -22,30 +22,30 @@ import (
 
 // Collection name constants.
 const (
-	colApps           = "authsome_apps"
-	colUsers          = "authsome_users"
-	colSessions       = "authsome_sessions"
-	colVerifications  = "authsome_verifications"
-	colPasswordResets = "authsome_password_resets"
-	colOrganizations  = "authsome_organizations"
-	colMembers        = "authsome_members"
-	colInvitations    = "authsome_invitations"
-	colTeams          = "authsome_teams"
-	colDevices        = "authsome_devices"
-	colWebhooks       = "authsome_webhooks"
-	colNotifications  = "authsome_notifications"
-	colAPIKeys        = "authsome_api_keys"
-	colEnvironments    = "authsome_environments"
-	colFormConfigs     = "authsome_form_configs"
-	colBrandingConfigs     = "authsome_branding_configs"
-	colAppSessionConfigs   = "authsome_app_session_configs"
+	colApps              = "authsome_apps"
+	colUsers             = "authsome_users"
+	colSessions          = "authsome_sessions"
+	colVerifications     = "authsome_verifications"
+	colPasswordResets    = "authsome_password_resets"
+	colOrganizations     = "authsome_organizations"
+	colMembers           = "authsome_members"
+	colInvitations       = "authsome_invitations"
+	colTeams             = "authsome_teams"
+	colDevices           = "authsome_devices"
+	colWebhooks          = "authsome_webhooks"
+	colNotifications     = "authsome_notifications"
+	colAPIKeys           = "authsome_api_keys"
+	colEnvironments      = "authsome_environments"
+	colFormConfigs       = "authsome_form_configs"
+	colBrandingConfigs   = "authsome_branding_configs"
+	colAppSessionConfigs = "authsome_app_session_configs"
 )
 
 // Compile-time interface checks.
 var (
-	_ store.Store              = (*Store)(nil)
-	_ environment.Store        = (*Store)(nil)
-	_ appsessionconfig.Store   = (*Store)(nil)
+	_ store.Store            = (*Store)(nil)
+	_ environment.Store      = (*Store)(nil)
+	_ appsessionconfig.Store = (*Store)(nil)
 )
 
 // Store implements store.Store using MongoDB via Grove ORM.

@@ -53,10 +53,10 @@ const (
 	PrefixAuthCode        Prefix = "aaco"
 	PrefixSetting         Prefix = "aset"
 	PrefixAppClientConfig Prefix = "aacf"
-	PrefixDeviceCode     Prefix = "advc"
-	PrefixSCIMConfig     Prefix = "ascm"
-	PrefixSCIMToken      Prefix = "asct"
-	PrefixSCIMLog        Prefix = "ascl"
+	PrefixDeviceCode      Prefix = "advc"
+	PrefixSCIMConfig      Prefix = "ascm"
+	PrefixSCIMToken       Prefix = "asct"
+	PrefixSCIMLog         Prefix = "ascl"
 )
 
 // ID is the primary identifier type for all AuthSome entities.

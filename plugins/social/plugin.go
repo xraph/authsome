@@ -6,11 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
 
@@ -197,12 +198,12 @@ type Plugin struct {
 	sessionConfig sessionConfigResolver
 	settingsMgr   *settings.Manager
 
-	chronicle    bridge.Chronicle
-	relay        bridge.EventRelay
-	hooks        *hook.Bus
-	logger       log.Logger
-	ceremonies   ceremony.Store
-	roleEnsurer  roleEnsurer
+	chronicle   bridge.Chronicle
+	relay       bridge.EventRelay
+	hooks       *hook.Bus
+	logger      log.Logger
+	ceremonies  ceremony.Store
+	roleEnsurer roleEnsurer
 }
 
 // roleEnsurer assigns a default Warden role to a newly created user.

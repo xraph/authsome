@@ -7,9 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/xraph/forgeui/components/input"
+
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/settings"
-	"github.com/xraph/forgeui/components/input"
 )
 
 // SettingsEditorData holds all data for the settings editor page.
@@ -51,8 +52,8 @@ type SettingsField struct {
 	ReadOnly       bool
 	Enforceable    bool
 	Scopes         []string
-	ValueType      string // "string", "int", "float", "bool", "array", "object"
-	Order          int    // UI display order
+	ValueType      string                    // "string", "int", "float", "bool", "array", "object"
+	Order          int                       // UI display order
 	ObjectFields   []settings.ObjectFieldDef // nested field schema for object_array type
 }
 

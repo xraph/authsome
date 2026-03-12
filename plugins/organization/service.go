@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log "github.com/xraph/go-utils/log"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"

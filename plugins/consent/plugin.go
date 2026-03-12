@@ -3,9 +3,10 @@ package consent
 import (
 	"context"
 	"fmt"
-	log "github.com/xraph/go-utils/log"
 	"net/http"
 	"time"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
 
@@ -21,21 +22,21 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin              = (*Plugin)(nil)
-	_ plugin.OnInit              = (*Plugin)(nil)
-	_ plugin.RouteProvider       = (*Plugin)(nil)
+	_ plugin.Plugin                = (*Plugin)(nil)
+	_ plugin.OnInit                = (*Plugin)(nil)
+	_ plugin.RouteProvider         = (*Plugin)(nil)
 	_ plugin.DataExportContributor = (*Plugin)(nil)
-	_ plugin.MigrationProvider   = (*Plugin)(nil)
+	_ plugin.MigrationProvider     = (*Plugin)(nil)
 )
 
 // Plugin is the consent tracking plugin.
 type Plugin struct {
-	store     Store
-	hooks     *hook.Bus
-	relay     bridge.EventRelay
-	chronicle bridge.Chronicle
-	logger    log.Logger
-	basePath  string
+	store       Store
+	hooks       *hook.Bus
+	relay       bridge.EventRelay
+	chronicle   bridge.Chronicle
+	logger      log.Logger
+	basePath    string
 	permChecker middleware.PermissionChecker
 }
 

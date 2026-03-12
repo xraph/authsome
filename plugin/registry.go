@@ -132,33 +132,33 @@ type Registry struct {
 	plugins []Plugin
 	logger  log.Logger
 
-	onInit                []onInitEntry
-	onShutdown            []onShutdownEntry
-	beforeSignUp          []beforeSignUpEntry
-	afterSignUp           []afterSignUpEntry
-	beforeSignIn          []beforeSignInEntry
-	afterSignIn           []afterSignInEntry
-	beforeSignOut         []beforeSignOutEntry
-	afterSignOut          []afterSignOutEntry
-	beforeUserCreate      []beforeUserCreateEntry
-	afterUserCreate       []afterUserCreateEntry
-	beforeUserUpdate      []beforeUserUpdateEntry
-	afterUserUpdate       []afterUserUpdateEntry
-	beforeUserDelete      []beforeUserDeleteEntry
-	afterUserDelete       []afterUserDeleteEntry
-	beforeSessionCreate   []beforeSessionCreateEntry
-	afterSessionCreate    []afterSessionCreateEntry
-	afterSessionRefresh   []afterSessionRefreshEntry
-	afterSessionRevoke    []afterSessionRevokeEntry
-	afterOrgCreate        []afterOrgCreateEntry
-	afterOrgUpdate        []afterOrgUpdateEntry
-	afterOrgDelete        []afterOrgDeleteEntry
-	afterMemberAdd        []afterMemberAddEntry
-	afterMemberRemove     []afterMemberRemoveEntry
-	afterMemberRoleChange []afterMemberRoleChangeEntry
-	routeProviders          []routeProviderEntry
-	migrationProviders      []migrationProviderEntry
-	dataExportContributors  []dataExportContributorEntry
+	onInit                 []onInitEntry
+	onShutdown             []onShutdownEntry
+	beforeSignUp           []beforeSignUpEntry
+	afterSignUp            []afterSignUpEntry
+	beforeSignIn           []beforeSignInEntry
+	afterSignIn            []afterSignInEntry
+	beforeSignOut          []beforeSignOutEntry
+	afterSignOut           []afterSignOutEntry
+	beforeUserCreate       []beforeUserCreateEntry
+	afterUserCreate        []afterUserCreateEntry
+	beforeUserUpdate       []beforeUserUpdateEntry
+	afterUserUpdate        []afterUserUpdateEntry
+	beforeUserDelete       []beforeUserDeleteEntry
+	afterUserDelete        []afterUserDeleteEntry
+	beforeSessionCreate    []beforeSessionCreateEntry
+	afterSessionCreate     []afterSessionCreateEntry
+	afterSessionRefresh    []afterSessionRefreshEntry
+	afterSessionRevoke     []afterSessionRevokeEntry
+	afterOrgCreate         []afterOrgCreateEntry
+	afterOrgUpdate         []afterOrgUpdateEntry
+	afterOrgDelete         []afterOrgDeleteEntry
+	afterMemberAdd         []afterMemberAddEntry
+	afterMemberRemove      []afterMemberRemoveEntry
+	afterMemberRoleChange  []afterMemberRoleChangeEntry
+	routeProviders         []routeProviderEntry
+	migrationProviders     []migrationProviderEntry
+	dataExportContributors []dataExportContributorEntry
 }
 
 // NewRegistry creates a plugin registry with the given logger.

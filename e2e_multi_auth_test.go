@@ -100,9 +100,9 @@ func TestE2E_MultiAuth_BearerSessionAuth(t *testing.T) {
 
 	// Step 1: Sign up a user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "session-auth@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "session-auth@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "SessionUser",
 	})
 	require.NoError(t, err)
@@ -158,9 +158,9 @@ func TestE2E_MultiAuth_APIKeyAuth(t *testing.T) {
 
 	// Step 1: Sign up a user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "apikey-auth@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "apikey-auth@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "APIKeyUser",
 	})
 	require.NoError(t, err)
@@ -211,9 +211,9 @@ func TestE2E_MultiAuth_BearerFailsAPIKeySucceeds(t *testing.T) {
 
 	// Step 1: Sign up a user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "fallback-auth@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "fallback-auth@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "FallbackUser",
 	})
 	require.NoError(t, err)
@@ -325,9 +325,9 @@ func TestE2E_MultiAuth_APIKeyInXAPIKeyHeader(t *testing.T) {
 
 	// Step 1: Sign up a user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "xapikey-user@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "xapikey-user@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "XAPIKeyUser",
 	})
 	require.NoError(t, err)
@@ -378,9 +378,9 @@ func TestE2E_MultiAuth_APIKeyWithAskPrefixInBearer(t *testing.T) {
 
 	// Step 1: Sign up a user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "bearer-ask@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "bearer-ask@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "BearerAskUser",
 	})
 	require.NoError(t, err)
@@ -433,9 +433,9 @@ func TestE2E_MultiAuth_RevokedAPIKeyRejected(t *testing.T) {
 
 	// Step 1: Sign up a user
 	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "revoked-key@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "revoked-key@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "RevokedKeyUser",
 	})
 	require.NoError(t, err)
@@ -499,9 +499,9 @@ func TestE2E_MultiAuth_ContextValuesCorrect(t *testing.T) {
 
 	// Step 1: Sign up a user
 	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    "context-check@example.com",
-		Password: "SecureP@ss1",
+		AppID:     appID,
+		Email:     "context-check@example.com",
+		Password:  "SecureP@ss1",
 		FirstName: "ContextUser",
 	})
 	require.NoError(t, err)

@@ -48,12 +48,12 @@ type Engine struct {
 	logger log.Logger
 
 	// Plugin system
-	plugins           *plugin.Registry
-	hooks             *hook.Bus
-	strategies        *strategy.Registry
-	pendingPlugins        []plugin.Plugin
-	pendingStrategies     []pendingStrategy
-	pendingAppSessCfgs    []*appsessionconfig.Config
+	plugins            *plugin.Registry
+	hooks              *hook.Bus
+	strategies         *strategy.Registry
+	pendingPlugins     []plugin.Plugin
+	pendingStrategies  []pendingStrategy
+	pendingAppSessCfgs []*appsessionconfig.Config
 
 	// First-class authorization engine (optional, replaces bridge for RBAC)
 	warden_ *warden.Engine
@@ -405,16 +405,16 @@ func (e *Engine) Settings() *settings.Manager { return e.settingsMgr }
 // by the /client-config endpoint. It tells the frontend SDK which auth
 // methods are enabled, available providers, branding, etc.
 type ClientConfigResponse struct {
-	Version          string                      `json:"version"`
-	AppID            string                      `json:"app_id"`
-	Branding         *ClientConfigBranding       `json:"branding,omitempty"`
-	Password         *ClientConfigToggle         `json:"password,omitempty"`
-	Social           *ClientConfigSocial         `json:"social,omitempty"`
-	Passkey          *ClientConfigToggle         `json:"passkey,omitempty"`
-	MFA              *ClientConfigMFA            `json:"mfa,omitempty"`
-	MagicLink        *ClientConfigToggle         `json:"magiclink,omitempty"`
-	SSO              *ClientConfigSSO            `json:"sso,omitempty"`
-	SupportedPlugins []string                    `json:"supported_plugins"`
+	Version          string                `json:"version"`
+	AppID            string                `json:"app_id"`
+	Branding         *ClientConfigBranding `json:"branding,omitempty"`
+	Password         *ClientConfigToggle   `json:"password,omitempty"`
+	Social           *ClientConfigSocial   `json:"social,omitempty"`
+	Passkey          *ClientConfigToggle   `json:"passkey,omitempty"`
+	MFA              *ClientConfigMFA      `json:"mfa,omitempty"`
+	MagicLink        *ClientConfigToggle   `json:"magiclink,omitempty"`
+	SSO              *ClientConfigSSO      `json:"sso,omitempty"`
+	SupportedPlugins []string              `json:"supported_plugins"`
 }
 
 // ClientConfigBranding holds app branding information.
@@ -448,8 +448,8 @@ type ClientConfigMFA struct {
 
 // ClientConfigSSO represents the SSO configuration.
 type ClientConfigSSO struct {
-	Enabled     bool                          `json:"enabled"`
-	Connections []ClientConfigSSOConnection   `json:"connections"`
+	Enabled     bool                        `json:"enabled"`
+	Connections []ClientConfigSSOConnection `json:"connections"`
 }
 
 // ClientConfigSSOConnection represents an SSO connection/provider.

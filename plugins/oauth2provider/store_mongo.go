@@ -37,15 +37,15 @@ var _ Store = (*MongoStore)(nil)
 // ──────────────────────────────────────────────────
 
 type oauth2ClientDoc struct {
-	ID           string   `bson:"_id"`
-	AppID        string   `bson:"app_id"`
-	Name         string   `bson:"name"`
-	ClientID     string   `bson:"client_id"`
-	ClientSecret string   `bson:"client_secret"`
-	RedirectURIs []string `bson:"redirect_uris"`
-	Scopes       []string `bson:"scopes"`
-	GrantTypes   []string `bson:"grant_types"`
-	Public       bool     `bson:"public"`
+	ID           string    `bson:"_id"`
+	AppID        string    `bson:"app_id"`
+	Name         string    `bson:"name"`
+	ClientID     string    `bson:"client_id"`
+	ClientSecret string    `bson:"client_secret"`
+	RedirectURIs []string  `bson:"redirect_uris"`
+	Scopes       []string  `bson:"scopes"`
+	GrantTypes   []string  `bson:"grant_types"`
+	Public       bool      `bson:"public"`
 	CreatedAt    time.Time `bson:"created_at"`
 	UpdatedAt    time.Time `bson:"updated_at"`
 }

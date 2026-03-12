@@ -6,7 +6,6 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
-	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/bridge/keysmithadapter"
 	"github.com/xraph/authsome/bridge/wardenadapter"
 	"github.com/xraph/authsome/ceremony"
@@ -16,6 +15,7 @@ import (
 	"github.com/xraph/authsome/securityevent"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
+	"github.com/xraph/authsome/tokenformat"
 
 	"github.com/xraph/keysmith"
 	"github.com/xraph/warden"

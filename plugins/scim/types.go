@@ -26,7 +26,7 @@ type SCIMConfig struct {
 
 // SCIMToken represents a bearer token for authenticating SCIM API requests.
 type SCIMToken struct {
-	ID         id.SCIMTokenID `json:"id"`
+	ID         id.SCIMTokenID  `json:"id"`
 	ConfigID   id.SCIMConfigID `json:"config_id"`
 	Name       string          `json:"name"`
 	TokenHash  string          `json:"-"`
@@ -45,7 +45,7 @@ func (t *SCIMToken) IsExpired() bool {
 
 // SCIMProvisionLog records a single SCIM provisioning action for audit purposes.
 type SCIMProvisionLog struct {
-	ID           id.SCIMLogID `json:"id"`
+	ID           id.SCIMLogID    `json:"id"`
 	ConfigID     id.SCIMConfigID `json:"config_id"`
 	Action       string          `json:"action"`        // "create_user", "update_user", "delete_user", "create_group", etc.
 	ResourceType string          `json:"resource_type"` // "User" or "Group"
@@ -65,13 +65,13 @@ const (
 
 // Provision log actions.
 const (
-	ActionCreateUser  = "create_user"
-	ActionUpdateUser  = "update_user"
-	ActionDeleteUser  = "delete_user"
-	ActionSuspendUser = "suspend_user"
-	ActionCreateGroup = "create_group"
-	ActionUpdateGroup = "update_group"
-	ActionDeleteGroup = "delete_group"
-	ActionAddMember   = "add_member"
+	ActionCreateUser   = "create_user"
+	ActionUpdateUser   = "update_user"
+	ActionDeleteUser   = "delete_user"
+	ActionSuspendUser  = "suspend_user"
+	ActionCreateGroup  = "create_group"
+	ActionUpdateGroup  = "update_group"
+	ActionDeleteGroup  = "delete_group"
+	ActionAddMember    = "add_member"
 	ActionRemoveMember = "remove_member"
 )

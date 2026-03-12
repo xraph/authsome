@@ -10,8 +10,8 @@ import (
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
-	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"

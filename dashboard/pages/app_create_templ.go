@@ -5,15 +5,15 @@ package pages
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import "github.com/a-h/templ"
-import templruntime "github.com/a-h/templ/runtime"
-
 import (
-	"github.com/xraph/authsome/app"
+	"github.com/a-h/templ"
+	templruntime "github.com/a-h/templ/runtime"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/icons"
+
+	"github.com/xraph/authsome/app"
 )
 
 // CreateAppPageData holds data for the create application form page.

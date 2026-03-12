@@ -128,9 +128,9 @@ type BulkImportUsersRequest struct {
 
 // BulkImportUser represents a single user in a bulk import request.
 type BulkImportUser struct {
-	Email     string `json:"email" description:"User email address"`
-	FirstName string `json:"first_name,omitempty" description:"First/given name"`
-	LastName  string `json:"last_name,omitempty" description:"Last/family name"`
+	Email        string        `json:"email" description:"User email address"`
+	FirstName    string        `json:"first_name,omitempty" description:"First/given name"`
+	LastName     string        `json:"last_name,omitempty" description:"Last/family name"`
 	Username     string        `json:"username,omitempty" description:"Unique username"`
 	PasswordHash string        `json:"password_hash" description:"Pre-hashed password (bcrypt or argon2id)"`
 	Metadata     user.Metadata `json:"metadata,omitempty" description:"Arbitrary user metadata"`

@@ -9,12 +9,13 @@ import (
 
 	"github.com/xraph/forge"
 
-	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/ledger/coupon"
 	ledgerid "github.com/xraph/ledger/id"
 	"github.com/xraph/ledger/plan"
 	lsub "github.com/xraph/ledger/subscription"
 	"github.com/xraph/ledger/types"
+
+	"github.com/xraph/authsome/bridge"
 )
 
 // RegisterRoutes registers billing API routes on a forge.Router.
@@ -247,16 +248,16 @@ type GetPlanRequest struct {
 }
 
 type CreatePlanRequest struct {
-	Name        string         `json:"name"`
-	Slug        string         `json:"slug"`
-	Description string         `json:"description"`
-	Currency    string         `json:"currency"`
-	TrialDays   int            `json:"trial_days"`
-	BaseAmount  int64          `json:"base_amount"`
-	Period      string         `json:"period"`
-	AppID       string         `json:"app_id"`
-	IsAddon     bool           `json:"is_addon"`
-	Features    []FeatureInput `json:"features,omitempty"`
+	Name        string            `json:"name"`
+	Slug        string            `json:"slug"`
+	Description string            `json:"description"`
+	Currency    string            `json:"currency"`
+	TrialDays   int               `json:"trial_days"`
+	BaseAmount  int64             `json:"base_amount"`
+	Period      string            `json:"period"`
+	AppID       string            `json:"app_id"`
+	IsAddon     bool              `json:"is_addon"`
+	Features    []FeatureInput    `json:"features,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 

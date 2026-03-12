@@ -227,12 +227,12 @@ func (p *Plugin) handleNewDevice(ctx context.Context, u *user.User, s *session.S
 			Locale:   "en",
 			Async:    true,
 			Data: map[string]any{
-				"user_name":  name,
-				"browser":    dev.Browser,
-				"os":         dev.OS,
-				"ip_address": dev.IPAddress,
+				"user_name":   name,
+				"browser":     dev.Browser,
+				"os":          dev.OS,
+				"ip_address":  dev.IPAddress,
 				"device_type": dev.Type,
-				"login_time": time.Now().Format(time.RFC1123),
+				"login_time":  time.Now().Format(time.RFC1123),
 			},
 		})
 	}

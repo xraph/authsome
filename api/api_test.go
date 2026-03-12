@@ -48,9 +48,9 @@ func signUp(t *testing.T, eng *authsome.Engine, email, password string) (*json.R
 	require.NoError(t, err)
 
 	u, sess, err := eng.SignUp(ctx, &account.SignUpRequest{
-		AppID:    appID,
-		Email:    email,
-		Password: password,
+		AppID:     appID,
+		Email:     email,
+		Password:  password,
 		FirstName: "Test User",
 	})
 	require.NoError(t, err)

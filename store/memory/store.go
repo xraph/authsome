@@ -36,49 +36,49 @@ var _ environment.Store = (*Store)(nil)
 type Store struct {
 	mu sync.RWMutex
 
-	users          map[string]*user.User
-	sessions       map[string]*session.Session
-	verifications  map[string]*account.Verification
-	passwordResets map[string]*account.PasswordReset
-	apps           map[string]*app.App
-	orgs           map[string]*organization.Organization
-	members        map[string]*organization.Member
-	invitations    map[string]*organization.Invitation
-	teams          map[string]*organization.Team
-	devices        map[string]*device.Device
-	webhooks       map[string]*webhook.Webhook
-	notifications  map[string]*notification.Notification
-	apikeys        map[string]*apikey.APIKey
-	environments   map[string]*environment.Environment
+	users             map[string]*user.User
+	sessions          map[string]*session.Session
+	verifications     map[string]*account.Verification
+	passwordResets    map[string]*account.PasswordReset
+	apps              map[string]*app.App
+	orgs              map[string]*organization.Organization
+	members           map[string]*organization.Member
+	invitations       map[string]*organization.Invitation
+	teams             map[string]*organization.Team
+	devices           map[string]*device.Device
+	webhooks          map[string]*webhook.Webhook
+	notifications     map[string]*notification.Notification
+	apikeys           map[string]*apikey.APIKey
+	environments      map[string]*environment.Environment
 	formConfigs       map[string]*formconfig.FormConfig
 	brandingConfigs   map[string]*formconfig.BrandingConfig
-	appSessionConfigs  map[string]*appsessionconfig.Config
-	appClientConfigs   map[string]*appclientconfig.Config
-	settingsMap        map[string]*settings.Setting
+	appSessionConfigs map[string]*appsessionconfig.Config
+	appClientConfigs  map[string]*appclientconfig.Config
+	settingsMap       map[string]*settings.Setting
 }
 
 // New creates a new in-memory store.
 func New() *Store {
 	return &Store{
-		users:          make(map[string]*user.User),
-		sessions:       make(map[string]*session.Session),
-		verifications:  make(map[string]*account.Verification),
-		passwordResets: make(map[string]*account.PasswordReset),
-		apps:           make(map[string]*app.App),
-		orgs:           make(map[string]*organization.Organization),
-		members:        make(map[string]*organization.Member),
-		invitations:    make(map[string]*organization.Invitation),
-		teams:          make(map[string]*organization.Team),
-		devices:        make(map[string]*device.Device),
-		webhooks:       make(map[string]*webhook.Webhook),
-		notifications:  make(map[string]*notification.Notification),
-		apikeys:        make(map[string]*apikey.APIKey),
-		environments:    make(map[string]*environment.Environment),
+		users:             make(map[string]*user.User),
+		sessions:          make(map[string]*session.Session),
+		verifications:     make(map[string]*account.Verification),
+		passwordResets:    make(map[string]*account.PasswordReset),
+		apps:              make(map[string]*app.App),
+		orgs:              make(map[string]*organization.Organization),
+		members:           make(map[string]*organization.Member),
+		invitations:       make(map[string]*organization.Invitation),
+		teams:             make(map[string]*organization.Team),
+		devices:           make(map[string]*device.Device),
+		webhooks:          make(map[string]*webhook.Webhook),
+		notifications:     make(map[string]*notification.Notification),
+		apikeys:           make(map[string]*apikey.APIKey),
+		environments:      make(map[string]*environment.Environment),
 		formConfigs:       make(map[string]*formconfig.FormConfig),
 		brandingConfigs:   make(map[string]*formconfig.BrandingConfig),
-		appSessionConfigs:  make(map[string]*appsessionconfig.Config),
-		appClientConfigs:   make(map[string]*appclientconfig.Config),
-		settingsMap:        make(map[string]*settings.Setting),
+		appSessionConfigs: make(map[string]*appsessionconfig.Config),
+		appClientConfigs:  make(map[string]*appclientconfig.Config),
+		settingsMap:       make(map[string]*settings.Setting),
 	}
 }
 

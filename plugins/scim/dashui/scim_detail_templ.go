@@ -5,13 +5,11 @@ package dashui
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import "github.com/a-h/templ"
-import templruntime "github.com/a-h/templ/runtime"
-
 import (
 	"strconv"
 
-	"github.com/xraph/authsome/dashboard/components"
+	"github.com/a-h/templ"
+	templruntime "github.com/a-h/templ/runtime"
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
@@ -19,6 +17,8 @@ import (
 	"github.com/xraph/forgeui/components/table"
 	"github.com/xraph/forgeui/components/tabs"
 	"github.com/xraph/forgeui/icons"
+
+	"github.com/xraph/authsome/dashboard/components"
 )
 
 // SCIMDetailPage renders the SCIM configuration detail page.

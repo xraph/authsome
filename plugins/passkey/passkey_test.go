@@ -157,9 +157,9 @@ func TestMemoryStore_UpdateSignCountNotFound(t *testing.T) {
 
 func TestWebAuthnUser_Interface(t *testing.T) {
 	u := &user.User{
-		ID:       id.NewUserID(),
-		Email:    "alice@example.com",
-		Username: "alice",
+		ID:        id.NewUserID(),
+		Email:     "alice@example.com",
+		Username:  "alice",
 		FirstName: "Alice Smith",
 	}
 

@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
