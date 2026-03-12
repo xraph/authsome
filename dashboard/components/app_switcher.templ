@@ -2,49 +2,238 @@ package components
 
 import (
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/dialog"
 	"github.com/xraph/forgeui/components/dropdown"
+	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/icons"
 )
 
-// AppSwitcher renders a dropdown for switching between apps in the sidebar header.
-// currentEnvSlug and currentPage are used to construct navigation URLs when switching apps.
-templ AppSwitcher(current *app.App, all []*app.App, currentEnvSlug, currentPage, basePath string) {
-	if len(all) > 1 {
+// AppSwitcherData holds props for the app switcher dropdown and create-app dialog.
+type AppSwitcherData struct {
+	Current        *app.App
+	All            []*app.App
+	CurrentEnvSlug string
+	CurrentPage    string
+	BasePath       string
+}
+
+// AppSwitcher renders a dropdown for switching between apps in the sidebar header,
+// with an embedded "Create application" dialog.
+templ AppSwitcher(data AppSwitcherData) {
+	if len(data.All) > 0 {
 		<div class="px-2 pb-2">
 			@dropdown.Dropdown() {
 				@dropdown.Trigger(dropdown.TriggerProps{
-					Class: "w-full inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent cursor-pointer",
+					Class: "w-full inline-flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent cursor-pointer transition-colors",
 				}) {
-					@icons.Building2(icons.WithSize(14))
-					<span class="flex-1 truncate text-left">{ current.Name }</span>
-					@icons.ChevronsUpDown(icons.WithSize(14), icons.WithClass("text-muted-foreground"))
+					<span class="flex items-center justify-center w-6 h-6 rounded-md bg-primary text-primary-foreground text-xs font-bold shrink-0">
+						{ string([]rune(data.Current.Name)[0:1]) }
+					</span>
+					<span class="flex-1 truncate text-left">{ data.Current.Name }</span>
+					@icons.ChevronsUpDown(icons.WithSize(14), icons.WithClass("text-muted-foreground shrink-0"))
 				}
 				@dropdown.Content(dropdown.ContentProps{
 					Placement: dropdown.PlacementBottomStart,
-					Class:     "w-[--radix-dropdown-trigger-width] min-w-48",
+					Class:     "w-[--radix-dropdown-trigger-width] min-w-52",
 				}) {
 					@dropdown.Label() {
-						Switch Application
+						Applications
 					}
 					@dropdown.Separator()
-					for _, a := range all {
+					for _, a := range data.All {
 						@dropdown.Item(dropdown.ItemProps{
 							Attributes: templ.Attributes{
-								"hx-get":      basePath + "/ext/authsome/pages/" + a.Slug + "/" + currentEnvSlug + currentPage,
+								"hx-get":      data.BasePath + "/ext/authsome/pages/" + a.Slug + "/" + data.CurrentEnvSlug + data.CurrentPage,
 								"hx-target":   "#content",
 								"hx-swap":     "innerHTML",
 								"hx-push-url": "true",
 							},
 						}) {
-							@icons.Building2(icons.WithSize(14))
-							<span class="flex-1">{ a.Name }</span>
-							if a.ID == current.ID {
-								@icons.Check(icons.WithSize(14))
+							<span class="flex items-center justify-center w-5 h-5 rounded bg-muted text-muted-foreground text-[10px] font-bold shrink-0">
+								{ string([]rune(a.Name)[0:1]) }
+							</span>
+							<span class="flex-1 truncate">{ a.Name }</span>
+							if a.ID == data.Current.ID {
+								@icons.Check(icons.WithSize(14), icons.WithClass("text-primary shrink-0"))
 							}
 						}
 					}
+					@dropdown.Separator()
+					@dropdown.Item(dropdown.ItemProps{
+						PreventClose: true,
+						Attributes: templ.Attributes{
+							"onclick": "window.tui.dialog.open('create-app-dialog')",
+						},
+					}) {
+						@icons.Plus(icons.WithSize(14), icons.WithClass("text-muted-foreground"))
+						<span class="text-muted-foreground">Create application</span>
+					}
+				}
+			}
+			<!-- Create App Dialog -->
+			@dialog.Dialog(dialog.Props{ID: "create-app-dialog"}) {
+				@dialog.Content(dialog.ContentProps{
+					Class: "sm:max-w-md",
+				}) {
+					@dialog.Header() {
+						@dialog.Title() {
+							Create Application
+						}
+						@dialog.Description() {
+							Add a new application. Default environments and roles will be created automatically.
+						}
+					}
+					<div id="create-app-form-container">
+						@createAppForm(data)
+					</div>
 				}
 			}
 		</div>
 	}
+}
+
+// createAppForm renders the form fields for creating a new app.
+// Uses the bridge API (authsome.createApp) for form submission.
+templ createAppForm(data AppSwitcherData) {
+	<form id="create-app-form" class="space-y-4">
+		<div id="create-app-error" class="rounded-lg border border-destructive/50 bg-destructive/10 p-4 hidden">
+			<p id="create-app-error-msg" class="text-sm font-medium text-destructive"></p>
+		</div>
+		<div>
+			<label class="text-sm font-medium mb-1.5 block" for="dialog-app-name">Name</label>
+			@input.Input(input.Props{
+				Type:        "text",
+				Name:        "name",
+				Placeholder: "My Application",
+				Attributes:  templ.Attributes{"required": true, "id": "dialog-app-name"},
+			})
+		</div>
+		<div>
+			<label class="text-sm font-medium mb-1.5 block" for="dialog-app-slug">Slug</label>
+			@input.Input(input.Props{
+				Type:        "text",
+				Name:        "slug",
+				Placeholder: "my-application",
+				Attributes:  templ.Attributes{"required": true, "id": "dialog-app-slug"},
+			})
+			<p class="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and hyphens only.</p>
+		</div>
+		@dialog.Footer() {
+			@dialog.Close(dialog.CloseProps{}) {
+				@button.Button(button.Props{Variant: button.VariantOutline, Type: "button"}) {
+					Cancel
+				}
+			}
+			@button.Button(button.Props{Type: "submit"}) {
+				@icons.Plus(icons.WithSize(16))
+				Create
+			}
+		}
+	</form>
+	@dialogSlugAutoFillScript()
+	@createAppBridgeScript()
+}
+
+templ dialogSlugAutoFillScript() {
+	<script>
+		(function() {
+			var nameInput = document.getElementById('dialog-app-name');
+			var slugInput = document.getElementById('dialog-app-slug');
+			if (!nameInput || !slugInput) return;
+
+			var slugManuallyEdited = false;
+
+			slugInput.addEventListener('input', function() {
+				slugManuallyEdited = true;
+			});
+
+			nameInput.addEventListener('input', function() {
+				if (!slugManuallyEdited) {
+					slugInput.value = nameInput.value
+						.toLowerCase()
+						.replace(/[^a-z0-9\s-]/g, '')
+						.replace(/\s+/g, '-')
+						.replace(/-+/g, '-')
+						.replace(/^-|-$/g, '');
+				}
+			});
+
+			slugInput.addEventListener('change', function() {
+				if (slugInput.value === '') {
+					slugManuallyEdited = false;
+				}
+			});
+		})();
+	</script>
+}
+
+// createAppBridgeScript handles form submission via the bridge API.
+templ createAppBridgeScript() {
+	<script>
+		(function() {
+			var form = document.getElementById('create-app-form');
+			if (!form) return;
+
+			form.addEventListener('submit', function(e) {
+				e.preventDefault();
+
+				var name = form.elements['name'].value.trim();
+				var slug = form.elements['slug'].value.trim();
+				var errorDiv = document.getElementById('create-app-error');
+				var errorMsg = document.getElementById('create-app-error-msg');
+				var submitBtn = form.querySelector('button[type="submit"]');
+
+				if (!name || !slug) {
+					errorDiv.classList.remove('hidden');
+					errorMsg.textContent = 'Name and slug are required.';
+					return;
+				}
+
+				// Disable submit button during request.
+				if (submitBtn) submitBtn.disabled = true;
+				errorDiv.classList.add('hidden');
+
+				var endpoint = window.BRIDGE_ENDPOINT || '/bridge/call';
+				var payload = {
+					jsonrpc: '2.0',
+					id: '1',
+					method: 'authsome.createApp',
+					params: { name: name, slug: slug }
+				};
+
+				fetch(endpoint, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				})
+				.then(function(res) { return res.json(); })
+				.then(function(data) {
+					if (data.error) {
+						errorDiv.classList.remove('hidden');
+						errorMsg.textContent = data.error.message || 'Failed to create application.';
+						if (submitBtn) submitBtn.disabled = false;
+						return;
+					}
+
+					// Success — replace form with success message.
+					var container = document.getElementById('create-app-form-container');
+					var appName = data.result && data.result.name ? data.result.name : 'Application';
+					container.innerHTML =
+						'<div class="space-y-4">' +
+						'<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">' +
+						'<p class="text-sm font-medium text-green-800 dark:text-green-200">' +
+						'Application &quot;' + appName + '&quot; created successfully.</p></div></div>';
+
+					// Reload after a short delay so the new app appears in the switcher.
+					setTimeout(function() { window.location.reload(); }, 1500);
+				})
+				.catch(function(err) {
+					errorDiv.classList.remove('hidden');
+					errorMsg.textContent = 'Network error. Please try again.';
+					if (submitBtn) submitBtn.disabled = false;
+				});
+			});
+		})();
+	</script>
 }

@@ -40,7 +40,7 @@ type Plugin struct {
 	logger       log.Logger
 	basePath     string
 	defaultAppID string
-	roleChecker  middleware.RoleChecker
+	permChecker  middleware.PermissionChecker
 }
 
 // New creates a new organization plugin with optional configuration.
@@ -112,8 +112,8 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 		p.defaultAppID = cfg.AppID
 	}
 
-	if rc, ok := engine.(middleware.RoleChecker); ok {
-		p.roleChecker = rc
+	if pc, ok := engine.(middleware.PermissionChecker); ok {
+		p.permChecker = pc
 	}
 
 	if p.config.PathPrefix == "" {

@@ -1,0 +1,273 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// FeaturesPage renders the feature catalog management page.
+templ FeaturesPage(data CatalogFeaturesPageData) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Feature Catalog</h1>
+			<p class="text-muted-foreground mt-1">Define reusable features that can be added to any plan.</p>
+		</div>
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			@components.StatCard("puzzle", "Total", strconv.Itoa(len(data.Features)), "All features")
+			@components.StatCard("check-circle", "Active", strconv.Itoa(data.ActiveCount), "Active features")
+			@components.StatCard("edit", "Draft", strconv.Itoa(data.DraftCount), "Draft features")
+			@components.StatCard("archive", "Archived", strconv.Itoa(data.ArchivedCount), "Archived features")
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Create Feature Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Create Feature
+				}
+				@card.Description() {
+					Define a new reusable feature. Features start as drafts and can be activated when ready.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="cf-key">Key</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "feature_key",
+								Placeholder: "e.g. api_calls",
+								ID:          "cf-key",
+							})
+							<p class="text-xs text-muted-foreground">Unique identifier used in code</p>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="cf-name">Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "feature_name",
+								Placeholder: "e.g. API Calls",
+								ID:          "cf-name",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="cf-type">Type</label>
+							<select name="feature_type" id="cf-type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								<option value="boolean">Boolean</option>
+								<option value="metered">Metered</option>
+								<option value="seat">Seat</option>
+							</select>
+						</div>
+						<div class="space-y-1.5 md:col-span-3">
+							<label class="text-sm font-medium" for="cf-desc">Description</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "feature_description",
+								Placeholder: "What this feature controls",
+								ID:          "cf-desc",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="cf-limit">Default Limit</label>
+							@input.Input(input.Props{
+								Type:        "number",
+								Name:        "feature_default_limit",
+								Placeholder: "0",
+								ID:          "cf-limit",
+							})
+							<p class="text-xs text-muted-foreground">0 = unlimited</p>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="cf-period">Period</label>
+							<select name="feature_period" id="cf-period" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								<option value="">None</option>
+								<option value="monthly">Monthly</option>
+								<option value="yearly">Yearly</option>
+							</select>
+						</div>
+						<div class="space-y-1.5 flex items-end">
+							<label class="flex items-center gap-2 text-sm cursor-pointer h-10">
+								<input type="checkbox" name="feature_soft_limit" value="true" class="h-4 w-4 rounded border-input"/>
+								<span>Soft limit (allow overage)</span>
+							</label>
+						</div>
+					</div>
+					<div class="flex justify-end">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Feature
+						}
+					</div>
+				</form>
+			}
+		}
+		<!-- Features Table -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					@card.Title() {
+						All Features
+					}
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Features)) }
+					}
+				</div>
+			}
+			@card.Content() {
+				if len(data.Features) == 0 {
+					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+						@icons.Puzzle(icons.WithSize(40))
+						<p class="mt-2 text-sm">No features in the catalog.</p>
+						<p class="text-xs mt-1">Create one using the form above.</p>
+					</div>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Key }
+								@table.Head() { Name }
+								@table.Head() { Type }
+								@table.Head() { Default Limit }
+								@table.Head() { Period }
+								@table.Head() { Soft Limit }
+								@table.Head() { Status }
+								@table.Head() { }
+							}
+						}
+						@table.Body() {
+							for _, f := range data.Features {
+								@table.Row() {
+									@table.Cell() {
+										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ f.Key }</code>
+									}
+									@table.Cell() {
+										<div>
+											<span class="font-medium">{ f.Name }</span>
+											if f.Description != "" {
+												<p class="text-xs text-muted-foreground mt-0.5">{ f.Description }</p>
+											}
+										</div>
+									}
+									@table.Cell() {
+										@featureTypeBadge(f.Type)
+									}
+									@table.Cell() {
+										if f.DefaultLimit > 0 {
+											{ strconv.FormatInt(f.DefaultLimit, 10) }
+										} else {
+											<span class="text-muted-foreground text-xs">Unlimited</span>
+										}
+									}
+									@table.Cell() {
+										if f.Period != "" {
+											{ f.Period }
+										} else {
+											<span class="text-muted-foreground text-xs">—</span>
+										}
+									}
+									@table.Cell() {
+										if f.SoftLimit {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												Soft
+											}
+										} else {
+											<span class="text-muted-foreground text-xs">Hard</span>
+										}
+									}
+									@table.Cell() {
+										@catalogFeatureStatusBadge(f.Status)
+									}
+									@table.Cell() {
+										<div class="flex items-center gap-1">
+											if f.Status == "active" || f.Status == "draft" {
+												<form method="POST" class="inline">
+													<input type="hidden" name="action" value="archive"/>
+													<input type="hidden" name="feature_id" value={ f.ID }/>
+													<input type="hidden" name="nonce" value={ data.FormNonce }/>
+													@button.Button(button.Props{
+														Type:    "submit",
+														Variant: button.VariantOutline,
+														Size:    button.SizeSm,
+													}) {
+														Archive
+													}
+												</form>
+											}
+											if f.Status == "draft" || f.Status == "archived" {
+												<form method="POST" class="inline">
+													<input type="hidden" name="action" value="activate"/>
+													<input type="hidden" name="feature_id" value={ f.ID }/>
+													<input type="hidden" name="nonce" value={ data.FormNonce }/>
+													@button.Button(button.Props{
+														Type:    "submit",
+														Variant: button.VariantDefault,
+														Size:    button.SizeSm,
+													}) {
+														Activate
+													}
+												</form>
+											}
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="delete"/>
+												<input type="hidden" name="feature_id" value={ f.ID }/>
+												<input type="hidden" name="nonce" value={ data.FormNonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantDestructive,
+													Size:    button.SizeSm,
+												}) {
+													@icons.Trash2(icons.WithSize(14))
+												}
+											</form>
+										</div>
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}
+
+templ catalogFeatureStatusBadge(status string) {
+	switch status {
+		case "active":
+			@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+				Active
+			}
+		case "draft":
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				Draft
+			}
+		case "archived":
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				Archived
+			}
+		default:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				{ status }
+			}
+	}
+}

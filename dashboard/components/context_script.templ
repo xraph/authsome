@@ -4,11 +4,13 @@ package components
 // interceptor that rewrites sidebar nav links to include the current app/env slugs.
 // This eliminates the double-request that would otherwise occur when clicking sidebar
 // links (which use bare paths like /users).
-templ ContextScript(appSlug, envSlug string) {
+// knownRoutesCSV is a comma-separated list of known page route prefixes (e.g. "/users,/sessions,/social-providers").
+templ ContextScript(appSlug, envSlug, knownRoutesCSV string) {
 	<div
 		id="auth-context"
 		data-app-slug={ appSlug }
 		data-env-slug={ envSlug }
+		data-known-routes={ knownRoutesCSV }
 		style="display:none"
 	></div>
 	@contextInterceptorScript()
@@ -25,17 +27,16 @@ templ contextInterceptorScript() {
 			function getAuthCtx() {
 				var el = document.getElementById('auth-context');
 				if (!el) return null;
+				var routesAttr = el.getAttribute('data-known-routes') || '';
 				return {
 					appSlug: el.getAttribute('data-app-slug'),
-					envSlug: el.getAttribute('data-env-slug')
+					envSlug: el.getAttribute('data-env-slug'),
+					knownRoutes: routesAttr ? routesAttr.split(',') : []
 				};
 			}
 
-			var knownRoutes = ['/users', '/sessions', '/devices', '/roles',
-				'/webhooks', '/environments', '/signup-forms'];
-
-			function isKnownRoute(segment) {
-				return knownRoutes.indexOf(segment) !== -1;
+			function isKnownRoute(ctx, segment) {
+				return ctx.knownRoutes.indexOf(segment) !== -1;
 			}
 
 			document.addEventListener('htmx:configRequest', function(evt) {
@@ -55,7 +56,7 @@ templ contextInterceptorScript() {
 				}
 
 				var firstSeg = '/' + after.split('/')[0];
-				if (!isKnownRoute(firstSeg)) return;
+				if (!isKnownRoute(ctx, firstSeg)) return;
 
 				evt.detail.path = path.substring(0, idx + pagesPrefix.length) +
 					ctx.appSlug + '/' + ctx.envSlug + '/' + after;

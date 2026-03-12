@@ -26,7 +26,7 @@ func (a *API) registerSecurityEventRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin", "security-events"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(a.engine, "admin", "super_admin"),
+			middleware.RequirePermission(a.engine, "read", "security_event"),
 		),
 	)
 

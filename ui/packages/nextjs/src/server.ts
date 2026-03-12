@@ -16,7 +16,7 @@
 import { cookies } from "next/headers";
 import { AuthClient, type ClientConfig, type User } from "@authsome/ui-core";
 
-const SESSION_COOKIE = "authsome:session_token";
+const SESSION_COOKIE = "authsome_session_token";
 
 /** Server session containing the validated user. */
 export interface ServerSession {
@@ -28,7 +28,7 @@ export interface ServerSession {
 export interface GetServerSessionOptions {
   /** Base URL of the AuthSome API. */
   baseURL: string;
-  /** Cookie name (default: "authsome:session_token"). */
+  /** Cookie name (default: "authsome_session_token"). */
   cookieName?: string;
 }
 

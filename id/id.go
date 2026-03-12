@@ -49,11 +49,14 @@ const (
 	PrefixFormConfig      Prefix = "afcf"
 	PrefixBrandingConfig  Prefix = "abrd"
 	PrefixAppSessionCfg   Prefix = "ascf"
-	PrefixOAuth2Client    Prefix = "ao2c"
+	PrefixOAuth2Client    Prefix = "aoac"
 	PrefixAuthCode        Prefix = "aaco"
 	PrefixSetting         Prefix = "aset"
 	PrefixAppClientConfig Prefix = "aacf"
 	PrefixDeviceCode     Prefix = "advc"
+	PrefixSCIMConfig     Prefix = "ascm"
+	PrefixSCIMToken      Prefix = "asct"
+	PrefixSCIMLog        Prefix = "ascl"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -148,7 +151,7 @@ type BrandingConfigID = ID
 // AppSessionConfigID is a type-safe identifier for app session configs (prefix: "ascf").
 type AppSessionConfigID = ID
 
-// OAuth2ClientID is a type-safe identifier for OAuth2 clients (prefix: "ao2c").
+// OAuth2ClientID is a type-safe identifier for OAuth2 clients (prefix: "aoac").
 type OAuth2ClientID = ID
 
 // AuthCodeID is a type-safe identifier for authorization codes (prefix: "aaco").
@@ -162,6 +165,15 @@ type AppClientConfigID = ID
 
 // DeviceCodeID is a type-safe identifier for OAuth2 device codes (prefix: "advc").
 type DeviceCodeID = ID
+
+// SCIMConfigID is a type-safe identifier for SCIM configurations (prefix: "ascm").
+type SCIMConfigID = ID
+
+// SCIMTokenID is a type-safe identifier for SCIM bearer tokens (prefix: "asct").
+type SCIMTokenID = ID
+
+// SCIMLogID is a type-safe identifier for SCIM provision logs (prefix: "ascl").
+type SCIMLogID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
@@ -325,6 +337,15 @@ func NewAppClientConfigID() ID { return New(PrefixAppClientConfig) }
 // NewDeviceCodeID generates a new unique device code ID.
 func NewDeviceCodeID() ID { return New(PrefixDeviceCode) }
 
+// NewSCIMConfigID generates a new unique SCIM config ID.
+func NewSCIMConfigID() ID { return New(PrefixSCIMConfig) }
+
+// NewSCIMTokenID generates a new unique SCIM token ID.
+func NewSCIMTokenID() ID { return New(PrefixSCIMToken) }
+
+// NewSCIMLogID generates a new unique SCIM provision log ID.
+func NewSCIMLogID() ID { return New(PrefixSCIMLog) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -406,7 +427,7 @@ func ParseBrandingConfigID(s string) (ID, error) { return ParseWithPrefix(s, Pre
 // ParseAppSessionConfigID parses a string and validates the "ascf" prefix.
 func ParseAppSessionConfigID(s string) (ID, error) { return ParseWithPrefix(s, PrefixAppSessionCfg) }
 
-// ParseOAuth2ClientID parses a string and validates the "ao2c" prefix.
+// ParseOAuth2ClientID parses a string and validates the "aoac" prefix.
 func ParseOAuth2ClientID(s string) (ID, error) { return ParseWithPrefix(s, PrefixOAuth2Client) }
 
 // ParseAuthCodeID parses a string and validates the "aaco" prefix.
@@ -420,6 +441,15 @@ func ParseAppClientConfigID(s string) (ID, error) { return ParseWithPrefix(s, Pr
 
 // ParseDeviceCodeID parses a string and validates the "advc" prefix.
 func ParseDeviceCodeID(s string) (ID, error) { return ParseWithPrefix(s, PrefixDeviceCode) }
+
+// ParseSCIMConfigID parses a string and validates the "ascm" prefix.
+func ParseSCIMConfigID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSCIMConfig) }
+
+// ParseSCIMTokenID parses a string and validates the "asct" prefix.
+func ParseSCIMTokenID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSCIMToken) }
+
+// ParseSCIMLogID parses a string and validates the "ascl" prefix.
+func ParseSCIMLogID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSCIMLog) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }

@@ -1,0 +1,187 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// SCIMListPage renders the SCIM configurations list page.
+templ SCIMListPage(data SCIMListPageData) {
+	<div class="space-y-6">
+		<div class="flex items-center justify-between">
+			<div>
+				<h1 class="text-3xl font-bold tracking-tight">SCIM Provisioning</h1>
+				<p class="text-muted-foreground mt-1">Manage SCIM 2.0 configurations for automated user and group provisioning.</p>
+			</div>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			@components.StatCard("shield-check", "Configurations", strconv.Itoa(data.TotalConfigs), "Active configs")
+			@components.StatCard("key-round", "Active Tokens", strconv.Itoa(data.ActiveTokens), "Bearer tokens")
+			@components.StatCard("users", "Provisioned Users", strconv.Itoa(data.ProvisionedUsers), "Via SCIM")
+			@components.StatCard("activity", "Recent Activity", strconv.Itoa(data.RecentActivity), "Last 24h")
+		</div>
+		<!-- Create Config Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Create SCIM Configuration
+				}
+				@card.Description() {
+					Set up a new SCIM endpoint for an identity provider.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="scim-name">Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "name",
+								Placeholder: "e.g. Okta SCIM",
+								ID:          "scim-name",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="scim-org">Organization ID (optional)</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "org_id",
+								Placeholder: "Leave blank for app-level",
+								ID:          "scim-org",
+							})
+						</div>
+					</div>
+					<div class="flex justify-end">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Configuration
+						}
+					</div>
+				</form>
+			}
+		}
+		<!-- Configs Table -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					@card.Title() {
+						Configurations
+					}
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Configs)) }
+					}
+				</div>
+			}
+			@card.Content() {
+				if len(data.Configs) == 0 {
+					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+						@icons.ShieldCheck(icons.WithSize(40))
+						<p class="mt-2 text-sm">No SCIM configurations found.</p>
+						<p class="text-xs mt-1">Create your first configuration to enable SCIM provisioning.</p>
+					</div>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Scope }
+								@table.Head() { Status }
+								@table.Head() { Tokens }
+								@table.Head() { Last Activity }
+								@table.Head() { }
+							}
+						}
+						@table.Body() {
+							for _, c := range data.Configs {
+								@table.Row() {
+									@table.Cell() {
+										<div
+											class="cursor-pointer"
+											hx-get={ "./scim/detail?id=" + c.ID }
+											hx-target="#content"
+											hx-swap="innerHTML"
+											hx-push-url="true"
+										>
+											<span class="font-medium hover:underline">{ c.Name }</span>
+										</div>
+									}
+									@table.Cell() {
+										if c.OrgName != "" {
+											@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+												{ c.OrgName }
+											}
+										} else {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												App-level
+											}
+										}
+									}
+									@table.Cell() {
+										@scimEnabledBadge(c.Enabled)
+									}
+									@table.Cell() {
+										{ strconv.Itoa(c.TokenCount) }
+									}
+									@table.Cell() {
+										if c.LastActivity != "" {
+											<span class="text-xs text-muted-foreground">{ c.LastActivity }</span>
+										} else {
+											<span class="text-xs text-muted-foreground">No activity</span>
+										}
+									}
+									@table.Cell() {
+										@button.Button(button.Props{
+											Variant: button.VariantOutline,
+											Size:    button.SizeSm,
+											Attributes: templ.Attributes{
+												"hx-get":      "/scim/detail?id=" + c.ID,
+												"hx-target":   "#content",
+												"hx-swap":     "innerHTML",
+												"hx-push-url": "true",
+											},
+										}) {
+											View
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}
+
+templ scimEnabledBadge(enabled bool) {
+	if enabled {
+		@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+			Enabled
+		}
+	} else {
+		@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+			Disabled
+		}
+	}
+}

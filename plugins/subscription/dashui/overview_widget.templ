@@ -1,0 +1,41 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+// OverviewWidget displays subscription statistics including MRR and plan count.
+templ OverviewWidget(data OverviewWidgetData) {
+	@card.Card() {
+		@card.Content() {
+			<div class="flex items-center gap-3">
+				<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+					@icons.CreditCard(icons.WithSize(20), icons.WithClass("text-primary"))
+				</div>
+				<div class="flex-1">
+					<p class="text-sm font-medium text-muted-foreground">Subscriptions</p>
+					<div class="flex items-center gap-3 mt-0.5">
+						<span class="text-lg font-bold">{ strconv.Itoa(data.ActiveCount) } active</span>
+						if data.TrialCount > 0 {
+							<span class="text-xs text-blue-600 dark:text-blue-400">{ strconv.Itoa(data.TrialCount) } trialing</span>
+						}
+						if data.PastDueCount > 0 {
+							<span class="text-xs text-amber-600 dark:text-amber-400">{ strconv.Itoa(data.PastDueCount) } past due</span>
+						}
+					</div>
+					<div class="flex items-center gap-3 mt-1">
+						if data.MRR != "" {
+							<span class="text-xs text-muted-foreground">MRR: <span class="font-medium text-foreground">{ data.MRR }</span></span>
+						}
+						if data.PlanCount > 0 {
+							<span class="text-xs text-muted-foreground">{ strconv.Itoa(data.PlanCount) } plans</span>
+						}
+					</div>
+				</div>
+			</div>
+		}
+	}
+}

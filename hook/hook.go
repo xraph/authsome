@@ -120,6 +120,10 @@ const (
 	ActionAccountDeletion = "user.account_deletion"
 	ActionDataExport      = "user.data_export"
 
+	ActionAppCreate = "app.create"
+	ActionAppUpdate = "app.update"
+	ActionAppDelete = "app.delete"
+
 	ActionEnvironmentCreate = "environment.create"
 	ActionEnvironmentUpdate = "environment.update"
 	ActionEnvironmentDelete = "environment.delete"

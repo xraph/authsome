@@ -2,10 +2,12 @@ package notification
 
 import (
 	"context"
+
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
@@ -84,29 +86,40 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	return settings.RegisterTyped(m, "notification", SettingAsync)
 }
 
+// userLookup provides user email resolution for recipient lookup.
+type userLookup interface {
+	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
+}
+
 // Plugin is the Herald-backed notification plugin. It replaces the legacy
 // email plugin with a unified multi-channel notification system.
 type Plugin struct {
-	config   Config
-	herald   bridge.Herald
-	hooks    *hook.Bus
-	logger   log.Logger
-	mappings map[string]*Mapping
+	config    Config
+	herald    bridge.Herald
+	templates bridge.HeraldTemplateManager
+	hooks     *hook.Bus
+	logger    log.Logger
+	mappings  map[string]*Mapping
+	users     userLookup
 }
 
-// New creates a new notification plugin with the given configuration.
-func New(cfg Config) *Plugin {
-	if cfg.AppName == "" {
-		cfg.AppName = "AuthSome"
+// New creates a new notification plugin with optional configuration.
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.DefaultLocale == "" {
-		cfg.DefaultLocale = "en"
+	if c.AppName == "" {
+		c.AppName = "AuthSome"
+	}
+	if c.DefaultLocale == "" {
+		c.DefaultLocale = "en"
 	}
 
 	// Merge user-provided mappings with defaults.
 	mappings := DefaultMappings()
-	if cfg.Mappings != nil {
-		for action, m := range cfg.Mappings {
+	if c.Mappings != nil {
+		for action, m := range c.Mappings {
 			if m == nil {
 				// nil entry disables the mapping.
 				delete(mappings, action)
@@ -117,7 +130,7 @@ func New(cfg Config) *Plugin {
 	}
 
 	return &Plugin{
-		config:   cfg,
+		config:   c,
 		mappings: mappings,
 	}
 }
@@ -128,12 +141,20 @@ func (p *Plugin) Name() string { return "notification" }
 // OnInit extracts the Herald bridge and hook bus from the engine during
 // initialization using duck-typing (same pattern as MFA plugin).
 func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	// Discover Herald bridge.
+	// Discover Herald bridge (required).
 	type heraldGetter interface {
 		Herald() bridge.Herald
 	}
 	if hg, ok := engine.(heraldGetter); ok {
 		p.herald = hg.Herald()
+	}
+	if p.herald == nil {
+		return bridge.ErrHeraldNotAvailable
+	}
+
+	// Discover template manager (optional, available when real Herald is configured).
+	if tm, ok := p.herald.(bridge.HeraldTemplateManager); ok {
+		p.templates = tm
 	}
 
 	// Discover hook bus.
@@ -153,6 +174,54 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	}
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
+	}
+
+	// Discover user store for recipient resolution fallback.
+	// We can't use Store() because its return type (store.Store) can't
+	// be imported here without circular deps. Instead, check if the
+	// engine itself satisfies userLookup (has GetUser).
+	if ul, ok := engine.(userLookup); ok {
+		p.users = ul
+	}
+
+	// Discover plugin-contributed notification mappings.
+	type registryGetter interface {
+		Plugins() interface{ Plugins() []plugin.Plugin }
+	}
+	if rg, ok := engine.(registryGetter); ok {
+		for _, pl := range rg.Plugins().Plugins() {
+			if contributor, ok := pl.(plugin.NotificationMappingContributor); ok {
+				for action, m := range contributor.NotificationMappings() {
+					// Plugin-contributed mappings don't override user-provided config mappings.
+					if _, exists := p.mappings[action]; !exists {
+						p.mappings[action] = &Mapping{
+							Template: m.Template,
+							Channels: m.Channels,
+							Enabled:  m.Enabled,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Seed default Herald templates so notifications don't fail with
+	// "template not found" on a fresh database.
+	if p.templates != nil {
+		appID := ""
+		type platformAppIDGetter interface {
+			PlatformAppID() id.AppID
+		}
+		if pg, ok := engine.(platformAppIDGetter); ok {
+			if pid := pg.PlatformAppID(); !pid.IsNil() {
+				appID = pid.String()
+			}
+		}
+		if err := p.templates.SeedDefaultTemplates(context.Background(), appID); err != nil {
+			p.logger.Warn("notification plugin: failed to seed default templates",
+				log.String("error", err.Error()),
+			)
+		}
 	}
 
 	// Register a global hook handler that auto-sends notifications for
@@ -324,6 +393,16 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	if email, ok := event.Metadata["email"]; ok && email != "" {
 		to = []string{email}
 	}
+
+	// Fallback: resolve email from ActorID via user store lookup.
+	if len(to) == 0 && event.ActorID != "" && p.users != nil {
+		if uid, err := id.ParseUserID(event.ActorID); err == nil {
+			if u, err := p.users.GetUser(ctx, uid); err == nil && u.Email != "" {
+				to = []string{u.Email}
+			}
+		}
+	}
+
 	if len(to) == 0 {
 		// No recipient — skip silently.
 		return nil

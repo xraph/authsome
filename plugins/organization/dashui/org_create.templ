@@ -1,0 +1,156 @@
+package dashui
+
+import (
+	"github.com/xraph/authsome/organization"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/icons"
+)
+
+// CreateOrgPageData holds data for the create organization form page.
+type CreateOrgPageData struct {
+	FormNonce    string
+	Error        string
+	CreatedOrg   *organization.Organization
+	PluginFields []templ.Component
+}
+
+templ CreateOrganizationPage(data CreateOrgPageData) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../organizations",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Organizations
+		}
+		<!-- Header -->
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Create Organization</h1>
+			<p class="text-muted-foreground mt-1">Add a new organization to this application.</p>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.CreatedOrg != nil {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<div class="flex items-center justify-between">
+					<p class="text-sm font-medium text-green-800 dark:text-green-200">
+						Organization "{ data.CreatedOrg.Name }" created successfully.
+					</p>
+					@button.Button(button.Props{
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
+							"hx-get":      "../organizations/detail?id=" + data.CreatedOrg.ID.String(),
+							"hx-target":   "#content",
+							"hx-swap":     "innerHTML",
+							"hx-push-url": "true",
+						},
+					}) {
+						View Organization
+					}
+				</div>
+			</div>
+		}
+		<!-- Create Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Organization Details
+				}
+				@card.Description() {
+					Provide the basic information for the new organization.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block" for="org-name">Name</label>
+						@input.Input(input.Props{
+							Type:        "text",
+							Name:        "name",
+							Placeholder: "My Organization",
+							Attributes:  templ.Attributes{"required": true, "id": "org-name"},
+						})
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block" for="org-slug">Slug</label>
+						@input.Input(input.Props{
+							Type:        "text",
+							Name:        "slug",
+							Placeholder: "my-organization",
+							Attributes:  templ.Attributes{"required": true, "id": "org-slug"},
+						})
+						<p class="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and hyphens only. Auto-generated from the name.</p>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block" for="org-logo">Logo URL (optional)</label>
+						@input.Input(input.Props{
+							Type:        "url",
+							Name:        "logo",
+							Placeholder: "https://example.com/logo.png",
+							Attributes:  templ.Attributes{"id": "org-logo"},
+						})
+					</div>
+					<!-- Plugin-contributed fields -->
+					for _, field := range data.PluginFields {
+						@field
+					}
+					<div class="flex gap-3 pt-2">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Organization
+						}
+					</div>
+				</form>
+			}
+		}
+	</div>
+	@slugAutoFillScript()
+}
+
+templ slugAutoFillScript() {
+	<script>
+		(function() {
+			var nameInput = document.getElementById('org-name');
+			var slugInput = document.getElementById('org-slug');
+			if (!nameInput || !slugInput) return;
+
+			var slugManuallyEdited = false;
+
+			slugInput.addEventListener('input', function() {
+				slugManuallyEdited = true;
+			});
+
+			nameInput.addEventListener('input', function() {
+				if (!slugManuallyEdited) {
+					slugInput.value = nameInput.value
+						.toLowerCase()
+						.replace(/[^a-z0-9\s-]/g, '')
+						.replace(/\s+/g, '-')
+						.replace(/-+/g, '-')
+						.replace(/^-|-$/g, '');
+				}
+			});
+
+			slugInput.addEventListener('change', function() {
+				if (slugInput.value === '') {
+					slugManuallyEdited = false;
+				}
+			});
+		})();
+	</script>
+}

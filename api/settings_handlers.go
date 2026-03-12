@@ -22,7 +22,7 @@ func (a *API) registerSettingsRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin", "settings"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(a.engine, "admin", "super_admin"),
+			middleware.RequirePermission(a.engine, "manage", "settings"),
 		),
 	)
 

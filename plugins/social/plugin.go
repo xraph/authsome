@@ -89,6 +89,72 @@ var SettingSocialProviders = settings.Define("social.providers", []SocialProvide
 	settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 	settings.WithSensitive(),
 	settings.WithOrder(30),
+	settings.WithObjectFields(
+		settings.ObjectFieldDef{
+			Key:         "name",
+			DisplayName: "Provider",
+			InputType:   formconfig.FieldSelect,
+			Required:    true,
+			Options: []formconfig.SelectOption{
+				{Label: "Google", Value: "google"},
+				{Label: "GitHub", Value: "github"},
+				{Label: "Apple", Value: "apple"},
+				{Label: "Microsoft", Value: "microsoft"},
+				{Label: "Facebook", Value: "facebook"},
+				{Label: "LinkedIn", Value: "linkedin"},
+				{Label: "Discord", Value: "discord"},
+				{Label: "Slack", Value: "slack"},
+				{Label: "Twitter", Value: "twitter"},
+				{Label: "Spotify", Value: "spotify"},
+				{Label: "Twitch", Value: "twitch"},
+				{Label: "GitLab", Value: "gitlab"},
+				{Label: "Bitbucket", Value: "bitbucket"},
+				{Label: "Dropbox", Value: "dropbox"},
+				{Label: "Yahoo", Value: "yahoo"},
+				{Label: "Amazon", Value: "amazon"},
+				{Label: "Zoom", Value: "zoom"},
+				{Label: "Pinterest", Value: "pinterest"},
+				{Label: "Strava", Value: "strava"},
+				{Label: "Patreon", Value: "patreon"},
+				{Label: "Instagram", Value: "instagram"},
+				{Label: "Line", Value: "line"},
+			},
+		},
+		settings.ObjectFieldDef{
+			Key:         "client_id",
+			DisplayName: "Client ID",
+			InputType:   formconfig.FieldText,
+			Required:    true,
+			Placeholder: "OAuth client ID",
+		},
+		settings.ObjectFieldDef{
+			Key:         "client_secret",
+			DisplayName: "Client Secret",
+			InputType:   formconfig.FieldText,
+			Required:    true,
+			Sensitive:   true,
+			Placeholder: "OAuth client secret",
+		},
+		settings.ObjectFieldDef{
+			Key:         "redirect_url",
+			DisplayName: "Redirect URL",
+			InputType:   formconfig.FieldURL,
+			Placeholder: "https://example.com/auth/callback",
+			HelpText:    "The OAuth callback URL registered with the provider",
+		},
+		settings.ObjectFieldDef{
+			Key:         "scopes",
+			DisplayName: "Scopes",
+			InputType:   formconfig.FieldTextarea,
+			Placeholder: "openid\nprofile\nemail",
+			HelpText:    "One scope per line",
+		},
+		settings.ObjectFieldDef{
+			Key:         "enabled",
+			DisplayName: "Enabled",
+			InputType:   formconfig.FieldSwitch,
+		},
+	),
 )
 
 func intPtr(v int) *int { return &v }
@@ -131,11 +197,17 @@ type Plugin struct {
 	sessionConfig sessionConfigResolver
 	settingsMgr   *settings.Manager
 
-	chronicle  bridge.Chronicle
-	relay      bridge.EventRelay
-	hooks      *hook.Bus
-	logger     log.Logger
-	ceremonies ceremony.Store
+	chronicle    bridge.Chronicle
+	relay        bridge.EventRelay
+	hooks        *hook.Bus
+	logger       log.Logger
+	ceremonies   ceremony.Store
+	roleEnsurer  roleEnsurer
+}
+
+// roleEnsurer assigns a default Warden role to a newly created user.
+type roleEnsurer interface {
+	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
 }
 
 // New creates a new social OAuth plugin.
@@ -222,6 +294,10 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	}
 	if sg, ok := engine.(settingsGetter); ok {
 		p.settingsMgr = sg.Settings()
+	}
+
+	if re, ok := engine.(roleEnsurer); ok {
+		p.roleEnsurer = re
 	}
 
 	return nil
@@ -557,6 +633,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 				if err := p.store.CreateUser(goCtx, u); err != nil {
 					return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
 				}
+				if p.roleEnsurer != nil {
+					p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
+				}
 			}
 		} else {
 			// No email from provider — create user without email
@@ -571,6 +650,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 			}
 			if err := p.store.CreateUser(goCtx, u); err != nil {
 				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			}
+			if p.roleEnsurer != nil {
+				p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
 			}
 		}
 
@@ -621,6 +703,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 	p.relayEvent(ctx.Context(), eventType, "", map[string]string{"user_id": u.ID.String(), "provider": req.Provider})
 	p.emitHook(ctx.Context(), hookAction, hook.ResourceUser, u.ID.String(), u.ID.String(), "")
+
+	// Set httpOnly session cookie for browser-based flows.
+	p.setSessionCookie(ctx, sess.Token, int(sessCfg.TokenTTL.Seconds()))
 
 	return &CallbackResponse{
 		User:         u,
@@ -688,6 +773,28 @@ func (p *Plugin) UnlinkAuthMethod(ctx context.Context, userID id.UserID, provide
 }
 
 // ──────────────────────────────────────────────────
+// Cookie helpers
+// ──────────────────────────────────────────────────
+
+// setSessionCookie sets an httpOnly session cookie on the response.
+// It uses the default cookie name "authsome_session_token" and auto-detects
+// HTTPS for the Secure flag. For advanced cookie configuration (custom name,
+// domain, sameSite), the core API handlers use the dynamic settings system.
+func (p *Plugin) setSessionCookie(ctx forge.Context, token string, maxAge int) {
+	r := ctx.Request()
+	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	http.SetCookie(ctx.Response(), &http.Cookie{
+		Name:     "authsome_session_token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   isHTTPS,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ──────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────
 
@@ -712,6 +819,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   bridge.SeverityInfo,
+		Category:   "auth",
 	})
 }
 

@@ -1,0 +1,52 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+)
+
+// OrgSection renders a compact SCIM provisioning summary for the org detail overview tab.
+templ OrgSection(data OrgSectionData) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				SCIM Provisioning
+			}
+			@card.Description() {
+				Automated user and group provisioning status
+			}
+		}
+		@card.Content() {
+			if !data.HasConfig {
+				<p class="text-sm text-muted-foreground py-4 text-center">No SCIM configuration for this organization.</p>
+			} else {
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Configurations</dt>
+					<dd class="font-medium">{ strconv.Itoa(data.ConfigCount) }</dd>
+					<dt class="text-muted-foreground">Status</dt>
+					<dd>
+						if data.Enabled {
+							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+								Enabled
+							}
+						} else {
+							@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+								Disabled
+							}
+						}
+					</dd>
+					<dt class="text-muted-foreground">Last Sync</dt>
+					<dd class="font-medium">
+						if data.LastSync != "" {
+							{ data.LastSync }
+						} else {
+							<span class="text-muted-foreground">Never</span>
+						}
+					</dd>
+				</dl>
+			}
+		}
+	}
+}

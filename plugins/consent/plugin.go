@@ -36,7 +36,7 @@ type Plugin struct {
 	chronicle bridge.Chronicle
 	logger    log.Logger
 	basePath  string
-	roleChecker middleware.RoleChecker
+	permChecker middleware.PermissionChecker
 }
 
 // New creates a new consent plugin. An in-memory consent store is used by
@@ -102,8 +102,8 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 		p.basePath = cg.Config().BasePath
 	}
 
-	if rc, ok := engine.(middleware.RoleChecker); ok {
-		p.roleChecker = rc
+	if pc, ok := engine.(middleware.PermissionChecker); ok {
+		p.permChecker = pc
 	}
 
 	return nil
@@ -348,6 +348,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Tenant:     tenant,
 		Outcome:    bridge.OutcomeSuccess,
 		Severity:   bridge.SeverityInfo,
+		Category:   "consent",
 		Metadata:   metadata,
 	})
 }

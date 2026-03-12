@@ -15,6 +15,7 @@ import (
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/user"
 )
 
@@ -184,15 +185,28 @@ func (a *authPages) handleSetup(ctx *router.PageContext) (string, templ.Componen
 	}
 
 	// Create the first user via SignUp using the platform app ID.
+	appID := a.defaultAppID()
 	_, sess, err := a.engine.SignUp(r.Context(), &account.SignUpRequest{
-		AppID:     a.defaultAppID(),
+		AppID:     appID,
 		Email:     email,
 		Password:  password,
 		FirstName: firstName,
 		LastName:  lastName,
+		IPAddress: clientIPFromRequest(r),
+		UserAgent: r.UserAgent(),
 	})
 	if err != nil {
 		return "", auth.SetupError(err.Error(), links), nil
+	}
+
+	// Assign platform_owner role to the first user so they have full
+	// cross-app access. Role resolution is delegated to Warden.
+	ownerRole, roleErr := a.engine.GetRoleBySlug(r.Context(), appID, rbac.PlatformOwnerSlug)
+	if roleErr == nil && ownerRole != nil {
+		_ = a.engine.AssignUserRole(r.Context(), &rbac.UserRole{
+			UserID: sess.UserID.String(),
+			RoleID: ownerRole.ID,
+		})
 	}
 
 	// Set auth cookie.
@@ -224,9 +238,11 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 	}
 
 	_, sess, err := a.engine.SignIn(r.Context(), &account.SignInRequest{
-		AppID:    a.defaultAppID(),
-		Email:    email,
-		Password: password,
+		AppID:     a.defaultAppID(),
+		Email:     email,
+		Password:  password,
+		IPAddress: clientIPFromRequest(r),
+		UserAgent: r.UserAgent(),
 	})
 	if err != nil {
 		return "", auth.LoginError("Invalid email or password", links), nil
@@ -287,6 +303,8 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 		Password:  password,
 		FirstName: firstName,
 		LastName:  lastName,
+		IPAddress: clientIPFromRequest(r),
+		UserAgent: r.UserAgent(),
 	}
 	if len(metadata) > 0 {
 		req.Metadata = metadata
@@ -412,4 +430,21 @@ func extractToken(r *http.Request) string {
 
 func isSecureRequest(r *http.Request) bool {
 	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+func clientIPFromRequest(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i > 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	addr := r.RemoteAddr
+	if i := strings.LastIndex(addr, ":"); i > 0 {
+		return addr[:i]
+	}
+	return addr
 }

@@ -24,8 +24,9 @@ const (
 	FieldTextarea FieldType = "textarea"
 	FieldSelect   FieldType = "select"
 	FieldCheckbox FieldType = "checkbox"
-	FieldRadio    FieldType = "radio"
-	FieldSwitch   FieldType = "switch"
+	FieldRadio       FieldType = "radio"
+	FieldSwitch      FieldType = "switch"
+	FieldObjectArray FieldType = "object_array"
 )
 
 // SelectOption represents a single option for select, radio, or checkbox fields.

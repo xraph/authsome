@@ -94,14 +94,18 @@ type Plugin struct {
 }
 
 // New creates a new email plugin with the given configuration.
-func New(cfg Config) *Plugin {
-	if cfg.AppName == "" {
-		cfg.AppName = "AuthSome"
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.From == "" {
-		cfg.From = "noreply@authsome.local"
+	if c.AppName == "" {
+		c.AppName = "AuthSome"
 	}
-	return &Plugin{config: cfg}
+	if c.From == "" {
+		c.From = "noreply@authsome.local"
+	}
+	return &Plugin{config: c}
 }
 
 // Name returns the plugin name.

@@ -22,6 +22,7 @@ type AuditEvent struct {
 	Tenant     string            `json:"tenant,omitempty"`
 	Outcome    string            `json:"outcome"`
 	Severity   string            `json:"severity"`
+	Category   string            `json:"category,omitempty"`
 	Metadata   map[string]string `json:"metadata,omitempty"`
 	Reason     string            `json:"reason,omitempty"`
 }

@@ -3,6 +3,10 @@
 import * as React from "react";
 import { useState } from "react";
 import { useAuth } from "@authsome/ui-react";
+import {
+  prepareCreationOptions,
+  serializeCredential,
+} from "@authsome/ui-core";
 import { Key, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
@@ -58,15 +62,19 @@ export function PasskeyRegisterButton({
         token,
       );
 
-      const credential = await navigator.credentials.create({
-        publicKey: options as unknown as PublicKeyCredentialCreationOptions,
-      });
+      const publicKey = prepareCreationOptions(
+        options as Record<string, unknown>,
+      );
+      const credential = await navigator.credentials.create({ publicKey });
 
       if (!credential) {
         throw new Error("No credential returned from authenticator");
       }
 
-      const result = await client.passkeyRegisterFinish(credential, token);
+      const result = await client.passkeyRegisterFinish(
+        serializeCredential(credential),
+        token,
+      );
       onSuccess?.({ id: result.id, display_name: result.display_name });
     } catch (err) {
       const error =

@@ -29,6 +29,155 @@ templ settingsEditorJS() {
 				};
 			}
 
+			// ──────────────────────────────────────────
+			// Object Array helpers
+			// ──────────────────────────────────────────
+
+			// Sync all object-array visible inputs to their hidden JSON inputs.
+			function syncAllObjectArrays(form) {
+				var containers = form.querySelectorAll('[data-oa-container]');
+				for (var c = 0; c < containers.length; c++) {
+					var key = containers[c].getAttribute('data-oa-container');
+					syncObjectArrayToHidden(key);
+				}
+			}
+
+			// Sync a single object-array's visible inputs to its hidden JSON input.
+			function syncObjectArrayToHidden(key) {
+				var container = document.querySelector('[data-oa-container="' + key + '"]');
+				if (!container) return;
+
+				var fieldDefs = [];
+				try { fieldDefs = JSON.parse(container.getAttribute('data-oa-fields') || '[]'); } catch(e) {}
+				var items = container.querySelectorAll('[data-oa-item="' + key + '"]');
+				var result = [];
+
+				for (var i = 0; i < items.length; i++) {
+					var obj = {};
+					for (var f = 0; f < fieldDefs.length; f++) {
+						var fd = fieldDefs[f];
+						var inputName = key + '[' + i + '].' + fd.key;
+						var el = items[i].querySelector('[name="' + inputName + '"]');
+						if (!el) continue;
+
+						if (fd.input_type === 'switch' || fd.input_type === 'checkbox') {
+							obj[fd.key] = el.checked;
+						} else if (fd.input_type === 'number') {
+							var n = parseFloat(el.value);
+							obj[fd.key] = isNaN(n) ? 0 : n;
+						} else if (fd.input_type === 'textarea') {
+							obj[fd.key] = el.value.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+						} else {
+							obj[fd.key] = el.value;
+						}
+					}
+					result.push(obj);
+				}
+
+				var hiddenInput = document.getElementById('setting-' + key);
+				if (hiddenInput) {
+					hiddenInput.value = JSON.stringify(result);
+				}
+			}
+
+			// Add a new empty item to an object array.
+			window.addObjectArrayItem = function(key) {
+				var container = document.querySelector('[data-oa-container="' + key + '"]');
+				if (!container) return;
+
+				var fieldDefs = [];
+				try { fieldDefs = JSON.parse(container.getAttribute('data-oa-fields') || '[]'); } catch(e) {}
+				var existingItems = container.querySelectorAll('[data-oa-item="' + key + '"]');
+				var newIndex = existingItems.length;
+
+				var html = '<div class="relative rounded-lg border bg-muted/30 p-4 space-y-3" data-oa-item="' + key + '" data-oa-index="' + newIndex + '">';
+				html += '<button type="button" class="absolute top-2 right-2 text-muted-foreground hover:text-destructive" onclick="removeObjectArrayItem(this, \'' + key + '\')" title="Remove item">';
+				html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+				html += '</button>';
+				html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 pr-6">';
+
+				for (var f = 0; f < fieldDefs.length; f++) {
+					var fd = fieldDefs[f];
+					var inputName = key + '[' + newIndex + '].' + fd.key;
+					html += '<div class="space-y-1">';
+					html += '<label class="text-xs font-medium text-muted-foreground">' + escapeHtml(fd.display_name);
+					if (fd.required) html += ' <span class="text-destructive">*</span>';
+					html += '</label>';
+
+					if (fd.input_type === 'switch') {
+						html += '<div class="flex items-center gap-2"><input type="checkbox" name="' + inputName + '" class="h-4 w-4 rounded border-input" /></div>';
+					} else if (fd.input_type === 'select' && fd.options) {
+						html += '<select name="' + inputName + '" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">';
+						for (var o = 0; o < fd.options.length; o++) {
+							html += '<option value="' + escapeHtml(fd.options[o].value) + '">' + escapeHtml(fd.options[o].label) + '</option>';
+						}
+						html += '</select>';
+					} else if (fd.input_type === 'textarea') {
+						html += '<textarea name="' + inputName + '" rows="2" class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50" placeholder="' + escapeHtml(fd.placeholder || '') + '"></textarea>';
+						html += '<p class="text-xs text-muted-foreground">One value per line</p>';
+					} else {
+						var inputType = fd.sensitive ? 'password' : 'text';
+						if (fd.input_type === 'email') inputType = 'email';
+						if (fd.input_type === 'url') inputType = 'url';
+						if (fd.input_type === 'number') inputType = 'number';
+						html += '<div class="relative w-full"><input type="' + inputType + '" name="' + inputName + '" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50" placeholder="' + escapeHtml(fd.placeholder || '') + '" /></div>';
+					}
+
+					if (fd.help_text) {
+						html += '<p class="text-xs text-muted-foreground">' + escapeHtml(fd.help_text) + '</p>';
+					}
+					html += '</div>';
+				}
+
+				html += '</div></div>';
+
+				// Insert before the "Add" button
+				var addBtn = container.querySelector('button[class*="text-primary"]');
+				if (addBtn) {
+					addBtn.insertAdjacentHTML('beforebegin', html);
+				} else {
+					container.insertAdjacentHTML('beforeend', html);
+				}
+			};
+
+			// Remove an item from an object array.
+			window.removeObjectArrayItem = function(btnEl, key) {
+				var itemEl = btnEl.closest('[data-oa-item]');
+				if (itemEl) {
+					itemEl.remove();
+					reindexObjectArrayItems(key);
+					syncObjectArrayToHidden(key);
+				}
+			};
+
+			// Re-index data-oa-index and input names after removal.
+			function reindexObjectArrayItems(key) {
+				var container = document.querySelector('[data-oa-container="' + key + '"]');
+				if (!container) return;
+				var items = container.querySelectorAll('[data-oa-item="' + key + '"]');
+				for (var i = 0; i < items.length; i++) {
+					var oldIndex = items[i].getAttribute('data-oa-index');
+					items[i].setAttribute('data-oa-index', String(i));
+					var inputs = items[i].querySelectorAll('input, select, textarea');
+					for (var j = 0; j < inputs.length; j++) {
+						var name = inputs[j].getAttribute('name');
+						if (name) {
+							inputs[j].setAttribute('name', name.replace(key + '[' + oldIndex + ']', key + '[' + i + ']'));
+						}
+					}
+				}
+			}
+
+			// Escape HTML for safe insertion.
+			function escapeHtml(str) {
+				if (!str) return '';
+				return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+			}
+
+			// ──────────────────────────────────────────
+			// Form submission
+			// ──────────────────────────────────────────
+
 			// Handle form submission — save all fields in the form
 			window.handleSettingsSubmit = async function(event) {
 				event.preventDefault();
@@ -36,6 +185,10 @@ templ settingsEditorJS() {
 				var config = getConfig();
 				var scope = form.querySelector('[name="_scope"]').value;
 				var appID = form.querySelector('[name="_app_id"]').value;
+
+				// Sync object-array visible inputs to hidden inputs before collecting values.
+				syncAllObjectArrays(form);
+
 				var fields = form.querySelectorAll('[data-setting-key]');
 
 				var successCount = 0;
@@ -60,7 +213,23 @@ templ settingsEditorJS() {
 						value = parseFloat(inputEl.value);
 						if (isNaN(value)) continue;
 					} else if (valueType === 'array') {
-						value = inputEl.value.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+						// Check if this is an object array (has oa-container).
+						var oaContainer = fieldDiv.querySelector('[data-oa-container]');
+						if (oaContainer) {
+							try {
+								value = JSON.parse(inputEl.value);
+							} catch(e) {
+								value = [];
+							}
+						} else {
+							value = inputEl.value.split('\n').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+						}
+					} else if (valueType === 'object') {
+						try {
+							value = JSON.parse(inputEl.value);
+						} catch(e) {
+							value = inputEl.value;
+						}
 					} else {
 						value = inputEl.value;
 					}

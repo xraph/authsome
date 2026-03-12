@@ -159,7 +159,7 @@ func (a *API) handleCreateEnvironment(ctx forge.Context, req *CreateEnvironmentR
 		return nil, mapError(err)
 	}
 
-	return env, ctx.JSON(http.StatusCreated, env)
+	return nil, ctx.JSON(http.StatusCreated, env)
 }
 
 func (a *API) handleListEnvironments(ctx forge.Context, req *ListEnvironmentsRequest) (*EnvironmentListResponse, error) {
@@ -191,7 +191,7 @@ func (a *API) handleGetEnvironment(ctx forge.Context, _ *GetEnvironmentRequest) 
 		return nil, mapError(err)
 	}
 
-	return env, ctx.JSON(http.StatusOK, env)
+	return env, nil
 }
 
 func (a *API) handleUpdateEnvironment(ctx forge.Context, req *UpdateEnvironmentRequest) (*environment.Environment, error) {
@@ -219,7 +219,7 @@ func (a *API) handleUpdateEnvironment(ctx forge.Context, req *UpdateEnvironmentR
 		return nil, mapError(err)
 	}
 
-	return env, ctx.JSON(http.StatusOK, env)
+	return env, nil
 }
 
 func (a *API) handleDeleteEnvironment(ctx forge.Context, _ *DeleteEnvironmentRequest) (*StatusResponse, error) {
@@ -337,7 +337,7 @@ func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *environmen
 		return nil, mapError(err)
 	}
 
-	return env, ctx.JSON(http.StatusOK, env)
+	return env, nil
 }
 
 func (a *API) handleSetDefaultEnvironment(ctx forge.Context, _ *SetDefaultEnvironmentRequest) (*StatusResponse, error) {

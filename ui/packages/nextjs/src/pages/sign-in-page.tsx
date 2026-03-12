@@ -7,6 +7,7 @@ import {
   type SocialButtonLayout,
   type SocialProvider,
 } from "@authsome/ui-components";
+import { useAuth } from "@authsome/ui-react";
 
 export interface SignInPageProps {
   signUpUrl?: string;
@@ -30,6 +31,17 @@ export function SignInPage({
   logo,
 }: SignInPageProps) {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      router.push(afterSignInUrl);
+    }
+  }, [isAuthenticated, router, afterSignInUrl]);
+
+  if (isLoading || isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">

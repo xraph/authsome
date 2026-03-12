@@ -72,7 +72,7 @@ func (a *API) handleGetMe(ctx forge.Context, _ *GetMeRequest) (*user.User, error
 		return nil, mapError(err)
 	}
 
-	return u, ctx.JSON(http.StatusOK, u)
+	return u, nil
 }
 
 func (a *API) handleUpdateMe(ctx forge.Context, req *UpdateMeRequest) (*user.User, error) {
@@ -103,7 +103,7 @@ func (a *API) handleUpdateMe(ctx forge.Context, req *UpdateMeRequest) (*user.Use
 		return nil, mapError(err)
 	}
 
-	return u, ctx.JSON(http.StatusOK, u)
+	return u, nil
 }
 
 func (a *API) handleDeleteAccount(ctx forge.Context, _ *DeleteAccountRequest) (*StatusResponse, error) {

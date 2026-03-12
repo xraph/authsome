@@ -82,20 +82,24 @@ type Plugin struct {
 }
 
 // New creates a new OAuth2 provider plugin.
-func New(cfg Config) *Plugin {
-	if cfg.AuthCodeTTL == 0 {
-		cfg.AuthCodeTTL = 10 * time.Minute
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.AccessTokenTTL == 0 {
-		cfg.AccessTokenTTL = time.Hour
+	if c.AuthCodeTTL == 0 {
+		c.AuthCodeTTL = 10 * time.Minute
 	}
-	if cfg.DeviceCodeTTL == 0 {
-		cfg.DeviceCodeTTL = 10 * time.Minute
+	if c.AccessTokenTTL == 0 {
+		c.AccessTokenTTL = time.Hour
 	}
-	if cfg.DeviceCodeInterval == 0 {
-		cfg.DeviceCodeInterval = 5
+	if c.DeviceCodeTTL == 0 {
+		c.DeviceCodeTTL = 10 * time.Minute
 	}
-	return &Plugin{config: cfg}
+	if c.DeviceCodeInterval == 0 {
+		c.DeviceCodeInterval = 5
+	}
+	return &Plugin{config: c}
 }
 
 // Name returns the plugin name.

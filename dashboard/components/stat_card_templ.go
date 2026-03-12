@@ -28,6 +28,28 @@ func resolveIcon(iconName string, opts ...icons.Option) templ.Component {
 		return icons.Shield(opts...)
 	case "webhook":
 		return icons.Webhook(opts...)
+	case "shield-check":
+		return icons.ShieldCheck(opts...)
+	case "check-circle":
+		return icons.CheckCircle(opts...)
+	case "x-circle":
+		return icons.XCircle(opts...)
+	case "skip-forward":
+		return icons.SkipForward(opts...)
+	case "scroll-text":
+		return icons.ScrollText(opts...)
+	case "layers":
+		return icons.Layers(opts...)
+	case "credit-card":
+		return icons.CreditCard(opts...)
+	case "file-text":
+		return icons.FileText(opts...)
+	case "mail":
+		return icons.Mail(opts...)
+	case "building-2-check":
+		return icons.Building2(opts...)
+	case "user-plus":
+		return icons.UserPlus(opts...)
 	default:
 		return icons.Info(opts...)
 	}
@@ -86,7 +108,7 @@ func StatCard(iconName string, label string, value string, subtitle string) temp
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/stat_card.templ`, Line: 33, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/stat_card.templ`, Line: 55, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -107,7 +129,7 @@ func StatCard(iconName string, label string, value string, subtitle string) temp
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/stat_card.templ`, Line: 38, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/stat_card.templ`, Line: 60, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -125,7 +147,7 @@ func StatCard(iconName string, label string, value string, subtitle string) temp
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(subtitle)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/stat_card.templ`, Line: 40, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/stat_card.templ`, Line: 62, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {

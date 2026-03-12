@@ -24,9 +24,10 @@ npm install @authsome/ui-nextjs @authsome/ui-react @authsome/ui-core @authsome/u
 # .env.local
 NEXT_PUBLIC_AUTHSOME_URL=http://localhost:8080
 AUTHSOME_API_URL=http://localhost:8080
+NEXT_PUBLIC_AUTHSOME_KEY=pk_live_xxxxx  # Optional: publishable key for auto-discovery
 ```
 
-`NEXT_PUBLIC_AUTHSOME_URL` is used by client components. `AUTHSOME_API_URL` is used by server components and middleware (never exposed to the browser).
+`NEXT_PUBLIC_AUTHSOME_URL` is used by client components. `AUTHSOME_API_URL` is used by server components and middleware (never exposed to the browser). `NEXT_PUBLIC_AUTHSOME_KEY` enables auto-discovery of which auth methods (social, passkey, MFA, etc.) are enabled on your backend.
 
 ## 4. Set up AuthProvider
 
@@ -36,14 +37,22 @@ Create a client-side providers component that wraps your app with `AuthProvider`
 // src/app/providers.tsx
 "use client";
 
-import { AuthProvider } from "@authsome/ui-nextjs";
-import { createCookieStorage } from "@authsome/ui-nextjs";
+import { AuthProvider, createCookieStorage } from "@authsome/ui-nextjs";
+import type { ClientConfig } from "@authsome/ui-nextjs";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  initialClientConfig,
+}: {
+  children: React.ReactNode;
+  initialClientConfig?: ClientConfig;
+}) {
   return (
     <AuthProvider
       baseURL={process.env.NEXT_PUBLIC_AUTHSOME_URL!}
       storage={createCookieStorage()}
+      publishableKey={process.env.NEXT_PUBLIC_AUTHSOME_KEY}
+      initialClientConfig={initialClientConfig}
     >
       {children}
     </AuthProvider>
@@ -51,11 +60,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 ```
 
-Update the root layout to use the providers:
+Update the root layout to use the providers with server-side autoconfig:
 
 ```tsx
 // src/app/layout.tsx
 import type { Metadata } from "next";
+import { getClientConfig } from "@authsome/ui-nextjs";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -64,24 +74,48 @@ export const metadata: Metadata = {
   description: "Next.js app with Authsome authentication",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const clientConfig = await getClientConfig({
+    baseURL: process.env.AUTHSOME_API_URL!,
+    publishableKey: process.env.NEXT_PUBLIC_AUTHSOME_KEY,
+  });
+
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers initialClientConfig={clientConfig ?? undefined}>
+          {children}
+        </Providers>
       </body>
     </html>
   );
 }
 ```
 
-## 5. Add middleware for route protection
+## 5. Add the proxy route handler
 
-Create the middleware file at the project root. All routes except the ones listed in `publicPaths` will require authentication.
+Create a catch-all API route that proxies requests to the Authsome backend. This is required for social login (OAuth callbacks), magic link verification, and cookie-based session management.
+
+```ts
+// src/app/api/authsome/[...path]/route.ts
+import { createProxyHandler } from "@authsome/ui-nextjs/proxy";
+
+const handler = createProxyHandler({
+  baseURL: process.env.NEXT_PUBLIC_AUTHSOME_URL!,
+});
+
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE, handler as PATCH };
+```
+
+All requests to `/api/authsome/*` will be forwarded to the corresponding path on your Authsome backend. The handler automatically forwards cookies and authorization headers.
+
+## 6. Add middleware for route protection
+
+Create the middleware file at the project root. All routes except the ones listed in `publicPaths` will require authentication. The `authPaths` option redirects already-authenticated users away from sign-in/sign-up pages.
 
 ```ts
 // src/middleware.ts
@@ -96,8 +130,9 @@ export default createAuthMiddleware({
     "/sign-up",
     "/forgot-password",
     "/reset-password",
-    "/api/public/*",
+    "/api/authsome/*",
   ],
+  afterSignInUrl: "/dashboard",
 });
 
 export const config = {
@@ -105,7 +140,9 @@ export const config = {
 };
 ```
 
-## 6. Create the sign-in page
+> **Important:** Include `/api/authsome/*` in `publicPaths` so the proxy route handler is accessible without authentication.
+
+## 7. Create the sign-in page
 
 ```tsx
 // src/app/sign-in/page.tsx
@@ -138,7 +175,7 @@ export default function SignInPage() {
 }
 ```
 
-## 7. Create the sign-up page
+## 8. Create the sign-up page
 
 ```tsx
 // src/app/sign-up/page.tsx
@@ -163,7 +200,7 @@ export default function SignUpPage() {
 }
 ```
 
-## 8. Create the dashboard
+## 9. Create the dashboard
 
 ### Server component with session validation
 
@@ -242,7 +279,7 @@ export function DashboardClient({ initialUser }: { initialUser: User }) {
 }
 ```
 
-## 9. Add organization switching
+## 10. Add organization switching
 
 Create an organization settings page:
 
@@ -281,7 +318,7 @@ export default function OrganizationsPage() {
 }
 ```
 
-## 10. Add a forgot-password page
+## 11. Add a forgot-password page
 
 ```tsx
 // src/app/forgot-password/page.tsx
@@ -300,19 +337,22 @@ export default function ForgotPasswordPage() {
 }
 ```
 
-## 11. Project structure
+## 12. Project structure
 
 After completing the guide, your project should look like this:
 
 ```
 src/
   app/
-    layout.tsx              # Root layout with Providers
+    layout.tsx              # Root layout with server-side autoconfig
     providers.tsx           # AuthProvider + cookie storage
     page.tsx                # Landing page (public)
     sign-in/page.tsx        # Sign-in page (public)
     sign-up/page.tsx        # Sign-up page (public)
     forgot-password/page.tsx # Forgot password (public)
+    api/
+      authsome/
+        [...path]/route.ts  # Proxy route handler
     dashboard/
       page.tsx              # Dashboard (protected, server component)
       dashboard-client.tsx  # Dashboard (client component)
@@ -321,7 +361,7 @@ src/
   middleware.ts             # Auth middleware
 ```
 
-## 12. Deploy considerations
+## 13. Deploy considerations
 
 ### Vercel
 

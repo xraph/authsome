@@ -1,0 +1,213 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// InvoiceDetailPage renders the invoice detail page.
+templ InvoiceDetailPage(data InvoiceDetailPageData) {
+	<div class="space-y-6">
+		<!-- Back Button + Header -->
+		<div>
+			<button
+				type="button"
+				class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
+				hx-get="./invoices"
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-push-url="true"
+			>
+				@icons.ArrowLeft(icons.WithSize(14))
+				Back to Invoices
+			</button>
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">Invoice</h1>
+				@invoiceStatusBadge(data.Invoice.Status)
+			</div>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Invoice Info -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Invoice Details
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Invoice ID</dt>
+					<dd class="font-mono text-xs">{ data.Invoice.ID }</dd>
+					<dt class="text-muted-foreground">Tenant ID</dt>
+					<dd class="font-mono text-xs">{ data.Invoice.TenantID }</dd>
+					<dt class="text-muted-foreground">Subscription</dt>
+					<dd class="font-mono text-xs">{ truncateID(data.Invoice.SubscriptionID) }</dd>
+					<dt class="text-muted-foreground">Currency</dt>
+					<dd class="font-medium uppercase">{ data.Invoice.Currency }</dd>
+					<dt class="text-muted-foreground">Period</dt>
+					<dd class="font-medium">
+						{{ start := data.Invoice.PeriodStart.Format("Jan 02, 2006") }}
+						{{ end := data.Invoice.PeriodEnd.Format("Jan 02, 2006") }}
+						{ start } – { end }
+					</dd>
+					if data.Invoice.DueDate != nil {
+						<dt class="text-muted-foreground">Due Date</dt>
+						<dd class="font-medium">
+							{{ due := data.Invoice.DueDate.Format("Jan 02, 2006") }}
+							{ due }
+						</dd>
+					}
+					if data.Invoice.PaidAt != nil {
+						<dt class="text-muted-foreground">Paid At</dt>
+						<dd class="font-medium text-green-700 dark:text-green-400">
+							{{ paid := data.Invoice.PaidAt.Format("Jan 02, 2006") }}
+							{ paid }
+						</dd>
+					}
+					if data.Invoice.PaymentRef != "" {
+						<dt class="text-muted-foreground">Payment Reference</dt>
+						<dd class="font-mono text-xs">{ data.Invoice.PaymentRef }</dd>
+					}
+					if data.Invoice.VoidReason != "" {
+						<dt class="text-muted-foreground">Void Reason</dt>
+						<dd class="font-medium text-destructive">{ data.Invoice.VoidReason }</dd>
+					}
+				</dl>
+			}
+		}
+		<!-- Line Items -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Line Items
+				}
+			}
+			@card.Content() {
+				if len(data.LineItems) == 0 {
+					<p class="text-sm text-muted-foreground py-4 text-center">No line items.</p>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Description }
+								@table.Head() { Type }
+								@table.Head() { Feature }
+								@table.Head() { Qty }
+								@table.Head() { Unit Price }
+								@table.Head() { Amount }
+							}
+						}
+						@table.Body() {
+							for _, li := range data.LineItems {
+								@table.Row() {
+									@table.Cell() {
+										<span class="font-medium">{ li.Description }</span>
+									}
+									@table.Cell() {
+										<span class="text-xs text-muted-foreground">{ li.Type }</span>
+									}
+									@table.Cell() {
+										if li.FeatureKey != "" {
+											<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ li.FeatureKey }</code>
+										} else {
+											<span class="text-muted-foreground text-xs">—</span>
+										}
+									}
+									@table.Cell() { { strconv.FormatInt(li.Quantity, 10) } }
+									@table.Cell() { { li.UnitAmount } }
+									@table.Cell() {
+										<span class="font-medium">{ li.Amount }</span>
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		<!-- Totals -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Totals
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm max-w-xs ml-auto">
+					<dt class="text-muted-foreground">Subtotal</dt>
+					<dd class="text-right font-medium">{ data.Invoice.Subtotal }</dd>
+					if data.Invoice.TaxAmount != "" && data.Invoice.TaxAmount != "0.00" {
+						<dt class="text-muted-foreground">Tax</dt>
+						<dd class="text-right font-medium">{ data.Invoice.TaxAmount }</dd>
+					}
+					if data.Invoice.DiscountAmount != "" && data.Invoice.DiscountAmount != "0.00" {
+						<dt class="text-muted-foreground">Discount</dt>
+						<dd class="text-right font-medium text-green-700 dark:text-green-400">-{ data.Invoice.DiscountAmount }</dd>
+					}
+					<dt class="text-muted-foreground font-bold border-t pt-2">Total</dt>
+					<dd class="text-right font-bold border-t pt-2">{ data.Invoice.Total } { data.Invoice.Currency }</dd>
+				</dl>
+			}
+		}
+		<!-- Actions -->
+		if data.Invoice.Status == "pending" || data.Invoice.Status == "draft" || data.Invoice.Status == "past_due" {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Actions
+					}
+				}
+				@card.Content() {
+					<div class="flex items-center gap-3 flex-wrap">
+						<!-- Mark Paid -->
+						if data.Invoice.Status != "paid" {
+							<form method="POST" class="flex items-center gap-2">
+								<input type="hidden" name="action" value="mark_paid"/>
+								<input type="hidden" name="nonce" value={ data.FormNonce }/>
+								<div class="min-w-[160px]">
+									@input.Input(input.Props{
+										Type:        "text",
+										Name:        "payment_ref",
+										Placeholder: "Payment reference",
+									})
+								</div>
+								@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+									Mark as Paid
+								}
+							</form>
+						}
+						<!-- Void -->
+						<form method="POST" class="flex items-center gap-2">
+							<input type="hidden" name="action" value="void"/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							<div class="min-w-[160px]">
+								@input.Input(input.Props{
+									Type:        "text",
+									Name:        "reason",
+									Placeholder: "Void reason",
+								})
+							</div>
+							@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Size: button.SizeSm}) {
+								Void Invoice
+							}
+						</form>
+					</div>
+				}
+			}
+		}
+	</div>
+}

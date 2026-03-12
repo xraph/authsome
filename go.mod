@@ -10,15 +10,15 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	github.com/xraph/chronicle v0.0.0
-	github.com/xraph/forge v1.2.0
-	github.com/xraph/forgeui v1.2.0
-	github.com/xraph/grove v1.0.0
-	github.com/xraph/grove/drivers/mongodriver v1.0.0
-	github.com/xraph/grove/drivers/pgdriver v1.0.0
-	github.com/xraph/grove/drivers/sqlitedriver v1.0.0
+	github.com/xraph/forge v1.3.0
+	github.com/xraph/forgeui v1.3.0
+	github.com/xraph/grove v1.3.0
+	github.com/xraph/grove/drivers/mongodriver v1.3.0
+	github.com/xraph/grove/drivers/pgdriver v1.3.0
+	github.com/xraph/grove/drivers/sqlitedriver v1.3.0
 	github.com/xraph/herald v0.0.0
 	github.com/xraph/keysmith v0.0.0
-	github.com/xraph/relay v0.2.0
+	github.com/xraph/relay v1.3.0
 	github.com/xraph/vessel v1.0.0
 	github.com/xraph/warden v0.0.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3

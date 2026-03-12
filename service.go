@@ -14,6 +14,7 @@ import (
 	"github.com/xraph/warden"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/device"
@@ -21,6 +22,7 @@ import (
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/store"
@@ -103,11 +105,17 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	// Plugin: after user create
 	e.plugins.EmitAfterUserCreate(ctx, u)
 
+	// Assign default Warden role to the new user.
+	e.EnsureDefaultRole(ctx, req.AppID, u.ID)
+
 	// Create session (using per-app + per-env config; JWT if configured)
 	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
 	if err != nil {
 		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
 	}
+
+	// Bind session to device (registers or finds device via fingerprint upsert)
+	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
 
 	// Plugin: before session create
 	if err := e.plugins.EmitBeforeSessionCreate(ctx, sess); err != nil {
@@ -132,7 +140,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	})
 
 	// Audit
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signup", "user", u.ID.String(), u.ID.String(), req.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signup", "user", u.ID.String(), u.ID.String(), req.AppID.String(), "auth", nil)
 
 	// Relay
 	e.relayEvent(ctx, "user.created", req.AppID.String(), map[string]string{
@@ -155,7 +163,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 			e.logger.Warn("authsome: lockout check failed", log.String("error", err.Error()))
 		}
 		if locked {
-			e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure, "signin", "session", "", "", req.AppID.String(), map[string]string{
+			e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure, "signin", "session", "", "", req.AppID.String(), "auth", map[string]string{
 				"reason":       "account_locked",
 				"locked_until": until.Format(time.RFC3339),
 			})
@@ -233,6 +241,9 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
 	}
 
+	// Bind session to device (registers or finds device via fingerprint upsert)
+	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
+
 	// Plugin: before session create
 	if err := e.plugins.EmitBeforeSessionCreate(ctx, sess); err != nil {
 		return nil, nil, fmt.Errorf("authsome: before session create: %w", err)
@@ -253,10 +264,15 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		ResourceID: sess.ID.String(),
 		ActorID:    u.ID.String(),
 		Tenant:     req.AppID.String(),
+		Metadata: map[string]string{
+			"email":      u.Email,
+			"user_name":  u.Name(),
+			"session_id": sess.ID.String(),
+		},
 	})
 
 	// Audit
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signin", "session", sess.ID.String(), u.ID.String(), req.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signin", "session", sess.ID.String(), u.ID.String(), req.AppID.String(), "auth", nil)
 
 	// Relay
 	e.relayEvent(ctx, "auth.signin", req.AppID.String(), map[string]string{
@@ -297,7 +313,7 @@ func (e *Engine) SignOut(ctx context.Context, sessionID id.SessionID) error {
 	})
 
 	// Audit
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signout", "session", sessionID.String(), sess.UserID.String(), sess.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signout", "session", sessionID.String(), sess.UserID.String(), sess.AppID.String(), "auth", nil)
 
 	// Relay
 	e.relayEvent(ctx, "auth.signout", sess.AppID.String(), map[string]string{
@@ -374,6 +390,10 @@ func (e *Engine) UpdateMe(ctx context.Context, u *user.User) error {
 		ResourceID: u.ID.String(),
 		ActorID:    u.ID.String(),
 		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
 	})
 
 	e.relayEvent(ctx, "user.updated", u.AppID.String(), map[string]string{
@@ -528,7 +548,37 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 	return sess, nil
 }
 
-func (e *Engine) audit(ctx context.Context, severity, outcome, action, resource, resourceID, actorID, tenant string, metadata map[string]string) {
+// bindSessionToDevice populates connection info on a session and registers
+// (or finds) the associated device via fingerprint-based upsert. Device
+// registration failure is non-fatal so it never blocks authentication.
+func (e *Engine) bindSessionToDevice(ctx context.Context, sess *session.Session, appID id.AppID, envID id.EnvironmentID, ipAddress, userAgent string) {
+	sess.EnvID = envID
+	sess.IPAddress = ipAddress
+	sess.UserAgent = userAgent
+
+	if userAgent == "" {
+		return
+	}
+
+	browser, os, devType := device.ParseUserAgent(userAgent)
+	dev, err := e.RegisterDevice(ctx, &device.Device{
+		UserID:      sess.UserID,
+		AppID:       appID,
+		EnvID:       envID,
+		Browser:     browser,
+		OS:          os,
+		Type:        devType,
+		IPAddress:   ipAddress,
+		Fingerprint: userAgent,
+	})
+	if err != nil {
+		e.logger.Warn("authsome: bind session to device failed", log.String("error", err.Error()))
+		return
+	}
+	sess.DeviceID = dev.ID
+}
+
+func (e *Engine) audit(ctx context.Context, severity, outcome, action, resource, resourceID, actorID, tenant, category string, metadata map[string]string) {
 	if e.chronicle == nil {
 		return
 	}
@@ -540,6 +590,7 @@ func (e *Engine) audit(ctx context.Context, severity, outcome, action, resource,
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   severity,
+		Category:   category,
 		Metadata:   metadata,
 	}); err != nil {
 		e.logger.Warn("authsome: audit record failed",
@@ -596,7 +647,7 @@ func (e *Engine) recordFailedSignin(ctx context.Context, req *account.SignInRequ
 	}
 
 	// Audit + hook + relay (same as before)
-	e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure, "signin", "session", "", "", req.AppID.String(), map[string]string{
+	e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure, "signin", "session", "", "", req.AppID.String(), "auth", map[string]string{
 		"identifier": identifier,
 	})
 	e.hooks.Emit(ctx, &hook.Event{
@@ -633,7 +684,7 @@ func (e *Engine) recordFailedSignin(ctx context.Context, req *account.SignInRequ
 					"attempts":   fmt.Sprintf("%d", attempts),
 				},
 			})
-			e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeFailure, "account_locked", "user", "", "", req.AppID.String(), map[string]string{
+			e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeFailure, "account_locked", "user", "", "", req.AppID.String(), "auth", map[string]string{
 				"identifier": identifier,
 				"attempts":   fmt.Sprintf("%d", attempts),
 			})
@@ -667,7 +718,7 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 		return nil, fmt.Errorf("authsome: store password reset: %w", err)
 	}
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "forgot_password", "user", u.ID.String(), u.ID.String(), appID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "forgot_password", "user", u.ID.String(), u.ID.String(), appID.String(), "auth", nil)
 	e.relayEvent(ctx, "auth.forgot_password", appID.String(), map[string]string{
 		"user_id": u.ID.String(),
 		"email":   u.Email,
@@ -731,7 +782,20 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 
 	_ = e.store.DeleteUserSessions(ctx, pr.UserID)
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "reset_password", "user", u.ID.String(), u.ID.String(), pr.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "reset_password", "user", u.ID.String(), u.ID.String(), pr.AppID.String(), "auth", nil)
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionPasswordReset,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     pr.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+
 	e.relayEvent(ctx, "auth.password_reset", pr.AppID.String(), map[string]string{
 		"user_id": u.ID.String(),
 	})
@@ -783,7 +847,23 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 	e.savePasswordHistory(ctx, userID, oldHash)
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "change_password", "user", u.ID.String(), u.ID.String(), u.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "change_password", "user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionPasswordChange,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+
+	e.relayEvent(ctx, "auth.password_changed", u.AppID.String(), map[string]string{
+		"user_id": u.ID.String(),
+	})
 
 	return nil
 }
@@ -814,7 +894,20 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 		return fmt.Errorf("authsome: update user: %w", err)
 	}
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "verify_email", "user", u.ID.String(), u.ID.String(), v.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "verify_email", "user", u.ID.String(), u.ID.String(), v.AppID.String(), "auth", nil)
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerify,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     v.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
+	})
+
 	e.relayEvent(ctx, "user.email_verified", v.AppID.String(), map[string]string{
 		"user_id": u.ID.String(),
 	})
@@ -1182,18 +1275,95 @@ func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac
 // The check walks the role hierarchy so permissions from parent roles are inherited.
 func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, resource string) (bool, error) {
 	ctx = e.ensureWardenScope(ctx)
-	return e.rbacStore().HasPermission(ctx, userID.String(), action, resource)
+
+	result, err := e.warden_.Check(ctx, &warden.CheckRequest{
+		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID.String()},
+		Action:   warden.Action{Name: action},
+		Resource: warden.Resource{Type: resource},
+	})
+	if err != nil {
+		e.logger.Warn("authsome: HasPermission error",
+			log.String("user_id", userID.String()),
+			log.String("action", action),
+			log.String("resource", resource),
+			log.String("error", err.Error()),
+		)
+		return false, err
+	}
+
+	if !result.Allowed {
+		// Log tenant and decision for diagnostics.
+		forgeAppID := ""
+		forgeOrgID := ""
+		if s, ok := forge.ScopeFrom(ctx); ok {
+			forgeAppID = s.AppID()
+			forgeOrgID = s.OrgID()
+		}
+
+		e.logger.Warn("authsome: HasPermission denied",
+			log.String("user_id", userID.String()),
+			log.String("action", action),
+			log.String("resource", resource),
+			log.String("decision", string(result.Decision)),
+			log.String("reason", result.Reason),
+			log.String("forge_app_id", forgeAppID),
+			log.String("forge_org_id", forgeOrgID),
+			log.String("platform_app_id", e.PlatformAppID().String()),
+		)
+	}
+
+	return result.Allowed, nil
+}
+
+// EnsureDefaultRole assigns the default Warden role to a user if they don't
+// already have one. For the platform app this is "platform_user"; for regular
+// apps it is "user". Errors are silently ignored to avoid blocking user creation.
+func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID) {
+	if !e.hasRBACStore() {
+		return
+	}
+
+	// Determine default role slug based on app type.
+	slug := rbac.AppUserSlug // "user"
+	if appID == e.PlatformAppID() {
+		slug = rbac.PlatformUserSlug // "platform_user"
+	}
+
+	role, err := e.GetRoleBySlug(ctx, appID, slug)
+	if err != nil || role == nil {
+		return
+	}
+
+	// Assign role (ignore duplicate assignment errors).
+	_ = e.AssignUserRole(ctx, &rbac.UserRole{
+		UserID: userID.String(),
+		RoleID: role.ID,
+	})
 }
 
 // ensureWardenScope ensures the context has a warden tenant scope set.
-// If forge.Scope is already set (from auth middleware), it's used as-is.
-// Otherwise, falls back to injecting the platform app ID as the tenant.
+// Warden's scopeFromContext uses forge.Scope.OrgID() as the tenant, but for
+// app-scoped sessions (no org) this is empty while roles are stored with
+// tenant_id = appID. We always inject the explicit warden tenant values so
+// that Warden falls back to the app ID when OrgID is absent.
 func (e *Engine) ensureWardenScope(ctx context.Context) context.Context {
-	if _, ok := forge.ScopeFrom(ctx); ok {
+	if e.warden_ == nil {
 		return ctx
 	}
+
+	// If forge scope is set, derive the warden tenant from it. Use OrgID if
+	// present (org-scoped), otherwise fall back to AppID (app-scoped).
+	if s, ok := forge.ScopeFrom(ctx); ok {
+		tenantID := s.OrgID()
+		if tenantID == "" {
+			tenantID = s.AppID()
+		}
+		return warden.WithTenant(ctx, s.AppID(), tenantID)
+	}
+
+	// No forge scope at all — inject the platform app ID as tenant.
 	appID := e.PlatformAppID()
-	if !appID.IsNil() && e.warden_ != nil {
+	if !appID.IsNil() {
 		return warden.WithTenant(ctx, appID.String(), appID.String())
 	}
 	return ctx
@@ -1242,10 +1412,14 @@ func (e *Engine) AdminBanUser(ctx context.Context, adminID, userID id.UserID, re
 		ResourceID: userID.String(),
 		ActorID:    adminID.String(),
 		Tenant:     u.AppID.String(),
-		Metadata:   map[string]string{"reason": reason},
+		Metadata: map[string]string{
+			"reason":    reason,
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
 	})
 
-	e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeSuccess, "admin_ban_user", "user", userID.String(), adminID.String(), u.AppID.String(), map[string]string{
+	e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeSuccess, "admin_ban_user", "user", userID.String(), adminID.String(), u.AppID.String(), "admin", map[string]string{
 		"reason": reason,
 	})
 
@@ -1280,9 +1454,13 @@ func (e *Engine) AdminUnbanUser(ctx context.Context, adminID, userID id.UserID) 
 		ResourceID: userID.String(),
 		ActorID:    adminID.String(),
 		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
 	})
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_unban_user", "user", userID.String(), adminID.String(), u.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_unban_user", "user", userID.String(), adminID.String(), u.AppID.String(), "admin", nil)
 
 	e.relayEvent(ctx, "admin.user.unbanned", u.AppID.String(), map[string]string{
 		"user_id":  userID.String(),
@@ -1323,9 +1501,13 @@ func (e *Engine) AdminDeleteUser(ctx context.Context, adminID, userID id.UserID)
 		ResourceID: userID.String(),
 		ActorID:    adminID.String(),
 		Tenant:     appID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
 	})
 
-	e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeSuccess, "admin_delete_user", "user", userID.String(), adminID.String(), appID.String(), nil)
+	e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeSuccess, "admin_delete_user", "user", userID.String(), adminID.String(), appID.String(), "admin", nil)
 
 	e.relayEvent(ctx, "admin.user.deleted", appID.String(), map[string]string{
 		"user_id":  userID.String(),
@@ -1421,7 +1603,7 @@ func (e *Engine) AdminBulkImportUsers(ctx context.Context, adminID id.UserID, us
 		},
 	})
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_bulk_import", "user", "", adminID.String(), "", map[string]string{
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_bulk_import", "user", "", adminID.String(), "", "admin", map[string]string{
 		"created": fmt.Sprintf("%d", result.Created),
 		"skipped": fmt.Sprintf("%d", result.Skipped),
 	})
@@ -1452,7 +1634,7 @@ func (e *Engine) AdminBulkRevokeSessions(ctx context.Context, adminID, userID id
 		},
 	})
 
-	e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeSuccess, "admin_bulk_revoke_sessions", "session", "", adminID.String(), "", map[string]string{
+	e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeSuccess, "admin_bulk_revoke_sessions", "session", "", adminID.String(), "", "admin", map[string]string{
 		"user_id": userID.String(),
 		"count":   fmt.Sprintf("%d", count),
 	})
@@ -1473,6 +1655,10 @@ func (e *Engine) DeleteAccount(ctx context.Context, userID id.UserID) error {
 	if err != nil {
 		return fmt.Errorf("authsome: delete account: %w", err)
 	}
+
+	// Capture original email before anonymization for notification delivery.
+	originalEmail := u.Email
+	originalName := u.Name()
 
 	// Cascade delete via plugin hooks (MFA, Passkey, OAuth cleanup)
 	if err := e.plugins.EmitBeforeUserDelete(ctx, userID); err != nil {
@@ -1509,9 +1695,13 @@ func (e *Engine) DeleteAccount(ctx context.Context, userID id.UserID) error {
 		ResourceID: userID.String(),
 		ActorID:    userID.String(),
 		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     originalEmail,
+			"user_name": originalName,
+		},
 	})
 
-	e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeSuccess, "account_deletion", "user", userID.String(), userID.String(), u.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeSuccess, "account_deletion", "user", userID.String(), userID.String(), u.AppID.String(), "account", nil)
 
 	e.relayEvent(ctx, "user.account_deleted", u.AppID.String(), map[string]string{
 		"user_id": userID.String(),
@@ -1554,9 +1744,13 @@ func (e *Engine) ExportUserData(ctx context.Context, userID id.UserID) (*UserExp
 		ResourceID: userID.String(),
 		ActorID:    userID.String(),
 		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":     u.Email,
+			"user_name": u.Name(),
+		},
 	})
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "data_export", "user", userID.String(), userID.String(), u.AppID.String(), nil)
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "data_export", "user", userID.String(), userID.String(), u.AppID.String(), "account", nil)
 
 	return &UserExport{
 		User:     u,
@@ -1611,7 +1805,7 @@ func (e *Engine) Impersonate(ctx context.Context, adminID, targetID id.UserID) (
 		},
 	})
 
-	e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeSuccess, "impersonate", "session", sess.ID.String(), adminID.String(), u.AppID.String(), map[string]string{
+	e.audit(ctx, bridge.SeverityCritical, bridge.OutcomeSuccess, "impersonate", "session", sess.ID.String(), adminID.String(), u.AppID.String(), "admin", map[string]string{
 		"target_user_id": targetID.String(),
 	})
 
@@ -1639,7 +1833,7 @@ func (e *Engine) StopImpersonation(ctx context.Context, sessionID id.SessionID) 
 		return fmt.Errorf("authsome: stop impersonation: delete session: %w", err)
 	}
 
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy.String(), sess.AppID.String(), map[string]string{
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "stop_impersonation", "session", sessionID.String(), sess.ImpersonatedBy.String(), sess.AppID.String(), "admin", map[string]string{
 		"target_user_id": sess.UserID.String(),
 	})
 
@@ -1663,6 +1857,92 @@ func (e *Engine) GetAppBySlug(ctx context.Context, slug string) (*app.App, error
 // ListApps returns all apps.
 func (e *Engine) ListApps(ctx context.Context) ([]*app.App, error) {
 	return e.store.ListApps(ctx)
+}
+
+// CreateApp creates a new application with default environments and roles.
+func (e *Engine) CreateApp(ctx context.Context, a *app.App) error {
+	if a.ID.IsNil() {
+		a.ID = id.NewAppID()
+	}
+	now := time.Now()
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = now
+	}
+	if a.UpdatedAt.IsZero() {
+		a.UpdatedAt = now
+	}
+
+	// Generate a publishable key if not provided.
+	if a.PublishableKey == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err == nil {
+			a.PublishableKey = apikey.PublicKeyMarker(environment.TypeProduction) + hex.EncodeToString(b)
+		}
+	}
+
+	if err := e.store.CreateApp(ctx, a); err != nil {
+		return fmt.Errorf("authsome: create app: %w", err)
+	}
+
+	// Bootstrap default environments and roles for the new app.
+	if err := e.bootstrapApp(ctx, a.ID); err != nil {
+		e.logger.Warn("authsome: bootstrap new app failed",
+			log.String("app_id", a.ID.String()),
+			log.String("error", err.Error()),
+		)
+	}
+
+	// Assign the owner role to the creating user (if user context is present).
+	if userID, ok := middleware.UserIDFrom(ctx); ok && !userID.IsNil() {
+		ownerRole, roleErr := e.GetRoleBySlug(ctx, a.ID, rbac.AppOwnerSlug)
+		if roleErr == nil && ownerRole != nil {
+			_ = e.AssignUserRole(ctx, &rbac.UserRole{
+				UserID: userID.String(),
+				RoleID: ownerRole.ID,
+			})
+		}
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionAppCreate,
+		Resource:   hook.ResourceApp,
+		ResourceID: a.ID.String(),
+		Metadata:   map[string]string{"app_name": a.Name, "app_slug": a.Slug},
+	})
+
+	return nil
+}
+
+// UpdateApp updates an existing application.
+func (e *Engine) UpdateApp(ctx context.Context, a *app.App) error {
+	a.UpdatedAt = time.Now()
+	if err := e.store.UpdateApp(ctx, a); err != nil {
+		return fmt.Errorf("authsome: update app: %w", err)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionAppUpdate,
+		Resource:   hook.ResourceApp,
+		ResourceID: a.ID.String(),
+		Metadata:   map[string]string{"app_name": a.Name},
+	})
+
+	return nil
+}
+
+// DeleteApp removes an application.
+func (e *Engine) DeleteApp(ctx context.Context, appID id.AppID) error {
+	if err := e.store.DeleteApp(ctx, appID); err != nil {
+		return fmt.Errorf("authsome: delete app: %w", err)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionAppDelete,
+		Resource:   hook.ResourceApp,
+		ResourceID: appID.String(),
+	})
+
+	return nil
 }
 
 // ──────────────────────────────────────────────────

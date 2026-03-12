@@ -5,12 +5,9 @@ package pages
 // pass while the full implementations are developed.
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/user"
 )
@@ -66,12 +63,4 @@ func formatTimeRemaining(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
-}
-
-// sessionsTable renders a table of sessions. This is a stub that returns
-// an empty component until the full implementation is built.
-func sessionsTable(sessions []*session.Session, _ interface{}, _ interface{}, _ string) templ.Component {
-	return templ.ComponentFunc(func(_ context.Context, _ io.Writer) error {
-		return nil
-	})
 }

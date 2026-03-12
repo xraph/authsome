@@ -229,7 +229,7 @@ templ addProviderForm(data ProviderDetailData) {
 		}
 		@card.Content() {
 			<form
-				hx-post={ "./social-providers/detail?provider=" + data.Name }
+				hx-post={ "./detail?provider=" + data.Name }
 				hx-target="#content"
 				hx-swap="innerHTML"
 				class="space-y-4"
@@ -331,7 +331,7 @@ templ configuredProviderSection(data ProviderDetailData) {
 			<!-- Actions -->
 			<div class="flex items-center gap-2 mt-4">
 				<form
-					hx-post={ "./social-providers/detail?provider=" + data.Name }
+					hx-post={ "./detail?provider=" + data.Name }
 					hx-target="#content"
 					hx-swap="innerHTML"
 					class="inline"
@@ -356,7 +356,7 @@ templ configuredProviderSection(data ProviderDetailData) {
 					}
 				</form>
 				<form
-					hx-post={ "./social-providers/detail?provider=" + data.Name }
+					hx-post={ "./detail?provider=" + data.Name }
 					hx-target="#content"
 					hx-swap="innerHTML"
 					class="inline"
@@ -386,7 +386,7 @@ templ configuredProviderSection(data ProviderDetailData) {
 		}
 		@card.Content() {
 			<form
-				hx-post={ "./social-providers/detail?provider=" + data.Name }
+				hx-post={ "./detail?provider=" + data.Name }
 				hx-target="#content"
 				hx-swap="innerHTML"
 				class="space-y-4"

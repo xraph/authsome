@@ -96,7 +96,7 @@ func (a *API) handleCreateWebhook(ctx forge.Context, req *CreateWebhookRequest) 
 		return nil, mapError(err)
 	}
 
-	return w, ctx.JSON(http.StatusCreated, w)
+	return nil, ctx.JSON(http.StatusCreated, w)
 }
 
 func (a *API) handleListWebhooks(ctx forge.Context, req *ListWebhooksRequest) (*WebhookListResponse, error) {
@@ -128,7 +128,7 @@ func (a *API) handleGetWebhook(ctx forge.Context, _ *GetWebhookRequest) (*webhoo
 		return nil, mapError(err)
 	}
 
-	return w, ctx.JSON(http.StatusOK, w)
+	return w, nil
 }
 
 func (a *API) handleUpdateWebhook(ctx forge.Context, req *UpdateWebhookRequest) (*webhook.Webhook, error) {
@@ -156,7 +156,7 @@ func (a *API) handleUpdateWebhook(ctx forge.Context, req *UpdateWebhookRequest) 
 		return nil, mapError(err)
 	}
 
-	return w, ctx.JSON(http.StatusOK, w)
+	return w, nil
 }
 
 func (a *API) handleDeleteWebhook(ctx forge.Context, _ *DeleteWebhookRequest) (*StatusResponse, error) {

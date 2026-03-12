@@ -164,6 +164,10 @@ func (p *Plugin) resolveUser(ctx forge.Context) (*user.User, error) {
 // ──────────────────────────────────────────────────
 
 func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginRequest) (*RegisterBeginResponse, error) {
+	if p.wa == nil {
+		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+	}
+
 	u, err := p.resolveUser(ctx)
 	if err != nil {
 		return nil, err
@@ -188,6 +192,10 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 }
 
 func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishRequest) (*RegisterFinishResponse, error) {
+	if p.wa == nil {
+		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+	}
+
 	u, err := p.resolveUser(ctx)
 	if err != nil {
 		return nil, err
@@ -238,6 +246,10 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 }
 
 func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*LoginBeginResponse, error) {
+	if p.wa == nil {
+		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+	}
+
 	// For discoverable credentials (passkey), we can start without user identity
 	if req.Email == "" {
 		options, session, err := p.wa.BeginDiscoverableLogin()
@@ -275,6 +287,10 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 }
 
 func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*LoginFinishResponse, error) {
+	if p.wa == nil {
+		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
+	}
+
 	u, err := p.resolveUser(ctx)
 	if err != nil {
 		return nil, err

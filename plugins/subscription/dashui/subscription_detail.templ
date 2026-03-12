@@ -1,0 +1,282 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// SubscriptionDetailPage renders the subscription detail page.
+templ SubscriptionDetailPage(data SubscriptionDetailPageData) {
+	<div class="space-y-6">
+		<!-- Back Button + Header -->
+		<div>
+			<button
+				type="button"
+				class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
+				hx-get="./subscriptions"
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-push-url="true"
+			>
+				@icons.ArrowLeft(icons.WithSize(14))
+				Back to Subscriptions
+			</button>
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">Subscription</h1>
+				@statusBadge(data.Subscription.Status)
+			</div>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Subscription Info -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Details
+				}
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Subscription ID</dt>
+					<dd class="font-mono text-xs">{ data.Subscription.ID }</dd>
+					<dt class="text-muted-foreground">Tenant ID</dt>
+					<dd class="font-mono text-xs">{ data.Subscription.TenantID }</dd>
+					<dt class="text-muted-foreground">Plan</dt>
+					<dd class="font-medium">{ data.Subscription.PlanName }</dd>
+					<dt class="text-muted-foreground">Period Start</dt>
+					<dd class="font-medium">
+						{{ start := data.Subscription.CurrentPeriodStart.Format("Jan 02, 2006") }}
+						{ start }
+					</dd>
+					<dt class="text-muted-foreground">Period End</dt>
+					<dd class="font-medium">
+						{{ end := data.Subscription.CurrentPeriodEnd.Format("Jan 02, 2006") }}
+						{ end }
+					</dd>
+					if data.Subscription.TrialEnd != nil {
+						<dt class="text-muted-foreground">Trial Ends</dt>
+						<dd class="font-medium">
+							{{ trialEnd := data.Subscription.TrialEnd.Format("Jan 02, 2006") }}
+							{ trialEnd }
+						</dd>
+					}
+					if data.Subscription.CanceledAt != nil {
+						<dt class="text-muted-foreground">Canceled At</dt>
+						<dd class="font-medium text-destructive">
+							{{ canceledAt := data.Subscription.CanceledAt.Format("Jan 02, 2006") }}
+							{ canceledAt }
+						</dd>
+					}
+					if data.Subscription.CancelAt != nil {
+						<dt class="text-muted-foreground">Cancels At</dt>
+						<dd class="font-medium text-amber-600 dark:text-amber-400">
+							{{ cancelAt := data.Subscription.CancelAt.Format("Jan 02, 2006") }}
+							{ cancelAt }
+						</dd>
+					}
+					if data.Subscription.EndedAt != nil {
+						<dt class="text-muted-foreground">Ended At</dt>
+						<dd class="font-medium text-destructive">
+							{{ endedAt := data.Subscription.EndedAt.Format("Jan 02, 2006") }}
+							{ endedAt }
+						</dd>
+					}
+					if data.Subscription.ProviderName != "" {
+						<dt class="text-muted-foreground">Provider</dt>
+						<dd class="font-medium">{ data.Subscription.ProviderName }</dd>
+					}
+				</dl>
+			}
+		}
+		<!-- Usage -->
+		if len(data.Usage) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Usage
+					}
+				}
+				@card.Content() {
+					<div class="space-y-4">
+						for _, u := range data.Usage {
+							<div>
+								<div class="flex items-center justify-between mb-1">
+									<div class="flex items-center gap-2">
+										<span class="text-sm font-medium">{ u.FeatureName }</span>
+										<span class="text-xs text-muted-foreground">({ u.FeatureType })</span>
+									</div>
+									<span class="text-xs text-muted-foreground">
+										{ strconv.FormatInt(u.Used, 10) }
+										if u.Limit > 0 {
+											/ { strconv.FormatInt(u.Limit, 10) }
+										}
+										if u.Period != "" {
+											<span class="ml-1">per { u.Period }</span>
+										}
+									</span>
+								</div>
+								<div class="h-2 w-full bg-muted rounded-full overflow-hidden">
+									<div
+										class={ "h-full rounded-full transition-all", usageBarColor(u.Percentage) }
+										style={ "width:" + strconv.Itoa(u.Percentage) + "%" }
+									></div>
+								</div>
+							</div>
+						}
+					</div>
+				}
+			}
+		}
+		<!-- Actions -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Actions
+				}
+			}
+			@card.Content() {
+				<div class="flex items-center gap-3 flex-wrap">
+					if data.Subscription.Status == "active" || data.Subscription.Status == "trialing" {
+						<!-- Change Plan -->
+						if len(data.Plans) > 0 {
+							<form method="POST" class="flex items-center gap-2">
+								<input type="hidden" name="action" value="change_plan"/>
+								<input type="hidden" name="sub_id" value={ data.Subscription.ID }/>
+								<input type="hidden" name="nonce" value={ data.FormNonce }/>
+								<select name="plan_id" class="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									for _, p := range data.Plans {
+										<option value={ p.ID } selected?={ p.ID == data.Plan.ID }>{ p.Name }</option>
+									}
+								</select>
+								@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+									Change Plan
+								}
+							</form>
+						}
+						<!-- Pause -->
+						<form method="POST" class="inline">
+							<input type="hidden" name="action" value="pause"/>
+							<input type="hidden" name="sub_id" value={ data.Subscription.ID }/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+								Pause
+							}
+						</form>
+						<!-- Cancel -->
+						<form method="POST" class="inline">
+							<input type="hidden" name="action" value="cancel"/>
+							<input type="hidden" name="sub_id" value={ data.Subscription.ID }/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Size: button.SizeSm}) {
+								Cancel
+							}
+						</form>
+					}
+					if data.Subscription.Status == "paused" {
+						<!-- Resume -->
+						<form method="POST" class="inline">
+							<input type="hidden" name="action" value="resume"/>
+							<input type="hidden" name="sub_id" value={ data.Subscription.ID }/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+								Resume
+							}
+						</form>
+					}
+					if data.Subscription.Status == "canceled" && data.Subscription.EndedAt == nil {
+						<!-- Resume canceled (not yet ended) -->
+						<form method="POST" class="inline">
+							<input type="hidden" name="action" value="resume"/>
+							<input type="hidden" name="sub_id" value={ data.Subscription.ID }/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+								Resume
+							}
+						</form>
+					}
+					if data.Subscription.Status == "expired" || (data.Subscription.Status == "canceled" && data.Subscription.EndedAt != nil) {
+						<p class="text-sm text-muted-foreground">This subscription has ended. No actions available.</p>
+					}
+				</div>
+			}
+		}
+		<!-- Invoices -->
+		if len(data.Invoices) > 0 {
+			@card.Card() {
+				@card.Header() {
+					<div class="flex items-center gap-3">
+						@card.Title() {
+							Invoices
+						}
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							{ strconv.Itoa(len(data.Invoices)) }
+						}
+					</div>
+				}
+				@card.Content() {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Invoice }
+								@table.Head() { Status }
+								@table.Head() { Total }
+								@table.Head() { Period }
+							}
+						}
+						@table.Body() {
+							for _, inv := range data.Invoices {
+								@table.Row() {
+									@table.Cell() {
+										<div
+											class="cursor-pointer"
+											hx-get={ "./invoices/detail?id=" + inv.ID }
+											hx-target="#content"
+											hx-swap="innerHTML"
+											hx-push-url="true"
+										>
+											<code class="text-xs font-medium hover:underline">{ truncateID(inv.ID) }</code>
+										</div>
+									}
+									@table.Cell() {
+										@invoiceStatusBadge(inv.Status)
+									}
+									@table.Cell() {
+										<span class="font-medium">{ inv.Total } { inv.Currency }</span>
+									}
+									@table.Cell() {
+										{{ start := inv.PeriodStart.Format("Jan 02") }}
+										{{ end := inv.PeriodEnd.Format("Jan 02, 2006") }}
+										{ start } – { end }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}
+
+func usageBarColor(pct int) string {
+	if pct >= 90 {
+		return "bg-destructive"
+	}
+	if pct >= 70 {
+		return "bg-amber-500"
+	}
+	return "bg-primary"
+}

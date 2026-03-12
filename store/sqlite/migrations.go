@@ -639,5 +639,26 @@ ALTER TABLE authsome_api_keys DROP COLUMN public_key;
 				return err
 			},
 		},
+
+		// Migration 12: Add publishable_key column to apps table.
+		&migrate.Migration{
+			Name:    "add_app_publishable_key",
+			Version: "20240101000012",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_apps ADD COLUMN publishable_key TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_apps_publishable_key
+    ON authsome_apps (publishable_key) WHERE publishable_key != '';
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP INDEX IF EXISTS idx_authsome_apps_publishable_key;
+ALTER TABLE authsome_apps DROP COLUMN publishable_key;
+`)
+				return err
+			},
+		},
 	)
 }

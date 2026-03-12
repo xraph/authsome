@@ -2,11 +2,14 @@ package authsome
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
@@ -56,6 +59,7 @@ type BootstrapRole struct {
 	Name        string
 	Slug        string
 	Description string
+	ParentSlug  string // slug of parent role (empty = root)
 	Permissions []BootstrapPermission
 }
 
@@ -73,17 +77,46 @@ func DefaultBootstrapConfig() *BootstrapConfig {
 			{Name: "Production", Slug: "production", Type: environment.TypeProduction},
 		},
 		DefaultRoles: []BootstrapRole{
+			// Platform-scoped roles (cross-app access).
+			// Hierarchy: platform_user ← platform_admin ← platform_owner
 			{
-				Name:        "Admin",
-				Slug:        "admin",
-				Description: "Full platform access",
+				Name:        "Platform User",
+				Slug:        rbac.PlatformUserSlug,
+				Description: "Standard cross-app access",
+				Permissions: []BootstrapPermission{
+					{Action: "read", Resource: "user"},
+					{Action: "read", Resource: "session"},
+					{Action: "read", Resource: "device"},
+					{Action: "read", Resource: "environment"},
+					{Action: "create", Resource: "session"},
+					{Action: "delete", Resource: "session"},
+					{Action: "create", Resource: "device"},
+					{Action: "update", Resource: "device"},
+				},
+			},
+			{
+				Name:        "Platform Admin",
+				Slug:        rbac.PlatformAdminSlug,
+				Description: "Admin-level cross-app access",
+				ParentSlug:  rbac.PlatformUserSlug,
 				Permissions: []BootstrapPermission{
 					{Action: "*", Resource: "*"},
 				},
 			},
 			{
+				Name:        "Platform Owner",
+				Slug:        rbac.PlatformOwnerSlug,
+				Description: "Full cross-app platform access",
+				ParentSlug:  rbac.PlatformAdminSlug,
+				Permissions: []BootstrapPermission{
+					{Action: "*", Resource: "*"},
+				},
+			},
+			// App-scoped roles.
+			// Hierarchy: user ← admin ← owner
+			{
 				Name:        "User",
-				Slug:        "user",
+				Slug:        rbac.AppUserSlug,
 				Description: "Standard user access",
 				Permissions: []BootstrapPermission{
 					{Action: "read", Resource: "user"},
@@ -94,6 +127,24 @@ func DefaultBootstrapConfig() *BootstrapConfig {
 					{Action: "delete", Resource: "session"},
 					{Action: "create", Resource: "device"},
 					{Action: "update", Resource: "device"},
+				},
+			},
+			{
+				Name:        "Admin",
+				Slug:        rbac.AppAdminSlug,
+				Description: "Full app administration",
+				ParentSlug:  rbac.AppUserSlug,
+				Permissions: []BootstrapPermission{
+					{Action: "*", Resource: "*"},
+				},
+			},
+			{
+				Name:        "Owner",
+				Slug:        rbac.AppOwnerSlug,
+				Description: "Full app ownership",
+				ParentSlug:  rbac.AppAdminSlug,
+				Permissions: []BootstrapPermission{
+					{Action: "*", Resource: "*"},
 				},
 			},
 		},
@@ -163,6 +214,13 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
+
+	// Generate publishable key for the platform app.
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err == nil {
+		platformApp.PublishableKey = apikey.PublicKeyMarker(environment.TypeProduction) + hex.EncodeToString(b)
+	}
+
 	if err := e.store.CreateApp(ctx, platformApp); err != nil {
 		return fmt.Errorf("bootstrap: create platform app: %w", err)
 	}
@@ -216,6 +274,8 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error {
 
 	// Create default roles with permissions (if an RBAC store is available).
 	if e.hasRBACStore() && !e.bootstrapCfg.SkipDefaultRoles {
+		// Pass 1: Create roles and attach permissions, collecting slug → ID map.
+		slugToID := make(map[string]string, len(e.bootstrapCfg.DefaultRoles))
 		for _, role := range e.bootstrapCfg.DefaultRoles {
 			r := &rbac.Role{
 				AppID:       appID.String(),
@@ -236,6 +296,7 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error {
 				}
 				r = existing
 			}
+			slugToID[role.Slug] = r.ID
 
 			// Attach permissions to the role.
 			for _, perm := range role.Permissions {
@@ -250,6 +311,28 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error {
 						log.String("error", err.Error()),
 					)
 				}
+			}
+		}
+
+		// Pass 2: Wire up role hierarchy via ParentID.
+		for _, role := range e.bootstrapCfg.DefaultRoles {
+			if role.ParentSlug == "" {
+				continue
+			}
+			childID, ok := slugToID[role.Slug]
+			if !ok {
+				continue
+			}
+			parentID, ok := slugToID[role.ParentSlug]
+			if !ok {
+				continue
+			}
+			if err := e.updateRoleParent(ctx, childID, parentID); err != nil {
+				e.logger.Debug("bootstrap: failed to set role parent",
+					log.String("child", role.Slug),
+					log.String("parent", role.ParentSlug),
+					log.String("error", err.Error()),
+				)
 			}
 		}
 	}
@@ -276,4 +359,14 @@ func (e *Engine) HasUsers(ctx context.Context) bool {
 // PlatformAppID returns the platform app's ID.
 func (e *Engine) PlatformAppID() id.AppID {
 	return e.platformAppID
+}
+
+// updateRoleParent sets the parent of a role by updating it via the RBAC store.
+func (e *Engine) updateRoleParent(ctx context.Context, roleID string, parentID string) error {
+	role, err := e.rbacStore().GetRole(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	role.ParentID = parentID
+	return e.rbacStore().UpdateRole(ctx, role)
 }

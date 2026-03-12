@@ -5,6 +5,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/id"
 )
 
@@ -22,17 +23,17 @@ func (a *API) registerClientConfigRoutes(router forge.Router) error {
 			"If a publishable key is provided via the 'key' query param, the config is resolved "+
 			"for that app. Otherwise, the platform app config is returned. No authentication required."),
 		forge.WithOperationID("getClientConfig"),
-		forge.WithResponseSchema(http.StatusOK, "Client configuration", map[string]any{}),
+		forge.WithResponseSchema(http.StatusOK, "Client configuration", authsome.ClientConfigResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
 
-func (a *API) handleGetClientConfig(ctx forge.Context, req *GetClientConfigRequest) (*map[string]any, error) {
+func (a *API) handleGetClientConfig(ctx forge.Context, req *GetClientConfigRequest) (*authsome.ClientConfigResponse, error) {
 	var appID id.AppID
 
 	if req.Key != "" {
-		// Resolve app by publishable key.
-		app, err := a.engine.Store().GetAppByPublishableKey(ctx.Context(), req.Key)
+		// Resolve app by publishable key (apps table first, then Keysmith metadata).
+		app, err := a.engine.ResolveAppByPublicKey(ctx.Context(), req.Key)
 		if err != nil {
 			return nil, forge.NotFound("invalid publishable key")
 		}
@@ -46,5 +47,5 @@ func (a *API) handleGetClientConfig(ctx forge.Context, req *GetClientConfigReque
 	}
 
 	config := a.engine.ClientConfig(ctx.Context(), appID)
-	return nil, ctx.JSON(http.StatusOK, config)
+	return config, nil
 }

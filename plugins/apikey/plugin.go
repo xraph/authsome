@@ -602,6 +602,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   bridge.SeverityInfo,
+		Category:   "apikey",
 	})
 }
 

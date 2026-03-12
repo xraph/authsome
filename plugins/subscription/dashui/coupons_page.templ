@@ -1,0 +1,252 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// CouponsPage renders the coupons management page.
+templ CouponsPage(data CouponsPageData) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Coupons</h1>
+			<p class="text-muted-foreground mt-1">Create and manage discount coupons for subscriptions.</p>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Create Coupon Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Create Coupon
+				}
+				@card.Description() {
+					Define a discount code that can be applied to subscriptions.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-code">Code</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "code",
+								Placeholder: "e.g. SAVE20",
+								ID:          "coupon-code",
+							})
+							<p class="text-xs text-muted-foreground">Will be uppercased automatically</p>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-name">Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "name",
+								Placeholder: "e.g. 20% Off Promo",
+								ID:          "coupon-name",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-type">Discount Type</label>
+							<select name="type" id="coupon-type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								<option value="percentage">Percentage</option>
+								<option value="amount">Fixed Amount</option>
+							</select>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-percentage">Percentage (%)</label>
+							@input.Input(input.Props{
+								Type:        "number",
+								Name:        "percentage",
+								Placeholder: "e.g. 20",
+								ID:          "coupon-percentage",
+							})
+							<p class="text-xs text-muted-foreground">Used when type is Percentage</p>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-amount">Amount</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "amount",
+								Placeholder: "e.g. 10.00",
+								ID:          "coupon-amount",
+							})
+							<p class="text-xs text-muted-foreground">Used when type is Fixed Amount</p>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-currency">Currency</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "currency",
+								Placeholder: "usd",
+								ID:          "coupon-currency",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-max">Max Redemptions</label>
+							@input.Input(input.Props{
+								Type:        "number",
+								Name:        "max_redemptions",
+								Placeholder: "0 = unlimited",
+								ID:          "coupon-max",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-from">Valid From</label>
+							@input.Input(input.Props{
+								Type: "date",
+								Name: "valid_from",
+								ID:   "coupon-from",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="coupon-until">Valid Until</label>
+							@input.Input(input.Props{
+								Type: "date",
+								Name: "valid_until",
+								ID:   "coupon-until",
+							})
+						</div>
+					</div>
+					<div class="flex justify-end">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Coupon
+						}
+					</div>
+				</form>
+			}
+		}
+		<!-- Coupons Table -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					@card.Title() {
+						All Coupons
+					}
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Coupons)) }
+					}
+				</div>
+			}
+			@card.Content() {
+				if len(data.Coupons) == 0 {
+					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+						@icons.Ticket(icons.WithSize(40))
+						<p class="mt-2 text-sm">No coupons found.</p>
+						<p class="text-xs mt-1">Create your first coupon using the form above.</p>
+					</div>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Code }
+								@table.Head() { Name }
+								@table.Head() { Discount }
+								@table.Head() { Redemptions }
+								@table.Head() { Validity }
+								@table.Head() { Status }
+								@table.Head() { }
+							}
+						}
+						@table.Body() {
+							for _, c := range data.Coupons {
+								@table.Row() {
+									@table.Cell() {
+										<code class="text-xs font-bold bg-muted px-2 py-1 rounded">{ c.Code }</code>
+									}
+									@table.Cell() {
+										<span class="font-medium">{ c.Name }</span>
+									}
+									@table.Cell() {
+										if c.Type == "percentage" {
+											<span class="font-medium">{ strconv.Itoa(c.Percentage) }%</span>
+										} else {
+											<span class="font-medium">{ c.Amount } { c.Currency }</span>
+										}
+									}
+									@table.Cell() {
+										<span class="text-sm">
+											{ strconv.Itoa(c.TimesRedeemed) }
+											if c.MaxRedemptions > 0 {
+												/ { strconv.Itoa(c.MaxRedemptions) }
+											} else {
+												<span class="text-muted-foreground text-xs ml-1">unlimited</span>
+											}
+										</span>
+									}
+									@table.Cell() {
+										<div class="text-xs">
+											if c.ValidFrom != nil {
+												{{ from := c.ValidFrom.Format("Jan 02, 2006") }}
+												<span>From { from }</span>
+											}
+											if c.ValidUntil != nil {
+												{{ until := c.ValidUntil.Format("Jan 02, 2006") }}
+												<span class="block">Until { until }</span>
+											}
+											if c.ValidFrom == nil && c.ValidUntil == nil {
+												<span class="text-muted-foreground">No expiry</span>
+											}
+										</div>
+									}
+									@table.Cell() {
+										@couponStatusBadge(c)
+									}
+									@table.Cell() {
+										if !c.IsExpired && !c.IsExhausted {
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="delete"/>
+												<input type="hidden" name="coupon_id" value={ c.ID }/>
+												<input type="hidden" name="nonce" value={ data.FormNonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantDestructive,
+													Size:    button.SizeSm,
+												}) {
+													Delete
+												}
+											</form>
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}
+
+templ couponStatusBadge(c CouponView) {
+	if c.IsExpired {
+		@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+			Expired
+		}
+	} else if c.IsExhausted {
+		@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+			Exhausted
+		}
+	} else {
+		@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+			Active
+		}
+	}
+}

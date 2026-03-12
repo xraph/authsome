@@ -24,9 +24,9 @@ Authsome UI is a family of five JavaScript/TypeScript packages that provide auth
 | Package | Version | What it provides |
 |---------|---------|-----------------|
 | `@authsome/ui-core` | — | `AuthManager` class, `AuthClient` HTTP client, TypeScript type definitions (`User`, `Session`, `Organization`, `AuthState`, etc.) |
-| `@authsome/ui-react` | — | `AuthProvider`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken`, headless `SignInForm`, `SignUpForm`, `MFAChallengeForm`, `AuthGuard` |
+| `@authsome/ui-react` | — | `AuthProvider`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken`, `useClientConfig`, headless `SignInForm`, `SignUpForm`, `MFAChallengeForm`, `AuthGuard` |
 | `@authsome/ui-components` | — | 40+ styled components built with Radix UI primitives and Tailwind CSS |
-| `@authsome/ui-nextjs` | — | `getServerSession()` for RSC, `createCookieStorage()`, `createAuthMiddleware()` for Edge, pre-built Next.js auth pages |
+| `@authsome/ui-nextjs` | — | `getServerSession()` for RSC, `getClientConfig()` for auto-discovery, `createCookieStorage()`, `createAuthMiddleware()` for Edge, `createProxyHandler()` for API proxy, pre-built Next.js auth pages |
 | `@authsome/ui-vue` | — | `createAuthPlugin()`, `useAuth`, `useUser`, `useOrganizations`, `useSessionToken` composables |
 
 ## Installation
@@ -68,7 +68,9 @@ npm install @authsome/ui-vue @authsome/ui-core
 | Headless form components | — | Yes | — | Re-exports | — |
 | Styled form components | — | — | Yes | — | — |
 | Server session (`RSC`) | — | — | — | Yes | — |
+| Client config (auto-discovery) | — | `useClientConfig` | — | `getClientConfig` | — |
 | Edge middleware | — | — | — | Yes | — |
+| API proxy handler | — | — | — | Yes | — |
 | Cookie token storage | — | — | — | Yes | — |
 
 ## Core concepts
@@ -145,7 +147,7 @@ function Dashboard() {
 <Cards>
   <Card title="React Integration" href="/docs/ui/react" description="AuthProvider, useAuth hook, headless components." />
   <Card title="Styled Components" href="/docs/ui/components" description="40+ Radix + Tailwind auth components." />
-  <Card title="Next.js Integration" href="/docs/ui/nextjs" description="Server sessions, Edge middleware, pre-built pages." />
+  <Card title="Next.js Integration" href="/docs/ui/nextjs" description="Server sessions, Edge middleware, API proxy, auto-discovery, pre-built pages." />
   <Card title="Vue Integration" href="/docs/ui/vue" description="createAuthPlugin and Vue 3 composables." />
   <Card title="Playground" href="/docs/ui/playground" description="Interactive Storybook with all components." />
 </Cards>

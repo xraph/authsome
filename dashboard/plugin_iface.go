@@ -10,11 +10,12 @@ import (
 	"github.com/xraph/authsome/id"
 )
 
-// Context keys for embedding app/env IDs and slugs in context.
+// Context keys for embedding app/env IDs, slugs, and page route in context.
 type appIDContextKey struct{}
 type envIDContextKey struct{}
 type appSlugContextKey struct{}
 type envSlugContextKey struct{}
+type pageRouteContextKey struct{}
 
 // WithAppID returns a context with the resolved app ID embedded.
 // Dashboard plugins can extract this via AppIDFromContext to scope
@@ -62,6 +63,17 @@ func EnvSlugFromContext(ctx context.Context) string {
 	return v
 }
 
+// WithPageRoute returns a context with the current page route embedded.
+func WithPageRoute(ctx context.Context, route string) context.Context {
+	return context.WithValue(ctx, pageRouteContextKey{}, route)
+}
+
+// PageRouteFromContext extracts the current page route from context.
+func PageRouteFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(pageRouteContextKey{}).(string)
+	return v
+}
+
 // PluginWidget describes a widget contributed by an authsome plugin.
 type PluginWidget struct {
 	ID         string
@@ -104,6 +116,29 @@ type UserDetailContributor interface {
 // the org ID so the plugin can fetch org-specific data from its own store.
 type OrgDetailContributor interface {
 	DashboardOrgDetailSection(ctx context.Context, orgID id.OrgID) templ.Component
+}
+
+// OrgDetailTab describes a tab contributed by a plugin to the organization detail page.
+type OrgDetailTab struct {
+	ID       string                                              // unique tab identifier (e.g., "billing", "scim")
+	Label    string                                              // display label (e.g., "Billing", "SCIM")
+	Icon     string                                              // lucide icon name (e.g., "credit-card", "key")
+	Priority int                                                 // ordering priority (lower = earlier)
+	Render   func(ctx context.Context, orgID id.OrgID) templ.Component // renders tab content
+}
+
+// OrgDetailTabContributor is optionally implemented by plugins that want to
+// contribute a full tab to the organization detail page. Unlike OrgDetailContributor
+// which adds a section to the Overview tab, this interface contributes a named,
+// navigable tab with its own content panel.
+type OrgDetailTabContributor interface {
+	DashboardOrgDetailTabs(ctx context.Context, orgID id.OrgID) []OrgDetailTab
+}
+
+// OrgCreateFormContributor is optionally implemented by plugins that want to
+// contribute additional form fields to the organization creation form.
+type OrgCreateFormContributor interface {
+	DashboardOrgCreateFormFields(ctx context.Context) templ.Component
 }
 
 // DashboardPageContributor is an enhanced interface for plugins that need

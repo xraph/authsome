@@ -111,20 +111,41 @@ type Plugin struct {
 }
 
 // New creates a new passkey plugin.
-func New(cfg Config) *Plugin {
-	if cfg.RPDisplayName == "" {
-		cfg.RPDisplayName = "AuthSome"
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.RPID == "" {
-		cfg.RPID = "localhost"
+	if c.RPDisplayName == "" {
+		c.RPDisplayName = "AuthSome"
 	}
-	if cfg.SessionTimeout == 0 {
-		cfg.SessionTimeout = 5 * time.Minute
+	if c.RPID == "" {
+		c.RPID = "localhost"
 	}
-	return &Plugin{
-		config:     cfg,
+	if c.SessionTimeout == 0 {
+		c.SessionTimeout = 5 * time.Minute
+	}
+	if len(c.RPOrigins) == 0 {
+		scheme := "https"
+		if c.RPID == "localhost" || c.RPID == "127.0.0.1" {
+			scheme = "http"
+		}
+		c.RPOrigins = []string{scheme + "://" + c.RPID}
+	}
+	p := &Plugin{
+		config:     c,
 		ceremonies: ceremony.NewMemory(),
 	}
+	// Eagerly initialize WebAuthn so the plugin works even without OnInit.
+	wa, err := webauthn.New(&webauthn.Config{
+		RPDisplayName: c.RPDisplayName,
+		RPID:          c.RPID,
+		RPOrigins:     c.RPOrigins,
+	})
+	if err == nil {
+		p.wa = wa
+	}
+	return p
 }
 
 // Name returns the plugin name.
@@ -338,6 +359,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   bridge.SeverityInfo,
+		Category:   "auth",
 	})
 }
 

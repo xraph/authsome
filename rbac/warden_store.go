@@ -110,10 +110,17 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	// Create the warden permission entity.
 	wp := ToWardenPermission(p, wr.TenantID)
 	if err := s.engine.Store().CreatePermission(ctx, wp); err != nil {
-		return mapWardenError(err)
+		// Permission may already exist (duplicate name+tenant). Look it up so we
+		// can still attach it to this role — AttachPermission is idempotent.
+		existing, findErr := s.engine.Store().GetPermissionByName(ctx, wp.TenantID, wp.Name)
+		if findErr != nil || existing == nil {
+			return mapWardenError(err) // Return the original CreatePermission error.
+		}
+		wp = existing
 	}
 
-	// Attach the permission to the role.
+	// Attach the permission to the role (idempotent — safe to call even if
+	// the link already exists).
 	if err := s.engine.Store().AttachPermission(ctx, roleID, wp.ID); err != nil {
 		return mapWardenError(err)
 	}

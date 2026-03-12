@@ -124,17 +124,21 @@ type Plugin struct {
 }
 
 // New creates a new magic link plugin.
-func New(cfg Config) *Plugin {
-	if cfg.TokenTTL == 0 {
-		cfg.TokenTTL = 10 * time.Minute
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.SessionTokenTTL == 0 {
-		cfg.SessionTokenTTL = 1 * time.Hour
+	if c.TokenTTL == 0 {
+		c.TokenTTL = 10 * time.Minute
 	}
-	if cfg.SessionRefreshTTL == 0 {
-		cfg.SessionRefreshTTL = 30 * 24 * time.Hour
+	if c.SessionTokenTTL == 0 {
+		c.SessionTokenTTL = 1 * time.Hour
 	}
-	return &Plugin{config: cfg}
+	if c.SessionRefreshTTL == 0 {
+		c.SessionRefreshTTL = 30 * 24 * time.Hour
+	}
+	return &Plugin{config: c}
 }
 
 // Name returns the plugin name.

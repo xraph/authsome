@@ -39,9 +39,13 @@ function App() {
 |------|------|---------|-------------|
 | `baseURL` | `string` | -- | Base URL of your Authsome API |
 | `storage` | `TokenStorage` | `localStorage` | Where to persist session tokens |
+| `publishableKey` | `string` | -- | Publishable key for auto-discovering enabled auth methods |
+| `initialClientConfig` | `ClientConfig` | -- | Pre-fetched client config (avoids client-side fetch on mount) |
 | `fetch` | `typeof fetch` | `globalThis.fetch` | Custom fetch implementation |
 | `onStateChange` | `(state: AuthState) => void` | -- | Callback when auth state changes |
 | `onError` | `(error: APIError) => void` | -- | Callback on auth errors |
+
+When `publishableKey` is provided, the `AuthManager` automatically fetches the client configuration from the backend to discover which auth methods are enabled (social, passkey, MFA, etc.). If you pre-fetch the config server-side (e.g. with `getClientConfig()` in Next.js), pass it as `initialClientConfig` to skip the client-side fetch.
 
 ## Core hooks
 
@@ -94,6 +98,10 @@ function Dashboard() {
 | `signOut` | `() => Promise<void>` | End the session |
 | `submitMFACode` | `(enrollmentId, code) => Promise<void>` | Submit a TOTP or SMS code |
 | `submitRecoveryCode` | `(code) => Promise<void>` | Submit an MFA recovery code |
+| `sendSMSCode` | `() => Promise<{ sent, phone_masked, expires_in_seconds }>` | Send an SMS code for MFA verification |
+| `submitSMSCode` | `(code) => Promise<void>` | Submit an SMS verification code |
+| `clientConfig` | `ClientConfig \| null` | Auto-discovered client configuration (null until loaded) |
+| `isConfigLoaded` | `boolean` | Whether the client config has been loaded |
 | `client` | `AuthClient` | Underlying HTTP client for custom API calls |
 | `manager` | `AuthManager` | The core state machine |
 
@@ -156,6 +164,41 @@ function ApiCaller() {
   return <button onClick={fetchData}>Fetch data</button>;
 }
 ```
+
+### useClientConfig
+
+Returns the auto-discovered client configuration from the backend. Requires a `publishableKey` on `AuthProvider` (or `initialClientConfig` for server-side pre-fetch). The config describes which auth methods are enabled so you can conditionally render UI elements.
+
+```tsx
+import { useClientConfig } from "@authsome/ui-react";
+
+function SocialLoginButtons() {
+  const { config, isLoaded } = useClientConfig();
+
+  if (!isLoaded) return null;
+
+  return (
+    <div>
+      {config?.social?.enabled && config.social.providers.map((provider) => (
+        <button key={provider.id}>Continue with {provider.name}</button>
+      ))}
+      {config?.passkey?.enabled && (
+        <button>Sign in with Passkey</button>
+      )}
+      {config?.magiclink?.enabled && (
+        <button>Send magic link</button>
+      )}
+    </div>
+  );
+}
+```
+
+#### Return value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `config` | `ClientConfig \| null` | The client configuration (null until loaded) |
+| `isLoaded` | `boolean` | Whether the config has been loaded |
 
 ## Headless form components
 
@@ -282,6 +325,9 @@ All core types are re-exported from `@authsome/ui-react` for convenience:
 import type {
   AuthState,
   AuthConfig,
+  ClientConfig,
+  SocialProviderConfig,
+  SSOConnectionConfig,
   User,
   Session,
   Organization,

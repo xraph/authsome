@@ -2,13 +2,17 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 )
 
@@ -97,18 +101,37 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		return nil, forge.BadRequest("invalid app_id")
 	}
 
+	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignUp(ctx.Context(), &account.SignUpRequest{
-		AppID:    appID,
-		Email:    req.Email,
-		Password: req.Password,
+		AppID:     appID,
+		Email:     req.Email,
+		Password:  req.Password,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Username: req.Username,
+		Username:  req.Username,
+		IPAddress: clientIPFromRequest(httpReq),
+		UserAgent: httpReq.UserAgent(),
 	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 
+	// If this is the first user for the platform app, assign platform_owner role.
+	platformID := a.engine.PlatformAppID()
+	if appID == platformID && !platformID.IsNil() {
+		list, _ := a.engine.Store().ListUsers(ctx.Context(), &user.UserQuery{AppID: appID, Limit: 2})
+		if list != nil && list.Total == 1 {
+			ownerRole, roleErr := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
+			if roleErr == nil && ownerRole != nil {
+				_ = a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{
+					UserID: u.ID.String(),
+					RoleID: ownerRole.ID,
+				})
+			}
+		}
+	}
+
+	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
 	return nil, ctx.JSON(http.StatusCreated, authResponse(u, sess))
 }
 
@@ -125,16 +148,20 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		return nil, forge.BadRequest("invalid app_id")
 	}
 
+	httpReq := ctx.Request()
 	u, sess, err := a.engine.SignIn(ctx.Context(), &account.SignInRequest{
-		AppID:    appID,
-		Email:    req.Email,
-		Username: req.Username,
-		Password: req.Password,
+		AppID:     appID,
+		Email:     req.Email,
+		Username:  req.Username,
+		Password:  req.Password,
+		IPAddress: clientIPFromRequest(httpReq),
+		UserAgent: httpReq.UserAgent(),
 	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 
+	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
 	return nil, ctx.JSON(http.StatusOK, authResponse(u, sess))
 }
 
@@ -148,6 +175,7 @@ func (a *API) handleSignOut(ctx forge.Context, _ *SignOutRequest) (*StatusRespon
 		return nil, mapError(err)
 	}
 
+	a.deleteSessionCookie(ctx)
 	resp := &StatusResponse{Status: "signed out"}
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
@@ -162,12 +190,104 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 		return nil, mapError(err)
 	}
 
+	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
 	resp := &TokenResponse{
 		SessionToken: sess.Token,
 		RefreshToken: sess.RefreshToken,
 		ExpiresAt:    sess.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 	return nil, ctx.JSON(http.StatusOK, resp)
+}
+
+// ──────────────────────────────────────────────────
+// Cookie helpers
+// ──────────────────────────────────────────────────
+
+// cookieConfig holds resolved cookie configuration from dynamic settings.
+type cookieConfig struct {
+	Name     string
+	Domain   string
+	Path     string
+	Secure   bool
+	HttpOnly bool
+	SameSite http.SameSite
+}
+
+// resolveCookieConfig reads cookie settings from the dynamic settings manager.
+func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
+	goCtx := ctx.Context()
+	mgr := a.engine.Settings()
+	opts := settings.ResolveOpts{}
+
+	name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts)
+	if name == "" {
+		name = "authsome_session_token"
+	}
+	domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts)
+	path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)
+	if path == "" {
+		path = "/"
+	}
+	secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts)
+	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHttpOnly, opts)
+	sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts)
+
+	// Auto-detect secure: if setting is true but request is plain HTTP, disable for dev.
+	r := ctx.Request()
+	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	secure := secureSetting && isHTTPS
+
+	sameSite := http.SameSiteLaxMode
+	switch sameSiteStr {
+	case "strict":
+		sameSite = http.SameSiteStrictMode
+	case "none":
+		sameSite = http.SameSiteNoneMode
+	}
+
+	return cookieConfig{
+		Name: name, Domain: domain, Path: path,
+		Secure: secure, HttpOnly: httpOnly, SameSite: sameSite,
+	}
+}
+
+// setSessionCookie sets the httpOnly session token cookie on the response.
+func (a *API) setSessionCookie(ctx forge.Context, token string, maxAge int) {
+	cc := a.resolveCookieConfig(ctx)
+	http.SetCookie(ctx.Response(), &http.Cookie{
+		Name:     cc.Name,
+		Value:    token,
+		Path:     cc.Path,
+		Domain:   cc.Domain,
+		MaxAge:   maxAge,
+		HttpOnly: cc.HttpOnly,
+		Secure:   cc.Secure,
+		SameSite: cc.SameSite,
+	})
+}
+
+// deleteSessionCookie clears the session cookie.
+func (a *API) deleteSessionCookie(ctx forge.Context) {
+	cc := a.resolveCookieConfig(ctx)
+	http.SetCookie(ctx.Response(), &http.Cookie{
+		Name:     cc.Name,
+		Value:    "",
+		Path:     cc.Path,
+		Domain:   cc.Domain,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   cc.Secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// sessionTokenMaxAge returns the session token TTL in seconds from engine config.
+func (a *API) sessionTokenMaxAge() int {
+	maxAge := int(a.engine.Config().Session.TokenTTL.Seconds())
+	if maxAge <= 0 {
+		maxAge = 3600
+	}
+	return maxAge
 }
 
 // ──────────────────────────────────────────────────
@@ -188,4 +308,23 @@ func authResponse(u *user.User, sess *session.Session) map[string]any {
 		"refresh_token": sess.RefreshToken,
 		"expires_at":    sess.ExpiresAt,
 	}
+}
+
+// clientIPFromRequest extracts the client IP from the request, checking
+// X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr.
+func clientIPFromRequest(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if i := strings.IndexByte(xff, ','); i > 0 {
+			return strings.TrimSpace(xff[:i])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	addr := r.RemoteAddr
+	if i := strings.LastIndex(addr, ":"); i > 0 {
+		return addr[:i]
+	}
+	return addr
 }

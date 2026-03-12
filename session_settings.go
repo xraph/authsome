@@ -150,6 +150,84 @@ var (
 	)
 )
 
+// Category: Cookie Configuration
+
+var (
+	// SettingCookieName controls the name of the httpOnly session cookie.
+	SettingCookieName = settings.Define("session.cookie_name", "authsome_session_token",
+		settings.WithDisplayName("Session Cookie Name"),
+		settings.WithDescription("Name of the httpOnly session cookie set on sign-in"),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldText),
+		settings.WithHelpText("The cookie name used to store the session token. Default: authsome_session_token"),
+		settings.WithOrder(110),
+	)
+
+	// SettingCookieDomain controls the Domain attribute of the session cookie.
+	SettingCookieDomain = settings.Define("session.cookie_domain", "",
+		settings.WithDisplayName("Cookie Domain"),
+		settings.WithDescription("Domain attribute for the session cookie. Empty means exact host only."),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldText),
+		settings.WithHelpText("Leave empty to scope cookie to the exact host. Set to '.example.com' for cross-subdomain sharing."),
+		settings.WithOrder(120),
+	)
+
+	// SettingCookiePath controls the Path attribute of the session cookie.
+	SettingCookiePath = settings.Define("session.cookie_path", "/",
+		settings.WithDisplayName("Cookie Path"),
+		settings.WithDescription("Path attribute for the session cookie"),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal),
+		settings.WithInputType(formconfig.FieldText),
+		settings.WithHelpText("URL path scope for the cookie. Default: / (all paths)"),
+		settings.WithOrder(130),
+	)
+
+	// SettingCookieSecure controls whether the Secure flag is set on the session cookie.
+	SettingCookieSecure = settings.Define("session.cookie_secure", true,
+		settings.WithDisplayName("Secure Cookie"),
+		settings.WithDescription("Only send cookie over HTTPS connections"),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, cookies are only sent over HTTPS. Automatically disabled for HTTP in development."),
+		settings.WithOrder(140),
+	)
+
+	// SettingCookieHttpOnly controls whether the HttpOnly flag is set on the session cookie.
+	SettingCookieHttpOnly = settings.Define("session.cookie_http_only", true,
+		settings.WithDisplayName("HttpOnly Cookie"),
+		settings.WithDescription("Prevent JavaScript from accessing the session cookie"),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, cookies are inaccessible to document.cookie (XSS protection). Strongly recommended."),
+		settings.WithOrder(150),
+	)
+
+	// SettingCookieSameSite controls the SameSite attribute of the session cookie.
+	SettingCookieSameSite = settings.Define("session.cookie_same_site", "lax",
+		settings.WithDisplayName("SameSite Policy"),
+		settings.WithDescription("SameSite attribute for cross-site request control"),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithInputType(formconfig.FieldSelect),
+		settings.WithOptions(
+			formconfig.SelectOption{Value: "strict", Label: "Strict"},
+			formconfig.SelectOption{Value: "lax", Label: "Lax (Recommended)"},
+			formconfig.SelectOption{Value: "none", Label: "None"},
+		),
+		settings.WithHelpText("Lax allows top-level navigations (OAuth redirects). Strict blocks all cross-site. None requires Secure=true."),
+		settings.WithOrder(160),
+	)
+)
+
 // registerCoreSessionSettings registers all core session settings under the "session" namespace.
 func registerCoreSessionSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "session", SettingTokenTTLSeconds); err != nil {
@@ -179,7 +257,25 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "session", SettingAutoRefreshEnabled); err != nil {
 		return err
 	}
-	return settings.RegisterTyped(m, "session", SettingAutoRefreshThresholdSeconds)
+	if err := settings.RegisterTyped(m, "session", SettingAutoRefreshThresholdSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingCookieName); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingCookieDomain); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingCookiePath); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingCookieSecure); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingCookieHttpOnly); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "session", SettingCookieSameSite)
 }
 
 // intPtr returns a pointer to the given int.

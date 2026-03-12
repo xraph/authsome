@@ -150,6 +150,7 @@ export class AuthManager {
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       this.handleError(err);
+      throw err;
     }
   }
 
@@ -166,6 +167,7 @@ export class AuthManager {
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
       this.handleError(err);
+      throw err;
     }
   }
 

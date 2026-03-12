@@ -1,0 +1,17 @@
+name: authsome_flutter_ui
+description: Pre-built Material Design 3 authentication UI widgets for AuthSome.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.0.0
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  authsome_flutter:
+    path: ../authsome_flutter
+
+dev_dependencies:
+  flutter_lints: ^4.0.0

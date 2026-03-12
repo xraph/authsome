@@ -242,3 +242,27 @@ type StrategyProvider interface {
 	Strategy() strategy.Strategy
 	StrategyPriority() int
 }
+
+// ──────────────────────────────────────────────────
+// Notification extensibility
+// ──────────────────────────────────────────────────
+
+// NotificationMapping describes a hook-to-notification template mapping
+// contributed by an external plugin.
+type NotificationMapping struct {
+	// Template is the Herald template slug (e.g. "billing.payment-failed").
+	Template string
+	// Channels lists the channels to send on (e.g. ["email", "inapp"]).
+	Channels []string
+	// Enabled controls whether this mapping is active.
+	Enabled bool
+}
+
+// NotificationMappingContributor is implemented by plugins that want to
+// contribute notification template mappings. The notification plugin
+// collects these during initialization to extend its default mappings.
+// Plugin-contributed mappings do not override user-provided config mappings.
+type NotificationMappingContributor interface {
+	Plugin
+	NotificationMappings() map[string]*NotificationMapping
+}

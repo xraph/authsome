@@ -411,7 +411,7 @@ func UserTable(users []*user.User, basePath string) templ.Component {
 					templ_7745c5c3_Err = table.Row(table.RowProps{
 						Class: "cursor-pointer",
 						Attributes: templ.Attributes{
-							"hx-get":      basePath + "/users/detail?userId=" + u.ID.String(),
+							"hx-get":      basePath + "/detail?id=" + u.ID.String(),
 							"hx-target":   "#content",
 							"hx-push-url": "true",
 						},

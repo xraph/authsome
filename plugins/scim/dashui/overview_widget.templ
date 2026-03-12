@@ -1,0 +1,33 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/icons"
+)
+
+// OverviewWidget displays SCIM provisioning statistics.
+templ OverviewWidget(data OverviewWidgetData) {
+	@card.Card() {
+		@card.Content() {
+			<div class="flex items-center gap-3">
+				<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+					@icons.ShieldCheck(icons.WithSize(20), icons.WithClass("text-primary"))
+				</div>
+				<div class="flex-1">
+					<p class="text-sm font-medium text-muted-foreground">SCIM Provisioning</p>
+					<div class="flex items-center gap-3 mt-0.5">
+						<span class="text-lg font-bold">{ strconv.Itoa(data.ConfigCount) } configs</span>
+						if data.TokenCount > 0 {
+							<span class="text-xs text-blue-600 dark:text-blue-400">{ strconv.Itoa(data.TokenCount) } tokens</span>
+						}
+						if data.RecentCount > 0 {
+							<span class="text-xs text-green-600 dark:text-green-400">{ strconv.Itoa(data.RecentCount) } recent</span>
+						}
+					</div>
+				</div>
+			</div>
+		}
+	}
+}

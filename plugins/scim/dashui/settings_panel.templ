@@ -1,0 +1,50 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/card"
+)
+
+// SettingsPanel displays current SCIM settings.
+templ SettingsPanel(data SettingsPanelData) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				SCIM Provisioning
+			}
+			@card.Description() {
+				SCIM 2.0 provisioning configuration
+			}
+		}
+		@card.Content() {
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+				<dt class="text-muted-foreground">SCIM Enabled</dt>
+				<dd class="font-medium">{ scimBoolLabel(data.Enabled) }</dd>
+				<dt class="text-muted-foreground">Auto-Create Users</dt>
+				<dd class="font-medium">{ scimBoolLabel(data.AutoCreate) }</dd>
+				<dt class="text-muted-foreground">Auto-Suspend Users</dt>
+				<dd class="font-medium">{ scimBoolLabel(data.AutoSuspend) }</dd>
+				<dt class="text-muted-foreground">Group Sync</dt>
+				<dd class="font-medium">{ scimBoolLabel(data.GroupSync) }</dd>
+				<dt class="text-muted-foreground">Default Role</dt>
+				<dd class="font-medium capitalize">
+					if data.DefaultRole != "" {
+						{ data.DefaultRole }
+					} else {
+						<span class="text-muted-foreground">member</span>
+					}
+				</dd>
+				<dt class="text-muted-foreground">Token Expiry</dt>
+				<dd class="font-medium">{ strconv.Itoa(data.TokenExpiryDays) } days</dd>
+			</dl>
+		}
+	}
+}
+
+func scimBoolLabel(v bool) string {
+	if v {
+		return "Enabled"
+	}
+	return "Disabled"
+}

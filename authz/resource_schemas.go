@@ -211,5 +211,118 @@ func DefaultSchemas() []ResourceSchema {
 				{Name: "remove", Expression: "org"},
 			},
 		},
+		// Plugin resource types
+		{
+			Name:        "scim_config",
+			Description: "SCIM configurations",
+			Relations: []resourcetype.RelationDef{
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "app"},
+				{Name: "create", Expression: "app"},
+				{Name: "update", Expression: "app"},
+				{Name: "delete", Expression: "app"},
+			},
+		},
+		{
+			Name:        "subscription",
+			Description: "Subscriptions",
+			Relations: []resourcetype.RelationDef{
+				{Name: "owner", AllowedSubjects: []string{"user"}},
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "owner or app"},
+				{Name: "create", Expression: "owner or app"},
+				{Name: "update", Expression: "owner or app"},
+				{Name: "cancel", Expression: "owner or app"},
+			},
+		},
+		{
+			Name:        "notification",
+			Description: "Notifications",
+			Relations: []resourcetype.RelationDef{
+				{Name: "owner", AllowedSubjects: []string{"user"}},
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "owner or app"},
+				{Name: "create", Expression: "app"},
+				{Name: "send", Expression: "app"},
+			},
+		},
+		{
+			Name:        "consent",
+			Description: "User consent records",
+			Relations: []resourcetype.RelationDef{
+				{Name: "owner", AllowedSubjects: []string{"user"}},
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "owner or app"},
+				{Name: "grant", Expression: "owner"},
+				{Name: "revoke", Expression: "owner"},
+			},
+		},
+		{
+			Name:        "mfa",
+			Description: "MFA configuration",
+			Relations: []resourcetype.RelationDef{
+				{Name: "owner", AllowedSubjects: []string{"user"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "owner"},
+				{Name: "enable", Expression: "owner"},
+				{Name: "disable", Expression: "owner"},
+			},
+		},
+		{
+			Name:        "social_provider",
+			Description: "Social login providers",
+			Relations: []resourcetype.RelationDef{
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "app"},
+				{Name: "create", Expression: "app"},
+				{Name: "update", Expression: "app"},
+				{Name: "delete", Expression: "app"},
+			},
+		},
+		{
+			Name:        "sso_config",
+			Description: "SSO configurations",
+			Relations: []resourcetype.RelationDef{
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "app"},
+				{Name: "create", Expression: "app"},
+				{Name: "update", Expression: "app"},
+				{Name: "delete", Expression: "app"},
+			},
+		},
+		{
+			Name:        "settings",
+			Description: "App settings",
+			Relations: []resourcetype.RelationDef{
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "app"},
+				{Name: "update", Expression: "app"},
+			},
+		},
+		{
+			Name:        "security_event",
+			Description: "Security audit events",
+			Relations: []resourcetype.RelationDef{
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "app"},
+			},
+		},
 	}
 }

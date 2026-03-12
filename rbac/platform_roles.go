@@ -8,6 +8,13 @@ const (
 	PlatformOwnerSlug = "platform_owner"
 )
 
+// App-scoped role slugs. Created for every app during bootstrap.
+const (
+	AppOwnerSlug = "owner"
+	AppAdminSlug = "admin"
+	AppUserSlug  = "user"
+)
+
 // IsPlatformRole returns true if the slug is a platform-scoped role.
 func IsPlatformRole(slug string) bool {
 	switch slug {

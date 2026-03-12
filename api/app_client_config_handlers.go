@@ -22,7 +22,7 @@ func (a *API) registerAppClientConfigRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin", "app-client-config"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(a.engine, "admin", "super_admin"),
+			middleware.RequirePermission(a.engine, "manage", "app"),
 		),
 	)
 
@@ -74,7 +74,7 @@ func (a *API) handleGetAppClientConfig(ctx forge.Context, req *GetAppClientConfi
 		return nil, mapError(err)
 	}
 
-	return cfg, ctx.JSON(http.StatusOK, cfg)
+	return cfg, nil
 }
 
 func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfigRequest) (*appclientconfig.Config, error) {
@@ -118,7 +118,7 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 		return nil, mapError(err)
 	}
 
-	return cfg, ctx.JSON(http.StatusOK, cfg)
+	return cfg, nil
 }
 
 func (a *API) handleDeleteAppClientConfig(ctx forge.Context, req *DeleteAppClientConfigRequest) (*StatusResponse, error) {

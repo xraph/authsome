@@ -3,7 +3,7 @@ package organization
 import (
 	"context"
 	"fmt"
-	"io"
+	"sort"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -81,6 +81,8 @@ func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params c
 	switch route {
 	case "/organizations":
 		return p.renderOrgList(ctx, params)
+	case "/organizations/create":
+		return p.renderOrgCreate(ctx, params)
 	case "/organizations/detail":
 		return p.renderOrgDetail(ctx, params)
 	default:
@@ -92,18 +94,45 @@ func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params c
 // Dashboard render helpers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) renderOrgList(ctx context.Context, params contributor.Params) (templ.Component, error) {
+func (p *Plugin) renderOrgList(ctx context.Context, _ contributor.Params) (templ.Component, error) {
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
 		appID, _ = id.ParseAppID(p.defaultAppID)
 	}
 
-	var data dashui.OrgsPageData
+	orgs, err := p.AdminListOrganizations(ctx, appID)
+	if err != nil {
+		orgs = nil
+	}
+
+	// Compute aggregate stats across all orgs.
+	data := dashui.OrgsPageData{Orgs: orgs}
+	for _, org := range orgs {
+		if members, err := p.ListMembers(ctx, org.ID); err == nil {
+			data.TotalMembers += len(members)
+		}
+		if teams, err := p.ListTeams(ctx, org.ID); err == nil {
+			data.TotalTeams += len(teams)
+		}
+		if invitations, err := p.ListInvitations(ctx, org.ID); err == nil {
+			data.TotalInvitations += len(invitations)
+		}
+	}
+
+	return dashui.OrganizationsPage(data), nil
+}
+
+func (p *Plugin) renderOrgCreate(ctx context.Context, params contributor.Params) (templ.Component, error) {
+	appID, ok := dashboard.AppIDFromContext(ctx)
+	if !ok {
+		appID, _ = id.ParseAppID(p.defaultAppID)
+	}
+
+	var data dashui.CreateOrgPageData
 
 	// Handle form actions (POST).
 	action := params.FormData["action"]
-	switch action {
-	case "create":
+	if action == "create" {
 		nonce := params.FormData["nonce"]
 		if dashboard.ConsumeNonce(nonce) {
 			data.CreatedOrg, data.Error = p.handleDashboardCreateOrg(ctx, appID, params)
@@ -113,13 +142,10 @@ func (p *Plugin) renderOrgList(ctx context.Context, params contributor.Params) (
 	// Generate a fresh nonce for the next form render.
 	data.FormNonce = dashboard.GenerateNonce()
 
-	orgs, err := p.AdminListOrganizations(ctx, appID)
-	if err != nil {
-		orgs = nil
-	}
-	data.Orgs = orgs
+	// Collect plugin-contributed form fields.
+	data.PluginFields = p.collectOrgCreateFormFields(ctx)
 
-	return dashui.OrganizationsPage(data), nil
+	return dashui.CreateOrganizationPage(data), nil
 }
 
 // handleDashboardCreateOrg creates a new organization from form data.
@@ -180,14 +206,44 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 		members = nil
 	}
 
-	// Collect plugin-contributed sections for org detail.
+	teams, err := p.ListTeams(ctx, orgID)
+	if err != nil {
+		teams = nil
+	}
+
+	invitations, err := p.ListInvitations(ctx, orgID)
+	if err != nil {
+		invitations = nil
+	}
+
+	// Collect legacy plugin-contributed sections (rendered in Overview tab).
 	pluginSections := p.collectOrgDetailSections(ctx, orgID)
 
-	return templ.ComponentFunc(func(tCtx context.Context, w io.Writer) error {
-		childCtx := templ.WithChildren(tCtx, renderPluginSections(pluginSections))
-		return dashui.OrgDetailPage(org, members).Render(childCtx, w)
-	}), nil
+	// Collect plugin-contributed tabs.
+	pluginTabs := p.collectOrgDetailTabs(ctx, orgID)
+
+	// Determine active tab from query param.
+	activeTab := params.QueryParams["tab"]
+	if activeTab == "" {
+		activeTab = "overview"
+	}
+
+	data := dashui.OrgDetailPageData{
+		Org:            org,
+		Members:        members,
+		Teams:          teams,
+		Invitations:    invitations,
+		PluginSections: pluginSections,
+		PluginTabs:     pluginTabs,
+		ActiveTab:      activeTab,
+	}
+
+	return dashui.OrgDetailPage(data), nil
 }
+
+// ──────────────────────────────────────────────────
+// Plugin contribution collectors
+// ──────────────────────────────────────────────────
 
 // collectOrgDetailSections gathers org detail sections from plugins implementing OrgDetailContributor.
 func (p *Plugin) collectOrgDetailSections(ctx context.Context, orgID id.OrgID) []templ.Component {
@@ -205,17 +261,51 @@ func (p *Plugin) collectOrgDetailSections(ctx context.Context, orgID id.OrgID) [
 	return sections
 }
 
-// renderPluginSections renders a list of templ components sequentially.
-func renderPluginSections(sections []templ.Component) templ.Component {
-	if len(sections) == 0 {
-		return templ.NopComponent
+// collectOrgDetailTabs gathers tabs from plugins implementing OrgDetailTabContributor.
+func (p *Plugin) collectOrgDetailTabs(ctx context.Context, orgID id.OrgID) []dashui.OrgDetailTabView {
+	if p.plugins == nil {
+		return nil
 	}
-	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
-		for _, s := range sections {
-			if err := s.Render(ctx, w); err != nil {
-				return err
+	var raw []dashboard.OrgDetailTab
+	for _, pl := range p.plugins.Plugins() {
+		if tc, ok := pl.(dashboard.OrgDetailTabContributor); ok {
+			raw = append(raw, tc.DashboardOrgDetailTabs(ctx, orgID)...)
+		}
+	}
+	if len(raw) == 0 {
+		return nil
+	}
+
+	// Sort by priority.
+	sort.Slice(raw, func(i, j int) bool {
+		return raw[i].Priority < raw[j].Priority
+	})
+
+	// Pre-render tab content into views.
+	views := make([]dashui.OrgDetailTabView, 0, len(raw))
+	for _, tab := range raw {
+		views = append(views, dashui.OrgDetailTabView{
+			ID:      tab.ID,
+			Label:   tab.Label,
+			Icon:    tab.Icon,
+			Content: tab.Render(ctx, orgID),
+		})
+	}
+	return views
+}
+
+// collectOrgCreateFormFields gathers form fields from plugins implementing OrgCreateFormContributor.
+func (p *Plugin) collectOrgCreateFormFields(ctx context.Context) []templ.Component {
+	if p.plugins == nil {
+		return nil
+	}
+	var fields []templ.Component
+	for _, pl := range p.plugins.Plugins() {
+		if fc, ok := pl.(dashboard.OrgCreateFormContributor); ok {
+			if field := fc.DashboardOrgCreateFormFields(ctx); field != nil {
+				fields = append(fields, field)
 			}
 		}
-		return nil
-	})
+	}
+	return fields
 }

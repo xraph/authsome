@@ -1,6 +1,8 @@
 package pages
 
 import (
+	"fmt"
+
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
@@ -187,6 +189,8 @@ templ settingsFieldRenderer(field SettingsField) {
 			@settingsNumber(field)
 		} else if field.InputType == "select" {
 			@settingsSelect(field)
+		} else if field.InputType == "object_array" {
+			@settingsObjectArray(field)
 		} else if field.InputType == "textarea" {
 			@settingsTextarea(field)
 		} else {
@@ -276,6 +280,121 @@ templ settingsText(field SettingsField) {
 		Placeholder: field.Placeholder,
 		Disabled:    !field.CanOverride || field.ReadOnly,
 	})
+}
+
+templ settingsObjectArray(field SettingsField) {
+	<!-- Hidden input holds the actual JSON value for form submission -->
+	<input
+		type="hidden"
+		name={ field.Key }
+		id={ fieldID(field.Key) }
+		value={ field.EffectiveValue }
+	/>
+	<div
+		class="space-y-3"
+		data-oa-container={ field.Key }
+		data-oa-fields={ objectFieldsJSON(field.ObjectFields) }
+	>
+		<!-- Existing items -->
+		for _, item := range ParseObjectArrayItems(field.EffectiveValue, field.ObjectFields) {
+			@objectArrayItemCard(field, item)
+		}
+		<!-- Add item button -->
+		if !field.ReadOnly && field.CanOverride {
+			<button
+				type="button"
+				class="flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium pt-1"
+				onclick={ addObjectArrayItemScript(field.Key) }
+			>
+				@icons.Plus(icons.WithSize(16))
+				Add item
+			</button>
+		}
+	</div>
+}
+
+templ objectArrayItemCard(field SettingsField, item ObjectArrayItem) {
+	<div
+		class="relative rounded-lg border bg-muted/30 p-4 space-y-3"
+		data-oa-item={ field.Key }
+		data-oa-index={ fmt.Sprintf("%d", item.Index) }
+	>
+		<!-- Remove button -->
+		if !field.ReadOnly && field.CanOverride {
+			<button
+				type="button"
+				class="absolute top-2 right-2 text-muted-foreground hover:text-destructive"
+				onclick={ removeObjectArrayItemScript(field.Key) }
+				title="Remove item"
+			>
+				@icons.Trash(icons.WithSize(14))
+			</button>
+		}
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-3 pr-6">
+			for _, fd := range field.ObjectFields {
+				<div class="space-y-1">
+					<label class="text-xs font-medium text-muted-foreground">
+						{ fd.DisplayName }
+						if fd.Required {
+							<span class="text-destructive">*</span>
+						}
+					</label>
+					if fd.InputType == "switch" {
+						<div class="flex items-center gap-2">
+							@switchcomp.Switch(switchcomp.Props{
+								Name:     objectFieldInputName(field.Key, item.Index, fd.Key),
+								Checked:  item.Fields[fd.Key] == "true",
+								Disabled: !field.CanOverride || field.ReadOnly,
+							})
+						</div>
+					} else if fd.InputType == "select" {
+						<select
+							name={ objectFieldInputName(field.Key, item.Index, fd.Key) }
+							class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+							disabled?={ !field.CanOverride || field.ReadOnly }
+						>
+							for _, opt := range fd.Options {
+								<option
+									value={ opt.Value }
+									selected?={ opt.Value == item.Fields[fd.Key] }
+								>
+									{ opt.Label }
+								</option>
+							}
+						</select>
+					} else if fd.InputType == "textarea" {
+						@textarea.Textarea(textarea.Props{
+							Name:        objectFieldInputName(field.Key, item.Index, fd.Key),
+							Value:       item.Fields[fd.Key],
+							Placeholder: fd.Placeholder,
+							Rows:        2,
+							Disabled:    !field.CanOverride || field.ReadOnly,
+						})
+						<p class="text-xs text-muted-foreground">One value per line</p>
+					} else {
+						@input.Input(input.Props{
+							Name:        objectFieldInputName(field.Key, item.Index, fd.Key),
+							Type:        objectFieldInputType(fd),
+							Value:       item.Fields[fd.Key],
+							Placeholder: fd.Placeholder,
+							Disabled:    !field.CanOverride || field.ReadOnly,
+						})
+					}
+					if fd.HelpText != "" {
+						<p class="text-xs text-muted-foreground">{ fd.HelpText }</p>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+script addObjectArrayItemScript(key string) {
+	addObjectArrayItem(key)
+}
+
+script removeObjectArrayItemScript(key string) {
+	removeObjectArrayItem(this, key)
 }
 
 script resetSettingScript(key string) {

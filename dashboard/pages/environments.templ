@@ -43,8 +43,8 @@ templ EnvironmentsPage(envs []*environment.Environment) {
 									@table.Cell() {
 										<div
 										class="flex items-center gap-2 cursor-pointer"
-										hx-get={ "/environments/detail?id=" + env.ID.String() }
-										hx-target="#main-content"
+										hx-get={ "./environments/detail?id=" + env.ID.String() }
+										hx-target="#content"
 										hx-swap="innerHTML"
 										hx-push-url="true"
 									>

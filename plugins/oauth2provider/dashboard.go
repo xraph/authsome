@@ -2,6 +2,7 @@ package oauth2provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -99,12 +100,19 @@ func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Param
 	action := params.FormData["action"]
 	switch action {
 	case "create":
-		data.CreatedClient = p.handleDashboardCreateClient(ctx, appID, params)
-		if data.CreatedClient == nil {
-			data.Error = "Failed to create OAuth2 client. Please provide a name."
+		created, errMsg := p.handleDashboardCreateClient(ctx, appID, params)
+		if created != nil {
+			data.CreatedClient = created
+			data.Success = "OAuth2 client created successfully."
+		} else {
+			data.Error = errMsg
 		}
 	case "delete":
-		p.handleDashboardDeleteClient(ctx, params)
+		if err := p.handleDashboardDeleteClient(ctx, params); err != nil {
+			data.Error = "Failed to delete OAuth2 client: " + err.Error()
+		} else if params.FormData["client_id"] != "" {
+			data.Success = "OAuth2 client deleted successfully."
+		}
 	}
 
 	// Fetch all clients for the app.
@@ -131,10 +139,12 @@ func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Param
 }
 
 // handleDashboardCreateClient creates a new OAuth2 client from form data.
-func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID, params contributor.Params) *o2dash.CreatedClientView {
+// Returns the created client view and an empty error message on success, or nil
+// and an error message on failure.
+func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID, params contributor.Params) (*o2dash.CreatedClientView, string) {
 	name := params.FormData["name"]
 	if name == "" {
-		return nil
+		return nil, "Client name is required."
 	}
 
 	// Parse redirect URIs from textarea (newline-separated).
@@ -160,15 +170,8 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 		scopes = []string{"openid", "profile", "email"}
 	}
 
-	// Parse grant types (comma or space separated).
-	grantTypesRaw := params.FormData["grant_types"]
-	var grantTypes []string
-	for _, g := range strings.FieldsFunc(grantTypesRaw, func(r rune) bool { return r == ',' || r == ' ' }) {
-		g = strings.TrimSpace(g)
-		if g != "" {
-			grantTypes = append(grantTypes, g)
-		}
-	}
+	// Parse grant types from individual checkboxes.
+	grantTypes := parseGrantTypeCheckboxes(params.FormData)
 	if len(grantTypes) == 0 {
 		grantTypes = []string{"authorization_code"}
 	}
@@ -179,7 +182,7 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 	// Generate client credentials.
 	clientIDStr, err := generateSecureToken(16)
 	if err != nil {
-		return nil
+		return nil, "Failed to generate client ID."
 	}
 
 	var rawSecret string
@@ -187,11 +190,11 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 	if !isPublic {
 		rawSecret, err = generateSecureToken(32)
 		if err != nil {
-			return nil
+			return nil, "Failed to generate client secret."
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(rawSecret), bcrypt.DefaultCost)
 		if err != nil {
-			return nil
+			return nil, "Failed to hash client secret."
 		}
 		hashedSecret = string(hash)
 	}
@@ -212,7 +215,7 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 	}
 
 	if err := p.oauth2Store.CreateClient(ctx, client); err != nil {
-		return nil
+		return nil, "Failed to create OAuth2 client: " + err.Error()
 	}
 
 	return &o2dash.CreatedClientView{
@@ -220,20 +223,38 @@ func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID
 		ClientID:     clientIDStr,
 		ClientSecret: rawSecret,
 		Public:       isPublic,
+	}, ""
+}
+
+// parseGrantTypeCheckboxes reads individual grant type checkboxes from form data.
+func parseGrantTypeCheckboxes(formData map[string]string) []string {
+	var grantTypes []string
+	if formData["grant_authorization_code"] == "on" {
+		grantTypes = append(grantTypes, "authorization_code")
 	}
+	if formData["grant_client_credentials"] == "on" {
+		grantTypes = append(grantTypes, "client_credentials")
+	}
+	if formData["grant_device_code"] == "on" {
+		grantTypes = append(grantTypes, "urn:ietf:params:oauth:grant-type:device_code")
+	}
+	if formData["grant_refresh_token"] == "on" {
+		grantTypes = append(grantTypes, "refresh_token")
+	}
+	return grantTypes
 }
 
 // handleDashboardDeleteClient deletes an OAuth2 client from form data.
-func (p *Plugin) handleDashboardDeleteClient(ctx context.Context, params contributor.Params) {
+func (p *Plugin) handleDashboardDeleteClient(ctx context.Context, params contributor.Params) error {
 	clientIDStr := params.FormData["client_id"]
 	if clientIDStr == "" {
-		return
+		return nil
 	}
 
 	clientID, err := id.ParseOAuth2ClientID(clientIDStr)
 	if err != nil {
-		return
+		return fmt.Errorf("invalid client ID: %w", err)
 	}
 
-	_ = p.oauth2Store.DeleteClient(ctx, clientID)
+	return p.oauth2Store.DeleteClient(ctx, clientID)
 }

@@ -20,6 +20,28 @@ func resolveIcon(iconName string, opts ...icons.Option) templ.Component {
 		return icons.Shield(opts...)
 	case "webhook":
 		return icons.Webhook(opts...)
+	case "shield-check":
+		return icons.ShieldCheck(opts...)
+	case "check-circle":
+		return icons.CheckCircle(opts...)
+	case "x-circle":
+		return icons.XCircle(opts...)
+	case "skip-forward":
+		return icons.SkipForward(opts...)
+	case "scroll-text":
+		return icons.ScrollText(opts...)
+	case "layers":
+		return icons.Layers(opts...)
+	case "credit-card":
+		return icons.CreditCard(opts...)
+	case "file-text":
+		return icons.FileText(opts...)
+	case "mail":
+		return icons.Mail(opts...)
+	case "building-2-check":
+		return icons.Building2(opts...)
+	case "user-plus":
+		return icons.UserPlus(opts...)
 	default:
 		return icons.Info(opts...)
 	}

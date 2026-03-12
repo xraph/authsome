@@ -18,8 +18,10 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
+	fuibridge "github.com/xraph/forgeui/bridge"
 	"github.com/xraph/authsome/bridge/chronicleadapter"
 	"github.com/xraph/authsome/bridge/dispatchadapter"
 	"github.com/xraph/authsome/bridge/heraldadapter"
@@ -68,6 +70,7 @@ var (
 	_ dashboard.DashboardAware             = (*Extension)(nil)
 	_ dashboard.DashboardAuthAware         = (*Extension)(nil)
 	_ dashboard.DashboardFooterContributor = (*Extension)(nil)
+	_ dashboard.BridgeAware                = (*Extension)(nil)
 )
 
 // Extension adapts AuthSome as a Forge extension.
@@ -327,26 +330,27 @@ func (e *Extension) init(fapp forge.App) error {
 	}
 	e.engine = eng
 
-	// Create API handler (no router passed -- Handler() will create one on demand)
+	// Create API handler and register routes on the Forge router.
 	if !e.config.DisableRoutes {
 		e.apiHandler = api.New(eng)
-	}
 
-	// If Forge router is available from the container, register routes directly.
-	if router, err := forge.GetRouter(fapp.Container()); err == nil && !e.config.DisableRoutes {
-		apiHandler := api.New(eng)
-		if err := apiHandler.RegisterRoutes(router); err != nil {
-			return fmt.Errorf("authsome: register forge routes: %w", err)
-		}
-
-		// Register plugin routes on the Forge router.
-		for _, rp := range eng.Plugins().RouteProviders() {
-			if err := rp.RegisterRoutes(router); err != nil {
-				return fmt.Errorf("authsome: register plugin routes (%T): %w", rp, err)
+		router := fapp.Router()
+		if router != nil {
+			if err := e.apiHandler.RegisterRoutes(router); err != nil {
+				return fmt.Errorf("authsome: register forge routes: %w", err)
 			}
-		}
 
-		e.Logger().Info("authsome: registered routes on forge router")
+			// Register plugin routes on the Forge router.
+			for _, rp := range eng.Plugins().RouteProviders() {
+				if err := rp.RegisterRoutes(router); err != nil {
+					return fmt.Errorf("authsome: register plugin routes (%T): %w", rp, err)
+				}
+			}
+
+			e.Logger().Info("authsome: registered routes on forge router")
+		} else {
+			e.Logger().Warn("authsome: forge router not available, API routes not registered")
+		}
 	}
 
 	return nil
@@ -408,30 +412,54 @@ func (e *Extension) Middlewares() []forge.Middleware {
 // resolution fails. This is the forge.Scope producer -- it resolves the
 // authenticated identity and sets AppID/OrgID on context for all downstream
 // extensions.
+//
+// A cookie-to-header bridge is applied so that dashboard JavaScript fetch()
+// requests (which send the HttpOnly auth_token cookie but no Authorization
+// header) are authenticated by the same session-resolution pipeline.
 func (e *Extension) AuthMiddleware() forge.Middleware {
+	// Select the appropriate inner middleware based on engine capabilities.
+	var inner forge.Middleware
+
 	// JWT-aware middleware (handles JWT + opaque + strategies)
 	if e.engine.HasJWT() {
-		return middleware.AuthMiddlewareWithJWT(
+		inner = middleware.AuthMiddlewareWithJWT(
 			e.engine.ResolveSessionByToken,
 			e.engine.ResolveUser,
 			e.engine.Strategies(),
 			e.engine,
 			e.engine.Logger(),
 		)
-	}
-	if e.engine.HasStrategies() {
-		return middleware.AuthMiddlewareWithStrategies(
+	} else if e.engine.HasStrategies() {
+		inner = middleware.AuthMiddlewareWithStrategies(
 			e.engine.ResolveSessionByToken,
 			e.engine.ResolveUser,
 			e.engine.Strategies(),
 			e.engine.Logger(),
 		)
+	} else {
+		inner = middleware.AuthMiddleware(
+			e.engine.ResolveSessionByToken,
+			e.engine.ResolveUser,
+			e.engine.Logger(),
+		)
 	}
-	return middleware.AuthMiddleware(
-		e.engine.ResolveSessionByToken,
-		e.engine.ResolveUser,
-		e.engine.Logger(),
-	)
+
+	// Wrap with cookie-to-header bridge: when no Authorization header is
+	// present, read the auth_token cookie (set by dashboard login) and
+	// inject it as a Bearer token. This allows dashboard JS fetch() calls
+	// (which use credentials:'same-origin') to authenticate against API
+	// endpoints that only inspect the Authorization header.
+	return func(next forge.Handler) forge.Handler {
+		return func(ctx forge.Context) error {
+			r := ctx.Request()
+			if r.Header.Get("Authorization") == "" {
+				if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
+					r.Header.Set("Authorization", "Bearer "+cookie.Value)
+				}
+			}
+			return inner(next)(ctx)
+		}
+	}
 }
 
 // DashboardContributor implements dashboard.DashboardAware. It returns a
@@ -465,6 +493,56 @@ func (e *Extension) DashboardUserDropdownActions(basePath string) []shell.UserDr
 		{Label: "Profile", Icon: "user", Href: basePath + "/ext/authsome/pages/profile"},
 		{Label: "Security", Icon: "shield", Href: basePath + "/ext/authsome/pages/security"},
 	}
+}
+
+// RegisterDashboardBridge implements dashboard.BridgeAware. It registers
+// authsome bridge functions for Go↔JS communication in the dashboard.
+func (e *Extension) RegisterDashboardBridge(b *fuibridge.Bridge) error {
+	return b.Register("authsome.createApp", e.bridgeCreateApp,
+		fuibridge.WithDescription("Create a new application with default environments and roles"),
+	)
+}
+
+// createAppInput holds parameters for the authsome.createApp bridge function.
+type createAppInput struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Logo string `json:"logo,omitempty"`
+}
+
+// createAppOutput holds the result of a successful app creation.
+type createAppOutput struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// bridgeCreateApp handles the authsome.createApp bridge function call.
+func (e *Extension) bridgeCreateApp(ctx fuibridge.Context, input createAppInput) (*createAppOutput, error) {
+	if input.Name == "" || input.Slug == "" {
+		return nil, fuibridge.NewError(fuibridge.ErrCodeBadRequest, "Name and slug are required")
+	}
+
+	existing, err := e.engine.GetAppBySlug(ctx.Context(), input.Slug)
+	if err == nil && existing != nil {
+		return nil, fuibridge.NewError(fuibridge.ErrCodeBadRequest, fmt.Sprintf("Slug %q is already in use", input.Slug))
+	}
+
+	a := &app.App{
+		Name: input.Name,
+		Slug: input.Slug,
+		Logo: input.Logo,
+	}
+
+	if err := e.engine.CreateApp(ctx.Context(), a); err != nil {
+		return nil, fuibridge.NewError(fuibridge.ErrCodeInternal, fmt.Sprintf("Failed to create app: %v", err))
+	}
+
+	return &createAppOutput{
+		ID:   a.ID.String(),
+		Name: a.Name,
+		Slug: a.Slug,
+	}, nil
 }
 
 // --- Config Loading (mirrors grove extension pattern) ---

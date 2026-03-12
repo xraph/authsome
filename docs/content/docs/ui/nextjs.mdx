@@ -1,9 +1,9 @@
 ---
 title: Next.js Integration
-description: Server sessions, Edge middleware, cookie storage, and pre-built pages for Next.js via @authsome/ui-nextjs.
+description: Server sessions, Edge middleware, API proxy, cookie storage, and pre-built pages for Next.js via @authsome/ui-nextjs.
 ---
 
-`@authsome/ui-nextjs` extends the React package with server-side utilities for Next.js. It provides session validation in Server Components, Edge middleware for route protection, cookie-based token storage, and pre-built authentication pages.
+`@authsome/ui-nextjs` extends the React package with server-side utilities for Next.js. It provides session validation in Server Components, Edge middleware for route protection, an API proxy handler, cookie-based token storage, auto-discovery of enabled auth methods, and pre-built authentication pages.
 
 ## Installation
 
@@ -45,7 +45,61 @@ export default async function DashboardPage() {
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `baseURL` | `string` | -- | Authsome API URL |
-| `cookieName` | `string` | `"authsome:session_token"` | Cookie name for the session token |
+| `cookieName` | `string` | `"authsome_session_token"` | Cookie name for the session token |
+
+### getClientConfig
+
+Fetches the client configuration from the Authsome backend server-side with ISR caching (5-minute revalidation). The client config describes which authentication methods are enabled (password, social, passkey, MFA, magic link, SSO) so your UI components can auto-configure without manual props.
+
+Pass the result as `initialClientConfig` to `AuthProvider` to avoid a redundant client-side fetch on mount.
+
+```tsx
+// app/layout.tsx (Server Component)
+import { getClientConfig } from "@authsome/ui-nextjs";
+import { Providers } from "./providers";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const clientConfig = await getClientConfig({
+    baseURL: process.env.AUTHSOME_API_URL!,
+    publishableKey: process.env.NEXT_PUBLIC_AUTHSOME_KEY,
+  });
+
+  return (
+    <html lang="en">
+      <body>
+        <Providers initialClientConfig={clientConfig ?? undefined}>
+          {children}
+        </Providers>
+      </body>
+    </html>
+  );
+}
+```
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | -- | Authsome API URL |
+| `publishableKey` | `string` | -- | Publishable key to identify the app |
+
+#### ClientConfig shape
+
+The returned `ClientConfig` object describes the enabled authentication methods:
+
+```ts
+interface ClientConfig {
+  version?: string;
+  app_id?: string;
+  branding?: { app_name?: string; logo_url?: string };
+  password?: { enabled: boolean };
+  social?: { enabled: boolean; providers: { id: string; name: string }[] };
+  passkey?: { enabled: boolean };
+  mfa?: { enabled: boolean; methods: string[] };
+  magiclink?: { enabled: boolean };
+  sso?: { enabled: boolean; connections: { id: string; name: string }[] };
+}
+```
 
 ### createCookieStorage
 
@@ -85,6 +139,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 Creates a Next.js Edge middleware that protects routes behind authentication. Unauthenticated users are redirected to the sign-in page. The middleware validates the session token against the Authsome API on every request.
 
+It also redirects already-authenticated users away from auth pages (sign-in, sign-up) to prevent them from seeing login forms when they are already logged in.
+
 ```ts
 // middleware.ts
 import { createAuthMiddleware } from "@authsome/ui-nextjs/middleware";
@@ -92,7 +148,9 @@ import { createAuthMiddleware } from "@authsome/ui-nextjs/middleware";
 export default createAuthMiddleware({
   baseURL: process.env.AUTHSOME_API_URL!,
   signInPage: "/sign-in",
-  publicPaths: ["/", "/sign-in", "/sign-up", "/forgot-password", "/api/public/*"],
+  publicPaths: ["/", "/sign-in", "/sign-up", "/forgot-password", "/api/authsome/*"],
+  authPaths: ["/sign-in", "/sign-up"],
+  afterSignInUrl: "/dashboard",
 });
 
 export const config = {
@@ -107,9 +165,46 @@ export const config = {
 | `baseURL` | `string` | -- | Authsome API URL |
 | `signInPage` | `string` | `"/sign-in"` | Redirect target for unauthenticated users |
 | `publicPaths` | `string[]` | `["/", signInPage]` | Paths that do not require authentication. Supports glob suffixes with `*` |
-| `cookieName` | `string` | `"authsome:session_token"` | Cookie name to read |
+| `cookieName` | `string` | `"authsome_session_token"` | Cookie name to read |
+| `authPaths` | `string[]` | `[signInPage, "/sign-up"]` | Paths that redirect authenticated users away (e.g. sign-in, sign-up pages). Supports glob suffixes |
+| `afterSignInUrl` | `string` | `"/"` | Where to redirect authenticated users visiting auth pages |
 
 The middleware appends a `?redirect=` query parameter to the sign-in URL so you can redirect users back after authentication.
+
+> **Note:** Make sure `/api/authsome/*` is included in `publicPaths` so the proxy route handler is accessible without authentication.
+
+## Proxy route handler
+
+### createProxyHandler
+
+Creates a Next.js App Router catch-all route handler that proxies requests from your Next.js app to the Authsome backend API. This is required for social login (OAuth callbacks), magic link verification, and any other flow where the browser needs to communicate with the Authsome API through your app's domain.
+
+The proxy handler:
+- Forwards `Authorization` and `Cookie` headers to the backend
+- Proxies request bodies for non-GET/HEAD methods
+- Forwards `Set-Cookie` response headers back to the browser (essential for session cookies)
+- Parses JSON responses with a text fallback
+
+```ts
+// app/api/authsome/[...path]/route.ts
+import { createProxyHandler } from "@authsome/ui-nextjs/proxy";
+
+const handler = createProxyHandler({
+  baseURL: process.env.NEXT_PUBLIC_AUTHSOME_API_URL!,
+});
+
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE, handler as PATCH };
+```
+
+This single file replaces any manual proxy implementation. All requests to `/api/authsome/*` will be forwarded to the corresponding path on your Authsome backend (e.g., `/api/authsome/v1/auth/signin` proxies to `<baseURL>/v1/auth/signin`).
+
+#### Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | -- | Base URL of the Authsome backend API |
+
+> **Important:** Add `/api/authsome/*` to your middleware's `publicPaths` array so the proxy route is accessible without authentication.
 
 ## Pre-built pages
 
@@ -153,19 +248,30 @@ export default function Page() {
 # .env.local
 NEXT_PUBLIC_AUTHSOME_URL=https://api.example.com
 AUTHSOME_API_URL=https://api.example.com
+NEXT_PUBLIC_AUTHSOME_KEY=pk_live_xxxxx  # Optional: publishable key for auto-discovery
 ```
 
-### 2. Root layout with providers
+### 2. Root layout with server-side autoconfig
+
+Pre-fetch the client configuration server-side and pass it to the providers:
 
 ```tsx
 // app/layout.tsx
+import { getClientConfig } from "@authsome/ui-nextjs";
 import { Providers } from "./providers";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const clientConfig = await getClientConfig({
+    baseURL: process.env.AUTHSOME_API_URL!,
+    publishableKey: process.env.NEXT_PUBLIC_AUTHSOME_KEY,
+  });
+
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers initialClientConfig={clientConfig ?? undefined}>
+          {children}
+        </Providers>
       </body>
     </html>
   );
@@ -178,14 +284,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 // app/providers.tsx
 "use client";
 
-import { AuthProvider } from "@authsome/ui-nextjs";
-import { createCookieStorage } from "@authsome/ui-nextjs";
+import { AuthProvider, createCookieStorage } from "@authsome/ui-nextjs";
+import type { ClientConfig } from "@authsome/ui-nextjs";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  initialClientConfig,
+}: {
+  children: React.ReactNode;
+  initialClientConfig?: ClientConfig;
+}) {
   return (
     <AuthProvider
       baseURL={process.env.NEXT_PUBLIC_AUTHSOME_URL!}
       storage={createCookieStorage()}
+      publishableKey={process.env.NEXT_PUBLIC_AUTHSOME_KEY}
+      initialClientConfig={initialClientConfig}
     >
       {children}
     </AuthProvider>
@@ -193,7 +307,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 ```
 
-### 4. Middleware
+### 4. Proxy route handler
+
+```ts
+// app/api/authsome/[...path]/route.ts
+import { createProxyHandler } from "@authsome/ui-nextjs/proxy";
+
+const handler = createProxyHandler({
+  baseURL: process.env.NEXT_PUBLIC_AUTHSOME_URL!,
+});
+
+export { handler as GET, handler as POST, handler as PUT, handler as DELETE, handler as PATCH };
+```
+
+### 5. Middleware
 
 ```ts
 // middleware.ts
@@ -202,7 +329,8 @@ import { createAuthMiddleware } from "@authsome/ui-nextjs/middleware";
 export default createAuthMiddleware({
   baseURL: process.env.AUTHSOME_API_URL!,
   signInPage: "/sign-in",
-  publicPaths: ["/", "/sign-in", "/sign-up", "/forgot-password"],
+  publicPaths: ["/", "/sign-in", "/sign-up", "/forgot-password", "/api/authsome/*"],
+  afterSignInUrl: "/dashboard",
 });
 
 export const config = {
@@ -210,7 +338,7 @@ export const config = {
 };
 ```
 
-### 5. Protected server page
+### 6. Protected server page
 
 ```tsx
 // app/dashboard/page.tsx
@@ -257,12 +385,12 @@ For server-side session validation in `getServerSideProps`, read the cookie manu
 import type { GetServerSideProps } from "next";
 
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
-  const token = ctx.req.cookies["authsome:session_token"];
+  const token = ctx.req.cookies["authsome_session_token"];
   if (!token) {
     return { redirect: { destination: "/sign-in", permanent: false } };
   }
 
-  const res = await fetch(`${process.env.AUTHSOME_API_URL}/v1/me`, {
+  const res = await fetch(`${process.env.AUTHSOME_API_URL}/v1/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -286,9 +414,21 @@ import {
   useUser,
   useOrganizations,
   useSessionToken,
+  useClientConfig,
   SignInForm,
   SignUpForm,
   MFAChallengeForm,
   AuthGuard,
+} from "@authsome/ui-nextjs";
+
+// Types
+import type {
+  AuthState,
+  ClientConfig,
+  User,
+  Session,
+  Organization,
+  TokenStorage,
+  ServerSession,
 } from "@authsome/ui-nextjs";
 ```

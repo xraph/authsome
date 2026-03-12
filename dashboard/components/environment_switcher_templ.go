@@ -230,8 +230,8 @@ func EnvironmentSwitcher(current *environment.Environment, all []*environment.En
 						})
 						templ_7745c5c3_Err = dropdown.Item(dropdown.ItemProps{
 							Attributes: templ.Attributes{
-								"hx-get":      "/environments/detail?id=" + env.ID.String(),
-								"hx-target":   "#main-content",
+								"hx-get":      "./environments/detail?id=" + env.ID.String(),
+								"hx-target":   "#content",
 								"hx-swap":     "innerHTML",
 								"hx-push-url": "true",
 							},

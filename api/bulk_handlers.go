@@ -21,7 +21,7 @@ func (a *API) registerBulkRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin", "bulk"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(a.engine, "admin", "super_admin"),
+			middleware.RequirePermission(a.engine, "manage", "user"),
 		),
 	)
 

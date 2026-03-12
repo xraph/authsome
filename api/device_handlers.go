@@ -91,7 +91,7 @@ func (a *API) handleGetDevice(ctx forge.Context, _ *GetDeviceRequest) (*device.D
 		return nil, mapError(err)
 	}
 
-	return d, ctx.JSON(http.StatusOK, d)
+	return d, nil
 }
 
 func (a *API) handleDeleteDevice(ctx forge.Context, _ *DeleteDeviceRequest) (*StatusResponse, error) {
@@ -119,5 +119,5 @@ func (a *API) handleTrustDevice(ctx forge.Context, _ *TrustDeviceRequest) (*devi
 		return nil, mapError(err)
 	}
 
-	return d, ctx.JSON(http.StatusOK, d)
+	return d, nil
 }

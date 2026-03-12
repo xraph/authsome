@@ -3,6 +3,10 @@
 import * as React from "react";
 import { useState } from "react";
 import { useAuth } from "@authsome/ui-react";
+import {
+  prepareRequestOptions,
+  serializeCredential,
+} from "@authsome/ui-core";
 import { Fingerprint } from "lucide-react";
 import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
@@ -55,15 +59,16 @@ export function PasskeyLoginButton({
     try {
       const { options } = await client.passkeyLoginBegin({});
 
-      const credential = await navigator.credentials.get({
-        publicKey: options as unknown as PublicKeyCredentialRequestOptions,
-      });
+      const publicKey = prepareRequestOptions(
+        options as Record<string, unknown>,
+      );
+      const credential = await navigator.credentials.get({ publicKey });
 
       if (!credential) {
         throw new Error("No credential returned from authenticator");
       }
 
-      await client.passkeyLoginFinish(credential);
+      await client.passkeyLoginFinish(serializeCredential(credential));
       onSuccess?.();
     } catch (err) {
       const error =

@@ -195,3 +195,63 @@ func (h *NoopHerald) Notify(_ context.Context, req *HeraldNotifyRequest) error {
 	)
 	return nil
 }
+
+// ListTemplates implements HeraldTemplateManager.
+func (h *NoopHerald) ListTemplates(_ context.Context, _ string) ([]*HeraldTemplate, error) {
+	return nil, nil
+}
+
+// GetTemplate implements HeraldTemplateManager.
+func (h *NoopHerald) GetTemplate(_ context.Context, _ string) (*HeraldTemplate, error) {
+	return nil, ErrHeraldNotAvailable
+}
+
+// CreateTemplate implements HeraldTemplateManager.
+func (h *NoopHerald) CreateTemplate(_ context.Context, _ *HeraldTemplate) error {
+	return ErrHeraldNotAvailable
+}
+
+// UpdateTemplate implements HeraldTemplateManager.
+func (h *NoopHerald) UpdateTemplate(_ context.Context, _ *HeraldTemplate) error {
+	return ErrHeraldNotAvailable
+}
+
+// DeleteTemplate implements HeraldTemplateManager.
+func (h *NoopHerald) DeleteTemplate(_ context.Context, _ string) error {
+	return ErrHeraldNotAvailable
+}
+
+// CreateVersion implements HeraldTemplateManager.
+func (h *NoopHerald) CreateVersion(_ context.Context, _ *HeraldTemplateVersion) error {
+	return ErrHeraldNotAvailable
+}
+
+// UpdateVersion implements HeraldTemplateManager.
+func (h *NoopHerald) UpdateVersion(_ context.Context, _ *HeraldTemplateVersion) error {
+	return ErrHeraldNotAvailable
+}
+
+// DeleteVersion implements HeraldTemplateManager.
+func (h *NoopHerald) DeleteVersion(_ context.Context, _ string) error {
+	return ErrHeraldNotAvailable
+}
+
+// RenderTemplate implements HeraldTemplateManager.
+func (h *NoopHerald) RenderTemplate(_ context.Context, _ string, _ string, _ map[string]any) (*HeraldRenderedContent, error) {
+	return nil, ErrHeraldNotAvailable
+}
+
+// TestSend implements HeraldTemplateManager.
+func (h *NoopHerald) TestSend(_ context.Context, _ *HeraldSendRequest) error {
+	return ErrHeraldNotAvailable
+}
+
+// SeedDefaultTemplates implements HeraldTemplateManager.
+func (h *NoopHerald) SeedDefaultTemplates(_ context.Context, _ string) error {
+	return nil
+}
+
+// ResetDefaultTemplates implements HeraldTemplateManager.
+func (h *NoopHerald) ResetDefaultTemplates(_ context.Context, _ string) error {
+	return ErrHeraldNotAvailable
+}

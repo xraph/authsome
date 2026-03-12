@@ -104,18 +104,28 @@ type Plugin struct {
 	logger        log.Logger
 	appID         string
 	sessionConfig sessionConfigResolver
+	roleEnsurer   roleEnsurer
+}
+
+// roleEnsurer assigns a default Warden role to a newly created user.
+type roleEnsurer interface {
+	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
 }
 
 // New creates a new phone auth plugin.
-func New(cfg Config) *Plugin {
-	if cfg.CodeTTL == 0 {
-		cfg.CodeTTL = 5 * time.Minute
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
 	}
-	if cfg.AutoCreate == nil {
+	if c.CodeTTL == 0 {
+		c.CodeTTL = 5 * time.Minute
+	}
+	if c.AutoCreate == nil {
 		t := true
-		cfg.AutoCreate = &t
+		c.AutoCreate = &t
 	}
-	return &Plugin{config: cfg}
+	return &Plugin{config: c}
 }
 
 // Name returns the plugin name.
@@ -155,6 +165,10 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 
 	if scr, ok := engine.(sessionConfigResolver); ok {
 		p.sessionConfig = scr
+	}
+
+	if re, ok := engine.(roleEnsurer); ok {
+		p.roleEnsurer = re
 	}
 
 	return nil
@@ -397,6 +411,9 @@ func (p *Plugin) resolveOrCreateUser(ctx context.Context, appID id.AppID, phone 
 	}
 	if err := p.store.CreateUser(ctx, newUser); err != nil {
 		return nil, false, forge.InternalError(fmt.Errorf("phone auth: create user: %w", err))
+	}
+	if p.roleEnsurer != nil {
+		p.roleEnsurer.EnsureDefaultRole(ctx, appID, newUser.ID)
 	}
 
 	return newUser, true, nil

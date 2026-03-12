@@ -22,7 +22,7 @@ func (a *API) registerAppSessionConfigRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin", "app-session-config"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(a.engine, "admin", "super_admin"),
+			middleware.RequirePermission(a.engine, "manage", "app"),
 		),
 	)
 
@@ -74,7 +74,7 @@ func (a *API) handleGetAppSessionConfig(ctx forge.Context, req *GetAppSessionCon
 		return nil, mapError(err)
 	}
 
-	return cfg, ctx.JSON(http.StatusOK, cfg)
+	return cfg, nil
 }
 
 func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionConfigRequest) (*appsessionconfig.Config, error) {
@@ -115,7 +115,7 @@ func (a *API) handleSetAppSessionConfig(ctx forge.Context, req *SetAppSessionCon
 		return nil, mapError(err)
 	}
 
-	return cfg, ctx.JSON(http.StatusOK, cfg)
+	return cfg, nil
 }
 
 func (a *API) handleDeleteAppSessionConfig(ctx forge.Context, req *DeleteAppSessionConfigRequest) (*StatusResponse, error) {

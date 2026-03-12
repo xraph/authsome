@@ -3,24 +3,45 @@ package dashui
 import (
 	"strconv"
 
+	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/components/separator"
 	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/components/tabs"
 	"github.com/xraph/forgeui/icons"
 )
 
-templ OrgDetailPage(org *organization.Organization, members []*organization.Member) {
+// OrgDetailTabView holds a pre-rendered tab for the detail page.
+type OrgDetailTabView struct {
+	ID      string
+	Label   string
+	Icon    string
+	Content templ.Component
+}
+
+// OrgDetailPageData holds all data for the organization detail page.
+type OrgDetailPageData struct {
+	Org            *organization.Organization
+	Members        []*organization.Member
+	Teams          []*organization.Team
+	Invitations    []*organization.Invitation
+	PluginSections []templ.Component
+	PluginTabs     []OrgDetailTabView
+	ActiveTab      string
+}
+
+templ OrgDetailPage(data OrgDetailPageData) {
 	<div class="space-y-6">
 		<!-- Back Button -->
 		@button.Button(button.Props{
 			Variant: button.VariantGhost,
 			Size:    button.SizeSm,
 			Attributes: templ.Attributes{
-				"hx-get":      "/organizations",
-				"hx-target":   "#main-content",
+				"hx-get":      "../organizations",
+				"hx-target":   "#content",
 				"hx-swap":     "innerHTML",
 				"hx-push-url": "true",
 			},
@@ -28,14 +49,13 @@ templ OrgDetailPage(org *organization.Organization, members []*organization.Memb
 			@icons.ChevronLeft(icons.WithSize(16))
 			Back to Organizations
 		}
-
-		<!-- Org Info Card -->
+		<!-- Org Info Header -->
 		@card.Card() {
 			@card.Header() {
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-4">
-						if org.Logo != "" {
-							<img src={ org.Logo } alt={ org.Name } class="h-16 w-16 rounded-lg object-cover"/>
+						if data.Org.Logo != "" {
+							<img src={ data.Org.Logo } alt={ data.Org.Name } class="h-16 w-16 rounded-lg object-cover"/>
 						} else {
 							<div class="flex h-16 w-16 items-center justify-center rounded-lg bg-muted">
 								@icons.Building2(icons.WithSize(24))
@@ -43,28 +63,95 @@ templ OrgDetailPage(org *organization.Organization, members []*organization.Memb
 						}
 						<div>
 							@card.Title() {
-								{ org.Name }
+								{ data.Org.Name }
 							}
 							@card.Description() {
-								<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ org.Slug }</code>
+								<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ data.Org.Slug }</code>
 							}
 						</div>
 					</div>
+					<div class="flex items-center gap-2">
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							{ strconv.Itoa(len(data.Members)) } members
+						}
+						if len(data.Teams) > 0 {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+								{ strconv.Itoa(len(data.Teams)) } teams
+							}
+						}
+					</div>
 				</div>
+			}
+		}
+		<!-- Tabs -->
+		@tabs.Tabs(tabs.Props{ID: "org-detail-tabs"}) {
+			@tabs.List(tabs.ListProps{Class: "mb-4"}) {
+				@tabs.Trigger(tabs.TriggerProps{Value: "overview", IsActive: data.ActiveTab == "overview"}) {
+					@icons.Info(icons.WithSize(14))
+					Overview
+				}
+				@tabs.Trigger(tabs.TriggerProps{Value: "members", IsActive: data.ActiveTab == "members"}) {
+					@icons.Users(icons.WithSize(14))
+					Members
+				}
+				for _, pt := range data.PluginTabs {
+					@tabs.Trigger(tabs.TriggerProps{Value: pt.ID, IsActive: data.ActiveTab == pt.ID}) {
+						{ pt.Label }
+					}
+				}
+			}
+			<!-- Overview Tab -->
+			@tabs.Content(tabs.ContentProps{Value: "overview", IsActive: data.ActiveTab == "overview"}) {
+				@orgOverviewTab(data)
+			}
+			<!-- Members Tab -->
+			@tabs.Content(tabs.ContentProps{Value: "members", IsActive: data.ActiveTab == "members"}) {
+				@orgMembersTab(data)
+			}
+			<!-- Plugin Tabs -->
+			for _, pt := range data.PluginTabs {
+				@tabs.Content(tabs.ContentProps{Value: pt.ID, IsActive: data.ActiveTab == pt.ID}) {
+					if pt.Content != nil {
+						@pt.Content
+					}
+				}
+			}
+		}
+		@tabs.Script()
+	</div>
+}
+
+templ orgOverviewTab(data OrgDetailPageData) {
+	<div class="space-y-6">
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			@components.StatCard("users", "Members", strconv.Itoa(len(data.Members)), "")
+			@components.StatCard("activity", "Teams", strconv.Itoa(len(data.Teams)), "")
+			@components.StatCard("mail", "Invitations", strconv.Itoa(len(data.Invitations)), "Pending")
+			@components.StatCard("key-round", "Metadata", strconv.Itoa(len(data.Org.Metadata)), "Keys")
+		</div>
+		<!-- Organization Details -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Details
+				}
 			}
 			@card.Content() {
 				@separator.Separator()
 				<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-					@orgField("Organization ID", org.ID.String())
-					@orgField("Slug", org.Slug)
-					@orgField("Created", org.CreatedAt.Format("Jan 02, 2006 15:04"))
-					@orgField("Updated", org.UpdatedAt.Format("Jan 02, 2006 15:04"))
+					@orgField("Organization ID", data.Org.ID.String())
+					@orgField("Slug", data.Org.Slug)
+					@orgField("Created", data.Org.CreatedAt.Format("Jan 02, 2006 15:04"))
+					@orgField("Updated", data.Org.UpdatedAt.Format("Jan 02, 2006 15:04"))
+					if data.Org.CreatedBy.String() != "" {
+						@orgField("Created By", data.Org.CreatedBy.String())
+					}
 				</dl>
 			}
 		}
-
-		<!-- Metadata Section -->
-		if len(org.Metadata) > 0 {
+		<!-- Metadata -->
+		if len(data.Org.Metadata) > 0 {
 			@card.Card() {
 				@card.Header() {
 					@card.Title() {
@@ -73,31 +160,129 @@ templ OrgDetailPage(org *organization.Organization, members []*organization.Memb
 				}
 				@card.Content() {
 					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						for key, value := range org.Metadata {
+						for key, value := range data.Org.Metadata {
 							@orgField(key, value)
 						}
 					</dl>
 				}
 			}
 		}
+		<!-- Teams -->
+		if len(data.Teams) > 0 {
+			@card.Card() {
+				@card.Header() {
+					<div class="flex items-center gap-3">
+						@icons.Users(icons.WithSize(18))
+						@card.Title() {
+							Teams
+						}
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							{ strconv.Itoa(len(data.Teams)) }
+						}
+					</div>
+				}
+				@card.Content() {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Slug }
+								@table.Head() { Created }
+							}
+						}
+						@table.Body() {
+							for _, t := range data.Teams {
+								@table.Row() {
+									@table.Cell() {
+										<span class="font-medium">{ t.Name }</span>
+									}
+									@table.Cell() {
+										<code class="text-xs">{ t.Slug }</code>
+									}
+									@table.Cell() {
+										{ t.CreatedAt.Format("Jan 02, 2006") }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		<!-- Invitations -->
+		if len(data.Invitations) > 0 {
+			@card.Card() {
+				@card.Header() {
+					<div class="flex items-center gap-3">
+						@icons.Mail(icons.WithSize(18))
+						@card.Title() {
+							Pending Invitations
+						}
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							{ strconv.Itoa(len(data.Invitations)) }
+						}
+					</div>
+				}
+				@card.Content() {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Email }
+								@table.Head() { Role }
+								@table.Head() { Status }
+								@table.Head() { Expires }
+							}
+						}
+						@table.Body() {
+							for _, inv := range data.Invitations {
+								@table.Row() {
+									@table.Cell() {
+										{ inv.Email }
+									}
+									@table.Cell() {
+										@memberRoleBadge(inv.Role)
+									}
+									@table.Cell() {
+										@invitationStatusBadge(inv.Status)
+									}
+									@table.Cell() {
+										{ inv.ExpiresAt.Format("Jan 02, 2006") }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		<!-- Legacy plugin-contributed sections -->
+		for _, section := range data.PluginSections {
+			@section
+		}
+	</div>
+}
 
-		<!-- Members Section -->
+templ orgMembersTab(data OrgDetailPageData) {
+	<div class="space-y-6">
 		@card.Card() {
 			@card.Header() {
 				<div class="flex items-center gap-3">
 					@card.Title() {
 						Members
 					}
-					if members != nil {
+					if data.Members != nil {
 						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
-							{ strconv.Itoa(len(members)) }
+							{ strconv.Itoa(len(data.Members)) }
 						}
 					}
 				</div>
 			}
 			@card.Content() {
-				if len(members) == 0 {
-					<p class="text-sm text-muted-foreground py-4 text-center">No members found.</p>
+				if len(data.Members) == 0 {
+					<div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
+						@icons.Users(icons.WithSize(32))
+						<p class="mt-2 text-sm">No members found.</p>
+					</div>
 				} else {
 					@table.Table() {
 						@table.Header() {
@@ -108,7 +293,7 @@ templ OrgDetailPage(org *organization.Organization, members []*organization.Memb
 							}
 						}
 						@table.Body() {
-							for _, m := range members {
+							for _, m := range data.Members {
 								@table.Row() {
 									@table.Cell() {
 										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ m.UserID.String() }</code>
@@ -127,9 +312,6 @@ templ OrgDetailPage(org *organization.Organization, members []*organization.Memb
 				}
 			}
 		}
-
-		<!-- Plugin-contributed sections slot -->
-		{ children... }
 	</div>
 }
 
@@ -153,6 +335,31 @@ templ memberRoleBadge(role organization.MemberRole) {
 		default:
 			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
 				Member
+			}
+	}
+}
+
+templ invitationStatusBadge(status organization.InvitationStatus) {
+	switch status {
+		case organization.InvitationPending:
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				Pending
+			}
+		case organization.InvitationAccepted:
+			@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+				Accepted
+			}
+		case organization.InvitationExpired:
+			@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+				Expired
+			}
+		case organization.InvitationDeclined:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				Declined
+			}
+		default:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				{ string(status) }
 			}
 	}
 }

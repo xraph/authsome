@@ -9,6 +9,7 @@ import (
 
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/settings"
+	"github.com/xraph/forgeui/components/input"
 )
 
 // SettingsEditorData holds all data for the settings editor page.
@@ -52,6 +53,7 @@ type SettingsField struct {
 	Scopes         []string
 	ValueType      string // "string", "int", "float", "bool", "array", "object"
 	Order          int    // UI display order
+	ObjectFields   []settings.ObjectFieldDef // nested field schema for object_array type
 }
 
 // BuildSettingsEditorData resolves all settings and builds the editor data structure.
@@ -151,6 +153,11 @@ func resolvedSettingToField(rs *settings.ResolvedSetting, scope, appID string) S
 		Order:          ui.Order,
 	}
 
+	// Copy object field definitions for object_array rendering.
+	if ui.ObjectFields != nil {
+		field.ObjectFields = ui.ObjectFields
+	}
+
 	// Build scopes list.
 	for _, s := range def.Scopes {
 		field.Scopes = append(field.Scopes, string(s))
@@ -239,4 +246,104 @@ func ScopeLabel(scope string) string {
 	default:
 		return scope
 	}
+}
+
+// ──────────────────────────────────────────────────
+// Object array helpers
+// ──────────────────────────────────────────────────
+
+// ObjectArrayItem represents one parsed item in an object array for template rendering.
+type ObjectArrayItem struct {
+	Index  int
+	Fields map[string]string
+}
+
+// ParseObjectArrayItems parses the effective value (JSON array of objects)
+// into a slice of ObjectArrayItem for template rendering.
+func ParseObjectArrayItems(effectiveValue string, objectFields []settings.ObjectFieldDef) []ObjectArrayItem {
+	if effectiveValue == "" || effectiveValue == "[]" || effectiveValue == "null" {
+		return nil
+	}
+
+	var rawItems []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(effectiveValue), &rawItems); err != nil {
+		return nil
+	}
+
+	items := make([]ObjectArrayItem, 0, len(rawItems))
+	for i, raw := range rawItems {
+		item := ObjectArrayItem{
+			Index:  i,
+			Fields: make(map[string]string, len(objectFields)),
+		}
+		for _, fd := range objectFields {
+			val, ok := raw[fd.Key]
+			if !ok {
+				item.Fields[fd.Key] = ""
+				continue
+			}
+			switch fd.InputType {
+			case formconfig.FieldSwitch, formconfig.FieldCheckbox:
+				var b bool
+				if json.Unmarshal(val, &b) == nil {
+					item.Fields[fd.Key] = fmt.Sprintf("%v", b)
+				}
+			case formconfig.FieldTextarea:
+				// Array-of-strings subfields (e.g. scopes): join with newlines.
+				var arr []string
+				if json.Unmarshal(val, &arr) == nil {
+					item.Fields[fd.Key] = strings.Join(arr, "\n")
+				} else {
+					var s string
+					if json.Unmarshal(val, &s) == nil {
+						item.Fields[fd.Key] = s
+					}
+				}
+			default:
+				var s string
+				if json.Unmarshal(val, &s) == nil {
+					item.Fields[fd.Key] = s
+				} else {
+					// For numbers or other non-string JSON values, strip quotes.
+					item.Fields[fd.Key] = strings.Trim(string(val), "\"")
+				}
+			}
+		}
+		items = append(items, item)
+	}
+
+	return items
+}
+
+// objectFieldInputName generates a namespaced input name for a nested object field.
+func objectFieldInputName(settingKey string, index int, fieldKey string) string {
+	return fmt.Sprintf("%s[%d].%s", settingKey, index, fieldKey)
+}
+
+// objectFieldInputType maps an ObjectFieldDef to a forgeui input.Type.
+func objectFieldInputType(fd settings.ObjectFieldDef) input.Type {
+	if fd.Sensitive {
+		return input.TypePassword
+	}
+	switch fd.InputType {
+	case formconfig.FieldEmail:
+		return input.TypeEmail
+	case formconfig.FieldURL:
+		return input.TypeURL
+	case formconfig.FieldNumber:
+		return input.TypeNumber
+	case formconfig.FieldTel:
+		return input.TypeTel
+	default:
+		return input.TypeText
+	}
+}
+
+// objectFieldsJSON serializes the ObjectFieldDef slice to JSON for the JS add-item handler.
+func objectFieldsJSON(fields []settings.ObjectFieldDef) string {
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
 }

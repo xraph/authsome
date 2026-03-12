@@ -247,7 +247,7 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						Variant: button.VariantDestructive,
 						Size:    button.SizeSm,
 						Attributes: templ.Attributes{
-							"hx-get":     "./detail?session_id=" + data.Session.ID.String() + "&action=revoke",
+							"hx-get":     "./detail?id=" + data.Session.ID.String() + "&action=revoke",
 							"hx-target":  "#content",
 							"hx-swap":    "innerHTML",
 							"hx-confirm": "Are you sure you want to revoke this session?",
@@ -486,9 +486,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var18 templ.SafeURL
-					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../users/detail?user_id=" + data.Session.UserID.String()))
+					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../users/detail?id=" + data.Session.UserID.String()))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 154, Col: 90}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 154, Col: 85}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 					if templ_7745c5c3_Err != nil {
@@ -499,9 +499,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var19 string
-					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs("../users/detail?user_id=" + data.Session.UserID.String())
+					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs("../users/detail?id=" + data.Session.UserID.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 156, Col: 77}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 156, Col: 72}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 					if templ_7745c5c3_Err != nil {
@@ -545,9 +545,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var21 templ.SafeURL
-					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../devices/detail?device_id=" + data.Session.DeviceID.String()))
+					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../devices/detail?id=" + data.Session.DeviceID.String()))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 176, Col: 96}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 176, Col: 89}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
@@ -558,9 +558,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var22 string
-					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs("../devices/detail?device_id=" + data.Session.DeviceID.String())
+					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs("../devices/detail?id=" + data.Session.DeviceID.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 178, Col: 83}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 178, Col: 76}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {
@@ -758,9 +758,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var33 templ.SafeURL
-					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../users/detail?user_id=" + data.User.ID.String()))
+					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../users/detail?id=" + data.User.ID.String()))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 218, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 218, Col: 75}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 					if templ_7745c5c3_Err != nil {
@@ -771,9 +771,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var34 string
-					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs("../users/detail?user_id=" + data.User.ID.String())
+					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs("../users/detail?id=" + data.User.ID.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 220, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 220, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 					if templ_7745c5c3_Err != nil {
@@ -990,9 +990,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var44 templ.SafeURL
-					templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../devices/detail?device_id=" + data.Device.ID.String()))
+					templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("../devices/detail?id=" + data.Device.ID.String()))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 271, Col: 85}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 271, Col: 78}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 					if templ_7745c5c3_Err != nil {
@@ -1003,9 +1003,9 @@ func SessionDetailPage(data SessionDetailData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var45 string
-					templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs("../devices/detail?device_id=" + data.Device.ID.String())
+					templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs("../devices/detail?id=" + data.Device.ID.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 273, Col: 72}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/session_detail.templ`, Line: 273, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 					if templ_7745c5c3_Err != nil {

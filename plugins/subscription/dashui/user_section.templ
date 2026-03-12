@@ -1,0 +1,69 @@
+package dashui
+
+import (
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+)
+
+// UserSection renders subscription info for a user detail page.
+templ UserSection(view ActiveSubView) {
+	@card.Card() {
+		@card.Header() {
+			@card.Title() {
+				Subscription
+			}
+			@card.Description() {
+				Current billing subscription for this user
+			}
+		}
+		@card.Content() {
+			if !view.HasSub {
+				<p class="text-sm text-muted-foreground py-4 text-center">No active subscription.</p>
+			} else {
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Plan</dt>
+					<dd class="font-medium">{ view.PlanName }</dd>
+					<dt class="text-muted-foreground">Status</dt>
+					<dd>
+						@statusBadge(view.Status)
+					</dd>
+					<dt class="text-muted-foreground">Period Ends</dt>
+					<dd class="font-medium">
+						{{ end := view.PeriodEnd.Format("Jan 02, 2006") }}
+						{ end }
+					</dd>
+				</dl>
+			}
+		}
+	}
+}
+
+// statusBadge renders a colored badge based on subscription status.
+templ statusBadge(status string) {
+	switch status {
+		case "active":
+			@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+				Active
+			}
+		case "trialing":
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				Trialing
+			}
+		case "past_due":
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				Past Due
+			}
+		case "canceled":
+			@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+				Canceled
+			}
+		case "paused":
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				Paused
+			}
+		default:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				{ status }
+			}
+	}
+}

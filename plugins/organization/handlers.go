@@ -244,7 +244,7 @@ func (p *Plugin) registerAdminOrgRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(p.roleChecker, "admin", "super_admin"),
+			middleware.RequirePermission(p.permChecker, "manage", "organization"),
 		),
 	)
 

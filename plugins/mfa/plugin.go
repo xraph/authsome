@@ -71,12 +71,16 @@ type Plugin struct {
 }
 
 // New creates a new MFA plugin.
-func New(cfg Config) *Plugin {
-	if cfg.Issuer == "" {
-		cfg.Issuer = "AuthSome"
+func New(cfg ...Config) *Plugin {
+	var c Config
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
+	if c.Issuer == "" {
+		c.Issuer = "AuthSome"
 	}
 	return &Plugin{
-		config:     cfg,
+		config:     c,
 		ceremonies: ceremony.NewMemory(),
 	}
 }
@@ -786,6 +790,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   bridge.SeverityInfo,
+		Category:   "auth",
 	})
 }
 

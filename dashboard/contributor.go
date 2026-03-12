@@ -93,7 +93,7 @@ func (c *Contributor) Manifest() *contributor.Manifest { return c.manifest }
 // slugs from the route and enriches the context so layout components
 // (app switcher, env switcher) can access them during rendering.
 func (c *Contributor) PrepareContext(ctx context.Context, route string) context.Context {
-	appSlug, envSlug, _ := c.parseAppEnvRoute(route)
+	appSlug, envSlug, pageRoute := c.parseAppEnvRoute(route)
 	if appSlug == "" || envSlug == "" {
 		// Fall back to default app/env so layout components (switchers) render.
 		defaultApp, defaultEnv := c.resolveDefaults(ctx)
@@ -110,6 +110,7 @@ func (c *Contributor) PrepareContext(ctx context.Context, route string) context.
 	ctx = WithEnvID(ctx, env.ID)
 	ctx = WithAppSlug(ctx, appSlug)
 	ctx = WithEnvSlug(ctx, envSlug)
+	ctx = WithPageRoute(ctx, pageRoute)
 	return ctx
 }
 
@@ -147,6 +148,7 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 		ctx = WithAppSlug(ctx, appSlug)
 		ctx = WithEnvSlug(ctx, envSlug)
 	}
+	ctx = WithPageRoute(ctx, pageRoute)
 
 	appID, _ := AppIDFromContext(ctx)
 
@@ -157,7 +159,7 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 	}
 
 	// Wrap the page component with the context script for HTMX nav link rewriting.
-	return withContextScript(comp, appSlug, envSlug), nil
+	return withContextScript(comp, appSlug, envSlug, c.knownRoutesCSV()), nil
 }
 
 // renderPageRoute dispatches to the correct page renderer based on the page route.
@@ -223,15 +225,19 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 		return c.renderDeviceDetail(ctx, params)
 	case "/roles/detail":
 		return c.renderRoleDetail(ctx, appID, params)
+	case "/apps":
+		return c.renderApps(ctx)
+	case "/apps/create":
+		return c.renderAppCreate(ctx, params)
 	default:
 		return nil, contributor.ErrPageNotFound
 	}
 }
 
 // withContextScript wraps a page component with the auth context script for HTMX nav rewriting.
-func withContextScript(page templ.Component, appSlug, envSlug string) templ.Component {
+func withContextScript(page templ.Component, appSlug, envSlug, knownRoutesCSV string) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
-		if err := components.ContextScript(appSlug, envSlug).Render(ctx, w); err != nil {
+		if err := components.ContextScript(appSlug, envSlug, knownRoutesCSV).Render(ctx, w); err != nil {
 			return err
 		}
 		return page.Render(ctx, w)
@@ -348,7 +354,7 @@ func (c *Contributor) renderUsers(ctx context.Context, appID id.AppID, params co
 		return nil, fmt.Errorf("dashboard: render users: %w", err)
 	}
 
-	basePath := "/users"
+	basePath := "./users"
 	return pages.UsersPage(userList, cursor, basePath), nil
 }
 
@@ -759,6 +765,63 @@ func (c *Contributor) renderRoleDetail(ctx context.Context, _ id.AppID, params c
 	return pages.RoleDetailPage(data), nil
 }
 
+func (c *Contributor) renderApps(ctx context.Context) (templ.Component, error) {
+	apps, err := c.engine.ListApps(ctx)
+	if err != nil {
+		apps = nil
+	}
+
+	return pages.AppsPage(apps), nil
+}
+
+func (c *Contributor) renderAppCreate(ctx context.Context, params contributor.Params) (templ.Component, error) {
+	// App creation from the sidebar dialog is handled by the bridge API
+	// (authsome.createApp). This full-page route is kept as a fallback.
+	action := params.FormData["action"]
+	if action == "create" {
+		nonce := params.FormData["nonce"]
+		if ConsumeNonce(nonce) {
+			created, errMsg := c.handleCreateApp(ctx, params)
+			var data pages.CreateAppPageData
+			data.CreatedApp = created
+			data.Error = errMsg
+			data.FormNonce = GenerateNonce()
+			return pages.CreateAppPage(data), nil
+		}
+	}
+
+	var data pages.CreateAppPageData
+	data.FormNonce = GenerateNonce()
+	return pages.CreateAppPage(data), nil
+}
+
+func (c *Contributor) handleCreateApp(ctx context.Context, params contributor.Params) (*app.App, string) {
+	name := strings.TrimSpace(params.FormData["name"])
+	slug := strings.TrimSpace(params.FormData["slug"])
+	logo := strings.TrimSpace(params.FormData["logo"])
+
+	if name == "" || slug == "" {
+		return nil, "Name and slug are required."
+	}
+
+	existing, err := c.engine.GetAppBySlug(ctx, slug)
+	if err == nil && existing != nil {
+		return nil, fmt.Sprintf("Slug %q is already in use.", slug)
+	}
+
+	a := &app.App{
+		Name: name,
+		Slug: slug,
+		Logo: logo,
+	}
+
+	if err := c.engine.CreateApp(ctx, a); err != nil {
+		return nil, fmt.Sprintf("Failed to create app: %v", err)
+	}
+
+	return a, ""
+}
+
 // ─── Widget Render Helpers ───────────────────────────────────────────────────
 
 func (c *Contributor) renderStatsWidget(ctx context.Context, appID id.AppID) (templ.Component, error) {
@@ -906,6 +969,29 @@ func (c *Contributor) collectUserDetailSections(ctx context.Context, userID id.U
 	return sections
 }
 
+// knownRoutesCSV returns a comma-separated list of unique top-level page route
+// prefixes (e.g. "/users,/sessions,/social-providers") for use by the client-side
+// HTMX interceptor which rewrites sidebar nav links with app/env slug prefixes.
+func (c *Contributor) knownRoutesCSV() string {
+	seen := make(map[string]bool)
+	var routes []string
+	for route := range c.pageRoutes {
+		// Extract the top-level segment (e.g. "/users" from "/users/detail").
+		seg := route
+		if len(seg) > 1 {
+			if i := strings.Index(seg[1:], "/"); i >= 0 {
+				seg = seg[:i+1]
+			}
+		}
+		if seg == "/" || seg == "" || seen[seg] {
+			continue
+		}
+		seen[seg] = true
+		routes = append(routes, seg)
+	}
+	return strings.Join(routes, ",")
+}
+
 // ─── App/Env Route Parsing ───────────────────────────────────────────────────
 
 // knownPageRoutes is the set of top-level page routes that the dashboard handles.
@@ -929,6 +1015,8 @@ var knownPageRoutes = map[string]bool{
 	"/plugins":             true,
 	"/settings":            true,
 	"/settings/editor":     true,
+	"/apps":                true,
+	"/apps/create":         true,
 }
 
 // parseAppEnvRoute extracts app slug, env slug, and page route from a route string.

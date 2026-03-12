@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/middleware.ts", "src/pages/index.tsx"],
+  entry: ["src/index.ts", "src/middleware.ts", "src/proxy.ts", "src/pages/index.tsx"],
   format: ["esm"],
   dts: true,
   clean: true,

@@ -31,11 +31,14 @@ func (a *Adapter) Record(ctx context.Context, event *bridge.AuditEvent) error {
 		builder = a.emitter.Info(ctx, event.Action, event.Resource, event.ResourceID)
 	}
 
+	if event.Category != "" {
+		builder = builder.Category(event.Category)
+	}
 	if event.ActorID != "" {
 		builder = builder.UserID(event.ActorID)
 	}
 	if event.Tenant != "" {
-		builder = builder.TenantID(event.Tenant)
+		builder = builder.AppID(event.Tenant)
 	}
 	if event.Outcome != "" {
 		builder = builder.Outcome(event.Outcome)

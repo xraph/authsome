@@ -1,165 +1,463 @@
 ---
-title: Flutter SDK
-description: Native Flutter SDK for Authsome authentication -- currently under active development.
+title: Flutter UI
+description: Pre-built Material Design 3 authentication screens and widgets for Flutter.
 ---
 
-The Authsome Flutter SDK will bring native authentication support to Flutter applications across all platforms. The SDK is currently under active development and is expected to enter public beta soon.
+The `authsome_flutter_ui` package provides a complete set of Material Design 3 authentication screens, headless builder widgets, and user management components for Flutter. It integrates with `AuthProvider` from `authsome_flutter` and supports auto-configuration from your Authsome backend.
 
-> **Status:** Under active development. The API surface described on this page is preliminary and subject to change.
+## Installation
 
-## Planned features
+Add both packages to your `pubspec.yaml`:
 
-### AuthProvider widget
+```yaml
+dependencies:
+  authsome_flutter:
+    # your version or path
+  authsome_flutter_ui:
+    # your version or path
+```
 
-A top-level `InheritedWidget` that manages authentication state and provides it to the widget tree:
+`authsome_flutter_ui` re-exports `authsome_flutter` for convenience, so a single import gives you everything:
 
 ```dart
-// Planned API
+import 'package:authsome_flutter_ui/authsome_flutter_ui.dart';
+```
+
+## Quick start
+
+Wrap your app with `AuthProvider`, then use any pre-built screen:
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:authsome_flutter_ui/authsome_flutter_ui.dart';
+
 void main() {
   runApp(
     AuthProvider(
-      config: AuthConfig(
-        baseURL: 'https://api.example.com',
-        storage: SecureTokenStorage(),
-      ),
+      config: AuthConfig(baseURL: 'https://api.example.com'),
       child: const MyApp(),
     ),
   );
 }
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
+      home: const AuthGuard(
+        child: HomePage(),
+        fallback: SignInPage(),
+      ),
+    );
+  }
+}
+
+class SignInPage extends StatelessWidget {
+  const SignInPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: SignInForm(
+          onSuccess: () => Navigator.pushReplacementNamed(context, '/home'),
+          onSignUpTap: () => Navigator.pushNamed(context, '/sign-up'),
+          onForgotPasswordTap: () => Navigator.pushNamed(context, '/forgot'),
+        ),
+      ),
+    );
+  }
+}
 ```
 
-### Pre-built auth screens
+## Styled screens
 
-Material Design 3 screens for every authentication flow:
+All screens are Material Design 3 styled, use `Theme.of(context)` for colors and text styles, and accept string-override props for localization.
 
-| Screen | Description |
-|--------|-------------|
-| `SignInScreen` | Email/password sign-in with social provider buttons |
-| `SignUpScreen` | Registration with name, email, and password fields |
-| `ForgotPasswordScreen` | Password reset request |
-| `ResetPasswordScreen` | New password entry with token from deep link |
-| `MFAChallengeScreen` | TOTP or SMS code entry with pin input |
-| `UserProfileScreen` | View and edit user profile |
-| `SessionListScreen` | View and revoke active sessions |
+### SignInForm
 
-All screens will follow Material Design 3 guidelines and support custom theming through Flutter's `ThemeData`.
-
-### Secure token storage
-
-Integration with `flutter_secure_storage` for platform-appropriate credential persistence:
-
-| Platform | Storage backend |
-|----------|----------------|
-| iOS | Keychain Services |
-| Android | EncryptedSharedPreferences (API 23+) / Keystore |
-| Web | Encrypted localStorage |
-| macOS | Keychain Services |
-| Windows | Windows Credential Manager |
-| Linux | libsecret |
-
-### Biometric authentication
-
-Optional biometric gate before retrieving stored tokens:
+Multi-step email-then-password flow with optional social login buttons. Auto-discovers social providers from `clientConfig`.
 
 ```dart
-// Planned API
-AuthProvider(
-  config: AuthConfig(
-    baseURL: 'https://api.example.com',
-    storage: SecureTokenStorage(
-      biometric: BiometricConfig(
-        enabled: true,
-        reason: 'Authenticate to access your account',
+SignInForm(
+  onSuccess: () => Navigator.pushReplacementNamed(context, '/home'),
+  onSignUpTap: () => Navigator.pushNamed(context, '/sign-up'),
+  onForgotPasswordTap: () => Navigator.pushNamed(context, '/forgot'),
+  onMagicLinkTap: () => Navigator.pushNamed(context, '/magic-link'),
+  logo: Image.asset('assets/logo.png', height: 48),
+  // Override auto-detected social providers:
+  socialProviders: [
+    SocialProvider(id: 'google', name: 'Google'),
+    SocialProvider(id: 'github', name: 'GitHub'),
+  ],
+  socialLayout: SocialButtonLayout.grid,
+)
+```
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onSuccess` | `VoidCallback?` | Called after successful sign-in |
+| `onSignUpTap` | `VoidCallback?` | Navigate to sign-up |
+| `onForgotPasswordTap` | `VoidCallback?` | Navigate to forgot password |
+| `onMagicLinkTap` | `VoidCallback?` | Navigate to magic link |
+| `onSocialLogin` | `Function(String, String)?` | Social login callback `(providerId, url)` |
+| `socialProviders` | `List<SocialProvider>?` | Override auto-detected providers |
+| `socialLayout` | `SocialButtonLayout?` | `grid`, `iconRow`, or `vertical` |
+| `logo` | `Widget?` | Logo above the title |
+| `titleText` | `String` | Default: "Sign in" |
+| `emailLabel` | `String` | Default: "Email" |
+| `passwordLabel` | `String` | Default: "Password" |
+
+### SignUpForm
+
+Multi-step email-then-name-and-password registration flow.
+
+```dart
+SignUpForm(
+  onSuccess: () => Navigator.pushReplacementNamed(context, '/home'),
+  onSignInTap: () => Navigator.pop(context),
+)
+```
+
+### ForgotPasswordForm
+
+Email input with success confirmation view showing a mail icon.
+
+```dart
+ForgotPasswordForm(
+  onSuccess: () => print('Reset email sent'),
+  onSignInTap: () => Navigator.pop(context),
+)
+```
+
+### ResetPasswordForm
+
+New password and confirm password fields with strength indicator. Requires a `token` from a deep link.
+
+```dart
+ResetPasswordForm(
+  token: resetToken,
+  onSuccess: () => Navigator.pushReplacementNamed(context, '/sign-in'),
+)
+```
+
+### MfaChallengeForm
+
+Tabbed multi-method MFA: TOTP (authenticator), SMS (with 60s resend cooldown), and recovery codes. Auto-discovers available methods from `clientConfig.mfa.methods`.
+
+```dart
+MfaChallengeForm(
+  enrollmentId: enrollmentId,
+  onSuccess: () => Navigator.pushReplacementNamed(context, '/home'),
+  // Override auto-detected methods:
+  methods: [MfaMethod.totp, MfaMethod.sms, MfaMethod.recovery],
+  defaultMethod: MfaMethod.totp,
+)
+```
+
+### MagicLinkForm
+
+Email input that sends a passwordless sign-in link.
+
+```dart
+MagicLinkForm(
+  onSuccess: () => print('Magic link sent'),
+  onSignInTap: () => Navigator.pop(context),
+)
+```
+
+### ChangePasswordForm
+
+Current password, new password, and confirm password fields.
+
+```dart
+ChangePasswordForm(
+  onSuccess: () => ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Password changed')),
+  ),
+)
+```
+
+### EmailVerificationForm
+
+6-digit OTP input with a resend button and 60-second cooldown timer.
+
+```dart
+EmailVerificationForm(
+  email: 'user@example.com',
+  onSuccess: () => Navigator.pushReplacementNamed(context, '/home'),
+  cooldownSeconds: 60,
+)
+```
+
+## User management widgets
+
+### UserAvatar
+
+CircleAvatar with image URL or initials fallback. Reads user data from `context.auth.user`.
+
+```dart
+// Automatic from auth state
+UserAvatar(size: AvatarSize.md)
+
+// Manual override
+UserAvatar(
+  imageUrl: 'https://example.com/avatar.jpg',
+  name: 'John Doe',
+  size: AvatarSize.lg,
+)
+```
+
+### UserButton
+
+Avatar with a popup menu containing profile, settings, and sign-out actions.
+
+```dart
+UserButton(
+  onProfileTap: () => Navigator.pushNamed(context, '/profile'),
+  onSettingsTap: () => Navigator.pushNamed(context, '/settings'),
+  onSignOut: () => context.auth.signOut(),
+  menuItems: [
+    PopupMenuItem(value: 'help', child: Text('Help')),
+  ],
+)
+```
+
+### UserProfileCard
+
+Card displaying avatar, name, email, and other user info with optional inline editing.
+
+```dart
+UserProfileCard(
+  editable: true,
+  onUpdate: () => print('Profile updated'),
+)
+```
+
+### OrgSwitcher
+
+Popup menu for switching between organizations and creating new ones.
+
+```dart
+OrgSwitcher(
+  activeOrgId: currentOrgId,
+  onOrgChange: (orgId) => setState(() => currentOrgId = orgId),
+  onCreateOrg: () => print('New org created'),
+)
+```
+
+## Session and device management
+
+### SessionList
+
+Fetches and displays active sessions with device icons, IP addresses, relative timestamps, and revoke actions. The current session is badged and protected from accidental revocation.
+
+```dart
+SessionList(
+  currentSessionToken: context.auth.session?.sessionToken,
+  onRevoke: (sessionId) => print('Revoked $sessionId'),
+)
+```
+
+### DeviceList
+
+Fetches and displays registered devices with trust/untrust badges and delete actions.
+
+```dart
+DeviceList(
+  onTrust: (deviceId) => print('Trusted $deviceId'),
+  onDelete: (deviceId) => print('Deleted $deviceId'),
+)
+```
+
+## Headless builders
+
+Builder-pattern widgets that expose form state without rendering any UI. Use these when you need full control over the layout.
+
+### AuthGuard
+
+Shows different widgets based on authentication state.
+
+```dart
+AuthGuard(
+  child: const HomePage(),
+  fallback: const SignInPage(),
+  loading: const Center(child: CircularProgressIndicator()),
+)
+```
+
+### SignInFormBuilder
+
+```dart
+SignInFormBuilder(
+  builder: (state) => Column(
+    children: [
+      TextField(
+        onChanged: state.setEmail,
+        decoration: InputDecoration(hintText: 'Email'),
       ),
+      TextField(
+        onChanged: state.setPassword,
+        obscureText: true,
+        decoration: InputDecoration(hintText: 'Password'),
+      ),
+      if (state.error != null) Text(state.error!, style: TextStyle(color: Colors.red)),
+      ElevatedButton(
+        onPressed: state.isLoading ? null : state.submit,
+        child: state.isLoading
+            ? CircularProgressIndicator()
+            : Text('Sign In'),
+      ),
+    ],
+  ),
+)
+```
+
+### SignUpFormBuilder
+
+Same pattern as `SignInFormBuilder`, adds `name`/`setName` to the state object.
+
+### MfaChallengeFormBuilder
+
+```dart
+MfaChallengeFormBuilder(
+  enrollmentId: enrollmentId,
+  builder: (state) => Column(
+    children: [
+      TextField(onChanged: state.setCode),
+      ElevatedButton(
+        onPressed: state.isLoading ? null : state.submit,
+        child: Text('Verify'),
+      ),
+    ],
+  ),
+)
+```
+
+## Shared widgets
+
+Reusable building blocks used by the styled screens. You can use them in your own custom layouts.
+
+| Widget | Description |
+|--------|-------------|
+| `AuthCard` | Centered card with title, description, logo, footer, and content area |
+| `ErrorDisplay` | Inline error banner using `colorScheme.errorContainer` |
+| `PasswordInput` | TextField with visibility toggle (eye icon) |
+| `OtpInput` | 6-digit PIN input with auto-submit on completion |
+| `OrDivider` | Row with "or" text between two dividers |
+| `SocialButtons` | Social provider buttons in `grid`, `iconRow`, or `vertical` layout |
+| `LoadingIndicator` | Sized `CircularProgressIndicator` (`sm`, `md`, `lg`) |
+
+## Customization
+
+### Theme integration
+
+All widgets use `Theme.of(context).colorScheme` and `Theme.of(context).textTheme`. Customize the look by adjusting your `ThemeData`:
+
+```dart
+MaterialApp(
+  theme: ThemeData(
+    useMaterial3: true,
+    colorSchemeSeed: Colors.indigo,
+    inputDecorationTheme: InputDecorationTheme(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     ),
   ),
-  child: const MyApp(),
-);
+  // ...
+)
 ```
 
-### Deep link handling
+### AuthTheme
 
-Built-in support for deep links used by magic link sign-in and OAuth callbacks:
+For finer control over spacing and border radius, wrap your tree with `AuthTheme`:
 
 ```dart
-// Planned API
-AuthProvider(
-  config: AuthConfig(
-    baseURL: 'https://api.example.com',
-    deepLinkScheme: 'myapp',
-    deepLinkHost: 'auth',
+AuthTheme(
+  data: AuthThemeData(
+    cardMaxWidth: 420,
+    cardPadding: 32,
+    fieldSpacing: 16,
+    sectionSpacing: 24,
+    borderRadius: 16,
   ),
-  child: const MyApp(),
-);
+  child: SignInForm(/* ... */),
+)
 ```
 
-This will handle URLs like `myapp://auth/callback?token=...` and `myapp://auth/magic-link?code=...` automatically.
+### String overrides (localization)
+
+Every user-facing string is an optional named parameter with an English default:
+
+```dart
+SignInForm(
+  titleText: 'Connexion',
+  emailLabel: 'Adresse e-mail',
+  passwordLabel: 'Mot de passe',
+  continueLabel: 'Continuer',
+  signUpLabel: 'Cr\u00e9er un compte',
+  forgotPasswordLabel: 'Mot de passe oubli\u00e9 ?',
+)
+```
+
+### Social login
+
+Social login uses a callback pattern to keep the package dependency-free. Your app is responsible for launching the OAuth URL:
+
+```dart
+SignInForm(
+  onSocialLogin: (providerId, url) async {
+    // Use url_launcher or custom WebView to open the OAuth URL
+    await launchUrl(Uri.parse(url));
+  },
+)
+```
+
+## Auto-configuration
+
+When `AuthProvider` fetches the client config from your backend (`/v1/auth/client-config`), the UI widgets automatically adapt:
+
+- **Social providers**: `SignInForm` and `SignUpForm` show buttons for providers enabled in your dashboard
+- **MFA methods**: `MfaChallengeForm` shows tabs only for enabled methods (TOTP, SMS, recovery)
+- **Magic link**: Sign-in forms can show a magic link option when enabled
+- **Passkeys**: Future support for passkey-based authentication
+
+You can override any auto-detected value with explicit props.
+
+## React to Flutter mapping
+
+| React Component | Flutter Widget |
+|----------------|---------------|
+| `<SignIn />` | `SignInForm` |
+| `<SignUp />` | `SignUpForm` |
+| `<ForgotPassword />` | `ForgotPasswordForm` |
+| `<ResetPassword />` | `ResetPasswordForm` |
+| `<MFAChallenge />` | `MfaChallengeForm` |
+| `<MagicLink />` | `MagicLinkForm` |
+| `<ChangePassword />` | `ChangePasswordForm` |
+| `<EmailVerification />` | `EmailVerificationForm` |
+| `<UserAvatar />` | `UserAvatar` |
+| `<UserButton />` | `UserButton` |
+| `<UserProfile />` | `UserProfileCard` |
+| `<OrgSwitcher />` | `OrgSwitcher` |
+| `<SessionList />` | `SessionList` |
+| `<DeviceList />` | `DeviceList` |
+| `useSignIn()` | `SignInFormBuilder` |
+| `useSignUp()` | `SignUpFormBuilder` |
+| `useMFA()` | `MfaChallengeFormBuilder` |
+| `<AuthGuard>` | `AuthGuard` |
 
 ## Platform support
 
 | Platform | Status |
 |----------|--------|
-| iOS | Planned |
-| Android | Planned |
-| Web | Planned |
-| macOS | Planned |
-| Windows | Planned |
-| Linux | Planned |
+| iOS | Supported |
+| Android | Supported |
+| Web | Supported |
+| macOS | Supported |
+| Windows | Supported |
+| Linux | Supported |
 
-## Expected API surface
-
-### State management
-
-```dart
-// Planned API
-class AuthState {
-  final AuthStatus status; // loading, authenticated, unauthenticated, mfaRequired, error
-  final User? user;
-  final Session? session;
-  final String? error;
-}
-```
-
-### Hooks (via flutter_hooks or Riverpod)
-
-```dart
-// Planned API -- flutter_hooks style
-Widget build(BuildContext context) {
-  final auth = useAuth();
-  final user = useUser();
-  final orgs = useOrganizations();
-
-  if (auth.isLoading) return const CircularProgressIndicator();
-  if (!auth.isAuthenticated) return const SignInScreen();
-
-  return Text('Welcome, ${user.value?.name}');
-}
-```
-
-### Programmatic API
-
-```dart
-// Planned API
-final authManager = AuthManager(config: AuthConfig(baseURL: '...'));
-await authManager.initialize();
-
-await authManager.signIn(email: 'user@example.com', password: 'secret');
-await authManager.signOut();
-
-final user = authManager.state.user;
-```
-
-## Roadmap
-
-1. **Core SDK** -- AuthManager, AuthClient, token storage, state management
-2. **Material Design 3 screens** -- Sign-in, sign-up, MFA, profile screens
-3. **Deep link handler** -- Magic links and OAuth callbacks
-4. **Biometric support** -- Biometric gating for token retrieval
-5. **Riverpod integration** -- First-class Riverpod providers
-6. **Platform plugins** -- Native passkey support (iOS 16+, Android 9+)
-
-## Stay updated
-
-The Flutter SDK is part of the Authsome UI family. Sign up for release notifications by watching the [Authsome repository](https://github.com/xraph/authsome) on GitHub or joining the community Discord.
-
-If you are interested in early access or want to contribute, open an issue on GitHub with the label `flutter-sdk`.
+All platforms use `flutter_secure_storage` for credential persistence (Keychain on Apple, EncryptedSharedPreferences on Android, libsecret on Linux, Windows Credential Manager on Windows).

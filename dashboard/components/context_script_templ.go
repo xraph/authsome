@@ -12,7 +12,8 @@ import templruntime "github.com/a-h/templ/runtime"
 // interceptor that rewrites sidebar nav links to include the current app/env slugs.
 // This eliminates the double-request that would otherwise occur when clicking sidebar
 // links (which use bare paths like /users).
-func ContextScript(appSlug, envSlug string) templ.Component {
+// knownRoutesCSV is a comma-separated list of known page route prefixes (e.g. "/users,/sessions,/social-providers").
+func ContextScript(appSlug, envSlug, knownRoutesCSV string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -40,7 +41,7 @@ func ContextScript(appSlug, envSlug string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(appSlug)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/context_script.templ`, Line: 10, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/context_script.templ`, Line: 11, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -53,13 +54,26 @@ func ContextScript(appSlug, envSlug string) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(envSlug)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/context_script.templ`, Line: 11, Col: 25}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/context_script.templ`, Line: 12, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" style=\"display:none\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" data-known-routes=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(knownRoutesCSV)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/context_script.templ`, Line: 13, Col: 36}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" style=\"display:none\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -89,12 +103,12 @@ func contextInterceptorScript() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var4 == nil {
-			templ_7745c5c3_Var4 = templ.NopComponent
+		templ_7745c5c3_Var5 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var5 == nil {
+			templ_7745c5c3_Var5 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<script>\n\t\t(function() {\n\t\t\tif (window.__authCtxInterceptorRegistered) return;\n\t\t\twindow.__authCtxInterceptorRegistered = true;\n\n\t\t\tfunction getAuthCtx() {\n\t\t\t\tvar el = document.getElementById('auth-context');\n\t\t\t\tif (!el) return null;\n\t\t\t\treturn {\n\t\t\t\t\tappSlug: el.getAttribute('data-app-slug'),\n\t\t\t\t\tenvSlug: el.getAttribute('data-env-slug')\n\t\t\t\t};\n\t\t\t}\n\n\t\t\tvar knownRoutes = ['/users', '/sessions', '/devices', '/roles',\n\t\t\t\t'/webhooks', '/environments', '/signup-forms'];\n\n\t\t\tfunction isKnownRoute(segment) {\n\t\t\t\treturn knownRoutes.indexOf(segment) !== -1;\n\t\t\t}\n\n\t\t\tdocument.addEventListener('htmx:configRequest', function(evt) {\n\t\t\t\tvar ctx = getAuthCtx();\n\t\t\t\tif (!ctx || !ctx.appSlug || !ctx.envSlug) return;\n\n\t\t\t\tvar path = evt.detail.path;\n\t\t\t\tvar pagesPrefix = '/ext/authsome/pages/';\n\t\t\t\tvar idx = path.indexOf(pagesPrefix);\n\t\t\t\tif (idx === -1) return;\n\n\t\t\t\tvar after = path.substring(idx + pagesPrefix.length);\n\t\t\t\tif (after === '' || after === '/') {\n\t\t\t\t\tevt.detail.path = path.substring(0, idx + pagesPrefix.length) +\n\t\t\t\t\t\tctx.appSlug + '/' + ctx.envSlug + '/';\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tvar firstSeg = '/' + after.split('/')[0];\n\t\t\t\tif (!isKnownRoute(firstSeg)) return;\n\n\t\t\t\tevt.detail.path = path.substring(0, idx + pagesPrefix.length) +\n\t\t\t\t\tctx.appSlug + '/' + ctx.envSlug + '/' + after;\n\t\t\t});\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<script>\n\t\t(function() {\n\t\t\tif (window.__authCtxInterceptorRegistered) return;\n\t\t\twindow.__authCtxInterceptorRegistered = true;\n\n\t\t\tfunction getAuthCtx() {\n\t\t\t\tvar el = document.getElementById('auth-context');\n\t\t\t\tif (!el) return null;\n\t\t\t\tvar routesAttr = el.getAttribute('data-known-routes') || '';\n\t\t\t\treturn {\n\t\t\t\t\tappSlug: el.getAttribute('data-app-slug'),\n\t\t\t\t\tenvSlug: el.getAttribute('data-env-slug'),\n\t\t\t\t\tknownRoutes: routesAttr ? routesAttr.split(',') : []\n\t\t\t\t};\n\t\t\t}\n\n\t\t\tfunction isKnownRoute(ctx, segment) {\n\t\t\t\treturn ctx.knownRoutes.indexOf(segment) !== -1;\n\t\t\t}\n\n\t\t\tdocument.addEventListener('htmx:configRequest', function(evt) {\n\t\t\t\tvar ctx = getAuthCtx();\n\t\t\t\tif (!ctx || !ctx.appSlug || !ctx.envSlug) return;\n\n\t\t\t\tvar path = evt.detail.path;\n\t\t\t\tvar pagesPrefix = '/ext/authsome/pages/';\n\t\t\t\tvar idx = path.indexOf(pagesPrefix);\n\t\t\t\tif (idx === -1) return;\n\n\t\t\t\tvar after = path.substring(idx + pagesPrefix.length);\n\t\t\t\tif (after === '' || after === '/') {\n\t\t\t\t\tevt.detail.path = path.substring(0, idx + pagesPrefix.length) +\n\t\t\t\t\t\tctx.appSlug + '/' + ctx.envSlug + '/';\n\t\t\t\t\treturn;\n\t\t\t\t}\n\n\t\t\t\tvar firstSeg = '/' + after.split('/')[0];\n\t\t\t\tif (!isKnownRoute(ctx, firstSeg)) return;\n\n\t\t\t\tevt.detail.path = path.substring(0, idx + pagesPrefix.length) +\n\t\t\t\t\tctx.appSlug + '/' + ctx.envSlug + '/' + after;\n\t\t\t});\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

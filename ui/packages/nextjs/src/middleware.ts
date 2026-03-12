@@ -18,7 +18,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-const SESSION_COOKIE = "authsome:session_token";
+const SESSION_COOKIE = "authsome_session_token";
 
 /** Configuration for the auth middleware. */
 export interface AuthMiddlewareConfig {
@@ -26,15 +26,23 @@ export interface AuthMiddlewareConfig {
   baseURL: string;
   /** Path to redirect unauthenticated users (default: "/sign-in"). */
   signInPage?: string;
-  /** Paths that do not require authentication. Supports glob-like prefixes (e.g. "/api/public"). */
+  /** Paths that do not require authentication. Supports glob-like prefixes (e.g. "/api/public*"). */
   publicPaths?: string[];
-  /** Cookie name for the session token (default: "authsome:session_token"). */
+  /** Cookie name for the session token (default: "authsome_session_token"). */
   cookieName?: string;
+  /**
+   * Paths that should redirect authenticated users away (e.g. sign-in, sign-up pages).
+   * Supports glob-like prefixes. By default includes `signInPage` and "/sign-up".
+   */
+  authPaths?: string[];
+  /** Where to redirect authenticated users visiting auth pages (default: "/"). */
+  afterSignInUrl?: string;
 }
 
 /**
  * Creates a Next.js Edge middleware that protects routes behind authentication.
  *
+ * - Auth pages redirect authenticated users to `afterSignInUrl`.
  * - Public paths are served without checks.
  * - Other paths require a valid session token (stored in a cookie).
  * - If the token is missing or invalid the user is redirected to `signInPage`.
@@ -43,24 +51,43 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   const signInPage = config.signInPage ?? "/sign-in";
   const publicPaths = config.publicPaths ?? ["/", signInPage];
   const cookieName = config.cookieName ?? SESSION_COOKIE;
+  const afterSignInUrl = config.afterSignInUrl ?? "/";
+  const authPaths = config.authPaths ?? [signInPage, "/sign-up"];
 
   return async function authMiddleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
+    const sessionToken = request.cookies.get(cookieName)?.value;
+
+    // If this is an auth page and user has a session token, redirect away.
+    if (sessionToken && matchesPath(pathname, authPaths)) {
+      try {
+        const res = await fetch(`${config.baseURL}/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${sessionToken}` },
+        });
+        if (res.ok) {
+          const url = request.nextUrl.clone();
+          url.pathname = afterSignInUrl;
+          url.search = "";
+          return NextResponse.redirect(url);
+        }
+      } catch {
+        // Network error — fall through and let the page render.
+      }
+    }
 
     // Allow public paths.
-    if (isPublicPath(pathname, publicPaths)) {
+    if (matchesPath(pathname, publicPaths)) {
       return NextResponse.next();
     }
 
     // Check for session cookie.
-    const sessionToken = request.cookies.get(cookieName)?.value;
     if (!sessionToken) {
       return redirectToSignIn(request, signInPage);
     }
 
     // Validate the token against the API.
     try {
-      const res = await fetch(`${config.baseURL}/v1/me`, {
+      const res = await fetch(`${config.baseURL}/v1/auth/me`, {
         headers: { Authorization: `Bearer ${sessionToken}` },
       });
 
@@ -76,8 +103,8 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   };
 }
 
-function isPublicPath(pathname: string, publicPaths: string[]): boolean {
-  return publicPaths.some((p) => {
+function matchesPath(pathname: string, paths: string[]): boolean {
+  return paths.some((p) => {
     if (p.endsWith("*")) {
       return pathname.startsWith(p.slice(0, -1));
     }

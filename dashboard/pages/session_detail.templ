@@ -67,7 +67,7 @@ templ SessionDetailPage(data SessionDetailData) {
 								Variant: button.VariantDestructive,
 								Size:    button.SizeSm,
 								Attributes: templ.Attributes{
-									"hx-get":      "./detail?session_id=" + data.Session.ID.String() + "&action=revoke",
+									"hx-get":      "./detail?id=" + data.Session.ID.String() + "&action=revoke",
 									"hx-target":   "#content",
 									"hx-swap":     "innerHTML",
 									"hx-confirm":  "Are you sure you want to revoke this session?",
@@ -151,9 +151,9 @@ templ SessionDetailPage(data SessionDetailData) {
 									<dt class="text-sm font-medium text-muted-foreground">User ID</dt>
 									<dd class="mt-1 text-sm">
 										<a
-											href={ templ.SafeURL("../users/detail?user_id=" + data.Session.UserID.String()) }
+											href={ templ.SafeURL("../users/detail?id=" + data.Session.UserID.String()) }
 											class="text-primary hover:underline"
-											hx-get={ "../users/detail?user_id=" + data.Session.UserID.String() }
+											hx-get={ "../users/detail?id=" + data.Session.UserID.String() }
 											hx-target="#content"
 											hx-push-url="true"
 											hx-swap="innerHTML"
@@ -173,9 +173,9 @@ templ SessionDetailPage(data SessionDetailData) {
 									<dt class="text-sm font-medium text-muted-foreground">Device ID</dt>
 									<dd class="mt-1 text-sm">
 										<a
-											href={ templ.SafeURL("../devices/detail?device_id=" + data.Session.DeviceID.String()) }
+											href={ templ.SafeURL("../devices/detail?id=" + data.Session.DeviceID.String()) }
 											class="text-primary hover:underline"
-											hx-get={ "../devices/detail?device_id=" + data.Session.DeviceID.String() }
+											hx-get={ "../devices/detail?id=" + data.Session.DeviceID.String() }
 											hx-target="#content"
 											hx-push-url="true"
 											hx-swap="innerHTML"
@@ -215,9 +215,9 @@ templ SessionDetailPage(data SessionDetailData) {
 								<p class="text-xs text-muted-foreground truncate">{ data.User.Email }</p>
 							</div>
 							<a
-								href={ templ.SafeURL("../users/detail?user_id=" + data.User.ID.String()) }
+								href={ templ.SafeURL("../users/detail?id=" + data.User.ID.String()) }
 								class="text-xs text-primary hover:underline"
-								hx-get={ "../users/detail?user_id=" + data.User.ID.String() }
+								hx-get={ "../users/detail?id=" + data.User.ID.String() }
 								hx-target="#content"
 								hx-push-url="true"
 								hx-swap="innerHTML"
@@ -268,9 +268,9 @@ templ SessionDetailPage(data SessionDetailData) {
 							</div>
 						</div>
 						<a
-							href={ templ.SafeURL("../devices/detail?device_id=" + data.Device.ID.String()) }
+							href={ templ.SafeURL("../devices/detail?id=" + data.Device.ID.String()) }
 							class="text-xs text-primary hover:underline"
-							hx-get={ "../devices/detail?device_id=" + data.Device.ID.String() }
+							hx-get={ "../devices/detail?id=" + data.Device.ID.String() }
 							hx-target="#content"
 							hx-push-url="true"
 							hx-swap="innerHTML"

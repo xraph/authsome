@@ -495,5 +495,5 @@ type DeleteAppClientConfigRequest struct {
 
 // GetClientConfigRequest binds query params for GET /client-config.
 type GetClientConfigRequest struct {
-	Key string `query:"key" description:"Publishable key to resolve the app"`
+	Key string `query:"key" optional:"true" description:"Publishable key to resolve the app"`
 }

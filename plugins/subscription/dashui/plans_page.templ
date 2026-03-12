@@ -1,0 +1,323 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// PlansPage renders the plans management page with tabs for plans and addons.
+templ PlansPage(data PlansPageData) {
+	<div class="space-y-6">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Billing Plans</h1>
+			<p class="text-muted-foreground mt-1">Create and manage subscription plans for your application.</p>
+		</div>
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			@components.StatCard("layers", "Total Plans", strconv.Itoa(len(data.Plans)+len(data.Addons)), "All plans & addons")
+			@components.StatCard("check-circle", "Active", strconv.Itoa(data.ActiveCount), "Active plans")
+			@components.StatCard("x-circle", "Archived", strconv.Itoa(data.ArchivedCount), "Archived plans")
+			@components.StatCard("activity", "Features", strconv.Itoa(data.TotalFeatures), "Across all plans")
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Create Plan Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Create Plan
+				}
+				@card.Description() {
+					Define a new billing plan with pricing and features. Plans are created as drafts.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="plan-name">Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "name",
+								Placeholder: "e.g. Pro Plan",
+								ID:          "plan-name",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="plan-slug">Slug</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "slug",
+								Placeholder: "e.g. pro",
+								ID:          "plan-slug",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="plan-currency">Currency</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "currency",
+								Placeholder: "usd",
+								ID:          "plan-currency",
+							})
+						</div>
+						<div class="space-y-1.5 md:col-span-3">
+							<label class="text-sm font-medium" for="plan-desc">Description</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "description",
+								Placeholder: "What this plan includes",
+								ID:          "plan-desc",
+							})
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="plan-base-amount">Base Price</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "base_amount",
+								Placeholder: "29.99",
+								ID:          "plan-base-amount",
+							})
+							<p class="text-xs text-muted-foreground">Leave empty for free plans</p>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="plan-period">Billing Period</label>
+							<select name="billing_period" id="plan-period" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								<option value="monthly">Monthly</option>
+								<option value="yearly">Yearly</option>
+							</select>
+						</div>
+						<div class="space-y-1.5">
+							<label class="text-sm font-medium" for="plan-trial">Trial Days</label>
+							@input.Input(input.Props{
+								Type:        "number",
+								Name:        "trial_days",
+								Placeholder: "0",
+								ID:          "plan-trial",
+							})
+						</div>
+					</div>
+					<div class="flex items-center gap-6">
+						<label class="flex items-center gap-2 text-sm cursor-pointer">
+							<input type="checkbox" name="is_addon" value="true" class="h-4 w-4 rounded border-input"/>
+							<span>This is an addon</span>
+						</label>
+					</div>
+					<div class="flex justify-end">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Plan
+						}
+					</div>
+				</form>
+			}
+		}
+		<!-- Tab Navigation -->
+		<div class="flex border-b">
+			<button
+				type="button"
+				class={ "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors", planTabClass(data.Tab, "plans") }
+				hx-get="./plans?tab=plans"
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-push-url="true"
+			>
+				Plans
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(data.Plans)) }
+				}
+			</button>
+			<button
+				type="button"
+				class={ "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors", planTabClass(data.Tab, "addons") }
+				hx-get="./plans?tab=addons"
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-push-url="true"
+			>
+				Addons
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(data.Addons)) }
+				}
+			</button>
+		</div>
+		<!-- Plans/Addons Table -->
+		if data.Tab == "addons" {
+			@plansTable(data.Addons, data.FormNonce, true)
+		} else {
+			@plansTable(data.Plans, data.FormNonce, false)
+		}
+	</div>
+}
+
+func planTabClass(current, tab string) string {
+	if current == tab || (current == "" && tab == "plans") {
+		return "border-primary text-foreground"
+	}
+	return "border-transparent text-muted-foreground hover:text-foreground"
+}
+
+templ plansTable(plans []PlanView, nonce string, isAddon bool) {
+	@card.Card() {
+		@card.Header() {
+			<div class="flex items-center gap-3">
+				@card.Title() {
+					if isAddon {
+						Addons
+					} else {
+						Plans
+					}
+				}
+				@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+					{ strconv.Itoa(len(plans)) }
+				}
+			</div>
+		}
+		@card.Content() {
+			if len(plans) == 0 {
+				<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+					@icons.Layers(icons.WithSize(40))
+					if isAddon {
+						<p class="mt-2 text-sm">No addons found.</p>
+					} else {
+						<p class="mt-2 text-sm">No plans found.</p>
+					}
+					<p class="text-xs mt-1">Create one using the form above.</p>
+				</div>
+			} else {
+				@table.Table() {
+					@table.Header() {
+						@table.Row() {
+							@table.Head() { Name }
+							@table.Head() { Slug }
+							@table.Head() { Price }
+							@table.Head() { Period }
+							@table.Head() { Trial }
+							@table.Head() { Status }
+							@table.Head() { Features }
+							@table.Head() { }
+						}
+					}
+					@table.Body() {
+						for _, p := range plans {
+							@table.Row() {
+								@table.Cell() {
+									<div
+										class="cursor-pointer"
+										hx-get={ "./plans/detail?id=" + p.ID }
+										hx-target="#content"
+										hx-swap="innerHTML"
+										hx-push-url="true"
+									>
+										<span class="font-medium hover:underline">{ p.Name }</span>
+									</div>
+								}
+								@table.Cell() {
+									<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ p.Slug }</code>
+								}
+								@table.Cell() {
+									if p.BaseAmount != "" {
+										<span class="font-medium">{ p.BaseAmount }</span>
+										<span class="text-muted-foreground text-xs uppercase ml-1">{ p.Currency }</span>
+									} else {
+										<span class="text-muted-foreground text-xs">Free</span>
+									}
+								}
+								@table.Cell() {
+									if p.BillingPeriod != "" {
+										{ p.BillingPeriod }
+									} else {
+										<span class="text-muted-foreground text-xs">—</span>
+									}
+								}
+								@table.Cell() {
+									if p.TrialDays > 0 {
+										{ strconv.Itoa(p.TrialDays) }d
+									} else {
+										<span class="text-muted-foreground text-xs">—</span>
+									}
+								}
+								@table.Cell() {
+									@planStatusBadge(p.Status)
+								}
+								@table.Cell() {
+									{ strconv.Itoa(p.FeaturesCount) }
+								}
+								@table.Cell() {
+									<div class="flex items-center gap-1">
+										if p.Status == "active" {
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="archive"/>
+												<input type="hidden" name="plan_id" value={ p.ID }/>
+												<input type="hidden" name="nonce" value={ nonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantOutline,
+													Size:    button.SizeSm,
+												}) {
+													Archive
+												}
+											</form>
+										}
+										if p.Status == "draft" {
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="activate"/>
+												<input type="hidden" name="plan_id" value={ p.ID }/>
+												<input type="hidden" name="nonce" value={ nonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantDefault,
+													Size:    button.SizeSm,
+												}) {
+													Activate
+												}
+											</form>
+										}
+									</div>
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+templ planStatusBadge(status string) {
+	switch status {
+		case "active":
+			@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+				Active
+			}
+		case "draft":
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				Draft
+			}
+		case "archived":
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				Archived
+			}
+		default:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				{ status }
+			}
+	}
+}

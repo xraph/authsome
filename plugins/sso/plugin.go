@@ -102,11 +102,17 @@ type Plugin struct {
 	appID         string
 	sessionConfig sessionConfigResolver
 
-	chronicle  bridge.Chronicle
-	relay      bridge.EventRelay
-	hooks      *hook.Bus
-	logger     log.Logger
-	ceremonies ceremony.Store
+	chronicle   bridge.Chronicle
+	relay       bridge.EventRelay
+	hooks       *hook.Bus
+	logger      log.Logger
+	ceremonies  ceremony.Store
+	roleEnsurer roleEnsurer
+}
+
+// roleEnsurer assigns a default Warden role to a newly created user.
+type roleEnsurer interface {
+	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
 }
 
 // New creates a new SSO plugin.
@@ -136,6 +142,15 @@ func New(cfg ...Config) *Plugin {
 
 // Name returns the plugin name.
 func (p *Plugin) Name() string { return "sso" }
+
+// Connections returns the list of configured SSO connection names for client config.
+func (p *Plugin) Connections() []string {
+	names := make([]string, 0, len(p.providers))
+	for name := range p.providers {
+		names = append(names, name)
+	}
+	return names
+}
 
 // OnInit captures the store reference and bridges from the engine.
 func (p *Plugin) OnInit(_ context.Context, engine any) error {
@@ -186,6 +201,10 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 
 	if scr, ok := engine.(sessionConfigResolver); ok {
 		p.sessionConfig = scr
+	}
+
+	if re, ok := engine.(roleEnsurer); ok {
+		p.roleEnsurer = re
 	}
 
 	return nil
@@ -468,6 +487,9 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 			if err := p.store.CreateUser(goCtx, u); err != nil {
 				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
 			}
+			if p.roleEnsurer != nil {
+				p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
+			}
 			isNew = true
 		}
 	} else {
@@ -548,6 +570,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   bridge.SeverityInfo,
+		Category:   "auth",
 	})
 }
 

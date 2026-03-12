@@ -385,6 +385,7 @@ func (p *Plugin) audit(ctx context.Context, severity, outcome, action, resource,
 		Tenant:     tenant,
 		Outcome:    outcome,
 		Severity:   severity,
+		Category:   "organization",
 		Metadata:   metadata,
 	}); err != nil {
 		p.logger.Warn("organization: audit record failed",

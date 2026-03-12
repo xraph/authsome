@@ -14,6 +14,10 @@
       "import": "./dist/middleware.js",
       "types": "./dist/middleware.d.ts"
     },
+    "./proxy": {
+      "import": "./dist/proxy.js",
+      "types": "./dist/proxy.d.ts"
+    },
     "./pages": {
       "import": "./dist/pages/index.js",
       "types": "./dist/pages/index.d.ts"

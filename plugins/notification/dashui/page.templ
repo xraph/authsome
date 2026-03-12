@@ -1,19 +1,67 @@
 package dashui
 
 import (
+	"strconv"
+
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/components/separator"
+	"github.com/xraph/forgeui/components/table"
 	"github.com/xraph/forgeui/icons"
 )
 
-// ConfigPage renders the notification configuration page.
-templ ConfigPage(appName string, baseURL string, locale string, async bool, mappingNames []string) {
+// OverviewStats holds aggregate template statistics.
+type OverviewStats struct {
+	TotalTemplates int
+	EmailCount     int
+	SMSCount       int
+	InAppCount     int
+	PushCount      int
+	MappingsCount  int
+}
+
+// OverviewData holds all data for the notification overview page.
+type OverviewData struct {
+	AppName      string
+	BaseURL      string
+	Locale       string
+	Async        bool
+	MappingNames []string
+	Stats        OverviewStats
+}
+
+templ OverviewPage(data OverviewData) {
 	<div class="space-y-6">
-		<div>
-			<h1 class="text-3xl font-bold tracking-tight">Notifications</h1>
-			<p class="text-muted-foreground mt-1">Multi-channel notification configuration powered by Herald.</p>
+		<!-- Header -->
+		<div class="flex items-center justify-between">
+			<div>
+				<h1 class="text-3xl font-bold tracking-tight">Notifications</h1>
+				<p class="text-muted-foreground mt-1">Multi-channel notification configuration powered by Herald.</p>
+			</div>
+			@button.Button(button.Props{
+				Attributes: templ.Attributes{
+					"hx-get":      "./notifications/templates",
+					"hx-target":   "#content",
+					"hx-swap":     "innerHTML",
+					"hx-push-url": "true",
+				},
+			}) {
+				@icons.Layers(icons.WithSize(16))
+				Manage Templates
+			}
 		</div>
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+			@components.StatCard("layers", "Templates", strconv.Itoa(data.Stats.TotalTemplates), "Total")
+			@components.StatCard("mail", "Email", strconv.Itoa(data.Stats.EmailCount), "Templates")
+			@components.StatCard("scroll-text", "SMS", strconv.Itoa(data.Stats.SMSCount), "Templates")
+			@components.StatCard("activity", "In-App", strconv.Itoa(data.Stats.InAppCount), "Templates")
+			@components.StatCard("skip-forward", "Push", strconv.Itoa(data.Stats.PushCount), "Templates")
+		</div>
+		<!-- Configuration Card -->
 		@card.Card() {
 			@card.Header() {
 				<div class="flex items-center gap-3">
@@ -34,20 +82,20 @@ templ ConfigPage(appName string, baseURL string, locale string, async bool, mapp
 				@separator.Separator()
 				<dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
 					<dt class="text-muted-foreground">App Name</dt>
-					<dd class="font-medium">{ appName }</dd>
+					<dd class="font-medium">{ data.AppName }</dd>
 					<dt class="text-muted-foreground">Base URL</dt>
 					<dd class="font-medium">
-						if baseURL != "" {
-							{ baseURL }
+						if data.BaseURL != "" {
+							{ data.BaseURL }
 						} else {
 							<span class="text-muted-foreground italic">Not configured</span>
 						}
 					</dd>
 					<dt class="text-muted-foreground">Default Locale</dt>
-					<dd class="font-medium">{ locale }</dd>
+					<dd class="font-medium">{ data.Locale }</dd>
 					<dt class="text-muted-foreground">Async Delivery</dt>
 					<dd>
-						if async {
+						if data.Async {
 							@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
 								Enabled
 							}
@@ -59,7 +107,17 @@ templ ConfigPage(appName string, baseURL string, locale string, async bool, mapp
 					</dd>
 				</dl>
 			}
+			@card.Footer() {
+				<a
+					href="settings/editor?scope=app&namespace=notification"
+					class="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+				>
+					@icons.ExternalLink(icons.WithSize(12))
+					Edit Settings
+				</a>
+			}
 		}
+		<!-- Template Mappings -->
 		@card.Card() {
 			@card.Header() {
 				<div class="flex items-center gap-3">
@@ -74,16 +132,19 @@ templ ConfigPage(appName string, baseURL string, locale string, async bool, mapp
 							Hook actions mapped to Herald notification templates.
 						}
 					</div>
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(data.Stats.MappingsCount) }
+					}
 				</div>
 			}
 			@card.Content() {
 				@separator.Separator()
 				<div class="mt-4">
-					if len(mappingNames) == 0 {
+					if len(data.MappingNames) == 0 {
 						<p class="text-sm text-muted-foreground py-4 text-center">No template mappings configured.</p>
 					} else {
 						<div class="space-y-2">
-							for _, name := range mappingNames {
+							for _, name := range data.MappingNames {
 								<div class="flex items-center gap-3 rounded-sm border p-3">
 									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
 										@icons.Zap(icons.WithSize(14))
@@ -101,25 +162,824 @@ templ ConfigPage(appName string, baseURL string, locale string, async bool, mapp
 				</div>
 			}
 		}
-		<!-- Settings link -->
+		<!-- Quick Links -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Quick Actions
+				}
+			}
+			@card.Content() {
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+					@quickLinkCard("Browse Templates", "View and edit all notification templates.", "./notifications/templates", "layers")
+					@quickLinkCard("Create Template", "Add a new notification template.", "./notifications/templates/create", "file-text")
+				</div>
+			}
+		}
+	</div>
+}
+
+templ quickLinkCard(title string, description string, href string, iconName string) {
+	<div
+		class="flex items-center gap-3 rounded-lg border p-4 cursor-pointer hover:bg-accent/50 transition-colors"
+		hx-get={ href }
+		hx-target="#content"
+		hx-swap="innerHTML"
+		hx-push-url="true"
+	>
+		<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+			@resolveQuickLinkIcon(iconName)
+		</div>
+		<div>
+			<p class="text-sm font-medium">{ title }</p>
+			<p class="text-xs text-muted-foreground">{ description }</p>
+		</div>
+	</div>
+}
+
+func resolveQuickLinkIcon(name string) templ.Component {
+	switch name {
+	case "layers":
+		return icons.Layers(icons.WithSize(18))
+	case "file-text":
+		return icons.FileText(icons.WithSize(18))
+	default:
+		return icons.Info(icons.WithSize(18))
+	}
+}
+
+// ──────────────────────────────────────────────────
+// Templates List Page
+// ──────────────────────────────────────────────────
+
+// TemplatesListData holds data for the templates list page.
+type TemplatesListData struct {
+	Templates     []*bridge.HeraldTemplate
+	ActiveChannel string
+	Error         string
+	SuccessMsg    string
+	ErrorMsg      string
+	FormNonce     string
+}
+
+templ TemplatesListPage(data TemplatesListData) {
+	<div class="space-y-6">
+		<!-- Back + Header -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../notifications",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Notifications
+		}
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">Templates</h1>
+				if data.Templates != nil {
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Templates)) }
+					}
+				}
+			</div>
+			<div class="flex items-center gap-2">
+				if data.FormNonce != "" {
+					@button.Button(button.Props{
+						Variant: button.VariantOutline,
+						Attributes: templ.Attributes{
+							"hx-post":    "../notifications/templates",
+							"hx-target":  "#content",
+							"hx-swap":    "innerHTML",
+							"hx-vals":    `{"action":"reset_defaults","nonce":"` + data.FormNonce + `"}`,
+							"hx-confirm": "This will delete all system templates and restore factory defaults. Custom templates will not be affected. Continue?",
+						},
+					}) {
+						@icons.RotateCcw(icons.WithSize(16))
+						Reset to Defaults
+					}
+				}
+				@button.Button(button.Props{
+					Attributes: templ.Attributes{
+						"hx-get":      "../notifications/templates/create",
+						"hx-target":   "#content",
+						"hx-swap":     "innerHTML",
+						"hx-push-url": "true",
+					},
+				}) {
+					@icons.Plus(icons.WithSize(16))
+					Create Template
+				}
+			</div>
+		</div>
+		if data.SuccessMsg != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+				<p class="text-sm font-medium text-green-700 dark:text-green-400">{ data.SuccessMsg }</p>
+			</div>
+		}
+		if data.ErrorMsg != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.ErrorMsg }</p>
+			</div>
+		}
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		<!-- Channel Filter Tabs -->
+		<div class="flex items-center gap-2 border-b pb-2">
+			@channelFilterTab("All", "all", data.ActiveChannel)
+			@channelFilterTab("Email", "email", data.ActiveChannel)
+			@channelFilterTab("SMS", "sms", data.ActiveChannel)
+			@channelFilterTab("In-App", "inapp", data.ActiveChannel)
+			@channelFilterTab("Push", "push", data.ActiveChannel)
+		</div>
+		<!-- Templates Table -->
 		@card.Card() {
 			@card.Content() {
-				<div class="flex items-center justify-between py-2">
-					<div class="flex items-center gap-3">
-						@icons.Settings(icons.WithSize(16), icons.WithClass("text-muted-foreground"))
+				if len(data.Templates) == 0 {
+					<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+						@icons.Layers(icons.WithSize(40))
+						<p class="mt-2 text-sm">No templates found.</p>
+						<p class="text-xs mt-1">Create your first notification template to get started.</p>
+					</div>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Slug }
+								@table.Head() { Channel }
+								@table.Head() { Category }
+								@table.Head() { Versions }
+								@table.Head() { Status }
+							}
+						}
+						@table.Body() {
+							for _, t := range data.Templates {
+								@table.Row() {
+									@table.Cell() {
+										<div
+											class="cursor-pointer hover:underline font-medium"
+											hx-get={ "../notifications/templates/detail?id=" + t.ID }
+											hx-target="#content"
+											hx-swap="innerHTML"
+											hx-push-url="true"
+										>
+											{ t.Name }
+										</div>
+									}
+									@table.Cell() {
+										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ t.Slug }</code>
+									}
+									@table.Cell() {
+										@channelBadge(t.Channel)
+									}
+									@table.Cell() {
+										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+											{ t.Category }
+										}
+									}
+									@table.Cell() {
+										{ strconv.Itoa(len(t.Versions)) }
+									}
+									@table.Cell() {
+										if t.Enabled {
+											@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+												Enabled
+											}
+										} else {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												Disabled
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}
+
+templ channelFilterTab(label string, channel string, active string) {
+	if (active == channel) || (active == "" && channel == "all") {
+		<button
+			class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 border-primary text-primary -mb-[9px]"
+			hx-get={ "../notifications/templates?channel=" + channel }
+			hx-target="#content"
+			hx-swap="innerHTML"
+			hx-push-url="true"
+		>
+			{ label }
+		</button>
+	} else {
+		<button
+			class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground -mb-[9px] border-b-2 border-transparent"
+			hx-get={ "../notifications/templates?channel=" + channel }
+			hx-target="#content"
+			hx-swap="innerHTML"
+			hx-push-url="true"
+		>
+			{ label }
+		</button>
+	}
+}
+
+templ channelBadge(channel string) {
+	switch channel {
+		case "email":
+			@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+				Email
+			}
+		case "sms":
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				SMS
+			}
+		case "inapp":
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				In-App
+			}
+		case "push":
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				Push
+			}
+		default:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				{ channel }
+			}
+	}
+}
+
+// ──────────────────────────────────────────────────
+// Template Detail Page
+// ──────────────────────────────────────────────────
+
+// TemplateDetailData holds all data for the template detail page.
+type TemplateDetailData struct {
+	Template     *bridge.HeraldTemplate
+	Preview      *bridge.HeraldRenderedContent
+	ActiveLocale string
+	FormNonce    string
+	SuccessMsg   string
+	ErrorMsg     string
+}
+
+templ TemplateDetailPage(data TemplateDetailData) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../templates",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Templates
+		}
+		if data.SuccessMsg != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.SuccessMsg }</p>
+			</div>
+		}
+		if data.ErrorMsg != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.ErrorMsg }</p>
+			</div>
+		}
+		<!-- Template Header Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-4">
+						<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+							@channelIcon(data.Template.Channel)
+						</div>
 						<div>
-							<p class="text-sm font-medium">Notification Settings</p>
-							<p class="text-xs text-muted-foreground">Configure app name, base URL, locale, and async delivery.</p>
+							@card.Title() {
+								{ data.Template.Name }
+							}
+							@card.Description() {
+								<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ data.Template.Slug }</code>
+							}
 						</div>
 					</div>
-					<a
-						href="settings/editor?scope=app&namespace=notification"
-						class="inline-flex h-8 items-center justify-center gap-1.5 rounded-sm border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
-					>
-						@icons.ExternalLink(icons.WithSize(12))
-						Edit Settings
-					</a>
+					<div class="flex items-center gap-2">
+						@channelBadge(data.Template.Channel)
+						@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+							{ data.Template.Category }
+						}
+						<!-- Toggle Enabled -->
+						<form method="POST" class="inline">
+							<input type="hidden" name="action" value="toggle_enabled"/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							if data.Template.Enabled {
+								@button.Button(button.Props{
+									Type:    "submit",
+									Variant: button.VariantOutline,
+									Size:    button.SizeSm,
+								}) {
+									@icons.CheckCircle(icons.WithSize(14))
+									Enabled
+								}
+							} else {
+								@button.Button(button.Props{
+									Type:    "submit",
+									Variant: button.VariantSecondary,
+									Size:    button.SizeSm,
+								}) {
+									@icons.XCircle(icons.WithSize(14))
+									Disabled
+								}
+							}
+						</form>
+					</div>
 				</div>
+			}
+		}
+		<!-- Variables Card -->
+		if len(data.Template.Variables) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Template Variables
+					}
+					@card.Description() {
+						Variables used in this template's content.
+					}
+				}
+				@card.Content() {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Type }
+								@table.Head() { Required }
+								@table.Head() { Default }
+								@table.Head() { Description }
+							}
+						}
+						@table.Body() {
+							for _, v := range data.Template.Variables {
+								@table.Row() {
+									@table.Cell() {
+										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ v.Name }</code>
+									}
+									@table.Cell() {
+										@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+											{ v.Type }
+										}
+									}
+									@table.Cell() {
+										if v.Required {
+											@badge.Badge(badge.Props{Variant: badge.VariantDestructive}) {
+												Required
+											}
+										} else {
+											<span class="text-muted-foreground text-xs">Optional</span>
+										}
+									}
+									@table.Cell() {
+										if v.Default != "" {
+											<code class="text-xs">{ v.Default }</code>
+										} else {
+											<span class="text-muted-foreground text-xs">—</span>
+										}
+									}
+									@table.Cell() {
+										if v.Description != "" {
+											<span class="text-xs">{ v.Description }</span>
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		<!-- Versions Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div>
+						@card.Title() {
+							Versions
+						}
+						@card.Description() {
+							Locale-specific content versions for this template.
+						}
+					</div>
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Template.Versions)) } locales
+					}
+				</div>
+			}
+			@card.Content() {
+				if len(data.Template.Versions) == 0 {
+					<div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
+						@icons.FileText(icons.WithSize(32))
+						<p class="mt-2 text-sm">No versions yet.</p>
+					</div>
+				} else {
+					<!-- Locale Tabs -->
+					<div class="flex items-center gap-2 border-b pb-2 mb-4">
+						for _, ver := range data.Template.Versions {
+							@localeTab(ver.Locale, data.ActiveLocale, data.Template.ID)
+						}
+					</div>
+					<!-- Active Version Editor -->
+					for _, ver := range data.Template.Versions {
+						if ver.Locale == data.ActiveLocale {
+							@versionEditor(ver, data.Template.ID, data.FormNonce)
+						}
+					}
+				}
+			}
+		}
+		<!-- Add Version Card -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Add Locale Version
+				}
+				@card.Description() {
+					Create a new locale-specific version of this template.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create_version"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1.5 block">Locale</label>
+							<input type="text" name="locale" placeholder="e.g. fr, de, es" required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block">Subject</label>
+							<input type="text" name="subject" placeholder="Email subject line" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+						</div>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">Title</label>
+						<input type="text" name="title" placeholder="Notification title" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">HTML Content</label>
+						<textarea name="html" rows="4" placeholder="HTML template content..." class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"></textarea>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">Plain Text Content</label>
+						<textarea name="text" rows="3" placeholder="Plain text fallback..." class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"></textarea>
+					</div>
+					<div class="flex gap-3 pt-2">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Add Version
+						}
+					</div>
+				</form>
+			}
+		}
+		<!-- Preview Card -->
+		if data.Preview != nil {
+			@card.Card() {
+				@card.Header() {
+					<div class="flex items-center gap-3">
+						@icons.Eye(icons.WithSize(18))
+						@card.Title() {
+							Preview
+						}
+						@card.Description() {
+							Rendered with sample data for locale "{ data.ActiveLocale }".
+						}
+					</div>
+				}
+				@card.Content() {
+					@separator.Separator()
+					<div class="mt-4 space-y-4">
+						if data.Preview.Subject != "" {
+							<div>
+								<span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject</span>
+								<p class="mt-1 text-sm font-medium">{ data.Preview.Subject }</p>
+							</div>
+						}
+						if data.Preview.Title != "" {
+							<div>
+								<span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Title</span>
+								<p class="mt-1 text-sm font-medium">{ data.Preview.Title }</p>
+							</div>
+						}
+						if data.Preview.HTML != "" {
+							<div>
+								<span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">HTML</span>
+								<div class="mt-1 rounded-md border bg-muted/30 p-4">
+									<div class="prose prose-sm max-w-none dark:prose-invert">
+										@templ.Raw(data.Preview.HTML)
+									</div>
+								</div>
+							</div>
+						}
+						if data.Preview.Text != "" {
+							<div>
+								<span class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plain Text</span>
+								<pre class="mt-1 rounded-md border bg-muted/30 p-4 text-xs font-mono whitespace-pre-wrap">{ data.Preview.Text }</pre>
+							</div>
+						}
+					</div>
+				}
+			}
+		}
+		<!-- Test Send Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					@icons.Send(icons.WithSize(18))
+					@card.Title() {
+						Test Send
+					}
+					@card.Description() {
+						Send a test notification using sample data.
+					}
+				</div>
+			}
+			@card.Content() {
+				<form method="POST" class="flex items-end gap-3">
+					<input type="hidden" name="action" value="test_send"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="flex-1">
+						<label class="text-sm font-medium mb-1.5 block">Recipient</label>
+						<input type="text" name="recipient" placeholder={ recipientPlaceholder(data.Template.Channel) } required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+					</div>
+					@button.Button(button.Props{Type: "submit"}) {
+						@icons.Send(icons.WithSize(16))
+						Send Test
+					}
+				</form>
+			}
+		}
+	</div>
+}
+
+func recipientPlaceholder(channel string) string {
+	switch channel {
+	case "email":
+		return "user@example.com"
+	case "sms":
+		return "+1234567890"
+	default:
+		return "user-id or address"
+	}
+}
+
+templ localeTab(locale string, active string, templateID string) {
+	if locale == active {
+		<button
+			class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 border-primary text-primary -mb-[9px]"
+		>
+			{ locale }
+		</button>
+	} else {
+		<button
+			class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground -mb-[9px] border-b-2 border-transparent"
+			hx-get={ "./detail?id=" + templateID + "&locale=" + locale }
+			hx-target="#content"
+			hx-swap="innerHTML"
+			hx-push-url="true"
+		>
+			{ locale }
+		</button>
+	}
+}
+
+templ versionEditor(ver bridge.HeraldTemplateVersion, templateID string, nonce string) {
+	<form method="POST" class="space-y-4">
+		<input type="hidden" name="action" value="update_version"/>
+		<input type="hidden" name="nonce" value={ nonce }/>
+		<input type="hidden" name="version_id" value={ ver.ID }/>
+		<input type="hidden" name="template_id" value={ templateID }/>
+		<input type="hidden" name="locale" value={ ver.Locale }/>
+		<div class="flex items-center justify-between mb-4">
+			<div class="flex items-center gap-2">
+				@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+					{ ver.Locale }
+				}
+				if ver.Active {
+					@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+						Active
+					}
+				} else {
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						Inactive
+					}
+				}
+			</div>
+			<div class="flex items-center gap-2">
+				<label class="flex items-center gap-2 text-sm">
+					<input type="checkbox" name="active" class="rounded" checked?={ ver.Active }/>
+					Active
+				</label>
+			</div>
+		</div>
+		<div>
+			<label class="text-sm font-medium mb-1.5 block">Subject</label>
+			<input type="text" name="subject" value={ ver.Subject } class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+		</div>
+		<div>
+			<label class="text-sm font-medium mb-1.5 block">Title</label>
+			<input type="text" name="title" value={ ver.Title } class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+		</div>
+		<div>
+			<label class="text-sm font-medium mb-1.5 block">HTML Content</label>
+			<textarea name="html" rows="8" class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono">{ ver.HTML }</textarea>
+		</div>
+		<div>
+			<label class="text-sm font-medium mb-1.5 block">Plain Text Content</label>
+			<textarea name="text" rows="4" class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono">{ ver.Text }</textarea>
+		</div>
+		<div class="flex items-center justify-between pt-2">
+			@button.Button(button.Props{Type: "submit"}) {
+				@icons.Save(icons.WithSize(16))
+				Save Changes
+			}
+			<!-- Delete version button -->
+			<button
+				type="button"
+				class="inline-flex h-9 items-center justify-center gap-1.5 rounded-sm border border-destructive/30 px-3 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+				hx-post={ "./detail?id=" + templateID }
+				hx-vals={ `{"action":"delete_version","version_id":"` + ver.ID + `","nonce":"` + nonce + `"}` }
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-confirm="Delete this version? This cannot be undone."
+			>
+				@icons.Trash(icons.WithSize(14))
+				Delete Version
+			</button>
+		</div>
+	</form>
+}
+
+func channelIcon(channel string) templ.Component {
+	switch channel {
+	case "email":
+		return icons.Mail(icons.WithSize(20))
+	case "sms":
+		return icons.MessageSquare(icons.WithSize(20))
+	case "inapp":
+		return icons.Bell(icons.WithSize(20))
+	case "push":
+		return icons.Smartphone(icons.WithSize(20))
+	default:
+		return icons.Layers(icons.WithSize(20))
+	}
+}
+
+// ──────────────────────────────────────────────────
+// Template Create Page
+// ──────────────────────────────────────────────────
+
+// TemplateCreateData holds data for the create template page.
+type TemplateCreateData struct {
+	FormNonce  string
+	Error      string
+	SuccessMsg string
+	CreatedID  string
+}
+
+templ TemplateCreatePage(data TemplateCreateData) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../templates",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Templates
+		}
+		<!-- Header -->
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Create Template</h1>
+			<p class="text-muted-foreground mt-1">Add a new notification template with an initial locale version.</p>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.SuccessMsg != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<div class="flex items-center justify-between">
+					<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.SuccessMsg }</p>
+					if data.CreatedID != "" {
+						@button.Button(button.Props{
+							Variant: button.VariantOutline,
+							Size:    button.SizeSm,
+							Attributes: templ.Attributes{
+								"hx-get":      "../templates/detail?id=" + data.CreatedID,
+								"hx-target":   "#content",
+								"hx-swap":     "innerHTML",
+								"hx-push-url": "true",
+							},
+						}) {
+							View Template
+						}
+					}
+				</div>
+			</div>
+		}
+		<!-- Create Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Template Details
+				}
+				@card.Description() {
+					Define the template metadata and initial content.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-6">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<!-- Metadata Section -->
+					@separator.Separator()
+					<p class="text-sm font-medium text-muted-foreground uppercase tracking-wide">Metadata</p>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="tmpl-name">Name</label>
+							<input type="text" name="name" id="tmpl-name" placeholder="Welcome Email" required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="tmpl-slug">Slug</label>
+							<input type="text" name="slug" id="tmpl-slug" placeholder="auth.welcome" required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+							<p class="text-xs text-muted-foreground mt-1">Unique identifier used in code (e.g. auth.welcome).</p>
+						</div>
+					</div>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="tmpl-channel">Channel</label>
+							<select name="channel" id="tmpl-channel" required class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+								<option value="">Select channel...</option>
+								<option value="email">Email</option>
+								<option value="sms">SMS</option>
+								<option value="inapp">In-App</option>
+								<option value="push">Push</option>
+							</select>
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="tmpl-category">Category</label>
+							<select name="category" id="tmpl-category" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+								<option value="transactional" selected>Transactional</option>
+								<option value="auth">Auth</option>
+								<option value="marketing">Marketing</option>
+								<option value="system">System</option>
+							</select>
+						</div>
+					</div>
+					<!-- Initial Version Section -->
+					@separator.Separator()
+					<p class="text-sm font-medium text-muted-foreground uppercase tracking-wide">Initial Version (English)</p>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">Subject</label>
+						<input type="text" name="subject" placeholder="Email subject line" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">Title</label>
+						<input type="text" name="title" placeholder="Notification title (for push/in-app)" class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"/>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">HTML Content</label>
+						<textarea name="html" rows="6" placeholder="HTML template content with {{ .variable }} placeholders..." class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"></textarea>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block">Plain Text Content</label>
+						<textarea name="text" rows="4" placeholder="Plain text fallback content..." class="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"></textarea>
+					</div>
+					<div class="flex gap-3 pt-2">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Template
+						}
+					</div>
+				</form>
 			}
 		}
 	</div>

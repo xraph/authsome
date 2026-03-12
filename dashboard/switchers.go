@@ -37,10 +37,18 @@ func appSwitcherFromContext(engine *authsome.Engine) templ.Component {
 			return nil
 		}
 
-		// Determine current page route (default to "/").
-		currentPage := "/"
+		currentPage := PageRouteFromContext(ctx)
+		if currentPage == "" {
+			currentPage = "/"
+		}
 
-		return components.AppSwitcher(currentApp, allApps, envSlug, currentPage, "").Render(ctx, w)
+		return components.AppSwitcher(components.AppSwitcherData{
+			Current:        currentApp,
+			All:            allApps,
+			CurrentEnvSlug: envSlug,
+			CurrentPage:    currentPage,
+			BasePath:       "",
+		}).Render(ctx, w)
 	})
 }
 
@@ -74,7 +82,10 @@ func envSwitcherFromContext(engine *authsome.Engine) templ.Component {
 			allEnvs = []*environment.Environment{currentEnv}
 		}
 
-		currentPage := "/"
+		currentPage := PageRouteFromContext(ctx)
+		if currentPage == "" {
+			currentPage = "/"
+		}
 
 		return components.TopbarEnvSwitcher(currentEnv, allEnvs, appSlug, currentPage, "").Render(ctx, w)
 	})

@@ -61,11 +61,14 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		a.registerEnvironmentRoutes,
 		a.registerAdminRoutes,
 		a.registerAppSessionConfigRoutes,
+		a.registerAppClientConfigRoutes,
+		a.registerClientConfigRoutes,
 		a.registerAuthMethodRoutes,
 		a.registerJWKSRoutes,
 		a.registerBulkRoutes,
 		a.registerSecurityEventRoutes,
 		a.registerHealthRoutes,
+		a.registerSettingsRoutes,
 	}
 	for _, fn := range registerers {
 		if err := fn(router); err != nil {

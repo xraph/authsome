@@ -50,6 +50,38 @@ type UIMetadata struct {
 
 	// Section is an optional sub-group label within a category.
 	Section string `json:"section,omitempty"`
+
+	// ObjectFields describes the schema for each object in an object_array field.
+	// Only used when InputType is FieldObjectArray.
+	ObjectFields []ObjectFieldDef `json:"object_fields,omitempty"`
+}
+
+// ObjectFieldDef describes a single field within a structured object.
+// Used by the object_array renderer to know how to render each nested input.
+type ObjectFieldDef struct {
+	// Key is the JSON field name (must match the struct's json tag).
+	Key string `json:"key"`
+
+	// DisplayName is the human-readable label.
+	DisplayName string `json:"display_name"`
+
+	// InputType is the form field type for this nested field.
+	InputType formconfig.FieldType `json:"input_type"`
+
+	// Placeholder is placeholder text for the input.
+	Placeholder string `json:"placeholder,omitempty"`
+
+	// Required marks this field as mandatory within each object.
+	Required bool `json:"required,omitempty"`
+
+	// Sensitive marks this field as a secret (renders as password input).
+	Sensitive bool `json:"sensitive,omitempty"`
+
+	// Options lists choices if InputType is select.
+	Options []formconfig.SelectOption `json:"options,omitempty"`
+
+	// HelpText is descriptive text shown below the nested input.
+	HelpText string `json:"help_text,omitempty"`
 }
 
 // VisibilityCondition controls when a setting field is visible in the UI.
@@ -275,6 +307,19 @@ func WithVisibleWhen(key string, value any, operator ...string) DefOption {
 // WithSection sets a sub-group label within a category.
 func WithSection(s string) DefOption {
 	return func(d *Definition) { ensureUI(d).Section = s }
+}
+
+// WithObjectFields sets the schema for nested object fields in an object_array setting.
+// This implicitly sets InputType to FieldObjectArray when no explicit InputType is set
+// or when the auto-inferred type is FieldTextarea (the default for slices).
+func WithObjectFields(fields ...ObjectFieldDef) DefOption {
+	return func(d *Definition) {
+		ui := ensureUI(d)
+		ui.ObjectFields = fields
+		if ui.InputType == "" || ui.InputType == formconfig.FieldTextarea {
+			ui.InputType = formconfig.FieldObjectArray
+		}
+	}
 }
 
 // inferType maps a Go type to a ValueType via reflection.

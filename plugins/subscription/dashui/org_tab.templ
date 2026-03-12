@@ -1,0 +1,169 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// OrgBillingTab renders the billing tab content for org detail pages.
+templ OrgBillingTab(data OrgBillingTabData) {
+	<div class="space-y-6">
+		if !data.HasSub {
+			<div class="flex flex-col items-center justify-center py-12 text-muted-foreground">
+				@icons.CreditCard(icons.WithSize(40))
+				<p class="mt-2 text-sm font-medium">No active subscription</p>
+				<p class="text-xs mt-1">This organization does not have an active subscription.</p>
+			</div>
+		} else {
+			<!-- Subscription Overview -->
+			if data.Subscription != nil {
+				@card.Card() {
+					@card.Header() {
+						<div class="flex items-center justify-between">
+							@card.Title() {
+								Subscription
+							}
+							@statusBadge(data.Subscription.Status)
+						</div>
+					}
+					@card.Content() {
+						<dl class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+							<dt class="text-muted-foreground">Plan</dt>
+							<dd class="font-medium">
+								if data.Plan != nil {
+									{ data.Plan.Name }
+								} else {
+									{ data.Subscription.PlanName }
+								}
+							</dd>
+							<dt class="text-muted-foreground">Status</dt>
+							<dd class="font-medium capitalize">{ data.Subscription.Status }</dd>
+							<dt class="text-muted-foreground">Period</dt>
+							<dd class="font-medium">
+								{{ start := data.Subscription.CurrentPeriodStart.Format("Jan 02") }}
+								{{ end := data.Subscription.CurrentPeriodEnd.Format("Jan 02, 2006") }}
+								{ start } – { end }
+							</dd>
+							if data.Plan != nil && data.Plan.BaseAmount != "" {
+								<dt class="text-muted-foreground">Price</dt>
+								<dd class="font-medium">
+									{ data.Plan.BaseAmount }
+									<span class="text-muted-foreground text-xs uppercase ml-1">{ data.Plan.Currency }</span>
+									if data.Plan.BillingPeriod != "" {
+										<span class="text-muted-foreground text-xs ml-1">/ { data.Plan.BillingPeriod }</span>
+									}
+								</dd>
+							}
+							if data.Subscription.TrialEnd != nil {
+								<dt class="text-muted-foreground">Trial Ends</dt>
+								<dd class="font-medium">
+									{{ trialEnd := data.Subscription.TrialEnd.Format("Jan 02, 2006") }}
+									{ trialEnd }
+								</dd>
+							}
+							if data.Subscription.CanceledAt != nil {
+								<dt class="text-muted-foreground">Canceled</dt>
+								<dd class="font-medium text-destructive">
+									{{ canceledAt := data.Subscription.CanceledAt.Format("Jan 02, 2006") }}
+									{ canceledAt }
+								</dd>
+							}
+						</dl>
+					}
+				}
+			}
+			<!-- Usage -->
+			if len(data.Usage) > 0 {
+				@card.Card() {
+					@card.Header() {
+						@card.Title() {
+							Feature Usage
+						}
+					}
+					@card.Content() {
+						<div class="space-y-4">
+							for _, u := range data.Usage {
+								<div>
+									<div class="flex items-center justify-between mb-1">
+										<span class="text-sm font-medium">{ u.FeatureName }</span>
+										<span class="text-xs text-muted-foreground">
+											{ strconv.FormatInt(u.Used, 10) }
+											if u.Limit > 0 {
+												/ { strconv.FormatInt(u.Limit, 10) }
+											}
+										</span>
+									</div>
+									<div class="h-2 w-full bg-muted rounded-full overflow-hidden">
+										<div
+											class={ "h-full rounded-full transition-all", usageBarColor(u.Percentage) }
+											style={ "width:" + strconv.Itoa(u.Percentage) + "%" }
+										></div>
+									</div>
+								</div>
+							}
+						</div>
+					}
+				}
+			}
+			<!-- Recent Invoices -->
+			if len(data.Invoices) > 0 {
+				@card.Card() {
+					@card.Header() {
+						<div class="flex items-center gap-3">
+							@card.Title() {
+								Invoices
+							}
+							@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+								{ strconv.Itoa(len(data.Invoices)) }
+							}
+						</div>
+					}
+					@card.Content() {
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() { Invoice }
+									@table.Head() { Status }
+									@table.Head() { Total }
+									@table.Head() { Period }
+								}
+							}
+							@table.Body() {
+								for _, inv := range data.Invoices {
+									@table.Row() {
+										@table.Cell() {
+											<div
+												class="cursor-pointer"
+												hx-get={ "./invoices/detail?id=" + inv.ID }
+												hx-target="#content"
+												hx-swap="innerHTML"
+												hx-push-url="true"
+											>
+												<code class="text-xs font-medium hover:underline">{ truncateID(inv.ID) }</code>
+											</div>
+										}
+										@table.Cell() {
+											@invoiceStatusBadge(inv.Status)
+										}
+										@table.Cell() {
+											<span class="font-medium">{ inv.Total } { inv.Currency }</span>
+										}
+										@table.Cell() {
+											{{ start := inv.PeriodStart.Format("Jan 02") }}
+											{{ end := inv.PeriodEnd.Format("Jan 02, 2006") }}
+											{ start } – { end }
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}

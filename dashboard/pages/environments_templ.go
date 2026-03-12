@@ -325,15 +325,15 @@ func EnvironmentsPage(envs []*environment.Environment) templ.Component {
 											return templ_7745c5c3_Err
 										}
 										var templ_7745c5c3_Var17 string
-										templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs("/environments/detail?id=" + env.ID.String())
+										templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs("./environments/detail?id=" + env.ID.String())
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/environments.templ`, Line: 46, Col: 63}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/pages/environments.templ`, Line: 46, Col: 64}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"true\"><span class=\"inline-block w-3 h-3 rounded-full\" style=\"")
+										templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" hx-target=\"#content\" hx-swap=\"innerHTML\" hx-push-url=\"true\"><span class=\"inline-block w-3 h-3 rounded-full\" style=\"")
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}

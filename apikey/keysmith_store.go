@@ -85,6 +85,26 @@ func (s *KeysmithStore) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID
 	return nil, ErrNotFound
 }
 
+// FindByPublicKey searches all keys across all tenants for a matching public key
+// stored in Keysmith metadata. This is used to resolve a publishable key (pk_live_...)
+// to an app without knowing the app ID upfront.
+func (s *KeysmithStore) FindByPublicKey(ctx context.Context, publicKey string) (*APIKey, error) {
+	keys, err := s.engine.Store().Keys().List(ctx, &key.ListFilter{})
+	if err != nil {
+		return nil, keysmithError(err)
+	}
+	for _, k := range keys {
+		ak, err := fromKeysmithKey(k)
+		if err != nil {
+			continue
+		}
+		if ak.PublicKey == publicKey {
+			return ak, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 func (s *KeysmithStore) UpdateAPIKey(ctx context.Context, ak *APIKey) error {
 	k := toKeysmithKey(ak)
 	if err := s.engine.Store().Keys().Update(ctx, k); err != nil {

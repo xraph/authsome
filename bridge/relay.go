@@ -34,12 +34,16 @@ func WebhookEventCatalog() []WebhookDefinition {
 		{Name: "user.created", Description: "New user registered", Group: "user"},
 		{Name: "user.updated", Description: "User profile updated", Group: "user"},
 		{Name: "user.deleted", Description: "User account deleted", Group: "user"},
+		{Name: "user.email_verified", Description: "User email verified", Group: "user"},
+		{Name: "user.account_deleted", Description: "User deleted their account", Group: "user"},
 		{Name: "session.created", Description: "New login session", Group: "session"},
 		{Name: "session.revoked", Description: "Session terminated", Group: "session"},
 		{Name: "auth.signin", Description: "Successful sign-in", Group: "auth"},
 		{Name: "auth.signin.failed", Description: "Failed sign-in attempt", Group: "auth"},
 		{Name: "auth.signout", Description: "User signed out", Group: "auth"},
-		{Name: "auth.password.reset", Description: "Password reset completed", Group: "auth"},
+		{Name: "auth.forgot_password", Description: "Password reset requested", Group: "auth"},
+		{Name: "auth.password_reset", Description: "Password reset completed", Group: "auth"},
+		{Name: "auth.account_locked", Description: "Account locked after failed attempts", Group: "auth"},
 		{Name: "auth.mfa.enabled", Description: "MFA enrolled", Group: "auth"},
 		{Name: "org.created", Description: "Organization created", Group: "org"},
 		{Name: "org.updated", Description: "Organization updated", Group: "org"},
@@ -51,6 +55,23 @@ func WebhookEventCatalog() []WebhookDefinition {
 		{Name: "environment.updated", Description: "Environment updated", Group: "environment"},
 		{Name: "environment.deleted", Description: "Environment deleted", Group: "environment"},
 		{Name: "environment.cloned", Description: "Environment cloned", Group: "environment"},
+
+		// Device events
+		{Name: "device.registered", Description: "New device registered", Group: "device"},
+		{Name: "device.trusted", Description: "Device marked as trusted", Group: "device"},
+
+		// Webhook events
+		{Name: "webhook.created", Description: "Webhook endpoint created", Group: "webhook"},
+
+		// RBAC events
+		{Name: "rbac.role.created", Description: "RBAC role created", Group: "rbac"},
+
+		// Admin events
+		{Name: "admin.user.banned", Description: "Admin banned a user", Group: "admin"},
+		{Name: "admin.user.unbanned", Description: "Admin unbanned a user", Group: "admin"},
+		{Name: "admin.user.deleted", Description: "Admin deleted a user", Group: "admin"},
+		{Name: "admin.sessions.bulk_revoked", Description: "Admin bulk-revoked sessions", Group: "admin"},
+		{Name: "admin.impersonate", Description: "Admin started impersonation", Group: "admin"},
 
 		// MFA events
 		{Name: "auth.mfa.enrolled", Description: "MFA method enrolled", Group: "auth"},

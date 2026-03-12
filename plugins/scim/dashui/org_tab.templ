@@ -1,0 +1,140 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// OrgTab renders the SCIM tab content for the organization detail page.
+templ OrgTab(data OrgTabData) {
+	<div class="space-y-6">
+		<!-- Stats Grid -->
+		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+			@components.StatCard("shield-check", "Configurations", strconv.Itoa(len(data.Configs)), "For this org")
+			@components.StatCard("users", "Provisioned", strconv.Itoa(data.ProvisionedUsers), "Users via SCIM")
+			@components.StatCard("activity", "Recent", strconv.Itoa(data.RecentCount), "Last 7 days")
+		</div>
+		<!-- Configs Table -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-3">
+						@card.Title() {
+							SCIM Configurations
+						}
+						@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+							{ strconv.Itoa(len(data.Configs)) }
+						}
+					</div>
+					@button.Button(button.Props{
+						Size: button.SizeSm,
+						Attributes: templ.Attributes{
+							"hx-get":      "/scim",
+							"hx-target":   "#content",
+							"hx-swap":     "innerHTML",
+							"hx-push-url": "true",
+						},
+					}) {
+						@icons.Plus(icons.WithSize(14))
+						Add Config
+					}
+				</div>
+			}
+			@card.Content() {
+				if len(data.Configs) == 0 {
+					<div class="flex flex-col items-center justify-center py-8 text-muted-foreground">
+						@icons.ShieldCheck(icons.WithSize(32))
+						<p class="mt-2 text-sm">No SCIM configurations for this organization.</p>
+						<p class="text-xs mt-1">Set up SCIM provisioning to automate user management.</p>
+					</div>
+				} else {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Name }
+								@table.Head() { Status }
+								@table.Head() { Tokens }
+								@table.Head() { }
+							}
+						}
+						@table.Body() {
+							for _, c := range data.Configs {
+								@table.Row() {
+									@table.Cell() {
+										<span class="font-medium">{ c.Name }</span>
+									}
+									@table.Cell() {
+										@scimEnabledBadge(c.Enabled)
+									}
+									@table.Cell() {
+										{ strconv.Itoa(c.TokenCount) }
+									}
+									@table.Cell() {
+										@button.Button(button.Props{
+											Variant: button.VariantOutline,
+											Size:    button.SizeSm,
+											Attributes: templ.Attributes{
+												"hx-get":      "/scim/detail?id=" + c.ID,
+												"hx-target":   "#content",
+												"hx-swap":     "innerHTML",
+												"hx-push-url": "true",
+											},
+										}) {
+											View
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		<!-- Recent Activity -->
+		if len(data.RecentLogs) > 0 {
+			@card.Card() {
+				@card.Header() {
+					@card.Title() {
+						Recent Provisioning Activity
+					}
+				}
+				@card.Content() {
+					@table.Table() {
+						@table.Header() {
+							@table.Row() {
+								@table.Head() { Time }
+								@table.Head() { Action }
+								@table.Head() { Resource }
+								@table.Head() { Status }
+							}
+						}
+						@table.Body() {
+							for _, l := range data.RecentLogs {
+								@table.Row() {
+									@table.Cell() {
+										<span class="text-xs text-muted-foreground">{ l.CreatedAt.Format("Jan 02 15:04") }</span>
+									}
+									@table.Cell() {
+										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ l.Action }</code>
+									}
+									@table.Cell() {
+										{ l.ResourceType }
+									}
+									@table.Cell() {
+										@logStatusBadge(l.Status)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	</div>
+}

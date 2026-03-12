@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/rbac"
 )
 
@@ -16,7 +17,12 @@ import (
 
 func (a *API) registerRBACRoutes(router forge.Router) error {
 	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("RBAC"))
+	g := router.Group(base,
+		forge.WithGroupTags("RBAC"),
+		forge.WithGroupMiddleware(
+			middleware.RequireAuth(),
+		),
+	)
 
 	// Role CRUD
 	if err := g.POST("/roles", a.handleCreateRole,
@@ -26,6 +32,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithRequestSchema(CreateRoleRequest{}),
 		forge.WithCreatedResponse(rbac.Role{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "create", "role")),
 	); err != nil {
 		return err
 	}
@@ -36,6 +43,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithOperationID("listRoles"),
 		forge.WithResponseSchema(http.StatusOK, "Role list", RoleListResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "read", "role")),
 	); err != nil {
 		return err
 	}
@@ -46,6 +54,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithOperationID("getRole"),
 		forge.WithResponseSchema(http.StatusOK, "Role details", rbac.Role{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "read", "role")),
 	); err != nil {
 		return err
 	}
@@ -57,6 +66,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithRequestSchema(UpdateRoleRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Updated role", rbac.Role{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "update", "role")),
 	); err != nil {
 		return err
 	}
@@ -67,6 +77,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithOperationID("deleteRole"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "delete", "role")),
 	); err != nil {
 		return err
 	}
@@ -79,6 +90,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithRequestSchema(AddPermissionRequest{}),
 		forge.WithCreatedResponse(rbac.Permission{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "create", "permission")),
 	); err != nil {
 		return err
 	}
@@ -89,6 +101,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithOperationID("listRolePermissions"),
 		forge.WithResponseSchema(http.StatusOK, "Permission list", PermissionListResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "read", "permission")),
 	); err != nil {
 		return err
 	}
@@ -99,6 +112,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithOperationID("removePermission"),
 		forge.WithResponseSchema(http.StatusOK, "Removed", StatusResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "delete", "permission")),
 	); err != nil {
 		return err
 	}
@@ -111,6 +125,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithRequestSchema(AssignRoleRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Assigned", StatusResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "assign", "role")),
 	); err != nil {
 		return err
 	}
@@ -122,6 +137,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithRequestSchema(UnassignRoleRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Unassigned", StatusResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "unassign", "role")),
 	); err != nil {
 		return err
 	}
@@ -133,6 +149,7 @@ func (a *API) registerRBACRoutes(router forge.Router) error {
 		forge.WithOperationID("listUserRoles"),
 		forge.WithResponseSchema(http.StatusOK, "User role list", UserRoleListResponse{}),
 		forge.WithErrorResponses(),
+		forge.WithMiddleware(middleware.RequirePermission(a.engine, "read", "role")),
 	)
 }
 
@@ -166,7 +183,7 @@ func (a *API) handleCreateRole(ctx forge.Context, req *CreateRoleRequest) (*rbac
 		return nil, mapError(err)
 	}
 
-	return r, ctx.JSON(http.StatusCreated, r)
+	return nil, ctx.JSON(http.StatusCreated, r)
 }
 
 func (a *API) handleListRoles(ctx forge.Context, req *ListRolesRequest) (*RoleListResponse, error) {
@@ -198,7 +215,7 @@ func (a *API) handleGetRole(ctx forge.Context, _ *GetRoleRequest) (*rbac.Role, e
 		return nil, mapError(err)
 	}
 
-	return r, ctx.JSON(http.StatusOK, r)
+	return r, nil
 }
 
 func (a *API) handleUpdateRole(ctx forge.Context, req *UpdateRoleRequest) (*rbac.Role, error) {
@@ -226,7 +243,7 @@ func (a *API) handleUpdateRole(ctx forge.Context, req *UpdateRoleRequest) (*rbac
 		return nil, mapError(err)
 	}
 
-	return r, ctx.JSON(http.StatusOK, r)
+	return r, nil
 }
 
 func (a *API) handleDeleteRole(ctx forge.Context, _ *DeleteRoleRequest) (*StatusResponse, error) {
@@ -267,7 +284,7 @@ func (a *API) handleAddPermission(ctx forge.Context, req *AddPermissionRequest) 
 		return nil, mapError(err)
 	}
 
-	return perm, ctx.JSON(http.StatusCreated, perm)
+	return nil, ctx.JSON(http.StatusCreated, perm)
 }
 
 func (a *API) handleListRolePermissions(ctx forge.Context, _ *ListRolePermissionsRequest) (*PermissionListResponse, error) {

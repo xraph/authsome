@@ -1,0 +1,151 @@
+package pages
+
+import (
+	"github.com/xraph/authsome/app"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/icons"
+)
+
+// CreateAppPageData holds data for the create application form page.
+type CreateAppPageData struct {
+	FormNonce  string
+	Error      string
+	CreatedApp *app.App
+}
+
+templ CreateAppPage(data CreateAppPageData) {
+	<div class="space-y-6">
+		<!-- Back Button -->
+		@button.Button(button.Props{
+			Variant: button.VariantGhost,
+			Size:    button.SizeSm,
+			Attributes: templ.Attributes{
+				"hx-get":      "../apps",
+				"hx-target":   "#content",
+				"hx-swap":     "innerHTML",
+				"hx-push-url": "true",
+			},
+		}) {
+			@icons.ChevronLeft(icons.WithSize(16))
+			Back to Applications
+		}
+		<!-- Header -->
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Create Application</h1>
+			<p class="text-muted-foreground mt-1">Add a new application. Default environments and roles will be created automatically.</p>
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.CreatedApp != nil {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<div class="flex items-center justify-between">
+					<p class="text-sm font-medium text-green-800 dark:text-green-200">
+						Application "{ data.CreatedApp.Name }" created successfully.
+					</p>
+					@button.Button(button.Props{
+						Variant: button.VariantOutline,
+						Size:    button.SizeSm,
+						Attributes: templ.Attributes{
+							"hx-get":      "../apps",
+							"hx-target":   "#content",
+							"hx-swap":     "innerHTML",
+							"hx-push-url": "true",
+						},
+					}) {
+						View Applications
+					}
+				</div>
+			</div>
+		}
+		<!-- Create Form -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Application Details
+				}
+				@card.Description() {
+					Provide the basic information for the new application.
+				}
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="create"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block" for="app-name">Name</label>
+						@input.Input(input.Props{
+							Type:        "text",
+							Name:        "name",
+							Placeholder: "My Application",
+							Attributes:  templ.Attributes{"required": true, "id": "app-name"},
+						})
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block" for="app-slug">Slug</label>
+						@input.Input(input.Props{
+							Type:        "text",
+							Name:        "slug",
+							Placeholder: "my-application",
+							Attributes:  templ.Attributes{"required": true, "id": "app-slug"},
+						})
+						<p class="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and hyphens only. Auto-generated from the name.</p>
+					</div>
+					<div>
+						<label class="text-sm font-medium mb-1.5 block" for="app-logo">Logo URL (optional)</label>
+						@input.Input(input.Props{
+							Type:        "url",
+							Name:        "logo",
+							Placeholder: "https://example.com/logo.png",
+							Attributes:  templ.Attributes{"id": "app-logo"},
+						})
+					</div>
+					<div class="flex gap-3 pt-2">
+						@button.Button(button.Props{Type: "submit"}) {
+							@icons.Plus(icons.WithSize(16))
+							Create Application
+						}
+					</div>
+				</form>
+			}
+		}
+	</div>
+	@appSlugAutoFillScript()
+}
+
+templ appSlugAutoFillScript() {
+	<script>
+		(function() {
+			var nameInput = document.getElementById('app-name');
+			var slugInput = document.getElementById('app-slug');
+			if (!nameInput || !slugInput) return;
+
+			var slugManuallyEdited = false;
+
+			slugInput.addEventListener('input', function() {
+				slugManuallyEdited = true;
+			});
+
+			nameInput.addEventListener('input', function() {
+				if (!slugManuallyEdited) {
+					slugInput.value = nameInput.value
+						.toLowerCase()
+						.replace(/[^a-z0-9\s-]/g, '')
+						.replace(/\s+/g, '-')
+						.replace(/-+/g, '-')
+						.replace(/^-|-$/g, '');
+				}
+			});
+
+			slugInput.addEventListener('change', function() {
+				if (slugInput.value === '') {
+					slugManuallyEdited = false;
+				}
+			});
+		})();
+	</script>
+}

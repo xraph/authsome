@@ -21,7 +21,7 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		forge.WithGroupTags("admin"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
-			middleware.RequireAnyRole(a.engine, "admin", "super_admin"),
+			middleware.RequirePermission(a.engine, "manage", "user"),
 		),
 	)
 
@@ -155,7 +155,7 @@ func (a *API) handleAdminGetUser(ctx forge.Context, req *AdminGetUserRequest) (*
 		return nil, mapError(err)
 	}
 
-	return u, ctx.JSON(http.StatusOK, u)
+	return u, nil
 }
 
 func (a *API) handleAdminBanUser(ctx forge.Context, req *AdminBanUserRequest) (*StatusResponse, error) {

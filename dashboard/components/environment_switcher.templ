@@ -28,8 +28,8 @@ templ EnvironmentSwitcher(current *environment.Environment, all []*environment.E
 					for _, env := range all {
 						@dropdown.Item(dropdown.ItemProps{
 							Attributes: templ.Attributes{
-								"hx-get":     "/environments/detail?id=" + env.ID.String(),
-								"hx-target":  "#main-content",
+								"hx-get":     "./environments/detail?id=" + env.ID.String(),
+								"hx-target":  "#content",
 								"hx-swap":    "innerHTML",
 								"hx-push-url": "true",
 							},

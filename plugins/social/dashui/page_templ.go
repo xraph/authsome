@@ -808,9 +808,9 @@ func addProviderForm(data ProviderDetailData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var30 string
-				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs("./social-providers/detail?provider=" + data.Name)
+				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs("./detail?provider=" + data.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 232, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 232, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -1214,9 +1214,9 @@ func configuredProviderSection(data ProviderDetailData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var47 string
-				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs("./social-providers/detail?provider=" + data.Name)
+				templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs("./detail?provider=" + data.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 334, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 334, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 				if templ_7745c5c3_Err != nil {
@@ -1310,9 +1310,9 @@ func configuredProviderSection(data ProviderDetailData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var52 string
-				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs("./social-providers/detail?provider=" + data.Name)
+				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs("./detail?provider=" + data.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 359, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 359, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 				if templ_7745c5c3_Err != nil {
@@ -1492,9 +1492,9 @@ func configuredProviderSection(data ProviderDetailData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var61 string
-				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs("./social-providers/detail?provider=" + data.Name)
+				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs("./detail?provider=" + data.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 389, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `plugins/social/dashui/page.templ`, Line: 389, Col: 46}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 				if templ_7745c5c3_Err != nil {

@@ -1,0 +1,549 @@
+package dashui
+
+import (
+	"strconv"
+
+	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
+	"github.com/xraph/forgeui/components/table"
+	"github.com/xraph/forgeui/icons"
+)
+
+// PlanDetailPage renders the plan detail page with full management capabilities.
+templ PlanDetailPage(data PlanDetailPageData) {
+	<div class="space-y-6">
+		<!-- Back Button + Header -->
+		<div>
+			<button
+				type="button"
+				class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
+				hx-get="./plans"
+				hx-target="#content"
+				hx-swap="innerHTML"
+				hx-push-url="true"
+			>
+				@icons.ArrowLeft(icons.WithSize(14))
+				Back to Plans
+			</button>
+			<div class="flex items-center gap-3">
+				<h1 class="text-3xl font-bold tracking-tight">{ data.Plan.Name }</h1>
+				@planStatusBadge(data.Plan.Status)
+				if data.Plan.IsAddon {
+					@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+						Addon
+					}
+				}
+			</div>
+			if data.Plan.Description != "" {
+				<p class="text-muted-foreground mt-1">{ data.Plan.Description }</p>
+			}
+		</div>
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
+		}
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		<!-- Plan Info + Edit -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center justify-between">
+					@card.Title() {
+						Plan Details
+					}
+					if data.Plan.SubscriberCount > 0 {
+						<span class="text-sm text-muted-foreground">
+							{ strconv.Itoa(data.Plan.SubscriberCount) } subscriber(s)
+						</span>
+					}
+				</div>
+			}
+			@card.Content() {
+				<dl class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+					<dt class="text-muted-foreground">Slug</dt>
+					<dd class="font-medium">
+						<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ data.Plan.Slug }</code>
+					</dd>
+					<dt class="text-muted-foreground">Currency</dt>
+					<dd class="font-medium uppercase">{ data.Plan.Currency }</dd>
+					<dt class="text-muted-foreground">Base Price</dt>
+					<dd class="font-medium">
+						if data.Plan.BaseAmount != "" {
+							{ data.Plan.BaseAmount }
+						} else {
+							Free
+						}
+					</dd>
+					<dt class="text-muted-foreground">Billing Period</dt>
+					<dd class="font-medium">
+						if data.Plan.BillingPeriod != "" {
+							{ data.Plan.BillingPeriod }
+						} else {
+							<span class="text-muted-foreground">—</span>
+						}
+					</dd>
+					<dt class="text-muted-foreground">Trial Days</dt>
+					<dd class="font-medium">{ strconv.Itoa(data.Plan.TrialDays) }</dd>
+					<dt class="text-muted-foreground">Status</dt>
+					<dd class="font-medium capitalize">{ data.Plan.Status }</dd>
+				</dl>
+				<!-- Update Info Form -->
+				<div class="mt-4 pt-4 border-t">
+					<p class="text-sm font-medium mb-3">Update Plan Info</p>
+					<form method="POST" class="flex items-end gap-3 flex-wrap">
+						<input type="hidden" name="action" value="update_info"/>
+						<input type="hidden" name="nonce" value={ data.FormNonce }/>
+						<div class="space-y-1.5 min-w-[160px]">
+							<label class="text-xs text-muted-foreground" for="edit-name">Name</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "name",
+								Placeholder: data.Plan.Name,
+								ID:          "edit-name",
+							})
+						</div>
+						<div class="space-y-1.5 min-w-[200px] flex-1">
+							<label class="text-xs text-muted-foreground" for="edit-desc">Description</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "description",
+								Placeholder: "Plan description",
+								ID:          "edit-desc",
+							})
+						</div>
+						<div class="space-y-1.5 min-w-[80px]">
+							<label class="text-xs text-muted-foreground" for="edit-trial">Trial Days</label>
+							@input.Input(input.Props{
+								Type:        "number",
+								Name:        "trial_days",
+								Placeholder: strconv.Itoa(data.Plan.TrialDays),
+								ID:          "edit-trial",
+							})
+						</div>
+						@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+							Update
+						}
+					</form>
+				</div>
+			}
+		}
+		<!-- Pricing -->
+		@card.Card() {
+			@card.Header() {
+				@card.Title() {
+					Pricing
+				}
+			}
+			@card.Content() {
+				if data.Plan.BaseAmount != "" {
+					<div class="mb-4 text-sm">
+						<span class="text-2xl font-bold">{ data.Plan.BaseAmount }</span>
+						<span class="text-muted-foreground uppercase ml-1">{ data.Plan.Currency }</span>
+						if data.Plan.BillingPeriod != "" {
+							<span class="text-muted-foreground ml-1">/ { data.Plan.BillingPeriod }</span>
+						}
+					</div>
+				} else {
+					<p class="text-sm text-muted-foreground mb-4">No pricing set (free plan).</p>
+				}
+				<!-- Pricing Tiers -->
+				if len(data.Plan.Tiers) > 0 {
+					<div class="mb-4">
+						<p class="text-sm font-medium mb-2">Price Tiers</p>
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() { Feature }
+									@table.Head() { Tier Type }
+									@table.Head() { Up To }
+									@table.Head() { Unit Amount }
+									@table.Head() { Flat Amount }
+									@table.Head() { }
+								}
+							}
+							@table.Body() {
+								for idx, t := range data.Plan.Tiers {
+									@table.Row() {
+										@table.Cell() {
+											<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ t.FeatureKey }</code>
+										}
+										@table.Cell() { { t.Type } }
+										@table.Cell() {
+											if t.UpTo > 0 {
+												{ strconv.FormatInt(t.UpTo, 10) }
+											} else {
+												<span class="text-muted-foreground text-xs">∞</span>
+											}
+										}
+										@table.Cell() { { t.UnitAmount } }
+										@table.Cell() { { t.FlatAmount } }
+										@table.Cell() {
+											<form method="POST" class="inline">
+												<input type="hidden" name="action" value="remove_tier"/>
+												<input type="hidden" name="tier_index" value={ strconv.Itoa(idx) }/>
+												<input type="hidden" name="nonce" value={ data.FormNonce }/>
+												@button.Button(button.Props{
+													Type:    "submit",
+													Variant: button.VariantDestructive,
+													Size:    button.SizeSm,
+												}) {
+													@icons.Trash2(icons.WithSize(14))
+												}
+											</form>
+										}
+									}
+								}
+							}
+						}
+					</div>
+				}
+				<!-- Add Tier Form -->
+				if len(data.TierForm.FeatureKeys) > 0 {
+					<div class="mb-4 pt-4 border-t">
+						<p class="text-sm font-medium mb-3">Add Price Tier</p>
+						<form method="POST" class="flex items-end gap-3 flex-wrap">
+							<input type="hidden" name="action" value="add_tier"/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							<div class="space-y-1.5 min-w-[140px]">
+								<label class="text-xs text-muted-foreground" for="tier-fk">Feature Key</label>
+								<select name="tier_feature_key" id="tier-fk" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									for _, fk := range data.TierForm.FeatureKeys {
+										<option value={ fk }>{ fk }</option>
+									}
+								</select>
+							</div>
+							<div class="space-y-1.5 min-w-[120px]">
+								<label class="text-xs text-muted-foreground" for="tier-type">Tier Type</label>
+								<select name="tier_type" id="tier-type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<option value="graduated">Graduated</option>
+									<option value="volume">Volume</option>
+									<option value="flat">Flat</option>
+								</select>
+							</div>
+							<div class="space-y-1.5 min-w-[100px]">
+								<label class="text-xs text-muted-foreground" for="tier-upto">Up To</label>
+								@input.Input(input.Props{
+									Type:        "number",
+									Name:        "tier_up_to",
+									Placeholder: "0 = ∞",
+									ID:          "tier-upto",
+								})
+							</div>
+							<div class="space-y-1.5 min-w-[100px]">
+								<label class="text-xs text-muted-foreground" for="tier-unit">Unit Amount</label>
+								@input.Input(input.Props{
+									Type:        "text",
+									Name:        "tier_unit_amount",
+									Placeholder: "0.05",
+									ID:          "tier-unit",
+								})
+							</div>
+							<div class="space-y-1.5 min-w-[100px]">
+								<label class="text-xs text-muted-foreground" for="tier-flat">Flat Amount</label>
+								@input.Input(input.Props{
+									Type:        "text",
+									Name:        "tier_flat_amount",
+									Placeholder: "10.00",
+									ID:          "tier-flat",
+								})
+							</div>
+							@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+								@icons.Plus(icons.WithSize(14))
+								Add Tier
+							}
+						</form>
+					</div>
+				}
+				<!-- Update Pricing Form -->
+				<div class="pt-4 border-t">
+					<p class="text-sm font-medium mb-3">Update Base Pricing</p>
+					<form method="POST" class="flex items-end gap-3 flex-wrap">
+						<input type="hidden" name="action" value="update_pricing"/>
+						<input type="hidden" name="nonce" value={ data.FormNonce }/>
+						<div class="space-y-1.5 min-w-[120px]">
+							<label class="text-xs text-muted-foreground" for="pricing-amount">Base Amount</label>
+							@input.Input(input.Props{
+								Type:        "text",
+								Name:        "base_amount",
+								Placeholder: "29.99",
+								ID:          "pricing-amount",
+							})
+						</div>
+						<div class="space-y-1.5 min-w-[120px]">
+							<label class="text-xs text-muted-foreground" for="pricing-period">Billing Period</label>
+							<select name="billing_period" id="pricing-period" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+								<option value="monthly">Monthly</option>
+								<option value="yearly">Yearly</option>
+							</select>
+						</div>
+						@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+							Update Pricing
+						}
+					</form>
+					<p class="text-xs text-muted-foreground mt-2">Set amount to 0 or leave empty to make the plan free.</p>
+				</div>
+			}
+		}
+		<!-- Features -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-3">
+					@card.Title() {
+						Features
+					}
+					@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+						{ strconv.Itoa(len(data.Plan.Features)) }
+					}
+				</div>
+			}
+			@card.Content() {
+				if len(data.Plan.Features) == 0 {
+					<p class="text-sm text-muted-foreground py-4 text-center">No features configured.</p>
+				} else {
+					<div class="space-y-0">
+						for _, f := range data.Plan.Features {
+							<div class="border-b last:border-b-0">
+								<!-- Feature Row -->
+								<div class="flex items-center gap-4 py-3 text-sm">
+									<div class="min-w-[120px]">
+										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ f.Key }</code>
+									</div>
+									<div class="min-w-[120px]">
+										<span class="font-medium">{ f.Name }</span>
+										if f.CatalogID != "" {
+											<span class="text-xs text-muted-foreground ml-1" title="From catalog">📋</span>
+										}
+									</div>
+									<div class="min-w-[80px]">
+										@featureTypeBadge(f.Type)
+									</div>
+									<div class="min-w-[80px]">
+										if f.Limit > 0 {
+											{ strconv.FormatInt(f.Limit, 10) }
+										} else {
+											<span class="text-muted-foreground text-xs">Unlimited</span>
+										}
+									</div>
+									<div class="min-w-[70px]">
+										if f.Period != "" {
+											{ f.Period }
+										} else {
+											<span class="text-muted-foreground text-xs">—</span>
+										}
+									</div>
+									<div class="min-w-[50px]">
+										if f.SoftLimit {
+											@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+												Soft
+											}
+										} else {
+											<span class="text-muted-foreground text-xs">Hard</span>
+										}
+									</div>
+									<div class="ml-auto flex items-center gap-1">
+										<form method="POST" class="inline">
+											<input type="hidden" name="action" value="remove_feature"/>
+											<input type="hidden" name="feature_id" value={ f.ID }/>
+											<input type="hidden" name="nonce" value={ data.FormNonce }/>
+											@button.Button(button.Props{
+												Type:    "submit",
+												Variant: button.VariantDestructive,
+												Size:    button.SizeSm,
+											}) {
+												@icons.Trash2(icons.WithSize(14))
+											}
+										</form>
+									</div>
+								</div>
+								<!-- Inline Edit Form (collapsible) -->
+								<details class="pb-3">
+									<summary class="text-xs text-muted-foreground cursor-pointer hover:text-foreground ml-1 mb-2">Edit feature</summary>
+									<form method="POST" class="flex items-end gap-3 flex-wrap pl-1">
+										<input type="hidden" name="action" value="edit_feature"/>
+										<input type="hidden" name="feature_id" value={ f.ID }/>
+										<input type="hidden" name="nonce" value={ data.FormNonce }/>
+										<div class="space-y-1.5 min-w-[120px]">
+											<label class="text-xs text-muted-foreground">Name</label>
+											@input.Input(input.Props{
+												Type:        "text",
+												Name:        "feature_name",
+												Placeholder: f.Name,
+											})
+										</div>
+										<div class="space-y-1.5 min-w-[100px]">
+											<label class="text-xs text-muted-foreground">Type</label>
+											<select name="feature_type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+												<option value="boolean" selected?={ f.Type == "boolean" }>Boolean</option>
+												<option value="metered" selected?={ f.Type == "metered" }>Metered</option>
+												<option value="seat" selected?={ f.Type == "seat" }>Seat</option>
+											</select>
+										</div>
+										<div class="space-y-1.5 min-w-[80px]">
+											<label class="text-xs text-muted-foreground">Limit</label>
+											@input.Input(input.Props{
+												Type:        "number",
+												Name:        "feature_limit",
+												Placeholder: strconv.FormatInt(f.Limit, 10),
+											})
+										</div>
+										<div class="space-y-1.5 min-w-[100px]">
+											<label class="text-xs text-muted-foreground">Period</label>
+											<select name="feature_period" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+												<option value="" selected?={ f.Period == "" }>None</option>
+												<option value="monthly" selected?={ f.Period == "monthly" }>Monthly</option>
+												<option value="yearly" selected?={ f.Period == "yearly" }>Yearly</option>
+											</select>
+										</div>
+										<label class="flex items-center gap-2 text-xs cursor-pointer h-10">
+											if f.SoftLimit {
+												<input type="checkbox" name="feature_soft_limit" value="true" checked class="h-4 w-4 rounded border-input"/>
+											} else {
+												<input type="checkbox" name="feature_soft_limit" value="true" class="h-4 w-4 rounded border-input"/>
+											}
+											<span>Soft</span>
+										</label>
+										@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+											Save
+										}
+									</form>
+								</details>
+							</div>
+						}
+					</div>
+				}
+				<!-- Add Feature Form -->
+				<div class="mt-4 pt-4 border-t">
+					<p class="text-sm font-medium mb-3">Add Feature</p>
+					<form method="POST" class="space-y-3">
+						<input type="hidden" name="action" value="add_feature"/>
+						<input type="hidden" name="nonce" value={ data.FormNonce }/>
+						<div class="flex items-end gap-3 flex-wrap">
+							<div class="space-y-1.5 min-w-[140px]">
+								<label class="text-xs text-muted-foreground" for="feat-key">Key</label>
+								@input.Input(input.Props{
+									Type:        "text",
+									Name:        "feature_key",
+									Placeholder: "e.g. api_calls",
+									ID:          "feat-key",
+								})
+							</div>
+							<div class="space-y-1.5 min-w-[140px]">
+								<label class="text-xs text-muted-foreground" for="feat-name">Name</label>
+								@input.Input(input.Props{
+									Type:        "text",
+									Name:        "feature_name",
+									Placeholder: "e.g. API Calls",
+									ID:          "feat-name",
+								})
+							</div>
+							<div class="space-y-1.5 min-w-[120px]">
+								<label class="text-xs text-muted-foreground" for="feat-type">Type</label>
+								<select name="feature_type" id="feat-type" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<option value="boolean">Boolean</option>
+									<option value="metered">Metered</option>
+									<option value="seat">Seat</option>
+								</select>
+							</div>
+							<div class="space-y-1.5 min-w-[100px]">
+								<label class="text-xs text-muted-foreground" for="feat-limit">Limit</label>
+								@input.Input(input.Props{
+									Type:        "number",
+									Name:        "feature_limit",
+									Placeholder: "0",
+									ID:          "feat-limit",
+								})
+							</div>
+							<div class="space-y-1.5 min-w-[100px]">
+								<label class="text-xs text-muted-foreground" for="feat-period">Period</label>
+								<select name="feature_period" id="feat-period" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+									<option value="">None</option>
+									<option value="monthly">Monthly</option>
+									<option value="yearly">Yearly</option>
+								</select>
+							</div>
+						</div>
+						<div class="flex items-center gap-4">
+							<label class="flex items-center gap-2 text-sm cursor-pointer">
+								<input type="checkbox" name="feature_soft_limit" value="true" class="h-4 w-4 rounded border-input"/>
+								<span>Soft limit (allow overage)</span>
+							</label>
+							@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+								@icons.Plus(icons.WithSize(14))
+								Add Feature
+							}
+						</div>
+					</form>
+				</div>
+				<!-- Add from Catalog -->
+				if len(data.CatalogFeatures) > 0 {
+					<div class="mt-4 pt-4 border-t">
+						<p class="text-sm font-medium mb-3">Add from Catalog</p>
+						<p class="text-xs text-muted-foreground mb-3">
+							Select a feature from the catalog to quickly add it to this plan.
+						</p>
+						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+							for _, cf := range data.CatalogFeatures {
+								<div class="border rounded-lg p-3 hover:bg-muted/50 transition-colors">
+									<div class="flex items-center justify-between mb-1">
+										<span class="font-medium text-sm">{ cf.Name }</span>
+										@featureTypeBadge(cf.Type)
+									</div>
+									<p class="text-xs text-muted-foreground mb-2">
+										<code class="bg-muted px-1 py-0.5 rounded">{ cf.Key }</code>
+										if cf.Description != "" {
+											<span class="ml-1">— { cf.Description }</span>
+										}
+									</p>
+									<form method="POST">
+										<input type="hidden" name="action" value="add_feature"/>
+										<input type="hidden" name="nonce" value={ data.FormNonce }/>
+										<input type="hidden" name="feature_key" value={ cf.Key }/>
+										<input type="hidden" name="feature_name" value={ cf.Name }/>
+										<input type="hidden" name="feature_type" value={ cf.Type }/>
+										<input type="hidden" name="feature_limit" value={ strconv.FormatInt(cf.DefaultLimit, 10) }/>
+										<input type="hidden" name="feature_period" value={ cf.Period }/>
+										if cf.SoftLimit {
+											<input type="hidden" name="feature_soft_limit" value="true"/>
+										}
+										<input type="hidden" name="catalog_id" value={ cf.ID }/>
+										@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+											@icons.Plus(icons.WithSize(14))
+											Add to Plan
+										}
+									</form>
+								</div>
+							}
+						</div>
+					</div>
+				}
+			}
+		}
+	</div>
+}
+
+templ featureTypeBadge(t string) {
+	switch t {
+		case "boolean":
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				Boolean
+			}
+		case "metered":
+			@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+				Metered
+			}
+		case "seat":
+			@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+				Seat
+			}
+		default:
+			@badge.Badge(badge.Props{Variant: badge.VariantOutline}) {
+				{ t }
+			}
+	}
+}

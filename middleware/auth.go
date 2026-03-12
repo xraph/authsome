@@ -451,14 +451,17 @@ func isAPIKeyToken(token string) bool {
 
 func extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return ""
+	if auth != "" {
+		parts := strings.SplitN(auth, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+			return parts[1]
+		}
 	}
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-		return ""
+	// Fallback: read session token from httpOnly cookie set by the backend.
+	if cookie, err := r.Cookie("authsome_session_token"); err == nil && cookie.Value != "" {
+		return cookie.Value
 	}
-	return parts[1]
+	return ""
 }
 
 // clientIPFromRequest extracts the client IP from the request, checking

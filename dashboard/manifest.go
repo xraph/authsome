@@ -114,6 +114,7 @@ func baseNav() []contributor.NavItem {
 		{Label: "Roles", Path: "/roles", Icon: "shield", Group: "Access Control", Priority: 0},
 
 		// Configuration
+		{Label: "Applications", Path: "/apps", Icon: "building-2", Group: "Configuration", Priority: -1},
 		{Label: "Settings", Path: "/settings", Icon: "settings", Group: "Configuration", Priority: 0},
 		{Label: "Environments", Path: "/environments", Icon: "globe", Group: "Configuration", Priority: 1},
 		{Label: "Signup Forms", Path: "/signup-forms", Icon: "file-edit", Group: "Configuration", Priority: 2},

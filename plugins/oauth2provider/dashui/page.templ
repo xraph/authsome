@@ -16,6 +16,7 @@ type ClientsPageData struct {
 	Clients       []OAuth2ClientView
 	CreatedClient *CreatedClientView // non-nil only after creation (secret shown once)
 	Error         string             // validation/creation error message
+	Success       string             // success message (e.g. after delete)
 }
 
 // OAuth2ClientView is a display-only view of an OAuth2 client.
@@ -111,12 +112,32 @@ templ ClientsPage(data ClientsPageData) {
 		}
 		<!-- Error Banner -->
 		if data.Error != "" {
-			<div class="flex items-start gap-3 rounded-sm border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 p-4">
+			<div class="flex items-start gap-3 rounded-sm border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900 p-4" id="o2-error-toast">
 				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 mt-0.5">
 					@icons.CircleX(icons.WithSize(18))
 				</div>
-				<p class="text-sm text-red-800 dark:text-red-300">{ data.Error }</p>
+				<div class="flex-1">
+					<p class="text-sm text-red-800 dark:text-red-300">{ data.Error }</p>
+				</div>
+				<button type="button" class="shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-colors" onclick="this.closest('[id]').remove()">
+					@icons.X(icons.WithSize(16))
+				</button>
 			</div>
+		}
+		<!-- Success Banner -->
+		if data.Success != "" {
+			<div class="flex items-start gap-3 rounded-sm border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 p-4" id="o2-success-toast">
+				<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 mt-0.5">
+					@icons.CircleCheck(icons.WithSize(18))
+				</div>
+				<div class="flex-1">
+					<p class="text-sm text-emerald-800 dark:text-emerald-300">{ data.Success }</p>
+				</div>
+				<button type="button" class="shrink-0 text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 transition-colors" onclick="this.closest('[id]').remove()">
+					@icons.X(icons.WithSize(16))
+				</button>
+			</div>
+			@o2AutoDismiss("o2-success-toast", 5000)
 		}
 		<!-- Create Client Card -->
 		@card.Card() {
@@ -174,29 +195,71 @@ templ ClientsPage(data ClientsPageData) {
 						></textarea>
 						<p class="text-[10px] text-muted-foreground">One URI per line</p>
 					</div>
-					<div class="grid gap-4 md:grid-cols-2">
-						<div class="space-y-1.5">
-							<label for="grant-types" class="text-sm font-medium">Grant Types</label>
-							<input
-								id="grant-types"
-								name="grant_types"
-								type="text"
-								placeholder="authorization_code client_credentials"
-								class="flex h-9 w-full rounded-sm border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-							/>
-							<p class="text-[10px] text-muted-foreground">Defaults to: authorization_code</p>
-						</div>
-						<div class="flex items-end pb-1">
-							<label class="flex items-center gap-2 text-sm">
+					<div class="space-y-1.5">
+						<span class="text-sm font-medium">Grant Types</span>
+						<div class="grid gap-3 sm:grid-cols-2 rounded-sm border border-input p-3">
+							<label class="flex items-start gap-2 text-sm cursor-pointer">
 								<input
 									type="checkbox"
-									name="public"
-									class="h-4 w-4 rounded border-input"
+									name="grant_authorization_code"
+									value="on"
+									checked
+									class="h-4 w-4 rounded border-input mt-0.5"
 								/>
-								<span class="font-medium">Public Client</span>
-								<span class="text-muted-foreground text-xs">(no client secret)</span>
+								<div>
+									<span class="font-medium">Authorization Code</span>
+									<p class="text-[10px] text-muted-foreground leading-tight">Web apps with server-side backend</p>
+								</div>
+							</label>
+							<label class="flex items-start gap-2 text-sm cursor-pointer">
+								<input
+									type="checkbox"
+									name="grant_client_credentials"
+									value="on"
+									class="h-4 w-4 rounded border-input mt-0.5"
+								/>
+								<div>
+									<span class="font-medium">Client Credentials</span>
+									<p class="text-[10px] text-muted-foreground leading-tight">Machine-to-machine / service accounts</p>
+								</div>
+							</label>
+							<label class="flex items-start gap-2 text-sm cursor-pointer">
+								<input
+									type="checkbox"
+									name="grant_device_code"
+									value="on"
+									class="h-4 w-4 rounded border-input mt-0.5"
+								/>
+								<div>
+									<span class="font-medium">Device Code</span>
+									<p class="text-[10px] text-muted-foreground leading-tight">CLI tools and input-constrained devices</p>
+								</div>
+							</label>
+							<label class="flex items-start gap-2 text-sm cursor-pointer">
+								<input
+									type="checkbox"
+									name="grant_refresh_token"
+									value="on"
+									class="h-4 w-4 rounded border-input mt-0.5"
+								/>
+								<div>
+									<span class="font-medium">Refresh Token</span>
+									<p class="text-[10px] text-muted-foreground leading-tight">Allow token refresh without re-auth</p>
+								</div>
 							</label>
 						</div>
+						<p class="text-[10px] text-muted-foreground">Select one or more. Defaults to Authorization Code if none selected.</p>
+					</div>
+					<div class="flex items-center">
+						<label class="flex items-center gap-2 text-sm cursor-pointer">
+							<input
+								type="checkbox"
+								name="public"
+								class="h-4 w-4 rounded border-input"
+							/>
+							<span class="font-medium">Public Client</span>
+							<span class="text-muted-foreground text-xs">(no client secret, e.g. SPAs or mobile apps)</span>
+						</label>
 					</div>
 					<div class="flex justify-end">
 						<button
@@ -315,4 +378,15 @@ script o2CopyToClipboard(text string) {
 			setTimeout(function() { btn.title = originalTitle; }, 2000);
 		}
 	});
+}
+
+script o2AutoDismiss(elementId string, delayMs int) {
+	setTimeout(function() {
+		var el = document.getElementById(elementId);
+		if (el) {
+			el.style.transition = "opacity 0.3s ease-out";
+			el.style.opacity = "0";
+			setTimeout(function() { el.remove(); }, 300);
+		}
+	}, delayMs);
 }
