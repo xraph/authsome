@@ -32,7 +32,7 @@ func (m *mockStrategyAuth) Authenticate(ctx context.Context, r *http.Request) (*
 	if m.authenticateFn != nil {
 		return m.authenticateFn(ctx, r)
 	}
-	return nil, strategy.ErrStrategyNotApplicable{}
+	return nil, strategy.NotApplicableError{}
 }
 
 // ──────────────────────────────────────────────────
@@ -212,7 +212,7 @@ func TestStrategyMiddleware_NoAuthHeaders(t *testing.T) {
 		},
 		&mockStrategyAuth{
 			authenticateFn: func(_ context.Context, _ *http.Request) (*strategy.Result, error) {
-				return nil, strategy.ErrStrategyNotApplicable{}
+				return nil, strategy.NotApplicableError{}
 			},
 		},
 		log.NewNoopLogger(),
@@ -275,7 +275,7 @@ func TestStrategyMiddleware_APIKeyOnly(t *testing.T) {
 						Session: strategySess,
 					}, nil
 				}
-				return nil, strategy.ErrStrategyNotApplicable{}
+				return nil, strategy.NotApplicableError{}
 			},
 		},
 		log.NewNoopLogger(),
@@ -328,15 +328,15 @@ func TestStrategyMiddleware_BearerWithAskPrefix(t *testing.T) {
 	sessionResolverCalled := false
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			sessionResolverCalled = true
 			return nil, errors.New("should not be called")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{
-			authenticateFn: func(ctx context.Context, r *http.Request) (*strategy.Result, error) {
+			authenticateFn: func(_ context.Context, _ *http.Request) (*strategy.Result, error) {
 				return &strategy.Result{
 					User:    strategyUser,
 					Session: strategySess,
@@ -386,7 +386,7 @@ func TestStrategyMiddleware_StrategyNotApplicable(t *testing.T) {
 		},
 		&mockStrategyAuth{
 			authenticateFn: func(_ context.Context, _ *http.Request) (*strategy.Result, error) {
-				return nil, strategy.ErrStrategyNotApplicable{}
+				return nil, strategy.NotApplicableError{}
 			},
 		},
 		log.NewNoopLogger(),
@@ -456,7 +456,7 @@ func TestStrategyMiddleware_RequireAuth_NoAuth(t *testing.T) {
 		},
 		&mockStrategyAuth{
 			authenticateFn: func(_ context.Context, _ *http.Request) (*strategy.Result, error) {
-				return nil, strategy.ErrStrategyNotApplicable{}
+				return nil, strategy.NotApplicableError{}
 			},
 		},
 		log.NewNoopLogger(),
@@ -499,14 +499,14 @@ func TestStrategyMiddleware_RequireAuth_WithStrategy(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{
-			authenticateFn: func(ctx context.Context, r *http.Request) (*strategy.Result, error) {
+			authenticateFn: func(_ context.Context, _ *http.Request) (*strategy.Result, error) {
 				return &strategy.Result{
 					User:    strategyUser,
 					Session: strategySess,
@@ -555,14 +555,14 @@ func TestStrategyMiddleware_StrategyResultSetsScope(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddlewareWithStrategies(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			return nil, errors.New("invalid")
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			return nil, errors.New("not found")
 		},
 		&mockStrategyAuth{
-			authenticateFn: func(ctx context.Context, r *http.Request) (*strategy.Result, error) {
+			authenticateFn: func(_ context.Context, _ *http.Request) (*strategy.Result, error) {
 				return &strategy.Result{
 					User:    strategyUser,
 					Session: strategySess,

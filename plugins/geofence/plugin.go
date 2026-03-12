@@ -259,7 +259,7 @@ func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {
 
 func (p *Plugin) auditBlock(ctx context.Context, appID string, loc *geoip.GeoLocation) {
 	if p.chronicle != nil {
-		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:   "geofence_blocked",
 			Resource: "auth",
 			Tenant:   appID,
@@ -273,7 +273,7 @@ func (p *Plugin) auditBlock(ctx context.Context, appID string, loc *geoip.GeoLoc
 		})
 	}
 	if p.relay != nil {
-		_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "security.geofence_blocked",
 			TenantID: appID,
 			Data: map[string]string{

@@ -24,8 +24,12 @@ func TestOrganization_FieldsPopulated(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 	assert.NotEmpty(t, o.ID.String())
+	assert.NotEmpty(t, o.AppID.String())
+	assert.NotEmpty(t, o.CreatedBy.String())
 	assert.Equal(t, "Test Org", o.Name)
 	assert.Equal(t, "test-org", o.Slug)
+	assert.False(t, o.CreatedAt.IsZero())
+	assert.False(t, o.UpdatedAt.IsZero())
 }
 
 func TestOrganization_Metadata(t *testing.T) {
@@ -54,7 +58,11 @@ func TestMember_FieldsPopulated(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 	assert.NotEmpty(t, m.ID.String())
+	assert.NotEmpty(t, m.OrgID.String())
+	assert.NotEmpty(t, m.UserID.String())
 	assert.Equal(t, RoleMember, m.Role)
+	assert.False(t, m.CreatedAt.IsZero())
+	assert.False(t, m.UpdatedAt.IsZero())
 }
 
 // ──────────────────────────────────────────────────
@@ -81,8 +89,14 @@ func TestInvitation_FieldsPopulated(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	assert.NotEmpty(t, inv.ID.String())
+	assert.NotEmpty(t, inv.OrgID.String())
+	assert.NotEmpty(t, inv.InviterID.String())
 	assert.Equal(t, InvitationPending, inv.Status)
 	assert.Equal(t, "test@example.com", inv.Email)
+	assert.Equal(t, RoleMember, inv.Role)
+	assert.Equal(t, "some-token", inv.Token)
+	assert.False(t, inv.ExpiresAt.IsZero())
+	assert.False(t, inv.CreatedAt.IsZero())
 }
 
 // ──────────────────────────────────────────────────
@@ -99,6 +113,9 @@ func TestTeam_FieldsPopulated(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 	assert.NotEmpty(t, tm.ID.String())
+	assert.NotEmpty(t, tm.OrgID.String())
 	assert.Equal(t, "Engineering", tm.Name)
 	assert.Equal(t, "engineering", tm.Slug)
+	assert.False(t, tm.CreatedAt.IsZero())
+	assert.False(t, tm.UpdatedAt.IsZero())
 }

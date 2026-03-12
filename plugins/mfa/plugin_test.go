@@ -73,7 +73,7 @@ func TestPlugin_DefaultIssuer(t *testing.T) {
 	assert.Equal(t, "mfa", p.Name())
 }
 
-func TestPlugin_ImplementsInterfaces(t *testing.T) {
+func TestPlugin_ImplementsInterfaces(t *testing.T) { //nolint:revive // test function signature
 	p := mfa.New(mfa.Config{})
 
 	var _ plugin.Plugin = p

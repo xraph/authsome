@@ -41,14 +41,18 @@ func (p *microsoftProvider) OAuth2Config() *oauth2.Config { return p.config }
 
 func (p *microsoftProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*ProviderUser, error) {
 	client := p.config.Client(ctx, token)
-	resp, err := client.Get("https://graph.microsoft.com/v1.0/me")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://graph.microsoft.com/v1.0/me", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("microsoft: create request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("microsoft: fetch user: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024)) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("microsoft: API error %d: %s", resp.StatusCode, string(body))
 	}
 

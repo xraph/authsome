@@ -315,10 +315,10 @@ func TestEnvironmentMiddleware_WrongApp(t *testing.T) {
 	}
 
 	mw := middleware.EnvironmentMiddleware(middleware.EnvironmentMiddlewareConfig{
-		ResolveEnvironment: func(envID id.EnvironmentID) (*environment.Environment, error) {
+		ResolveEnvironment: func(_ id.EnvironmentID) (*environment.Environment, error) {
 			return testEnv, nil
 		},
-		ResolveDefault: func(appID id.AppID) (*environment.Environment, error) {
+		ResolveDefault: func(_ id.AppID) (*environment.Environment, error) {
 			return nil, errors.New("not found")
 		},
 		Logger: log.NewNoopLogger(),

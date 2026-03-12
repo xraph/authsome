@@ -30,7 +30,7 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 			Title:      "SSO Connections",
 			Size:       "sm",
 			RefreshSec: 60,
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return ssodash.ConnectionsWidget(p.providerNames())
 			},
 		},
@@ -79,7 +79,7 @@ func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params c
 func (p *Plugin) renderProvidersPage(ctx context.Context, params contributor.Params) (templ.Component, error) {
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
-		appID, _ = id.ParseAppID(p.appID)
+		appID, _ = id.ParseAppID(p.appID) //nolint:errcheck // best-effort parse
 	}
 
 	var data ssodash.ProvidersPageData
@@ -115,7 +115,7 @@ func (p *Plugin) renderProvidersPage(ctx context.Context, params contributor.Par
 
 	// Load DB-managed connections.
 	if p.ssoStore != nil {
-		connections, err := p.ssoStore.ListSSOConnections(ctx, appID)
+		connections, err := p.ssoStore.ListConnections(ctx, appID)
 		if err != nil {
 			connections = nil
 		}
@@ -159,7 +159,7 @@ func (p *Plugin) handleAddConnection(ctx context.Context, appID id.AppID, params
 	}
 
 	now := time.Now()
-	conn := &SSOConnection{
+	conn := &Connection{
 		ID:        id.NewSSOConnectionID(),
 		AppID:     appID,
 		Provider:  provider,
@@ -184,7 +184,7 @@ func (p *Plugin) handleAddConnection(ctx context.Context, appID id.AppID, params
 		}
 	}
 
-	if err := p.ssoStore.CreateSSOConnection(ctx, conn); err != nil {
+	if err := p.ssoStore.CreateConnection(ctx, conn); err != nil {
 		return fmt.Sprintf("Failed to create connection: %v", err)
 	}
 
@@ -204,13 +204,13 @@ func (p *Plugin) handleToggleConnection(ctx context.Context, params contributor.
 	if err != nil {
 		return
 	}
-	conn, err := p.ssoStore.GetSSOConnection(ctx, connID)
+	conn, err := p.ssoStore.GetConnection(ctx, connID)
 	if err != nil {
 		return
 	}
 	conn.Active = !conn.Active
 	conn.UpdatedAt = time.Now()
-	_ = p.ssoStore.UpdateSSOConnection(ctx, conn)
+	_ = p.ssoStore.UpdateConnection(ctx, conn) //nolint:errcheck // best-effort update
 }
 
 // handleDeleteConnection deletes a connection.
@@ -226,7 +226,7 @@ func (p *Plugin) handleDeleteConnection(ctx context.Context, params contributor.
 	if err != nil {
 		return
 	}
-	_ = p.ssoStore.DeleteSSOConnection(ctx, connID)
+	_ = p.ssoStore.DeleteConnection(ctx, connID) //nolint:errcheck // best-effort delete
 }
 
 // ──────────────────────────────────────────────────
@@ -241,9 +241,9 @@ func (p *Plugin) DashboardOrgDetailSection(ctx context.Context, orgID id.OrgID) 
 	// Use app ID from dashboard context, falling back to plugin config.
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
-		appID, _ = id.ParseAppID(p.appID)
+		appID, _ = id.ParseAppID(p.appID) //nolint:errcheck // best-effort parse
 	}
-	connections, err := p.ssoStore.ListSSOConnections(ctx, appID)
+	connections, err := p.ssoStore.ListConnections(ctx, appID)
 	if err != nil {
 		connections = nil
 	}

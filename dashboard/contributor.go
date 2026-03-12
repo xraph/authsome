@@ -483,7 +483,7 @@ func (c *Contributor) renderEnvironments(ctx context.Context, appID id.AppID) (t
 	return pages.EnvironmentsPage(envs), nil
 }
 
-func (c *Contributor) renderEnvironmentDetail(ctx context.Context, appID id.AppID, params contributor.Params) (templ.Component, error) {
+func (c *Contributor) renderEnvironmentDetail(ctx context.Context, _ id.AppID, params contributor.Params) (templ.Component, error) {
 	envIDStr := params.PathParams["id"]
 	if envIDStr == "" {
 		envIDStr = params.QueryParams["id"]
@@ -549,7 +549,7 @@ func (c *Contributor) renderCredentials(ctx context.Context, appID id.AppID, _ c
 	envID, _ := EnvIDFromContext(ctx)
 	var env *environment.Environment
 	if !envID.IsNil() {
-		env, _ = c.engine.GetEnvironment(ctx, envID)
+		env, _ = c.engine.GetEnvironment(ctx, envID) //nolint:errcheck // best-effort fetch
 	}
 
 	data := pages.CredentialsPageData{
@@ -562,7 +562,7 @@ func (c *Contributor) renderCredentials(ctx context.Context, appID id.AppID, _ c
 }
 
 func (c *Contributor) renderPlugins(_ context.Context) (templ.Component, error) {
-	var infos []pages.PluginInfo
+	infos := make([]pages.PluginInfo, 0, len(c.plugins))
 	for _, p := range c.plugins {
 		info := pages.PluginInfo{
 			Name: p.Name(),
@@ -795,7 +795,7 @@ func (c *Contributor) renderAppCreate(ctx context.Context, params contributor.Pa
 	return pages.CreateAppPage(data), nil
 }
 
-func (c *Contributor) handleCreateApp(ctx context.Context, params contributor.Params) (*app.App, string) {
+func (c *Contributor) handleCreateApp(ctx context.Context, params contributor.Params) (created *app.App, errMsg string) {
 	name := strings.TrimSpace(params.FormData["name"])
 	slug := strings.TrimSpace(params.FormData["slug"])
 	logo := strings.TrimSpace(params.FormData["logo"])
@@ -1102,6 +1102,6 @@ func htmxRedirect(url string) templ.Component {
 
 // defaultAppID returns the app ID from the engine config.
 func (c *Contributor) defaultAppID() id.AppID {
-	appID, _ := id.ParseAppID(c.engine.Config().AppID)
+	appID, _ := id.ParseAppID(c.engine.Config().AppID) //nolint:errcheck // best-effort parse
 	return appID
 }

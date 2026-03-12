@@ -49,7 +49,7 @@ func (p *amazonProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*P
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("social: amazon: fetch user: status %d: %s", resp.StatusCode, body)
 	}
 

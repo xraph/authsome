@@ -11,67 +11,67 @@ import (
 // SCIM 2.0 Resource Types (RFC 7643)
 // ──────────────────────────────────────────────────
 
-// SCIMUserResource represents a SCIM 2.0 User resource.
-type SCIMUserResource struct {
-	Schemas    []string       `json:"schemas"`
-	ID         string         `json:"id,omitempty"`
-	ExternalID string         `json:"externalId,omitempty"`
-	UserName   string         `json:"userName"`
-	Name       SCIMName       `json:"name"`
-	Emails     []SCIMEmail    `json:"emails,omitempty"`
-	Active     bool           `json:"active"`
-	Meta       *SCIMMeta      `json:"meta,omitempty"`
-	Groups     []SCIMGroupRef `json:"groups,omitempty"`
+// UserResource represents a SCIM 2.0 User resource.
+type UserResource struct {
+	Schemas    []string   `json:"schemas"`
+	ID         string     `json:"id,omitempty"`
+	ExternalID string     `json:"externalId,omitempty"`
+	UserName   string     `json:"userName"`
+	Name       Name       `json:"name"`
+	Emails     []Email    `json:"emails,omitempty"`
+	Active     bool       `json:"active"`
+	Meta       *Meta      `json:"meta,omitempty"`
+	Groups     []GroupRef `json:"groups,omitempty"`
 }
 
-// SCIMName represents a SCIM name component.
-type SCIMName struct {
+// Name represents a SCIM name component.
+type Name struct {
 	GivenName  string `json:"givenName"`
 	FamilyName string `json:"familyName"`
 	Formatted  string `json:"formatted,omitempty"`
 }
 
-// SCIMEmail represents a SCIM email address.
-type SCIMEmail struct {
+// Email represents a SCIM email address.
+type Email struct {
 	Value   string `json:"value"`
 	Type    string `json:"type,omitempty"`
 	Primary bool   `json:"primary"`
 }
 
-// SCIMGroupRef is a reference to a SCIM group.
-type SCIMGroupRef struct {
+// GroupRef is a reference to a SCIM group.
+type GroupRef struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
 	Ref     string `json:"$ref,omitempty"`
 }
 
-// SCIMMeta holds SCIM resource metadata.
-type SCIMMeta struct {
+// Meta holds SCIM resource metadata.
+type Meta struct {
 	ResourceType string `json:"resourceType"`
 	Created      string `json:"created,omitempty"`
 	LastModified string `json:"lastModified,omitempty"`
 	Location     string `json:"location,omitempty"`
 }
 
-// SCIMGroupResource represents a SCIM 2.0 Group resource.
-type SCIMGroupResource struct {
-	Schemas     []string        `json:"schemas"`
-	ID          string          `json:"id,omitempty"`
-	ExternalID  string          `json:"externalId,omitempty"`
-	DisplayName string          `json:"displayName"`
-	Members     []SCIMMemberRef `json:"members,omitempty"`
-	Meta        *SCIMMeta       `json:"meta,omitempty"`
+// GroupResource represents a SCIM 2.0 Group resource.
+type GroupResource struct {
+	Schemas     []string    `json:"schemas"`
+	ID          string      `json:"id,omitempty"`
+	ExternalID  string      `json:"externalId,omitempty"`
+	DisplayName string      `json:"displayName"`
+	Members     []MemberRef `json:"members,omitempty"`
+	Meta        *Meta       `json:"meta,omitempty"`
 }
 
-// SCIMMemberRef is a member reference within a SCIM Group.
-type SCIMMemberRef struct {
+// MemberRef is a member reference within a SCIM Group.
+type MemberRef struct {
 	Value   string `json:"value"`
 	Display string `json:"display,omitempty"`
 	Ref     string `json:"$ref,omitempty"`
 }
 
-// SCIMListResponse is a SCIM list response (RFC 7644 Section 3.4.2).
-type SCIMListResponse struct {
+// ListResponse is a SCIM list response (RFC 7644 Section 3.4.2).
+type ListResponse struct {
 	Schemas      []string `json:"schemas"`
 	TotalResults int      `json:"totalResults"`
 	StartIndex   int      `json:"startIndex"`
@@ -80,21 +80,21 @@ type SCIMListResponse struct {
 }
 
 // SCIMError represents a SCIM error response (RFC 7644 Section 3.12).
-type SCIMError struct {
+type SCIMError struct { //nolint:revive // Error conflicts with builtin
 	Schemas  []string `json:"schemas"`
 	Detail   string   `json:"detail"`
 	Status   string   `json:"status"`
 	ScimType string   `json:"scimType,omitempty"`
 }
 
-// SCIMPatchOp represents a SCIM PATCH request (RFC 7644 Section 3.5.2).
-type SCIMPatchOp struct {
-	Schemas    []string        `json:"schemas"`
-	Operations []SCIMOperation `json:"Operations"`
+// PatchOp represents a SCIM PATCH request (RFC 7644 Section 3.5.2).
+type PatchOp struct {
+	Schemas    []string    `json:"schemas"`
+	Operations []Operation `json:"Operations"`
 }
 
-// SCIMOperation is a single SCIM PATCH operation.
-type SCIMOperation struct {
+// Operation is a single SCIM PATCH operation.
+type Operation struct {
 	Op    string `json:"op"`
 	Path  string `json:"path,omitempty"`
 	Value any    `json:"value,omitempty"`
@@ -114,7 +114,7 @@ const (
 
 // PrimaryEmail returns the primary email from the emails list,
 // falling back to UserName.
-func (u *SCIMUserResource) PrimaryEmail() string {
+func (u *UserResource) PrimaryEmail() string {
 	for _, e := range u.Emails {
 		if e.Primary {
 			return e.Value
@@ -131,25 +131,25 @@ func (u *SCIMUserResource) PrimaryEmail() string {
 // ──────────────────────────────────────────────────
 
 // UserToSCIM converts an AuthSome user to a SCIM User resource.
-func UserToSCIM(u *user.User, baseURL string) *SCIMUserResource {
-	scimUser := &SCIMUserResource{
+func UserToSCIM(u *user.User, baseURL string) *UserResource {
+	scimUser := &UserResource{
 		Schemas:  []string{SchemaUser},
 		ID:       u.ID.String(),
 		UserName: u.Email,
-		Name: SCIMName{
+		Name: Name{
 			GivenName:  u.FirstName,
 			FamilyName: u.LastName,
 			Formatted:  u.Name(),
 		},
 		Active: !u.Banned,
-		Emails: []SCIMEmail{
+		Emails: []Email{
 			{
 				Value:   u.Email,
 				Type:    "work",
 				Primary: true,
 			},
 		},
-		Meta: &SCIMMeta{
+		Meta: &Meta{
 			ResourceType: "User",
 			Created:      u.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			LastModified: u.UpdatedAt.Format("2006-01-02T15:04:05Z"),
@@ -160,12 +160,12 @@ func UserToSCIM(u *user.User, baseURL string) *SCIMUserResource {
 }
 
 // TeamToSCIMGroup converts an AuthSome team to a SCIM Group resource.
-func TeamToSCIMGroup(t *organization.Team, members []*organization.Member, baseURL string) *SCIMGroupResource {
-	scimGroup := &SCIMGroupResource{
+func TeamToSCIMGroup(t *organization.Team, members []*organization.Member, baseURL string) *GroupResource {
+	scimGroup := &GroupResource{
 		Schemas:     []string{SchemaGroup},
 		ID:          t.ID.String(),
 		DisplayName: t.Name,
-		Meta: &SCIMMeta{
+		Meta: &Meta{
 			ResourceType: "Group",
 			Created:      t.CreatedAt.Format("2006-01-02T15:04:05Z"),
 			LastModified: t.UpdatedAt.Format("2006-01-02T15:04:05Z"),
@@ -174,7 +174,7 @@ func TeamToSCIMGroup(t *organization.Team, members []*organization.Member, baseU
 	}
 
 	for _, m := range members {
-		scimGroup.Members = append(scimGroup.Members, SCIMMemberRef{
+		scimGroup.Members = append(scimGroup.Members, MemberRef{
 			Value: m.UserID.String(),
 			Ref:   baseURL + "/Users/" + m.UserID.String(),
 		})

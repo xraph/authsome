@@ -36,11 +36,11 @@ type Provider interface {
 
 	// HandleCallback processes the callback from the identity provider
 	// and returns the authenticated user's identity.
-	HandleCallback(ctx context.Context, params map[string]string) (*SSOUser, error)
+	HandleCallback(ctx context.Context, params map[string]string) (*User, error)
 }
 
-// SSOUser represents the identity returned by an SSO provider.
-type SSOUser struct {
+// User represents the identity returned by an SSO provider.
+type User struct {
 	ProviderUserID string            `json:"provider_user_id"`
 	Email          string            `json:"email"`
 	FirstName      string            `json:"first_name"`
@@ -49,8 +49,8 @@ type SSOUser struct {
 	Attributes     map[string]string `json:"attributes,omitempty"`
 }
 
-// SSOConnection represents a stored SSO connection for a tenant.
-type SSOConnection struct {
+// Connection represents a stored SSO connection for a tenant.
+type Connection struct {
 	ID           id.SSOConnectionID `json:"id"`
 	AppID        id.AppID           `json:"app_id"`
 	OrgID        id.OrgID           `json:"org_id,omitempty"`
@@ -68,11 +68,11 @@ type SSOConnection struct {
 
 // Store persists SSO connections.
 type Store interface {
-	CreateSSOConnection(ctx context.Context, c *SSOConnection) error
-	GetSSOConnection(ctx context.Context, connID id.SSOConnectionID) (*SSOConnection, error)
-	GetSSOConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*SSOConnection, error)
-	GetSSOConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*SSOConnection, error)
-	ListSSOConnections(ctx context.Context, appID id.AppID) ([]*SSOConnection, error)
-	UpdateSSOConnection(ctx context.Context, c *SSOConnection) error
-	DeleteSSOConnection(ctx context.Context, connID id.SSOConnectionID) error
+	CreateConnection(ctx context.Context, c *Connection) error
+	GetConnection(ctx context.Context, connID id.SSOConnectionID) (*Connection, error)
+	GetConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*Connection, error)
+	GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error)
+	ListConnections(ctx context.Context, appID id.AppID) ([]*Connection, error)
+	UpdateConnection(ctx context.Context, c *Connection) error
+	DeleteConnection(ctx context.Context, connID id.SSOConnectionID) error
 }

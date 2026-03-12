@@ -51,7 +51,7 @@ func (p *bitbucketProvider) FetchUser(ctx context.Context, token *oauth2.Token) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("social: bitbucket: fetch user: status %d: %s", resp.StatusCode, body)
 	}
 

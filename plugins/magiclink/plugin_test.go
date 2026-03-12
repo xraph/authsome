@@ -94,7 +94,7 @@ func TestPlugin_Name(t *testing.T) {
 	assert.Equal(t, "magiclink", p.Name())
 }
 
-func TestPlugin_ImplementsInterfaces(t *testing.T) {
+func TestPlugin_ImplementsInterfaces(t *testing.T) { //nolint:revive // test function signature
 	p := magiclink.New(magiclink.Config{})
 
 	// Plugin should implement base Plugin interface

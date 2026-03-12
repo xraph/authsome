@@ -63,17 +63,6 @@ var (
 	)
 )
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "email", SettingFromAddress); err != nil {
-		return err
-	}
-	if err := settings.RegisterTyped(m, "email", SettingAppName); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "email", SettingBaseURL)
-}
-
 // Config configures the email notification plugin.
 type Config struct {
 	// From is the default sender email address (e.g. "noreply@example.com").
@@ -92,6 +81,17 @@ type Plugin struct {
 	config Config
 	mailer bridge.Mailer
 	logger log.Logger
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "email", SettingFromAddress); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "email", SettingAppName); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "email", SettingBaseURL)
 }
 
 // New creates a new email plugin with the given configuration.

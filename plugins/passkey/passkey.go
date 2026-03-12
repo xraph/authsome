@@ -73,17 +73,6 @@ var (
 
 func intPtr(v int) *int { return &v }
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "passkey", SettingRPDisplayName); err != nil {
-		return err
-	}
-	if err := settings.RegisterTyped(m, "passkey", SettingRPID); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "passkey", SettingSessionTimeoutSeconds)
-}
-
 // Config configures the passkey/WebAuthn plugin.
 type Config struct {
 	// RPDisplayName is the relying party display name shown to users.
@@ -109,6 +98,17 @@ type Plugin struct {
 	relay      bridge.EventRelay
 	hooks      *hook.Bus
 	logger     log.Logger
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "passkey", SettingRPDisplayName); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "passkey", SettingRPID); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "passkey", SettingSessionTimeoutSeconds)
 }
 
 // New creates a new passkey plugin.
@@ -297,7 +297,7 @@ func (p *Plugin) toWebAuthnUser(ctx context.Context, u *user.User) *webAuthnUser
 	wau := &webAuthnUser{user: u}
 
 	if p.store != nil {
-		creds, _ := p.store.ListUserCredentials(ctx, u.ID)
+		creds, _ := p.store.ListUserCredentials(ctx, u.ID) //nolint:errcheck // best-effort lookup
 		for _, c := range creds {
 			transports := make([]protocol.AuthenticatorTransport, 0, len(c.Transport))
 			for _, t := range c.Transport {
@@ -352,7 +352,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -369,7 +369,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,

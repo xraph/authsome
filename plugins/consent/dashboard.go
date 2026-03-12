@@ -24,7 +24,7 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 			Title:      "Consent",
 			Size:       "sm",
 			RefreshSec: 60,
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return consentdash.OverviewWidget()
 			},
 		},
@@ -43,7 +43,7 @@ func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 			Route: "/consents",
 			Label: "Consent",
 			Icon:  "shield-check",
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return consentdash.ConsentsPage()
 			},
 		},

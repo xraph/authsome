@@ -160,17 +160,6 @@ var SettingSocialProviders = settings.Define("social.providers", []ProviderSetti
 
 func intPtr(v int) *int { return &v }
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "social", SettingSessionTokenTTLSeconds); err != nil {
-		return err
-	}
-	if err := settings.RegisterTyped(m, "social", SettingSessionRefreshTTLSeconds); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "social", SettingSocialProviders)
-}
-
 // Config configures the social OAuth plugin.
 type Config struct {
 	// Providers is the list of enabled OAuth providers.
@@ -183,12 +172,12 @@ type Config struct {
 	SessionRefreshTTL time.Duration
 }
 
-// Plugin is the social OAuth authentication plugin.
 // sessionConfigResolver resolves per-app session configuration.
 type sessionConfigResolver interface {
 	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
 }
 
+// Plugin is the social OAuth authentication plugin.
 type Plugin struct {
 	config        Config
 	providers     map[string]Provider
@@ -204,6 +193,17 @@ type Plugin struct {
 	logger      log.Logger
 	ceremonies  ceremony.Store
 	roleEnsurer roleEnsurer
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "social", SettingSessionTokenTTLSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "social", SettingSessionRefreshTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "social", SettingSocialProviders)
 }
 
 // roleEnsurer assigns a default Warden role to a newly created user.
@@ -534,8 +534,8 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	}
 
 	// Store the state for CSRF protection
-	stateData, _ := json.Marshal(map[string]string{"provider": req.Provider})
-	_ = p.ceremonies.Set(ctx.Context(), "social:state:"+state, stateData, 10*time.Minute)
+	stateData, _ := json.Marshal(map[string]string{"provider": req.Provider})             //nolint:errcheck // marshaling known types
+	_ = p.ceremonies.Set(ctx.Context(), "social:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	cfg := provider.OAuth2Config()
 	authURL := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
@@ -560,7 +560,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if err != nil {
 		return nil, forge.BadRequest("invalid state parameter")
 	}
-	_ = p.ceremonies.Delete(ctx.Context(), "social:state:"+req.State)
+	_ = p.ceremonies.Delete(ctx.Context(), "social:state:"+req.State) //nolint:errcheck // best-effort cleanup
 	var stateInfo map[string]string
 	if unmarshalErr := json.Unmarshal(stateData, &stateInfo); unmarshalErr != nil || stateInfo["provider"] != req.Provider {
 		return nil, forge.BadRequest("invalid state parameter")
@@ -672,8 +672,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 				CreatedAt:      time.Now(),
 				UpdatedAt:      time.Now(),
 			}
-			if err := p.oauthStore.CreateOAuthConnection(goCtx, conn); err != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to store oauth connection: %w", err))
+			if createErr := p.oauthStore.CreateOAuthConnection(goCtx, conn); createErr != nil {
+				return nil, forge.InternalError(fmt.Errorf("failed to store oauth connection: %w", createErr))
 			}
 		}
 	}
@@ -812,7 +812,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,

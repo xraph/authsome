@@ -594,7 +594,7 @@ func toCamelCase(s string) string {
 }
 
 // buildFromJSONExpr generates a Dart expression to extract a field from a JSON map.
-func buildFromJSONExpr(jsonKey string, dartType string, optional bool) string {
+func buildFromJSONExpr(jsonKey, dartType string, optional bool) string {
 	accessor := "json['" + jsonKey + "']"
 	if optional {
 		accessor = "json['" + jsonKey + "']"
@@ -647,7 +647,7 @@ func buildFromJSONExpr(jsonKey string, dartType string, optional bool) string {
 	return dartType + ".fromJson(Map<String, dynamic>.from(" + accessor + " as Map))"
 }
 
-func itemFromJSON(varName string, dartType string) string {
+func itemFromJSON(varName, dartType string) string {
 	switch dartType {
 	case "String":
 		return varName + " as String"
@@ -666,7 +666,7 @@ func itemFromJSON(varName string, dartType string) string {
 }
 
 // buildToJSONExpr generates a Dart expression to convert a field to JSON.
-func buildToJSONExpr(dartName string, dartType string, optional bool) string {
+func buildToJSONExpr(dartName, dartType string, optional bool) string {
 	switch dartType {
 	case "String", "int", "double", "bool", "dynamic":
 		return dartName

@@ -3,6 +3,7 @@ package sso
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -32,7 +33,7 @@ var _ Store = (*SqliteStore)(nil)
 // Store methods
 // ──────────────────────────────────────────────────
 
-func (s *SqliteStore) CreateSSOConnection(ctx context.Context, c *SSOConnection) error {
+func (s *SqliteStore) CreateConnection(ctx context.Context, c *Connection) error {
 	now := time.Now()
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = now
@@ -40,12 +41,12 @@ func (s *SqliteStore) CreateSSOConnection(ctx context.Context, c *SSOConnection)
 	if c.UpdatedAt.IsZero() {
 		c.UpdatedAt = now
 	}
-	m := fromSSOConnection(c)
+	m := fromConnection(c)
 	_, err := s.sdb.NewInsert(m).Exec(ctx)
 	return ssoSqliteError(err)
 }
 
-func (s *SqliteStore) GetSSOConnection(ctx context.Context, connID id.SSOConnectionID) (*SSOConnection, error) {
+func (s *SqliteStore) GetConnection(ctx context.Context, connID id.SSOConnectionID) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.sdb.NewSelect(m).
 		Where("id = ?", connID.String()).
@@ -53,10 +54,10 @@ func (s *SqliteStore) GetSSOConnection(ctx context.Context, connID id.SSOConnect
 	if err != nil {
 		return nil, ssoSqliteError(err)
 	}
-	return toSSOConnection(m)
+	return toConnection(m)
 }
 
-func (s *SqliteStore) GetSSOConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*SSOConnection, error) {
+func (s *SqliteStore) GetConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.sdb.NewSelect(m).
 		Where("app_id = ?", appID.String()).
@@ -66,10 +67,10 @@ func (s *SqliteStore) GetSSOConnectionByDomain(ctx context.Context, appID id.App
 	if err != nil {
 		return nil, ssoSqliteError(err)
 	}
-	return toSSOConnection(m)
+	return toConnection(m)
 }
 
-func (s *SqliteStore) GetSSOConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*SSOConnection, error) {
+func (s *SqliteStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.sdb.NewSelect(m).
 		Where("app_id = ?", appID.String()).
@@ -79,10 +80,10 @@ func (s *SqliteStore) GetSSOConnectionByProvider(ctx context.Context, appID id.A
 	if err != nil {
 		return nil, ssoSqliteError(err)
 	}
-	return toSSOConnection(m)
+	return toConnection(m)
 }
 
-func (s *SqliteStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([]*SSOConnection, error) {
+func (s *SqliteStore) ListConnections(ctx context.Context, appID id.AppID) ([]*Connection, error) {
 	var models []ssoConnectionModel
 	err := s.sdb.NewSelect(&models).
 		Where("app_id = ?", appID.String()).
@@ -91,9 +92,9 @@ func (s *SqliteStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([
 	if err != nil {
 		return nil, ssoSqliteError(err)
 	}
-	result := make([]*SSOConnection, 0, len(models))
+	result := make([]*Connection, 0, len(models))
 	for i := range models {
-		c, err := toSSOConnection(&models[i])
+		c, err := toConnection(&models[i])
 		if err != nil {
 			return nil, err
 		}
@@ -102,16 +103,16 @@ func (s *SqliteStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([
 	return result, nil
 }
 
-func (s *SqliteStore) UpdateSSOConnection(ctx context.Context, c *SSOConnection) error {
+func (s *SqliteStore) UpdateConnection(ctx context.Context, c *Connection) error {
 	c.UpdatedAt = time.Now()
-	m := fromSSOConnection(c)
+	m := fromConnection(c)
 	_, err := s.sdb.NewUpdate(m).
 		WherePK().
 		Exec(ctx)
 	return ssoSqliteError(err)
 }
 
-func (s *SqliteStore) DeleteSSOConnection(ctx context.Context, connID id.SSOConnectionID) error {
+func (s *SqliteStore) DeleteConnection(ctx context.Context, connID id.SSOConnectionID) error {
 	_, err := s.sdb.NewDelete((*ssoConnectionModel)(nil)).
 		Where("id = ?", connID.String()).
 		Exec(ctx)
@@ -126,7 +127,7 @@ func ssoSqliteError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrConnectionNotFound
 	}
 	return err

@@ -13,16 +13,16 @@ import (
 type MemoryStore struct {
 	mu      sync.RWMutex
 	configs map[string]*SCIMConfig
-	tokens  map[string]*SCIMToken
-	logs    map[string]*SCIMProvisionLog
+	tokens  map[string]*Token
+	logs    map[string]*ProvisionLog
 }
 
 // NewMemoryStore creates a new in-memory SCIM store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		configs: make(map[string]*SCIMConfig),
-		tokens:  make(map[string]*SCIMToken),
-		logs:    make(map[string]*SCIMProvisionLog),
+		tokens:  make(map[string]*Token),
+		logs:    make(map[string]*ProvisionLog),
 	}
 }
 
@@ -104,7 +104,7 @@ func (s *MemoryStore) ListConfigsByOrg(_ context.Context, orgID id.OrgID) ([]*SC
 // Token CRUD
 // ──────────────────────────────────────────────────
 
-func (s *MemoryStore) CreateToken(_ context.Context, t *SCIMToken) error {
+func (s *MemoryStore) CreateToken(_ context.Context, t *Token) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := t.ID.String()
@@ -116,7 +116,7 @@ func (s *MemoryStore) CreateToken(_ context.Context, t *SCIMToken) error {
 	return nil
 }
 
-func (s *MemoryStore) GetToken(_ context.Context, tokenID id.SCIMTokenID) (*SCIMToken, error) {
+func (s *MemoryStore) GetToken(_ context.Context, tokenID id.SCIMTokenID) (*Token, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	t, ok := s.tokens[tokenID.String()]
@@ -127,10 +127,10 @@ func (s *MemoryStore) GetToken(_ context.Context, tokenID id.SCIMTokenID) (*SCIM
 	return &cp, nil
 }
 
-func (s *MemoryStore) ListTokens(_ context.Context, configID id.SCIMConfigID) ([]*SCIMToken, error) {
+func (s *MemoryStore) ListTokens(_ context.Context, configID id.SCIMConfigID) ([]*Token, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var result []*SCIMToken
+	var result []*Token
 	cfgKey := configID.String()
 	for _, t := range s.tokens {
 		if t.ConfigID.String() == cfgKey {
@@ -151,19 +151,20 @@ func (s *MemoryStore) DeleteToken(_ context.Context, tokenID id.SCIMTokenID) err
 	return nil
 }
 
-func (s *MemoryStore) FindTokenByHash(_ context.Context, tokenHash string) (*SCIMToken, *SCIMConfig, error) {
+func (s *MemoryStore) FindTokenByHash(_ context.Context, tokenHash string) (*Token, *SCIMConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, t := range s.tokens {
-		if t.TokenHash == tokenHash {
-			cp := *t
-			cfg, ok := s.configs[t.ConfigID.String()]
-			if !ok {
-				return nil, nil, fmt.Errorf("scim: config for token not found")
-			}
-			cfgCp := *cfg
-			return &cp, &cfgCp, nil
+		if t.TokenHash != tokenHash {
+			continue
 		}
+		cp := *t
+		cfg, ok := s.configs[t.ConfigID.String()]
+		if !ok {
+			return nil, nil, fmt.Errorf("scim: config for token not found")
+		}
+		cfgCp := *cfg
+		return &cp, &cfgCp, nil
 	}
 	return nil, nil, fmt.Errorf("scim: token not found")
 }
@@ -172,7 +173,7 @@ func (s *MemoryStore) FindTokenByHash(_ context.Context, tokenHash string) (*SCI
 // Provision logs
 // ──────────────────────────────────────────────────
 
-func (s *MemoryStore) CreateLog(_ context.Context, l *SCIMProvisionLog) error {
+func (s *MemoryStore) CreateLog(_ context.Context, l *ProvisionLog) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	cp := *l
@@ -180,10 +181,10 @@ func (s *MemoryStore) CreateLog(_ context.Context, l *SCIMProvisionLog) error {
 	return nil
 }
 
-func (s *MemoryStore) ListLogs(_ context.Context, configID id.SCIMConfigID, limit int) ([]*SCIMProvisionLog, error) {
+func (s *MemoryStore) ListLogs(_ context.Context, configID id.SCIMConfigID, limit int) ([]*ProvisionLog, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var result []*SCIMProvisionLog
+	var result []*ProvisionLog
 	cfgKey := configID.String()
 	for _, l := range s.logs {
 		if l.ConfigID.String() == cfgKey {
@@ -198,7 +199,7 @@ func (s *MemoryStore) ListLogs(_ context.Context, configID id.SCIMConfigID, limi
 	return result, nil
 }
 
-func (s *MemoryStore) ListAllLogs(_ context.Context, appID string, limit int) ([]*SCIMProvisionLog, error) {
+func (s *MemoryStore) ListAllLogs(_ context.Context, appID string, limit int) ([]*ProvisionLog, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -210,7 +211,7 @@ func (s *MemoryStore) ListAllLogs(_ context.Context, appID string, limit int) ([
 		}
 	}
 
-	var result []*SCIMProvisionLog
+	var result []*ProvisionLog
 	for _, l := range s.logs {
 		if appConfigs[l.ConfigID.String()] {
 			cp := *l
@@ -279,7 +280,7 @@ func sortConfigsByCreated(configs []*SCIMConfig) {
 	})
 }
 
-func sortLogsByCreated(logs []*SCIMProvisionLog) {
+func sortLogsByCreated(logs []*ProvisionLog) {
 	sort.Slice(logs, func(i, j int) bool {
 		return logs[i].CreatedAt.After(logs[j].CreatedAt)
 	})

@@ -180,14 +180,14 @@ func (p *Plugin) Resolve(ipStr string) *GeoLocation {
 }
 
 // OnBeforeSignIn resolves geo for the sign-in request and stores it in context.
-func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest) error {
+func (p *Plugin) OnBeforeSignIn(_ context.Context, req *account.SignInRequest) error {
 	// Resolve geo for the sign-in request. Downstream plugins will call Resolve themselves.
 	_ = p.Resolve(req.IPAddress)
 	return nil
 }
 
 // OnBeforeSignUp resolves geo for the sign-up request.
-func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest) error {
+func (p *Plugin) OnBeforeSignUp(_ context.Context, req *account.SignUpRequest) error {
 	// Resolve but don't block — downstream plugins will call Resolve themselves.
 	_ = p.Resolve(req.IPAddress)
 	return nil
@@ -209,7 +209,7 @@ func (p *Plugin) auditGeo(ctx context.Context, action string, userID id.UserID, 
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:   action,
 		Resource: "session",
 		ActorID:  userID.String(),
@@ -229,7 +229,7 @@ func (p *Plugin) relayGeo(ctx context.Context, eventType, appID, userID, session
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: appID,
 		Data: map[string]string{

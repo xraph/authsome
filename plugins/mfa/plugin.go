@@ -359,7 +359,7 @@ func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollRes
 	}
 
 	// Check if already enrolled
-	existing, _ := p.store.GetEnrollment(ctx.Context(), userID, "totp")
+	existing, _ := p.store.GetEnrollment(ctx.Context(), userID, "totp") //nolint:errcheck // best-effort lookup
 	if existing != nil && existing.Verified {
 		return nil, forge.NewHTTPError(http.StatusConflict, "MFA already enrolled and verified")
 	}
@@ -392,7 +392,7 @@ func (p *Plugin) handleEnroll(ctx forge.Context, req *EnrollRequest) (*EnrollRes
 
 	// If there's an existing unverified enrollment, delete it first
 	if existing != nil {
-		_ = p.store.DeleteEnrollment(ctx.Context(), existing.ID)
+		_ = p.store.DeleteEnrollment(ctx.Context(), existing.ID) //nolint:errcheck // best-effort cleanup
 	}
 
 	if err := p.store.CreateEnrollment(ctx.Context(), enrollment); err != nil {
@@ -446,7 +446,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 		}
 
 		// Delete any old codes for this user, then store new ones
-		_ = p.store.DeleteRecoveryCodes(ctx.Context(), userID)
+		_ = p.store.DeleteRecoveryCodes(ctx.Context(), userID) //nolint:errcheck // best-effort cleanup
 		if err := p.store.CreateRecoveryCodes(ctx.Context(), codes); err != nil {
 			return nil, forge.InternalError(fmt.Errorf("failed to store recovery codes: %w", err))
 		}
@@ -602,7 +602,7 @@ func (p *Plugin) handleRecoveryRegenerate(ctx forge.Context, _ *RecoveryRegenera
 	}
 
 	// Delete old codes, store new ones
-	_ = p.store.DeleteRecoveryCodes(ctx.Context(), userID)
+	_ = p.store.DeleteRecoveryCodes(ctx.Context(), userID) //nolint:errcheck // best-effort cleanup
 	if err := p.store.CreateRecoveryCodes(ctx.Context(), codes); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to store recovery codes: %w", err))
 	}
@@ -649,7 +649,7 @@ func (p *Plugin) enrollSMS(ctx forge.Context, userID id.UserID, req *EnrollReque
 	}
 
 	// Check if already enrolled
-	existing, _ := p.store.GetEnrollment(ctx.Context(), userID, "sms")
+	existing, _ := p.store.GetEnrollment(ctx.Context(), userID, "sms") //nolint:errcheck // best-effort lookup
 	if existing != nil && existing.Verified {
 		return nil, forge.NewHTTPError(http.StatusConflict, "SMS MFA already enrolled and verified")
 	}
@@ -667,7 +667,7 @@ func (p *Plugin) enrollSMS(ctx forge.Context, userID id.UserID, req *EnrollReque
 
 	// Delete existing unverified enrollment
 	if existing != nil {
-		_ = p.store.DeleteEnrollment(ctx.Context(), existing.ID)
+		_ = p.store.DeleteEnrollment(ctx.Context(), existing.ID) //nolint:errcheck // best-effort cleanup
 	}
 
 	if err := p.store.CreateEnrollment(ctx.Context(), enrollment); err != nil {
@@ -680,8 +680,8 @@ func (p *Plugin) enrollSMS(ctx forge.Context, userID id.UserID, req *EnrollReque
 		return nil, forge.InternalError(fmt.Errorf("failed to send SMS code: %w", err))
 	}
 
-	challengeData, _ := json.Marshal(challenge)
-	_ = p.ceremonies.Set(ctx.Context(), "mfa:sms:"+userID.String(), challengeData, smsCodeTTL)
+	challengeData, _ := json.Marshal(challenge)                                                //nolint:errcheck // marshaling known types
+	_ = p.ceremonies.Set(ctx.Context(), "mfa:sms:"+userID.String(), challengeData, smsCodeTTL) //nolint:errcheck // best-effort cache
 
 	p.audit(ctx.Context(), hook.ActionMFAEnroll, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
 	p.relayEvent(ctx.Context(), "auth.mfa.enrolled", "", map[string]string{"user_id": userID.String(), "method": enrollment.Method})
@@ -719,8 +719,8 @@ func (p *Plugin) handleSMSSend(ctx forge.Context, req *SMSSendRequest) (*SMSSend
 		return nil, forge.InternalError(fmt.Errorf("failed to send SMS code: %w", err))
 	}
 
-	challengeData, _ := json.Marshal(challenge)
-	_ = p.ceremonies.Set(ctx.Context(), "mfa:sms:"+userID.String(), challengeData, smsCodeTTL)
+	challengeData, _ := json.Marshal(challenge)                                                //nolint:errcheck // marshaling known types
+	_ = p.ceremonies.Set(ctx.Context(), "mfa:sms:"+userID.String(), challengeData, smsCodeTTL) //nolint:errcheck // best-effort cache
 
 	// Mask phone number for response
 	masked := maskPhone(phone)
@@ -758,14 +758,14 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 	}
 
 	// Remove the used challenge
-	_ = p.ceremonies.Delete(ctx.Context(), "mfa:sms:"+userID.String())
+	_ = p.ceremonies.Delete(ctx.Context(), "mfa:sms:"+userID.String()) //nolint:errcheck // best-effort cleanup
 
 	// If the enrollment is not yet verified, mark it as verified
 	enrollment, err := p.store.GetEnrollment(ctx.Context(), userID, "sms")
 	if err == nil && !enrollment.Verified {
 		enrollment.Verified = true
 		enrollment.UpdatedAt = time.Now()
-		_ = p.store.UpdateEnrollment(ctx.Context(), enrollment)
+		_ = p.store.UpdateEnrollment(ctx.Context(), enrollment) //nolint:errcheck // best-effort update
 	}
 
 	return &SMSVerifyResponse{
@@ -783,7 +783,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -800,7 +800,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,

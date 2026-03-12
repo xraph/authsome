@@ -11,7 +11,7 @@ import (
 )
 
 // discordEndpoint is the OAuth2 endpoint for Discord.
-var discordEndpoint = oauth2.Endpoint{
+var discordEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
 	AuthURL:  "https://discord.com/oauth2/authorize",
 	TokenURL: "https://discord.com/api/oauth2/token",
 }
@@ -43,14 +43,18 @@ func (p *discordProvider) OAuth2Config() *oauth2.Config { return p.config }
 
 func (p *discordProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*ProviderUser, error) {
 	client := p.config.Client(ctx, token)
-	resp, err := client.Get("https://discord.com/api/users/@me")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://discord.com/api/users/@me", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("social: discord: create request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("social: discord: fetch user: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("social: discord: fetch user: status %d: %s", resp.StatusCode, body)
 	}
 

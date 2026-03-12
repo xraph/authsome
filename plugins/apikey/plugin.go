@@ -475,7 +475,7 @@ func (s *apikeyStrategy) Name() string { return "apikey" }
 func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*strategy.Result, error) {
 	rawKey := extractAPIKey(r)
 	if rawKey == "" {
-		return nil, strategy.ErrStrategyNotApplicable{}
+		return nil, strategy.NotApplicableError{}
 	}
 
 	// Reject public keys — they are not for authentication.
@@ -520,7 +520,7 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	// Update last used timestamp (best-effort, don't fail auth)
 	now := time.Now()
 	key.LastUsedAt = &now
-	_ = s.store.UpdateAPIKey(ctx, key)
+	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 
 	// Resolve the user associated with this API key.
 	if s.resolveUser == nil {
@@ -595,7 +595,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -612,7 +612,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,

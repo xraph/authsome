@@ -76,13 +76,13 @@ func (p *Plugin) DashboardSettingsPanel(ctx context.Context) templ.Component {
 	appID := p.resolveAppID(ctx)
 	opts := settings.ResolveOpts{AppID: appID}
 
-	defaultPlan, _ := settings.Get(ctx, p.settings, SettingDefaultPlan, opts)
-	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, opts)
-	autoSubOrg, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeOrg, opts)
-	autoSubUser, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeUser, opts)
-	trialDays, _ := settings.Get(ctx, p.settings, SettingTrialDays, opts)
-	selfService, _ := settings.Get(ctx, p.settings, SettingSelfServiceUpgrade, opts)
-	graceDays, _ := settings.Get(ctx, p.settings, SettingGracePeriodDays, opts)
+	defaultPlan, _ := settings.Get(ctx, p.settings, SettingDefaultPlan, opts)        //nolint:errcheck // best-effort settings
+	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, opts)          //nolint:errcheck // best-effort settings
+	autoSubOrg, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeOrg, opts)    //nolint:errcheck // best-effort settings
+	autoSubUser, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeUser, opts)  //nolint:errcheck // best-effort settings
+	trialDays, _ := settings.Get(ctx, p.settings, SettingTrialDays, opts)            //nolint:errcheck // best-effort settings
+	selfService, _ := settings.Get(ctx, p.settings, SettingSelfServiceUpgrade, opts) //nolint:errcheck // best-effort settings
+	graceDays, _ := settings.Get(ctx, p.settings, SettingGracePeriodDays, opts)      //nolint:errcheck // best-effort settings
 
 	return subdash.SettingsPanel(subdash.SettingsPanelData{
 		DefaultPlan:      defaultPlan,
@@ -183,7 +183,7 @@ func (p *Plugin) DashboardOrgDetailSection(ctx context.Context, orgID id.OrgID) 
 // OrgDetailTabContributor
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) DashboardOrgDetailTabs(ctx context.Context, orgID id.OrgID) []dashboard.OrgDetailTab {
+func (p *Plugin) DashboardOrgDetailTabs(_ context.Context, _ id.OrgID) []dashboard.OrgDetailTab {
 	return []dashboard.OrgDetailTab{
 		{
 			ID:       "billing",
@@ -283,9 +283,10 @@ func (p *Plugin) renderPlansPage(ctx context.Context, params contributor.Params)
 			for _, pl := range plans {
 				pv := toPlanView(pl)
 				data.TotalFeatures += pv.FeaturesCount
-				if pv.Status == "active" {
+				switch pv.Status {
+				case "active":
 					data.ActiveCount++
-				} else if pv.Status == "archived" {
+				case "archived":
 					data.ArchivedCount++
 				}
 				if pv.IsAddon {
@@ -736,7 +737,7 @@ func (p *Plugin) renderFeaturesPage(ctx context.Context, params contributor.Para
 					data.Error = fmt.Sprintf("Failed to get feature: %v", err)
 				} else {
 					f.Status = feature.StatusActive
-					f.Entity.Touch()
+					f.Touch()
 					if err := p.service.UpdateCatalogFeature(ctx, f); err != nil {
 						data.Error = fmt.Sprintf("Failed to activate feature: %v", err)
 					} else {
@@ -798,7 +799,7 @@ func (p *Plugin) handleDashCreatePlan(ctx context.Context, appID string, params 
 	if currency == "" {
 		currency = "usd"
 	}
-	trialDays, _ := strconv.Atoi(params.FormData["trial_days"])
+	trialDays, _ := strconv.Atoi(params.FormData["trial_days"]) //nolint:errcheck // best-effort parse
 
 	pl := &plan.Plan{
 		Name: name, Slug: slug,
@@ -834,13 +835,13 @@ func (p *Plugin) handleDashCreatePlan(ctx context.Context, appID string, params 
 
 func (p *Plugin) handleDashArchivePlan(ctx context.Context, params contributor.Params) {
 	if pid, err := ledgerid.ParsePlanID(params.FormData["plan_id"]); err == nil {
-		_ = p.service.ArchivePlan(ctx, pid)
+		_ = p.service.ArchivePlan(ctx, pid) //nolint:errcheck // best-effort archive
 	}
 }
 
 func (p *Plugin) handleDashActivatePlan(ctx context.Context, params contributor.Params) {
 	if pid, err := ledgerid.ParsePlanID(params.FormData["plan_id"]); err == nil {
-		_ = p.service.ActivatePlan(ctx, pid)
+		_ = p.service.ActivatePlan(ctx, pid) //nolint:errcheck // best-effort activate
 	}
 }
 
@@ -861,7 +862,7 @@ func (p *Plugin) handleDashAddFeature(ctx context.Context, pl *plan.Plan, params
 		f.Type = plan.FeatureBoolean
 	}
 	if v := params.FormData["feature_limit"]; v != "" {
-		f.Limit, _ = strconv.ParseInt(v, 10, 64)
+		f.Limit, _ = strconv.ParseInt(v, 10, 64) //nolint:errcheck // best-effort parse
 	}
 	if v := params.FormData["feature_period"]; v != "" {
 		f.Period = plan.Period(v)
@@ -876,7 +877,7 @@ func (p *Plugin) handleDashAddFeature(ctx context.Context, pl *plan.Plan, params
 	}
 
 	pl.Features = append(pl.Features, f)
-	pl.Entity.Touch()
+	pl.Touch()
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {
 			return fmt.Sprintf("Failed to add feature: %v", err), ""
@@ -903,7 +904,7 @@ func (p *Plugin) handleDashRemoveFeature(ctx context.Context, pl *plan.Plan, par
 		return "Feature not found.", ""
 	}
 	pl.Features = newFeatures
-	pl.Entity.Touch()
+	pl.Touch()
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {
 			return fmt.Sprintf("Failed to remove feature: %v", err), ""
@@ -926,7 +927,7 @@ func (p *Plugin) handleDashUpdatePricing(ctx context.Context, pl *plan.Plan, par
 	} else {
 		pl.Pricing = nil
 	}
-	pl.Entity.Touch()
+	pl.Touch()
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {
 			return fmt.Sprintf("Failed to update pricing: %v", err), ""
@@ -943,9 +944,9 @@ func (p *Plugin) handleDashUpdatePlanInfo(ctx context.Context, pl *plan.Plan, pa
 		pl.Description = v
 	}
 	if v := params.FormData["trial_days"]; v != "" {
-		pl.TrialDays, _ = strconv.Atoi(v)
+		pl.TrialDays, _ = strconv.Atoi(v) //nolint:errcheck // best-effort parse
 	}
-	pl.Entity.Touch()
+	pl.Touch()
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {
 			return fmt.Sprintf("Failed to update plan: %v", err), ""
@@ -991,14 +992,14 @@ func (p *Plugin) handleDashCreateCoupon(ctx context.Context, appID string, param
 	switch params.FormData["type"] {
 	case "percentage":
 		c.Type = coupon.CouponTypePercentage
-		c.Percentage, _ = strconv.Atoi(params.FormData["percentage"])
+		c.Percentage, _ = strconv.Atoi(params.FormData["percentage"]) //nolint:errcheck // best-effort parse
 	default:
 		c.Type = coupon.CouponTypeAmount
 		c.Amount = types.Money{Amount: parseAmountCents(params.FormData["amount"]), Currency: currency}
 	}
 
 	if v := params.FormData["max_redemptions"]; v != "" {
-		c.MaxRedemptions, _ = strconv.Atoi(v)
+		c.MaxRedemptions, _ = strconv.Atoi(v) //nolint:errcheck // best-effort parse
 	}
 	if v := params.FormData["valid_from"]; v != "" {
 		if t, err := time.Parse("2006-01-02", v); err == nil {
@@ -1019,13 +1020,13 @@ func (p *Plugin) handleDashCreateCoupon(ctx context.Context, appID string, param
 
 func (p *Plugin) handleDashDeleteCoupon(ctx context.Context, params contributor.Params) {
 	if cid, err := ledgerid.ParseCouponID(params.FormData["coupon_id"]); err == nil {
-		_ = p.service.DeleteCoupon(ctx, cid)
+		_ = p.service.DeleteCoupon(ctx, cid) //nolint:errcheck // best-effort delete
 	}
 }
 
 func (p *Plugin) handleDashAction(_ context.Context, subIDStr string, fn func(ledgerid.SubscriptionID) error) {
 	if subID, err := ledgerid.ParseSubscriptionID(subIDStr); err == nil {
-		_ = fn(subID)
+		_ = fn(subID) //nolint:errcheck // best-effort callback
 	}
 }
 
@@ -1051,7 +1052,7 @@ func (p *Plugin) handleDashCreateCatalogFeature(ctx context.Context, appID strin
 		f.Description = v
 	}
 	if v := params.FormData["feature_default_limit"]; v != "" {
-		f.DefaultLimit, _ = strconv.ParseInt(v, 10, 64)
+		f.DefaultLimit, _ = strconv.ParseInt(v, 10, 64) //nolint:errcheck // best-effort parse
 	}
 	if v := params.FormData["feature_period"]; v != "" {
 		f.Period = feature.Period(v)
@@ -1074,29 +1075,30 @@ func (p *Plugin) handleDashEditFeature(ctx context.Context, pl *plan.Plan, param
 
 	var found bool
 	for i, f := range pl.Features {
-		if f.ID.String() == featureID {
-			found = true
-			if v := params.FormData["feature_name"]; v != "" {
-				pl.Features[i].Name = v
-			}
-			if v := params.FormData["feature_type"]; v != "" {
-				pl.Features[i].Type = plan.FeatureType(v)
-			}
-			if v := params.FormData["feature_limit"]; v != "" {
-				pl.Features[i].Limit, _ = strconv.ParseInt(v, 10, 64)
-			}
-			if v := params.FormData["feature_period"]; v != "" {
-				pl.Features[i].Period = plan.Period(v)
-			}
-			pl.Features[i].SoftLimit = params.FormData["feature_soft_limit"] == "true"
-			break
+		if f.ID.String() != featureID {
+			continue
 		}
+		found = true
+		if v := params.FormData["feature_name"]; v != "" {
+			pl.Features[i].Name = v
+		}
+		if v := params.FormData["feature_type"]; v != "" {
+			pl.Features[i].Type = plan.FeatureType(v)
+		}
+		if v := params.FormData["feature_limit"]; v != "" {
+			pl.Features[i].Limit, _ = strconv.ParseInt(v, 10, 64) //nolint:errcheck // best-effort parse
+		}
+		if v := params.FormData["feature_period"]; v != "" {
+			pl.Features[i].Period = plan.Period(v)
+		}
+		pl.Features[i].SoftLimit = params.FormData["feature_soft_limit"] == "true"
+		break
 	}
 	if !found {
 		return "Feature not found.", ""
 	}
 
-	pl.Entity.Touch()
+	pl.Touch()
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {
 			return fmt.Sprintf("Failed to update feature: %v", err), ""
@@ -1117,7 +1119,7 @@ func (p *Plugin) handleDashAddTier(ctx context.Context, pl *plan.Plan, params co
 		Type:       plan.TierType(tierType),
 	}
 	if v := params.FormData["tier_up_to"]; v != "" {
-		tier.UpTo, _ = strconv.ParseInt(v, 10, 64)
+		tier.UpTo, _ = strconv.ParseInt(v, 10, 64) //nolint:errcheck // best-effort parse
 	}
 	if v := params.FormData["tier_unit_amount"]; v != "" {
 		cents := parseAmountCents(v)
@@ -1136,7 +1138,7 @@ func (p *Plugin) handleDashAddTier(ctx context.Context, pl *plan.Plan, params co
 	}
 	tier.Priority = len(pl.Pricing.Tiers)
 	pl.Pricing.Tiers = append(pl.Pricing.Tiers, tier)
-	pl.Entity.Touch()
+	pl.Touch()
 
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {
@@ -1157,7 +1159,7 @@ func (p *Plugin) handleDashRemoveTier(ctx context.Context, pl *plan.Plan, params
 	}
 
 	pl.Pricing.Tiers = append(pl.Pricing.Tiers[:idx], pl.Pricing.Tiers[idx+1:]...)
-	pl.Entity.Touch()
+	pl.Touch()
 
 	if p.ledgerStore != nil {
 		if err := p.ledgerStore.UpdatePlan(ctx, pl); err != nil {

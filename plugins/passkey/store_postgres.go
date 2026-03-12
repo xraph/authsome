@@ -3,6 +3,7 @@ package passkey
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -101,7 +102,7 @@ func passkeyPgError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrCredentialNotFound
 	}
 	return err

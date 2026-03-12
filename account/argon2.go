@@ -74,7 +74,7 @@ func IsArgon2Hash(hash string) bool {
 }
 
 // decodeArgon2Hash parses a PHC-format Argon2id hash string.
-func decodeArgon2Hash(encoded string) (params Argon2Params, salt []byte, hash []byte, err error) {
+func decodeArgon2Hash(encoded string) (params Argon2Params, salt, hash []byte, err error) {
 	// Expected format: $argon2id$v=19$m=65536,t=3,p=2$<salt>$<hash>
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 {
@@ -93,7 +93,7 @@ func decodeArgon2Hash(encoded string) (params Argon2Params, salt []byte, hash []
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: invalid argon2 params: %w", scanErr)
 	}
 
-	salt, err = base64.RawStdEncoding.DecodeString(parts[4]) //nolint:gosec // G115: length validated by argon2 output
+	salt, err = base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: decode argon2 salt: %w", err)
 	}

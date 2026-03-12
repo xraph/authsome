@@ -66,14 +66,6 @@ var (
 
 func intPtr(v int) *int { return &v }
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "phone", SettingCodeTTLSeconds); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "phone", SettingAutoCreate)
-}
-
 // phoneRegex is a basic E.164 phone number pattern.
 var phoneRegex = regexp.MustCompile(`^\+[1-9]\d{6,14}$`)
 
@@ -111,6 +103,14 @@ type Plugin struct {
 // roleEnsurer assigns a default Warden role to a newly created user.
 type roleEnsurer interface {
 	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "phone", SettingCodeTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "phone", SettingAutoCreate)
 }
 
 // New creates a new phone auth plugin.
@@ -345,7 +345,7 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	}
 
 	// Consume the challenge.
-	_ = p.ceremonies.Delete(ctx.Context(), ceremonyKey)
+	_ = p.ceremonies.Delete(ctx.Context(), ceremonyKey) //nolint:errcheck // best-effort cleanup
 
 	// Look up or create user by phone.
 	u, newUser, err := p.resolveOrCreateUser(ctx.Context(), appID, req.Phone)

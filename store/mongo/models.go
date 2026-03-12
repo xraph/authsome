@@ -143,7 +143,7 @@ func fromUserModel(m *userModel) (*user.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse //nolint:errcheck // best-effort parse
 	md := make(user.Metadata)
 	if len(m.Metadata) > 0 {
 		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
@@ -232,7 +232,7 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	userID, err := id.ParseUserID(m.UserID)
 	if err != nil {
 		return nil, err
@@ -316,7 +316,7 @@ func fromVerificationModel(m *verificationModel) (*account.Verification, error) 
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	userID, err := id.ParseUserID(m.UserID)
 	if err != nil {
 		return nil, err
@@ -373,7 +373,7 @@ func fromPasswordResetModel(m *passwordResetModel) (*account.PasswordReset, erro
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	userID, err := id.ParseUserID(m.UserID)
 	if err != nil {
 		return nil, err
@@ -434,7 +434,7 @@ func fromOrganizationModel(m *organizationModel) (*organization.Organization, er
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	createdBy, err := id.ParseUserID(m.CreatedBy)
 	if err != nil {
 		return nil, err
@@ -664,7 +664,7 @@ func fromDeviceModel(m *deviceModel) (*device.Device, error) {
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	return &device.Device{
 		ID:          devID,
 		UserID:      userID,
@@ -724,7 +724,7 @@ func fromWebhookModel(m *webhookModel) (*webhook.Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	return &webhook.Webhook{
 		ID:        whID,
 		AppID:     appID,
@@ -783,7 +783,7 @@ func fromNotificationModel(m *notificationModel) (*notification.Notification, er
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	userID, err := id.ParseUserID(m.UserID)
 	if err != nil {
 		return nil, err
@@ -859,7 +859,7 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	envID, _ := id.ParseEnvironmentID(m.EnvID)
+	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
 	userID, err := id.ParseUserID(m.UserID)
 	if err != nil {
 		return nil, err
@@ -909,8 +909,8 @@ type environmentModel struct {
 }
 
 func toEnvironmentModel(e *environment.Environment) *environmentModel {
-	settings, _ := json.Marshal(e.Settings) //nolint:errcheck // best-effort encode
-	md, _ := json.Marshal(e.Metadata)       //nolint:errcheck // best-effort encode
+	envSettings, _ := json.Marshal(e.Settings) //nolint:errcheck // best-effort encode
+	md, _ := json.Marshal(e.Metadata)          //nolint:errcheck // best-effort encode
 	m := &environmentModel{
 		ID:          e.ID.String(),
 		AppID:       e.AppID.String(),
@@ -920,7 +920,7 @@ func toEnvironmentModel(e *environment.Environment) *environmentModel {
 		IsDefault:   e.IsDefault,
 		Color:       e.Color,
 		Description: e.Description,
-		Settings:    settings,
+		Settings:    envSettings,
 		Metadata:    md,
 		CreatedAt:   e.CreatedAt,
 		UpdatedAt:   e.UpdatedAt,

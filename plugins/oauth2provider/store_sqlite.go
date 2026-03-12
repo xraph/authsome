@@ -3,6 +3,7 @@ package oauth2provider
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -146,7 +147,7 @@ func (s *SqliteStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCode 
 		Where("device_code = ?", deviceCode).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeviceCodeNotFound
 		}
 		return nil, oauth2SqliteError(err)
@@ -160,7 +161,7 @@ func (s *SqliteStore) GetDeviceCodeByUserCode(ctx context.Context, userCode stri
 		Where("user_code = ?", userCode).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeviceCodeNotFound
 		}
 		return nil, oauth2SqliteError(err)
@@ -191,7 +192,7 @@ func oauth2SqliteError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrClientNotFound
 	}
 	return err

@@ -120,7 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sso_connections_provider
 				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sso_connections ADD COLUMN client_secret TEXT NOT NULL DEFAULT '';`)
 				return err
 			},
-			Down: func(ctx context.Context, exec migrate.Executor) error {
+			Down: func(_ context.Context, _ migrate.Executor) error {
 				// SQLite does not support DROP COLUMN in older versions; best-effort.
 				return nil
 			},

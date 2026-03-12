@@ -510,7 +510,7 @@ CREATE INDEX IF NOT EXISTS idx_authsome_environments_app
 					"authsome_sso_connections",
 				}
 				for _, t := range tables {
-					_, _ = exec.Exec(ctx, fmt.Sprintf(
+					_, _ = exec.Exec(ctx, fmt.Sprintf( //nolint:errcheck // best-effort migration
 						`ALTER TABLE %s DROP COLUMN env_id`, t,
 					))
 				}

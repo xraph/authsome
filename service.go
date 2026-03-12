@@ -42,7 +42,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Breach check (fail-open on network errors)
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(req.Password); breached {
+		if breached, _ := account.NewBreachChecker().IsBreached(req.Password); breached { //nolint:errcheck // best-effort check
 			return nil, nil, account.ErrPasswordBreached
 		}
 	}
@@ -180,11 +180,12 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Lookup user
 	var u *user.User
 	var err error
-	if req.Email != "" {
+	switch {
+	case req.Email != "":
 		u, err = e.store.GetUserByEmail(ctx, req.AppID, req.Email)
-	} else if req.Username != "" {
+	case req.Username != "":
 		u, err = e.store.GetUserByUsername(ctx, req.AppID, req.Username)
-	} else {
+	default:
 		return nil, nil, account.ErrInvalidCredentials
 	}
 
@@ -209,7 +210,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 
 	// Reset lockout on successful authentication
 	if e.lockout != nil {
-		_ = e.lockout.Reset(ctx, lockoutKey)
+		_ = e.lockout.Reset(ctx, lockoutKey) //nolint:errcheck // best-effort reset
 	}
 
 	// Check password expiration
@@ -218,7 +219,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		if time.Since(*u.PasswordChangedAt) > maxAge {
 			// Reset lockout so the user can change their password
 			if e.lockout != nil {
-				_ = e.lockout.Reset(ctx, lockoutKey)
+				_ = e.lockout.Reset(ctx, lockoutKey) //nolint:errcheck // best-effort reset
 			}
 			return u, nil, account.ErrPasswordExpired
 		}
@@ -334,7 +335,7 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string) (*session.Ses
 
 	// Check if refresh token is expired
 	if time.Now().After(sess.RefreshTokenExpiresAt) {
-		_ = e.store.DeleteSession(ctx, sess.ID)
+		_ = e.store.DeleteSession(ctx, sess.ID) //nolint:errcheck // best-effort cleanup
 		return nil, account.ErrSessionExpired
 	}
 
@@ -706,7 +707,7 @@ func (e *Engine) recordFailedSignin(ctx context.Context, req *account.SignInRequ
 func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email string) (*account.PasswordReset, error) {
 	u, err := e.store.GetUserByEmail(ctx, appID, email)
 	if err != nil {
-		return nil, nil //nolint:nilerr
+		return nil, nil //nolint:nilerr // intentionally returning nil on auth failure
 	}
 
 	ttl := 1 * time.Hour
@@ -746,7 +747,7 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached {
+		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached { //nolint:errcheck // best-effort check
 			return account.ErrPasswordBreached
 		}
 	}
@@ -781,7 +782,7 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 		return fmt.Errorf("authsome: consume reset: %w", consumeErr)
 	}
 
-	_ = e.store.DeleteUserSessions(ctx, pr.UserID)
+	_ = e.store.DeleteUserSessions(ctx, pr.UserID) //nolint:errcheck // best-effort cleanup
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "reset_password", "user", u.ID.String(), u.ID.String(), pr.AppID.String(), "auth", nil)
 
@@ -822,7 +823,7 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 	// Breach check
 	if policy.CheckBreached {
-		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached {
+		if breached, _ := account.NewBreachChecker().IsBreached(newPassword); breached { //nolint:errcheck // best-effort check
 			return account.ErrPasswordBreached
 		}
 	}
@@ -1336,7 +1337,7 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 	}
 
 	// Assign role (ignore duplicate assignment errors).
-	_ = e.AssignUserRole(ctx, &rbac.UserRole{
+	_ = e.AssignUserRole(ctx, &rbac.UserRole{ //nolint:errcheck // best-effort role assign
 		UserID: userID.String(),
 		RoleID: role.ID,
 	})
@@ -1405,7 +1406,7 @@ func (e *Engine) AdminBanUser(ctx context.Context, adminID, userID id.UserID, re
 	}
 
 	// Revoke all active sessions for the banned user
-	_ = e.store.DeleteUserSessions(ctx, userID)
+	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
 
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionAdminBanUser,
@@ -1486,7 +1487,7 @@ func (e *Engine) AdminDeleteUser(ctx context.Context, adminID, userID id.UserID)
 	}
 
 	// Revoke all sessions
-	_ = e.store.DeleteUserSessions(ctx, userID)
+	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
 
 	// Delete the user
 	if err := e.store.DeleteUser(ctx, userID); err != nil {
@@ -1667,7 +1668,7 @@ func (e *Engine) DeleteAccount(ctx context.Context, userID id.UserID) error {
 	}
 
 	// Revoke all sessions
-	_ = e.store.DeleteUserSessions(ctx, userID)
+	_ = e.store.DeleteUserSessions(ctx, userID) //nolint:errcheck // best-effort cleanup
 
 	// Soft-delete: set deleted_at timestamp
 	now := time.Now()
@@ -1897,7 +1898,7 @@ func (e *Engine) CreateApp(ctx context.Context, a *app.App) error {
 	if userID, ok := middleware.UserIDFrom(ctx); ok && !userID.IsNil() {
 		ownerRole, roleErr := e.GetRoleBySlug(ctx, a.ID, rbac.AppOwnerSlug)
 		if roleErr == nil && ownerRole != nil {
-			_ = e.AssignUserRole(ctx, &rbac.UserRole{
+			_ = e.AssignUserRole(ctx, &rbac.UserRole{ //nolint:errcheck // best-effort role assign
 				UserID: userID.String(),
 				RoleID: ownerRole.ID,
 			})
@@ -1953,7 +1954,7 @@ func (e *Engine) DeleteApp(ctx context.Context, appID id.AppID) error {
 // CreateEnvironment creates a new environment for an app.
 func (e *Engine) CreateEnvironment(ctx context.Context, env *environment.Environment) error {
 	if env.ID.Prefix() == "" {
-		env.ID = id.EnvironmentID(id.NewEnvironmentID())
+		env.ID = id.NewEnvironmentID()
 	}
 	now := time.Now()
 	if env.CreatedAt.IsZero() {
@@ -2206,9 +2207,9 @@ func (a *storeCloneAdapter) CreateClonedPermission(ctx context.Context, p *envir
 func (a *storeCloneAdapter) CreateClonedWebhook(ctx context.Context, w *environment.WebhookForClone) error {
 	now := time.Now()
 	return a.store.CreateWebhook(ctx, &webhook.Webhook{
-		ID:        id.WebhookID(id.MustParse(w.ID)),
-		AppID:     id.AppID(id.MustParse(w.AppID)),
-		EnvID:     id.EnvironmentID(id.MustParse(w.EnvID)),
+		ID:        id.MustParse(w.ID),
+		AppID:     id.MustParse(w.AppID),
+		EnvID:     id.MustParse(w.EnvID),
 		URL:       w.URL,
 		Events:    w.Events,
 		Secret:    w.Secret,

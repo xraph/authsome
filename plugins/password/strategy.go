@@ -26,5 +26,5 @@ func (s *passwordStrategy) Name() string { return "password" }
 // SignIn flow handle the actual credential verification. The strategy
 // primarily serves as a registration marker for feature discovery.
 func (s *passwordStrategy) Authenticate(_ context.Context, _ *http.Request) (*strategy.Result, error) {
-	return nil, strategy.ErrStrategyNotApplicable{}
+	return nil, strategy.NotApplicableError{}
 }

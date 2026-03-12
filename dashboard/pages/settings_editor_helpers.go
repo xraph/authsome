@@ -132,7 +132,7 @@ func BuildSettingsEditorData(ctx context.Context, mgr *settings.Manager, scope, 
 }
 
 // resolvedSettingToField converts a ResolvedSetting to a SettingsField for UI rendering.
-func resolvedSettingToField(rs *settings.ResolvedSetting, scope, appID string) SettingsField {
+func resolvedSettingToField(rs *settings.ResolvedSetting, scope, _ string) SettingsField {
 	def := rs.Definition
 	ui := def.UI
 

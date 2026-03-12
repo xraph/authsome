@@ -27,7 +27,7 @@ var (
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns widgets this plugin contributes.
-func (p *Plugin) DashboardWidgets(ctx context.Context) []dashboard.PluginWidget {
+func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 	return []dashboard.PluginWidget{
 		{
 			ID:         "org-count",
@@ -37,7 +37,7 @@ func (p *Plugin) DashboardWidgets(ctx context.Context) []dashboard.PluginWidget 
 			Render: func(wCtx context.Context) templ.Component {
 				appID, ok := dashboard.AppIDFromContext(wCtx)
 				if !ok {
-					appID, _ = id.ParseAppID(p.defaultAppID)
+					appID, _ = id.ParseAppID(p.defaultAppID) //nolint:errcheck // best-effort parse
 				}
 				orgs, err := p.AdminListOrganizations(wCtx, appID)
 				if err != nil {
@@ -97,7 +97,7 @@ func (p *Plugin) DashboardRenderPage(ctx context.Context, route string, params c
 func (p *Plugin) renderOrgList(ctx context.Context, _ contributor.Params) (templ.Component, error) {
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
-		appID, _ = id.ParseAppID(p.defaultAppID)
+		appID, _ = id.ParseAppID(p.defaultAppID) //nolint:errcheck // best-effort parse
 	}
 
 	orgs, err := p.AdminListOrganizations(ctx, appID)
@@ -125,7 +125,7 @@ func (p *Plugin) renderOrgList(ctx context.Context, _ contributor.Params) (templ
 func (p *Plugin) renderOrgCreate(ctx context.Context, params contributor.Params) (templ.Component, error) {
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
-		appID, _ = id.ParseAppID(p.defaultAppID)
+		appID, _ = id.ParseAppID(p.defaultAppID) //nolint:errcheck // best-effort parse
 	}
 
 	var data dashui.CreateOrgPageData
@@ -149,7 +149,7 @@ func (p *Plugin) renderOrgCreate(ctx context.Context, params contributor.Params)
 }
 
 // handleDashboardCreateOrg creates a new organization from form data.
-func (p *Plugin) handleDashboardCreateOrg(ctx context.Context, appID id.AppID, params contributor.Params) (*organization.Organization, string) {
+func (p *Plugin) handleDashboardCreateOrg(ctx context.Context, appID id.AppID, params contributor.Params) (org *organization.Organization, errMsg string) {
 	name := strings.TrimSpace(params.FormData["name"])
 	slug := strings.TrimSpace(params.FormData["slug"])
 	logo := strings.TrimSpace(params.FormData["logo"])
@@ -167,7 +167,7 @@ func (p *Plugin) handleDashboardCreateOrg(ctx context.Context, appID id.AppID, p
 		return nil, fmt.Sprintf("Slug %q is already in use. Please choose a different one.", slug)
 	}
 
-	org := &organization.Organization{
+	org = &organization.Organization{
 		ID:    id.NewOrgID(),
 		AppID: appID,
 		Name:  name,

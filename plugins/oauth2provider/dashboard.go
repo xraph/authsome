@@ -35,7 +35,7 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 			Title:      "OAuth2 Clients",
 			Size:       "sm",
 			RefreshSec: 60,
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return o2dash.ClientsWidget()
 			},
 		},
@@ -141,7 +141,7 @@ func (p *Plugin) renderClientsPage(ctx context.Context, params contributor.Param
 // handleDashboardCreateClient creates a new OAuth2 client from form data.
 // Returns the created client view and an empty error message on success, or nil
 // and an error message on failure.
-func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID, params contributor.Params) (*o2dash.CreatedClientView, string) {
+func (p *Plugin) handleDashboardCreateClient(ctx context.Context, appID id.AppID, params contributor.Params) (view *o2dash.CreatedClientView, errMsg string) {
 	name := params.FormData["name"]
 	if name == "" {
 		return nil, "Client name is required."

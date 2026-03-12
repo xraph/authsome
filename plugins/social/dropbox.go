@@ -12,7 +12,7 @@ import (
 )
 
 // dropboxEndpoint is the OAuth2 endpoint for Dropbox.
-var dropboxEndpoint = oauth2.Endpoint{
+var dropboxEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
 	AuthURL:  "https://www.dropbox.com/oauth2/authorize",
 	TokenURL: "https://api.dropboxapi.com/oauth2/token",
 }
@@ -58,7 +58,7 @@ func (p *dropboxProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("social: dropbox: fetch user: status %d: %s", resp.StatusCode, body)
 	}
 

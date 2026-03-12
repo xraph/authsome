@@ -364,10 +364,10 @@ func TestAuthMiddleware_UserResolveFails(t *testing.T) {
 	}
 
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			return testSession, nil
 		},
-		func(userIDStr string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			return nil, errors.New("user not found")
 		},
 		log.NewNoopLogger(),

@@ -53,7 +53,7 @@ func TestPlugin_Name(t *testing.T) {
 	assert.Equal(t, "apikey", p.Name())
 }
 
-func TestPlugin_ImplementsInterfaces(t *testing.T) {
+func TestPlugin_ImplementsInterfaces(t *testing.T) { //nolint:revive // test function signature
 	p, _ := newTestPlugin()
 
 	var _ plugin.Plugin = p
@@ -334,8 +334,8 @@ func TestPlugin_Strategy_NotApplicable(t *testing.T) {
 	_, err := s.Authenticate(context.Background(), req)
 
 	assert.Error(t, err)
-	var target strategy.StrategyNotApplicableError
-	assert.True(t, errors.As(err, &target), "should return StrategyNotApplicableError")
+	var target strategy.NotApplicableError
+	assert.True(t, errors.As(err, &target), "should return NotApplicableError")
 }
 
 func TestPlugin_Strategy_Authenticate(t *testing.T) {

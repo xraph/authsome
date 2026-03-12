@@ -138,7 +138,7 @@ func (a *API) handleCreateEnvironment(ctx forge.Context, req *CreateEnvironmentR
 	}
 
 	env := &environment.Environment{
-		ID:          id.EnvironmentID(id.NewEnvironmentID()),
+		ID:          id.NewEnvironmentID(),
 		AppID:       appID,
 		Name:        req.Name,
 		Slug:        req.Slug,

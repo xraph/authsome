@@ -235,7 +235,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		activeLocale = tmpl.Versions[0].Locale
 	}
 	sampleData := buildSampleData(tmpl.Variables)
-	preview, _ = p.templates.RenderTemplate(ctx, templateID, activeLocale, sampleData)
+	preview, _ = p.templates.RenderTemplate(ctx, templateID, activeLocale, sampleData) //nolint:errcheck // best-effort preview
 
 	return notifydash.TemplateDetailPage(notifydash.TemplateDetailData{
 		Template:     tmpl,
@@ -362,7 +362,7 @@ func (p *Plugin) handleTestSend(ctx context.Context, params contributor.Params, 
 	return ""
 }
 
-func (p *Plugin) handleCreateTemplate(ctx context.Context, params contributor.Params) (*bridge.HeraldTemplate, string) {
+func (p *Plugin) handleCreateTemplate(ctx context.Context, params contributor.Params) (tmpl *bridge.HeraldTemplate, errMsg string) {
 	name := strings.TrimSpace(params.FormData["name"])
 	slug := strings.TrimSpace(params.FormData["slug"])
 	channel := strings.TrimSpace(params.FormData["channel"])
@@ -376,7 +376,7 @@ func (p *Plugin) handleCreateTemplate(ctx context.Context, params contributor.Pa
 	}
 
 	appID := p.appIDFromContext(ctx)
-	tmpl := &bridge.HeraldTemplate{
+	tmpl = &bridge.HeraldTemplate{
 		AppID:    appID,
 		Slug:     slug,
 		Name:     name,

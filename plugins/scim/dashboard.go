@@ -64,12 +64,12 @@ func (p *Plugin) DashboardSettingsPanel(ctx context.Context) templ.Component {
 	appID := p.resolveAppID(ctx)
 	opts := settings.ResolveOpts{AppID: appID}
 
-	enabled, _ := settings.Get(ctx, p.settings, SettingSCIMEnabled, opts)
-	autoCreate, _ := settings.Get(ctx, p.settings, SettingAutoCreateUsers, opts)
-	autoSuspend, _ := settings.Get(ctx, p.settings, SettingAutoSuspendUsers, opts)
-	groupSync, _ := settings.Get(ctx, p.settings, SettingGroupSync, opts)
-	defaultRole, _ := settings.Get(ctx, p.settings, SettingDefaultRole, opts)
-	tokenExpiry, _ := settings.Get(ctx, p.settings, SettingTokenExpiryDays, opts)
+	enabled, _ := settings.Get(ctx, p.settings, SettingSCIMEnabled, opts)          //nolint:errcheck // best-effort settings
+	autoCreate, _ := settings.Get(ctx, p.settings, SettingAutoCreateUsers, opts)   //nolint:errcheck // best-effort settings
+	autoSuspend, _ := settings.Get(ctx, p.settings, SettingAutoSuspendUsers, opts) //nolint:errcheck // best-effort settings
+	groupSync, _ := settings.Get(ctx, p.settings, SettingGroupSync, opts)          //nolint:errcheck // best-effort settings
+	defaultRole, _ := settings.Get(ctx, p.settings, SettingDefaultRole, opts)      //nolint:errcheck // best-effort settings
+	tokenExpiry, _ := settings.Get(ctx, p.settings, SettingTokenExpiryDays, opts)  //nolint:errcheck // best-effort settings
 
 	return scimdash.SettingsPanel(scimdash.SettingsPanelData{
 		Enabled:         enabled,
@@ -448,7 +448,7 @@ func (p *Plugin) handleRevokeToken(ctx context.Context, params contributor.Param
 	if err != nil {
 		return
 	}
-	_ = p.service.RevokeToken(ctx, tokenID)
+	_ = p.service.RevokeToken(ctx, tokenID) //nolint:errcheck // best-effort revoke
 }
 
 func (p *Plugin) handleUpdateConfigSettings(ctx context.Context, cfg *SCIMConfig, params contributor.Params) (errMsg, successMsg string) {
@@ -495,7 +495,7 @@ func toConfigView(c *SCIMConfig) scimdash.SCIMConfigView {
 	}
 }
 
-func toTokenView(t *SCIMToken) scimdash.SCIMTokenView {
+func toTokenView(t *Token) scimdash.SCIMTokenView {
 	tv := scimdash.SCIMTokenView{
 		ID:        t.ID.String(),
 		Name:      t.Name,
@@ -510,7 +510,7 @@ func toTokenView(t *SCIMToken) scimdash.SCIMTokenView {
 	return tv
 }
 
-func toLogView(l *SCIMProvisionLog, configName string) scimdash.SCIMLogView {
+func toLogView(l *ProvisionLog, configName string) scimdash.SCIMLogView {
 	return scimdash.SCIMLogView{
 		ID:           l.ID.String(),
 		ConfigID:     l.ConfigID.String(),

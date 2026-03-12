@@ -121,11 +121,11 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 	// If this is the first user for the platform app, assign platform_owner role.
 	platformID := a.engine.PlatformAppID()
 	if appID == platformID && !platformID.IsNil() {
-		list, _ := a.engine.Store().ListUsers(ctx.Context(), &user.Query{AppID: appID, Limit: 2})
+		list, _ := a.engine.Store().ListUsers(ctx.Context(), &user.Query{AppID: appID, Limit: 2}) //nolint:errcheck // best-effort lookup
 		if list != nil && list.Total == 1 {
 			ownerRole, roleErr := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
 			if roleErr == nil && ownerRole != nil {
-				_ = a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{
+				_ = a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{ //nolint:errcheck // best-effort role assignment
 					UserID: u.ID.String(),
 					RoleID: ownerRole.ID,
 				})
@@ -221,18 +221,18 @@ func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
 	mgr := a.engine.Settings()
 	opts := settings.ResolveOpts{}
 
-	name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts)
+	name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts) //nolint:errcheck // best-effort settings
 	if name == "" {
 		name = "authsome_session_token"
 	}
-	domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts)
-	path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)
+	domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts) //nolint:errcheck // best-effort settings
+	path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)     //nolint:errcheck // best-effort settings
 	if path == "" {
 		path = "/"
 	}
-	secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts)
-	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)
-	sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts)
+	secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts) //nolint:errcheck // best-effort settings
+	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)    //nolint:errcheck // best-effort settings
+	sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts) //nolint:errcheck // best-effort settings
 
 	// Auto-detect secure: if setting is true but request is plain HTTP, disable for dev.
 	r := ctx.Request()

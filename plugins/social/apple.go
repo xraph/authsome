@@ -58,8 +58,8 @@ func (p *appleProvider) FetchUser(_ context.Context, token *oauth2.Token) (*Prov
 		return nil, fmt.Errorf("apple: decode id_token: %w", err)
 	}
 
-	sub, _ := claims["sub"].(string)
-	email, _ := claims["email"].(string)
+	sub, _ := claims["sub"].(string)     //nolint:errcheck // type assertion
+	email, _ := claims["email"].(string) //nolint:errcheck // type assertion
 
 	if sub == "" {
 		return nil, fmt.Errorf("apple: missing sub claim in id_token")

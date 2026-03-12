@@ -279,7 +279,7 @@ func templateFromBridge(t *bridge.HeraldTemplate) *template.Template {
 		Enabled:  t.Enabled,
 	}
 	if t.ID != "" {
-		tmpl.ID, _ = id.ParseTemplateID(t.ID)
+		tmpl.ID, _ = id.ParseTemplateID(t.ID) //nolint:errcheck // best-effort parse
 	}
 	if len(t.Variables) > 0 {
 		tmpl.Variables = make([]template.Variable, len(t.Variables))
@@ -306,10 +306,10 @@ func versionFromBridge(v *bridge.HeraldTemplateVersion) *template.Version {
 		Active:  v.Active,
 	}
 	if v.ID != "" {
-		ver.ID, _ = id.ParseTemplateVersionID(v.ID)
+		ver.ID, _ = id.ParseTemplateVersionID(v.ID) //nolint:errcheck // best-effort parse
 	}
 	if v.TemplateID != "" {
-		ver.TemplateID, _ = id.ParseTemplateID(v.TemplateID)
+		ver.TemplateID, _ = id.ParseTemplateID(v.TemplateID) //nolint:errcheck // best-effort parse
 	}
 	return ver
 }

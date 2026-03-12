@@ -24,7 +24,7 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 			Title:      "MFA Coverage",
 			Size:       "sm",
 			RefreshSec: 60,
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return mfadash.CoverageWidget()
 			},
 		},
@@ -43,7 +43,7 @@ func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 			Route: "/mfa",
 			Label: "MFA",
 			Icon:  "shield-check",
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return mfadash.EnrollmentsPage()
 			},
 		},

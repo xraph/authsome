@@ -617,15 +617,16 @@ CREATE INDEX IF NOT EXISTS idx_authsome_sso_connections_env
 					"authsome_sso_connections",
 				}
 				for _, t := range tables {
-					_, _ = exec.Exec(ctx, fmt.Sprintf(
+					_, _ = exec.Exec(ctx, fmt.Sprintf( //nolint:errcheck // best-effort migration
 						`ALTER TABLE %s DROP CONSTRAINT IF EXISTS fk_%s_env`, t, t,
 					))
-					_, _ = exec.Exec(ctx, fmt.Sprintf(
+					_, _ = exec.Exec(ctx, fmt.Sprintf( //nolint:errcheck // best-effort migration
 						`ALTER TABLE %s DROP COLUMN IF EXISTS env_id`, t,
 					))
 				}
 
 				// Restore original unique indexes.
+				//nolint:errcheck // best-effort migration
 				_, _ = exec.Exec(ctx, `
 DROP INDEX IF EXISTS idx_authsome_users_email;
 CREATE UNIQUE INDEX idx_authsome_users_email

@@ -56,7 +56,7 @@ type ssoConnectionDoc struct {
 // Converters
 // ──────────────────────────────────────────────────
 
-func ssoDocToConnection(d *ssoConnectionDoc) (*SSOConnection, error) {
+func ssoDocToConnection(d *ssoConnectionDoc) (*Connection, error) {
 	connID, err := id.ParseSSOConnectionID(d.ID)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*SSOConnection, error) {
 		return nil, err
 	}
 
-	c := &SSOConnection{
+	c := &Connection{
 		ID:           connID,
 		AppID:        appID,
 		Provider:     d.Provider,
@@ -92,7 +92,7 @@ func ssoDocToConnection(d *ssoConnectionDoc) (*SSOConnection, error) {
 	return c, nil
 }
 
-func ssoConnectionToDoc(c *SSOConnection) *ssoConnectionDoc {
+func ssoConnectionToDoc(c *Connection) *ssoConnectionDoc {
 	doc := &ssoConnectionDoc{
 		ID:           c.ID.String(),
 		AppID:        c.AppID.String(),
@@ -123,7 +123,7 @@ const ssoConnectionsColl = "authsome_sso_connections"
 // Store methods
 // ──────────────────────────────────────────────────
 
-func (s *MongoStore) CreateSSOConnection(ctx context.Context, c *SSOConnection) error {
+func (s *MongoStore) CreateConnection(ctx context.Context, c *Connection) error {
 	now := time.Now()
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = now
@@ -136,7 +136,7 @@ func (s *MongoStore) CreateSSOConnection(ctx context.Context, c *SSOConnection) 
 	return ssoMongoError(err)
 }
 
-func (s *MongoStore) GetSSOConnection(ctx context.Context, connID id.SSOConnectionID) (*SSOConnection, error) {
+func (s *MongoStore) GetConnection(ctx context.Context, connID id.SSOConnectionID) (*Connection, error) {
 	doc := new(ssoConnectionDoc)
 	err := s.mdb.Collection(ssoConnectionsColl).FindOne(ctx, bson.M{
 		"_id": connID.String(),
@@ -147,7 +147,7 @@ func (s *MongoStore) GetSSOConnection(ctx context.Context, connID id.SSOConnecti
 	return ssoDocToConnection(doc)
 }
 
-func (s *MongoStore) GetSSOConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*SSOConnection, error) {
+func (s *MongoStore) GetConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*Connection, error) {
 	doc := new(ssoConnectionDoc)
 	err := s.mdb.Collection(ssoConnectionsColl).FindOne(ctx, bson.M{
 		"app_id": appID.String(),
@@ -160,7 +160,7 @@ func (s *MongoStore) GetSSOConnectionByDomain(ctx context.Context, appID id.AppI
 	return ssoDocToConnection(doc)
 }
 
-func (s *MongoStore) GetSSOConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*SSOConnection, error) {
+func (s *MongoStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	doc := new(ssoConnectionDoc)
 	err := s.mdb.Collection(ssoConnectionsColl).FindOne(ctx, bson.M{
 		"app_id":   appID.String(),
@@ -173,7 +173,7 @@ func (s *MongoStore) GetSSOConnectionByProvider(ctx context.Context, appID id.Ap
 	return ssoDocToConnection(doc)
 }
 
-func (s *MongoStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([]*SSOConnection, error) {
+func (s *MongoStore) ListConnections(ctx context.Context, appID id.AppID) ([]*Connection, error) {
 	cursor, err := s.mdb.Collection(ssoConnectionsColl).Find(ctx, bson.M{
 		"app_id": appID.String(),
 	})
@@ -187,7 +187,7 @@ func (s *MongoStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([]
 		return nil, ssoMongoError(err)
 	}
 
-	result := make([]*SSOConnection, 0, len(docs))
+	result := make([]*Connection, 0, len(docs))
 	for i := range docs {
 		c, err := ssoDocToConnection(&docs[i])
 		if err != nil {
@@ -198,7 +198,7 @@ func (s *MongoStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([]
 	return result, nil
 }
 
-func (s *MongoStore) UpdateSSOConnection(ctx context.Context, c *SSOConnection) error {
+func (s *MongoStore) UpdateConnection(ctx context.Context, c *Connection) error {
 	c.UpdatedAt = time.Now()
 	doc := ssoConnectionToDoc(c)
 	_, err := s.mdb.Collection(ssoConnectionsColl).UpdateOne(ctx,
@@ -220,7 +220,7 @@ func (s *MongoStore) UpdateSSOConnection(ctx context.Context, c *SSOConnection) 
 	return ssoMongoError(err)
 }
 
-func (s *MongoStore) DeleteSSOConnection(ctx context.Context, connID id.SSOConnectionID) error {
+func (s *MongoStore) DeleteConnection(ctx context.Context, connID id.SSOConnectionID) error {
 	_, err := s.mdb.Collection(ssoConnectionsColl).DeleteOne(ctx, bson.M{
 		"_id": connID.String(),
 	})

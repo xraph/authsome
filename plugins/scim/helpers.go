@@ -7,11 +7,11 @@ import (
 )
 
 // audit records an audit event via Chronicle (nil-safe).
-func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) {
+func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) { //nolint:unparam // signature kept for consistency
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -22,4 +22,3 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 		Category:   "scim",
 	})
 }
-

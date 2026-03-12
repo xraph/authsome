@@ -51,7 +51,7 @@ func toOAuthConnection(m *oauthConnectionModel) (*OAuthConnection, error) {
 
 	md := make(map[string]string)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 
 	c := &OAuthConnection{
@@ -74,7 +74,7 @@ func toOAuthConnection(m *oauthConnectionModel) (*OAuthConnection, error) {
 }
 
 func fromOAuthConnection(c *OAuthConnection) *oauthConnectionModel {
-	md, _ := json.Marshal(c.Metadata)
+	md, _ := json.Marshal(c.Metadata) //nolint:errcheck // marshaling known types
 	if len(md) == 0 {
 		md = []byte("{}")
 	}

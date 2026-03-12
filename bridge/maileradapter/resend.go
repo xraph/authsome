@@ -96,7 +96,7 @@ func (m *ResendMailer) SendEmail(ctx context.Context, msg *bridge.EmailMessage) 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024)) //nolint:errcheck // best-effort read
 		return fmt.Errorf("resend: API error %d: %s", resp.StatusCode, string(respBody))
 	}
 

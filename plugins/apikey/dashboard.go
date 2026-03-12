@@ -35,7 +35,7 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 			Title:      "API Keys",
 			Size:       "sm",
 			RefreshSec: 60,
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return akdash.CountWidget()
 			},
 		},
@@ -94,7 +94,7 @@ func (p *Plugin) renderKeysPage(ctx context.Context, params contributor.Params) 
 
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
-		appID, _ = id.ParseAppID(p.defaultAppID)
+		appID, _ = id.ParseAppID(p.defaultAppID) //nolint:errcheck // best-effort parse
 	}
 
 	var data akdash.KeysPageData
@@ -206,7 +206,7 @@ func (p *Plugin) handleDashboardRevoke(ctx context.Context, params contributor.P
 
 	key.Revoked = true
 	key.UpdatedAt = time.Now()
-	_ = p.store.UpdateAPIKey(ctx, key)
+	_ = p.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 }
 
 // ──────────────────────────────────────────────────
@@ -221,7 +221,7 @@ func (p *Plugin) DashboardUserDetailSection(ctx context.Context, userID id.UserI
 	// Use app ID from dashboard context to scope the query.
 	appID, ok := dashboard.AppIDFromContext(ctx)
 	if !ok {
-		appID, _ = id.ParseAppID(p.defaultAppID)
+		appID, _ = id.ParseAppID(p.defaultAppID) //nolint:errcheck // best-effort parse
 	}
 	keys, err := p.store.ListAPIKeysByUser(ctx, appID, userID)
 	if err != nil {

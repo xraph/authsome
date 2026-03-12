@@ -34,7 +34,7 @@ type ssoConnectionModel struct {
 // SSO connection converters
 // ──────────────────────────────────────────────────
 
-func toSSOConnection(m *ssoConnectionModel) (*SSOConnection, error) {
+func toConnection(m *ssoConnectionModel) (*Connection, error) {
 	connID, err := id.ParseSSOConnectionID(m.ID)
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func toSSOConnection(m *ssoConnectionModel) (*SSOConnection, error) {
 		return nil, err
 	}
 
-	c := &SSOConnection{
+	c := &Connection{
 		ID:           connID,
 		AppID:        appID,
 		Provider:     m.Provider,
@@ -70,7 +70,7 @@ func toSSOConnection(m *ssoConnectionModel) (*SSOConnection, error) {
 	return c, nil
 }
 
-func fromSSOConnection(c *SSOConnection) *ssoConnectionModel {
+func fromConnection(c *Connection) *ssoConnectionModel {
 	m := &ssoConnectionModel{
 		ID:           c.ID.String(),
 		AppID:        c.AppID.String(),

@@ -119,8 +119,8 @@ type LoginPattern struct {
 	LastLoginAt      time.Time
 }
 
-// AnomalyAlert is emitted when an anomalous login is detected.
-type AnomalyAlert struct {
+// Alert is emitted when an anomalous login is detected.
+type Alert struct {
 	UserID    id.UserID
 	SessionID id.SessionID
 	Type      string // "unusual_time", "unusual_country", "frequency_spike"
@@ -261,7 +261,7 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 	}
 
 	// Check anomalies.
-	var alerts []*AnomalyAlert
+	var alerts []*Alert
 
 	if p.config.EnableTimeAnomaly {
 		if alert := p.checkTimeAnomaly(u.ID, s.ID, now, &snapshot); alert != nil {
@@ -284,7 +284,7 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 	return nil
 }
 
-func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now time.Time, pattern *LoginPattern) *AnomalyAlert {
+func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now time.Time, pattern *LoginPattern) *Alert {
 	hour := now.Hour()
 	hourCount := pattern.HourHistogram[hour]
 	totalLogins := pattern.LoginCount
@@ -298,7 +298,7 @@ func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now tim
 		if score > 100 {
 			score = 100
 		}
-		return &AnomalyAlert{
+		return &Alert{
 			UserID:    userID,
 			SessionID: sessID,
 			Type:      "unusual_time",
@@ -313,12 +313,12 @@ func (p *Plugin) checkTimeAnomaly(userID id.UserID, sessID id.SessionID, now tim
 	return nil
 }
 
-func (p *Plugin) checkGeoAnomaly(userID id.UserID, sessID id.SessionID, country string, pattern *LoginPattern) *AnomalyAlert {
+func (p *Plugin) checkGeoAnomaly(userID id.UserID, sessID id.SessionID, country string, pattern *LoginPattern) *Alert {
 	countryCount := pattern.CountryHistogram[country]
 
 	// First time from this country (and user has history).
 	if countryCount <= 1 {
-		return &AnomalyAlert{
+		return &Alert{
 			UserID:    userID,
 			SessionID: sessID,
 			Type:      "unusual_country",
@@ -332,7 +332,7 @@ func (p *Plugin) checkGeoAnomaly(userID id.UserID, sessID id.SessionID, country 
 	return nil
 }
 
-func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *AnomalyAlert) {
+func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Alert) {
 	p.logger.Warn("anomaly: login anomaly detected",
 		log.String("user_id", alert.UserID.String()),
 		log.String("type", alert.Type),
@@ -346,7 +346,7 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Anomaly
 		for k, v := range alert.Details {
 			metadata[k] = v
 		}
-		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:     "login_anomaly",
 			Resource:   "session",
 			ResourceID: alert.SessionID.String(),
@@ -368,7 +368,7 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *Anomaly
 		for k, v := range alert.Details {
 			data[k] = v
 		}
-		_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "security.login_anomaly",
 			TenantID: appID.String(),
 			Data:     data,

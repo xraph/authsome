@@ -53,7 +53,7 @@ func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error)
 	return FromWardenRole(wr), nil
 }
 
-func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID string, slug string) (*Role, error) {
+func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*Role, error) {
 	wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, slug)
 	if err != nil {
 		return nil, mapWardenError(err)
@@ -188,7 +188,7 @@ func (s *WardenStore) AssignUserRole(ctx context.Context, ur *UserRole) error {
 	return nil
 }
 
-func (s *WardenStore) UnassignUserRole(ctx context.Context, userID string, roleID string) error {
+func (s *WardenStore) UnassignUserRole(ctx context.Context, userID, roleID string) error {
 	wRoleID, err := wardenid.ParseRoleID(roleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
@@ -220,11 +220,11 @@ func (s *WardenStore) ListUserRoles(ctx context.Context, userID string) ([]*Role
 	return s.listUserRolesWithTenant(ctx, tenantID, userID)
 }
 
-func (s *WardenStore) ListUserRolesForApp(ctx context.Context, appID string, userID string) ([]*Role, error) {
+func (s *WardenStore) ListUserRolesForApp(ctx context.Context, appID, userID string) ([]*Role, error) {
 	return s.listUserRolesWithTenant(ctx, appID, userID)
 }
 
-func (s *WardenStore) listUserRolesWithTenant(ctx context.Context, tenantID string, userID string) ([]*Role, error) {
+func (s *WardenStore) listUserRolesWithTenant(ctx context.Context, tenantID, userID string) ([]*Role, error) {
 	roleIDs, err := s.engine.Store().ListRolesForSubject(ctx, tenantID, "user", userID)
 	if err != nil {
 		return nil, mapWardenError(err)
@@ -277,7 +277,7 @@ func (s *WardenStore) GetRoleChildren(ctx context.Context, roleID string) ([]*Ro
 // Permission check
 // ──────────────────────────────────────────────────
 
-func (s *WardenStore) HasPermission(ctx context.Context, userID string, action, resource string) (bool, error) {
+func (s *WardenStore) HasPermission(ctx context.Context, userID, action, resource string) (bool, error) {
 	result, err := s.engine.Check(ctx, &warden.CheckRequest{
 		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID},
 		Action:   warden.Action{Name: action},

@@ -84,7 +84,7 @@ func (p *oidcProvider) LoginURL(state string) (string, error) {
 }
 
 // HandleCallback exchanges the authorization code for tokens and fetches user info.
-func (p *oidcProvider) HandleCallback(ctx context.Context, params map[string]string) (*SSOUser, error) {
+func (p *oidcProvider) HandleCallback(ctx context.Context, params map[string]string) (*User, error) {
 	code := params["code"]
 	if code == "" {
 		return nil, fmt.Errorf("sso/oidc: missing authorization code")
@@ -109,7 +109,11 @@ func (p *oidcProvider) HandleCallback(ctx context.Context, params map[string]str
 
 	// Fetch user info.
 	client := p.config.Client(ctx, token)
-	resp, err := client.Get(userinfoURL)
+	userinfoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("sso/oidc: create userinfo request failed: %w", err)
+	}
+	resp, err := client.Do(userinfoReq)
 	if err != nil {
 		return nil, fmt.Errorf("sso/oidc: userinfo request failed: %w", err)
 	}
@@ -129,7 +133,7 @@ func (p *oidcProvider) HandleCallback(ctx context.Context, params map[string]str
 		return nil, fmt.Errorf("sso/oidc: failed to parse userinfo: %w", err)
 	}
 
-	user := &SSOUser{
+	user := &User{
 		ProviderUserID: claims.Sub,
 		Email:          claims.Email,
 		FirstName:      claims.GivenName,
@@ -167,7 +171,7 @@ type oidcDiscovery struct {
 // discover fetches the OIDC discovery document from the issuer.
 func (p *oidcProvider) discover() (*oidcDiscovery, error) {
 	url := p.issuer + "/.well-known/openid-configuration"
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody) //nolint:gosec // G107: URL constructed from configured issuer
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

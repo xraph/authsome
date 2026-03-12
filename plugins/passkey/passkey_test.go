@@ -202,7 +202,12 @@ func TestCredential_FieldsPopulated(t *testing.T) {
 	}
 
 	assert.NotEmpty(t, c.ID.String())
+	assert.NotEmpty(t, c.UserID.String())
+	assert.NotEmpty(t, c.AppID.String())
+	assert.Equal(t, []byte{0x01, 0x02, 0x03}, c.CredentialID)
+	assert.Equal(t, []byte{0xAA, 0xBB}, c.PublicKey)
 	assert.Equal(t, "none", c.AttestationType)
+	assert.Equal(t, []string{"internal"}, c.Transport)
 	assert.Equal(t, uint32(42), c.SignCount)
 	assert.Equal(t, "My Passkey", c.DisplayName)
 }

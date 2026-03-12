@@ -11,7 +11,7 @@ import (
 )
 
 // twitterEndpoint is the OAuth2 endpoint for Twitter/X.
-var twitterEndpoint = oauth2.Endpoint{
+var twitterEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
 	AuthURL:  "https://twitter.com/i/oauth2/authorize",
 	TokenURL: "https://api.x.com/2/oauth2/token",
 }
@@ -43,14 +43,18 @@ func (p *twitterProvider) OAuth2Config() *oauth2.Config { return p.config }
 
 func (p *twitterProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*ProviderUser, error) {
 	client := p.config.Client(ctx, token)
-	resp, err := client.Get("https://api.x.com/2/users/me?user.fields=profile_image_url,name,username")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.x.com/2/users/me?user.fields=profile_image_url,name,username", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("social: twitter: create request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("social: twitter: fetch user: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("social: twitter: fetch user: status %d: %s", resp.StatusCode, body)
 	}
 

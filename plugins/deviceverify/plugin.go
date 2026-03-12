@@ -183,7 +183,7 @@ func (p *Plugin) handleNewDevice(ctx context.Context, u *user.User, _ *session.S
 	)
 
 	if p.chronicle != nil {
-		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:     "new_device_detected",
 			Resource:   "device",
 			ResourceID: dev.ID.String(),
@@ -201,7 +201,7 @@ func (p *Plugin) handleNewDevice(ctx context.Context, u *user.User, _ *session.S
 	}
 
 	if p.relay != nil {
-		_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "device.new_detected",
 			TenantID: u.AppID.String(),
 			Data: map[string]string{
@@ -219,7 +219,7 @@ func (p *Plugin) handleNewDevice(ctx context.Context, u *user.User, _ *session.S
 		if name == "" {
 			name = u.Email
 		}
-		_ = p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{
+		_ = p.herald.Notify(ctx, &bridge.HeraldNotifyRequest{ //nolint:errcheck // best-effort notification
 			Template: "new-device-login",
 			Channels: []string{"email"},
 			To:       []string{u.Email},

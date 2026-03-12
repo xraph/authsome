@@ -3,6 +3,7 @@ package consent
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -59,7 +60,7 @@ func (s *SqliteStore) GrantConsent(ctx context.Context, c *Consent) error {
 		return consentSqliteError(err)
 	}
 
-	rows, _ := res.RowsAffected()
+	rows, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
 	if rows > 0 {
 		return nil
 	}
@@ -83,7 +84,7 @@ func (s *SqliteStore) RevokeConsent(ctx context.Context, userID id.UserID, appID
 		return consentSqliteError(err)
 	}
 
-	rows, _ := res.RowsAffected()
+	rows, _ := res.RowsAffected() //nolint:errcheck // driver always supports RowsAffected
 	if rows == 0 {
 		return ErrNotFound
 	}
@@ -159,7 +160,7 @@ func consentSqliteError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
 	return err

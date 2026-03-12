@@ -122,6 +122,26 @@ var (
 
 func intPtr(v int) *int { return &v }
 
+// Plugin is the subscription management plugin for authsome.
+type Plugin struct {
+	config  Config
+	service *Service
+
+	// Ledger references
+	ledger      *ledger.Ledger
+	ledgerStore ledgerstore.Store
+	ledgerBrdg  bridge.Ledger
+
+	// AuthSome references
+	authStore    store.Store
+	chronicle    bridge.Chronicle
+	relay        bridge.EventRelay
+	hooks        *hook.Bus
+	logger       log.Logger
+	settings     *settings.Manager
+	defaultAppID string
+}
+
 // DeclareSettings implements plugin.SettingsProvider.
 func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "subscription", SettingDefaultPlan); err != nil {
@@ -143,26 +163,6 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	return settings.RegisterTyped(m, "subscription", SettingGracePeriodDays)
-}
-
-// Plugin is the subscription management plugin for authsome.
-type Plugin struct {
-	config  Config
-	service *Service
-
-	// Ledger references
-	ledger      *ledger.Ledger
-	ledgerStore ledgerstore.Store
-	ledgerBrdg  bridge.Ledger
-
-	// AuthSome references
-	authStore    store.Store
-	chronicle    bridge.Chronicle
-	relay        bridge.EventRelay
-	hooks        *hook.Bus
-	logger       log.Logger
-	settings     *settings.Manager
-	defaultAppID string
 }
 
 // New creates a new subscription plugin with the given configuration.
@@ -287,13 +287,13 @@ func (p *Plugin) OnAfterOrgCreate(ctx context.Context, o *organization.Organizat
 	appID := o.AppID.String()
 
 	// Resolve tenant mode setting.
-	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, settings.ResolveOpts{AppID: appID})
+	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 	if tenantMode != "organization" {
 		return nil
 	}
 
 	// Check auto-subscribe setting.
-	autoSub, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeOrg, settings.ResolveOpts{AppID: appID})
+	autoSub, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeOrg, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 	if !autoSub && !p.config.AutoSubscribeOnOrg {
 		return nil
 	}
@@ -311,13 +311,13 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, s *session.Ses
 	appID := s.AppID.String()
 
 	// Resolve tenant mode setting.
-	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, settings.ResolveOpts{AppID: appID})
+	tenantMode, _ := settings.Get(ctx, p.settings, SettingTenantMode, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 	if tenantMode != "user" {
 		return nil
 	}
 
 	// Check auto-subscribe setting.
-	autoSub, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeUser, settings.ResolveOpts{AppID: appID})
+	autoSub, _ := settings.Get(ctx, p.settings, SettingAutoSubscribeUser, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 	if !autoSub && !p.config.AutoSubscribeOnUser {
 		return nil
 	}
@@ -326,18 +326,18 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, s *session.Ses
 }
 
 // OnAfterMemberAdd records seat usage when a member is added to an organization.
-func (p *Plugin) OnAfterMemberAdd(ctx context.Context, m *organization.Member) error {
+func (p *Plugin) OnAfterMemberAdd(ctx context.Context, _ *organization.Member) error {
 	if p.ledgerBrdg == nil {
 		return nil
 	}
-	_ = p.ledgerBrdg.RecordUsage(ctx, "authsome.orgs.members", 1) //nolint:errcheck
+	_ = p.ledgerBrdg.RecordUsage(ctx, "authsome.orgs.members", 1) //nolint:errcheck // best-effort usage recording
 	return nil
 }
 
 // autoSubscribe creates a subscription for the given tenant using the default plan.
 func (p *Plugin) autoSubscribe(ctx context.Context, tenantID, appID string) error {
 	// Resolve the default plan slug.
-	planSlug, _ := settings.Get(ctx, p.settings, SettingDefaultPlan, settings.ResolveOpts{AppID: appID})
+	planSlug, _ := settings.Get(ctx, p.settings, SettingDefaultPlan, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 	if planSlug == "" {
 		planSlug = p.config.DefaultPlanSlug
 	}
@@ -358,7 +358,7 @@ func (p *Plugin) autoSubscribe(ctx context.Context, tenantID, appID string) erro
 	}
 
 	// Resolve trial days.
-	trialDays, _ := settings.Get(ctx, p.settings, SettingTrialDays, settings.ResolveOpts{AppID: appID})
+	trialDays, _ := settings.Get(ctx, p.settings, SettingTrialDays, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 	if trialDays == 0 {
 		trialDays = p.config.TrialDays
 	}

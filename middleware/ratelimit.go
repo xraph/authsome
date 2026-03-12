@@ -48,7 +48,7 @@ func RateLimit(limiter ratelimit.Limiter, cfg RateLimitConfig) forge.Middleware 
 			}
 
 			if !allowed {
-				remaining, _ := limiter.Remaining(ctx.Context(), key, cfg.Limit, cfg.Window)
+				remaining, _ := limiter.Remaining(ctx.Context(), key, cfg.Limit, cfg.Window) //nolint:errcheck // best-effort rate check
 				retryAfter := int(cfg.Window.Seconds())
 
 				ctx.Response().Header().Set("X-RateLimit-Limit", strconv.Itoa(cfg.Limit))

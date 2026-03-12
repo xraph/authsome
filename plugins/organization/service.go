@@ -187,7 +187,7 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 
 	if !inv.ExpiresAt.IsZero() && time.Now().After(inv.ExpiresAt) {
 		inv.Status = organization.InvitationExpired
-		_ = p.store.UpdateInvitation(ctx, inv)
+		_ = p.store.UpdateInvitation(ctx, inv) //nolint:errcheck // best-effort revoke
 		return nil, fmt.Errorf("organization: invitation has expired")
 	}
 

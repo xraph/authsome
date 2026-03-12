@@ -78,7 +78,7 @@ func (a *API) handleForgotPassword(ctx forge.Context, req *ForgotPasswordRequest
 	}
 
 	// ForgotPassword returns nil, nil for unknown emails (avoids email enumeration).
-	_, _ = a.engine.ForgotPassword(ctx.Context(), appID, req.Email)
+	_, _ = a.engine.ForgotPassword(ctx.Context(), appID, req.Email) //nolint:errcheck // best-effort lookup
 
 	// Always return success regardless of whether the email exists.
 	resp := &ForgotPasswordResponse{Status: "ok"}

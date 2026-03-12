@@ -3,6 +3,7 @@ package passkey
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -182,11 +183,11 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 
 	// Store session data for the finish step
 	key := "passkey:reg:" + u.ID.String()
-	sessionJSON, _ := json.Marshal(&ceremonySession{
+	sessionJSON, _ := json.Marshal(&ceremonySession{ //nolint:errcheck // marshaling known types
 		Data:        session,
 		DisplayName: req.DisplayName,
 	})
-	_ = p.ceremonies.Set(ctx.Context(), key, sessionJSON, p.config.SessionTimeout)
+	_ = p.ceremonies.Set(ctx.Context(), key, sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
 
 	return &RegisterBeginResponse{Options: options}, nil
 }
@@ -206,7 +207,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 	if err != nil {
 		return nil, forge.BadRequest("no pending registration ceremony")
 	}
-	_ = p.ceremonies.Delete(ctx.Context(), key)
+	_ = p.ceremonies.Delete(ctx.Context(), key) //nolint:errcheck // best-effort cleanup
 
 	var cs ceremonySession
 	if unmarshalErr := json.Unmarshal(sessionJSON, &cs); unmarshalErr != nil {
@@ -256,8 +257,8 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 		if err != nil {
 			return nil, forge.InternalError(fmt.Errorf("passkey: begin discoverable login: %w", err))
 		}
-		sessionJSON, _ := json.Marshal(session)
-		_ = p.ceremonies.Set(ctx.Context(), "passkey:discoverable", sessionJSON, p.config.SessionTimeout)
+		sessionJSON, _ := json.Marshal(session)                                                           //nolint:errcheck // marshaling known types
+		_ = p.ceremonies.Set(ctx.Context(), "passkey:discoverable", sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
 		return &LoginBeginResponse{Options: options}, nil
 	}
 
@@ -276,8 +277,8 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 	}
 
 	key := "passkey:login:" + u.ID.String()
-	sessionJSON, _ := json.Marshal(session)
-	_ = p.ceremonies.Set(ctx.Context(), key, sessionJSON, p.config.SessionTimeout)
+	sessionJSON, _ := json.Marshal(session)                                        //nolint:errcheck // marshaling known types
+	_ = p.ceremonies.Set(ctx.Context(), key, sessionJSON, p.config.SessionTimeout) //nolint:errcheck // best-effort cache
 
 	return &LoginBeginResponse{Options: options}, nil
 }
@@ -297,7 +298,7 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 	if err != nil {
 		return nil, forge.BadRequest("no pending login ceremony")
 	}
-	_ = p.ceremonies.Delete(ctx.Context(), key)
+	_ = p.ceremonies.Delete(ctx.Context(), key) //nolint:errcheck // best-effort cleanup
 
 	var session webauthn.SessionData
 	if unmarshalErr := json.Unmarshal(sessionJSON, &session); unmarshalErr != nil {
@@ -313,7 +314,7 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 
 	// Update sign count
 	if p.store != nil {
-		_ = p.store.UpdateSignCount(ctx.Context(), cred.ID, cred.Authenticator.SignCount)
+		_ = p.store.UpdateSignCount(ctx.Context(), cred.ID, cred.Authenticator.SignCount) //nolint:errcheck // best-effort update
 	}
 
 	userIDStr := u.ID.String()
@@ -338,7 +339,7 @@ func (p *Plugin) handleList(ctx forge.Context, _ *ListRequest) (*ListResponse, e
 	}
 
 	creds, err := p.store.ListUserCredentials(ctx.Context(), u.ID)
-	if err != nil && err != store.ErrNotFound {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, forge.InternalError(fmt.Errorf("passkey: list credentials: %w", err))
 	}
 
@@ -372,7 +373,7 @@ func (p *Plugin) handleDelete(ctx forge.Context, req *DeleteRequest) (*DeleteRes
 
 	if p.store != nil {
 		if err := p.store.DeleteCredential(ctx.Context(), credentialIDBytes); err != nil {
-			if err == ErrCredentialNotFound {
+			if errors.Is(err, ErrCredentialNotFound) {
 				return nil, forge.NotFound("credential not found")
 			}
 			return nil, forge.InternalError(fmt.Errorf("passkey: delete credential: %w", err))

@@ -263,7 +263,7 @@ func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest)
 }
 
 // OnBeforeSessionCreate attaches the risk score to the session metadata.
-func (p *Plugin) OnBeforeSessionCreate(ctx context.Context, s *session.Session) error {
+func (p *Plugin) OnBeforeSessionCreate(_ context.Context, _ *session.Session) error {
 	// No-op: risk data is attached via audit trail, not session struct.
 	return nil
 }
@@ -341,7 +341,7 @@ func (p *Plugin) auditAssessment(ctx context.Context, req *RiskRequest, assessme
 	}
 
 	if p.chronicle != nil {
-		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:   "risk_assessment",
 			Resource: "auth",
 			ActorID:  req.UserID,
@@ -353,7 +353,7 @@ func (p *Plugin) auditAssessment(ctx context.Context, req *RiskRequest, assessme
 	}
 
 	if p.relay != nil && assessment.Decision != "allow" {
-		_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "security.risk_assessment",
 			TenantID: req.AppID,
 			Data:     metadata,

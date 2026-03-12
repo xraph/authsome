@@ -59,7 +59,7 @@ func (t *TwilioSender) SendSMS(ctx context.Context, msg *bridge.SMSMessage) erro
 
 	if resp.StatusCode >= 400 {
 		var buf bytes.Buffer
-		_ = json.NewEncoder(&buf).Encode(resp.Body)
+		_ = json.NewEncoder(&buf).Encode(resp.Body) //nolint:errcheck // best-effort encode
 		return fmt.Errorf("sms/twilio: API error (status %d)", resp.StatusCode)
 	}
 

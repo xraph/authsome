@@ -509,6 +509,7 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 	}
 
 	// Detect enabled auth methods from registered plugins.
+	allPlugins := e.plugins.Plugins()
 	var (
 		passwordEnabled  bool
 		socialEnabled    bool
@@ -519,10 +520,10 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		socialProviders  []ClientConfigSocialProvider
 		ssoConnections   []ClientConfigSSOConnection
 		mfaMethods       []string
-		pluginNames      []string
+		pluginNames      = make([]string, 0, len(allPlugins))
 	)
 
-	for _, p := range e.plugins.Plugins() {
+	for _, p := range allPlugins {
 		name := p.Name()
 		pluginNames = append(pluginNames, name)
 
@@ -612,7 +613,7 @@ func applyClientConfigOverrides(
 	passwordEnabled, socialEnabled, passkeyEnabled *bool,
 	mfaEnabled, magicLinkEnabled, ssoEnabled *bool,
 	socialProviders *[]ClientConfigSocialProvider,
-	ssoConnections *[]ClientConfigSSOConnection,
+	_ *[]ClientConfigSSOConnection,
 	mfaMethods *[]string,
 ) {
 	if cfg.PasswordEnabled != nil {
@@ -676,7 +677,7 @@ func (e *Engine) APIKeyStore() apikey.Store {
 	if e.keysmithEng != nil {
 		return apikey.NewKeymithStore(e.keysmithEng)
 	}
-	return e.store.(apikey.Store)
+	return e.store.(apikey.Store) //nolint:errcheck // type assertion
 }
 
 // ResolveAppByPublicKey resolves a publishable key (pk_live_...) to an app.

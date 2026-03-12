@@ -19,7 +19,7 @@ func TestBus_OnAndEmit(t *testing.T) {
 	bus := newBus()
 	var called int32
 
-	bus.On("test", func(_ context.Context, e *hook.Event) error {
+	bus.On("test", func(_ context.Context, _ *hook.Event) error {
 		atomic.AddInt32(&called, 1)
 		return nil
 	})
@@ -78,7 +78,7 @@ func TestBus_EmitSetsTimestamp(t *testing.T) {
 	assert.False(t, captured.Timestamp.IsZero(), "timestamp should be auto-set")
 }
 
-func TestBus_EmptyHandlers(t *testing.T) {
+func TestBus_EmptyHandlers(t *testing.T) { //nolint:revive // test function signature
 	bus := newBus()
 	// Should not panic with no handlers.
 	bus.Emit(context.Background(), &hook.Event{Action: "noop"})

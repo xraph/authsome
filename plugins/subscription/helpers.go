@@ -4,15 +4,14 @@ import (
 	"context"
 
 	"github.com/xraph/authsome/bridge"
-	"github.com/xraph/authsome/hook"
 )
 
 // audit records an audit event via Chronicle (nil-safe).
-func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) {
+func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) { //nolint:unparam // signature kept for consistency
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -29,23 +28,9 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,
-	})
-}
-
-// emitHook fires a global hook event (nil-safe).
-func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, actorID, tenant string) {
-	if p.hooks == nil {
-		return
-	}
-	p.hooks.Emit(ctx, &hook.Event{
-		Action:     action,
-		Resource:   resource,
-		ResourceID: resourceID,
-		ActorID:    actorID,
-		Tenant:     tenant,
 	})
 }

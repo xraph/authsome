@@ -235,7 +235,7 @@ func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {
 
 	if rep.Score >= p.config.BlockThreshold || rep.IsBlacklisted {
 		if p.chronicle != nil {
-			_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+			_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 				Action:   "ipreputation_blocked",
 				Resource: "auth",
 				Tenant:   appID,
@@ -248,7 +248,7 @@ func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {
 			})
 		}
 		if p.relay != nil {
-			_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+			_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 				Type:     "security.ipreputation_blocked",
 				TenantID: appID,
 				Data: map[string]string{
@@ -262,7 +262,7 @@ func (p *Plugin) check(ctx context.Context, ipAddress, appID string) error {
 
 	if rep.Score >= p.config.WarnThreshold {
 		if p.chronicle != nil {
-			_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+			_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 				Action:   "ipreputation_warning",
 				Resource: "auth",
 				Tenant:   appID,

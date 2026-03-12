@@ -43,7 +43,7 @@ func (bc *BreachChecker) IsBreached(password string) (bool, error) {
 	prefix := hash[:5]
 	suffix := hash[5:]
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, bc.baseURL+prefix, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, bc.baseURL+prefix, http.NoBody)
 	if err != nil {
 		return false, nil //nolint:nilerr // fail-open: don't block auth on request build errors
 	}

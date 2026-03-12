@@ -31,7 +31,7 @@ func (m *mockProvider) CheckIP(_ context.Context, ip string) (*IPReputation, err
 	return rep, nil
 }
 
-func newTestPlugin(provider Provider, blockThreshold, warnThreshold int) *Plugin {
+func newTestPlugin(provider Provider, blockThreshold, warnThreshold int) *Plugin { //nolint:unparam // test helper
 	p := New(Config{
 		Provider:       provider,
 		BlockThreshold: blockThreshold,

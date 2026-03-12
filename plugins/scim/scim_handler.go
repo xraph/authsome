@@ -29,7 +29,7 @@ type scimGroupPathParam struct {
 // SCIM Discovery endpoints
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleServiceProviderConfig(ctx forge.Context, _ *struct{}) (*map[string]any, error) {
+func (p *Plugin) handleServiceProviderConfig(_ forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // ptrToRefParam: framework requires pointer return
 	config := map[string]any{
 		"schemas": []string{SchemaServiceConfig},
 		"patch": map[string]any{
@@ -63,7 +63,7 @@ func (p *Plugin) handleServiceProviderConfig(ctx forge.Context, _ *struct{}) (*m
 	return &config, nil
 }
 
-func (p *Plugin) handleSchemas(ctx forge.Context, _ *struct{}) (*map[string]any, error) {
+func (p *Plugin) handleSchemas(_ forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // ptrToRefParam: framework requires pointer return
 	schemas := map[string]any{
 		"schemas":      []string{SchemaListResponse},
 		"totalResults": 2,
@@ -81,7 +81,7 @@ func (p *Plugin) handleSchemas(ctx forge.Context, _ *struct{}) (*map[string]any,
 	return &schemas, nil
 }
 
-func (p *Plugin) handleResourceTypes(ctx forge.Context, _ *struct{}) (*map[string]any, error) {
+func (p *Plugin) handleResourceTypes(_ forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // ptrToRefParam: framework requires pointer return
 	types := map[string]any{
 		"schemas":      []string{SchemaListResponse},
 		"totalResults": 2,
@@ -109,7 +109,7 @@ func (p *Plugin) handleResourceTypes(ctx forge.Context, _ *struct{}) (*map[strin
 // User SCIM endpoints
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*SCIMListResponse, error) {
+func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*ListResponse, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*SCIMListRespo
 	baseURL := p.config.BasePath
 
 	// List users. For org-scoped configs, list org members; otherwise all users.
-	var users []*SCIMUserResource
+	var users []*UserResource
 	if !cfg.OrgID.IsNil() && p.authStore != nil {
 		members, err := p.authStore.ListMembers(ctx.Context(), cfg.OrgID)
 		if err != nil {
@@ -148,7 +148,7 @@ func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*SCIMListRespo
 		resources = append(resources, u)
 	}
 
-	return &SCIMListResponse{
+	return &ListResponse{
 		Schemas:      []string{SchemaListResponse},
 		TotalResults: len(resources),
 		StartIndex:   1,
@@ -157,7 +157,7 @@ func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*SCIMListRespo
 	}, nil
 }
 
-func (p *Plugin) handleGetUser(ctx forge.Context, req *scimUserPathParam) (*SCIMUserResource, error) {
+func (p *Plugin) handleGetUser(ctx forge.Context, req *scimUserPathParam) (*UserResource, error) {
 	_, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -176,13 +176,13 @@ func (p *Plugin) handleGetUser(ctx forge.Context, req *scimUserPathParam) (*SCIM
 	return UserToSCIM(u, p.config.BasePath), nil
 }
 
-func (p *Plugin) handleCreateUser(ctx forge.Context, _ *struct{}) (*SCIMUserResource, error) {
+func (p *Plugin) handleCreateUser(ctx forge.Context, _ *struct{}) (*UserResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var scimUser SCIMUserResource
+	var scimUser UserResource
 	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimUser); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM user payload")
 	}
@@ -202,13 +202,13 @@ func (p *Plugin) handleCreateUser(ctx forge.Context, _ *struct{}) (*SCIMUserReso
 	return nil, ctx.JSON(http.StatusCreated, result)
 }
 
-func (p *Plugin) handleReplaceUser(ctx forge.Context, req *scimUserPathParam) (*SCIMUserResource, error) {
+func (p *Plugin) handleReplaceUser(ctx forge.Context, req *scimUserPathParam) (*UserResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var scimUser SCIMUserResource
+	var scimUser UserResource
 	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimUser); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM user payload")
 	}
@@ -225,13 +225,13 @@ func (p *Plugin) handleReplaceUser(ctx forge.Context, req *scimUserPathParam) (*
 	return UserToSCIM(u, p.config.BasePath), nil
 }
 
-func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*SCIMUserResource, error) {
+func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*UserResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var patch SCIMPatchOp
+	var patch PatchOp
 	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&patch); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM patch payload")
 	}
@@ -295,14 +295,14 @@ func (p *Plugin) handleDeleteUser(ctx forge.Context, req *scimUserPathParam) (*s
 // Group SCIM endpoints
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) handleListGroups(ctx forge.Context, _ *struct{}) (*SCIMListResponse, error) {
+func (p *Plugin) handleListGroups(ctx forge.Context, _ *struct{}) (*ListResponse, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if !cfg.GroupSync || cfg.OrgID.IsNil() {
-		return &SCIMListResponse{
+		return &ListResponse{
 			Schemas:      []string{SchemaListResponse},
 			TotalResults: 0,
 			StartIndex:   1,
@@ -322,7 +322,7 @@ func (p *Plugin) handleListGroups(ctx forge.Context, _ *struct{}) (*SCIMListResp
 		resources = append(resources, TeamToSCIMGroup(t, nil, baseURL))
 	}
 
-	return &SCIMListResponse{
+	return &ListResponse{
 		Schemas:      []string{SchemaListResponse},
 		TotalResults: len(resources),
 		StartIndex:   1,
@@ -331,7 +331,7 @@ func (p *Plugin) handleListGroups(ctx forge.Context, _ *struct{}) (*SCIMListResp
 	}, nil
 }
 
-func (p *Plugin) handleGetGroup(ctx forge.Context, req *scimGroupPathParam) (*SCIMGroupResource, error) {
+func (p *Plugin) handleGetGroup(ctx forge.Context, req *scimGroupPathParam) (*GroupResource, error) {
 	_, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
@@ -350,13 +350,13 @@ func (p *Plugin) handleGetGroup(ctx forge.Context, req *scimGroupPathParam) (*SC
 	return TeamToSCIMGroup(team, nil, p.config.BasePath), nil
 }
 
-func (p *Plugin) handleCreateGroup(ctx forge.Context, _ *struct{}) (*SCIMGroupResource, error) {
+func (p *Plugin) handleCreateGroup(ctx forge.Context, _ *struct{}) (*GroupResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var scimGroup SCIMGroupResource
+	var scimGroup GroupResource
 	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimGroup); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM group payload")
 	}
@@ -374,13 +374,13 @@ func (p *Plugin) handleCreateGroup(ctx forge.Context, _ *struct{}) (*SCIMGroupRe
 	return nil, ctx.JSON(http.StatusCreated, result)
 }
 
-func (p *Plugin) handleReplaceGroup(ctx forge.Context, req *scimGroupPathParam) (*SCIMGroupResource, error) {
+func (p *Plugin) handleReplaceGroup(ctx forge.Context, req *scimGroupPathParam) (*GroupResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var scimGroup SCIMGroupResource
+	var scimGroup GroupResource
 	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimGroup); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM group payload")
 	}
@@ -396,13 +396,13 @@ func (p *Plugin) handleReplaceGroup(ctx forge.Context, req *scimGroupPathParam) 
 	return TeamToSCIMGroup(team, nil, p.config.BasePath), nil
 }
 
-func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*SCIMGroupResource, error) {
+func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*GroupResource, error) {
 	cfg, err := p.authenticateSCIM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var patch SCIMPatchOp
+	var patch PatchOp
 	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&patch); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM patch payload")
 	}
@@ -485,7 +485,7 @@ func (p *Plugin) authenticateSCIM(ctx forge.Context) (*SCIMConfig, error) {
 }
 
 // applyUserPatchReplace handles SCIM PATCH replace operations for a user.
-func (p *Plugin) applyUserPatchReplace(u *user.User, op SCIMOperation) {
+func (p *Plugin) applyUserPatchReplace(u *user.User, op Operation) {
 	switch op.Path {
 	case "active":
 		if active, ok := op.Value.(bool); ok {

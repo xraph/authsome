@@ -2,6 +2,7 @@ package consent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -148,7 +149,7 @@ func (p *Plugin) RegisterRoutes(router any) error {
 		forge.WithSummary("List consents"),
 		forge.WithDescription("Returns all consent records for the authenticated user."),
 		forge.WithOperationID("listConsents"),
-		forge.WithResponseSchema(http.StatusOK, "Consent list", ConsentListResponse{}),
+		forge.WithResponseSchema(http.StatusOK, "Consent list", ListResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -245,7 +246,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeConsentRequest) (*St
 	}
 
 	if err := p.store.RevokeConsent(ctx.Context(), userID, appID, req.Purpose); err != nil {
-		if err == ErrNotFound {
+		if errors.Is(err, ErrNotFound) {
 			return nil, forge.NotFound("consent record not found")
 		}
 		return nil, forge.InternalError(fmt.Errorf("failed to revoke consent"))
@@ -266,7 +267,7 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeConsentRequest) (*St
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
-func (p *Plugin) handleList(ctx forge.Context, req *ListConsentsRequest) (*ConsentListResponse, error) {
+func (p *Plugin) handleList(ctx forge.Context, req *ListConsentsRequest) (*ListResponse, error) {
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required")
@@ -291,7 +292,7 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListConsentsRequest) (*Conse
 		return nil, forge.InternalError(fmt.Errorf("failed to list consents"))
 	}
 
-	resp := &ConsentListResponse{
+	resp := &ListResponse{
 		Consents:   consents,
 		NextCursor: cursor,
 	}
@@ -322,8 +323,8 @@ type ListConsentsRequest struct {
 	Limit   int    `query:"limit" description:"Maximum number of results (default 50, max 200)"`
 }
 
-// ConsentListResponse wraps a paginated list of consent records.
-type ConsentListResponse struct {
+// ListResponse wraps a paginated list of consent records.
+type ListResponse struct {
 	Consents   []*Consent `json:"consents" description:"List of consent records"`
 	NextCursor string     `json:"next_cursor,omitempty" description:"Pagination cursor for next page"`
 }
@@ -341,7 +342,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 	if p.chronicle == nil {
 		return
 	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 		Action:     action,
 		Resource:   resource,
 		ResourceID: resourceID,
@@ -358,7 +359,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,

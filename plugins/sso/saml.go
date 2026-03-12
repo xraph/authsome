@@ -81,7 +81,7 @@ func (p *samlProvider) LoginURL(state string) (string, error) {
 }
 
 // HandleCallback processes the SAML assertion from the IdP.
-func (p *samlProvider) HandleCallback(_ context.Context, params map[string]string) (*SSOUser, error) {
+func (p *samlProvider) HandleCallback(_ context.Context, params map[string]string) (*User, error) {
 	samlResponse := params["SAMLResponse"]
 	if samlResponse == "" {
 		return nil, fmt.Errorf("sso/saml: missing SAMLResponse")

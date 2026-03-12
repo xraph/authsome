@@ -3,6 +3,7 @@ package oauth2provider
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -146,7 +147,7 @@ func (s *PostgresStore) GetDeviceCodeByDeviceCode(ctx context.Context, deviceCod
 		Where("device_code = ?", deviceCode).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeviceCodeNotFound
 		}
 		return nil, oauth2PgError(err)
@@ -160,7 +161,7 @@ func (s *PostgresStore) GetDeviceCodeByUserCode(ctx context.Context, userCode st
 		Where("user_code = ?", userCode).
 		Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDeviceCodeNotFound
 		}
 		return nil, oauth2PgError(err)
@@ -191,7 +192,7 @@ func oauth2PgError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrClientNotFound
 	}
 	return err

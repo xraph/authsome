@@ -69,14 +69,6 @@ var (
 
 func intPtr(v int) *int { return &v }
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "sso", SettingSessionTokenTTLSeconds); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "sso", SettingSessionRefreshTTLSeconds)
-}
-
 // Config configures the SSO plugin.
 type Config struct {
 	// Providers is the list of configured SSO providers.
@@ -89,12 +81,12 @@ type Config struct {
 	SessionRefreshTTL time.Duration
 }
 
-// Plugin is the SSO authentication plugin.
 // sessionConfigResolver resolves per-app session configuration.
 type sessionConfigResolver interface {
 	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
 }
 
+// Plugin is the SSO authentication plugin.
 type Plugin struct {
 	config        Config
 	providers     map[string]Provider
@@ -109,6 +101,14 @@ type Plugin struct {
 	logger      log.Logger
 	ceremonies  ceremony.Store
 	roleEnsurer roleEnsurer
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "sso", SettingSessionTokenTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "sso", SettingSessionRefreshTTLSeconds)
 }
 
 // roleEnsurer assigns a default Warden role to a newly created user.
@@ -263,15 +263,15 @@ func (p *Plugin) resolveProvider(ctx context.Context, name string) (Provider, bo
 	if err != nil {
 		return nil, false
 	}
-	conn, err := p.ssoStore.GetSSOConnectionByProvider(ctx, appID, name)
+	conn, err := p.ssoStore.GetConnectionByProvider(ctx, appID, name)
 	if err != nil || conn == nil || !conn.Active {
 		return nil, false
 	}
 	return p.connectionToProvider(conn), true
 }
 
-// connectionToProvider creates a Provider from a stored SSOConnection.
-func (p *Plugin) connectionToProvider(conn *SSOConnection) Provider {
+// connectionToProvider creates a Provider from a stored Connection.
+func (p *Plugin) connectionToProvider(conn *Connection) Provider {
 	switch conn.Protocol {
 	case "oidc":
 		return NewOIDCProvider(OIDCConfig{
@@ -382,8 +382,8 @@ func (p *Plugin) handleLogin(ctx forge.Context, req *LoginRequest) (*LoginRespon
 	}
 
 	// Store the state for CSRF protection
-	stateData, _ := json.Marshal(map[string]string{"provider": req.Provider})
-	_ = p.ceremonies.Set(ctx.Context(), "sso:state:"+state, stateData, 10*time.Minute)
+	stateData, _ := json.Marshal(map[string]string{"provider": req.Provider})          //nolint:errcheck // best-effort cache
+	_ = p.ceremonies.Set(ctx.Context(), "sso:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	loginURL, err := provider.LoginURL(state)
 	if err != nil {
@@ -542,7 +542,7 @@ func (p *Plugin) validateState(ctx context.Context, state, providerName string) 
 	if err != nil {
 		return fmt.Errorf("invalid state parameter")
 	}
-	_ = p.ceremonies.Delete(ctx, "sso:state:"+state)
+	_ = p.ceremonies.Delete(ctx, "sso:state:"+state) //nolint:errcheck // best-effort cleanup
 	var stateInfo map[string]string
 	if err := json.Unmarshal(stateData, &stateInfo); err != nil || stateInfo["provider"] != providerName {
 		return fmt.Errorf("invalid state parameter")
@@ -563,7 +563,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	if p.relay == nil {
 		return
 	}
-	_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+	_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 		Type:     eventType,
 		TenantID: tenantID,
 		Data:     data,

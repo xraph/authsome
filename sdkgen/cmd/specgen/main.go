@@ -166,8 +166,8 @@ func run(outPath, title, version string) error {
 	}
 
 	var specMap map[string]any
-	if err := json.Unmarshal(rawJSON, &specMap); err != nil {
-		return fmt.Errorf("unmarshal spec: %w", err)
+	if unmarshalErr := json.Unmarshal(rawJSON, &specMap); unmarshalErr != nil {
+		return fmt.Errorf("unmarshal spec: %w", unmarshalErr)
 	}
 
 	// Post-process: add security requirements and clean up.
@@ -211,7 +211,7 @@ func postProcess(spec map[string]any) {
 				continue
 			}
 
-			operationID, _ := op["operationId"].(string)
+			operationID, _ := op["operationId"].(string) //nolint:errcheck // type assertion, fallback to zero
 
 			// Add security requirements to non-public operations.
 			if operationID != "" && !publicOperations[operationID] {
@@ -249,11 +249,11 @@ func arrayOfRef(name string) map[string]any {
 // patchSchemaTypes fixes fields that the Forge OpenAPI generator couldn't
 // resolve because the Go types use interface{} / any.
 func patchSchemaTypes(spec map[string]any) {
-	components, _ := spec["components"].(map[string]any)
+	components, _ := spec["components"].(map[string]any) //nolint:errcheck // type assertion
 	if components == nil {
 		return
 	}
-	schemas, _ := components["schemas"].(map[string]any)
+	schemas, _ := components["schemas"].(map[string]any) //nolint:errcheck // type assertion
 	if schemas == nil {
 		return
 	}

@@ -303,7 +303,7 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *TravelA
 	)
 
 	if p.chronicle != nil {
-		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
+		_ = p.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // best-effort audit
 			Action:     "impossible_travel",
 			Resource:   "session",
 			ResourceID: alert.SessionID.String(),
@@ -325,7 +325,7 @@ func (p *Plugin) handleAlert(ctx context.Context, appID id.AppID, alert *TravelA
 	}
 
 	if p.relay != nil {
-		_ = p.relay.Send(ctx, &bridge.WebhookEvent{
+		_ = p.relay.Send(ctx, &bridge.WebhookEvent{ //nolint:errcheck // best-effort webhook
 			Type:     "security.impossible_travel",
 			TenantID: appID.String(),
 			Data: map[string]string{

@@ -118,12 +118,8 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return err
 	}
 
-	if err := scim.DELETE("/Groups/:groupId", p.handleDeleteGroup,
+	return scim.DELETE("/Groups/:groupId", p.handleDeleteGroup,
 		forge.WithSummary("Delete SCIM Group"),
 		forge.WithOperationID("scimDeleteGroup"),
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }

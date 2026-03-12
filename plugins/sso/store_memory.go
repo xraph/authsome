@@ -14,26 +14,26 @@ var ErrConnectionNotFound = errors.New("sso: connection not found")
 // MemoryStore is an in-memory Store for testing.
 type MemoryStore struct {
 	mu    sync.RWMutex
-	conns map[id.SSOConnectionID]*SSOConnection
+	conns map[id.SSOConnectionID]*Connection
 }
 
 // NewMemoryStore creates a new in-memory SSO connection store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		conns: make(map[id.SSOConnectionID]*SSOConnection),
+		conns: make(map[id.SSOConnectionID]*Connection),
 	}
 }
 
 var _ Store = (*MemoryStore)(nil)
 
-func (s *MemoryStore) CreateSSOConnection(_ context.Context, c *SSOConnection) error {
+func (s *MemoryStore) CreateConnection(_ context.Context, c *Connection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.conns[c.ID] = c
 	return nil
 }
 
-func (s *MemoryStore) GetSSOConnection(_ context.Context, connID id.SSOConnectionID) (*SSOConnection, error) {
+func (s *MemoryStore) GetConnection(_ context.Context, connID id.SSOConnectionID) (*Connection, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	c, ok := s.conns[connID]
@@ -43,7 +43,7 @@ func (s *MemoryStore) GetSSOConnection(_ context.Context, connID id.SSOConnectio
 	return c, nil
 }
 
-func (s *MemoryStore) GetSSOConnectionByDomain(_ context.Context, appID id.AppID, domain string) (*SSOConnection, error) {
+func (s *MemoryStore) GetConnectionByDomain(_ context.Context, appID id.AppID, domain string) (*Connection, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, c := range s.conns {
@@ -54,7 +54,7 @@ func (s *MemoryStore) GetSSOConnectionByDomain(_ context.Context, appID id.AppID
 	return nil, ErrConnectionNotFound
 }
 
-func (s *MemoryStore) GetSSOConnectionByProvider(_ context.Context, appID id.AppID, provider string) (*SSOConnection, error) {
+func (s *MemoryStore) GetConnectionByProvider(_ context.Context, appID id.AppID, provider string) (*Connection, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, c := range s.conns {
@@ -65,10 +65,10 @@ func (s *MemoryStore) GetSSOConnectionByProvider(_ context.Context, appID id.App
 	return nil, ErrConnectionNotFound
 }
 
-func (s *MemoryStore) ListSSOConnections(_ context.Context, appID id.AppID) ([]*SSOConnection, error) {
+func (s *MemoryStore) ListConnections(_ context.Context, appID id.AppID) ([]*Connection, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	var result []*SSOConnection
+	var result []*Connection
 	for _, c := range s.conns {
 		if c.AppID == appID {
 			result = append(result, c)
@@ -77,7 +77,7 @@ func (s *MemoryStore) ListSSOConnections(_ context.Context, appID id.AppID) ([]*
 	return result, nil
 }
 
-func (s *MemoryStore) UpdateSSOConnection(_ context.Context, c *SSOConnection) error {
+func (s *MemoryStore) UpdateConnection(_ context.Context, c *Connection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.conns[c.ID]; !ok {
@@ -87,7 +87,7 @@ func (s *MemoryStore) UpdateSSOConnection(_ context.Context, c *SSOConnection) e
 	return nil
 }
 
-func (s *MemoryStore) DeleteSSOConnection(_ context.Context, connID id.SSOConnectionID) error {
+func (s *MemoryStore) DeleteConnection(_ context.Context, connID id.SSOConnectionID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.conns[connID]; !ok {

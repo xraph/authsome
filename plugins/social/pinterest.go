@@ -11,7 +11,7 @@ import (
 )
 
 // pinterestEndpoint is the OAuth2 endpoint for Pinterest.
-var pinterestEndpoint = oauth2.Endpoint{
+var pinterestEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: not credentials, OAuth endpoint
 	AuthURL:  "https://www.pinterest.com/oauth/",
 	TokenURL: "https://api.pinterest.com/v5/oauth/token",
 }
@@ -43,14 +43,18 @@ func (p *pinterestProvider) OAuth2Config() *oauth2.Config { return p.config }
 
 func (p *pinterestProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*ProviderUser, error) {
 	client := p.config.Client(ctx, token)
-	resp, err := client.Get("https://api.pinterest.com/v5/user_account")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.pinterest.com/v5/user_account", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("social: pinterest: create request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("social: pinterest: fetch user: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
 		return nil, fmt.Errorf("social: pinterest: fetch user: status %d: %s", resp.StatusCode, body)
 	}
 

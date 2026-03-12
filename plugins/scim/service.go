@@ -76,7 +76,7 @@ func (s *Service) ListConfigsByOrg(ctx context.Context, orgID id.OrgID) ([]*SCIM
 
 // GenerateToken creates a new bearer token for a SCIM config.
 // Returns the plaintext token (shown once) and the stored token record.
-func (s *Service) GenerateToken(ctx context.Context, configID id.SCIMConfigID, name string, expiresAt *time.Time) (string, *SCIMToken, error) {
+func (s *Service) GenerateToken(ctx context.Context, configID id.SCIMConfigID, name string, expiresAt *time.Time) (string, *Token, error) {
 	// Generate random token.
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -90,7 +90,7 @@ func (s *Service) GenerateToken(ctx context.Context, configID id.SCIMConfigID, n
 		return "", nil, fmt.Errorf("scim: hash token: %w", err)
 	}
 
-	token := &SCIMToken{
+	token := &Token{
 		ID:        id.NewSCIMTokenID(),
 		ConfigID:  configID,
 		Name:      name,
@@ -107,7 +107,7 @@ func (s *Service) GenerateToken(ctx context.Context, configID id.SCIMConfigID, n
 }
 
 // ListTokens returns all tokens for a SCIM configuration.
-func (s *Service) ListTokens(ctx context.Context, configID id.SCIMConfigID) ([]*SCIMToken, error) {
+func (s *Service) ListTokens(ctx context.Context, configID id.SCIMConfigID) ([]*Token, error) {
 	return s.store.ListTokens(ctx, configID)
 }
 
@@ -118,7 +118,7 @@ func (s *Service) RevokeToken(ctx context.Context, tokenID id.SCIMTokenID) error
 
 // ValidateToken checks a bearer token against stored hashes.
 // Returns the matching token and its associated config, or an error.
-func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*SCIMToken, *SCIMConfig, error) {
+func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*Token, *SCIMConfig, error) {
 	// We need to iterate and bcrypt-compare since we can't reverse the hash.
 	// For the in-memory store, FindTokenByHash does a linear scan with bcrypt.Compare.
 	// For production, consider a token prefix lookup table.
@@ -153,7 +153,7 @@ func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*SCIMTok
 // ──────────────────────────────────────────────────
 
 // ProvisionUser creates or updates a user from SCIM data.
-func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *SCIMUserResource) (*user.User, string, error) {
+func (s *Service) ProvisionUser(ctx context.Context, cfg *SCIMConfig, scimUser *UserResource) (*user.User, string, error) {
 	if s.authStore == nil {
 		return nil, ActionCreateUser, fmt.Errorf("scim: auth store not available")
 	}
@@ -243,7 +243,7 @@ func (s *Service) DeactivateUser(ctx context.Context, cfg *SCIMConfig, userID id
 }
 
 // ProvisionGroup creates or updates a team from SCIM Group data.
-func (s *Service) ProvisionGroup(ctx context.Context, cfg *SCIMConfig, scimGroup *SCIMGroupResource) (*organization.Team, string, error) {
+func (s *Service) ProvisionGroup(ctx context.Context, cfg *SCIMConfig, scimGroup *GroupResource) (*organization.Team, string, error) {
 	if s.authStore == nil {
 		return nil, ActionCreateGroup, fmt.Errorf("scim: auth store not available")
 	}
@@ -297,7 +297,7 @@ func (s *Service) ProvisionGroup(ctx context.Context, cfg *SCIMConfig, scimGroup
 
 // RecordLog records a SCIM provisioning action.
 func (s *Service) RecordLog(ctx context.Context, configID id.SCIMConfigID, action, resourceType, externalID, internalID, status, detail string) {
-	l := &SCIMProvisionLog{
+	l := &ProvisionLog{
 		ID:           id.NewSCIMLogID(),
 		ConfigID:     configID,
 		Action:       action,
@@ -314,12 +314,12 @@ func (s *Service) RecordLog(ctx context.Context, configID id.SCIMConfigID, actio
 }
 
 // ListLogs returns provision logs for a config.
-func (s *Service) ListLogs(ctx context.Context, configID id.SCIMConfigID, limit int) ([]*SCIMProvisionLog, error) {
+func (s *Service) ListLogs(ctx context.Context, configID id.SCIMConfigID, limit int) ([]*ProvisionLog, error) {
 	return s.store.ListLogs(ctx, configID, limit)
 }
 
 // ListAllLogs returns provision logs across all configs for an app.
-func (s *Service) ListAllLogs(ctx context.Context, appID string, limit int) ([]*SCIMProvisionLog, error) {
+func (s *Service) ListAllLogs(ctx context.Context, appID string, limit int) ([]*ProvisionLog, error) {
 	return s.store.ListAllLogs(ctx, appID, limit)
 }
 

@@ -103,7 +103,7 @@ func (a *authPages) RenderAuthPage(ctx *router.PageContext, pageType dashauth.Au
 }
 
 // renderRegisterPage renders either the dynamic or static register page.
-func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) {
+func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) { //nolint:unparam // may receive values in future
 	links := registerLinks(a.basePath)
 	appID := a.defaultAppID()
 
@@ -161,7 +161,7 @@ func (a *authPages) defaultAppID() id.AppID {
 	if platformID := a.engine.PlatformAppID(); !platformID.IsNil() {
 		return platformID
 	}
-	appID, _ := id.ParseAppID(a.engine.Config().AppID)
+	appID, _ := id.ParseAppID(a.engine.Config().AppID) //nolint:errcheck // best-effort parse
 	return appID
 }
 
@@ -208,7 +208,7 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 	r := ctx.Request
 
 	if err := r.ParseForm(); err != nil {
-		comp, _ := a.renderRegisterPage(ctx, "Invalid form data", nil, nil)
+		comp, _ := a.renderRegisterPage(ctx, "Invalid form data", nil, nil) //nolint:errcheck // best-effort render
 		return "", comp, nil
 	}
 
@@ -236,7 +236,7 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 	}
 
 	if email == "" || password == "" {
-		comp, _ := a.renderRegisterPage(ctx, "Email and password are required", values, nil)
+		comp, _ := a.renderRegisterPage(ctx, "Email and password are required", values, nil) //nolint:errcheck // best-effort render
 		return "", comp, nil
 	}
 
@@ -255,7 +255,7 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 
 	_, sess, err := a.engine.SignUp(r.Context(), req)
 	if err != nil {
-		comp, _ := a.renderRegisterPage(ctx, err.Error(), values, nil)
+		comp, _ := a.renderRegisterPage(ctx, err.Error(), values, nil) //nolint:errcheck // best-effort render
 		return "", comp, nil
 	}
 
@@ -286,7 +286,7 @@ func (a *authPages) handleForgotPassword(ctx *router.PageContext) (string, templ
 	}
 
 	// Always show success to prevent email enumeration.
-	_, _ = a.engine.ForgotPassword(r.Context(), a.defaultAppID(), email)
+	_, _ = a.engine.ForgotPassword(r.Context(), a.defaultAppID(), email) //nolint:errcheck // best-effort send
 
 	return "", auth.ForgotPasswordSuccess(links), nil
 }
@@ -298,7 +298,7 @@ func (a *authPages) handleLogout(ctx *router.PageContext) (string, templ.Compone
 	token := extractToken(r)
 	if token != "" {
 		if sess, err := a.engine.ResolveSessionByToken(token); err == nil {
-			_ = a.engine.SignOut(r.Context(), sess.ID)
+			_ = a.engine.SignOut(r.Context(), sess.ID) //nolint:errcheck // best-effort sign out
 		}
 	}
 
@@ -325,7 +325,7 @@ type authChecker struct {
 var _ dashauth.AuthChecker = (*authChecker)(nil)
 
 // CheckAuth inspects the request and returns a UserInfo if authenticated.
-func (c *authChecker) CheckAuth(ctx context.Context, r *http.Request) (*dashauth.UserInfo, error) {
+func (c *authChecker) CheckAuth(_ context.Context, r *http.Request) (*dashauth.UserInfo, error) {
 	token := extractToken(r)
 	if token == "" {
 		return nil, nil

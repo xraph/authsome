@@ -3,6 +3,7 @@ package sso
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/xraph/grove"
@@ -32,7 +33,7 @@ var _ Store = (*PostgresStore)(nil)
 // Store methods
 // ──────────────────────────────────────────────────
 
-func (s *PostgresStore) CreateSSOConnection(ctx context.Context, c *SSOConnection) error {
+func (s *PostgresStore) CreateConnection(ctx context.Context, c *Connection) error {
 	now := time.Now()
 	if c.CreatedAt.IsZero() {
 		c.CreatedAt = now
@@ -40,12 +41,12 @@ func (s *PostgresStore) CreateSSOConnection(ctx context.Context, c *SSOConnectio
 	if c.UpdatedAt.IsZero() {
 		c.UpdatedAt = now
 	}
-	m := fromSSOConnection(c)
+	m := fromConnection(c)
 	_, err := s.pg.NewInsert(m).Exec(ctx)
 	return ssoPgError(err)
 }
 
-func (s *PostgresStore) GetSSOConnection(ctx context.Context, connID id.SSOConnectionID) (*SSOConnection, error) {
+func (s *PostgresStore) GetConnection(ctx context.Context, connID id.SSOConnectionID) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.pg.NewSelect(m).
 		Where("id = ?", connID.String()).
@@ -53,10 +54,10 @@ func (s *PostgresStore) GetSSOConnection(ctx context.Context, connID id.SSOConne
 	if err != nil {
 		return nil, ssoPgError(err)
 	}
-	return toSSOConnection(m)
+	return toConnection(m)
 }
 
-func (s *PostgresStore) GetSSOConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*SSOConnection, error) {
+func (s *PostgresStore) GetConnectionByDomain(ctx context.Context, appID id.AppID, domain string) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
@@ -66,10 +67,10 @@ func (s *PostgresStore) GetSSOConnectionByDomain(ctx context.Context, appID id.A
 	if err != nil {
 		return nil, ssoPgError(err)
 	}
-	return toSSOConnection(m)
+	return toConnection(m)
 }
 
-func (s *PostgresStore) GetSSOConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*SSOConnection, error) {
+func (s *PostgresStore) GetConnectionByProvider(ctx context.Context, appID id.AppID, provider string) (*Connection, error) {
 	m := new(ssoConnectionModel)
 	err := s.pg.NewSelect(m).
 		Where("app_id = ?", appID.String()).
@@ -79,10 +80,10 @@ func (s *PostgresStore) GetSSOConnectionByProvider(ctx context.Context, appID id
 	if err != nil {
 		return nil, ssoPgError(err)
 	}
-	return toSSOConnection(m)
+	return toConnection(m)
 }
 
-func (s *PostgresStore) ListSSOConnections(ctx context.Context, appID id.AppID) ([]*SSOConnection, error) {
+func (s *PostgresStore) ListConnections(ctx context.Context, appID id.AppID) ([]*Connection, error) {
 	var models []ssoConnectionModel
 	err := s.pg.NewSelect(&models).
 		Where("app_id = ?", appID.String()).
@@ -91,9 +92,9 @@ func (s *PostgresStore) ListSSOConnections(ctx context.Context, appID id.AppID) 
 	if err != nil {
 		return nil, ssoPgError(err)
 	}
-	result := make([]*SSOConnection, 0, len(models))
+	result := make([]*Connection, 0, len(models))
 	for i := range models {
-		c, err := toSSOConnection(&models[i])
+		c, err := toConnection(&models[i])
 		if err != nil {
 			return nil, err
 		}
@@ -102,16 +103,16 @@ func (s *PostgresStore) ListSSOConnections(ctx context.Context, appID id.AppID) 
 	return result, nil
 }
 
-func (s *PostgresStore) UpdateSSOConnection(ctx context.Context, c *SSOConnection) error {
+func (s *PostgresStore) UpdateConnection(ctx context.Context, c *Connection) error {
 	c.UpdatedAt = time.Now()
-	m := fromSSOConnection(c)
+	m := fromConnection(c)
 	_, err := s.pg.NewUpdate(m).
 		WherePK().
 		Exec(ctx)
 	return ssoPgError(err)
 }
 
-func (s *PostgresStore) DeleteSSOConnection(ctx context.Context, connID id.SSOConnectionID) error {
+func (s *PostgresStore) DeleteConnection(ctx context.Context, connID id.SSOConnectionID) error {
 	_, err := s.pg.NewDelete((*ssoConnectionModel)(nil)).
 		Where("id = ?", connID.String()).
 		Exec(ctx)
@@ -126,7 +127,7 @@ func ssoPgError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrConnectionNotFound
 	}
 	return err

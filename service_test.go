@@ -22,7 +22,7 @@ func testAppID(t *testing.T) id.AppID {
 	return appID
 }
 
-func signUpTestUser(t *testing.T, eng *authsome.Engine, email, password string) {
+func signUpTestUser(t *testing.T, eng *authsome.Engine, email, password string) { //nolint:unparam // test helper
 	t.Helper()
 	ctx := context.Background()
 	appID := testAppID(t)

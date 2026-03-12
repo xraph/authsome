@@ -36,6 +36,9 @@ func TestDevice_FieldsPopulated(t *testing.T) {
 	assert.Equal(t, "192.168.1.1", d.IPAddress)
 	assert.Equal(t, "abc123", d.Fingerprint)
 	assert.False(t, d.Trusted)
+	assert.False(t, d.LastSeenAt.IsZero())
+	assert.False(t, d.CreatedAt.IsZero())
+	assert.False(t, d.UpdatedAt.IsZero())
 }
 
 func TestDevice_TrustedField(t *testing.T) {
@@ -43,10 +46,12 @@ func TestDevice_TrustedField(t *testing.T) {
 		ID:      id.NewDeviceID(),
 		Trusted: true,
 	}
+	assert.NotEmpty(t, d.ID.String())
 	assert.True(t, d.Trusted)
 }
 
 func TestDevice_ZeroValueFingerprint(t *testing.T) {
 	d := &Device{ID: id.NewDeviceID()}
+	assert.NotEmpty(t, d.ID.String())
 	assert.Empty(t, d.Fingerprint)
 }

@@ -65,7 +65,7 @@ func (s *Service) UpdatePlan(ctx context.Context, p *plan.Plan) error {
 	if s.ledgerStore == nil {
 		return fmt.Errorf("subscription: ledger store not available")
 	}
-	p.Entity.Touch()
+	p.Touch()
 	return s.ledgerStore.UpdatePlan(ctx, p)
 }
 
@@ -87,7 +87,7 @@ func (s *Service) ActivatePlan(ctx context.Context, planID ledgerid.PlanID) erro
 		return err
 	}
 	p.Status = plan.StatusActive
-	p.Entity.Touch()
+	p.Touch()
 	return s.ledgerStore.UpdatePlan(ctx, p)
 }
 
@@ -144,7 +144,7 @@ func (s *Service) Subscribe(ctx context.Context, tenantID string, planID ledgeri
 	}
 
 	// Resolve trial days from settings.
-	trialDays, _ := settings.Get(ctx, s.settings, SettingTrialDays, settings.ResolveOpts{AppID: appID})
+	trialDays, _ := settings.Get(ctx, s.settings, SettingTrialDays, settings.ResolveOpts{AppID: appID}) //nolint:errcheck // best-effort settings
 
 	now := time.Now()
 	sub := &subscription.Subscription{
@@ -191,7 +191,7 @@ func (s *Service) ChangePlan(ctx context.Context, subID ledgerid.SubscriptionID,
 	}
 
 	sub.PlanID = newPlanID
-	sub.Entity.Touch()
+	sub.Touch()
 
 	return s.ledgerStore.UpdateSubscription(ctx, sub)
 }
@@ -206,7 +206,7 @@ func (s *Service) PauseSubscription(ctx context.Context, subID ledgerid.Subscrip
 		return err
 	}
 	sub.Status = subscription.StatusPaused
-	sub.Entity.Touch()
+	sub.Touch()
 	return s.ledgerStore.UpdateSubscription(ctx, sub)
 }
 
@@ -220,7 +220,7 @@ func (s *Service) ResumeSubscription(ctx context.Context, subID ledgerid.Subscri
 		return err
 	}
 	sub.Status = subscription.StatusActive
-	sub.Entity.Touch()
+	sub.Touch()
 	return s.ledgerStore.UpdateSubscription(ctx, sub)
 }
 
@@ -473,7 +473,7 @@ func (s *Service) CalculateMRR(ctx context.Context, appID string) string {
 		}
 		amount := pl.Pricing.BaseAmount.Amount
 		if pl.Pricing.BillingPeriod == plan.PeriodYearly {
-			amount = amount / 12
+			amount /= 12
 		}
 		totalCents += amount
 	}

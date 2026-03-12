@@ -125,7 +125,7 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 }
 
 // ExportUserData returns the user's organization data for GDPR export.
-func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (string, any, error) {
+func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (label string, data any, err error) {
 	orgs, err := p.store.ListUserOrganizations(ctx, userID)
 	if err != nil {
 		return "", nil, fmt.Errorf("organization: export user data: %w", err)

@@ -88,7 +88,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 	if err := subs.GET("/active", p.handleGetActiveSubscription,
 		forge.WithSummary("Get active subscription"),
 		forge.WithOperationID("getActiveSubscription"),
-		forge.WithResponseSchema(http.StatusOK, "Active subscription", SubscriptionResponse{}),
+		forge.WithResponseSchema(http.StatusOK, "Active subscription", Response{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -97,7 +97,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 	if err := subs.POST("", p.handleCreateSubscription,
 		forge.WithSummary("Create subscription"),
 		forge.WithOperationID("createSubscription"),
-		forge.WithCreatedResponse(SubscriptionResponse{}),
+		forge.WithCreatedResponse(Response{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -216,16 +216,12 @@ func (p *Plugin) RegisterRoutes(r any) error {
 	// Usage routes
 	usage := router.Group(prefix+"/usage", forge.WithGroupTags("Billing Usage"))
 
-	if err := usage.GET("", p.handleGetUsageSummary,
+	return usage.GET("", p.handleGetUsageSummary,
 		forge.WithSummary("Get usage summary"),
 		forge.WithOperationID("getUsageSummary"),
 		forge.WithResponseSchema(http.StatusOK, "Usage summary", UsageSummaryResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
 // ──────────────────────────────────────────────────
@@ -299,8 +295,8 @@ type ListSubscriptionsRequest struct {
 }
 
 type ListSubscriptionsResponse struct {
-	Subscriptions []SubscriptionResponse `json:"subscriptions"`
-	Total         int                    `json:"total"`
+	Subscriptions []Response `json:"subscriptions"`
+	Total         int        `json:"total"`
 }
 
 type GetActiveSubRequest struct {
@@ -328,7 +324,7 @@ type SubIDRequest struct {
 	SubID string `path:"subId"`
 }
 
-type SubscriptionResponse struct {
+type Response struct {
 	ID                 string  `json:"id"`
 	TenantID           string  `json:"tenant_id"`
 	PlanID             string  `json:"plan_id"`
@@ -607,7 +603,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 		return nil, forge.InternalError(fmt.Errorf("failed to list subscriptions: %w", err))
 	}
 
-	items := make([]SubscriptionResponse, 0, len(subs))
+	items := make([]Response, 0, len(subs))
 	for _, s := range subs {
 		items = append(items, toSubResponse(s))
 	}
@@ -615,7 +611,7 @@ func (p *Plugin) handleListSubscriptions(ctx forge.Context, req *ListSubscriptio
 	return &ListSubscriptionsResponse{Subscriptions: items, Total: len(items)}, nil
 }
 
-func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*SubscriptionResponse, error) {
+func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSubRequest) (*Response, error) {
 	if req.AppID == "" || req.TenantID == "" {
 		return nil, forge.BadRequest("app_id and tenant_id are required")
 	}
@@ -629,7 +625,7 @@ func (p *Plugin) handleGetActiveSubscription(ctx forge.Context, req *GetActiveSu
 	return &resp, nil
 }
 
-func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*SubscriptionResponse, error) {
+func (p *Plugin) handleCreateSubscription(ctx forge.Context, req *CreateSubscriptionRequest) (*Response, error) {
 	if req.TenantID == "" || req.PlanID == "" || req.AppID == "" {
 		return nil, forge.BadRequest("tenant_id, plan_id, and app_id are required")
 	}
@@ -915,15 +911,7 @@ func (p *Plugin) handleGetUsageSummary(ctx forge.Context, req *UsageSummaryReque
 
 	items := make([]UsageItemResponse, 0, len(summaries))
 	for _, u := range summaries {
-		items = append(items, UsageItemResponse{
-			FeatureKey:  u.FeatureKey,
-			FeatureName: u.FeatureName,
-			FeatureType: u.FeatureType,
-			Used:        u.Used,
-			Limit:       u.Limit,
-			Remaining:   u.Remaining,
-			Period:      u.Period,
-		})
+		items = append(items, UsageItemResponse(u))
 	}
 
 	return &UsageSummaryResponse{Usage: items}, nil
@@ -956,8 +944,8 @@ func toPlanResponse(pl *plan.Plan) PlanResponse {
 	return resp
 }
 
-func toSubResponse(s *lsub.Subscription) SubscriptionResponse {
-	resp := SubscriptionResponse{
+func toSubResponse(s *lsub.Subscription) Response {
+	resp := Response{
 		ID:                 s.ID.String(),
 		TenantID:           s.TenantID,
 		PlanID:             s.PlanID.String(),
@@ -1015,7 +1003,7 @@ func parseAmountCents(s string) int64 {
 		return 0
 	}
 	parts := strings.SplitN(s, ".", 2)
-	dollars, _ := strconv.ParseInt(parts[0], 10, 64)
+	dollars, _ := strconv.ParseInt(parts[0], 10, 64) //nolint:errcheck // best-effort parse
 	var cents int64
 	if len(parts) == 2 {
 		c := parts[1]
@@ -1024,7 +1012,7 @@ func parseAmountCents(s string) int64 {
 		} else if len(c) > 2 {
 			c = c[:2]
 		}
-		cents, _ = strconv.ParseInt(c, 10, 64)
+		cents, _ = strconv.ParseInt(c, 10, 64) //nolint:errcheck // best-effort parse
 	}
 	return dollars*100 + cents
 }

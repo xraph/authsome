@@ -137,7 +137,7 @@ func TestAddContributor(t *testing.T) {
 	assert.Equal(t, 50, assessment.OverallScore)
 }
 
-func TestAuditAssessment(t *testing.T) {
+func TestAuditAssessment(t *testing.T) { //nolint:revive // test function signature
 	// Verify auditAssessment does not panic when chronicle is nil.
 	contrib := &mockContributor{name: "test", score: 50, weight: 1.0}
 	p := newTestPlugin(Config{}, contrib)

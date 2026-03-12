@@ -72,20 +72,6 @@ var (
 	)
 )
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "notification", SettingAppName); err != nil {
-		return err
-	}
-	if err := settings.RegisterTyped(m, "notification", SettingBaseURL); err != nil {
-		return err
-	}
-	if err := settings.RegisterTyped(m, "notification", SettingDefaultLocale); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "notification", SettingAsync)
-}
-
 // userLookup provides user email resolution for recipient lookup.
 type userLookup interface {
 	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
@@ -101,6 +87,20 @@ type Plugin struct {
 	logger    log.Logger
 	mappings  map[string]*Mapping
 	users     userLookup
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "notification", SettingAppName); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "notification", SettingBaseURL); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "notification", SettingDefaultLocale); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "notification", SettingAsync)
 }
 
 // New creates a new notification plugin with optional configuration.

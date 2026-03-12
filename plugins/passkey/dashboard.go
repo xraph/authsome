@@ -24,7 +24,7 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 			Title:      "Passkey Adoption",
 			Size:       "sm",
 			RefreshSec: 60,
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return pkdash.AdoptionWidget()
 			},
 		},
@@ -48,7 +48,7 @@ func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 			Route: "/passkeys",
 			Label: "Passkeys",
 			Icon:  "fingerprint",
-			Render: func(ctx context.Context) templ.Component {
+			Render: func(_ context.Context) templ.Component {
 				return pkdash.CredentialsPage()
 			},
 		},

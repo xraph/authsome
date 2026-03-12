@@ -224,7 +224,7 @@ func (e *Extension) init(fapp forge.App) error {
 	}
 
 	// ── Auto-discover Dispatch (optional) ──
-	if dispatchEng, err := vessel.Inject[*dispatchengine.Engine](fapp.Container()); err == nil {
+	if dispatchEng, dispatchErr := vessel.Inject[*dispatchengine.Engine](fapp.Container()); dispatchErr == nil {
 		opts = append(opts, authsome.WithDispatcher(dispatchadapter.New(dispatchEng)))
 		e.Logger().Info("authsome: auto-discovered dispatch engine")
 	} else {
@@ -232,7 +232,7 @@ func (e *Extension) init(fapp forge.App) error {
 	}
 
 	// ── Auto-discover Ledger (optional) ──
-	if ledgerEng, err := vessel.Inject[*ledger.Ledger](fapp.Container()); err == nil {
+	if ledgerEng, ledgerErr := vessel.Inject[*ledger.Ledger](fapp.Container()); ledgerErr == nil {
 		opts = append(opts, authsome.WithLedger(ledgeradapter.New(ledgerEng)))
 		e.Logger().Info("authsome: auto-discovered ledger")
 	} else {
@@ -240,7 +240,7 @@ func (e *Extension) init(fapp forge.App) error {
 	}
 
 	// ── Auto-discover Herald (optional) ──
-	if heraldEng, err := vessel.Inject[*herald.Herald](fapp.Container()); err == nil {
+	if heraldEng, heraldErr := vessel.Inject[*herald.Herald](fapp.Container()); heraldErr == nil {
 		opts = append(opts, authsome.WithHerald(heraldadapter.New(heraldEng)))
 		e.Logger().Info("authsome: auto-discovered herald notification engine")
 	} else {
@@ -288,11 +288,11 @@ func (e *Extension) init(fapp forge.App) error {
 
 	// ── Per-app session configuration from YAML ──
 	for appIDStr, appCfg := range e.config.Apps {
-		appID, err := id.ParseAppID(appIDStr)
-		if err != nil {
+		appID, parseErr := id.ParseAppID(appIDStr)
+		if parseErr != nil {
 			e.Logger().Warn("authsome: invalid app ID in per-app config, skipping",
 				forge.F("app_id", appIDStr),
-				forge.F("error", err.Error()),
+				forge.F("error", parseErr.Error()),
 			)
 			continue
 		}
@@ -421,8 +421,9 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 	// Select the appropriate inner middleware based on engine capabilities.
 	var inner forge.Middleware
 
-	// JWT-aware middleware (handles JWT + opaque + strategies)
-	if e.engine.HasJWT() {
+	// Select auth middleware variant based on engine capabilities.
+	switch {
+	case e.engine.HasJWT():
 		inner = middleware.AuthMiddlewareWithJWT(
 			e.engine.ResolveSessionByToken,
 			e.engine.ResolveUser,
@@ -430,14 +431,14 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 			e.engine,
 			e.engine.Logger(),
 		)
-	} else if e.engine.HasStrategies() {
+	case e.engine.HasStrategies():
 		inner = middleware.AuthMiddlewareWithStrategies(
 			e.engine.ResolveSessionByToken,
 			e.engine.ResolveUser,
 			e.engine.Strategies(),
 			e.engine.Logger(),
 		)
-	} else {
+	default:
 		inner = middleware.AuthMiddleware(
 			e.engine.ResolveSessionByToken,
 			e.engine.ResolveUser,

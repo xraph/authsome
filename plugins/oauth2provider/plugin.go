@@ -562,7 +562,7 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 	}, nil
 }
 
-func (p *Plugin) handleDiscovery(ctx forge.Context, _ *DiscoveryRequest) (*map[string]any, error) {
+func (p *Plugin) handleDiscovery(ctx forge.Context, _ *DiscoveryRequest) (map[string]any, error) {
 	issuer := p.config.Issuer
 	if issuer == "" {
 		issuer = "https://localhost"
@@ -905,7 +905,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			// Client is polling too fast. Per RFC 8628, increase the interval by 5 seconds.
 			dc.Interval += 5
 			dc.LastPolledAt = now
-			_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc)
+			_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc) //nolint:errcheck // best-effort update
 			return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
 				Error:            "slow_down",
 				ErrorDescription: "polling too frequently, please slow down",
@@ -919,7 +919,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 	switch dc.Status {
 	case DeviceCodeStatusPending:
 		// Persist the updated LastPolledAt.
-		_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc)
+		_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc) //nolint:errcheck // best-effort update
 		// RFC 8628 Section 3.5: authorization_pending is expected during polling.
 		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
 			Error:            "authorization_pending",

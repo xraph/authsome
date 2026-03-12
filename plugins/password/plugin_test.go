@@ -20,7 +20,7 @@ func TestPlugin_Name(t *testing.T) {
 	assert.Equal(t, "password", p.Name())
 }
 
-func TestPlugin_ImplementsInterfaces(t *testing.T) {
+func TestPlugin_ImplementsInterfaces(t *testing.T) { //nolint:revive // test function signature
 	p := password.New()
 
 	// Plugin should implement base Plugin interface

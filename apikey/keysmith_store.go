@@ -151,7 +151,7 @@ func (s *KeysmithStore) ListAPIKeysByUser(ctx context.Context, appID id.AppID, u
 
 // toKeysmithKey converts an AuthSome APIKey to a Keysmith Key.
 func toKeysmithKey(ak *APIKey) *key.Key {
-	kid, _ := ksid.ParseKeyID(ak.ID.String())
+	kid, _ := ksid.ParseKeyID(ak.ID.String()) //nolint:errcheck // best-effort parse
 
 	state := key.StateActive
 	if ak.Revoked {

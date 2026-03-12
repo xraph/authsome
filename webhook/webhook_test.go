@@ -22,10 +22,13 @@ func TestWebhook_FieldsPopulated(t *testing.T) {
 	}
 
 	assert.NotEmpty(t, w.ID.String())
+	assert.NotEmpty(t, w.AppID.String())
 	assert.Equal(t, "https://example.com/webhook", w.URL)
 	assert.Equal(t, []string{"user.created", "auth.signin"}, w.Events)
 	assert.Equal(t, "whsec_test123", w.Secret)
 	assert.True(t, w.Active)
+	assert.False(t, w.CreatedAt.IsZero())
+	assert.False(t, w.UpdatedAt.IsZero())
 }
 
 func TestWebhook_EmptyEvents(t *testing.T) {
@@ -34,6 +37,9 @@ func TestWebhook_EmptyEvents(t *testing.T) {
 		AppID: id.NewAppID(),
 		URL:   "https://example.com/webhook",
 	}
+	assert.NotEmpty(t, w.ID.String())
+	assert.NotEmpty(t, w.AppID.String())
+	assert.Equal(t, "https://example.com/webhook", w.URL)
 	assert.Nil(t, w.Events)
 	assert.False(t, w.Active)
 }
@@ -44,6 +50,7 @@ func TestWebhook_MultipleEvents(t *testing.T) {
 		ID:     id.NewWebhookID(),
 		Events: events,
 	}
+	assert.NotEmpty(t, w.ID.String())
 	assert.Len(t, w.Events, 4)
 	assert.Contains(t, w.Events, "user.created")
 	assert.Contains(t, w.Events, "session.created")

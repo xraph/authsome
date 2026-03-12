@@ -36,7 +36,7 @@ var supportedProviders = []string{
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns social auth widgets.
-func (p *Plugin) DashboardWidgets(ctx context.Context) []dashboard.PluginWidget {
+func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 	return []dashboard.PluginWidget{
 		{
 			ID:         "social-connections",
@@ -285,28 +285,29 @@ func (p *Plugin) handleUpdateProvider(ctx context.Context, providerName string, 
 	dbProviders := p.loadDBProviderSettings(ctx)
 	found := false
 	for i, s := range dbProviders {
-		if s.Name == providerName {
-			if clientID != "" {
-				dbProviders[i].ClientID = clientID
-			}
-			if clientSecret != "" {
-				dbProviders[i].ClientSecret = clientSecret
-			}
-			dbProviders[i].RedirectURL = redirectURL
+		if s.Name != providerName {
+			continue
+		}
+		if clientID != "" {
+			dbProviders[i].ClientID = clientID
+		}
+		if clientSecret != "" {
+			dbProviders[i].ClientSecret = clientSecret
+		}
+		dbProviders[i].RedirectURL = redirectURL
 
-			var scopes []string
-			if scopesStr != "" {
-				for _, sc := range strings.Split(scopesStr, ",") {
-					sc = strings.TrimSpace(sc)
-					if sc != "" {
-						scopes = append(scopes, sc)
-					}
+		var scopes []string
+		if scopesStr != "" {
+			for _, sc := range strings.Split(scopesStr, ",") {
+				sc = strings.TrimSpace(sc)
+				if sc != "" {
+					scopes = append(scopes, sc)
 				}
 			}
-			dbProviders[i].Scopes = scopes
-			found = true
-			break
 		}
+		dbProviders[i].Scopes = scopes
+		found = true
+		break
 	}
 
 	if !found {

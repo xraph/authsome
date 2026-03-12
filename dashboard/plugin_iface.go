@@ -48,7 +48,7 @@ func WithAppSlug(ctx context.Context, slug string) context.Context {
 
 // AppSlugFromContext extracts the app slug from context.
 func AppSlugFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(appSlugContextKey{}).(string)
+	v, _ := ctx.Value(appSlugContextKey{}).(string) //nolint:errcheck // type assertion
 	return v
 }
 
@@ -59,7 +59,7 @@ func WithEnvSlug(ctx context.Context, slug string) context.Context {
 
 // EnvSlugFromContext extracts the environment slug from context.
 func EnvSlugFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(envSlugContextKey{}).(string)
+	v, _ := ctx.Value(envSlugContextKey{}).(string) //nolint:errcheck // type assertion
 	return v
 }
 
@@ -70,7 +70,7 @@ func WithPageRoute(ctx context.Context, route string) context.Context {
 
 // PageRouteFromContext extracts the current page route from context.
 func PageRouteFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(pageRouteContextKey{}).(string)
+	v, _ := ctx.Value(pageRouteContextKey{}).(string) //nolint:errcheck // type assertion
 	return v
 }
 

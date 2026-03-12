@@ -20,9 +20,12 @@ func TestRole_Fields(t *testing.T) {
 		UpdatedAt:   time.Now(),
 	}
 	assert.NotEmpty(t, r.ID)
+	assert.NotEmpty(t, r.AppID)
 	assert.Equal(t, "Admin", r.Name)
 	assert.Equal(t, "admin", r.Slug)
 	assert.Equal(t, "Full access role", r.Description)
+	assert.False(t, r.CreatedAt.IsZero())
+	assert.False(t, r.UpdatedAt.IsZero())
 }
 
 func TestPermission_Fields(t *testing.T) {
@@ -33,6 +36,7 @@ func TestPermission_Fields(t *testing.T) {
 		Resource: "user",
 	}
 	assert.NotEmpty(t, p.ID)
+	assert.NotEmpty(t, p.RoleID)
 	assert.Equal(t, "read", p.Action)
 	assert.Equal(t, "user", p.Resource)
 }
@@ -47,6 +51,7 @@ func TestUserRole_Fields(t *testing.T) {
 	assert.NotEmpty(t, ur.UserID)
 	assert.NotEmpty(t, ur.RoleID)
 	assert.Empty(t, ur.OrgID)
+	assert.False(t, ur.AssignedAt.IsZero())
 }
 
 func TestUserRole_WithOrgScope(t *testing.T) {
@@ -57,5 +62,8 @@ func TestUserRole_WithOrgScope(t *testing.T) {
 		OrgID:      orgID,
 		AssignedAt: time.Now(),
 	}
+	assert.NotEmpty(t, ur.UserID)
+	assert.NotEmpty(t, ur.RoleID)
 	assert.NotEmpty(t, ur.OrgID)
+	assert.False(t, ur.AssignedAt.IsZero())
 }

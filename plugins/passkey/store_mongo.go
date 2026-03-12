@@ -82,7 +82,7 @@ func credentialDocToCredential(d *credentialDoc) (*Credential, error) {
 		PublicKey:       d.PublicKey,
 		AttestationType: d.AttestationType,
 		Transport:       transport,
-		SignCount:       uint32(d.SignCount),
+		SignCount:       uint32(d.SignCount), //nolint:gosec // G115: sign count validated range
 		AAGUID:          d.AAGUID,
 		DisplayName:     d.DisplayName,
 		CreatedAt:       d.CreatedAt,
