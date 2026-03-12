@@ -138,7 +138,7 @@ func TestUser_List(t *testing.T) {
 	require.NoError(t, s.CreateUser(ctx(), u1))
 	require.NoError(t, s.CreateUser(ctx(), u2))
 
-	list, err := s.ListUsers(ctx(), &user.UserQuery{AppID: appID})
+	list, err := s.ListUsers(ctx(), &user.Query{AppID: appID})
 	require.NoError(t, err)
 	assert.Equal(t, 2, list.Total)
 	assert.Len(t, list.Users, 2)

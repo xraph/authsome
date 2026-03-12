@@ -54,13 +54,14 @@ func (s *MemoryStore) RevokeConsent(_ context.Context, userID id.UserID, appID i
 	defer s.mu.Unlock()
 
 	for _, c := range s.consents {
-		if c.UserID == userID && c.AppID == appID && c.Purpose == purpose {
-			now := time.Now()
-			c.Granted = false
-			c.RevokedAt = &now
-			c.UpdatedAt = now
-			return nil
+		if c.UserID != userID || c.AppID != appID || c.Purpose != purpose {
+			continue
 		}
+		now := time.Now()
+		c.Granted = false
+		c.RevokedAt = &now
+		c.UpdatedAt = now
+		return nil
 	}
 
 	return ErrNotFound

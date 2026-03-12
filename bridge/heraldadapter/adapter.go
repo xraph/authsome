@@ -170,7 +170,7 @@ func (a *Adapter) DeleteVersion(ctx context.Context, versionID string) error {
 }
 
 // RenderTemplate implements bridge.HeraldTemplateManager.
-func (a *Adapter) RenderTemplate(ctx context.Context, templateID string, locale string, data map[string]any) (*bridge.HeraldRenderedContent, error) {
+func (a *Adapter) RenderTemplate(ctx context.Context, templateID, locale string, data map[string]any) (*bridge.HeraldRenderedContent, error) {
 	tid, err := id.ParseTemplateID(templateID)
 	if err != nil {
 		return nil, fmt.Errorf("heraldadapter: invalid template ID: %w", err)

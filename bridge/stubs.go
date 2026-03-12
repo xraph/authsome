@@ -237,7 +237,7 @@ func (h *NoopHerald) DeleteVersion(_ context.Context, _ string) error {
 }
 
 // RenderTemplate implements HeraldTemplateManager.
-func (h *NoopHerald) RenderTemplate(_ context.Context, _ string, _ string, _ map[string]any) (*HeraldRenderedContent, error) {
+func (h *NoopHerald) RenderTemplate(_ context.Context, _, _ string, _ map[string]any) (*HeraldRenderedContent, error) {
 	return nil, ErrHeraldNotAvailable
 }
 

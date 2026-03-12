@@ -98,7 +98,7 @@ func TestEnvironmentMiddleware_HeaderResolution(t *testing.T) {
 			}
 			return nil, errors.New("not found")
 		},
-		ResolveDefault: func(appID id.AppID) (*environment.Environment, error) {
+		ResolveDefault: func(_ id.AppID) (*environment.Environment, error) {
 			t.Fatal("should not be called when header is present")
 			return nil, nil
 		},
@@ -149,7 +149,7 @@ func TestEnvironmentMiddleware_FallbackToDefault(t *testing.T) {
 	)
 
 	mw := middleware.EnvironmentMiddleware(middleware.EnvironmentMiddlewareConfig{
-		ResolveEnvironment: func(envID id.EnvironmentID) (*environment.Environment, error) {
+		ResolveEnvironment: func(_ id.EnvironmentID) (*environment.Environment, error) {
 			return nil, errors.New("not found")
 		},
 		ResolveDefault: func(appID id.AppID) (*environment.Environment, error) {
@@ -203,10 +203,10 @@ func TestEnvironmentMiddleware_ResolvesSettings(t *testing.T) {
 	)
 
 	mw := middleware.EnvironmentMiddleware(middleware.EnvironmentMiddlewareConfig{
-		ResolveEnvironment: func(envID id.EnvironmentID) (*environment.Environment, error) {
+		ResolveEnvironment: func(_ id.EnvironmentID) (*environment.Environment, error) {
 			return nil, errors.New("not found")
 		},
-		ResolveDefault: func(appID id.AppID) (*environment.Environment, error) {
+		ResolveDefault: func(_ id.AppID) (*environment.Environment, error) {
 			return defaultEnv, nil
 		},
 		Logger: log.NewNoopLogger(),
@@ -240,11 +240,11 @@ func TestEnvironmentMiddleware_NoAppID(t *testing.T) {
 	var called bool
 
 	mw := middleware.EnvironmentMiddleware(middleware.EnvironmentMiddlewareConfig{
-		ResolveEnvironment: func(envID id.EnvironmentID) (*environment.Environment, error) {
+		ResolveEnvironment: func(_ id.EnvironmentID) (*environment.Environment, error) {
 			t.Fatal("should not be called without AppID")
 			return nil, nil
 		},
-		ResolveDefault: func(appID id.AppID) (*environment.Environment, error) {
+		ResolveDefault: func(_ id.AppID) (*environment.Environment, error) {
 			t.Fatal("should not be called without AppID")
 			return nil, nil
 		},
@@ -270,11 +270,11 @@ func TestEnvironmentMiddleware_InvalidHeader(t *testing.T) {
 	testAppID := id.NewAppID()
 
 	mw := middleware.EnvironmentMiddleware(middleware.EnvironmentMiddlewareConfig{
-		ResolveEnvironment: func(envID id.EnvironmentID) (*environment.Environment, error) {
+		ResolveEnvironment: func(_ id.EnvironmentID) (*environment.Environment, error) {
 			t.Fatal("should not be called with invalid header")
 			return nil, nil
 		},
-		ResolveDefault: func(appID id.AppID) (*environment.Environment, error) {
+		ResolveDefault: func(_ id.AppID) (*environment.Environment, error) {
 			t.Fatal("should not be called with invalid header")
 			return nil, nil
 		},

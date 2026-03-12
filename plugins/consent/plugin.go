@@ -154,7 +154,7 @@ func (p *Plugin) RegisterRoutes(router any) error {
 }
 
 // ExportUserData returns the user's consent records for GDPR data export.
-func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (string, any, error) {
+func (p *Plugin) ExportUserData(ctx context.Context, userID id.UserID) (category string, data any, err error) {
 	consents, _, err := p.store.ListConsents(ctx, &Query{
 		UserID: userID,
 		Limit:  1000,

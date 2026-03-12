@@ -74,7 +74,7 @@ func IsArgon2Hash(hash string) bool {
 }
 
 // decodeArgon2Hash parses a PHC-format Argon2id hash string.
-func decodeArgon2Hash(encoded string) (Argon2Params, []byte, []byte, error) {
+func decodeArgon2Hash(encoded string) (params Argon2Params, salt []byte, hash []byte, err error) {
 	// Expected format: $argon2id$v=19$m=65536,t=3,p=2$<salt>$<hash>
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 {
@@ -82,29 +82,28 @@ func decodeArgon2Hash(encoded string) (Argon2Params, []byte, []byte, error) {
 	}
 
 	var version int
-	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
-		return Argon2Params{}, nil, nil, fmt.Errorf("account: invalid argon2 version: %w", err)
+	if _, scanErr := fmt.Sscanf(parts[2], "v=%d", &version); scanErr != nil {
+		return Argon2Params{}, nil, nil, fmt.Errorf("account: invalid argon2 version: %w", scanErr)
 	}
 	if version != argon2.Version {
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: unsupported argon2 version %d", version)
 	}
 
-	var params Argon2Params
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &params.Memory, &params.Iterations, &params.Parallelism); err != nil {
-		return Argon2Params{}, nil, nil, fmt.Errorf("account: invalid argon2 params: %w", err)
+	if _, scanErr := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &params.Memory, &params.Iterations, &params.Parallelism); scanErr != nil {
+		return Argon2Params{}, nil, nil, fmt.Errorf("account: invalid argon2 params: %w", scanErr)
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	salt, err = base64.RawStdEncoding.DecodeString(parts[4]) //nolint:gosec // G115: length validated by argon2 output
 	if err != nil {
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: decode argon2 salt: %w", err)
 	}
-	params.SaltLength = uint32(len(salt))
+	params.SaltLength = uint32(len(salt)) //nolint:gosec // G115: length validated by argon2 output
 
-	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	hash, err = base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: decode argon2 hash: %w", err)
 	}
-	params.KeyLength = uint32(len(hash))
+	params.KeyLength = uint32(len(hash)) //nolint:gosec // G115: length validated by argon2 output
 
 	return params, salt, hash, nil
 }

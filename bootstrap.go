@@ -252,7 +252,7 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 
 // bootstrapApp runs shared bootstrap logic for any app (envs, roles).
 // Called both during platform bootstrap and when any new app is created.
-func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error {
+func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error { //nolint:unparam // error return reserved for future use
 	// Create default environments.
 	if !e.bootstrapCfg.SkipDefaultEnvs {
 		for _, env := range e.bootstrapCfg.Environments {
@@ -346,7 +346,7 @@ func (e *Engine) HasUsers(ctx context.Context) bool {
 	if appID.IsNil() {
 		return false
 	}
-	list, err := e.store.ListUsers(ctx, &user.UserQuery{
+	list, err := e.store.ListUsers(ctx, &user.Query{
 		AppID: appID,
 		Limit: 1,
 	})
@@ -362,7 +362,7 @@ func (e *Engine) PlatformAppID() id.AppID {
 }
 
 // updateRoleParent sets the parent of a role by updating it via the RBAC store.
-func (e *Engine) updateRoleParent(ctx context.Context, roleID string, parentID string) error {
+func (e *Engine) updateRoleParent(ctx context.Context, roleID, parentID string) error {
 	role, err := e.rbacStore().GetRole(ctx, roleID)
 	if err != nil {
 		return err

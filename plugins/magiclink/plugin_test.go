@@ -45,15 +45,6 @@ func (m *mockMailer) SendMagicLink(_ context.Context, email, token string) error
 	return m.errVal
 }
 
-func (m *mockMailer) lastToken() string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.sent) == 0 {
-		return ""
-	}
-	return m.sent[len(m.sent)-1].Token
-}
-
 func newTestPlugin(t *testing.T) (*magiclink.Plugin, *memory.Store, *mockMailer) {
 	t.Helper()
 	mailer := &mockMailer{}

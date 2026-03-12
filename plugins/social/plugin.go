@@ -72,8 +72,8 @@ var (
 	)
 )
 
-// SocialProviderSetting represents a social provider configured via the dashboard.
-type SocialProviderSetting struct {
+// ProviderSetting represents a social provider configured via the dashboard.
+type ProviderSetting struct {
 	Name         string   `json:"name"`
 	ClientID     string   `json:"client_id"`
 	ClientSecret string   `json:"client_secret"`
@@ -83,7 +83,7 @@ type SocialProviderSetting struct {
 }
 
 // SettingSocialProviders stores dashboard-configured social providers.
-var SettingSocialProviders = settings.Define("social.providers", []SocialProviderSetting{},
+var SettingSocialProviders = settings.Define("social.providers", []ProviderSetting{},
 	settings.WithDisplayName("Social Providers"),
 	settings.WithDescription("Social OAuth providers configured via dashboard"),
 	settings.WithCategory("Social OAuth"),
@@ -357,7 +357,7 @@ func (p *Plugin) resolveProvider(ctx context.Context, name string) (Provider, bo
 }
 
 // loadDBProviderSettings reads dynamic providers from the settings store.
-func (p *Plugin) loadDBProviderSettings(ctx context.Context) []SocialProviderSetting {
+func (p *Plugin) loadDBProviderSettings(ctx context.Context) []ProviderSetting {
 	if p.settingsMgr == nil {
 		return nil
 	}
@@ -369,7 +369,7 @@ func (p *Plugin) loadDBProviderSettings(ctx context.Context) []SocialProviderSet
 }
 
 // saveDBProviderSettings writes dynamic providers to the settings store.
-func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []SocialProviderSetting) error {
+func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []ProviderSetting) error {
 	if p.settingsMgr == nil {
 		return fmt.Errorf("social: settings manager not available")
 	}
@@ -381,8 +381,8 @@ func (p *Plugin) saveDBProviderSettings(ctx context.Context, providers []SocialP
 		settings.ScopeGlobal, "", "", "", "dashboard")
 }
 
-// providerFromSetting creates a Provider from a SocialProviderSetting.
-func providerFromSetting(s SocialProviderSetting) Provider {
+// providerFromSetting creates a Provider from a ProviderSetting.
+func providerFromSetting(s ProviderSetting) Provider {
 	cfg := ProviderConfig{
 		ClientID:     s.ClientID,
 		ClientSecret: s.ClientSecret,
@@ -562,7 +562,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 	_ = p.ceremonies.Delete(ctx.Context(), "social:state:"+req.State)
 	var stateInfo map[string]string
-	if err := json.Unmarshal(stateData, &stateInfo); err != nil || stateInfo["provider"] != req.Provider {
+	if unmarshalErr := json.Unmarshal(stateData, &stateInfo); unmarshalErr != nil || stateInfo["provider"] != req.Provider {
 		return nil, forge.BadRequest("invalid state parameter")
 	}
 
@@ -599,8 +599,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	// Check if an OAuth connection already exists
 	var u *user.User
 	if p.oauthStore != nil {
-		conn, err := p.oauthStore.GetOAuthConnection(goCtx, req.Provider, providerUser.ProviderUserID)
-		if err == nil {
+		conn, connErr := p.oauthStore.GetOAuthConnection(goCtx, req.Provider, providerUser.ProviderUserID)
+		if connErr == nil {
 			// Existing connection — look up the user
 			u, err = p.store.GetUser(goCtx, conn.UserID)
 			if err != nil {
@@ -631,8 +631,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				}
-				if err := p.store.CreateUser(goCtx, u); err != nil {
-					return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+				if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
+					return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 				}
 				if p.roleEnsurer != nil {
 					p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
@@ -649,8 +649,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			}
-			if err := p.store.CreateUser(goCtx, u); err != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
+				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 			}
 			if p.roleEnsurer != nil {
 				p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
@@ -805,23 +805,6 @@ func generateState() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-// audit records an audit event via Chronicle (nil-safe).
-func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) {
-	if p.chronicle == nil {
-		return
-	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
-		Action:     action,
-		Resource:   resource,
-		ResourceID: resourceID,
-		ActorID:    actorID,
-		Tenant:     tenant,
-		Outcome:    outcome,
-		Severity:   bridge.SeverityInfo,
-		Category:   "auth",
-	})
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).

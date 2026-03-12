@@ -56,23 +56,23 @@ type Engine struct {
 	pendingAppSessCfgs []*appsessionconfig.Config
 
 	// First-class authorization engine (optional, replaces bridge for RBAC)
-	warden_ *warden.Engine
+	wardenEng *warden.Engine
 
 	// First-class key management engine (optional, replaces bridge for API keys)
-	keysmith_ *keysmith.Engine
+	keysmithEng *keysmith.Engine
 
 	// Optional forgery bridges (injected, not required)
-	chronicle  bridge.Chronicle
-	authorizer bridge.Authorizer
-	keyManager bridge.KeyManager
-	relay      bridge.EventRelay
-	mailer     bridge.Mailer
-	sms        bridge.SMSSender
-	herald_    bridge.Herald
-	vault      bridge.Vault
-	dispatcher bridge.Dispatcher
-	ledger     bridge.Ledger
-	metrics    bridge.MetricsCollector
+	chronicle    bridge.Chronicle
+	authorizer   bridge.Authorizer
+	keyManager   bridge.KeyManager
+	relay        bridge.EventRelay
+	mailer       bridge.Mailer
+	sms          bridge.SMSSender
+	heraldBridge bridge.Herald
+	vault        bridge.Vault
+	dispatcher   bridge.Dispatcher
+	ledger       bridge.Ledger
+	metrics      bridge.MetricsCollector
 
 	// Ceremony state store for multi-instance auth ceremonies
 	ceremonyStore ceremony.Store
@@ -111,7 +111,7 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	if e.store == nil {
 		return nil, errors.New("authsome: store is required")
 	}
-	if e.warden_ == nil {
+	if e.wardenEng == nil {
 		return nil, errors.New("authsome: warden engine is required (use WithWarden option)")
 	}
 
@@ -165,7 +165,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 
 	// Register authsome resource types with Warden (idempotent).
-	if e.warden_ != nil {
+	if e.wardenEng != nil {
 		e.registerWardenResourceTypes(ctx)
 	}
 
@@ -281,7 +281,7 @@ func (e *Engine) registerWardenResourceTypes(ctx context.Context) {
 			Relations:   schema.Relations,
 			Permissions: schema.Permissions,
 		}
-		if err := e.warden_.Store().CreateResourceType(ctx, rt); err != nil {
+		if err := e.wardenEng.Store().CreateResourceType(ctx, rt); err != nil {
 			// Idempotent — ignore duplicate/already-exists errors.
 			e.logger.Debug("authsome: resource type may already exist",
 				log.String("name", schema.Name),
@@ -353,7 +353,7 @@ func (e *Engine) Mailer() bridge.Mailer { return e.mailer }
 func (e *Engine) SMSSender() bridge.SMSSender { return e.sms }
 
 // Herald returns the Herald notification bridge (may be nil).
-func (e *Engine) Herald() bridge.Herald { return e.herald_ }
+func (e *Engine) Herald() bridge.Herald { return e.heraldBridge }
 
 // Vault returns the secrets/feature-flag/config bridge (may be nil).
 func (e *Engine) Vault() bridge.Vault { return e.vault }
@@ -389,10 +389,10 @@ func (e *Engine) PasswordHistory() account.PasswordHistoryStore { return e.passw
 func (e *Engine) SecurityEvents() securityevent.Store { return e.securityEvents }
 
 // Warden returns the first-class authorization engine (may be nil).
-func (e *Engine) Warden() *warden.Engine { return e.warden_ }
+func (e *Engine) Warden() *warden.Engine { return e.wardenEng }
 
 // Keysmith returns the first-class key management engine (may be nil).
-func (e *Engine) Keysmith() *keysmith.Engine { return e.keysmith_ }
+func (e *Engine) Keysmith() *keysmith.Engine { return e.keysmithEng }
 
 // Settings returns the dynamic settings manager (may be nil).
 func (e *Engine) Settings() *settings.Manager { return e.settingsMgr }
@@ -482,14 +482,14 @@ var providerDisplayNames = map[string]string{
 	"auth0": "Auth0", "onelogin": "OneLogin", "ping": "Ping Identity",
 }
 
-func providerDisplayName(id string) string {
-	if name, ok := providerDisplayNames[id]; ok {
+func providerDisplayName(providerID string) string {
+	if name, ok := providerDisplayNames[providerID]; ok {
 		return name
 	}
-	if len(id) == 0 {
-		return id
+	if providerID == "" {
+		return providerID
 	}
-	return strings.ToUpper(id[:1]) + id[1:]
+	return strings.ToUpper(providerID[:1]) + providerID[1:]
 }
 
 // ClientConfig returns the merged client-facing configuration for an app.
@@ -673,8 +673,8 @@ func applyClientConfigOverrides(
 // rate limiting, policy enforcement, key rotation, scope management, and
 // usage tracking). Otherwise, it returns the composite store's API key methods.
 func (e *Engine) APIKeyStore() apikey.Store {
-	if e.keysmith_ != nil {
-		return apikey.NewKeymithStore(e.keysmith_)
+	if e.keysmithEng != nil {
+		return apikey.NewKeymithStore(e.keysmithEng)
 	}
 	return e.store.(apikey.Store)
 }
@@ -690,8 +690,8 @@ func (e *Engine) ResolveAppByPublicKey(ctx context.Context, publicKey string) (*
 	}
 
 	// Fallback: search Keysmith metadata.
-	if e.keysmith_ != nil {
-		ks := apikey.NewKeymithStore(e.keysmith_)
+	if e.keysmithEng != nil {
+		ks := apikey.NewKeymithStore(e.keysmithEng)
 		ak, err := ks.FindByPublicKey(ctx, publicKey)
 		if err != nil {
 			return nil, fmt.Errorf("resolve publishable key: %w", err)

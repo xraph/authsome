@@ -33,7 +33,7 @@ const (
 
 // GenerateKey creates a new API key, returning the raw key (shown to user once)
 // and the hashed value (stored in the database).
-func GenerateKey() (raw string, hash string, prefix string, err error) {
+func GenerateKey() (raw, hash, prefix string, err error) {
 	b := make([]byte, rawKeyLen)
 	if _, err := rand.Read(b); err != nil {
 		return "", "", "", fmt.Errorf("apikey: generate random bytes: %w", err)
@@ -75,7 +75,7 @@ func EnvironmentKeyMarker(envType environment.Type) string {
 }
 
 // GenerateKeyForEnvironment creates a new API key with an environment-specific prefix.
-func GenerateKeyForEnvironment(envType environment.Type) (raw string, hash string, prefix string, err error) {
+func GenerateKeyForEnvironment(envType environment.Type) (raw, hash, prefix string, err error) {
 	b := make([]byte, rawKeyLen)
 	if _, err := rand.Read(b); err != nil {
 		return "", "", "", fmt.Errorf("apikey: generate random bytes: %w", err)
@@ -143,11 +143,15 @@ func PublicKeyMarker(envType environment.Type) string {
 // GenerateKeyPair creates a Clerk-style key pair: a publishable key (pk_*)
 // for frontend use and a secret key (sk_*) for server-side auth.
 // The secret key is hashed; the public key is stored in plaintext.
+//
+//nolint:gocritic // tooManyResultsChecker: key pair requires multiple components
 func GenerateKeyPair() (publicKey, secretKey, secretHash, publicPrefix, secretPrefix string, err error) {
 	return GenerateKeyPairForEnvironment(environment.TypeProduction)
 }
 
 // GenerateKeyPairForEnvironment creates an environment-aware key pair.
+//
+//nolint:gocritic // tooManyResultsChecker: key pair requires multiple components
 func GenerateKeyPairForEnvironment(envType environment.Type) (publicKey, secretKey, secretHash, publicPrefix, secretPrefix string, err error) {
 	// Generate secret key.
 	skBytes := make([]byte, rawKeyLen)

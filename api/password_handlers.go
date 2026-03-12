@@ -17,14 +17,15 @@ func (a *API) registerPasswordRoutes(router forge.Router) error {
 	rlCfg := a.engine.Config().RateLimit
 	g := router.Group(base, forge.WithGroupTags("password"))
 
-	forgotOpts := []forge.RouteOption{
+	forgotOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	forgotOpts = append(forgotOpts,
 		forge.WithSummary("Forgot password"),
 		forge.WithDescription("Initiates a password reset flow. Always returns success to prevent email enumeration."),
 		forge.WithOperationID("forgotPassword"),
 		forge.WithRequestSchema(ForgotPasswordRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Reset initiated", ForgotPasswordResponse{}),
 		forge.WithErrorResponses(),
-	}
+	)
 	forgotOpts = append(forgotOpts, a.rateLimitOpt(rlCfg.ForgotPasswordLimit)...)
 	if err := g.POST("/forgot-password", a.handleForgotPassword, forgotOpts...); err != nil {
 		return err

@@ -131,7 +131,7 @@ func (e *Extension) Register(fapp forge.App) error {
 func (e *Extension) init(fapp forge.App) error {
 	logger := e.logger
 	if logger == nil {
-		logger = e.BaseExtension.Logger()
+		logger = e.Logger()
 	}
 	if logger == nil {
 		logger = log.NewNoopLogger()
@@ -200,13 +200,13 @@ func (e *Extension) init(fapp forge.App) error {
 	e.Logger().Info("authsome: auto-discovered warden engine (required)")
 
 	// ── Auto-discover Keysmith (first-class key management engine) ──
-	if ksEng, err := vessel.Inject[*keysmith.Engine](fapp.Container()); err == nil {
+	if ksEng, ksErr := vessel.Inject[*keysmith.Engine](fapp.Container()); ksErr == nil {
 		opts = append(opts, authsome.WithKeysmith(ksEng))
 		e.Logger().Info("authsome: auto-discovered keysmith engine (first-class)")
 	}
 
 	// ── Auto-discover Relay (optional) ──
-	if relayInst, err := vessel.Inject[*relay.Relay](fapp.Container()); err == nil {
+	if relayInst, relayErr := vessel.Inject[*relay.Relay](fapp.Container()); relayErr == nil {
 		opts = append(opts, authsome.WithEventRelay(relayadapter.New(relayInst)))
 		e.Logger().Info("authsome: auto-discovered relay")
 	} else {
@@ -214,7 +214,7 @@ func (e *Extension) init(fapp forge.App) error {
 	}
 
 	// ── Auto-discover Vault (optional) ──
-	if _, err := vessel.Inject[*vault.Vault](fapp.Container()); err == nil {
+	if _, vaultErr := vessel.Inject[*vault.Vault](fapp.Container()); vaultErr == nil {
 		// Vault extension detected but services are not yet individually
 		// accessible. Use NoopVault until vault exposes sub-services.
 		opts = append(opts, authsome.WithVault(bridge.NewNoopVault()))

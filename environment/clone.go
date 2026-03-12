@@ -141,7 +141,7 @@ func (c *Cloner) Clone(ctx context.Context, req CloneRequest) (*CloneResult, err
 	// 2. Build the new environment.
 	now := time.Now()
 	newEnv := &Environment{
-		ID:          id.EnvironmentID(id.NewEnvironmentID()),
+		ID:          id.NewEnvironmentID(),
 		AppID:       srcEnv.AppID,
 		Name:        req.Name,
 		Slug:        req.Slug,
@@ -163,8 +163,8 @@ func (c *Cloner) Clone(ctx context.Context, req CloneRequest) (*CloneResult, err
 	newEnv.Settings = merged
 
 	// 3. Create the new environment.
-	if err := c.envStore.CreateEnvironment(ctx, newEnv); err != nil {
-		return nil, fmt.Errorf("environment: clone: create environment: %w", err)
+	if createErr := c.envStore.CreateEnvironment(ctx, newEnv); createErr != nil {
+		return nil, fmt.Errorf("environment: clone: create environment: %w", createErr)
 	}
 
 	result := &CloneResult{
@@ -201,17 +201,17 @@ func (c *Cloner) Clone(ctx context.Context, req CloneRequest) (*CloneResult, err
 			}
 		}
 
-		if err := c.target.CreateClonedRole(ctx, newRole); err != nil {
-			return nil, fmt.Errorf("environment: clone: create role %q: %w", role.Name, err)
+		if roleErr := c.target.CreateClonedRole(ctx, newRole); roleErr != nil {
+			return nil, fmt.Errorf("environment: clone: create role %q: %w", role.Name, roleErr)
 		}
 		result.RolesCloned++
 	}
 
 	// 5. Clone permissions, remapping role IDs.
 	for oldRoleID, newRoleID := range result.RoleIDMap {
-		perms, err := c.source.ListPermissionsForClone(ctx, oldRoleID)
-		if err != nil {
-			return nil, fmt.Errorf("environment: clone: list permissions for role %s: %w", oldRoleID, err)
+		perms, permErr := c.source.ListPermissionsForClone(ctx, oldRoleID)
+		if permErr != nil {
+			return nil, fmt.Errorf("environment: clone: list permissions for role %s: %w", oldRoleID, permErr)
 		}
 		for _, perm := range perms {
 			newPermID := id.NewPermissionID().String()
@@ -223,8 +223,8 @@ func (c *Cloner) Clone(ctx context.Context, req CloneRequest) (*CloneResult, err
 				Action:   perm.Action,
 				Resource: perm.Resource,
 			}
-			if err := c.target.CreateClonedPermission(ctx, newPerm); err != nil {
-				return nil, fmt.Errorf("environment: clone: create permission: %w", err)
+			if createErr := c.target.CreateClonedPermission(ctx, newPerm); createErr != nil {
+				return nil, fmt.Errorf("environment: clone: create permission: %w", createErr)
 			}
 			result.PermissionsCloned++
 		}

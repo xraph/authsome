@@ -43,7 +43,7 @@ type appModel struct {
 }
 
 func toAppModel(a *app.App) *appModel {
-	md, _ := json.Marshal(a.Metadata)
+	md, _ := json.Marshal(a.Metadata) //nolint:errcheck // best-effort encode
 	return &appModel{
 		ID:             a.ID.String(),
 		Name:           a.Name,
@@ -64,7 +64,7 @@ func fromAppModel(m *appModel) (*app.App, error) {
 	}
 	md := make(app.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	return &app.App{
 		ID:             appID,
@@ -109,7 +109,7 @@ type userModel struct {
 }
 
 func toUserModel(u *user.User) *userModel {
-	md, _ := json.Marshal(u.Metadata)
+	md, _ := json.Marshal(u.Metadata) //nolint:errcheck // best-effort encode
 	return &userModel{
 		ID:              u.ID.String(),
 		AppID:           u.AppID.String(),
@@ -146,7 +146,7 @@ func fromUserModel(m *userModel) (*user.User, error) {
 	envID, _ := id.ParseEnvironmentID(m.EnvID)
 	md := make(user.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	return &user.User{
 		ID:              userID,
@@ -410,7 +410,7 @@ type organizationModel struct {
 }
 
 func toOrganizationModel(o *organization.Organization) *organizationModel {
-	md, _ := json.Marshal(o.Metadata)
+	md, _ := json.Marshal(o.Metadata) //nolint:errcheck // best-effort encode
 	return &organizationModel{
 		ID:        o.ID.String(),
 		AppID:     o.AppID.String(),
@@ -441,7 +441,7 @@ func fromOrganizationModel(m *organizationModel) (*organization.Organization, er
 	}
 	md := make(organization.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	return &organization.Organization{
 		ID:        orgID,
@@ -909,8 +909,8 @@ type environmentModel struct {
 }
 
 func toEnvironmentModel(e *environment.Environment) *environmentModel {
-	settings, _ := json.Marshal(e.Settings)
-	md, _ := json.Marshal(e.Metadata)
+	settings, _ := json.Marshal(e.Settings) //nolint:errcheck // best-effort encode
+	md, _ := json.Marshal(e.Metadata)       //nolint:errcheck // best-effort encode
 	m := &environmentModel{
 		ID:          e.ID.String(),
 		AppID:       e.AppID.String(),
@@ -940,14 +940,14 @@ func fromEnvironmentModel(m *environmentModel) (*environment.Environment, error)
 	if err != nil {
 		return nil, err
 	}
-	var settings *environment.Settings
+	var envSettings *environment.Settings
 	if len(m.Settings) > 0 {
-		settings = new(environment.Settings)
-		_ = json.Unmarshal(m.Settings, settings)
+		envSettings = new(environment.Settings)
+		_ = json.Unmarshal(m.Settings, envSettings) //nolint:errcheck // best-effort decode
 	}
 	md := make(environment.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	e := &environment.Environment{
 		ID:          envID,
@@ -958,7 +958,7 @@ func fromEnvironmentModel(m *environmentModel) (*environment.Environment, error)
 		IsDefault:   m.IsDefault,
 		Color:       m.Color,
 		Description: m.Description,
-		Settings:    settings,
+		Settings:    envSettings,
 		Metadata:    md,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
@@ -991,7 +991,7 @@ type formConfigModel struct {
 }
 
 func toFormConfigModel(fc *formconfig.FormConfig) *formConfigModel {
-	fields, _ := json.Marshal(fc.Fields)
+	fields, _ := json.Marshal(fc.Fields) //nolint:errcheck // best-effort encode
 	return &formConfigModel{
 		ID:        fc.ID.String(),
 		AppID:     fc.AppID.String(),
@@ -1015,7 +1015,7 @@ func fromFormConfigModel(m *formConfigModel) (*formconfig.FormConfig, error) {
 	}
 	var fields []formconfig.FormField
 	if len(m.Fields) > 0 {
-		_ = json.Unmarshal(m.Fields, &fields)
+		_ = json.Unmarshal(m.Fields, &fields) //nolint:errcheck // best-effort decode
 	}
 	return &formconfig.FormConfig{
 		ID:        fcID,
@@ -1183,8 +1183,8 @@ type appClientConfigModel struct {
 }
 
 func toAppClientConfigModel(c *appclientconfig.Config) *appClientConfigModel {
-	sp, _ := json.Marshal(c.SocialProviders)
-	mm, _ := json.Marshal(c.MFAMethods)
+	sp, _ := json.Marshal(c.SocialProviders) //nolint:errcheck // best-effort encode
+	mm, _ := json.Marshal(c.MFAMethods)      //nolint:errcheck // best-effort encode
 	return &appClientConfigModel{
 		ID:               c.ID.String(),
 		AppID:            c.AppID.String(),
@@ -1214,11 +1214,11 @@ func fromAppClientConfigModel(m *appClientConfigModel) (*appclientconfig.Config,
 	}
 	var sp []string
 	if len(m.SocialProviders) > 0 {
-		_ = json.Unmarshal(m.SocialProviders, &sp)
+		_ = json.Unmarshal(m.SocialProviders, &sp) //nolint:errcheck // best-effort decode
 	}
 	var mm []string
 	if len(m.MFAMethods) > 0 {
-		_ = json.Unmarshal(m.MFAMethods, &mm)
+		_ = json.Unmarshal(m.MFAMethods, &mm) //nolint:errcheck // best-effort decode
 	}
 	return &appclientconfig.Config{
 		ID:               cfgID,

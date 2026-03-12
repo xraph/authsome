@@ -91,11 +91,11 @@ type PluginPage struct {
 	Render func(ctx context.Context) templ.Component
 }
 
-// DashboardPlugin is optionally implemented by authsome plugins
+// Plugin is optionally implemented by authsome plugins
 // to contribute UI sections to the authsome dashboard contributor.
 // When plugins implement this interface, their pages, widgets, and
 // settings panels are automatically merged into the dashboard.
-type DashboardPlugin interface {
+type Plugin interface {
 	// DashboardWidgets returns widgets this plugin contributes.
 	DashboardWidgets(ctx context.Context) []PluginWidget
 	// DashboardSettingsPanel returns a settings templ component, or nil.
@@ -141,12 +141,12 @@ type OrgCreateFormContributor interface {
 	DashboardOrgCreateFormFields(ctx context.Context) templ.Component
 }
 
-// DashboardPageContributor is an enhanced interface for plugins that need
+// PageContributor is an enhanced interface for plugins that need
 // access to route parameters when rendering dashboard pages. Unlike the
-// basic DashboardPlugin.DashboardPages() which only supports parameterless
+// basic Plugin.DashboardPages() which only supports parameterless
 // rendering, this interface receives the full route params, enabling
 // detail pages that parse IDs from query/path parameters.
-type DashboardPageContributor interface {
+type PageContributor interface {
 	// DashboardNavItems returns navigation items this plugin contributes.
 	DashboardNavItems() []contributor.NavItem
 	// DashboardRenderPage renders a page for the given route with params.

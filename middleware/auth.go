@@ -259,25 +259,25 @@ func tryJWTAuth(
 	goCtx := ctx.Context()
 
 	// Build a virtual session from JWT claims (no DB record needed).
-	appID := id.ID(id.MustParse(claims.AppID))
-	userID := id.ID(id.MustParse(claims.UserID))
+	appID := id.MustParse(claims.AppID)
+	userID := id.MustParse(claims.UserID)
 
 	goCtx = WithAppID(goCtx, appID)
 	goCtx = WithUserID(goCtx, userID)
 	goCtx = WithAuthMethod(goCtx, "jwt")
 
 	if claims.SessionID != "" {
-		sessionID := id.ID(id.MustParse(claims.SessionID))
+		sessionID := id.MustParse(claims.SessionID)
 		goCtx = WithSessionID(goCtx, sessionID)
 	}
 
 	if claims.EnvID != "" {
-		envID := id.ID(id.MustParse(claims.EnvID))
+		envID := id.MustParse(claims.EnvID)
 		goCtx = WithEnvID(goCtx, envID)
 	}
 
 	if claims.OrgID != "" {
-		orgID := id.ID(id.MustParse(claims.OrgID))
+		orgID := id.MustParse(claims.OrgID)
 		goCtx = WithOrgID(goCtx, orgID)
 		goCtx = forge.WithScope(goCtx, forge.NewOrgScope(claims.AppID, claims.OrgID))
 	} else {
@@ -351,7 +351,7 @@ func trySessionAuth(
 func tryStrategyAuth(
 	ctx forge.Context,
 	strategies StrategyAuthenticator,
-	resolveUser UserResolver,
+	_ UserResolver,
 	logger log.Logger,
 ) bool {
 	result, err := strategies.Authenticate(ctx.Context(), ctx.Request())

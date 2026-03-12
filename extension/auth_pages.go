@@ -15,7 +15,6 @@ import (
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/user"
 )
 
@@ -104,7 +103,7 @@ func (a *authPages) RenderAuthPage(ctx *router.PageContext, pageType dashauth.Au
 }
 
 // renderRegisterPage renders either the dynamic or static register page.
-func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, values map[string]string, fieldErrs map[string]string) (templ.Component, error) {
+func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) {
 	links := registerLinks(a.basePath)
 	appID := a.defaultAppID()
 
@@ -164,62 +163,6 @@ func (a *authPages) defaultAppID() id.AppID {
 	}
 	appID, _ := id.ParseAppID(a.engine.Config().AppID)
 	return appID
-}
-
-// handleSetup handles the "Create First User" form submission.
-func (a *authPages) handleSetup(ctx *router.PageContext) (string, templ.Component, error) {
-	r := ctx.Request
-	links := auth.SetupPageLinks{}
-
-	if err := r.ParseForm(); err != nil {
-		return "", auth.SetupError("Invalid form data", links), nil
-	}
-
-	firstName := r.FormValue("first_name")
-	lastName := r.FormValue("last_name")
-	email := r.FormValue("email")
-	password := r.FormValue("password")
-
-	if firstName == "" || email == "" || password == "" {
-		return "", auth.SetupError("All fields are required", links), nil
-	}
-
-	// Create the first user via SignUp using the platform app ID.
-	appID := a.defaultAppID()
-	_, sess, err := a.engine.SignUp(r.Context(), &account.SignUpRequest{
-		AppID:     appID,
-		Email:     email,
-		Password:  password,
-		FirstName: firstName,
-		LastName:  lastName,
-		IPAddress: clientIPFromRequest(r),
-		UserAgent: r.UserAgent(),
-	})
-	if err != nil {
-		return "", auth.SetupError(err.Error(), links), nil
-	}
-
-	// Assign platform_owner role to the first user so they have full
-	// cross-app access. Role resolution is delegated to Warden.
-	ownerRole, roleErr := a.engine.GetRoleBySlug(r.Context(), appID, rbac.PlatformOwnerSlug)
-	if roleErr == nil && ownerRole != nil {
-		_ = a.engine.AssignUserRole(r.Context(), &rbac.UserRole{
-			UserID: sess.UserID.String(),
-			RoleID: ownerRole.ID,
-		})
-	}
-
-	// Set auth cookie.
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    sess.Token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
-	})
-
-	return a.basePath + "/", nil, nil
 }
 
 func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Component, error) {

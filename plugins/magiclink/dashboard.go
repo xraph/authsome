@@ -10,7 +10,7 @@ import (
 )
 
 // Compile-time interface check.
-var _ dashboard.DashboardPlugin = (*Plugin)(nil)
+var _ dashboard.Plugin = (*Plugin)(nil)
 
 // DashboardWidgets returns no widgets for the magic link plugin.
 func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {

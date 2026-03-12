@@ -27,6 +27,8 @@ func TestDevice_FieldsPopulated(t *testing.T) {
 	}
 
 	assert.NotEmpty(t, d.ID.String())
+	assert.NotEmpty(t, d.UserID.String())
+	assert.NotEmpty(t, d.AppID.String())
 	assert.Equal(t, "Chrome on Mac", d.Name)
 	assert.Equal(t, "desktop", d.Type)
 	assert.Equal(t, "Chrome", d.Browser)

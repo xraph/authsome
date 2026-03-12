@@ -14,8 +14,8 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
-	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
+	_ dashboard.Plugin          = (*Plugin)(nil)
+	_ dashboard.PageContributor = (*Plugin)(nil)
 )
 
 // DashboardWidgets returns no widgets for the anomaly plugin.
@@ -33,13 +33,13 @@ func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
 	)
 }
 
-// DashboardPages returns nil — pages are handled via DashboardPageContributor.
+// DashboardPages returns nil — pages are handled via PageContributor.
 func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 	return nil
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPageContributor implementation
+// PageContributor implementation
 // ──────────────────────────────────────────────────
 
 // DashboardNavItems returns navigation items for the anomaly detection page.

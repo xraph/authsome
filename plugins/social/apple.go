@@ -11,7 +11,7 @@ import (
 )
 
 // Apple OAuth2 endpoints.
-var appleEndpoint = oauth2.Endpoint{
+var appleEndpoint = oauth2.Endpoint{ //nolint:gosec // G101: OAuth endpoint URLs, not credentials
 	AuthURL:  "https://appleid.apple.com/auth/authorize",
 	TokenURL: "https://appleid.apple.com/auth/token",
 }

@@ -18,13 +18,13 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
-	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
-	_ dashboard.UserDetailContributor    = (*Plugin)(nil)
+	_ dashboard.Plugin                = (*Plugin)(nil)
+	_ dashboard.PageContributor       = (*Plugin)(nil)
+	_ dashboard.UserDetailContributor = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
-// DashboardPlugin implementation
+// Plugin implementation
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns API key widgets.
@@ -51,13 +51,13 @@ func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
 	return akdash.SettingsPanel(p.config.MaxKeysPerUser, expiryStr)
 }
 
-// DashboardPages returns nil — pages are handled via DashboardPageContributor.
+// DashboardPages returns nil — pages are handled via PageContributor.
 func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 	return nil
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPageContributor implementation
+// PageContributor implementation
 // ──────────────────────────────────────────────────
 
 // DashboardNavItems returns navigation items for the API keys page.
@@ -145,7 +145,7 @@ func (p *Plugin) renderKeysPage(ctx context.Context, params contributor.Params) 
 }
 
 // handleDashboardCreate creates a new API key from form data.
-func (p *Plugin) handleDashboardCreate(ctx context.Context, appID id.AppID, params contributor.Params) (*akdash.CreatedKeyView, string) {
+func (p *Plugin) handleDashboardCreate(ctx context.Context, appID id.AppID, params contributor.Params) (created *akdash.CreatedKeyView, errMsg string) {
 	name := strings.TrimSpace(params.FormData["name"])
 	if name == "" {
 		return nil, "Please provide a key name."

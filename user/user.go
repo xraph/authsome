@@ -41,8 +41,8 @@ func (u *User) Name() string {
 // Metadata holds arbitrary user metadata as typed key-value pairs.
 type Metadata map[string]string
 
-// UserQuery holds query parameters for listing users.
-type UserQuery struct {
+// Query holds query parameters for listing users.
+type Query struct {
 	AppID  id.AppID         `json:"app_id"`
 	EnvID  id.EnvironmentID `json:"env_id,omitempty"`
 	Email  string           `json:"email,omitempty"`
@@ -50,8 +50,8 @@ type UserQuery struct {
 	Limit  int              `json:"limit,omitempty"`
 }
 
-// UserList is a paginated list of users.
-type UserList struct {
+// List is a paginated list of users.
+type List struct {
 	Users      []*User `json:"users"`
 	NextCursor string  `json:"next_cursor,omitempty"`
 	Total      int     `json:"total"`

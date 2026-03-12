@@ -12,7 +12,7 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.DashboardPlugin       = (*Plugin)(nil)
+	_ dashboard.Plugin                = (*Plugin)(nil)
 	_ dashboard.UserDetailContributor = (*Plugin)(nil)
 )
 

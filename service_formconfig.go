@@ -2,6 +2,7 @@ package authsome
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,7 +30,7 @@ func (e *Engine) SaveSignupFormConfig(ctx context.Context, fc *formconfig.FormCo
 	fc.FormType = formconfig.FormTypeSignup
 
 	existing, err := e.store.GetFormConfig(ctx, fc.AppID, formconfig.FormTypeSignup)
-	if err != nil && err != store.ErrNotFound {
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return fmt.Errorf("authsome: save signup form config: %w", err)
 	}
 

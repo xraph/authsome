@@ -19,7 +19,7 @@ type Strategy interface {
 
 	// Authenticate attempts to authenticate a request using this strategy.
 	// Returns the authenticated user and a new session, or an error if authentication fails.
-	// If this strategy does not apply to the request, return ErrStrategyNotApplicable.
+	// If this strategy does not apply to the request, return StrategyNotApplicableError.
 	Authenticate(ctx context.Context, r *http.Request) (*Result, error)
 }
 
@@ -30,9 +30,14 @@ type Result struct {
 	New     bool             `json:"new"` // True if user was created (signup)
 }
 
-// ErrStrategyNotApplicable is returned when a strategy does not apply to the request.
-type ErrStrategyNotApplicable struct{}
+// StrategyNotApplicableError is returned when a strategy does not apply to the request.
+type StrategyNotApplicableError struct{}
 
-func (e ErrStrategyNotApplicable) Error() string {
+func (e StrategyNotApplicableError) Error() string {
 	return "strategy: not applicable to this request"
 }
+
+// ErrStrategyNotApplicable is an alias kept for backward compatibility.
+//
+// Deprecated: Use StrategyNotApplicableError instead.
+type ErrStrategyNotApplicable = StrategyNotApplicableError

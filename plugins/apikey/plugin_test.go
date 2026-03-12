@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -333,8 +334,8 @@ func TestPlugin_Strategy_NotApplicable(t *testing.T) {
 	_, err := s.Authenticate(context.Background(), req)
 
 	assert.Error(t, err)
-	_, ok := err.(strategy.ErrStrategyNotApplicable)
-	assert.True(t, ok, "should return ErrStrategyNotApplicable")
+	var target strategy.StrategyNotApplicableError
+	assert.True(t, errors.As(err, &target), "should return StrategyNotApplicableError")
 }
 
 func TestPlugin_Strategy_Authenticate(t *testing.T) {

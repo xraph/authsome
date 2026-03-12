@@ -193,8 +193,8 @@ func (p *Plugin) AcceptInvitation(ctx context.Context, token string) (*organizat
 
 	// Mark invitation as accepted
 	inv.Status = organization.InvitationAccepted
-	if err := p.store.UpdateInvitation(ctx, inv); err != nil {
-		return nil, fmt.Errorf("organization: accept invitation: %w", err)
+	if updateErr := p.store.UpdateInvitation(ctx, inv); updateErr != nil {
+		return nil, fmt.Errorf("organization: accept invitation: %w", updateErr)
 	}
 
 	// Get organization to resolve AppID for the user lookup
@@ -369,28 +369,6 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	}); err != nil {
 		p.logger.Warn("organization: relay event failed",
 			log.String("type", eventType),
-			log.String("error", err.Error()),
-		)
-	}
-}
-
-func (p *Plugin) audit(ctx context.Context, severity, outcome, action, resource, resourceID, actorID, tenant string, metadata map[string]string) {
-	if p.chronicle == nil {
-		return
-	}
-	if err := p.chronicle.Record(ctx, &bridge.AuditEvent{
-		Action:     action,
-		Resource:   resource,
-		ResourceID: resourceID,
-		ActorID:    actorID,
-		Tenant:     tenant,
-		Outcome:    outcome,
-		Severity:   severity,
-		Category:   "organization",
-		Metadata:   metadata,
-	}); err != nil {
-		p.logger.Warn("organization: audit record failed",
-			log.String("action", action),
 			log.String("error", err.Error()),
 		)
 	}

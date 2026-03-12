@@ -202,7 +202,7 @@ func RefreshSession(sess *session.Session, cfg SessionConfig) error {
 }
 
 // generateSecureToken generates a cryptographically secure random hex token.
-func generateSecureToken(bytes int) (string, error) {
+func generateSecureToken(bytes int) (string, error) { //nolint:unparam // keep bytes configurable for future use
 	b := make([]byte, bytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("account: generate token: %w", err)
@@ -216,7 +216,7 @@ func GenerateVerificationToken() (string, error) {
 }
 
 // NewVerification creates a new email/phone verification record.
-func NewVerification(ctx context.Context, appID id.AppID, userID id.UserID, vType VerificationType, ttl time.Duration) (*Verification, error) {
+func NewVerification(_ context.Context, appID id.AppID, userID id.UserID, vType VerificationType, ttl time.Duration) (*Verification, error) {
 	token, err := GenerateVerificationToken()
 	if err != nil {
 		return nil, err
@@ -234,7 +234,7 @@ func NewVerification(ctx context.Context, appID id.AppID, userID id.UserID, vTyp
 }
 
 // NewPasswordReset creates a new password reset record.
-func NewPasswordReset(ctx context.Context, appID id.AppID, userID id.UserID, ttl time.Duration) (*PasswordReset, error) {
+func NewPasswordReset(_ context.Context, appID id.AppID, userID id.UserID, ttl time.Duration) (*PasswordReset, error) {
 	token, err := generateSecureToken(32)
 	if err != nil {
 		return nil, err

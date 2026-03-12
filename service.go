@@ -2,6 +2,7 @@ package authsome
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -69,18 +70,18 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	if err == nil {
 		return nil, nil, account.ErrEmailTaken
 	}
-	if err != store.ErrNotFound {
+	if !errors.Is(err, store.ErrNotFound) {
 		return nil, nil, fmt.Errorf("authsome: check email: %w", err)
 	}
 
 	// Check username uniqueness (if provided)
 	if req.Username != "" {
-		_, err := e.store.GetUserByUsername(ctx, req.AppID, req.Username)
-		if err == nil {
+		_, lookupErr := e.store.GetUserByUsername(ctx, req.AppID, req.Username)
+		if lookupErr == nil {
 			return nil, nil, account.ErrUsernameTaken
 		}
-		if err != store.ErrNotFound {
-			return nil, nil, fmt.Errorf("authsome: check username: %w", err)
+		if !errors.Is(lookupErr, store.ErrNotFound) {
+			return nil, nil, fmt.Errorf("authsome: check username: %w", lookupErr)
 		}
 	}
 
@@ -94,12 +95,12 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	u := account.NewUser(req, hash)
 
 	// Plugin: before user create
-	if err := e.plugins.EmitBeforeUserCreate(ctx, u); err != nil {
-		return nil, nil, fmt.Errorf("authsome: before user create: %w", err)
+	if hookErr := e.plugins.EmitBeforeUserCreate(ctx, u); hookErr != nil {
+		return nil, nil, fmt.Errorf("authsome: before user create: %w", hookErr)
 	}
 
-	if err := e.store.CreateUser(ctx, u); err != nil {
-		return nil, nil, fmt.Errorf("authsome: create user: %w", err)
+	if createErr := e.store.CreateUser(ctx, u); createErr != nil {
+		return nil, nil, fmt.Errorf("authsome: create user: %w", createErr)
 	}
 
 	// Plugin: after user create
@@ -118,12 +119,12 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
 
 	// Plugin: before session create
-	if err := e.plugins.EmitBeforeSessionCreate(ctx, sess); err != nil {
-		return nil, nil, fmt.Errorf("authsome: before session create: %w", err)
+	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
+		return nil, nil, fmt.Errorf("authsome: before session create: %w", hookErr)
 	}
 
-	if err := e.store.CreateSession(ctx, sess); err != nil {
-		return nil, nil, fmt.Errorf("authsome: create session: %w", err)
+	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
+		return nil, nil, fmt.Errorf("authsome: create session: %w", storeErr)
 	}
 
 	// Plugin: after session create + after signup
@@ -201,7 +202,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	}
 
 	// Verify password
-	if err := account.CheckPassword(u.PasswordHash, req.Password); err != nil {
+	if checkErr := account.CheckPassword(u.PasswordHash, req.Password); checkErr != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
 	}
@@ -226,11 +227,11 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Transparent rehash if the password algorithm has changed (e.g. bcrypt→argon2id).
 	policy := e.passwordPolicy()
 	if account.NeedsRehash(u.PasswordHash, policy) {
-		if newHash, err := account.HashPasswordWithPolicy(req.Password, policy); err == nil {
+		if newHash, hashErr := account.HashPasswordWithPolicy(req.Password, policy); hashErr == nil {
 			u.PasswordHash = newHash
 			u.UpdatedAt = time.Now()
-			if err := e.store.UpdateUser(ctx, u); err != nil {
-				e.logger.Warn("authsome: rehash on login failed", log.String("error", err.Error()))
+			if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
+				e.logger.Warn("authsome: rehash on login failed", log.String("error", updateErr.Error()))
 			}
 		}
 	}
@@ -245,12 +246,12 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
 
 	// Plugin: before session create
-	if err := e.plugins.EmitBeforeSessionCreate(ctx, sess); err != nil {
-		return nil, nil, fmt.Errorf("authsome: before session create: %w", err)
+	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
+		return nil, nil, fmt.Errorf("authsome: before session create: %w", hookErr)
 	}
 
-	if err := e.store.CreateSession(ctx, sess); err != nil {
-		return nil, nil, fmt.Errorf("authsome: create session: %w", err)
+	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
+		return nil, nil, fmt.Errorf("authsome: create session: %w", storeErr)
 	}
 
 	// Plugin: after session create + after signin
@@ -291,12 +292,12 @@ func (e *Engine) SignOut(ctx context.Context, sessionID id.SessionID) error {
 	}
 
 	// Plugin: before signout
-	if err := e.plugins.EmitBeforeSignOut(ctx, sessionID); err != nil {
-		return fmt.Errorf("authsome: before signout: %w", err)
+	if hookErr := e.plugins.EmitBeforeSignOut(ctx, sessionID); hookErr != nil {
+		return fmt.Errorf("authsome: before signout: %w", hookErr)
 	}
 
-	if err := e.store.DeleteSession(ctx, sessionID); err != nil {
-		return fmt.Errorf("authsome: delete session: %w", err)
+	if deleteErr := e.store.DeleteSession(ctx, sessionID); deleteErr != nil {
+		return fmt.Errorf("authsome: delete session: %w", deleteErr)
 	}
 
 	// Plugin: after signout
@@ -532,15 +533,15 @@ func (e *Engine) newSession(appID id.AppID, userID id.UserID, cfg account.Sessio
 	// Check if app uses JWT for access tokens.
 	tokFmt := e.TokenFormatForApp(appID.String())
 	if tokFmt.Name() == "jwt" {
-		jwtToken, err := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
+		jwtToken, genErr := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
 			UserID:    userID.String(),
 			AppID:     appID.String(),
 			SessionID: sess.ID.String(),
 			IssuedAt:  sess.CreatedAt,
 			ExpiresAt: sess.ExpiresAt,
 		})
-		if err != nil {
-			return nil, err
+		if genErr != nil {
+			return nil, genErr
 		}
 		sess.Token = jwtToken
 	}
@@ -714,8 +715,8 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 		return nil, fmt.Errorf("authsome: create password reset: %w", err)
 	}
 
-	if err := e.store.CreatePasswordReset(ctx, pr); err != nil {
-		return nil, fmt.Errorf("authsome: store password reset: %w", err)
+	if storeErr := e.store.CreatePasswordReset(ctx, pr); storeErr != nil {
+		return nil, fmt.Errorf("authsome: store password reset: %w", storeErr)
 	}
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "forgot_password", "user", u.ID.String(), u.ID.String(), appID.String(), "auth", nil)
@@ -739,8 +740,8 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 	}
 
 	policy := e.passwordPolicy()
-	if err := policy.ValidatePassword(newPassword); err != nil {
-		return err
+	if validateErr := policy.ValidatePassword(newPassword); validateErr != nil {
+		return validateErr
 	}
 
 	// Breach check
@@ -756,8 +757,8 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 	}
 
 	// Password history check
-	if err := e.checkPasswordHistory(ctx, u.ID, newPassword); err != nil {
-		return err
+	if historyErr := e.checkPasswordHistory(ctx, u.ID, newPassword); historyErr != nil {
+		return historyErr
 	}
 
 	hash, err := account.HashPasswordWithPolicy(newPassword, policy)
@@ -770,14 +771,14 @@ func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) e
 	u.PasswordHash = hash
 	u.PasswordChangedAt = &now
 	u.UpdatedAt = now
-	if err := e.store.UpdateUser(ctx, u); err != nil {
-		return fmt.Errorf("authsome: update user: %w", err)
+	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
+		return fmt.Errorf("authsome: update user: %w", updateErr)
 	}
 
 	e.savePasswordHistory(ctx, u.ID, oldHash)
 
-	if err := e.store.ConsumePasswordReset(ctx, token); err != nil {
-		return fmt.Errorf("authsome: consume reset: %w", err)
+	if consumeErr := e.store.ConsumePasswordReset(ctx, token); consumeErr != nil {
+		return fmt.Errorf("authsome: consume reset: %w", consumeErr)
 	}
 
 	_ = e.store.DeleteUserSessions(ctx, pr.UserID)
@@ -810,13 +811,13 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 		return fmt.Errorf("authsome: get user: %w", err)
 	}
 
-	if err := account.CheckPassword(u.PasswordHash, currentPassword); err != nil {
+	if verifyErr := account.CheckPassword(u.PasswordHash, currentPassword); verifyErr != nil {
 		return account.ErrInvalidCredentials
 	}
 
 	policy := e.passwordPolicy()
-	if err := policy.ValidatePassword(newPassword); err != nil {
-		return err
+	if validateErr := policy.ValidatePassword(newPassword); validateErr != nil {
+		return validateErr
 	}
 
 	// Breach check
@@ -827,8 +828,8 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 	}
 
 	// Password history check
-	if err := e.checkPasswordHistory(ctx, userID, newPassword); err != nil {
-		return err
+	if historyErr := e.checkPasswordHistory(ctx, userID, newPassword); historyErr != nil {
+		return historyErr
 	}
 
 	hash, err := account.HashPasswordWithPolicy(newPassword, policy)
@@ -841,8 +842,8 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 	u.PasswordHash = hash
 	u.PasswordChangedAt = &now
 	u.UpdatedAt = now
-	if err := e.store.UpdateUser(ctx, u); err != nil {
-		return fmt.Errorf("authsome: update user: %w", err)
+	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
+		return fmt.Errorf("authsome: update user: %w", updateErr)
 	}
 
 	e.savePasswordHistory(ctx, userID, oldHash)
@@ -879,8 +880,8 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 		return account.ErrInvalidCredentials
 	}
 
-	if err := e.store.ConsumeVerification(ctx, token); err != nil {
-		return fmt.Errorf("authsome: consume verification: %w", err)
+	if consumeErr := e.store.ConsumeVerification(ctx, token); consumeErr != nil {
+		return fmt.Errorf("authsome: consume verification: %w", consumeErr)
 	}
 
 	u, err := e.store.GetUser(ctx, v.UserID)
@@ -890,8 +891,8 @@ func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 
 	u.EmailVerified = true
 	u.UpdatedAt = time.Now()
-	if err := e.store.UpdateUser(ctx, u); err != nil {
-		return fmt.Errorf("authsome: update user: %w", err)
+	if updateErr := e.store.UpdateUser(ctx, u); updateErr != nil {
+		return fmt.Errorf("authsome: update user: %w", updateErr)
 	}
 
 	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "verify_email", "user", u.ID.String(), u.ID.String(), v.AppID.String(), "auth", nil)
@@ -1113,15 +1114,15 @@ func generateWebhookSecret() (string, error) {
 // rbacStore returns the RBAC store backed by Warden. Warden is required for
 // all RBAC operations. Callers should guard with hasRBACStore() first.
 func (e *Engine) rbacStore() rbac.Store {
-	if e.warden_ == nil {
+	if e.wardenEng == nil {
 		panic("authsome: rbacStore() called but warden is not configured; warden is required for RBAC")
 	}
-	return rbac.NewWardenStore(e.warden_)
+	return rbac.NewWardenStore(e.wardenEng)
 }
 
 // hasRBACStore reports whether the Warden engine is available for RBAC operations.
 func (e *Engine) hasRBACStore() bool {
-	return e.warden_ != nil
+	return e.wardenEng != nil
 }
 
 // ──────────────────────────────────────────────────
@@ -1276,7 +1277,7 @@ func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac
 func (e *Engine) HasPermission(ctx context.Context, userID id.UserID, action, resource string) (bool, error) {
 	ctx = e.ensureWardenScope(ctx)
 
-	result, err := e.warden_.Check(ctx, &warden.CheckRequest{
+	result, err := e.wardenEng.Check(ctx, &warden.CheckRequest{
 		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID.String()},
 		Action:   warden.Action{Name: action},
 		Resource: warden.Resource{Type: resource},
@@ -1347,7 +1348,7 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 // tenant_id = appID. We always inject the explicit warden tenant values so
 // that Warden falls back to the app ID when OrgID is absent.
 func (e *Engine) ensureWardenScope(ctx context.Context) context.Context {
-	if e.warden_ == nil {
+	if e.wardenEng == nil {
 		return ctx
 	}
 
@@ -1374,7 +1375,7 @@ func (e *Engine) ensureWardenScope(ctx context.Context) context.Context {
 // ──────────────────────────────────────────────────
 
 // AdminListUsers returns a paginated list of users for the given app.
-func (e *Engine) AdminListUsers(ctx context.Context, q *user.UserQuery) (*user.UserList, error) {
+func (e *Engine) AdminListUsers(ctx context.Context, q *user.Query) (*user.List, error) {
 	return e.store.ListUsers(ctx, q)
 }
 

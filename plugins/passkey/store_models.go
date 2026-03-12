@@ -61,7 +61,7 @@ func credentialFromModel(m *credentialModel) (*Credential, error) {
 		PublicKey:       m.PublicKey,
 		AttestationType: m.AttestationType,
 		Transport:       transport,
-		SignCount:       uint32(m.SignCount),
+		SignCount:       uint32(m.SignCount), //nolint:gosec // G115: sign count from trusted source
 		AAGUID:          m.AAGUID,
 		DisplayName:     m.DisplayName,
 		CreatedAt:       m.CreatedAt,

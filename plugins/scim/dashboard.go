@@ -19,14 +19,14 @@ import (
 
 // Compile-time dashboard interface checks.
 var (
-	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
-	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
-	_ dashboard.OrgDetailContributor     = (*Plugin)(nil)
-	_ dashboard.OrgDetailTabContributor  = (*Plugin)(nil)
+	_ dashboard.Plugin                  = (*Plugin)(nil)
+	_ dashboard.PageContributor         = (*Plugin)(nil)
+	_ dashboard.OrgDetailContributor    = (*Plugin)(nil)
+	_ dashboard.OrgDetailTabContributor = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
-// DashboardPlugin implementation
+// Plugin implementation
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns SCIM provisioning widgets.
@@ -81,13 +81,13 @@ func (p *Plugin) DashboardSettingsPanel(ctx context.Context) templ.Component {
 	})
 }
 
-// DashboardPages returns nil — pages are handled via DashboardPageContributor.
+// DashboardPages returns nil — pages are handled via PageContributor.
 func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 	return nil
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPageContributor implementation
+// PageContributor implementation
 // ──────────────────────────────────────────────────
 
 // DashboardNavItems returns navigation items for SCIM pages.
@@ -291,7 +291,7 @@ func (p *Plugin) renderSCIMDetail(ctx context.Context, params contributor.Params
 		if dashboard.ConsumeNonce(nonce) {
 			data.Error, data.Success = p.handleUpdateConfigSettings(ctx, cfg, params)
 			// Re-fetch.
-			if updated, err := p.service.GetConfig(ctx, configID); err == nil {
+			if updated, fetchErr := p.service.GetConfig(ctx, configID); fetchErr == nil {
 				cfg = updated
 			}
 		}
@@ -302,7 +302,7 @@ func (p *Plugin) renderSCIMDetail(ctx context.Context, params contributor.Params
 
 	// Resolve org name.
 	if !cfg.OrgID.IsNil() && p.authStore != nil {
-		if org, err := p.authStore.GetOrganization(ctx, cfg.OrgID); err == nil {
+		if org, orgErr := p.authStore.GetOrganization(ctx, cfg.OrgID); orgErr == nil {
 			data.Config.OrgName = org.Name
 		}
 	}
@@ -313,7 +313,7 @@ func (p *Plugin) renderSCIMDetail(ctx context.Context, params contributor.Params
 	data.GroupsEndpoint = p.config.BasePath + "/Groups"
 
 	// Fetch tokens.
-	if tokens, err := p.service.ListTokens(ctx, configID); err == nil {
+	if tokens, tokErr := p.service.ListTokens(ctx, configID); tokErr == nil {
 		data.Tokens = make([]scimdash.SCIMTokenView, 0, len(tokens))
 		for _, t := range tokens {
 			data.Tokens = append(data.Tokens, toTokenView(t))

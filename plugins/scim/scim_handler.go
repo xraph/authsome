@@ -132,7 +132,7 @@ func (p *Plugin) handleListUsers(ctx forge.Context, _ *struct{}) (*SCIMListRespo
 			users = append(users, UserToSCIM(u, baseURL))
 		}
 	} else if p.authStore != nil {
-		result, err := p.authStore.ListUsers(ctx.Context(), &user.UserQuery{
+		result, err := p.authStore.ListUsers(ctx.Context(), &user.Query{
 			AppID: cfg.AppID,
 		})
 		if err != nil {
@@ -183,7 +183,7 @@ func (p *Plugin) handleCreateUser(ctx forge.Context, _ *struct{}) (*SCIMUserReso
 	}
 
 	var scimUser SCIMUserResource
-	if err := json.NewDecoder(ctx.Request().Body).Decode(&scimUser); err != nil {
+	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimUser); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM user payload")
 	}
 
@@ -209,7 +209,7 @@ func (p *Plugin) handleReplaceUser(ctx forge.Context, req *scimUserPathParam) (*
 	}
 
 	var scimUser SCIMUserResource
-	if err := json.NewDecoder(ctx.Request().Body).Decode(&scimUser); err != nil {
+	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimUser); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM user payload")
 	}
 
@@ -232,7 +232,7 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*SC
 	}
 
 	var patch SCIMPatchOp
-	if err := json.NewDecoder(ctx.Request().Body).Decode(&patch); err != nil {
+	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&patch); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM patch payload")
 	}
 
@@ -248,8 +248,7 @@ func (p *Plugin) handlePatchUser(ctx forge.Context, req *scimUserPathParam) (*SC
 
 	// Apply SCIM PATCH operations.
 	for _, op := range patch.Operations {
-		switch strings.ToLower(op.Op) {
-		case "replace":
+		if strings.EqualFold(op.Op, "replace") {
 			p.applyUserPatchReplace(u, op)
 		}
 	}
@@ -358,7 +357,7 @@ func (p *Plugin) handleCreateGroup(ctx forge.Context, _ *struct{}) (*SCIMGroupRe
 	}
 
 	var scimGroup SCIMGroupResource
-	if err := json.NewDecoder(ctx.Request().Body).Decode(&scimGroup); err != nil {
+	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimGroup); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM group payload")
 	}
 
@@ -382,7 +381,7 @@ func (p *Plugin) handleReplaceGroup(ctx forge.Context, req *scimGroupPathParam) 
 	}
 
 	var scimGroup SCIMGroupResource
-	if err := json.NewDecoder(ctx.Request().Body).Decode(&scimGroup); err != nil {
+	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&scimGroup); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM group payload")
 	}
 	scimGroup.ID = req.GroupID
@@ -404,7 +403,7 @@ func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*
 	}
 
 	var patch SCIMPatchOp
-	if err := json.NewDecoder(ctx.Request().Body).Decode(&patch); err != nil {
+	if decodeErr := json.NewDecoder(ctx.Request().Body).Decode(&patch); decodeErr != nil {
 		return nil, forge.BadRequest("invalid SCIM patch payload")
 	}
 
@@ -420,7 +419,7 @@ func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*
 
 	// Apply PATCH operations (simplified: handle displayName changes).
 	for _, op := range patch.Operations {
-		if strings.ToLower(op.Op) == "replace" {
+		if strings.EqualFold(op.Op, "replace") {
 			if op.Path == "displayName" {
 				if name, ok := op.Value.(string); ok {
 					team.Name = name
@@ -429,7 +428,7 @@ func (p *Plugin) handlePatchGroup(ctx forge.Context, req *scimGroupPathParam) (*
 		}
 	}
 
-	team.UpdatedAt = team.UpdatedAt // Touch.
+	team.UpdatedAt = time.Now()
 	if err := p.authStore.UpdateTeam(ctx.Context(), team); err != nil {
 		p.service.RecordLog(ctx.Context(), cfg.ID, ActionUpdateGroup, "Group", "", req.GroupID, LogStatusError, err.Error())
 		return nil, forge.InternalError(err)

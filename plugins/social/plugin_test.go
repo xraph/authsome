@@ -63,6 +63,7 @@ func newMockProvider(name string) *mockProvider {
 	}
 }
 
+//nolint:unparam // test helper returns stores for flexible test assertions
 func newTestPlugin(t *testing.T, providers ...social.Provider) (*social.Plugin, *memory.Store, *social.MemoryStore) {
 	t.Helper()
 	p := social.New(social.Config{
@@ -357,8 +358,8 @@ func TestMemoryStore_MultipleConnections(t *testing.T) {
 			CreatedAt:      time.Now(),
 			UpdatedAt:      time.Now(),
 		}
-		err := s.CreateOAuthConnection(ctx, conn)
-		require.NoError(t, err)
+		createErr := s.CreateOAuthConnection(ctx, conn)
+		require.NoError(t, createErr)
 	}
 
 	conns, err := s.GetOAuthConnectionsByUserID(ctx, userID)

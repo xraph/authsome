@@ -136,20 +136,20 @@ func run(outPath, title, version string) error {
 
 	// Register core API routes (auth, password, user, session, org, device, etc.).
 	apiHandler := api.New(engine)
-	if err := apiHandler.RegisterRoutes(router); err != nil {
-		return fmt.Errorf("register API routes: %w", err)
+	if routeErr := apiHandler.RegisterRoutes(router); routeErr != nil {
+		return fmt.Errorf("register API routes: %w", routeErr)
 	}
 
 	// Register plugin routes (each plugin that implements RouteProvider).
 	for _, rp := range engine.Plugins().RouteProviders() {
-		if err := rp.RegisterRoutes(router); err != nil {
-			return fmt.Errorf("register plugin routes (%T): %w", rp, err)
+		if pluginRouteErr := rp.RegisterRoutes(router); pluginRouteErr != nil {
+			return fmt.Errorf("register plugin routes (%T): %w", rp, pluginRouteErr)
 		}
 	}
 
 	// Start the router so the OpenAPI generator processes all registered routes.
-	if err := router.Start(context.Background()); err != nil {
-		return fmt.Errorf("start router: %w", err)
+	if startErr := router.Start(context.Background()); startErr != nil {
+		return fmt.Errorf("start router: %w", startErr)
 	}
 
 	// Extract the dynamically-generated OpenAPI spec.
@@ -178,7 +178,7 @@ func run(outPath, title, version string) error {
 		return fmt.Errorf("marshal spec: %w", err)
 	}
 
-	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+	if err := os.WriteFile(outPath, data, 0o644); err != nil { //nolint:gosec // G306: file permissions appropriate for generated spec
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
 

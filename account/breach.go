@@ -1,6 +1,7 @@
 package account
 
 import (
+	"context"
 	"crypto/sha1" //nolint:gosec // SHA-1 required by HIBP k-Anonymity API
 	"encoding/hex"
 	"fmt"
@@ -35,17 +36,21 @@ func NewBreachChecker() *BreachChecker {
 // On network errors, returns false (fail-open to avoid blocking auth).
 func (bc *BreachChecker) IsBreached(password string) (bool, error) {
 	// SHA-1 hash the password
-	h := sha1.New() //nolint:gosec
+	h := sha1.New() //nolint:gosec // SHA-1 required by HIBP k-Anonymity API protocol
 	h.Write([]byte(password))
 	hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 
 	prefix := hash[:5]
 	suffix := hash[5:]
 
-	resp, err := bc.client.Get(bc.baseURL + prefix)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, bc.baseURL+prefix, nil)
+	if err != nil {
+		return false, nil //nolint:nilerr // fail-open: don't block auth on request build errors
+	}
+	resp, err := bc.client.Do(req)
 	if err != nil {
 		// Fail open on network errors — don't block authentication.
-		return false, nil //nolint:nilerr
+		return false, nil //nolint:nilerr // fail-open: don't block auth on network errors
 	}
 	defer resp.Body.Close()
 
@@ -55,7 +60,7 @@ func (bc *BreachChecker) IsBreached(password string) (bool, error) {
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MiB limit
 	if err != nil {
-		return false, nil //nolint:nilerr
+		return false, nil //nolint:nilerr // fail-open: don't block auth on read errors
 	}
 
 	// Response format: SUFFIX:COUNT\r\n

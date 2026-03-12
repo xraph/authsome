@@ -40,7 +40,11 @@ func (p *bitbucketProvider) FetchUser(ctx context.Context, token *oauth2.Token) 
 	client := p.config.Client(ctx, token)
 
 	// Fetch user profile.
-	resp, err := client.Get("https://api.bitbucket.org/2.0/user")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bitbucket.org/2.0/user", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("social: bitbucket: create request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("social: bitbucket: fetch user: %w", err)
 	}
@@ -82,7 +86,11 @@ func (p *bitbucketProvider) FetchUser(ctx context.Context, token *oauth2.Token) 
 }
 
 func (p *bitbucketProvider) fetchPrimaryEmail(ctx context.Context, client *http.Client) string {
-	resp, err := client.Get("https://api.bitbucket.org/2.0/user/emails")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bitbucket.org/2.0/user/emails", http.NoBody)
+	if err != nil {
+		return ""
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return ""
 	}

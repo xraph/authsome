@@ -36,7 +36,7 @@ func (a *API) Handler() http.Handler {
 	}
 	if err := a.RegisterRoutes(a.router); err != nil {
 		a.engine.Logger().Error("authsome: register routes failed", log.String("error", err.Error()))
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "authsome: service unavailable", http.StatusServiceUnavailable)
 		})
 	}
@@ -104,7 +104,7 @@ func (a *API) registerWellKnownRoutes(router forge.Router) error {
 	)
 }
 
-func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (*map[string]any, error) {
+func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (map[string]any, error) {
 	manifest := map[string]any{
 		"version":   "0.5.0",
 		"base_path": a.engine.Config().BasePath,
@@ -128,7 +128,7 @@ func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (*map[string]any, e
 	return nil, ctx.JSON(http.StatusOK, manifest)
 }
 
-func (a *API) handleOpenAPI(ctx forge.Context, _ *struct{}) (*map[string]any, error) {
+func (a *API) handleOpenAPI(ctx forge.Context, _ *struct{}) (map[string]any, error) {
 	// Prefer the Forge router's dynamically-generated spec when available.
 	// This spec is built from the actual registered routes and their OpenAPI
 	// metadata, so it always reflects the true API surface.

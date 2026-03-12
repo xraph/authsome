@@ -41,27 +41,29 @@ func (a *API) registerAuthRoutes(router forge.Router) error {
 	rlCfg := a.engine.Config().RateLimit
 	g := router.Group(base, forge.WithGroupTags("authentication"))
 
-	signUpOpts := []forge.RouteOption{
+	signUpOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	signUpOpts = append(signUpOpts,
 		forge.WithSummary("Sign up"),
 		forge.WithDescription("Creates a new user account and returns authentication tokens."),
 		forge.WithOperationID("signUp"),
 		forge.WithRequestSchema(SignUpRequest{}),
 		forge.WithCreatedResponse(AuthResponse{}),
 		forge.WithErrorResponses(),
-	}
+	)
 	signUpOpts = append(signUpOpts, a.rateLimitOpt(rlCfg.SignUpLimit)...)
 	if err := g.POST("/signup", a.handleSignUp, signUpOpts...); err != nil {
 		return err
 	}
 
-	signInOpts := []forge.RouteOption{
+	signInOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	signInOpts = append(signInOpts,
 		forge.WithSummary("Sign in"),
 		forge.WithDescription("Authenticates a user with email/username and password."),
 		forge.WithOperationID("signIn"),
 		forge.WithRequestSchema(SignInRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Authenticated", AuthResponse{}),
 		forge.WithErrorResponses(),
-	}
+	)
 	signInOpts = append(signInOpts, a.rateLimitOpt(rlCfg.SignInLimit)...)
 	if err := g.POST("/signin", a.handleSignIn, signInOpts...); err != nil {
 		return err
@@ -119,7 +121,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 	// If this is the first user for the platform app, assign platform_owner role.
 	platformID := a.engine.PlatformAppID()
 	if appID == platformID && !platformID.IsNil() {
-		list, _ := a.engine.Store().ListUsers(ctx.Context(), &user.UserQuery{AppID: appID, Limit: 2})
+		list, _ := a.engine.Store().ListUsers(ctx.Context(), &user.Query{AppID: appID, Limit: 2})
 		if list != nil && list.Total == 1 {
 			ownerRole, roleErr := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
 			if roleErr == nil && ownerRole != nil {
@@ -209,7 +211,7 @@ type cookieConfig struct {
 	Domain   string
 	Path     string
 	Secure   bool
-	HttpOnly bool
+	HTTPOnly bool
 	SameSite http.SameSite
 }
 
@@ -229,7 +231,7 @@ func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
 		path = "/"
 	}
 	secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts)
-	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHttpOnly, opts)
+	httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)
 	sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts)
 
 	// Auto-detect secure: if setting is true but request is plain HTTP, disable for dev.
@@ -247,7 +249,7 @@ func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
 
 	return cookieConfig{
 		Name: name, Domain: domain, Path: path,
-		Secure: secure, HttpOnly: httpOnly, SameSite: sameSite,
+		Secure: secure, HTTPOnly: httpOnly, SameSite: sameSite,
 	}
 }
 
@@ -260,7 +262,7 @@ func (a *API) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 		Path:     cc.Path,
 		Domain:   cc.Domain,
 		MaxAge:   maxAge,
-		HttpOnly: cc.HttpOnly,
+		HttpOnly: cc.HTTPOnly,
 		Secure:   cc.Secure,
 		SameSite: cc.SameSite,
 	})

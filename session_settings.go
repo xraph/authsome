@@ -199,8 +199,8 @@ var (
 		settings.WithOrder(140),
 	)
 
-	// SettingCookieHttpOnly controls whether the HttpOnly flag is set on the session cookie.
-	SettingCookieHttpOnly = settings.Define("session.cookie_http_only", true,
+	// SettingCookieHTTPOnly controls whether the HttpOnly flag is set on the session cookie.
+	SettingCookieHTTPOnly = settings.Define("session.cookie_http_only", true,
 		settings.WithDisplayName("HttpOnly Cookie"),
 		settings.WithDescription("Prevent JavaScript from accessing the session cookie"),
 		settings.WithCategory("Cookie Configuration"),
@@ -272,7 +272,7 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "session", SettingCookieSecure); err != nil {
 		return err
 	}
-	if err := settings.RegisterTyped(m, "session", SettingCookieHttpOnly); err != nil {
+	if err := settings.RegisterTyped(m, "session", SettingCookieHTTPOnly); err != nil {
 		return err
 	}
 	return settings.RegisterTyped(m, "session", SettingCookieSameSite)

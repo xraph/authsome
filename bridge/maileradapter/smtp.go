@@ -47,7 +47,7 @@ func NewSMTPMailer(host, port, username, password, fromAddr string, opts ...SMTP
 var _ bridge.Mailer = (*SMTPMailer)(nil)
 
 // SendEmail delivers a message via SMTP.
-func (m *SMTPMailer) SendEmail(_ context.Context, msg *bridge.EmailMessage) error {
+func (m *SMTPMailer) SendEmail(ctx context.Context, msg *bridge.EmailMessage) error {
 	from := msg.From
 	if from == "" {
 		from = m.fromAddr
@@ -78,7 +78,7 @@ func (m *SMTPMailer) SendEmail(_ context.Context, msg *bridge.EmailMessage) erro
 	}
 
 	if m.useTLS {
-		return m.sendWithTLS(addr, from, msg.To, body.String(), auth)
+		return m.sendWithTLS(ctx, addr, from, msg.To, body.String(), auth)
 	}
 
 	if err := smtp.SendMail(addr, auth, from, msg.To, []byte(body.String())); err != nil {
@@ -88,13 +88,14 @@ func (m *SMTPMailer) SendEmail(_ context.Context, msg *bridge.EmailMessage) erro
 }
 
 // sendWithTLS establishes a TLS connection and sends the email.
-func (m *SMTPMailer) sendWithTLS(addr, from string, to []string, body string, auth smtp.Auth) error {
+func (m *SMTPMailer) sendWithTLS(ctx context.Context, addr, from string, to []string, body string, auth smtp.Auth) error {
 	tlsConfig := &tls.Config{
 		ServerName: m.host,
 		MinVersion: tls.VersionTLS12,
 	}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	dialer := &tls.Dialer{Config: tlsConfig}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("smtp: tls dial: %w", err)
 	}
@@ -107,17 +108,17 @@ func (m *SMTPMailer) sendWithTLS(addr, from string, to []string, body string, au
 	defer client.Close()
 
 	if auth != nil {
-		if err := client.Auth(auth); err != nil {
-			return fmt.Errorf("smtp: auth: %w", err)
+		if authErr := client.Auth(auth); authErr != nil {
+			return fmt.Errorf("smtp: auth: %w", authErr)
 		}
 	}
 
-	if err := client.Mail(from); err != nil {
-		return fmt.Errorf("smtp: mail from: %w", err)
+	if mailErr := client.Mail(from); mailErr != nil {
+		return fmt.Errorf("smtp: mail from: %w", mailErr)
 	}
 	for _, recipient := range to {
-		if err := client.Rcpt(recipient); err != nil {
-			return fmt.Errorf("smtp: rcpt to %s: %w", recipient, err)
+		if rcptErr := client.Rcpt(recipient); rcptErr != nil {
+			return fmt.Errorf("smtp: rcpt to %s: %w", recipient, rcptErr)
 		}
 	}
 

@@ -18,12 +18,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
-	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
+	_ dashboard.Plugin          = (*Plugin)(nil)
+	_ dashboard.PageContributor = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
-// DashboardPlugin implementation
+// Plugin implementation
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns widgets this plugin contributes.
@@ -54,13 +54,13 @@ func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
 	return nil
 }
 
-// DashboardPages returns empty since pages are handled via DashboardPageContributor.
+// DashboardPages returns empty since pages are handled via PageContributor.
 func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 	return nil
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPageContributor implementation
+// PageContributor implementation
 // ──────────────────────────────────────────────────
 
 // DashboardNavItems returns navigation items for the organization pages.

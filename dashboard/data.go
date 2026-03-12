@@ -3,7 +3,6 @@ package dashboard
 import (
 	"context"
 	"fmt"
-	"time"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/environment"
@@ -15,7 +14,7 @@ import (
 
 // fetchStats returns the total number of users for the given app.
 func fetchStats(ctx context.Context, engine *authsome.Engine, appID id.AppID) (totalUsers int, err error) {
-	users, err := engine.AdminListUsers(ctx, &user.UserQuery{
+	users, err := engine.AdminListUsers(ctx, &user.Query{
 		AppID: appID,
 		Limit: 1,
 	})
@@ -27,12 +26,12 @@ func fetchStats(ctx context.Context, engine *authsome.Engine, appID id.AppID) (t
 }
 
 // fetchUsers returns a paginated list of users for the given app.
-func fetchUsers(ctx context.Context, engine *authsome.Engine, appID id.AppID, cursor string, limit int) (*user.UserList, error) {
+func fetchUsers(ctx context.Context, engine *authsome.Engine, appID id.AppID, cursor string, limit int) (*user.List, error) {
 	if limit <= 0 {
 		limit = 25
 	}
 
-	list, err := engine.AdminListUsers(ctx, &user.UserQuery{
+	list, err := engine.AdminListUsers(ctx, &user.Query{
 		AppID:  appID,
 		Cursor: cursor,
 		Limit:  limit,
@@ -64,27 +63,6 @@ func fetchWebhooks(ctx context.Context, engine *authsome.Engine, appID id.AppID)
 	return hooks, nil
 }
 
-// formatTimeAgo returns a human-readable relative time string such as
-// "2m ago", "3h ago", "5d ago", or "1y ago".
-func formatTimeAgo(t time.Time) string {
-	d := time.Since(t)
-
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	case d < 365*24*time.Hour:
-		return fmt.Sprintf("%dmo ago", int(d.Hours()/(24*30)))
-	default:
-		return fmt.Sprintf("%dy ago", int(d.Hours()/(24*365)))
-	}
-}
-
 // fetchEnvironments returns all environments for the given app.
 func fetchEnvironments(ctx context.Context, engine *authsome.Engine, appID id.AppID) ([]*environment.Environment, error) {
 	envs, err := engine.ListEnvironments(ctx, appID)
@@ -93,17 +71,4 @@ func fetchEnvironments(ctx context.Context, engine *authsome.Engine, appID id.Ap
 	}
 
 	return envs, nil
-}
-
-// truncateString shortens s to max characters and appends "..." if truncated.
-func truncateString(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-
-	if max <= 3 {
-		return s[:max]
-	}
-
-	return s[:max-3] + "..."
 }

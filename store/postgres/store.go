@@ -4,6 +4,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -223,7 +224,7 @@ func (s *Store) DeleteUser(ctx context.Context, userID id.UserID) error {
 	return pgError(err)
 }
 
-func (s *Store) ListUsers(ctx context.Context, q *user.UserQuery) (*user.UserList, error) {
+func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error) {
 	var models []UserModel
 	query := s.pg.NewSelect(&models).
 		Where("app_id = ?", q.AppID.String()).
@@ -253,7 +254,7 @@ func (s *Store) ListUsers(ctx context.Context, q *user.UserQuery) (*user.UserLis
 		return nil, pgError(err)
 	}
 
-	list := &user.UserList{
+	list := &user.List{
 		Users: make([]*user.User, 0, len(models)),
 	}
 
@@ -1123,7 +1124,7 @@ func (s *Store) SaveBranding(ctx context.Context, b *formconfig.BrandingConfig) 
 	if err != nil {
 		return pgError(err)
 	}
-	n, _ := res.RowsAffected()
+	n, _ := res.RowsAffected() //nolint:errcheck // driver always returns valid count
 	if n > 0 {
 		return nil
 	}
@@ -1144,7 +1145,7 @@ func (s *Store) GetAppSessionConfig(ctx context.Context, appID id.AppID) (*appse
 	m := new(AppSessionConfigModel)
 	err := s.pg.NewSelect(m).Where("app_id = ?", appID.String()).Scan(ctx)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, appsessionconfig.ErrNotFound
 		}
 		return nil, err
@@ -1167,7 +1168,7 @@ func (s *Store) SetAppSessionConfig(ctx context.Context, cfg *appsessionconfig.C
 	if err != nil {
 		return pgError(err)
 	}
-	n, _ := res.RowsAffected()
+	n, _ := res.RowsAffected() //nolint:errcheck // driver always returns valid count
 	if n > 0 {
 		return nil
 	}
@@ -1237,7 +1238,7 @@ func pgError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return store.ErrNotFound
 	}
 	return err

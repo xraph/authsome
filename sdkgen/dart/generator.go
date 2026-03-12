@@ -306,7 +306,7 @@ func (g *Generator) isPrimitiveAlias(name string) bool {
 	if !ok {
 		return false
 	}
-	if schema.Properties != nil && len(schema.Properties) > 0 {
+	if len(schema.Properties) > 0 {
 		return false
 	}
 	switch schema.Type {
@@ -336,7 +336,7 @@ func (g *Generator) schemaToDartType(s *openapi.Schema) string {
 		// Resolve primitive type aliases (e.g., ID → String).
 		if g.spec != nil && g.spec.Components != nil {
 			if refSchema, ok := g.spec.Components.Schemas[refName]; ok {
-				if refSchema.Properties == nil || len(refSchema.Properties) == 0 {
+				if len(refSchema.Properties) == 0 {
 					switch refSchema.Type {
 					case "string":
 						return "String"
@@ -492,15 +492,9 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 			}
 			return false
 		},
-		"fromJsonExpr": func(fieldName string, fieldType string, optional bool) string {
-			return buildFromJsonExpr(fieldName, fieldType, optional)
-		},
-		"toJsonExpr": func(dartName string, fieldType string, optional bool) string {
-			return buildToJsonExpr(dartName, fieldType, optional)
-		},
-		"responseFromJson": func(respType string) string {
-			return buildResponseFromJson(respType)
-		},
+		"fromJsonExpr":     buildFromJSONExpr,
+		"toJsonExpr":       buildToJSONExpr,
+		"responseFromJson": buildResponseFromJSON,
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, name)
@@ -581,15 +575,16 @@ func toCamelCase(s string) string {
 	if i == 0 {
 		return s // Already camelCase
 	}
-	if i == 1 {
+	switch {
+	case i == 1:
 		// Single uppercase letter at start
 		runes[0] = unicode.ToLower(runes[0])
-	} else if i == len(runes) {
+	case i == len(runes):
 		// All uppercase — lowercase everything
 		for j := range runes {
 			runes[j] = unicode.ToLower(runes[j])
 		}
-	} else {
+	default:
 		// Multiple uppercase — lowercase all but the last (which starts the next word)
 		for j := 0; j < i-1; j++ {
 			runes[j] = unicode.ToLower(runes[j])
@@ -598,8 +593,8 @@ func toCamelCase(s string) string {
 	return string(runes)
 }
 
-// buildFromJsonExpr generates a Dart expression to extract a field from a JSON map.
-func buildFromJsonExpr(jsonKey string, dartType string, optional bool) string {
+// buildFromJSONExpr generates a Dart expression to extract a field from a JSON map.
+func buildFromJSONExpr(jsonKey string, dartType string, optional bool) string {
 	accessor := "json['" + jsonKey + "']"
 	if optional {
 		accessor = "json['" + jsonKey + "']"
@@ -640,9 +635,9 @@ func buildFromJsonExpr(jsonKey string, dartType string, optional bool) string {
 	if strings.HasPrefix(dartType, "List<") {
 		innerType := dartType[5 : len(dartType)-1]
 		if optional {
-			return accessor + " == null ? null : (" + accessor + " as List).map((e) => " + itemFromJson("e", innerType) + ").toList()"
+			return accessor + " == null ? null : (" + accessor + " as List).map((e) => " + itemFromJSON("e", innerType) + ").toList()"
 		}
-		return "(" + accessor + " as List).map((e) => " + itemFromJson("e", innerType) + ").toList()"
+		return "(" + accessor + " as List).map((e) => " + itemFromJSON("e", innerType) + ").toList()"
 	}
 
 	// Complex type — use fromJson
@@ -652,7 +647,7 @@ func buildFromJsonExpr(jsonKey string, dartType string, optional bool) string {
 	return dartType + ".fromJson(Map<String, dynamic>.from(" + accessor + " as Map))"
 }
 
-func itemFromJson(varName string, dartType string) string {
+func itemFromJSON(varName string, dartType string) string {
 	switch dartType {
 	case "String":
 		return varName + " as String"
@@ -670,8 +665,8 @@ func itemFromJson(varName string, dartType string) string {
 	return dartType + ".fromJson(Map<String, dynamic>.from(" + varName + " as Map))"
 }
 
-// buildToJsonExpr generates a Dart expression to convert a field to JSON.
-func buildToJsonExpr(dartName string, dartType string, optional bool) string {
+// buildToJSONExpr generates a Dart expression to convert a field to JSON.
+func buildToJSONExpr(dartName string, dartType string, optional bool) string {
 	switch dartType {
 	case "String", "int", "double", "bool", "dynamic":
 		return dartName
@@ -700,9 +695,9 @@ func buildToJsonExpr(dartName string, dartType string, optional bool) string {
 	return dartName + ".toJson()"
 }
 
-// buildResponseFromJson generates a Dart expression to parse a response body.
+// buildResponseFromJSON generates a Dart expression to parse a response body.
 // The template stores the _request() return value in a variable named `res`.
-func buildResponseFromJson(respType string) string {
+func buildResponseFromJSON(respType string) string {
 	switch respType {
 	case "void":
 		return ""
@@ -712,7 +707,7 @@ func buildResponseFromJson(respType string) string {
 
 	if strings.HasPrefix(respType, "List<") {
 		innerType := respType[5 : len(respType)-1]
-		return "(res as List).map((e) => " + itemFromJson("e", innerType) + ").toList()"
+		return "(res as List).map((e) => " + itemFromJSON("e", innerType) + ").toList()"
 	}
 
 	return respType + ".fromJson(Map<String, dynamic>.from(res as Map))"

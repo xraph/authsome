@@ -147,7 +147,7 @@ func (s *Store) DeleteUser(ctx context.Context, userID id.UserID) error {
 }
 
 // ListUsers returns a paginated list of users for an app, with optional email search.
-func (s *Store) ListUsers(ctx context.Context, q *user.UserQuery) (*user.UserList, error) {
+func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error) {
 	var models []userModel
 
 	filter := bson.M{
@@ -181,7 +181,7 @@ func (s *Store) ListUsers(ctx context.Context, q *user.UserQuery) (*user.UserLis
 		return nil, fmt.Errorf("authsome/mongo: list users: %w", err)
 	}
 
-	list := &user.UserList{
+	list := &user.List{
 		Users: make([]*user.User, 0, len(models)),
 	}
 

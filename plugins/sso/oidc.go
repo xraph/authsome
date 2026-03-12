@@ -167,7 +167,11 @@ type oidcDiscovery struct {
 // discover fetches the OIDC discovery document from the issuer.
 func (p *oidcProvider) discover() (*oidcDiscovery, error) {
 	url := p.issuer + "/.well-known/openid-configuration"
-	resp, err := http.Get(url) // #nosec G107 -- URL constructed from configured issuer
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, http.NoBody) //nolint:gosec // G107: URL constructed from configured issuer
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

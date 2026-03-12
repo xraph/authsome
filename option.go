@@ -95,7 +95,7 @@ func WithAuthorizer(a bridge.Authorizer) Option {
 // This also sets the bridge.Authorizer for backward compatibility.
 func WithWarden(w *warden.Engine) Option {
 	return func(e *Engine) {
-		e.warden_ = w
+		e.wardenEng = w
 		e.authorizer = wardenadapter.New(w)
 	}
 }
@@ -107,7 +107,7 @@ func WithWarden(w *warden.Engine) Option {
 // This also sets the bridge.KeyManager for backward compatibility.
 func WithKeysmith(ks *keysmith.Engine) Option {
 	return func(e *Engine) {
-		e.keysmith_ = ks
+		e.keysmithEng = ks
 		e.keyManager = keysmithadapter.New(ks)
 	}
 }
@@ -146,7 +146,7 @@ func WithSMSSender(s bridge.SMSSender) Option {
 // scoped configuration, and user preference management.
 func WithHerald(h bridge.Herald) Option {
 	return func(e *Engine) {
-		e.herald_ = h
+		e.heraldBridge = h
 	}
 }
 

@@ -118,11 +118,11 @@ func TestSessionIDFrom_Missing(t *testing.T) {
 
 func TestAuthMiddleware_NoToken(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
-		func(userID string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
@@ -294,10 +294,10 @@ func TestAuthMiddleware_ValidToken_OrgScope(t *testing.T) {
 
 func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			return nil, errors.New("session not found")
 		},
-		func(userID string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
@@ -324,11 +324,11 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 
 func TestAuthMiddleware_NonBearerAuth(t *testing.T) {
 	mw := middleware.AuthMiddleware(
-		func(token string) (*session.Session, error) {
+		func(_ string) (*session.Session, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},
-		func(userID string) (*user.User, error) {
+		func(_ string) (*user.User, error) {
 			t.Fatal("should not be called")
 			return nil, nil
 		},

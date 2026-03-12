@@ -174,7 +174,7 @@ func (p *Plugin) OnAfterSignIn(ctx context.Context, u *user.User, s *session.Ses
 	return nil
 }
 
-func (p *Plugin) handleNewDevice(ctx context.Context, u *user.User, s *session.Session, dev *device.Device) {
+func (p *Plugin) handleNewDevice(ctx context.Context, u *user.User, _ *session.Session, dev *device.Device) {
 	p.logger.Info("deviceverify: new device detected",
 		log.String("user_id", u.ID.String()),
 		log.String("device_id", dev.ID.String()),

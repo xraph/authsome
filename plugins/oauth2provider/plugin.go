@@ -714,7 +714,7 @@ func (p *Plugin) handleDeleteClient(ctx forge.Context, req *DeleteClientRequest)
 // Token Issuance
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) issueTokens(ctx context.Context, client *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string) (*TokenResponse, error) {
+func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.UserID, appID id.AppID, scopes []string) (*TokenResponse, error) {
 	// Resolve session config for the app.
 	sessCfg := account.SessionConfig{
 		TokenTTL:        p.config.AccessTokenTTL,

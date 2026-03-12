@@ -34,7 +34,7 @@ const (
 	colDevices           = "authsome_devices"
 	colWebhooks          = "authsome_webhooks"
 	colNotifications     = "authsome_notifications"
-	colAPIKeys           = "authsome_api_keys"
+	colAPIKeys           = "authsome_api_keys" //nolint:gosec // G101: not a credential
 	colEnvironments      = "authsome_environments"
 	colFormConfigs       = "authsome_form_configs"
 	colBrandingConfigs   = "authsome_branding_configs"
@@ -68,7 +68,7 @@ func (s *Store) DB() *grove.DB { return s.db }
 // Migrate creates indexes for all authsome collections.
 // The extraGroups parameter is accepted for interface compatibility but is not
 // used for MongoDB (Mongo does not use SQL migrations).
-func (s *Store) Migrate(ctx context.Context, extraGroups ...*migrate.Group) error {
+func (s *Store) Migrate(ctx context.Context, _ ...*migrate.Group) error {
 	indexes := migrationIndexes()
 
 	for col, models := range indexes {

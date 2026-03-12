@@ -11,7 +11,7 @@ import (
 
 // NewManifest builds a contributor.Manifest for the authsome dashboard.
 // It starts with the base nav items, widgets, and settings, then merges
-// any additional contributions from plugins implementing DashboardPlugin.
+// any additional contributions from plugins implementing Plugin.
 // The engine is used to create context-aware switcher components.
 func NewManifest(engine *authsome.Engine, plugins []plugin.Plugin) *contributor.Manifest {
 	m := &contributor.Manifest{
@@ -65,12 +65,12 @@ func NewManifest(engine *authsome.Engine, plugins []plugin.Plugin) *contributor.
 
 	// Merge plugin-contributed nav items and widgets.
 	for _, p := range plugins {
-		// DashboardPageContributor provides nav items for pages with route params.
-		if dpc, ok := p.(DashboardPageContributor); ok {
+		// PageContributor provides nav items for pages with route params.
+		if dpc, ok := p.(PageContributor); ok {
 			m.Nav = append(m.Nav, dpc.DashboardNavItems()...)
 		}
 
-		dp, ok := p.(DashboardPlugin)
+		dp, ok := p.(Plugin)
 		if !ok {
 			continue
 		}

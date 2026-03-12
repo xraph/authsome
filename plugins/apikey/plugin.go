@@ -68,14 +68,6 @@ var (
 
 func intPtr(v int) *int { return &v }
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "apikey", SettingMaxKeysPerUser); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "apikey", SettingDefaultExpirySeconds)
-}
-
 // Config configures the API key plugin.
 type Config struct {
 	// PathPrefix is the HTTP path prefix for API key routes.
@@ -105,6 +97,14 @@ type Plugin struct {
 	relay       bridge.EventRelay
 	hooks       *hook.Bus
 	logger      log.Logger
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "apikey", SettingMaxKeysPerUser); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "apikey", SettingDefaultExpirySeconds)
 }
 
 // New creates a new API key plugin with the given configuration.
@@ -303,9 +303,9 @@ func (p *Plugin) handleCreate(ctx forge.Context, req *CreateKeyRequest) (*Create
 
 	// Check max keys limit
 	if p.config.MaxKeysPerUser > 0 {
-		existing, err := p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
-		if err != nil {
-			return nil, forge.InternalError(fmt.Errorf("failed to check existing keys: %w", err))
+		existing, listErr := p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)
+		if listErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to check existing keys: %w", listErr))
 		}
 		activeCount := 0
 		for _, k := range existing {
@@ -382,8 +382,8 @@ func (p *Plugin) handleList(ctx forge.Context, req *ListKeysRequest) (*ListKeysR
 
 	var keys []*apikey.APIKey
 	if req.UserID != "" {
-		userID, err := id.ParseUserID(req.UserID)
-		if err != nil {
+		userID, parseErr := id.ParseUserID(req.UserID)
+		if parseErr != nil {
 			return nil, forge.BadRequest("invalid user_id")
 		}
 		keys, err = p.store.ListAPIKeysByUser(ctx.Context(), appID, userID)

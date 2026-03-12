@@ -48,11 +48,6 @@ var (
 	)
 )
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	return settings.RegisterTyped(m, "mfa", SettingIssuer)
-}
-
 // Config configures the MFA plugin.
 type Config struct {
 	// Issuer is the name shown in authenticator apps (default: "AuthSome").
@@ -69,6 +64,11 @@ type Plugin struct {
 	hooks      *hook.Bus
 	logger     log.Logger
 	ceremonies ceremony.Store
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	return settings.RegisterTyped(m, "mfa", SettingIssuer)
 }
 
 // New creates a new MFA plugin.
@@ -749,8 +749,8 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 	}
 
 	var challenge SMSChallenge
-	if err := json.Unmarshal(challengeData, &challenge); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse challenge: %w", err))
+	if unmarshalErr := json.Unmarshal(challengeData, &challenge); unmarshalErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to parse challenge: %w", unmarshalErr))
 	}
 
 	if !ValidateSMSCode(req.Code, &challenge) {
@@ -778,7 +778,7 @@ func (p *Plugin) handleSMSVerify(ctx forge.Context, req *SMSVerifyRequest) (*SMS
 // Audit / Relay / Hook helpers
 // ──────────────────────────────────────────────────
 
-// audit records an audit event to Chronicle (nil-safe).
+//nolint:unparam // consistent audit/event API
 func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) {
 	if p.chronicle == nil {
 		return
@@ -795,7 +795,7 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 	})
 }
 
-// relayEvent sends a webhook event to EventRelay (nil-safe).
+//nolint:unparam // consistent audit/event API
 func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, data map[string]string) {
 	if p.relay == nil {
 		return
@@ -807,7 +807,7 @@ func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, dat
 	})
 }
 
-// emitHook fires a global hook event (nil-safe).
+//nolint:unparam // consistent audit/event API
 func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, actorID, tenant string) {
 	if p.hooks == nil {
 		return

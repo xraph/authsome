@@ -15,5 +15,5 @@ type Store interface {
 	GetUserByUsername(ctx context.Context, appID id.AppID, username string) (*User, error)
 	UpdateUser(ctx context.Context, u *User) error
 	DeleteUser(ctx context.Context, userID id.UserID) error
-	ListUsers(ctx context.Context, q *UserQuery) (*UserList, error)
+	ListUsers(ctx context.Context, q *Query) (*List, error)
 }

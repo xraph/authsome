@@ -58,7 +58,7 @@ func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plug
 }
 
 // buildPageRoutes merges core knownPageRoutes with routes contributed by
-// plugins (via DashboardPageContributor and DashboardPlugin). This ensures
+// plugins (via PageContributor and Plugin). This ensures
 // parseAppEnvRoute correctly identifies plugin routes as page routes rather
 // than misinterpreting them as app/env slugs.
 func (c *Contributor) buildPageRoutes() map[string]bool {
@@ -68,15 +68,15 @@ func (c *Contributor) buildPageRoutes() map[string]bool {
 	}
 
 	for _, p := range c.plugins {
-		// DashboardPageContributor plugins declare nav items with paths.
-		if dpc, ok := p.(DashboardPageContributor); ok {
+		// PageContributor plugins declare nav items with paths.
+		if dpc, ok := p.(PageContributor); ok {
 			for _, nav := range dpc.DashboardNavItems() {
 				routes[nav.Path] = true
 			}
 		}
 
-		// DashboardPlugin plugins declare pages with routes.
-		if dp, ok := p.(DashboardPlugin); ok {
+		// Plugin plugins declare pages with routes.
+		if dp, ok := p.(Plugin); ok {
 			for _, pp := range dp.DashboardPages() {
 				routes[pp.Route] = true
 			}
@@ -122,7 +122,7 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 	appSlug := AppSlugFromContext(ctx)
 	envSlug := EnvSlugFromContext(ctx)
 
-	pageRoute := route
+	var pageRoute string
 	if appSlug == "" || envSlug == "" {
 		appSlug, envSlug, pageRoute = c.parseAppEnvRoute(route)
 	} else {
@@ -164,11 +164,11 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 
 // renderPageRoute dispatches to the correct page renderer based on the page route.
 func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, appID id.AppID, params contributor.Params) (templ.Component, error) {
-	// Check plugin-contributed pages first (DashboardPageContributor for parameterized routes).
+	// Check plugin-contributed pages first (PageContributor for parameterized routes).
 	// Plugins return (nil, ErrPageNotFound) for routes they don't handle; real errors
 	// are propagated so the dashboard can surface them instead of silently swallowing.
 	for _, p := range c.plugins {
-		if dpc, ok := p.(DashboardPageContributor); ok {
+		if dpc, ok := p.(PageContributor); ok {
 			comp, err := dpc.DashboardRenderPage(ctx, pageRoute, params)
 			if err != nil && !errors.Is(err, contributor.ErrPageNotFound) {
 				return nil, err // propagate real errors
@@ -179,7 +179,7 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 		}
 	}
 
-	// Check plugin-contributed pages (DashboardPlugin for simple routes).
+	// Check plugin-contributed pages (Plugin for simple routes).
 	for _, dp := range c.dashboardPlugins() {
 		for _, pp := range dp.DashboardPages() {
 			if pp.Route == pageRoute {
@@ -540,7 +540,7 @@ func (c *Contributor) renderSignupFormEditor(ctx context.Context, appID id.AppID
 	return pages.SignupFormEditorPage(fc), nil
 }
 
-func (c *Contributor) renderCredentials(ctx context.Context, appID id.AppID, params contributor.Params) (templ.Component, error) {
+func (c *Contributor) renderCredentials(ctx context.Context, appID id.AppID, _ contributor.Params) (templ.Component, error) {
 	a, err := c.engine.GetApp(ctx, appID)
 	if err != nil {
 		return nil, fmt.Errorf("dashboard: render credentials: %w", err)
@@ -568,7 +568,7 @@ func (c *Contributor) renderPlugins(_ context.Context) (templ.Component, error) 
 			Name: p.Name(),
 		}
 
-		if dp, ok := p.(DashboardPlugin); ok {
+		if dp, ok := p.(Plugin); ok {
 			for _, pp := range dp.DashboardPages() {
 				info.Pages = append(info.Pages, pages.PluginPageInfo{
 					Route: pp.Route,
@@ -587,7 +587,7 @@ func (c *Contributor) renderPlugins(_ context.Context) (templ.Component, error) 
 			}
 		}
 
-		if _, ok := p.(DashboardPageContributor); ok {
+		if _, ok := p.(PageContributor); ok {
 			info.HasPageContributor = true
 		}
 
@@ -923,11 +923,11 @@ func (c *Contributor) handleRegister(ctx context.Context, params contributor.Par
 
 // ─── Plugin Helpers ──────────────────────────────────────────────────────────
 
-// dashboardPlugins returns all registered plugins that implement DashboardPlugin.
-func (c *Contributor) dashboardPlugins() []DashboardPlugin {
-	var dps []DashboardPlugin
+// dashboardPlugins returns all registered plugins that implement Plugin.
+func (c *Contributor) dashboardPlugins() []Plugin {
+	var dps []Plugin
 	for _, p := range c.plugins {
-		if dp, ok := p.(DashboardPlugin); ok {
+		if dp, ok := p.(Plugin); ok {
 			dps = append(dps, dp)
 		}
 	}
@@ -1093,9 +1093,9 @@ func (c *Contributor) resolveAppEnv(ctx context.Context, appSlug, envSlug string
 // htmxRedirect returns a templ component that triggers an HTMX client-side redirect.
 func htmxRedirect(url string) templ.Component {
 	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
-		_, err := io.WriteString(w, fmt.Sprintf(
+		_, err := fmt.Fprintf(w,
 			`<div hx-get="%s" hx-trigger="load" hx-target="#content" hx-swap="innerHTML" hx-push-url="true"></div>`,
-			url))
+			url)
 		return err
 	})
 }

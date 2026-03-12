@@ -85,14 +85,14 @@ type Environment struct {
 // Metadata holds arbitrary environment metadata as typed key-value pairs.
 type Metadata map[string]string
 
-// EnvironmentQuery holds query parameters for listing environments.
-type EnvironmentQuery struct {
+// Query holds query parameters for listing environments.
+type Query struct {
 	AppID id.AppID `json:"app_id"`
 	Type  Type     `json:"type,omitempty"`
 }
 
-// EnvironmentList is a list of environments for an app.
-type EnvironmentList struct {
+// List is a list of environments for an app.
+type List struct {
 	Environments []*Environment `json:"environments"`
 	Total        int            `json:"total"`
 }

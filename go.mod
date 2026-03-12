@@ -9,18 +9,18 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
-	github.com/xraph/chronicle v0.0.0
+	github.com/xraph/chronicle v1.3.0
 	github.com/xraph/forge v1.3.0
 	github.com/xraph/forgeui v1.3.0
 	github.com/xraph/grove v1.3.0
 	github.com/xraph/grove/drivers/mongodriver v1.3.0
 	github.com/xraph/grove/drivers/pgdriver v1.3.0
 	github.com/xraph/grove/drivers/sqlitedriver v1.3.0
-	github.com/xraph/herald v0.0.0
-	github.com/xraph/keysmith v0.0.0
+	github.com/xraph/herald v1.3.0
+	github.com/xraph/keysmith v1.3.0
 	github.com/xraph/relay v1.3.0
 	github.com/xraph/vessel v1.0.0
-	github.com/xraph/warden v0.0.0
+	github.com/xraph/warden v1.3.0
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.48.0
@@ -158,10 +158,10 @@ require (
 	github.com/uptrace/bunrouter v1.0.23 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xraph/confy v0.1.0 // indirect
-	github.com/xraph/dispatch v0.0.0
+	github.com/xraph/dispatch v1.3.0
 	github.com/xraph/go-utils v1.0.0
-	github.com/xraph/ledger v0.0.0
-	github.com/xraph/vault v0.0.0
+	github.com/xraph/ledger v1.3.0
+	github.com/xraph/vault v1.3.0
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
@@ -194,26 +194,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-replace (
-	github.com/xraph/chronicle => ../chronicle
-	github.com/xraph/forge => ../../forge
-	github.com/xraph/grove => ../grove
-	github.com/xraph/grove/drivers/mongodriver => ../grove/drivers/mongodriver
-	github.com/xraph/grove/drivers/pgdriver => ../grove/drivers/pgdriver
-	github.com/xraph/grove/drivers/sqlitedriver => ../grove/drivers/sqlitedriver
-	github.com/xraph/keysmith => ../keysmith
-	github.com/xraph/relay => ../relay
-
-	github.com/xraph/warden => ../warden
-)
-
-replace github.com/xraph/vault => ../vault
-
-replace github.com/xraph/dispatch => ../dispatch
-
-replace github.com/xraph/herald => ../herald
-
-replace github.com/xraph/ledger => ../ledger
-
-replace github.com/xraph/forgeui => ../../forgeui

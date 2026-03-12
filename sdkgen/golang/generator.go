@@ -318,7 +318,7 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 		"lower": strings.ToLower,
 		"upper": strings.ToUpper,
 		"unexport": func(s string) string {
-			if len(s) == 0 {
+			if s == "" {
 				return s
 			}
 			return strings.ToLower(s[:1]) + s[1:]
@@ -349,7 +349,7 @@ func exportedName(s string) string {
 
 	var result strings.Builder
 	for _, part := range parts {
-		if len(part) == 0 {
+		if part == "" {
 			continue
 		}
 		// Known acronyms

@@ -71,17 +71,6 @@ var (
 
 func intPtr(v int) *int { return &v }
 
-// DeclareSettings implements plugin.SettingsProvider.
-func (p *Plugin) DeclareSettings(m *settings.Manager) error {
-	if err := settings.RegisterTyped(m, "magiclink", SettingTokenTTLSeconds); err != nil {
-		return err
-	}
-	if err := settings.RegisterTyped(m, "magiclink", SettingSessionTokenTTLSeconds); err != nil {
-		return err
-	}
-	return settings.RegisterTyped(m, "magiclink", SettingSessionRefreshTTLSeconds)
-}
-
 // Mailer sends magic link emails.
 type Mailer interface {
 	SendMagicLink(ctx context.Context, email, token string) error
@@ -121,6 +110,17 @@ type Plugin struct {
 	store         store.Store
 	appID         string
 	sessionConfig sessionConfigResolver
+}
+
+// DeclareSettings implements plugin.SettingsProvider.
+func (p *Plugin) DeclareSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "magiclink", SettingTokenTTLSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "magiclink", SettingSessionTokenTTLSeconds); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "magiclink", SettingSessionRefreshTTLSeconds)
 }
 
 // New creates a new magic link plugin.
@@ -283,8 +283,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	}
 
 	// Consume the verification
-	if err := p.store.ConsumeVerification(ctx.Context(), req.Token); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to verify magic link: %w", err))
+	if consumeErr := p.store.ConsumeVerification(ctx.Context(), req.Token); consumeErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to verify magic link: %w", consumeErr))
 	}
 
 	// Look up user

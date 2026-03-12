@@ -485,8 +485,8 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 				CreatedAt:     time.Now(),
 				UpdatedAt:     time.Now(),
 			}
-			if err := p.store.CreateUser(goCtx, u); err != nil {
-				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", err))
+			if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
+				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 			}
 			if p.roleEnsurer != nil {
 				p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
@@ -556,23 +556,6 @@ func generateState() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-// audit records an audit event via Chronicle (nil-safe).
-func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant, outcome string) {
-	if p.chronicle == nil {
-		return
-	}
-	_ = p.chronicle.Record(ctx, &bridge.AuditEvent{
-		Action:     action,
-		Resource:   resource,
-		ResourceID: resourceID,
-		ActorID:    actorID,
-		Tenant:     tenant,
-		Outcome:    outcome,
-		Severity:   bridge.SeverityInfo,
-		Category:   "auth",
-	})
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).

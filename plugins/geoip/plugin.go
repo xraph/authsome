@@ -181,13 +181,8 @@ func (p *Plugin) Resolve(ipStr string) *GeoLocation {
 
 // OnBeforeSignIn resolves geo for the sign-in request and stores it in context.
 func (p *Plugin) OnBeforeSignIn(ctx context.Context, req *account.SignInRequest) error {
-	loc := p.Resolve(req.IPAddress)
-	if loc != nil {
-		// Store in context for downstream plugins.
-		// Note: Before hooks can modify the context that propagates downstream
-		// only if the engine passes a context.Context pointer or returns it.
-		// We store on the request instead for reliable propagation.
-	}
+	// Resolve geo for the sign-in request. Downstream plugins will call Resolve themselves.
+	_ = p.Resolve(req.IPAddress)
 	return nil
 }
 

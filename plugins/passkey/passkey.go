@@ -299,7 +299,7 @@ func (p *Plugin) toWebAuthnUser(ctx context.Context, u *user.User) *webAuthnUser
 	if p.store != nil {
 		creds, _ := p.store.ListUserCredentials(ctx, u.ID)
 		for _, c := range creds {
-			var transports []protocol.AuthenticatorTransport
+			transports := make([]protocol.AuthenticatorTransport, 0, len(c.Transport))
 			for _, t := range c.Transport {
 				transports = append(transports, protocol.AuthenticatorTransport(t))
 			}
@@ -321,7 +321,7 @@ func (p *Plugin) toWebAuthnUser(ctx context.Context, u *user.User) *webAuthnUser
 
 // toCredential converts a WebAuthn credential to a passkey Credential.
 func toCredential(userID id.UserID, appID id.AppID, cred *webauthn.Credential, displayName string) *Credential {
-	var transports []string
+	transports := make([]string, 0, len(cred.Transport))
 	for _, t := range cred.Transport {
 		transports = append(transports, string(t))
 	}

@@ -162,7 +162,7 @@ func (s *Store) DeleteUser(_ context.Context, userID id.UserID) error {
 	return nil
 }
 
-func (s *Store) ListUsers(_ context.Context, q *user.UserQuery) (*user.UserList, error) {
+func (s *Store) ListUsers(_ context.Context, q *user.Query) (*user.List, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var result []*user.User
@@ -175,7 +175,7 @@ func (s *Store) ListUsers(_ context.Context, q *user.UserQuery) (*user.UserList,
 		}
 		result = append(result, u)
 	}
-	return &user.UserList{Users: result, Total: len(result)}, nil
+	return &user.List{Users: result, Total: len(result)}, nil
 }
 
 // ──────────────────────────────────────────────────
@@ -1050,11 +1050,6 @@ func (s *Store) SetDefaultEnvironment(_ context.Context, appID id.AppID, envID i
 // ──────────────────────────────────────────────────
 // FormConfig Store
 // ──────────────────────────────────────────────────
-
-// formConfigKey returns a composite key for form config lookups.
-func formConfigKey(appID id.AppID, formType string) string {
-	return appID.String() + ":" + formType
-}
 
 func (s *Store) CreateFormConfig(_ context.Context, fc *formconfig.FormConfig) error {
 	s.mu.Lock()

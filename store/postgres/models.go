@@ -48,7 +48,7 @@ func toApp(m *AppModel) (*app.App, error) {
 	}
 	md := make(app.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	return &app.App{
 		ID:             appID,
@@ -64,7 +64,7 @@ func toApp(m *AppModel) (*app.App, error) {
 }
 
 func fromApp(a *app.App) *AppModel {
-	md, _ := json.Marshal(a.Metadata)
+	md, _ := json.Marshal(a.Metadata) //nolint:errcheck // best-effort encode
 	return &AppModel{
 		ID:             a.ID.String(),
 		Name:           a.Name,
@@ -122,7 +122,7 @@ func toUser(m *UserModel) (*user.User, error) {
 	}
 	md := make(user.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	u := &user.User{
 		ID:              userID,
@@ -154,7 +154,7 @@ func toUser(m *UserModel) (*user.User, error) {
 }
 
 func fromUser(u *user.User) *UserModel {
-	md, _ := json.Marshal(u.Metadata)
+	md, _ := json.Marshal(u.Metadata) //nolint:errcheck // best-effort encode
 	m := &UserModel{
 		ID:              u.ID.String(),
 		AppID:           u.AppID.String(),
@@ -449,7 +449,7 @@ func toOrganization(m *OrganizationModel) (*organization.Organization, error) {
 	}
 	md := make(organization.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	return &organization.Organization{
 		ID:        orgID,
@@ -466,7 +466,7 @@ func toOrganization(m *OrganizationModel) (*organization.Organization, error) {
 }
 
 func fromOrganization(o *organization.Organization) *OrganizationModel {
-	md, _ := json.Marshal(o.Metadata)
+	md, _ := json.Marshal(o.Metadata) //nolint:errcheck // best-effort encode
 	return &OrganizationModel{
 		ID:        o.ID.String(),
 		AppID:     o.AppID.String(),
@@ -743,7 +743,7 @@ func toWebhook(m *WebhookModel) (*webhook.Webhook, error) {
 	}
 	var events []string
 	if len(m.Events) > 0 {
-		_ = json.Unmarshal(m.Events, &events)
+		_ = json.Unmarshal(m.Events, &events) //nolint:errcheck // best-effort decode
 	}
 	return &webhook.Webhook{
 		ID:        whID,
@@ -759,7 +759,7 @@ func toWebhook(m *WebhookModel) (*webhook.Webhook, error) {
 }
 
 func fromWebhook(w *webhook.Webhook) *WebhookModel {
-	events, _ := json.Marshal(w.Events)
+	events, _ := json.Marshal(w.Events) //nolint:errcheck // best-effort encode
 	return &WebhookModel{
 		ID:        w.ID.String(),
 		AppID:     w.AppID.String(),
@@ -975,11 +975,11 @@ func toEnvironment(m *EnvironmentModel) (*environment.Environment, error) {
 	var settings *environment.Settings
 	if len(m.Settings) > 0 {
 		settings = new(environment.Settings)
-		_ = json.Unmarshal(m.Settings, settings)
+		_ = json.Unmarshal(m.Settings, settings) //nolint:errcheck // best-effort decode
 	}
 	md := make(environment.Metadata)
 	if len(m.Metadata) > 0 {
-		_ = json.Unmarshal(m.Metadata, &md)
+		_ = json.Unmarshal(m.Metadata, &md) //nolint:errcheck // best-effort decode
 	}
 	e := &environment.Environment{
 		ID:          envID,
@@ -1006,8 +1006,8 @@ func toEnvironment(m *EnvironmentModel) (*environment.Environment, error) {
 }
 
 func fromEnvironment(e *environment.Environment) *EnvironmentModel {
-	settings, _ := json.Marshal(e.Settings)
-	md, _ := json.Marshal(e.Metadata)
+	settings, _ := json.Marshal(e.Settings) //nolint:errcheck // best-effort encode
+	md, _ := json.Marshal(e.Metadata)       //nolint:errcheck // best-effort encode
 	m := &EnvironmentModel{
 		ID:          e.ID.String(),
 		AppID:       e.AppID.String(),
@@ -1056,7 +1056,7 @@ func toFormConfig(m *FormConfigModel) (*formconfig.FormConfig, error) {
 	}
 	var fields []formconfig.FormField
 	if len(m.Fields) > 0 {
-		_ = json.Unmarshal(m.Fields, &fields)
+		_ = json.Unmarshal(m.Fields, &fields) //nolint:errcheck // best-effort decode
 	}
 	return &formconfig.FormConfig{
 		ID:        fcID,
@@ -1071,7 +1071,7 @@ func toFormConfig(m *FormConfigModel) (*formconfig.FormConfig, error) {
 }
 
 func fromFormConfig(fc *formconfig.FormConfig) *FormConfigModel {
-	fields, _ := json.Marshal(fc.Fields)
+	fields, _ := json.Marshal(fc.Fields) //nolint:errcheck // best-effort encode
 	return &FormConfigModel{
 		ID:        fc.ID.String(),
 		AppID:     fc.AppID.String(),

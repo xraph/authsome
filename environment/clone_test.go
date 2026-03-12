@@ -105,7 +105,7 @@ func (m *mockCloneTarget) CreateClonedWebhook(_ context.Context, w *WebhookForCl
 
 func testSourceEnv() *Environment {
 	return &Environment{
-		ID:    id.EnvironmentID(id.NewEnvironmentID()),
+		ID:    id.NewEnvironmentID(),
 		AppID: id.NewAppID(),
 		Name:  "Production",
 		Slug:  "production",

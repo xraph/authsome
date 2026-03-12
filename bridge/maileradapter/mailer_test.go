@@ -99,7 +99,7 @@ func TestResendMailer_SendEmail_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "API error 422")
 }
 
-func TestSMTPMailer_ImplementsMailer(t *testing.T) {
+func TestSMTPMailer_ImplementsMailer(_ *testing.T) {
 	// Just verify the type satisfies the interface at compile time.
 	var _ bridge.Mailer = maileradapter.NewSMTPMailer("localhost", "587", "", "", "noreply@example.com")
 }

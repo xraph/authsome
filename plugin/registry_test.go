@@ -309,24 +309,13 @@ func TestRegistry_EmptyRegistry(t *testing.T) {
 	assert.Empty(t, r.RouteProviders())
 }
 
-func TestRegistry_OnInitShutdown(t *testing.T) {
+func TestRegistry_OnInitShutdown(_ *testing.T) {
 	r := plugin.NewRegistry(log.NewNoopLogger())
 	ctx := context.Background()
 
-	var initCalled, shutdownCalled bool
-
-	type lifecyclePlugin struct {
-		basePlugin
-	}
-	type initPlugin struct {
-		lifecyclePlugin
-	}
 	// We can't easily test OnInit/OnShutdown with our mock approach since those
 	// are separate interfaces. Instead just verify EmitOnInit/EmitOnShutdown
 	// don't panic on an empty registry.
-	_ = initCalled
-	_ = shutdownCalled
-
 	r.EmitOnInit(ctx, nil)
 	r.EmitOnShutdown(ctx)
 }

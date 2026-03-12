@@ -37,7 +37,7 @@ func (p *twitchProvider) Name() string                 { return "twitch" }
 func (p *twitchProvider) OAuth2Config() *oauth2.Config { return p.config }
 
 func (p *twitchProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*ProviderUser, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.twitch.tv/helix/users", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.twitch.tv/helix/users", http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("social: twitch: create request: %w", err)
 	}

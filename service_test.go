@@ -603,12 +603,12 @@ func TestSignIn_AccountLockout_ResetOnSuccess(t *testing.T) {
 
 	// Another 2 failed attempts should NOT lock (counter was reset)
 	for i := 0; i < 2; i++ {
-		_, _, err := eng.SignIn(ctx, &account.SignInRequest{
+		_, _, signInErr := eng.SignIn(ctx, &account.SignInRequest{
 			AppID:    appID,
 			Email:    "reset@example.com",
 			Password: "WrongPassword1!",
 		})
-		assert.ErrorIs(t, err, account.ErrInvalidCredentials)
+		assert.ErrorIs(t, signInErr, account.ErrInvalidCredentials)
 	}
 
 	// Should still be able to sign in (only 2 failures since reset, not 3)

@@ -17,12 +17,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
-	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
+	_ dashboard.Plugin          = (*Plugin)(nil)
+	_ dashboard.PageContributor = (*Plugin)(nil)
 )
 
 // ──────────────────────────────────────────────────
-// DashboardPlugin implementation
+// Plugin implementation
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns no widgets.
@@ -35,13 +35,13 @@ func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
 	return notifydash.SettingsPanel(p.config.AppName, p.config.BaseURL, p.config.DefaultLocale, p.config.Async)
 }
 
-// DashboardPages returns nil — pages are handled via DashboardPageContributor.
+// DashboardPages returns nil — pages are handled via PageContributor.
 func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 	return nil
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPageContributor implementation
+// PageContributor implementation
 // ──────────────────────────────────────────────────
 
 // DashboardNavItems returns navigation items for the notifications page.

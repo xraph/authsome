@@ -209,8 +209,8 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 	_ = p.ceremonies.Delete(ctx.Context(), key)
 
 	var cs ceremonySession
-	if err := json.Unmarshal(sessionJSON, &cs); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", err))
+	if unmarshalErr := json.Unmarshal(sessionJSON, &cs); unmarshalErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
@@ -262,10 +262,6 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 	}
 
 	// With email, resolve user and generate assertion with existing credentials
-	type userByEmailGetter interface {
-		GetUserByEmail(ctx any, appID any, email string) (*user.User, error)
-	}
-
 	// For now, we require the user context to be set (e.g., by prior lookup)
 	u, err := p.resolveUser(ctx)
 	if err != nil {
@@ -304,8 +300,8 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 	_ = p.ceremonies.Delete(ctx.Context(), key)
 
 	var session webauthn.SessionData
-	if err := json.Unmarshal(sessionJSON, &session); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", err))
+	if unmarshalErr := json.Unmarshal(sessionJSON, &session); unmarshalErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to parse session: %w", unmarshalErr))
 	}
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)

@@ -332,8 +332,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	}
 
 	var challenge phoneChallenge
-	if err := json.Unmarshal(data, &challenge); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: unmarshal challenge: %w", err))
+	if unmarshalErr := json.Unmarshal(data, &challenge); unmarshalErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("phone auth: unmarshal challenge: %w", unmarshalErr))
 	}
 
 	// Validate using the MFA helper.

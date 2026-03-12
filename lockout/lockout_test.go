@@ -26,8 +26,8 @@ func TestMemoryTracker_RecordAndLock(t *testing.T) {
 
 	// Record failures
 	for i := 0; i < 3; i++ {
-		attempts, err := tracker.RecordFailure(ctx, key)
-		require.NoError(t, err)
+		attempts, recordErr := tracker.RecordFailure(ctx, key)
+		require.NoError(t, recordErr)
 		assert.Equal(t, i+1, attempts)
 	}
 

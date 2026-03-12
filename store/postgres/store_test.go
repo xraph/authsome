@@ -265,7 +265,7 @@ func TestUser_CRUD(t *testing.T) {
 
 	// List
 	createTestUser(t, s, a.ID, "bob@test.com")
-	list, err := s.ListUsers(ctx, &user.UserQuery{AppID: a.ID, Limit: 10})
+	list, err := s.ListUsers(ctx, &user.Query{AppID: a.ID, Limit: 10})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(list.Users), 2)
 
@@ -329,19 +329,19 @@ func TestUser_ListWithLimit(t *testing.T) {
 	}
 
 	// Get all
-	all, err := s.ListUsers(ctx, &user.UserQuery{AppID: a.ID, Limit: 50})
+	all, err := s.ListUsers(ctx, &user.Query{AppID: a.ID, Limit: 50})
 	require.NoError(t, err)
 	assert.Len(t, all.Users, 5, "should have 5 users total")
 	assert.Empty(t, all.NextCursor, "should not need cursor for full page")
 
 	// Limit to 3 — should get 3 and indicate more are available
-	limited, err := s.ListUsers(ctx, &user.UserQuery{AppID: a.ID, Limit: 3})
+	limited, err := s.ListUsers(ctx, &user.Query{AppID: a.ID, Limit: 3})
 	require.NoError(t, err)
 	assert.Len(t, limited.Users, 3)
 	assert.NotEmpty(t, limited.NextCursor, "should have cursor when more results exist")
 
 	// Default limit (no explicit limit)
-	defaulted, err := s.ListUsers(ctx, &user.UserQuery{AppID: a.ID})
+	defaulted, err := s.ListUsers(ctx, &user.Query{AppID: a.ID})
 	require.NoError(t, err)
 	assert.Len(t, defaulted.Users, 5, "default limit should be enough for 5 users")
 }
@@ -354,7 +354,7 @@ func TestUser_ListByEmail(t *testing.T) {
 	createTestUser(t, s, a.ID, "findme@test.com")
 	createTestUser(t, s, a.ID, "other@test.com")
 
-	list, err := s.ListUsers(ctx, &user.UserQuery{AppID: a.ID, Email: "findme"})
+	list, err := s.ListUsers(ctx, &user.Query{AppID: a.ID, Email: "findme"})
 	require.NoError(t, err)
 	assert.Len(t, list.Users, 1)
 	assert.Equal(t, "findme@test.com", list.Users[0].Email)

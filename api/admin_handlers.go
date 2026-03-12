@@ -126,7 +126,7 @@ func (a *API) handleAdminListUsers(ctx forge.Context, req *AdminListUsersRequest
 		limit = 100
 	}
 
-	list, err := a.engine.AdminListUsers(ctx.Context(), &user.UserQuery{
+	list, err := a.engine.AdminListUsers(ctx.Context(), &user.Query{
 		AppID:  appID,
 		Email:  req.Email,
 		Cursor: req.Cursor,
@@ -240,7 +240,7 @@ func (a *API) handleAdminStats(ctx forge.Context, req *AdminStatsRequest) (*Admi
 		return nil, forge.BadRequest("invalid app_id")
 	}
 
-	users, err := a.engine.AdminListUsers(ctx.Context(), &user.UserQuery{
+	users, err := a.engine.AdminListUsers(ctx.Context(), &user.Query{
 		AppID: appID,
 		Limit: 1,
 	})

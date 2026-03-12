@@ -517,7 +517,7 @@ func (r *Registry) RouteProviders() []RouteProvider {
 // CollectMigrationGroups gathers migration groups from all plugins that
 // implement MigrationProvider for the given driver name.
 func (r *Registry) CollectMigrationGroups(driverName string) []*migrate.Group {
-	var groups []*migrate.Group
+	groups := make([]*migrate.Group, 0, len(r.migrationProviders))
 	for _, e := range r.migrationProviders {
 		groups = append(groups, e.hook.MigrationGroups(driverName)...)
 	}

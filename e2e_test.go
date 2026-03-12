@@ -35,7 +35,7 @@ func e2eAppID(t *testing.T) id.AppID {
 	return appID
 }
 
-func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) {
+func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) { //nolint:unparam // test helper returns store for assertions
 	t.Helper()
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
@@ -116,7 +116,7 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 // E2E: Organization Invitation Flow
 // ──────────────────────────────────────────────────
 
-func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin.Plugin) {
+func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin.Plugin) { //nolint:unparam // test helper returns store for assertions
 	t.Helper()
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))

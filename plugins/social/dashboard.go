@@ -16,9 +16,9 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.DashboardPlugin          = (*Plugin)(nil)
-	_ dashboard.DashboardPageContributor = (*Plugin)(nil)
-	_ dashboard.UserDetailContributor    = (*Plugin)(nil)
+	_ dashboard.Plugin                = (*Plugin)(nil)
+	_ dashboard.PageContributor       = (*Plugin)(nil)
+	_ dashboard.UserDetailContributor = (*Plugin)(nil)
 )
 
 // supportedProviders is the full list of providers that can be configured.
@@ -32,7 +32,7 @@ var supportedProviders = []string{
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPlugin implementation
+// Plugin implementation
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns social auth widgets.
@@ -55,13 +55,13 @@ func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
 	return socialdash.SettingsPanel(p.providerNames())
 }
 
-// DashboardPages returns nil since pages are handled via DashboardPageContributor.
+// DashboardPages returns nil since pages are handled via PageContributor.
 func (p *Plugin) DashboardPages() []dashboard.PluginPage {
 	return nil
 }
 
 // ──────────────────────────────────────────────────
-// DashboardPageContributor implementation
+// PageContributor implementation
 // ──────────────────────────────────────────────────
 
 // DashboardNavItems returns navigation items for the social login pages.
@@ -103,7 +103,7 @@ func (p *Plugin) renderProvidersGrid(ctx context.Context, _ contributor.Params) 
 	}
 
 	dbProviders := p.loadDBProviderSettings(ctx)
-	dbMap := make(map[string]SocialProviderSetting)
+	dbMap := make(map[string]ProviderSetting)
 	for _, s := range dbProviders {
 		dbMap[s.Name] = s
 	}
@@ -200,18 +200,19 @@ func (p *Plugin) renderProviderDetail(ctx context.Context, params contributor.Pa
 	} else {
 		dbProviders := p.loadDBProviderSettings(ctx)
 		for _, s := range dbProviders {
-			if s.Name == providerName {
-				data.Source = "dashboard"
-				data.ClientID = maskSecret(s.ClientID)
-				data.RedirectURL = s.RedirectURL
-				data.Scopes = strings.Join(s.Scopes, ", ")
-				if s.Enabled {
-					data.Status = socialdash.StatusEnabled
-				} else {
-					data.Status = socialdash.StatusDisabled
-				}
-				break
+			if s.Name != providerName {
+				continue
 			}
+			data.Source = "dashboard"
+			data.ClientID = maskSecret(s.ClientID)
+			data.RedirectURL = s.RedirectURL
+			data.Scopes = strings.Join(s.Scopes, ", ")
+			if s.Enabled {
+				data.Status = socialdash.StatusEnabled
+			} else {
+				data.Status = socialdash.StatusDisabled
+			}
+			break
 		}
 		if data.Source == "" {
 			data.Status = socialdash.StatusNotConfigured
@@ -259,7 +260,7 @@ func (p *Plugin) handleAddProvider(ctx context.Context, providerName string, par
 		}
 	}
 
-	dbProviders = append(dbProviders, SocialProviderSetting{
+	dbProviders = append(dbProviders, ProviderSetting{
 		Name:         providerName,
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -326,7 +327,7 @@ func (p *Plugin) handleRemoveProvider(ctx context.Context, params contributor.Pa
 	}
 
 	dbProviders := p.loadDBProviderSettings(ctx)
-	filtered := make([]SocialProviderSetting, 0, len(dbProviders))
+	filtered := make([]ProviderSetting, 0, len(dbProviders))
 	found := false
 	for _, s := range dbProviders {
 		if s.Name == providerName {
