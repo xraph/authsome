@@ -133,3 +133,69 @@ jobs:
           name: authsome-sdk
           path: sdk/
           retention-days: 14
+
+  # ─── JS/TypeScript ──────────────────────────────────────────────────
+  js:
+    name: JS/TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: cd ui && pnpm install --frozen-lockfile
+
+      - name: Build
+        run: cd ui && pnpm run build
+
+      - name: Typecheck
+        run: cd ui && pnpm run typecheck
+
+      - name: Build SDK TypeScript
+        run: |
+          cd sdk/typescript
+          npm install
+          npm run build
+
+  # ─── Flutter ────────────────────────────────────────────────────────
+  flutter:
+    name: Flutter
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get dependencies (core)
+        run: cd flutter/packages/authsome_core && flutter pub get
+
+      - name: Analyze (core)
+        run: cd flutter/packages/authsome_core && flutter analyze --no-fatal-infos
+
+      - name: Get dependencies (flutter)
+        run: cd flutter/packages/authsome_flutter && flutter pub get
+
+      - name: Analyze (flutter)
+        run: cd flutter/packages/authsome_flutter && flutter analyze --no-fatal-infos
+
+      - name: Get dependencies (flutter_ui)
+        run: cd flutter/packages/authsome_flutter_ui && flutter pub get
+
+      - name: Analyze (flutter_ui)
+        run: cd flutter/packages/authsome_flutter_ui && flutter analyze --no-fatal-infos

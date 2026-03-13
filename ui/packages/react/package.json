@@ -1,8 +1,17 @@
 {
   "name": "@authsome/ui-react",
   "version": "0.1.0",
-  "private": true,
+  "description": "React bindings for AuthSome authentication UI",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xraph/authsome.git",
+    "directory": "ui/packages/react"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

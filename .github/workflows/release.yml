@@ -10,14 +10,24 @@ on:
         description: 'Release tag (e.g., v1.0.0)'
         required: true
         type: string
+      dry_run:
+        description: 'Dry run (skip actual publish)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
-  release:
-    name: Release
+  # ─── Prepare ─────────────────────────────────────────────────────────
+  prepare:
+    name: Prepare Release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.set-tag.outputs.tag }}
+      version: ${{ steps.set-tag.outputs.version }}
 
     steps:
       - name: Checkout
@@ -25,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set release tag
+      - name: Set release tag and version
         id: set-tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -38,7 +48,22 @@ jobs:
           else
             TAG="${{ github.ref_name }}"
           fi
+          VERSION="${TAG#v}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG, version: $VERSION"
+
+  # ─── Go Release ──────────────────────────────────────────────────────
+  go-release:
+    name: Go Release
+    runs-on: ubuntu-latest
+    needs: [prepare]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -71,7 +96,7 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.set-tag.outputs.tag }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
           body: |
             ## Changes
 
@@ -81,7 +106,131 @@ jobs:
 
             ### Installation
 
+            **Go:**
             ```bash
-            go get github.com/xraph/authsome@${{ steps.set-tag.outputs.tag }}
+            go get github.com/xraph/authsome@${{ needs.prepare.outputs.tag }}
+            ```
+
+            **npm:**
+            ```bash
+            npm install @authsome/client@${{ needs.prepare.outputs.version }}
+            npm install @authsome/ui-react@${{ needs.prepare.outputs.version }}
+            ```
+
+            **Flutter:**
+            ```yaml
+            dependencies:
+              authsome_flutter: ^${{ needs.prepare.outputs.version }}
             ```
           generate_release_notes: true
+
+  # ─── npm Release ─────────────────────────────────────────────────────
+  npm-release:
+    name: npm Release
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install UI dependencies
+        run: cd ui && pnpm install --frozen-lockfile
+
+      - name: Build UI packages
+        run: cd ui && pnpm run build
+
+      - name: Build SDK TypeScript
+        run: |
+          cd sdk/typescript
+          npm install
+          npm run build
+
+      - name: Prepare packages for publishing
+        run: |
+          chmod +x scripts/prepare-npm-publish.sh
+          ./scripts/prepare-npm-publish.sh "${{ needs.prepare.outputs.version }}"
+
+      - name: Publish @authsome/client
+        run: |
+          cd sdk/typescript
+          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Publish @authsome/ui-core
+        run: |
+          cd ui/packages/core
+          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Publish @authsome/ui-react
+        run: |
+          cd ui/packages/react
+          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Publish @authsome/ui-vue
+        run: |
+          cd ui/packages/vue
+          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Publish @authsome/ui-components
+        run: |
+          cd ui/packages/components
+          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Publish @authsome/ui-nextjs
+        run: |
+          cd ui/packages/nextjs
+          npm publish --access public ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+  # ─── Flutter/pub.dev Release ─────────────────────────────────────────
+  flutter-release:
+    name: Flutter Release
+    runs-on: ubuntu-latest
+    needs: [prepare]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Prepare Flutter packages for publishing
+        run: |
+          chmod +x scripts/prepare-flutter-publish.sh
+          ./scripts/prepare-flutter-publish.sh "${{ needs.prepare.outputs.version }}"
+
+      - name: Publish authsome_core
+        run: |
+          cd flutter/packages/authsome_core
+          flutter pub publish --force
+
+      - name: Wait for pub.dev indexing
+        run: sleep 45
+
+      - name: Publish authsome_flutter
+        run: |
+          cd flutter/packages/authsome_flutter
+          flutter pub publish --force
+
+      - name: Wait for pub.dev indexing
+        run: sleep 45
+
+      - name: Publish authsome_flutter_ui
+        run: |
+          cd flutter/packages/authsome_flutter_ui
+          flutter pub publish --force

@@ -1,8 +1,17 @@
 {
   "name": "@authsome/ui-nextjs",
   "version": "0.1.0",
-  "private": true,
+  "description": "Next.js integration for AuthSome authentication",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xraph/authsome.git",
+    "directory": "ui/packages/nextjs"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

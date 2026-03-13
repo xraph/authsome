@@ -9,6 +9,14 @@
     "dist",
     "src"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xraph/authsome.git",
+    "directory": "sdk/typescript"
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
