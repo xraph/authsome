@@ -63,7 +63,7 @@ func (c *Client) GetManifest(ctx context.Context) (*Manifest, error) {
 }
 
 // GetOpenAPISpec — OpenAPI specification
-func (c *Client) GetOpenAPISpec(ctx context.Context) (error) {
+func (c *Client) GetOpenAPISpec(ctx context.Context) error {
 	return c.do(ctx, "GET", "/.well-known/authsome/openapi", nil, nil)
 }
 
@@ -327,7 +327,6 @@ func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*map
 	}
 	return &result, nil
 }
-
 
 // ──────────────────────────────────────────────────
 // Internal HTTP helper

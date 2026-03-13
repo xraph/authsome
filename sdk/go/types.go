@@ -4,92 +4,91 @@ package authclient
 
 // APIKey represents the APIKey schema.
 type APIKey struct {
-	AppID string `json:"app_id,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	ExpiresAt string `json:"expires_at,omitempty"`
-	ID string `json:"id,omitempty"`
-	KeyPrefix string `json:"key_prefix,omitempty"`
-	LastUsedAt string `json:"last_used_at,omitempty"`
-	Name string `json:"name,omitempty"`
-	Scopes []string `json:"scopes,omitempty"`
+	AppID      string   `json:"app_id,omitempty"`
+	CreatedAt  string   `json:"created_at,omitempty"`
+	ExpiresAt  string   `json:"expires_at,omitempty"`
+	ID         string   `json:"id,omitempty"`
+	KeyPrefix  string   `json:"key_prefix,omitempty"`
+	LastUsedAt string   `json:"last_used_at,omitempty"`
+	Name       string   `json:"name,omitempty"`
+	Scopes     []string `json:"scopes,omitempty"`
 }
 
 // AuthResponse represents the AuthResponse schema.
 type AuthResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
-	User *User `json:"user"`
+	User         *User  `json:"user"`
 }
 
 // Device represents the Device schema.
 type Device struct {
-	CreatedAt string `json:"created_at,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
 	Fingerprint string `json:"fingerprint,omitempty"`
-	ID string `json:"id,omitempty"`
-	IPAddress string `json:"ip_address,omitempty"`
-	LastUsedAt string `json:"last_used_at,omitempty"`
-	Name string `json:"name,omitempty"`
-	Type string `json:"type,omitempty"`
-	UserAgent string `json:"user_agent,omitempty"`
-	UserID string `json:"user_id,omitempty"`
+	ID          string `json:"id,omitempty"`
+	IPAddress   string `json:"ip_address,omitempty"`
+	LastUsedAt  string `json:"last_used_at,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Type        string `json:"type,omitempty"`
+	UserAgent   string `json:"user_agent,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
 }
 
 // Error represents the Error schema.
 type Error struct {
-	Code int64 `json:"code,omitempty"`
+	Code  int64  `json:"code,omitempty"`
 	Error string `json:"error"`
 }
 
 // MFAEnrollment represents the MFAEnrollment schema.
 type MFAEnrollment struct {
-	ID string `json:"id,omitempty"`
-	Method string `json:"method,omitempty"`
+	ID         string `json:"id,omitempty"`
+	Method     string `json:"method,omitempty"`
 	OtpauthURL string `json:"otpauth_url,omitempty"`
-	Secret string `json:"secret,omitempty"`
+	Secret     string `json:"secret,omitempty"`
 }
 
 // Manifest represents the Manifest schema.
 type Manifest struct {
-	BasePath string `json:"base_path,omitempty"`
+	BasePath  string           `json:"base_path,omitempty"`
 	Endpoints []map[string]any `json:"endpoints,omitempty"`
-	Features map[string]any `json:"features,omitempty"`
-	Version string `json:"version,omitempty"`
+	Features  map[string]any   `json:"features,omitempty"`
+	Version   string           `json:"version,omitempty"`
 }
 
 // Session represents the Session schema.
 type Session struct {
 	CreatedAt string `json:"created_at,omitempty"`
 	ExpiresAt string `json:"expires_at,omitempty"`
-	ID string `json:"id,omitempty"`
-	Token string `json:"token,omitempty"`
-	UserID string `json:"user_id,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Token     string `json:"token,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
 }
 
 // TokenResponse represents the TokenResponse schema.
 type TokenResponse struct {
-	ExpiresAt string `json:"expires_at"`
+	ExpiresAt    string `json:"expires_at"`
 	RefreshToken string `json:"refresh_token"`
 	SessionToken string `json:"session_token"`
 }
 
 // User represents the User schema.
 type User struct {
-	Banned bool `json:"banned,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	Email string `json:"email"`
-	EmailVerified bool `json:"email_verified,omitempty"`
-	ID string `json:"id"`
-	Image string `json:"image,omitempty"`
-	Name string `json:"name,omitempty"`
-	Phone string `json:"phone,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	Username string `json:"username,omitempty"`
+	Banned        bool   `json:"banned,omitempty"`
+	CreatedAt     string `json:"created_at,omitempty"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified,omitempty"`
+	ID            string `json:"id"`
+	Image         string `json:"image,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Phone         string `json:"phone,omitempty"`
+	UpdatedAt     string `json:"updated_at,omitempty"`
+	Username      string `json:"username,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
 // Request types
 // ──────────────────────────────────────────────────
-
 
 // AdminBanUserRequest is the request body for AdminBanUser.
 type AdminBanUserRequest struct {
@@ -99,7 +98,7 @@ type AdminBanUserRequest struct {
 // ChangePasswordRequest is the request body for ChangePassword.
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
-	NewPassword string `json:"new_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 // ForgotPasswordRequest is the request body for ForgotPassword.
@@ -109,8 +108,8 @@ type ForgotPasswordRequest struct {
 
 // UpdateMeRequest is the request body for UpdateMe.
 type UpdateMeRequest struct {
-	Image string `json:"image,omitempty"`
-	Name string `json:"name,omitempty"`
+	Image    string `json:"image,omitempty"`
+	Name     string `json:"name,omitempty"`
 	Username string `json:"username,omitempty"`
 }
 
@@ -122,20 +121,20 @@ type RefreshSessionRequest struct {
 // ResetPasswordRequest is the request body for ResetPassword.
 type ResetPasswordRequest struct {
 	NewPassword string `json:"new_password"`
-	Token string `json:"token"`
+	Token       string `json:"token"`
 }
 
 // SignInRequest is the request body for SignIn.
 type SignInRequest struct {
-	Email string `json:"email,omitempty"`
+	Email    string `json:"email,omitempty"`
 	Password string `json:"password"`
 	Username string `json:"username,omitempty"`
 }
 
 // SignUpRequest is the request body for SignUp.
 type SignUpRequest struct {
-	Email string `json:"email"`
-	Name string `json:"name,omitempty"`
+	Email    string `json:"email"`
+	Name     string `json:"name,omitempty"`
 	Password string `json:"password"`
 	Username string `json:"username,omitempty"`
 }
