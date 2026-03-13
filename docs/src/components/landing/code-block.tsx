@@ -3,8 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
+/**
+ * Token-based syntax highlighter. Each highlighting step stores its <span> HTML
+ * in a tokens array and inserts an inert placeholder (\x00idx\x01) into the
+ * result string. Subsequent regex passes only see placeholders, preventing
+ * later passes from corrupting earlier output.
+ */
+function createTokenizer() {
+  const tokens: string[] = [];
+  const wrap = (cls: string, text: string): string => {
+    const i = tokens.length;
+    tokens.push(`<span class="${cls}">${text}</span>`);
+    return `\x00${i}\x01`;
+  };
+  const restore = (result: string): string =>
+    result.replace(/\x00(\d+)\x01/g, (_, idx) => tokens[parseInt(idx)]);
+  return { wrap, restore };
+}
+
 // Simple Go syntax highlighter
 function highlightGo(code: string): string {
+  const { wrap, restore } = createTokenizer();
   let result = code;
 
   // Escape HTML first
@@ -14,22 +33,17 @@ function highlightGo(code: string): string {
     .replace(/>/g, "&gt;");
 
   // Comments (single-line)
-  result = result.replace(
-    /(\/\/.*$)/gm,
-    '<span className="text-fd-muted-foreground/60 italic">$1</span>',
+  result = result.replace(/(\/\/.*$)/gm, (_, m) =>
+    wrap("text-fd-muted-foreground/60 italic", m),
   );
 
   // Strings (double-quoted)
-  result = result.replace(
-    /("(?:[^"\\]|\\.)*")/g,
-    '<span className="text-teal-400">$1</span>',
+  result = result.replace(/("(?:[^"\\]|\\.)*")/g, (_, m) =>
+    wrap("text-teal-400", m),
   );
 
   // Backtick strings
-  result = result.replace(
-    /(`[^`]*`)/g,
-    '<span className="text-teal-400">$1</span>',
-  );
+  result = result.replace(/(`[^`]*`)/g, (_, m) => wrap("text-teal-400", m));
 
   // Keywords
   const keywords = [
@@ -62,13 +76,12 @@ function highlightGo(code: string): string {
     "false",
     "err",
   ];
-  keywords.forEach((kw) => {
+  for (const kw of keywords) {
     const regex = new RegExp(`\\b(${kw})\\b`, "g");
-    result = result.replace(
-      regex,
-      '<span class="text-purple-400 font-medium">$1</span>',
+    result = result.replace(regex, (_, m) =>
+      wrap("text-purple-400 font-medium", m),
     );
-  });
+  }
 
   // Types
   const types = [
@@ -83,28 +96,29 @@ function highlightGo(code: string): string {
     "any",
     "context\\.Context",
   ];
-  types.forEach((t) => {
+  for (const t of types) {
     const regex = new RegExp(`\\b(${t})\\b`, "g");
-    result = result.replace(regex, '<span class="text-cyan-400">$1</span>');
-  });
+    result = result.replace(regex, (_, m) => wrap("text-cyan-400", m));
+  }
 
   // Function calls
-  result = result.replace(
-    /\b([A-Z]\w*)\s*\(/g,
-    '<span class="text-blue-400">$1</span>(',
-  );
+  result = result.replace(/\b([A-Z]\w*)\s*\(/g, (match, name) => {
+    const ws = match.slice(name.length, -1);
+    return `${wrap("text-blue-400", name)}${ws}(`;
+  });
 
   // Method calls (after dot)
-  result = result.replace(
-    /\.([A-Z]\w*)\s*\(/g,
-    '.<span class="text-blue-400">$1</span>(',
-  );
+  result = result.replace(/\.([A-Z]\w*)\s*\(/g, (match, name) => {
+    const ws = match.slice(name.length + 1, -1);
+    return `.${wrap("text-blue-400", name)}${ws}(`;
+  });
 
-  return result;
+  return restore(result);
 }
 
 // Simple TSX/JSX syntax highlighter
 function highlightTSX(code: string): string {
+  const { wrap, restore } = createTokenizer();
   let result = code;
 
   // Escape HTML first
@@ -114,28 +128,22 @@ function highlightTSX(code: string): string {
     .replace(/>/g, "&gt;");
 
   // Comments (single-line)
-  result = result.replace(
-    /(\/\/.*$)/gm,
-    '<span class="text-fd-muted-foreground/60 italic">$1</span>',
+  result = result.replace(/(\/\/.*$)/gm, (_, m) =>
+    wrap("text-fd-muted-foreground/60 italic", m),
   );
 
   // Strings (double-quoted)
-  result = result.replace(
-    /("(?:[^"\\]|\\.)*")/g,
-    '<span class="text-teal-400">$1</span>',
+  result = result.replace(/("(?:[^"\\]|\\.)*")/g, (_, m) =>
+    wrap("text-teal-400", m),
   );
 
   // Strings (single-quoted)
-  result = result.replace(
-    /('(?:[^'\\]|\\.)*')/g,
-    '<span class="text-teal-400">$1</span>',
+  result = result.replace(/('(?:[^'\\]|\\.)*')/g, (_, m) =>
+    wrap("text-teal-400", m),
   );
 
   // Template literals (backtick)
-  result = result.replace(
-    /(`[^`]*`)/g,
-    '<span class="text-teal-400">$1</span>',
-  );
+  result = result.replace(/(`[^`]*`)/g, (_, m) => wrap("text-teal-400", m));
 
   // Keywords
   const keywords = [
@@ -165,39 +173,32 @@ function highlightTSX(code: string): string {
     "true",
     "false",
   ];
-  keywords.forEach((kw) => {
+  for (const kw of keywords) {
     const regex = new RegExp(`\\b(${kw})\\b`, "g");
-    result = result.replace(
-      regex,
-      '<span class="text-purple-400 font-medium">$1</span>',
+    result = result.replace(regex, (_, m) =>
+      wrap("text-purple-400 font-medium", m),
     );
-  });
+  }
 
   // JSX tags: &lt;ComponentName or &lt;/ComponentName
-  result = result.replace(
-    /(&lt;\/?)([\w.]+)/g,
-    '$1<span class="text-blue-400">$2</span>',
+  result = result.replace(/(&lt;\/?)([\w.]+)/g, (_, prefix, tag) =>
+    `${prefix}${wrap("text-blue-400", tag)}`,
   );
 
   // JSX props: propName=
-  result = result.replace(
-    /\b([a-zA-Z][\w]*)(=)/g,
-    '<span class="text-cyan-400">$1</span>$2',
+  result = result.replace(/\b([a-zA-Z][\w]*)(=)/g, (_, prop, eq) =>
+    `${wrap("text-cyan-400", prop)}${eq}`,
   );
 
   // Arrow functions
-  result = result.replace(
-    /(=&gt;)/g,
-    '<span class="text-purple-400">$1</span>',
-  );
+  result = result.replace(/(=&gt;)/g, (_, m) => wrap("text-purple-400", m));
 
   // Destructured/type imports in curly braces
-  result = result.replace(
-    /\{([^}]+)\}/g,
-    (match, inner) => `{<span class="text-amber-300">${inner}</span>}`,
+  result = result.replace(/\{([^}]+)\}/g, (_, inner) =>
+    `{${wrap("text-amber-300", inner)}}`,
   );
 
-  return result;
+  return restore(result);
 }
 
 interface CodeBlockProps {

@@ -116,7 +116,8 @@ func TestStrategyMiddleware_ValidBearerSession(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer valid-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -187,7 +188,8 @@ func TestStrategyMiddleware_InvalidBearerFallsBackToStrategy(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer bad-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -231,7 +233,8 @@ func TestStrategyMiddleware_NoAuthHeaders(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -296,7 +299,8 @@ func TestStrategyMiddleware_APIKeyOnly(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("X-API-Key", "my-api-key")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -361,7 +365,8 @@ func TestStrategyMiddleware_BearerWithAskPrefix(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer ask_some_api_key_value")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -401,7 +406,8 @@ func TestStrategyMiddleware_StrategyNotApplicable(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("X-API-Key", "some-key")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -437,7 +443,8 @@ func TestStrategyMiddleware_StrategyError(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("X-API-Key", "some-key")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -472,7 +479,8 @@ func TestStrategyMiddleware_RequireAuth_NoAuth(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/protected", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
+	require.NoError(t, err)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -526,7 +534,8 @@ func TestStrategyMiddleware_RequireAuth_WithStrategy(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/protected", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
+	require.NoError(t, err)
 	req.Header.Set("X-API-Key", "my-api-key")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -587,7 +596,8 @@ func TestStrategyMiddleware_StrategyResultSetsScope(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	require.NoError(t, err)
 	req.Header.Set("X-API-Key", "org-key")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

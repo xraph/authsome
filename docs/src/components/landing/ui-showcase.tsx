@@ -236,6 +236,75 @@ const uiCards: UICard[] = [
       </div>
     ),
   },
+  {
+    title: "Passkey Manager",
+    description: "Register, view, and revoke WebAuthn passkeys",
+    preview: (
+      <div className="space-y-2 p-3">
+        <div className="text-xs font-semibold text-fd-foreground mb-2">
+          Passkeys
+        </div>
+        {[
+          { name: "MacBook Pro", created: "2 weeks ago", icon: "💻" },
+          { name: "iPhone 15", created: "3 days ago", icon: "📱" },
+        ].map((key) => (
+          <div
+            key={key.name}
+            className="flex items-center justify-between rounded-md border border-fd-border p-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm">{key.icon}</span>
+              <div>
+                <div className="text-[11px] font-medium text-fd-foreground">
+                  {key.name}
+                </div>
+                <div className="text-[10px] text-fd-muted-foreground">
+                  Added {key.created}
+                </div>
+              </div>
+            </div>
+            <div className="text-[10px] text-red-500 cursor-pointer">
+              Remove
+            </div>
+          </div>
+        ))}
+        <MockButton variant="outline">+ Register new passkey</MockButton>
+      </div>
+    ),
+  },
+  {
+    title: "API Key Manager",
+    description: "Create, rotate, and revoke API keys with scopes",
+    preview: (
+      <div className="space-y-2 p-3">
+        <div className="text-xs font-semibold text-fd-foreground mb-2">
+          API Keys
+        </div>
+        {[
+          { name: "Production", prefix: "ak_live_", scope: "read+write" },
+          { name: "Testing", prefix: "ak_test_", scope: "read" },
+        ].map((key) => (
+          <div
+            key={key.name}
+            className="rounded-md border border-fd-border p-2"
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-medium text-fd-foreground">
+                {key.name}
+              </div>
+              <span className="text-[9px] bg-fd-muted text-fd-muted-foreground rounded px-1 py-0.5">
+                {key.scope}
+              </span>
+            </div>
+            <div className="text-[10px] text-fd-muted-foreground font-mono mt-1">
+              {key.prefix}••••••••••••
+            </div>
+          </div>
+        ))}
+        <MockButton>+ Create new key</MockButton>
+      </div>
+    ),
+  },
 ];
 
 const containerVariants = {
@@ -274,7 +343,7 @@ export function UIShowcase() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-50px" }}
-          className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
           {uiCards.map((card) => (
             <motion.div

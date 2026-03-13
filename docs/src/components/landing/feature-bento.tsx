@@ -138,9 +138,9 @@ engine, _ := authsome.NewEngine(
     filename: "store.go",
   },
   {
-    title: "Security & RBAC",
+    title: "Organizations & Teams",
     description:
-      "Account lockout, rate limiting, IP control, and role-based access control via Warden integration. 31 webhook events for audit trails.",
+      "Multi-org support with team hierarchy, invitation system, and per-org SSO. Users belong to multiple orgs with different roles.",
     icon: (
       <svg
         className="size-5"
@@ -152,19 +152,83 @@ engine, _ := authsome.NewEngine(
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <path d="M9 12l2 2 4-4" />
+        <path d="M18 21a8 8 0 00-16 0" />
+        <circle cx="10" cy="8" r="5" />
+        <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 00-.45-8.3" />
+      </svg>
+    ),
+    code: `org, _ := engine.CreateOrganization(ctx,
+  authsome.CreateOrgInput{
+    Name: "Acme Corp",
+    Slug: "acme",
+  })
+
+engine.InviteMember(ctx, org.ID,
+  authsome.InviteInput{
+    Email: "dev@acme.com",
+    Role:  "admin",
+  })`,
+    filename: "orgs.go",
+  },
+  {
+    title: "Webhooks & Events",
+    description:
+      "31+ typed webhook events for every auth action — sign-in, MFA, org changes, session revokes. Relay bridge for real-time streaming.",
+    icon: (
+      <svg
+        className="size-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
       </svg>
     ),
     code: `engine, _ := authsome.NewEngine(
-  authsome.WithLockout(authsome.LockoutConfig{
-    MaxAttempts: 5,
-    Window:      15 * time.Minute,
-  }),
-  authsome.WithRateLimit(limiter),
-  authsome.WithWebhooks(relay.Bridge()),
+  authsome.WithWebhooks(relay.Bridge(
+    relay.WithURL("https://api.example.com/hooks"),
+    relay.WithEvents(
+      "user.signed_in",
+      "user.signed_up",
+      "mfa.verified",
+      "session.revoked",
+    ),
+  )),
 )`,
-    filename: "security.go",
+    filename: "webhooks.go",
+  },
+  {
+    title: "Device Management",
+    description:
+      "Fingerprint devices, track trusted devices per user, and challenge unknown devices. Integrates with risk engine for anomaly detection.",
+    icon: (
+      <svg
+        className="size-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+        <path d="M12 18h.01" />
+      </svg>
+    ),
+    code: `engine, _ := authsome.NewEngine(
+  authsome.WithDeviceVerification(
+    device.New(
+      device.WithTrustDuration(30*24*time.Hour),
+      device.WithChallenge(device.EmailChallenge),
+    ),
+  ),
+)`,
+    filename: "device.go",
   },
   {
     title: "React & Next.js UI Components",
