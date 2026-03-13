@@ -18,7 +18,7 @@ type OverviewStats struct {
 }
 
 templ OverviewPage(stats OverviewStats, recentUsers []*user.User) {
-	<div class="space-y-8">
+	<div class="space-y-12">
 		<!-- Page Header -->
 		<div>
 			<h1 class="text-3xl font-bold tracking-tight">Authentication Overview</h1>
@@ -26,7 +26,7 @@ templ OverviewPage(stats OverviewStats, recentUsers []*user.User) {
 		</div>
 
 		<!-- Stats Grid -->
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 			@components.StatCard("users", "Total Users", strconv.Itoa(stats.TotalUsers), "Registered accounts")
 			@components.StatCard("key-round", "Active Sessions", strconv.Itoa(stats.ActiveSessions), "Current sessions")
 			@components.StatCard("monitor-smartphone", "Devices", strconv.Itoa(stats.RegisteredDevices), "Registered devices")

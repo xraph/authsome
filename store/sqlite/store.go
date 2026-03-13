@@ -316,6 +316,16 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 	return sqliteError(err)
 }
 
+func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error {
+	_, err := s.sdb.NewUpdate((*SessionModel)(nil)).
+		Set("last_activity_at = ?", lastActivityAt).
+		Set("expires_at = ?", expiresAt).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", sessionID.String()).
+		Exec(ctx)
+	return sqliteError(err)
+}
+
 func (s *Store) DeleteSession(ctx context.Context, sessionID id.SessionID) error {
 	_, err := s.sdb.NewDelete((*SessionModel)(nil)).Where("id = ?", sessionID.String()).Exec(ctx)
 	return sqliteError(err)

@@ -447,5 +447,13 @@ func init() {
 				return mexec.DropCollection(ctx, (*environmentModel)(nil))
 			},
 		},
+
+		// Migration 18: Add last_activity_at field to sessions (no-op for MongoDB, field is added dynamically).
+		&migrate.Migration{
+			Name:    "add_session_last_activity_at",
+			Version: "20240101000018",
+			Up:      func(_ context.Context, _ migrate.Executor) error { return nil },
+			Down:    func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
 	)
 }

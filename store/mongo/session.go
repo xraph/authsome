@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -93,6 +94,23 @@ func (s *Store) UpdateSession(ctx context.Context, sess *session.Session) error 
 		return store.ErrNotFound
 	}
 
+	return nil
+}
+
+// TouchSession performs a lightweight update of last_activity_at, expires_at, and updated_at.
+func (s *Store) TouchSession(ctx context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error {
+	res, err := s.mdb.NewUpdate((*sessionModel)(nil)).
+		Filter(bson.M{"_id": sessionID.String()}).
+		Set("last_activity_at", lastActivityAt).
+		Set("expires_at", expiresAt).
+		Set("updated_at", now()).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: touch session: %w", err)
+	}
+	if res.MatchedCount() == 0 {
+		return store.ErrNotFound
+	}
 	return nil
 }
 

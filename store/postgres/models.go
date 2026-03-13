@@ -202,6 +202,7 @@ type SessionModel struct {
 	UserAgent             string    `grove:"user_agent"`
 	DeviceID              string    `grove:"device_id"`
 	ImpersonatedBy        string    `grove:"impersonated_by"`
+	LastActivityAt        time.Time `grove:"last_activity_at"`
 	ExpiresAt             time.Time `grove:"expires_at,notnull"`
 	RefreshTokenExpiresAt time.Time `grove:"refresh_token_expires_at,notnull"`
 	CreatedAt             time.Time `grove:"created_at,notnull,default:now()"`
@@ -234,6 +235,7 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		RefreshToken:          m.RefreshToken,
 		IPAddress:             m.IPAddress,
 		UserAgent:             m.UserAgent,
+		LastActivityAt:        m.LastActivityAt,
 		ExpiresAt:             m.ExpiresAt,
 		RefreshTokenExpiresAt: m.RefreshTokenExpiresAt,
 		CreatedAt:             m.CreatedAt,
@@ -273,6 +275,7 @@ func fromSession(s *session.Session) *SessionModel {
 		RefreshToken:          s.RefreshToken,
 		IPAddress:             s.IPAddress,
 		UserAgent:             s.UserAgent,
+		LastActivityAt:        s.LastActivityAt,
 		ExpiresAt:             s.ExpiresAt,
 		RefreshTokenExpiresAt: s.RefreshTokenExpiresAt,
 		CreatedAt:             s.CreatedAt,

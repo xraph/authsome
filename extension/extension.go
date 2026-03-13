@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -36,6 +37,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	mongostore "github.com/xraph/authsome/store/mongo"
 	pgstore "github.com/xraph/authsome/store/postgres"
@@ -398,12 +400,17 @@ func (e *Extension) Handler() http.Handler {
 }
 
 // Middlewares implements forge.MiddlewareExtension. It returns the auth
-// middleware so Forge auto-applies it globally to all routes.
+// middleware, session activity extension, and auto-refresh middleware
+// so Forge auto-applies them globally to all routes.
 func (e *Extension) Middlewares() []forge.Middleware {
 	if e.engine == nil {
 		return nil
 	}
-	return []forge.Middleware{e.AuthMiddleware()}
+	return []forge.Middleware{
+		e.AuthMiddleware(),
+		e.sessionActivityMiddleware(),
+		e.autoRefreshMiddleware(),
+	}
 }
 
 // AuthMiddleware returns the authentication middleware that resolves sessions
@@ -462,6 +469,76 @@ func (e *Extension) AuthMiddleware() forge.Middleware {
 			return inner(next)(ctx)
 		}
 	}
+}
+
+// autoRefreshMiddleware returns a middleware that transparently refreshes
+// near-expiry access tokens based on the auto-refresh settings.
+func (e *Extension) autoRefreshMiddleware() forge.Middleware {
+	return middleware.AutoRefreshMiddleware(
+		e.engine.Refresh,
+		func(ctx context.Context) middleware.AutoRefreshConfig {
+			mgr := e.engine.Settings()
+			if mgr == nil {
+				return middleware.AutoRefreshConfig{}
+			}
+
+			opts := settings.ResolveOpts{}
+			if appID, ok := middleware.AppIDFrom(ctx); ok {
+				opts.AppID = appID.String()
+			}
+
+			enabled, err := settings.Get(ctx, mgr, authsome.SettingAutoRefreshEnabled, opts)
+			if err != nil || !enabled {
+				return middleware.AutoRefreshConfig{}
+			}
+
+			thresholdSec, err := settings.Get(ctx, mgr, authsome.SettingAutoRefreshThresholdSeconds, opts)
+			if err != nil || thresholdSec <= 0 {
+				thresholdSec = 300
+			}
+
+			return middleware.AutoRefreshConfig{
+				Enabled:   true,
+				Threshold: time.Duration(thresholdSec) * time.Second,
+			}
+		},
+		e.Logger(),
+	)
+}
+
+// sessionActivityMiddleware returns a middleware that extends session expiry
+// on each authenticated request (sliding session window).
+func (e *Extension) sessionActivityMiddleware() forge.Middleware {
+	return middleware.SessionActivityMiddleware(
+		e.engine.Store().TouchSession,
+		func(ctx context.Context) middleware.SessionActivityConfig {
+			mgr := e.engine.Settings()
+			if mgr == nil {
+				return middleware.SessionActivityConfig{}
+			}
+
+			opts := settings.ResolveOpts{}
+			if appID, ok := middleware.AppIDFrom(ctx); ok {
+				opts.AppID = appID.String()
+			}
+
+			enabled, err := settings.Get(ctx, mgr, authsome.SettingExtendOnActivity, opts)
+			if err != nil || !enabled {
+				return middleware.SessionActivityConfig{}
+			}
+
+			timeoutSec, err := settings.Get(ctx, mgr, authsome.SettingInactivityTimeoutSeconds, opts)
+			if err != nil || timeoutSec <= 0 {
+				timeoutSec = 1800
+			}
+
+			return middleware.SessionActivityConfig{
+				Enabled:           true,
+				InactivityTimeout: time.Duration(timeoutSec) * time.Second,
+			}
+		},
+		e.Logger(),
+	)
 }
 
 // DashboardContributor implements dashboard.DashboardAware. It returns a

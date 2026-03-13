@@ -660,5 +660,23 @@ ALTER TABLE authsome_apps DROP COLUMN publishable_key;
 				return err
 			},
 		},
+
+		// Migration 13: Add last_activity_at column to sessions table for sliding session extension.
+		&migrate.Migration{
+			Name:    "add_session_last_activity_at",
+			Version: "20240101000013",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions ADD COLUMN last_activity_at DATETIME;
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+ALTER TABLE authsome_sessions DROP COLUMN last_activity_at;
+`)
+				return err
+			},
+		},
 	)
 }

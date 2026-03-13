@@ -17,7 +17,9 @@ var nonceStore = struct {
 // GenerateNonce creates a random nonce and stores it for later validation.
 func GenerateNonce() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand: failed to read random bytes: " + err.Error())
+	}
 	nonce := hex.EncodeToString(b)
 	nonceStore.Lock()
 	// Purge expired nonces (older than 10 minutes).

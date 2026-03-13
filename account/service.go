@@ -147,6 +147,7 @@ func NewSession(appID id.AppID, userID id.UserID, cfg SessionConfig) (*session.S
 		UserID:                userID,
 		Token:                 token,
 		RefreshToken:          refreshToken,
+		LastActivityAt:        now,
 		ExpiresAt:             now.Add(cfg.TokenTTL),
 		RefreshTokenExpiresAt: now.Add(cfg.RefreshTokenTTL),
 		CreatedAt:             now,

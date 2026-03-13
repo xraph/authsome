@@ -236,6 +236,19 @@ func (s *Store) UpdateSession(_ context.Context, sess *session.Session) error {
 	return nil
 }
 
+func (s *Store) TouchSession(_ context.Context, sessionID id.SessionID, lastActivityAt, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[sessionID.String()]
+	if !ok {
+		return store.ErrNotFound
+	}
+	sess.LastActivityAt = lastActivityAt
+	sess.ExpiresAt = expiresAt
+	sess.UpdatedAt = time.Now()
+	return nil
+}
+
 func (s *Store) DeleteSession(_ context.Context, sessionID id.SessionID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

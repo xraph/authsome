@@ -299,6 +299,24 @@ type UserInfoRequest struct{}
 // DiscoveryRequest is empty.
 type DiscoveryRequest struct{}
 
+// DiscoveryResponse is the OpenID Connect discovery document.
+type DiscoveryResponse struct {
+	Issuer                            string   `json:"issuer"`
+	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
+	TokenEndpoint                     string   `json:"token_endpoint"`
+	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
+	RevocationEndpoint                string   `json:"revocation_endpoint"`
+	DeviceAuthorizationEndpoint       string   `json:"device_authorization_endpoint"`
+	JWKSURI                           string   `json:"jwks_uri"`
+	ResponseTypesSupported            []string `json:"response_types_supported"`
+	GrantTypesSupported               []string `json:"grant_types_supported"`
+	SubjectTypesSupported             []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	ScopesSupported                   []string `json:"scopes_supported"`
+	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+}
+
 // CreateClientRequest is the admin request to create an OAuth2 client.
 type CreateClientRequest struct {
 	AppID        string   `json:"app_id"`
@@ -562,30 +580,28 @@ func (p *Plugin) handleUserInfo(ctx forge.Context, _ *UserInfoRequest) (*UserInf
 	}, nil
 }
 
-func (p *Plugin) handleDiscovery(ctx forge.Context, _ *DiscoveryRequest) (map[string]any, error) {
+func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*DiscoveryResponse, error) {
 	issuer := p.config.Issuer
 	if issuer == "" {
 		issuer = "https://localhost"
 	}
 
-	discovery := map[string]any{
-		"issuer":                                issuer,
-		"authorization_endpoint":                issuer + "/v1/auth/oauth/authorize",
-		"token_endpoint":                        issuer + "/v1/auth/oauth/token",
-		"userinfo_endpoint":                     issuer + "/v1/auth/oauth/userinfo",
-		"revocation_endpoint":                   issuer + "/v1/auth/oauth/revoke",
-		"device_authorization_endpoint":         issuer + "/v1/auth/oauth/device/authorize",
-		"jwks_uri":                              issuer + "/.well-known/jwks.json",
-		"response_types_supported":              []string{"code"},
-		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
-		"subject_types_supported":               []string{"public"},
-		"id_token_signing_alg_values_supported": []string{"RS256", "ES256"},
-		"scopes_supported":                      []string{"openid", "profile", "email", "phone"},
-		"token_endpoint_auth_methods_supported": []string{"client_secret_post", "client_secret_basic"},
-		"code_challenge_methods_supported":      []string{"S256", "plain"},
-	}
-
-	return nil, ctx.JSON(http.StatusOK, discovery)
+	return &DiscoveryResponse{
+		Issuer:                            issuer,
+		AuthorizationEndpoint:             issuer + "/v1/auth/oauth/authorize",
+		TokenEndpoint:                     issuer + "/v1/auth/oauth/token",
+		UserinfoEndpoint:                  issuer + "/v1/auth/oauth/userinfo",
+		RevocationEndpoint:                issuer + "/v1/auth/oauth/revoke",
+		DeviceAuthorizationEndpoint:       issuer + "/v1/auth/oauth/device/authorize",
+		JWKSURI:                           issuer + "/.well-known/jwks.json",
+		ResponseTypesSupported:            []string{"code"},
+		GrantTypesSupported:               []string{"authorization_code", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
+		SubjectTypesSupported:             []string{"public"},
+		IDTokenSigningAlgValuesSupported:  []string{"RS256", "ES256"},
+		ScopesSupported:                   []string{"openid", "profile", "email", "phone"},
+		TokenEndpointAuthMethodsSupported: []string{"client_secret_post", "client_secret_basic"},
+		CodeChallengeMethodsSupported:     []string{"S256", "plain"},
+	}, nil
 }
 
 // ──────────────────────────────────────────────────

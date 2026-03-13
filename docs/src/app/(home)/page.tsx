@@ -2,6 +2,7 @@ import { AuthFlowSection } from "@/components/landing/auth-flow-section";
 import { AuthStrategiesSection } from "@/components/landing/auth-strategies-section";
 import { CodeShowcase } from "@/components/landing/code-showcase";
 import { CTA } from "@/components/landing/cta";
+import { DashboardSection } from "@/components/landing/dashboard-section";
 import { EnterpriseSection } from "@/components/landing/enterprise-section";
 import { FeatureBento } from "@/components/landing/feature-bento";
 import { Hero } from "@/components/landing/hero";
@@ -23,6 +24,7 @@ export default function HomePage() {
       <SdkEcosystemSection />
       <UIShowcase />
       <EnterpriseSection />
+      <DashboardSection />
       <CTA />
     </main>
   );

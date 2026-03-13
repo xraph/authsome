@@ -150,6 +150,34 @@ var (
 	)
 )
 
+// Category: Session Extension
+
+var (
+	// SettingExtendOnActivity controls whether sessions are extended on each authenticated request.
+	SettingExtendOnActivity = settings.Define("session.extend_on_activity", false,
+		settings.WithDisplayName("Extend Session on Activity"),
+		settings.WithDescription("Automatically extend session expiry on each authenticated request"),
+		settings.WithCategory("Session Extension"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, each authenticated request resets the session expiry timer, implementing a sliding session window"),
+		settings.WithOrder(105),
+	)
+
+	// SettingInactivityTimeoutSeconds controls how long a session lives without activity.
+	SettingInactivityTimeoutSeconds = settings.Define("session.inactivity_timeout_seconds", 1800,
+		settings.WithDisplayName("Inactivity Timeout (seconds)"),
+		settings.WithDescription("Session expires after this many seconds of inactivity"),
+		settings.WithCategory("Session Extension"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldNumber),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(86400)}),
+		settings.WithHelpText("The session expiry is reset to now + this value on each request. Default: 1800 (30 minutes)"),
+		settings.WithOrder(106),
+		settings.WithVisibleWhen("session.extend_on_activity", true),
+	)
+)
+
 // Category: Cookie Configuration
 
 var (
@@ -258,6 +286,12 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingAutoRefreshThresholdSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingExtendOnActivity); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingInactivityTimeoutSeconds); err != nil {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingCookieName); err != nil {

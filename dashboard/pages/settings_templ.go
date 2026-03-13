@@ -46,7 +46,7 @@ func SettingsPage(data SettingsPageData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-6\"><!-- Header --><div class=\"flex items-center justify-between\"><div><h1 class=\"text-3xl font-bold tracking-tight\">Settings</h1><p class=\"text-muted-foreground mt-1\">Current engine configuration. Changes are applied through code or environment variables.</p></div><a href=\"./settings/editor\" class=\"inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors\" hx-get=\"./settings/editor\" hx-target=\"#content\" hx-push-url=\"true\" hx-swap=\"innerHTML\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-10\"><!-- Header --><div class=\"flex items-center justify-between\"><div><h1 class=\"text-3xl font-bold tracking-tight\">Settings</h1><p class=\"text-muted-foreground mt-1\">Current engine configuration. Changes are applied through code or environment variables.</p></div><a href=\"./settings/editor\" class=\"inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors\" hx-get=\"./settings/editor\" hx-target=\"#content\" hx-push-url=\"true\" hx-swap=\"innerHTML\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

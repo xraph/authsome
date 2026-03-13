@@ -46,7 +46,7 @@ func OverviewPage(stats OverviewStats, recentUsers []*user.User) templ.Component
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-8\"><!-- Page Header --><div><h1 class=\"text-3xl font-bold tracking-tight\">Authentication Overview</h1><p class=\"text-muted-foreground mt-1\">Monitor your authentication system at a glance.</p></div><!-- Stats Grid --><div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-12\"><!-- Page Header --><div><h1 class=\"text-3xl font-bold tracking-tight\">Authentication Overview</h1><p class=\"text-muted-foreground mt-1\">Monitor your authentication system at a glance.</p></div><!-- Stats Grid --><div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
