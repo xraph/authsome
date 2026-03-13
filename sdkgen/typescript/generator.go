@@ -519,7 +519,7 @@ func camelToKebab(s string) string {
 			if i > 0 {
 				result = append(result, '-')
 			}
-			result = append(result, byte(r-'A'+'a')) //nolint:gosec // G115: safe, r is in [A-Z]
+			result = append(result, byte(r-'A'+'a'))
 		} else {
 			result = append(result, byte(r)) //nolint:gosec // G115: safe cast, ASCII range
 		}

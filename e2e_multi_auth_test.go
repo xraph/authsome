@@ -133,7 +133,7 @@ func TestE2E_MultiAuth_BearerSessionAuth(t *testing.T) {
 	})
 
 	// Step 4: Send request with session token in Bearer header
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+sess.Token)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -185,7 +185,7 @@ func TestE2E_MultiAuth_APIKeyAuth(t *testing.T) {
 	})
 
 	// Step 4: Send request with API key in X-API-Key header
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-API-Key", rawKey)
 	req.Header.Set("X-App-ID", appID.String())
 	rec := httptest.NewRecorder()
@@ -238,7 +238,7 @@ func TestE2E_MultiAuth_BearerFailsAPIKeySucceeds(t *testing.T) {
 	})
 
 	// Step 4: Send request with invalid session token in Bearer + valid API key in X-API-Key
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-session-token-abc123")
 	req.Header.Set("X-API-Key", rawKey)
 	req.Header.Set("X-App-ID", appID.String())

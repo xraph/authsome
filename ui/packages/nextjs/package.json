@@ -1,6 +1,6 @@
 {
   "name": "@authsome/ui-nextjs",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Next.js integration for AuthSome authentication",
   "license": "MIT",
   "type": "module",
@@ -32,7 +32,9 @@
       "types": "./dist/pages/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

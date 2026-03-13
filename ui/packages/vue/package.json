@@ -1,6 +1,6 @@
 {
   "name": "@authsome/ui-vue",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Vue.js bindings for AuthSome authentication UI",
   "license": "MIT",
   "type": "module",
@@ -20,7 +20,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

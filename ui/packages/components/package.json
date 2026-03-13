@@ -1,6 +1,6 @@
 {
   "name": "@authsome/ui-components",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Pre-built authentication UI components for AuthSome (Radix UI + Tailwind)",
   "license": "MIT",
   "type": "module",
@@ -21,7 +21,9 @@
     },
     "./styles.css": "./dist/styles.css"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
