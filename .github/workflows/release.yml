@@ -10,6 +10,19 @@ on:
         description: 'Release tag (e.g., v1.0.0)'
         required: true
         type: string
+      modules:
+        description: 'Module groups to release'
+        required: false
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - go
+          - npm
+          - flutter
+          - go+npm
+          - go+flutter
+          - npm+flutter
       dry_run:
         description: 'Dry run (skip actual publish)'
         required: false
@@ -53,11 +66,61 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Release tag: $TAG, version: $VERSION"
 
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            NOTES=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            NOTES=$(git log --pretty=format:"- %s (%h)" ${PREV_TAG}..HEAD)
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.set-tag.outputs.tag }}
+          body: |
+            ## Changes
+
+            ${{ steps.notes.outputs.notes }}
+
+            ---
+
+            ### Installation
+
+            **Go:**
+            ```bash
+            go get github.com/xraph/authsome@${{ steps.set-tag.outputs.tag }}
+            ```
+
+            **npm:**
+            ```bash
+            npm install @authsome/client@${{ steps.set-tag.outputs.version }}
+            npm install @authsome/ui-react@${{ steps.set-tag.outputs.version }}
+            ```
+
+            **Flutter:**
+            ```yaml
+            dependencies:
+              authsome_flutter: ^${{ steps.set-tag.outputs.version }}
+            ```
+          generate_release_notes: true
+
   # ─── Go Release ──────────────────────────────────────────────────────
   go-release:
     name: Go Release
     runs-on: ubuntu-latest
     needs: [prepare]
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.modules == 'all' ||
+      contains(github.event.inputs.modules, 'go')
 
     steps:
       - name: Checkout
@@ -78,57 +141,15 @@ jobs:
           go build ./...
           go test -race -count=1 ./...
 
-      - name: Generate release notes
-        id: notes
-        run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREV_TAG" ]; then
-            NOTES=$(git log --pretty=format:"- %s (%h)" HEAD)
-          else
-            NOTES=$(git log --pretty=format:"- %s (%h)" ${PREV_TAG}..HEAD)
-          fi
-          {
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          body: |
-            ## Changes
-
-            ${{ steps.notes.outputs.notes }}
-
-            ---
-
-            ### Installation
-
-            **Go:**
-            ```bash
-            go get github.com/xraph/authsome@${{ needs.prepare.outputs.tag }}
-            ```
-
-            **npm:**
-            ```bash
-            npm install @authsome/client@${{ needs.prepare.outputs.version }}
-            npm install @authsome/ui-react@${{ needs.prepare.outputs.version }}
-            ```
-
-            **Flutter:**
-            ```yaml
-            dependencies:
-              authsome_flutter: ^${{ needs.prepare.outputs.version }}
-            ```
-          generate_release_notes: true
-
   # ─── npm Release ─────────────────────────────────────────────────────
   npm-release:
     name: npm Release
     runs-on: ubuntu-latest
     needs: [prepare]
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.modules == 'all' ||
+      contains(github.event.inputs.modules, 'npm')
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -199,6 +220,10 @@ jobs:
     name: Flutter Release
     runs-on: ubuntu-latest
     needs: [prepare]
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.modules == 'all' ||
+      contains(github.event.inputs.modules, 'flutter')
 
     steps:
       - name: Checkout
@@ -220,20 +245,22 @@ jobs:
       - name: Publish authsome_core
         run: |
           cd flutter/packages/authsome_core
-          flutter pub publish --force
+          dart pub publish --force ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Wait for pub.dev indexing
+        if: github.event.inputs.dry_run != 'true'
         run: sleep 45
 
       - name: Publish authsome_flutter
         run: |
           cd flutter/packages/authsome_flutter
-          flutter pub publish --force
+          dart pub publish --force ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
 
       - name: Wait for pub.dev indexing
+        if: github.event.inputs.dry_run != 'true'
         run: sleep 45
 
       - name: Publish authsome_flutter_ui
         run: |
           cd flutter/packages/authsome_flutter_ui
-          flutter pub publish --force
+          dart pub publish --force ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
