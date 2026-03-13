@@ -19,6 +19,9 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
+
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/plugins/apikey"
@@ -91,9 +94,15 @@ func run(outPath, title, version string) error {
 
 	// Build the engine with every known plugin so their routes are registered.
 	// We don't call engine.Start — we only need route metadata, not runtime state.
+	wardenEng, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	if err != nil {
+		return fmt.Errorf("create warden engine: %w", err)
+	}
+
 	engine, err := authsome.NewEngine(
 		authsome.WithStore(store),
 		authsome.WithLogger(logger),
+		authsome.WithWarden(wardenEng),
 		authsome.WithDisableMigrate(),
 
 		// Core
