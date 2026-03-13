@@ -1,0 +1,10 @@
+name: _authsome_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+workspace:
+  - packages/authsome_core
+  - packages/authsome_flutter
+  - packages/authsome_flutter_ui

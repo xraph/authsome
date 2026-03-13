@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Converts Flutter path dependencies to hosted version dependencies for pub.dev publishing.
+# Prepares Flutter packages for pub.dev publishing.
 # Usage: ./scripts/prepare-flutter-publish.sh <version>
 # Note: This script uses GNU sed syntax and is intended for CI (Linux).
 set -euo pipefail
@@ -15,18 +15,17 @@ for pkg in authsome_core authsome_flutter authsome_flutter_ui; do
   echo "  Set $pkg version to $VERSION"
 done
 
-# Convert authsome_flutter's path dep on authsome_core to hosted
-sed -i '/authsome_core:/{
-n
-s|path: ../authsome_core|version: ^'"$VERSION"'|
-}' "$FLUTTER_DIR/authsome_flutter/pubspec.yaml"
-echo "  Converted authsome_flutter -> authsome_core to hosted ^$VERSION"
+# Remove resolution: workspace from all member packages (not valid for pub.dev)
+for pkg in authsome_core authsome_flutter authsome_flutter_ui; do
+  sed -i '/^resolution: workspace$/d' "$FLUTTER_DIR/$pkg/pubspec.yaml"
+  echo "  Removed resolution: workspace from $pkg"
+done
 
-# Convert authsome_flutter_ui's path dep on authsome_flutter to hosted
-sed -i '/authsome_flutter:/{
-n
-s|path: ../authsome_flutter|version: ^'"$VERSION"'|
-}' "$FLUTTER_DIR/authsome_flutter_ui/pubspec.yaml"
-echo "  Converted authsome_flutter_ui -> authsome_flutter to hosted ^$VERSION"
+# Update inter-package version constraints to match release version
+sed -i "s/authsome_core: ^0.1.0/authsome_core: ^$VERSION/" "$FLUTTER_DIR/authsome_flutter/pubspec.yaml"
+echo "  Updated authsome_flutter -> authsome_core constraint to ^$VERSION"
+
+sed -i "s/authsome_flutter: ^0.1.0/authsome_flutter: ^$VERSION/" "$FLUTTER_DIR/authsome_flutter_ui/pubspec.yaml"
+echo "  Updated authsome_flutter_ui -> authsome_flutter constraint to ^$VERSION"
 
 echo "Done. Flutter packages ready for pub.dev publishing."

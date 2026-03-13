@@ -6,14 +6,15 @@ repository: https://github.com/xraph/authsome/tree/main/flutter/packages/authsom
 issue_tracker: https://github.com/xraph/authsome/issues
 
 environment:
-  sdk: ^3.0.0
+  sdk: ^3.6.0
   flutter: ">=3.10.0"
+
+resolution: workspace
 
 dependencies:
   flutter:
     sdk: flutter
-  authsome_flutter:
-    path: ../authsome_flutter
+  authsome_flutter: ^0.1.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

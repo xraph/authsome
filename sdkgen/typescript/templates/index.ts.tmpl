@@ -8,7 +8,7 @@ export type {
 {{- end }}
 {{- range .Operations }}
 {{- if .HasBody }}
-  {{ .Name }}Request,
+  {{ .Name | pascalCase }}Request,
 {{- end }}
 {{- end }}
 } from './types';

@@ -18,6 +18,10 @@ ui/**/storybook-static/
 ui/**/coverage/
 ui/**/*.tsbuildinfo
 
+# SDK
+sdk/**/dist/
+sdk/**/node_modules/
+
 # General
 .DS_Store
 *.pem
