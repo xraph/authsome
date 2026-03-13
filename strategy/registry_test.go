@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	log "github.com/xraph/go-utils/log"
@@ -56,7 +55,8 @@ func TestRegistry_Authenticate_FirstApplicable(t *testing.T) {
 		result: &strategy.Result{User: expectedUser, Session: expectedSession},
 	}, 2)
 
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	require.NoError(t, err)
 	result, err := reg.Authenticate(context.Background(), req)
 	require.NoError(t, err)
 	assert.Equal(t, "Alice", result.User.FirstName)
@@ -70,8 +70,9 @@ func TestRegistry_Authenticate_NoApplicable(t *testing.T) {
 		err:  strategy.ErrStrategyNotApplicable{},
 	}, 1)
 
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	_, err := reg.Authenticate(context.Background(), req)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	require.NoError(t, err)
+	_, err = reg.Authenticate(context.Background(), req)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no applicable")
 }
@@ -83,8 +84,9 @@ func TestRegistry_Authenticate_PropagatesError(t *testing.T) {
 		err:  errors.New("auth failed"),
 	}, 1)
 
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	_, err := reg.Authenticate(context.Background(), req)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	require.NoError(t, err)
+	_, err = reg.Authenticate(context.Background(), req)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "auth failed")
 }
@@ -106,7 +108,8 @@ func TestRegistry_Empty(t *testing.T) {
 	reg := strategy.NewRegistry(log.NewNoopLogger())
 	assert.Empty(t, reg.Strategies())
 
-	req := httptest.NewRequest(http.MethodPost, "/", nil)
-	_, err := reg.Authenticate(context.Background(), req)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
+	require.NoError(t, err)
+	_, err = reg.Authenticate(context.Background(), req)
 	assert.Error(t, err)
 }
