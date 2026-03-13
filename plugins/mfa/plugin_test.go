@@ -43,9 +43,9 @@ func authedRequest(t *testing.T, method, path string, body *bytes.Buffer, userID
 	t.Helper()
 	var req *http.Request
 	if body != nil {
-		req = httptest.NewRequest(method, path, body)
+		req = httptest.NewRequestWithContext(context.Background(), method, path, body)
 	} else {
-		req = httptest.NewRequest(method, path, nil)
+		req = httptest.NewRequestWithContext(context.Background(), method, path, nil)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	ctx := middleware.WithUserID(req.Context(), userID)
@@ -258,7 +258,7 @@ func TestHandleEnroll_Unauthenticated(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"method": "totp"})
-	req := httptest.NewRequest("POST", "/v1/auth/mfa/enroll", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/mfa/enroll", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -419,7 +419,7 @@ func TestHandleVerify_Unauthenticated(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": "123456"})
-	req := httptest.NewRequest("POST", "/v1/auth/mfa/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/mfa/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -564,7 +564,7 @@ func TestHandleDisable_Unauthenticated(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("DELETE", "/v1/auth/mfa/enrollment", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/mfa/enrollment", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

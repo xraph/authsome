@@ -95,7 +95,7 @@ func TestPlugin_CreateKey(t *testing.T) {
 		"scopes":  []string{"read", "write"},
 	})
 
-	req := httptest.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -147,7 +147,7 @@ func TestPlugin_CreateKey_ValidationErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(body))
+			req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 			assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -189,7 +189,7 @@ func TestPlugin_CreateKey_MaxKeysLimit(t *testing.T) {
 		"user_id": userID.String(),
 		"name":    "One Too Many",
 	})
-	req := httptest.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -223,7 +223,7 @@ func TestPlugin_ListKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	// List by app
-	req := httptest.NewRequest("GET", "/v1/auth/keys?app_id="+appID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/keys?app_id="+appID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -267,7 +267,7 @@ func TestPlugin_ListKeys_ByUser(t *testing.T) {
 	}
 
 	// List by user1 only
-	req := httptest.NewRequest("GET", "/v1/auth/keys?app_id="+appID.String()+"&user_id="+user1.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/keys?app_id="+appID.String()+"&user_id="+user1.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -299,7 +299,7 @@ func TestPlugin_RevokeKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("DELETE", "/v1/auth/keys/"+keyID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/keys/"+keyID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -318,7 +318,7 @@ func TestPlugin_RevokeKey_NotFound(t *testing.T) {
 	require.NoError(t, p.RegisterRoutes(mux))
 
 	fakeID := id.NewAPIKeyID()
-	req := httptest.NewRequest("DELETE", "/v1/auth/keys/"+fakeID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/keys/"+fakeID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -330,7 +330,7 @@ func TestPlugin_Strategy_NotApplicable(t *testing.T) {
 	s := p.Strategy()
 
 	// Request without API key header should return not applicable
-	req := httptest.NewRequest("GET", "/some-endpoint", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/some-endpoint", nil)
 	_, err := s.Authenticate(context.Background(), req)
 
 	assert.Error(t, err)
@@ -358,7 +358,7 @@ func TestPlugin_Strategy_Authenticate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Authenticate with Bearer token
-	req := httptest.NewRequest("GET", "/api/data", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	req.Header.Set("X-App-ID", appID.String())
 
@@ -392,7 +392,7 @@ func TestPlugin_Strategy_Authenticate_XAPIKey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Authenticate with X-API-Key header
-	req := httptest.NewRequest("GET", "/api/data", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
 	req.Header.Set("X-API-Key", raw)
 	req.Header.Set("X-App-ID", appID.String())
 
@@ -423,7 +423,7 @@ func TestPlugin_Strategy_Authenticate_InvalidKey(t *testing.T) {
 
 	// Try with wrong key but same prefix
 	fakeKey := "ask_" + prefix[4:] + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	req := httptest.NewRequest("GET", "/api/data", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
 	req.Header.Set("Authorization", "Bearer "+fakeKey)
 	req.Header.Set("X-App-ID", appID.String())
 
@@ -451,7 +451,7 @@ func TestPlugin_Strategy_Authenticate_RevokedKey(t *testing.T) {
 	err = store.CreateAPIKey(context.Background(), key)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/api/data", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	req.Header.Set("X-App-ID", appID.String())
 
@@ -481,7 +481,7 @@ func TestPlugin_Strategy_Authenticate_ExpiredKey(t *testing.T) {
 	err = store.CreateAPIKey(context.Background(), key)
 	require.NoError(t, err)
 
-	req := httptest.NewRequest("GET", "/api/data", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	req.Header.Set("X-App-ID", appID.String())
 
@@ -512,7 +512,7 @@ func TestPlugin_Strategy_Authenticate_RejectsPublicKey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Attempting to authenticate with a public key should fail
-	req := httptest.NewRequest("GET", "/api/data", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/data", nil)
 	req.Header.Set("Authorization", "Bearer "+publicKey)
 	req.Header.Set("X-App-ID", appID.String())
 
@@ -596,7 +596,7 @@ func TestPlugin_CreateKey_DefaultExpiry(t *testing.T) {
 		"user_id": id.NewUserID().String(),
 		"name":    "Expiring Key",
 	})
-	req := httptest.NewRequest("POST", "/v1/auth/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 

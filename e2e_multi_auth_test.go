@@ -275,7 +275,7 @@ func TestE2E_MultiAuth_BothFail(t *testing.T) {
 	})
 
 	// Send request with invalid session token and no API key
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer invalid-session-token-xyz")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -304,7 +304,7 @@ func TestE2E_MultiAuth_RequireAuthBlocksUnauthenticated(t *testing.T) {
 	})
 
 	// Send request with no valid auth headers
-	req := httptest.NewRequest("GET", "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -352,7 +352,7 @@ func TestE2E_MultiAuth_APIKeyInXAPIKeyHeader(t *testing.T) {
 	})
 
 	// Step 4: Send request with API key via X-API-Key header (not Bearer)
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-API-Key", rawKey)
 	req.Header.Set("X-App-ID", appID.String())
 	rec := httptest.NewRecorder()
@@ -407,7 +407,7 @@ func TestE2E_MultiAuth_APIKeyWithAskPrefixInBearer(t *testing.T) {
 
 	// Step 4: Send request with ask_ key in Authorization: Bearer header
 	// The middleware should skip session resolution and go directly to strategy chain
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+rawKey)
 	req.Header.Set("X-App-ID", appID.String())
 	rec := httptest.NewRecorder()
@@ -464,7 +464,7 @@ func TestE2E_MultiAuth_RevokedAPIKeyRejected(t *testing.T) {
 	})
 
 	// Step 5: Send request with the revoked API key
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-API-Key", rawKey)
 	req.Header.Set("X-App-ID", appID.String())
 	rec := httptest.NewRecorder()
@@ -538,7 +538,7 @@ func TestE2E_MultiAuth_ContextValuesCorrect(t *testing.T) {
 	})
 
 	// Step 4: Send request with API key
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-API-Key", rawKey)
 	req.Header.Set("X-App-ID", appID.String())
 	rec := httptest.NewRecorder()

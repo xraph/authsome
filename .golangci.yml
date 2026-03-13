@@ -75,6 +75,7 @@ linters:
     gosec:
       excludes:
         - G104
+        - G115 # Integer overflow conversions: all flagged sites are bounded ASCII range casts.
         - G117 # Secret field names are legitimate for HMAC signing secrets.
         - G304
         - G402

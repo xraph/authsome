@@ -121,7 +121,7 @@ func TestEnvironmentMiddleware_HeaderResolution(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-Environment-ID", testEnvID.String())
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -175,7 +175,7 @@ func TestEnvironmentMiddleware_FallbackToDefault(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -226,7 +226,7 @@ func TestEnvironmentMiddleware_ResolvesSettings(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -258,7 +258,7 @@ func TestEnvironmentMiddleware_NoAppID(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -294,7 +294,7 @@ func TestEnvironmentMiddleware_InvalidHeader(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-Environment-ID", "not-a-valid-id")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -337,7 +337,7 @@ func TestEnvironmentMiddleware_WrongApp(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("X-Environment-ID", testEnvID.String())
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -367,7 +367,7 @@ func TestRequireEnvironment_WithEnv(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -385,7 +385,7 @@ func TestRequireEnvironment_WithoutEnv(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

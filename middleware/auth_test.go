@@ -137,7 +137,7 @@ func TestAuthMiddleware_NoToken(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -203,7 +203,7 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer valid-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -275,7 +275,7 @@ func TestAuthMiddleware_ValidToken_OrgScope(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer org-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -312,7 +312,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer bad-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -343,7 +343,7 @@ func TestAuthMiddleware_NonBearerAuth(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Basic dGVzdDp0ZXN0")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -386,7 +386,7 @@ func TestAuthMiddleware_UserResolveFails(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	req.Header.Set("Authorization", "Bearer valid-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -418,7 +418,7 @@ func TestRequireAuth_WithUser(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -436,7 +436,7 @@ func TestRequireAuth_WithoutUser(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/protected", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

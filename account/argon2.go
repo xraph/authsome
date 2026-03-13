@@ -97,13 +97,13 @@ func decodeArgon2Hash(encoded string) (params Argon2Params, salt, hash []byte, e
 	if err != nil {
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: decode argon2 salt: %w", err)
 	}
-	params.SaltLength = uint32(len(salt)) //nolint:gosec // G115: length validated by argon2 output
+	params.SaltLength = uint32(len(salt))
 
 	hash, err = base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
 		return Argon2Params{}, nil, nil, fmt.Errorf("account: decode argon2 hash: %w", err)
 	}
-	params.KeyLength = uint32(len(hash)) //nolint:gosec // G115: length validated by argon2 output
+	params.KeyLength = uint32(len(hash))
 
 	return params, salt, hash, nil
 }

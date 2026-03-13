@@ -521,7 +521,7 @@ func (i ID) MarshalBSONValue() (bsonType byte, data []byte, err error) {
 	l := len(s) + 1 // length includes null terminator
 
 	buf := make([]byte, 4+len(s)+1)
-	binary.LittleEndian.PutUint32(buf, uint32(l)) //nolint:gosec // TypeID strings are <64 bytes; no overflow
+	binary.LittleEndian.PutUint32(buf, uint32(l))
 	copy(buf[4:], s)
 	// trailing 0x00 is already zero from make
 

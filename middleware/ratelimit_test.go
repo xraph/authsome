@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,7 +28,7 @@ func TestRateLimit_AllowsUnderLimit(t *testing.T) {
 	})
 
 	for i := 0; i < 3; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code, "request %d should be allowed", i+1)
@@ -49,14 +50,14 @@ func TestRateLimit_DeniesOverLimit(t *testing.T) {
 
 	// Use up the limit
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code)
 	}
 
 	// Should be denied
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
@@ -81,7 +82,7 @@ func TestRateLimit_NoopAllowsAll(t *testing.T) {
 	})
 
 	for i := 0; i < 10; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusOK, rec.Code)
