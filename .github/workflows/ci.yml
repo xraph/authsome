@@ -182,20 +182,8 @@ jobs:
         with:
           channel: stable
 
-      - name: Get dependencies (core)
-        run: cd flutter/packages/authsome_core && flutter pub get
+      - name: Get dependencies (workspace)
+        run: cd flutter && flutter pub get
 
-      - name: Analyze (core)
-        run: cd flutter/packages/authsome_core && flutter analyze --no-fatal-infos
-
-      - name: Get dependencies (flutter)
-        run: cd flutter/packages/authsome_flutter && flutter pub get
-
-      - name: Analyze (flutter)
-        run: cd flutter/packages/authsome_flutter && flutter analyze --no-fatal-infos
-
-      - name: Get dependencies (flutter_ui)
-        run: cd flutter/packages/authsome_flutter_ui && flutter pub get
-
-      - name: Analyze (flutter_ui)
-        run: cd flutter/packages/authsome_flutter_ui && flutter analyze --no-fatal-infos
+      - name: Analyze (workspace)
+        run: cd flutter && flutter analyze --no-fatal-infos

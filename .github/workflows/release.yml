@@ -209,6 +209,9 @@ jobs:
         with:
           channel: stable
 
+      - name: Resolve workspace dependencies
+        run: cd flutter && flutter pub get
+
       - name: Prepare Flutter packages for publishing
         run: |
           chmod +x scripts/prepare-flutter-publish.sh
