@@ -104,7 +104,7 @@ func (a *API) registerWellKnownRoutes(router forge.Router) error {
 	)
 }
 
-func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (map[string]any, error) {
+func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // Forge requires pointer return type for handler detection
 	manifest := map[string]any{
 		"version":   "0.5.0",
 		"base_path": a.engine.Config().BasePath,
@@ -128,7 +128,7 @@ func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (map[string]any, er
 	return nil, ctx.JSON(http.StatusOK, manifest)
 }
 
-func (a *API) handleOpenAPI(ctx forge.Context, _ *struct{}) (map[string]any, error) {
+func (a *API) handleOpenAPI(ctx forge.Context, _ *struct{}) (*map[string]any, error) { //nolint:gocritic // Forge requires pointer return type for handler detection
 	// Prefer the Forge router's dynamically-generated spec when available.
 	// This spec is built from the actual registered routes and their OpenAPI
 	// metadata, so it always reflects the true API surface.

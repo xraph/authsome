@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/xraph/forge"
 	"github.com/xraph/warden"
@@ -11,6 +12,34 @@ import (
 	wardenid "github.com/xraph/warden/id"
 	wardenrole "github.com/xraph/warden/role"
 )
+
+// convertToWardenRoleID converts an authsome role ID string (prefix "arol") to a
+// warden role ID (prefix "role"). If the string already has the warden prefix, it
+// is parsed directly. This handles the prefix mismatch between authsome and warden.
+func convertToWardenRoleID(s string) (wardenid.RoleID, error) {
+	if wid, err := wardenid.ParseRoleID(s); err == nil {
+		return wid, nil
+	}
+	// Extract suffix and reconstruct with warden role prefix.
+	parts := strings.SplitN(s, "_", 2)
+	if len(parts) != 2 {
+		return wardenid.Nil, fmt.Errorf("rbac: invalid role id format %q", s)
+	}
+	return wardenid.ParseRoleID(string(wardenid.PrefixRole) + "_" + parts[1])
+}
+
+// convertToWardenPermissionID converts an authsome permission ID string (prefix "aprm")
+// to a warden permission ID (prefix "perm").
+func convertToWardenPermissionID(s string) (wardenid.PermissionID, error) {
+	if wid, err := wardenid.ParsePermissionID(s); err == nil {
+		return wid, nil
+	}
+	parts := strings.SplitN(s, "_", 2)
+	if len(parts) != 2 {
+		return wardenid.Nil, fmt.Errorf("rbac: invalid permission id format %q", s)
+	}
+	return wardenid.ParsePermissionID(string(wardenid.PrefixPermission) + "_" + parts[1])
+}
 
 // WardenStore implements rbac.Store by delegating to a Warden authorization engine.
 // Role/permission CRUD is performed via Warden's store. HasPermission uses
@@ -42,7 +71,7 @@ func (s *WardenStore) CreateRole(ctx context.Context, r *Role) error {
 }
 
 func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error) {
-	wid, err := wardenid.ParseRoleID(roleID)
+	wid, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
@@ -70,7 +99,7 @@ func (s *WardenStore) UpdateRole(ctx context.Context, r *Role) error {
 }
 
 func (s *WardenStore) DeleteRole(ctx context.Context, roleID string) error {
-	wid, err := wardenid.ParseRoleID(roleID)
+	wid, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
@@ -98,7 +127,7 @@ func (s *WardenStore) ListRoles(ctx context.Context, appID string) ([]*Role, err
 
 func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	// Resolve the role to find its TenantID (needed for the warden permission).
-	roleID, err := wardenid.ParseRoleID(p.RoleID)
+	roleID, err := convertToWardenRoleID(p.RoleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", p.RoleID, err)
 	}
@@ -131,7 +160,7 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 }
 
 func (s *WardenStore) RemovePermission(ctx context.Context, permID string) error {
-	wid, err := wardenid.ParsePermissionID(permID)
+	wid, err := convertToWardenPermissionID(permID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid permission id %q: %w", permID, err)
 	}
@@ -143,7 +172,7 @@ func (s *WardenStore) RemovePermission(ctx context.Context, permID string) error
 }
 
 func (s *WardenStore) ListRolePermissions(ctx context.Context, roleID string) ([]*Permission, error) {
-	wRoleID, err := wardenid.ParseRoleID(roleID)
+	wRoleID, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
@@ -172,7 +201,7 @@ func (s *WardenStore) ListRolePermissions(ctx context.Context, roleID string) ([
 
 func (s *WardenStore) AssignUserRole(ctx context.Context, ur *UserRole) error {
 	// Resolve the role to find its TenantID for the assignment.
-	roleID, err := wardenid.ParseRoleID(ur.RoleID)
+	roleID, err := convertToWardenRoleID(ur.RoleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", ur.RoleID, err)
 	}
@@ -189,7 +218,7 @@ func (s *WardenStore) AssignUserRole(ctx context.Context, ur *UserRole) error {
 }
 
 func (s *WardenStore) UnassignUserRole(ctx context.Context, userID, roleID string) error {
-	wRoleID, err := wardenid.ParseRoleID(roleID)
+	wRoleID, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
@@ -258,7 +287,7 @@ func resolveTenantFromContext(ctx context.Context) string {
 // ──────────────────────────────────────────────────
 
 func (s *WardenStore) GetRoleChildren(ctx context.Context, roleID string) ([]*Role, error) {
-	wid, err := wardenid.ParseRoleID(roleID)
+	wid, err := convertToWardenRoleID(roleID)
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}

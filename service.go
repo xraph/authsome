@@ -1265,6 +1265,10 @@ func (e *Engine) ListUserRoles(ctx context.Context, userID id.UserID) ([]*rbac.R
 	if appID := e.PlatformAppID(); !appID.IsNil() {
 		return e.rbacStore().ListUserRolesForApp(ctx, appID.String(), userID.String())
 	}
+	// Fallback to config.AppID (e.g. tests that skip bootstrap).
+	if e.config.AppID != "" {
+		return e.rbacStore().ListUserRolesForApp(ctx, e.config.AppID, userID.String())
+	}
 	return e.rbacStore().ListUserRoles(ctx, userID.String())
 }
 
@@ -1367,6 +1371,10 @@ func (e *Engine) ensureWardenScope(ctx context.Context) context.Context {
 	appID := e.PlatformAppID()
 	if !appID.IsNil() {
 		return warden.WithTenant(ctx, appID.String(), appID.String())
+	}
+	// Fallback to config.AppID (e.g. tests that skip bootstrap).
+	if e.config.AppID != "" {
+		return warden.WithTenant(ctx, e.config.AppID, e.config.AppID)
 	}
 	return ctx
 }
