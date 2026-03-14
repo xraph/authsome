@@ -9,18 +9,18 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
-	github.com/xraph/chronicle v1.3.0
-	github.com/xraph/forge v1.3.0
+	github.com/xraph/chronicle v1.3.1
+	github.com/xraph/forge v1.3.1
 	github.com/xraph/forgeui v1.3.0
-	github.com/xraph/grove v1.3.0
-	github.com/xraph/grove/drivers/mongodriver v1.3.0
-	github.com/xraph/grove/drivers/pgdriver v1.3.0
-	github.com/xraph/grove/drivers/sqlitedriver v1.3.0
-	github.com/xraph/herald v1.3.0
-	github.com/xraph/keysmith v1.3.0
-	github.com/xraph/relay v1.3.0
+	github.com/xraph/grove v1.3.1
+	github.com/xraph/grove/drivers/mongodriver v1.3.1
+	github.com/xraph/grove/drivers/pgdriver v1.3.1
+	github.com/xraph/grove/drivers/sqlitedriver v1.3.1
+	github.com/xraph/herald v1.3.1
+	github.com/xraph/keysmith v1.3.1
+	github.com/xraph/relay v1.3.1
 	github.com/xraph/vessel v1.0.0
-	github.com/xraph/warden v1.3.0
+	github.com/xraph/warden v1.3.1
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.48.0

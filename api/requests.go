@@ -412,6 +412,12 @@ type SetDefaultEnvironmentRequest struct {
 	EnvID string `path:"envId" description:"Environment identifier"`
 }
 
+// UpdateEnvironmentSettingsRequest binds path + body for PATCH /environments/:envId/settings.
+type UpdateEnvironmentSettingsRequest struct {
+	EnvID string `path:"envId" description:"Environment identifier"`
+	environment.Settings
+}
+
 // EnvironmentListResponse wraps a list of environments.
 type EnvironmentListResponse struct {
 	Environments any `json:"environments" description:"List of environments"`

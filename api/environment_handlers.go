@@ -44,6 +44,7 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 		forge.WithSummary("Get environment"),
 		forge.WithDescription("Returns details of a specific environment."),
 		forge.WithOperationID("getEnvironment"),
+		forge.WithRequestSchema(GetEnvironmentRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Environment details", environment.Environment{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -65,6 +66,7 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 		forge.WithSummary("Delete environment"),
 		forge.WithDescription("Deletes an environment. Cannot delete the default environment."),
 		forge.WithOperationID("deleteEnvironment"),
+		forge.WithRequestSchema(DeleteEnvironmentRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -86,6 +88,7 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 		forge.WithSummary("Get environment settings"),
 		forge.WithDescription("Returns the resolved settings for an environment (type defaults merged with overrides)."),
 		forge.WithOperationID("getEnvironmentSettings"),
+		forge.WithRequestSchema(GetEnvironmentSettingsRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Resolved settings", EnvironmentSettingsResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -96,7 +99,7 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 		forge.WithSummary("Update environment settings"),
 		forge.WithDescription("Updates per-environment settings overrides."),
 		forge.WithOperationID("updateEnvironmentSettings"),
-		forge.WithRequestSchema(environment.Settings{}),
+		forge.WithRequestSchema(UpdateEnvironmentSettingsRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Updated settings", environment.Environment{}),
 		forge.WithErrorResponses(),
 	); err != nil {
@@ -107,6 +110,7 @@ func (a *API) registerEnvironmentRoutes(router forge.Router) error {
 		forge.WithSummary("Set default environment"),
 		forge.WithDescription("Sets an environment as the default for its app."),
 		forge.WithOperationID("setDefaultEnvironment"),
+		forge.WithRequestSchema(SetDefaultEnvironmentRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Default set", StatusResponse{}),
 		forge.WithErrorResponses(),
 	)
@@ -319,7 +323,7 @@ func (a *API) handleGetEnvironmentSettings(ctx forge.Context, _ *GetEnvironmentS
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
-func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *environment.Settings) (*environment.Environment, error) {
+func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *UpdateEnvironmentSettingsRequest) (*environment.Environment, error) {
 	envID, err := id.ParseEnvironmentID(ctx.Param("envId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid environment id: %v", err))
@@ -331,7 +335,8 @@ func (a *API) handleUpdateEnvironmentSettings(ctx forge.Context, req *environmen
 	}
 
 	// Merge new overrides on top of existing.
-	env.Settings = environment.MergeSettings(env.Settings, req)
+	settings := req.Settings
+	env.Settings = environment.MergeSettings(env.Settings, &settings)
 
 	if err := a.engine.Store().UpdateEnvironment(ctx.Context(), env); err != nil {
 		return nil, mapError(err)
