@@ -56,7 +56,7 @@ type Config struct {
 	DeviceCodeInterval int
 
 	// VerificationURI is the customizable user verification URL for the device flow.
-	// If empty, defaults to "{issuer}/v1/auth/oauth/device".
+	// If empty, defaults to "{issuer}/v1/oauth/device".
 	// Set this to a custom URL (e.g. "https://myapp.com/device") when using
 	// an external UI like authsome-ui to host the verification page.
 	VerificationURI string
@@ -163,7 +163,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 	}
 
 	// Public OAuth2 endpoints
-	g := router.Group("/v1/auth/oauth", forge.WithGroupTags("OAuth2"))
+	g := router.Group("/v1/oauth", forge.WithGroupTags("OAuth2"))
 
 	if err := g.GET("/authorize", p.handleAuthorize,
 		forge.WithSummary("OAuth2 Authorization"),
@@ -234,7 +234,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 	}
 
 	// Admin endpoints for client management
-	admin := router.Group("/v1/auth/admin/oauth", forge.WithGroupTags("OAuth2 Admin"))
+	admin := router.Group("/v1/admin/oauth", forge.WithGroupTags("OAuth2 Admin"))
 
 	if err := admin.POST("/clients", p.handleCreateClient,
 		forge.WithSummary("Create OAuth2 client"),
@@ -588,11 +588,11 @@ func (p *Plugin) handleDiscovery(_ forge.Context, _ *DiscoveryRequest) (*Discove
 
 	return &DiscoveryResponse{
 		Issuer:                            issuer,
-		AuthorizationEndpoint:             issuer + "/v1/auth/oauth/authorize",
-		TokenEndpoint:                     issuer + "/v1/auth/oauth/token",
-		UserinfoEndpoint:                  issuer + "/v1/auth/oauth/userinfo",
-		RevocationEndpoint:                issuer + "/v1/auth/oauth/revoke",
-		DeviceAuthorizationEndpoint:       issuer + "/v1/auth/oauth/device/authorize",
+		AuthorizationEndpoint:             issuer + "/v1/oauth/authorize",
+		TokenEndpoint:                     issuer + "/v1/oauth/token",
+		UserinfoEndpoint:                  issuer + "/v1/oauth/userinfo",
+		RevocationEndpoint:                issuer + "/v1/oauth/revoke",
+		DeviceAuthorizationEndpoint:       issuer + "/v1/oauth/device/authorize",
 		JWKSURI:                           issuer + "/.well-known/jwks.json",
 		ResponseTypesSupported:            []string{"code"},
 		GrantTypesSupported:               []string{"authorization_code", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
@@ -844,7 +844,7 @@ func (p *Plugin) handleDeviceAuthorize(ctx forge.Context, req *DeviceAuthRequest
 		if issuer == "" {
 			issuer = "https://localhost"
 		}
-		verificationURI = issuer + "/v1/auth/oauth/device"
+		verificationURI = issuer + "/v1/oauth/device"
 	}
 
 	scopes := strings.Fields(req.Scope)

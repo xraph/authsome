@@ -14,8 +14,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerUserRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("user"))
+	g := router.Group("/v1", forge.WithGroupTags("user"))
 
 	if err := g.GET("/me", a.handleGetMe,
 		forge.WithSummary("Get current user"),

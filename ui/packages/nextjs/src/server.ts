@@ -95,7 +95,7 @@ export interface GetClientConfigOptions {
 export async function getClientConfig(
   opts: GetClientConfigOptions,
 ): Promise<ClientConfig | null> {
-  const url = new URL("/v1/auth/client-config", opts.baseURL);
+  const url = new URL("/v1/client-config", opts.baseURL);
   if (opts.publishableKey) {
     url.searchParams.set("key", opts.publishableKey);
   }

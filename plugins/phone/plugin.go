@@ -182,7 +182,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return fmt.Errorf("phone: expected forge.Router, got %T", r)
 	}
 
-	g := router.Group("/v1/auth/phone", forge.WithGroupTags("Phone Auth"))
+	g := router.Group("/v1/phone", forge.WithGroupTags("Phone Auth"))
 
 	if err := g.POST("/start", p.handleStart,
 		forge.WithSummary("Start phone authentication"),

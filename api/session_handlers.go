@@ -16,8 +16,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerSessionRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("sessions"))
+	g := router.Group("/v1", forge.WithGroupTags("sessions"))
 
 	if err := g.GET("/sessions", a.handleListSessions,
 		forge.WithSummary("List sessions"),

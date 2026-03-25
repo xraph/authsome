@@ -24,7 +24,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return fmt.Errorf("passkey: expected forge.Router, got %T", r)
 	}
 
-	g := router.Group("/v1/auth/passkeys", forge.WithGroupTags("Passkeys"))
+	g := router.Group("/v1/passkeys", forge.WithGroupTags("Passkeys"))
 
 	if err := g.POST("/register/begin", p.handleRegisterBegin,
 		forge.WithSummary("Begin passkey registration"),

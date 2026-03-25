@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -34,6 +35,15 @@ import (
 
 // SignUp creates a new user account and returns the user + session.
 func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.User, *session.Session, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, nil, err
+	}
+
+	// Normalize email early so all downstream checks use the canonical form.
+	if req.Email != "" {
+		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	}
+
 	// Validate password
 	policy := e.passwordPolicy()
 	if err := policy.ValidatePassword(req.Password); err != nil {
@@ -85,6 +95,13 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		}
 	}
 
+	// Resolve default environment when not explicitly provided.
+	if req.EnvID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil {
+			req.EnvID = env.ID
+		}
+	}
+
 	// Hash password using configured algorithm
 	hash, err := account.HashPasswordWithPolicy(req.Password, policy)
 	if err != nil {
@@ -108,6 +125,9 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Assign default Warden role to the new user.
 	e.EnsureDefaultRole(ctx, req.AppID, u.ID)
+
+	// If this is the first user for the platform app, promote to platform_owner.
+	e.promoteFirstUserToOwner(ctx, req.AppID, u.ID)
 
 	// Create session (using per-app + per-env config; JWT if configured)
 	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
@@ -154,6 +174,10 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 // SignIn authenticates a user and returns the user + session.
 func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.User, *session.Session, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, nil, err
+	}
+
 	// Build lockout key from identifier + appID
 	lockoutKey := e.lockoutKey(req)
 
@@ -177,6 +201,11 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		return nil, nil, fmt.Errorf("authsome: before signin: %w", err)
 	}
 
+	// Normalize email for case-insensitive lookup (emails are stored lowercase).
+	if req.Email != "" {
+		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	}
+
 	// Lookup user
 	var u *user.User
 	var err error
@@ -192,6 +221,13 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	if err != nil {
 		e.recordFailedSignin(ctx, req, lockoutKey)
 		return nil, nil, account.ErrInvalidCredentials
+	}
+
+	// Resolve default environment when not explicitly provided.
+	if req.EnvID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil {
+			req.EnvID = env.ID
+		}
 	}
 
 	// Check banned
@@ -211,6 +247,33 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Reset lockout on successful authentication
 	if e.lockout != nil {
 		_ = e.lockout.Reset(ctx, lockoutKey) //nolint:errcheck // best-effort reset
+	}
+
+	// Enforce email verification. Users whose email is not verified are
+	// blocked from signing in unless enforcement is explicitly disabled.
+	//
+	// Resolution order (first non-nil wins):
+	// 1. Per-app client config override (RequireEmailVerification)
+	// 2. Environment setting (SkipEmailVerification — inverted)
+	// 3. Default: require verification (true)
+	if !u.EmailVerified {
+		requireVerif := true // default: enforce
+
+		// Check per-app override first.
+		if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.RequireEmailVerification != nil {
+			requireVerif = *appCfg.RequireEmailVerification
+		} else {
+			// Fall back to environment setting.
+			if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil && env.Settings != nil {
+				if env.Settings.SkipEmailVerificationEnabled() {
+					requireVerif = false
+				}
+			}
+		}
+
+		if requireVerif {
+			return u, nil, account.ErrEmailNotVerified
+		}
 	}
 
 	// Check password expiration
@@ -287,6 +350,10 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 
 // SignOut terminates a session.
 func (e *Engine) SignOut(ctx context.Context, sessionID id.SessionID) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+
 	sess, err := e.store.GetSession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("authsome: get session: %w", err)
@@ -705,6 +772,12 @@ func (e *Engine) recordFailedSignin(ctx context.Context, req *account.SignInRequ
 // Returns the reset record (token can be sent via email by the caller).
 // Returns nil, nil if user not found (avoids email enumeration).
 func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email string) (*account.PasswordReset, error) {
+	if err := e.requireStarted(); err != nil {
+		return nil, err
+	}
+
+	email = strings.ToLower(strings.TrimSpace(email))
+
 	u, err := e.store.GetUserByEmail(ctx, appID, email)
 	if err != nil {
 		return nil, nil //nolint:nilerr // intentionally returning nil on auth failure
@@ -731,6 +804,10 @@ func (e *Engine) ForgotPassword(ctx context.Context, appID id.AppID, email strin
 
 // ResetPassword resets a user's password using a reset token.
 func (e *Engine) ResetPassword(ctx context.Context, token, newPassword string) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+
 	pr, err := e.store.GetPasswordReset(ctx, token)
 	if err != nil {
 		return account.ErrInvalidCredentials
@@ -872,6 +949,10 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 
 // VerifyEmail verifies a user's email using a verification token.
 func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+
 	v, err := e.store.GetVerification(ctx, token)
 	if err != nil {
 		return account.ErrInvalidCredentials
@@ -1234,11 +1315,14 @@ func (e *Engine) AssignUserRole(ctx context.Context, ur *rbac.UserRole) error {
 		return fmt.Errorf("authsome: assign user role: %w", err)
 	}
 
+	// Resolve names for notification template variables (best-effort).
+	hookMeta := e.buildRoleHookMetadata(ctx, ur.UserID, ur.RoleID)
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionRoleAssign,
 		Resource:   hook.ResourceRole,
 		ResourceID: ur.RoleID,
 		ActorID:    ur.UserID,
+		Metadata:   hookMeta,
 	})
 
 	return nil
@@ -1250,14 +1334,33 @@ func (e *Engine) UnassignUserRole(ctx context.Context, userID id.UserID, roleID 
 		return fmt.Errorf("authsome: unassign user role: %w", err)
 	}
 
+	// Resolve names for notification template variables (best-effort).
+	hookMeta := e.buildRoleHookMetadata(ctx, userID.String(), roleID.String())
 	e.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionRoleUnassign,
 		Resource:   hook.ResourceRole,
 		ResourceID: roleID.String(),
 		ActorID:    userID.String(),
+		Metadata:   hookMeta,
 	})
 
 	return nil
+}
+
+// buildRoleHookMetadata resolves user and role names for notification templates.
+// All lookups are best-effort — missing fields are simply omitted.
+func (e *Engine) buildRoleHookMetadata(ctx context.Context, userIDStr, roleIDStr string) map[string]string {
+	meta := make(map[string]string, 4)
+	if uid, err := id.ParseUserID(userIDStr); err == nil {
+		if u, err := e.store.GetUser(ctx, uid); err == nil {
+			meta["user_name"] = u.Name()
+			meta["email"] = u.Email
+		}
+	}
+	if role, err := e.rbacStore().GetRole(ctx, roleIDStr); err == nil {
+		meta["new_role"] = role.Name
+	}
+	return meta
 }
 
 // ListUserRoles returns all roles assigned to a user within the platform app scope.
@@ -1345,6 +1448,55 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 		UserID: userID.String(),
 		RoleID: role.ID,
 	})
+}
+
+// promoteFirstUserToOwner assigns the platform_owner (or app owner) role to
+// the first user created for an app. This must live in the engine so it works
+// regardless of entry point (API handler, dashboard, SDK, etc.).
+func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, userID id.UserID) {
+	if !e.hasRBACStore() {
+		return
+	}
+
+	platformID := e.PlatformAppID()
+	if appID.IsNil() || platformID.IsNil() {
+		return
+	}
+
+	// Only promote for the platform app.
+	if appID != platformID {
+		return
+	}
+
+	list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: 2})
+	if err != nil || list == nil || len(list.Users) != 1 {
+		return // Not the first user.
+	}
+
+	ownerRole, err := e.GetRoleBySlug(ctx, appID, rbac.PlatformOwnerSlug)
+	if err != nil || ownerRole == nil {
+		e.logger.Warn("authsome: could not find platform_owner role for first-user promotion",
+			log.String("app_id", appID.String()),
+			log.String("error", fmt.Sprintf("%v", err)),
+		)
+		return
+	}
+
+	if err := e.AssignUserRole(ctx, &rbac.UserRole{
+		UserID: userID.String(),
+		RoleID: ownerRole.ID,
+	}); err != nil {
+		e.logger.Warn("authsome: failed to promote first user to platform_owner",
+			log.String("user_id", userID.String()),
+			log.String("error", err.Error()),
+		)
+		return
+	}
+
+	e.logger.Info("authsome: promoted first user to platform_owner",
+		log.String("user_id", userID.String()),
+		log.String("app_id", appID.String()),
+	)
 }
 
 // ensureWardenScope ensures the context has a warden tenant scope set.

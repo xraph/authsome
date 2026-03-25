@@ -16,8 +16,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerBulkRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base+"/admin/bulk",
+	g := router.Group("/v1/admin/bulk",
 		forge.WithGroupTags("admin", "bulk"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),

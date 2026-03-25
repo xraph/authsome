@@ -1,11 +1,18 @@
 package dashboard
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/xraph/authsome/store/memory"
+
+	authsome "github.com/xraph/authsome"
+	"github.com/xraph/warden"
+	wardenmem "github.com/xraph/warden/store/memory"
 )
 
 // TestParseAppEnvRoute verifies URL parsing for the dashboard route dispatcher.
@@ -227,6 +234,72 @@ func findProjectRoot(t *testing.T) string {
 			t.Fatal("could not find project root (no go.mod)")
 		}
 		dir = parent
+	}
+}
+
+// ──────────────────────────────────────────────────
+// defaultAppID
+// ──────────────────────────────────────────────────
+
+func TestContributor_DefaultAppID_UsesPlatformAppID(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	if err != nil {
+		t.Fatalf("create warden: %v", err)
+	}
+
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithBootstrap(), // enables bootstrap with default config
+	)
+	if err != nil {
+		t.Fatalf("create engine: %v", err)
+	}
+	if err := eng.Start(context.Background()); err != nil {
+		t.Fatalf("start engine: %v", err)
+	}
+
+	c := &Contributor{engine: eng}
+	appID := c.defaultAppID()
+
+	// With bootstrap enabled, defaultAppID should return the platform app ID
+	platformID := eng.PlatformAppID()
+	if platformID.IsNil() {
+		t.Fatal("platform app ID should not be nil after bootstrap")
+	}
+	if appID != platformID {
+		t.Errorf("defaultAppID() = %v, want platform app ID %v", appID, platformID)
+	}
+}
+
+func TestContributor_DefaultAppID_FallsBackToConfig(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	if err != nil {
+		t.Fatalf("create warden: %v", err)
+	}
+
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID("aapp_01jf0000000000000000000000"),
+		// No bootstrap — PlatformAppID will be nil
+	)
+	if err != nil {
+		t.Fatalf("create engine: %v", err)
+	}
+	if err := eng.Start(context.Background()); err != nil {
+		t.Fatalf("start engine: %v", err)
+	}
+
+	c := &Contributor{engine: eng}
+	appID := c.defaultAppID()
+
+	if appID.String() != "aapp_01jf0000000000000000000000" {
+		t.Errorf("defaultAppID() = %v, want config app ID aapp_01jf0000000000000000000000", appID)
 	}
 }
 

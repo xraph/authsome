@@ -1177,7 +1177,9 @@ type appClientConfigModel struct {
 	MFAEnabled       *bool           `grove:"mfa_enabled"         bson:"mfa_enabled,omitempty"`
 	SSOEnabled       *bool           `grove:"sso_enabled"         bson:"sso_enabled,omitempty"`
 	SocialEnabled    *bool           `grove:"social_enabled"      bson:"social_enabled,omitempty"`
-	SocialProviders  json.RawMessage `grove:"social_providers"    bson:"social_providers,omitempty"`
+	WaitlistEnabled          *bool           `grove:"waitlist_enabled"              bson:"waitlist_enabled,omitempty"`
+	RequireEmailVerification *bool           `grove:"require_email_verification"    bson:"require_email_verification,omitempty"`
+	SocialProviders          json.RawMessage `grove:"social_providers"              bson:"social_providers,omitempty"`
 	MFAMethods       json.RawMessage `grove:"mfa_methods"         bson:"mfa_methods,omitempty"`
 	AppName          *string         `grove:"app_name"            bson:"app_name,omitempty"`
 	LogoURL          *string         `grove:"logo_url"            bson:"logo_url,omitempty"`
@@ -1197,12 +1199,14 @@ func toAppClientConfigModel(c *appclientconfig.Config) *appClientConfigModel {
 		MFAEnabled:       c.MFAEnabled,
 		SSOEnabled:       c.SSOEnabled,
 		SocialEnabled:    c.SocialEnabled,
-		SocialProviders:  sp,
-		MFAMethods:       mm,
-		AppName:          c.AppName,
-		LogoURL:          c.LogoURL,
-		CreatedAt:        c.CreatedAt,
-		UpdatedAt:        c.UpdatedAt,
+		WaitlistEnabled:          c.WaitlistEnabled,
+		RequireEmailVerification: c.RequireEmailVerification,
+		SocialProviders:          sp,
+		MFAMethods:               mm,
+		AppName:                  c.AppName,
+		LogoURL:                  c.LogoURL,
+		CreatedAt:                c.CreatedAt,
+		UpdatedAt:                c.UpdatedAt,
 	}
 }
 
@@ -1232,12 +1236,14 @@ func fromAppClientConfigModel(m *appClientConfigModel) (*appclientconfig.Config,
 		MFAEnabled:       m.MFAEnabled,
 		SSOEnabled:       m.SSOEnabled,
 		SocialEnabled:    m.SocialEnabled,
-		SocialProviders:  sp,
-		MFAMethods:       mm,
-		AppName:          m.AppName,
-		LogoURL:          m.LogoURL,
-		CreatedAt:        m.CreatedAt,
-		UpdatedAt:        m.UpdatedAt,
+		WaitlistEnabled:          m.WaitlistEnabled,
+		RequireEmailVerification: m.RequireEmailVerification,
+		SocialProviders:          sp,
+		MFAMethods:               mm,
+		AppName:                  m.AppName,
+		LogoURL:                  m.LogoURL,
+		CreatedAt:                m.CreatedAt,
+		UpdatedAt:                m.UpdatedAt,
 	}, nil
 }
 

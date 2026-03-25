@@ -1,0 +1,9 @@
+name: authsome
+description: Dart SDK for Authsome authentication
+version: 0.1.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  http: ^1.2.0

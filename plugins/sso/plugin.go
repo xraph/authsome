@@ -297,7 +297,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return fmt.Errorf("sso: expected forge.Router, got %T", r)
 	}
 
-	g := router.Group("/v1/auth/sso", forge.WithGroupTags("SSO"))
+	g := router.Group("/v1/sso", forge.WithGroupTags("SSO"))
 
 	if err := g.POST("/:provider/login", p.handleLogin,
 		forge.WithSummary("Start SSO login flow"),

@@ -13,9 +13,8 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerPasswordRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
 	rlCfg := a.engine.Config().RateLimit
-	g := router.Group(base, forge.WithGroupTags("password"))
+	g := router.Group("/v1", forge.WithGroupTags("password"))
 
 	forgotOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	forgotOpts = append(forgotOpts,

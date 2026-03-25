@@ -82,3 +82,28 @@ func WithGroveDatabase(name string) ExtOption {
 		e.useGrove = true
 	}
 }
+
+// WithClientMode configures the extension as a client that delegates all
+// auth operations to a remote authsome server via HTTP API. In this mode:
+//   - No local engine is created
+//   - No database connection is required
+//   - Token validation uses the /v1/introspect endpoint on the remote server
+//   - An authclient.Client is registered in the DI container for downstream use
+//
+// This is the intended mode for services that are NOT the auth authority
+// (e.g. TwinOS instances that delegate to a shared Portal).
+func WithClientMode(portalURL string) ExtOption {
+	return func(e *Extension) {
+		e.config.ClientMode = true
+		e.config.PortalURL = portalURL
+	}
+}
+
+// WithServiceAPIKey sets the API key used to authenticate this service with
+// the remote authsome server. Required for client mode bootstrap operations
+// (e.g. creating organizations during startup).
+func WithServiceAPIKey(key string) ExtOption {
+	return func(e *Extension) {
+		e.config.ServiceAPIKey = key
+	}
+}

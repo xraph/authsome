@@ -57,6 +57,7 @@ const (
 	PrefixSCIMConfig      Prefix = "ascm"
 	PrefixSCIMToken       Prefix = "asct"
 	PrefixSCIMLog         Prefix = "ascl"
+	PrefixWaitlist        Prefix = "awlt"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -174,6 +175,9 @@ type SCIMTokenID = ID
 
 // SCIMLogID is a type-safe identifier for SCIM provision logs (prefix: "ascl").
 type SCIMLogID = ID
+
+// WaitlistID is a type-safe identifier for waitlist entries (prefix: "awlt").
+type WaitlistID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
@@ -346,6 +350,9 @@ func NewSCIMTokenID() ID { return New(PrefixSCIMToken) }
 // NewSCIMLogID generates a new unique SCIM provision log ID.
 func NewSCIMLogID() ID { return New(PrefixSCIMLog) }
 
+// NewWaitlistID generates a new unique waitlist entry ID.
+func NewWaitlistID() ID { return New(PrefixWaitlist) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -450,6 +457,9 @@ func ParseSCIMTokenID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSC
 
 // ParseSCIMLogID parses a string and validates the "ascl" prefix.
 func ParseSCIMLogID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSCIMLog) }
+
+// ParseWaitlistID parses a string and validates the "awlt" prefix.
+func ParseWaitlistID(s string) (ID, error) { return ParseWithPrefix(s, PrefixWaitlist) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }

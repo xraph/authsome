@@ -168,9 +168,18 @@ func NewRegistry(logger log.Logger) *Registry {
 
 // Register adds a plugin and type-asserts it into all applicable
 // hook caches. Plugins are notified in registration order.
+// Duplicate plugins (same Name()) are silently skipped.
 func (r *Registry) Register(p Plugin) {
-	r.plugins = append(r.plugins, p)
 	name := p.Name()
+	for _, existing := range r.plugins {
+		if existing.Name() == name {
+			r.logger.Warn("authsome: plugin already registered, skipping duplicate",
+				log.String("plugin", name),
+			)
+			return
+		}
+	}
+	r.plugins = append(r.plugins, p)
 
 	if h, ok := p.(OnInit); ok {
 		r.onInit = append(r.onInit, onInitEntry{name, h})

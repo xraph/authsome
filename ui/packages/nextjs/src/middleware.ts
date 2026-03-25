@@ -61,7 +61,7 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
     // If this is an auth page and user has a session token, redirect away.
     if (sessionToken && matchesPath(pathname, authPaths)) {
       try {
-        const res = await fetch(`${config.baseURL}/v1/auth/me`, {
+        const res = await fetch(`${config.baseURL}/v1/me`, {
           headers: { Authorization: `Bearer ${sessionToken}` },
         });
         if (res.ok) {
@@ -87,11 +87,14 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
 
     // Validate the token against the API.
     try {
-      const res = await fetch(`${config.baseURL}/v1/auth/me`, {
+      const res = await fetch(`${config.baseURL}/v1/me`, {
         headers: { Authorization: `Bearer ${sessionToken}` },
       });
 
-      if (!res.ok) {
+      if (res.status === 401) {
+        // Only redirect on explicit authentication rejection.
+        // Other errors (404 when portal is down, 500, etc.) should not
+        // force a logout — let the page render and retry later.
         return redirectToSignIn(request, signInPage);
       }
     } catch {

@@ -115,7 +115,7 @@ func RequireAnyRole(checker RoleChecker, roles ...string) forge.Middleware {
 			// roles with wildcard permissions (e.g. platform_owner with *:*)
 			// to satisfy any role check without explicit slug matching.
 			if pc, ok := checker.(PermissionChecker); ok {
-				allowed, permErr := pc.HasPermission(ctx.Context(), userID, "manage", "admin")
+				allowed, permErr := pc.HasPermission(ctx.Context(), userID, "manage", "app")
 				if permErr == nil && allowed {
 					return next(ctx)
 				}

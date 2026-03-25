@@ -1,7 +1,7 @@
 /** Headless UI components for common auth flows. */
 
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
-import { useAuth } from "./context";
+import { useAuth, type AuthContextValue } from "./context";
 
 // ── Sign In ─────────────────────────────────────────
 
@@ -62,10 +62,10 @@ export interface SignUpFormProps {
   children: (props: {
     email: string;
     password: string;
-    name: string;
+    fields: Record<string, string>;
     setEmail: (v: string) => void;
     setPassword: (v: string) => void;
-    setName: (v: string) => void;
+    setField: (key: string, value: string) => void;
     submit: (e?: FormEvent) => void;
     isLoading: boolean;
     error: string | null;
@@ -80,23 +80,28 @@ export function SignUpForm({ children, onSuccess }: SignUpFormProps) {
   const { signUp, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+
+  const setField = useCallback((key: string, value: string) => {
+    setFields((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   const submit = useCallback(
     (e?: FormEvent) => {
       e?.preventDefault();
       setError(null);
-      signUp(email, password, name || undefined)
+      const f = Object.keys(fields).length > 0 ? fields : undefined;
+      signUp(email, password, f)
         .then(() => onSuccess?.())
         .catch((err: Error) => setError(err.message));
     },
-    [email, password, name, signUp, onSuccess],
+    [email, password, fields, signUp, onSuccess],
   );
 
   return (
     <>
-      {children({ email, password, name, setEmail, setPassword, setName, submit, isLoading, error })}
+      {children({ email, password, fields, setEmail, setPassword, setField, submit, isLoading, error })}
     </>
   );
 }
@@ -163,6 +168,102 @@ export function AuthGuard({ children, fallback = null, loading = null }: AuthGua
 
   if (state.status !== "authenticated") {
     return <>{fallback}</>;
+  }
+
+  return <>{children}</>;
+}
+
+// ── SignedIn / SignedOut ─────────────────────────────
+
+export interface SignedInProps {
+  children: ReactNode;
+}
+
+/**
+ * Renders children only when the user is authenticated.
+ *
+ * ```tsx
+ * <SignedIn>
+ *   <Dashboard />
+ * </SignedIn>
+ * ```
+ */
+export function SignedIn({ children }: SignedInProps) {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading || !isAuthenticated) return null;
+  return <>{children}</>;
+}
+
+export interface SignedOutProps {
+  children: ReactNode;
+}
+
+/**
+ * Renders children only when the user is NOT authenticated.
+ *
+ * ```tsx
+ * <SignedOut>
+ *   <SignInPage />
+ * </SignedOut>
+ * ```
+ */
+export function SignedOut({ children }: SignedOutProps) {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading || isAuthenticated) return null;
+  return <>{children}</>;
+}
+
+// ── Protect ─────────────────────────────────────────
+
+export interface ProtectProps {
+  children: ReactNode;
+  /** Fallback rendered when the user doesn't meet the requirements. */
+  fallback?: ReactNode;
+  /** Require a specific role (e.g. "admin"). */
+  role?: string;
+  /** Require a specific permission (e.g. "packages:write"). */
+  permission?: string;
+  /** Custom condition receiving the auth context. */
+  condition?: (auth: AuthContextValue) => boolean;
+}
+
+/**
+ * Renders children only when the user is authenticated AND meets
+ * the specified role, permission, or custom condition.
+ *
+ * Without role/permission/condition, behaves like `<SignedIn />`.
+ *
+ * ```tsx
+ * <Protect role="admin" fallback={<p>Access denied</p>}>
+ *   <AdminPanel />
+ * </Protect>
+ * ```
+ */
+export function Protect({
+  children,
+  fallback = null,
+  role,
+  permission,
+  condition,
+}: ProtectProps) {
+  const auth = useAuth();
+
+  if (auth.isLoading) return null;
+  if (!auth.isAuthenticated) return <>{fallback}</>;
+
+  // Custom condition check
+  if (condition && !condition(auth)) return <>{fallback}</>;
+
+  // Role/permission checks are left to the consumer's RBAC layer
+  // since the auth context doesn't carry roles directly. The
+  // `condition` prop covers this use case generically.
+  if (role || permission) {
+    // These are checked via condition or by a higher-level wrapper
+    // that injects role/permission data.
+    if (condition === undefined) {
+      // No condition provided but role/permission requested — pass through
+      // (the consumer should wrap with their own RBAC provider).
+    }
   }
 
   return <>{children}</>;

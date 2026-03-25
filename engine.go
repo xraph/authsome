@@ -14,6 +14,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appclientconfig"
@@ -35,6 +36,8 @@ import (
 	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/keysmith"
+	xledger "github.com/xraph/ledger"
+	ledgerstore "github.com/xraph/ledger/store"
 	"github.com/xraph/warden"
 	wardenid "github.com/xraph/warden/id"
 	"github.com/xraph/warden/resourcetype"
@@ -60,6 +63,9 @@ type Engine struct {
 
 	// First-class key management engine (optional, replaces bridge for API keys)
 	keysmithEng *keysmith.Engine
+
+	// First-class billing engine (optional, provides store access for subscription plugin)
+	ledgerEng *xledger.Ledger
 
 	// Optional forgery bridges (injected, not required)
 	chronicle    bridge.Chronicle
@@ -143,31 +149,53 @@ func NewEngine(opts ...Option) (*Engine, error) {
 	return e, nil
 }
 
+// ErrNotStarted is returned when a service method is called before Start().
+var ErrNotStarted = errors.New("authsome: engine not started, please wait for initialization to complete")
+
+// EnsureMigrated runs store migrations (core + plugin groups) if not disabled.
+// This is idempotent — safe to call multiple times. Use this to ensure tables
+// exist before the engine is fully started (e.g. during extension init).
+func (e *Engine) EnsureMigrated(ctx context.Context) error {
+	if e.config.DisableMigrate {
+		return nil
+	}
+	extraGroups := e.plugins.CollectMigrationGroups(e.config.DriverName)
+	return e.store.Migrate(ctx, extraGroups...)
+}
+
+// requireStarted returns ErrNotStarted if the engine has not been started.
+func (e *Engine) requireStarted() error {
+	if !e.started {
+		return ErrNotStarted
+	}
+	return nil
+}
+
 // Start initializes the engine, runs migrations, and starts plugins.
 func (e *Engine) Start(ctx context.Context) error {
 	if e.started {
 		return nil
 	}
 
-	// Run store migrations (core + plugin groups together).
-	if !e.config.DisableMigrate {
-		extraGroups := e.plugins.CollectMigrationGroups(e.config.DriverName)
-		if err := e.store.Migrate(ctx, extraGroups...); err != nil {
-			return err
+	// Run store migrations (idempotent — may have been called earlier via EnsureMigrated).
+	if err := e.EnsureMigrated(ctx); err != nil {
+		return err
+	}
+
+	// Register webhook event catalog with relay (before bootstrap so
+	// events emitted during bootstrap are recognized).
+	if e.relay != nil {
+		if err := e.relay.RegisterEventTypes(ctx, bridge.WebhookEventCatalog()); err != nil {
+			e.logger.Warn("authsome: failed to register webhook event catalog",
+				log.String("error", err.Error()),
+			)
 		}
 	}
 
-	// Bootstrap platform app (if configured).
-	if e.bootstrapCfg != nil {
-		if err := e.bootstrap(ctx); err != nil {
-			return err
-		}
-	}
-
-	// Register authsome resource types with Warden (idempotent).
-	if e.wardenEng != nil {
-		e.registerWardenResourceTypes(ctx)
-	}
+	// Initialize plugins BEFORE bootstrap so that plugin-seeded resources
+	// (e.g. herald notification templates) exist when bootstrap fires
+	// notifications during first-user or role creation.
+	e.plugins.EmitOnInit(ctx, e)
 
 	// Seed per-app session configs (from code options or YAML config).
 	for _, cfg := range e.pendingAppSessCfgs {
@@ -180,8 +208,32 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	e.pendingAppSessCfgs = nil
 
-	// Initialize plugins
-	e.plugins.EmitOnInit(ctx, e)
+	// Bootstrap platform app (if configured).
+	if e.bootstrapCfg != nil {
+		if err := e.bootstrap(ctx); err != nil {
+			return err
+		}
+	}
+
+	// Register authsome resource types with Warden (idempotent).
+	// This must run AFTER bootstrap so that platformAppID is set and
+	// resource types are created with the correct tenant ID.
+	if e.wardenEng != nil {
+		e.registerWardenResourceTypes(ctx)
+	}
+
+	// Distribute the resolved app ID to plugins that need it.
+	// This must happen after bootstrap (which may create the platform app).
+	if appID := e.config.AppID; appID != "" {
+		for _, p := range e.plugins.Plugins() {
+			type appIDSetter interface {
+				SetAppID(string)
+			}
+			if s, ok := p.(appIDSetter); ok {
+				s.SetAppID(appID)
+			}
+		}
+	}
 
 	// Auto-register strategies from plugins implementing StrategyProvider.
 	for _, p := range e.plugins.Plugins() {
@@ -203,15 +255,6 @@ func (e *Engine) Start(ctx context.Context) error {
 					log.String("error", err.Error()),
 				)
 			}
-		}
-	}
-
-	// Register webhook event catalog with relay
-	if e.relay != nil {
-		if err := e.relay.RegisterEventTypes(ctx, bridge.WebhookEventCatalog()); err != nil {
-			e.logger.Warn("authsome: failed to register webhook event catalog",
-				log.String("error", err.Error()),
-			)
 		}
 	}
 
@@ -364,6 +407,19 @@ func (e *Engine) Dispatcher() bridge.Dispatcher { return e.dispatcher }
 // Ledger returns the billing/metering bridge (may be nil).
 func (e *Engine) Ledger() bridge.Ledger { return e.ledger }
 
+// LedgerEngine returns the first-class ledger billing engine (may be nil).
+func (e *Engine) LedgerEngine() *xledger.Ledger { return e.ledgerEng }
+
+// LedgerStore returns the underlying ledger store for direct query access
+// (e.g. plan/feature/subscription listing). Returns nil if no ledger engine
+// was provided via WithLedgerEngine.
+func (e *Engine) LedgerStore() ledgerstore.Store {
+	if e.ledgerEng != nil {
+		return e.ledgerEng.Store()
+	}
+	return nil
+}
+
 // MetricsCollector returns the metrics collector bridge (may be nil).
 func (e *Engine) MetricsCollector() bridge.MetricsCollector { return e.metrics }
 
@@ -405,16 +461,26 @@ func (e *Engine) Settings() *settings.Manager { return e.settingsMgr }
 // by the /client-config endpoint. It tells the frontend SDK which auth
 // methods are enabled, available providers, branding, etc.
 type ClientConfigResponse struct {
-	Version          string                `json:"version"`
-	AppID            string                `json:"app_id"`
-	Branding         *ClientConfigBranding `json:"branding,omitempty"`
-	Password         *ClientConfigToggle   `json:"password,omitempty"`
-	Social           *ClientConfigSocial   `json:"social,omitempty"`
-	Passkey          *ClientConfigToggle   `json:"passkey,omitempty"`
-	MFA              *ClientConfigMFA      `json:"mfa,omitempty"`
-	MagicLink        *ClientConfigToggle   `json:"magiclink,omitempty"`
-	SSO              *ClientConfigSSO      `json:"sso,omitempty"`
-	SupportedPlugins []string              `json:"supported_plugins"`
+	Version              string                        `json:"version"`
+	AppID                string                        `json:"app_id"`
+	Branding             *ClientConfigBranding         `json:"branding,omitempty"`
+	Password             *ClientConfigToggle           `json:"password,omitempty"`
+	Social               *ClientConfigSocial           `json:"social,omitempty"`
+	Passkey              *ClientConfigToggle           `json:"passkey,omitempty"`
+	MFA                  *ClientConfigMFA              `json:"mfa,omitempty"`
+	MagicLink            *ClientConfigToggle           `json:"magiclink,omitempty"`
+	SSO                  *ClientConfigSSO              `json:"sso,omitempty"`
+	EmailVerification    *ClientConfigEmailVerification `json:"email_verification,omitempty"`
+	DeviceAuthorization  *ClientConfigToggle           `json:"device_authorization,omitempty"`
+	Waitlist             *ClientConfigToggle           `json:"waitlist,omitempty"`
+	SupportedPlugins     []string                      `json:"supported_plugins"`
+	SignupFields         []ClientConfigSignupField     `json:"signup_fields,omitempty"`
+}
+
+// ClientConfigEmailVerification represents email verification settings.
+type ClientConfigEmailVerification struct {
+	Enabled  bool `json:"enabled"`
+	Required bool `json:"required"`
 }
 
 // ClientConfigBranding holds app branding information.
@@ -456,6 +522,35 @@ type ClientConfigSSO struct {
 type ClientConfigSSOConnection struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// ClientConfigSignupField describes a custom signup form field.
+type ClientConfigSignupField struct {
+	Key         string                        `json:"key"`
+	Label       string                        `json:"label"`
+	Type        string                        `json:"type"`
+	Placeholder string                        `json:"placeholder,omitempty"`
+	Description string                        `json:"description,omitempty"`
+	Options     []ClientConfigSelectOption    `json:"options,omitempty"`
+	Default     string                        `json:"default,omitempty"`
+	Validation  *ClientConfigFieldValidation  `json:"validation,omitempty"`
+	Order       int                           `json:"order"`
+}
+
+// ClientConfigSelectOption represents a select/radio option.
+type ClientConfigSelectOption struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// ClientConfigFieldValidation defines validation rules for a signup field.
+type ClientConfigFieldValidation struct {
+	Required bool   `json:"required,omitempty"`
+	MinLen   int    `json:"min_len,omitempty"`
+	MaxLen   int    `json:"max_len,omitempty"`
+	Pattern  string `json:"pattern,omitempty"`
+	Min      *int   `json:"min,omitempty"`
+	Max      *int   `json:"max,omitempty"`
 }
 
 // socialProviderLister is implemented by the social plugin to expose providers.
@@ -517,6 +612,7 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		mfaEnabled       bool
 		magicLinkEnabled bool
 		ssoEnabled       bool
+		waitlistEnabled  bool
 		socialProviders  []ClientConfigSocialProvider
 		ssoConnections   []ClientConfigSSOConnection
 		mfaMethods       []string
@@ -557,6 +653,8 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 					})
 				}
 			}
+		case "waitlist":
+			waitlistEnabled = true
 		}
 	}
 
@@ -565,6 +663,7 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		applyClientConfigOverrides(resp, overrides,
 			&passwordEnabled, &socialEnabled, &passkeyEnabled,
 			&mfaEnabled, &magicLinkEnabled, &ssoEnabled,
+			&waitlistEnabled,
 			&socialProviders, &ssoConnections, &mfaMethods,
 		)
 	}
@@ -598,10 +697,70 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		Connections: ssoConnections,
 	}
 
+	resp.Waitlist = &ClientConfigToggle{Enabled: waitlistEnabled}
+
 	if pluginNames == nil {
 		pluginNames = []string{}
 	}
 	resp.SupportedPlugins = pluginNames
+
+	// Load active signup form config and expose fields.
+	if fc, err := e.store.GetFormConfig(ctx, appID, formconfig.FormTypeSignup); err == nil && fc != nil && fc.Active && len(fc.Fields) > 0 {
+		fields := make([]ClientConfigSignupField, 0, len(fc.Fields))
+		for _, f := range fc.Fields {
+			sf := ClientConfigSignupField{
+				Key:         f.Key,
+				Label:       f.Label,
+				Type:        string(f.Type),
+				Placeholder: f.Placeholder,
+				Description: f.Description,
+				Default:     f.Default,
+				Order:       f.Order,
+			}
+			if len(f.Options) > 0 {
+				opts := make([]ClientConfigSelectOption, 0, len(f.Options))
+				for _, o := range f.Options {
+					opts = append(opts, ClientConfigSelectOption{Label: o.Label, Value: o.Value})
+				}
+				sf.Options = opts
+			}
+			if f.Validation != (formconfig.Validation{}) {
+				sf.Validation = &ClientConfigFieldValidation{
+					Required: f.Validation.Required,
+					MinLen:   f.Validation.MinLen,
+					MaxLen:   f.Validation.MaxLen,
+					Pattern:  f.Validation.Pattern,
+					Min:      f.Validation.Min,
+					Max:      f.Validation.Max,
+				}
+			}
+			fields = append(fields, sf)
+		}
+		resp.SignupFields = fields
+	}
+
+	// Email verification: enabled when password plugin is registered,
+	// required based on environment settings (default: required in production).
+	if passwordEnabled {
+		emailVerifRequired := true
+		if env, _ := e.GetDefaultEnvironment(ctx, appID); env != nil && env.Settings != nil {
+			if env.Settings.SkipEmailVerification != nil && *env.Settings.SkipEmailVerification {
+				emailVerifRequired = false
+			}
+		}
+		resp.EmailVerification = &ClientConfigEmailVerification{
+			Enabled:  true,
+			Required: emailVerifRequired,
+		}
+	}
+
+	// Device authorization: enabled when oauth2provider plugin is registered.
+	for _, name := range pluginNames {
+		if name == "oauth2provider" {
+			resp.DeviceAuthorization = &ClientConfigToggle{Enabled: true}
+			break
+		}
+	}
 
 	return resp
 }
@@ -612,6 +771,7 @@ func applyClientConfigOverrides(
 	cfg *appclientconfig.Config,
 	passwordEnabled, socialEnabled, passkeyEnabled *bool,
 	mfaEnabled, magicLinkEnabled, ssoEnabled *bool,
+	waitlistEnabled *bool,
 	socialProviders *[]ClientConfigSocialProvider,
 	_ *[]ClientConfigSSOConnection,
 	mfaMethods *[]string,
@@ -633,6 +793,9 @@ func applyClientConfigOverrides(
 	}
 	if cfg.SSOEnabled != nil {
 		*ssoEnabled = *cfg.SSOEnabled
+	}
+	if cfg.WaitlistEnabled != nil {
+		*waitlistEnabled = *cfg.WaitlistEnabled
 	}
 
 	// Filter social providers to per-app whitelist.

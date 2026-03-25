@@ -16,8 +16,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerDeviceRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("devices"))
+	g := router.Group("/v1", forge.WithGroupTags("devices"))
 
 	if err := g.GET("/devices", a.handleListDevices,
 		forge.WithSummary("List devices"),

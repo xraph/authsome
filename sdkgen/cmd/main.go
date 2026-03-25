@@ -4,11 +4,12 @@
 //
 //	go run ./sdkgen/cmd generate --lang=typescript --out=./sdk
 //	go run ./sdkgen/cmd generate --lang=go --out=./sdk
+//	go run ./sdkgen/cmd generate --lang=dart --out=./sdk
 //	go run ./sdkgen/cmd generate --lang=all --out=./sdk
 //
 // Flags:
 //
-//	--lang              Target language: "typescript", "go", or "all" (default: "all")
+//	--lang              Target language: "typescript", "go", "dart", or "all" (default: "all")
 //	--out               Output directory (default: "./sdk")
 //	--plugins           Comma-separated list of enabled plugins (default: "")
 //	--title             API title for the spec (default: "AuthSome API")
@@ -26,6 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/xraph/authsome/sdkgen/dart"
 	"github.com/xraph/authsome/sdkgen/golang"
 	"github.com/xraph/authsome/sdkgen/openapi"
 	"github.com/xraph/authsome/sdkgen/typescript"
@@ -38,7 +40,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Generates typed client SDKs from AuthSome API metadata.")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Flags:")
-		fmt.Fprintln(os.Stderr, "  --lang              Target language: typescript, go, or all (default: all)")
+		fmt.Fprintln(os.Stderr, "  --lang              Target language: typescript, go, dart, or all (default: all)")
 		fmt.Fprintln(os.Stderr, "  --out               Output directory (default: ./sdk)")
 		fmt.Fprintln(os.Stderr, "  --plugins           Comma-separated enabled plugins (default: \"\")")
 		fmt.Fprintln(os.Stderr, "  --title             API title (default: AuthSome API)")
@@ -52,7 +54,7 @@ func main() {
 
 	// Parse flags after the "generate" subcommand
 	fs := flag.NewFlagSet("generate", flag.ExitOnError)
-	lang := fs.String("lang", "all", "Target language: typescript, go, or all")
+	lang := fs.String("lang", "all", "Target language: typescript, go, dart, or all")
 	outDir := fs.String("out", "./sdk", "Output directory")
 	plugins := fs.String("plugins", "", "Comma-separated list of enabled plugins")
 	title := fs.String("title", "AuthSome API", "API title")
@@ -120,6 +122,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error generating Go SDK: %v\n", err)
 			os.Exit(1)
 		}
+	case "dart", "flutter":
+		if err := generateDart(spec, *outDir, *outputMode, overrides); err != nil {
+			fmt.Fprintf(os.Stderr, "Error generating Dart SDK: %v\n", err)
+			os.Exit(1)
+		}
 	case "all":
 		if err := generateTypeScript(spec, filepath.Join(*outDir, "typescript"), *outputMode, overrides); err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating TypeScript SDK: %v\n", err)
@@ -129,8 +136,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error generating Go SDK: %v\n", err)
 			os.Exit(1)
 		}
+		if err := generateDart(spec, filepath.Join(*outDir, "dart"), *outputMode, overrides); err != nil {
+			fmt.Fprintf(os.Stderr, "Error generating Dart SDK: %v\n", err)
+			os.Exit(1)
+		}
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown language: %s (supported: typescript, go, all)\n", *lang)
+		fmt.Fprintf(os.Stderr, "Unknown language: %s (supported: typescript, go, dart, all)\n", *lang)
 		os.Exit(1)
 	}
 
@@ -152,6 +163,21 @@ func generateTypeScript(spec *openapi.Spec, outDir, outputMode string, overrides
 	return writeFiles(outDir, files)
 }
 
+func generateDart(spec *openapi.Spec, outDir, outputMode string, overrides map[string]string) error {
+	fmt.Printf("Generating Dart SDK -> %s (mode: %s)\n", outDir, outputMode)
+
+	gen := dart.NewGenerator(dart.GeneratorConfig{
+		OutputMode:      outputMode,
+		MethodOverrides: overrides,
+	})
+	files, err := gen.Generate(spec)
+	if err != nil {
+		return err
+	}
+
+	return writeDartFiles(outDir, files)
+}
+
 func generateGo(spec *openapi.Spec, outDir string) error {
 	fmt.Printf("Generating Go SDK -> %s\n", outDir)
 
@@ -165,6 +191,21 @@ func generateGo(spec *openapi.Spec, outDir string) error {
 }
 
 func writeFiles(outDir string, files []typescript.GeneratedFile) error {
+	for _, f := range files {
+		path := filepath.Join(outDir, f.Path)
+		dir := filepath.Dir(path)
+		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: directory permissions appropriate for generated SDK
+			return fmt.Errorf("create directory %s: %w", dir, err)
+		}
+		if err := os.WriteFile(path, []byte(f.Content), 0o644); err != nil { //nolint:gosec // G306: file permissions appropriate for generated SDK
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		fmt.Printf("  wrote %s\n", f.Path)
+	}
+	return nil
+}
+
+func writeDartFiles(outDir string, files []dart.GeneratedFile) error {
 	for _, f := range files {
 		path := filepath.Join(outDir, f.Path)
 		dir := filepath.Dir(path)

@@ -3,7 +3,7 @@ import {
   AuthContext,
   type AuthContextValue,
 } from "@authsome/ui-react";
-import type { AuthState, User, Session, AuthClient, Organization } from "@authsome/ui-core";
+import type { AuthState, User, Session, AuthClient, ClientConfig, Organization } from "@authsome/ui-core";
 
 /** Mock user for Storybook stories. */
 export const MOCK_USER: User = {
@@ -189,6 +189,8 @@ export interface MockAuthProviderProps {
   errorMessage?: string;
   /** Custom mock user. */
   user?: User;
+  /** Optional client config for auto-configuration stories. */
+  clientConfig?: ClientConfig;
 }
 
 /**
@@ -202,6 +204,7 @@ export function MockAuthProvider({
   simulateError = false,
   errorMessage = "Invalid email or password",
   user = MOCK_USER,
+  clientConfig = null,
 }: MockAuthProviderProps) {
   const [state, setState] = useState<AuthState>(
     stateFromPreset(initialState, user, MOCK_SESSION),
@@ -376,17 +379,22 @@ export function MockAuthProvider({
       session: currentSession,
       isAuthenticated: state.status === "authenticated",
       isLoading: state.status === "loading",
+      clientConfig: clientConfig ?? null,
+      isConfigLoaded: clientConfig !== null,
       signIn,
       signUp,
       signOut,
       submitMFACode,
       submitRecoveryCode,
+      sendSMSCode: async () => ({ sent: true, phone_masked: "+1***1234", expires_in_seconds: 300 }),
+      submitSMSCode: async () => {},
     }),
     [
       state,
       mockClient,
       currentUser,
       currentSession,
+      clientConfig,
       signIn,
       signUp,
       signOut,

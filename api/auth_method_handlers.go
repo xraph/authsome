@@ -15,7 +15,7 @@ import (
 
 // registerAuthMethodRoutes registers the auth method listing/unlinking endpoints.
 func (a *API) registerAuthMethodRoutes(router forge.Router) error {
-	g := router.Group("/v1/auth/me", forge.WithGroupTags("Auth Methods"))
+	g := router.Group("/v1/me", forge.WithGroupTags("Auth Methods"))
 
 	if err := g.GET("/auth-methods", a.handleListAuthMethods,
 		forge.WithSummary("List linked auth methods"),

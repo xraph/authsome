@@ -143,6 +143,10 @@ const (
 	ActionSSOSignUp = "sso.signup"
 
 	ActionMFADisable = "auth.mfa.disable"
+
+	ActionWaitlistJoin    = "waitlist.join"
+	ActionWaitlistApprove = "waitlist.approve"
+	ActionWaitlistReject  = "waitlist.reject"
 )
 
 // ──────────────────────────────────────────────────
@@ -164,4 +168,5 @@ const (
 	ResourceEnvironment  = "environment"
 	ResourcePasskey      = "passkey"
 	ResourceAPIKey       = "apikey"
+	ResourceWaitlist     = "waitlist"
 )

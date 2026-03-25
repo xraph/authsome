@@ -14,8 +14,9 @@ import (
 
 // API wires all AuthSome HTTP handlers together.
 type API struct {
-	engine *authsome.Engine
-	router forge.Router
+	engine     *authsome.Engine
+	router     forge.Router
+	rootRouter forge.Router
 }
 
 // New creates an API from an Engine and an optional Forge router.
@@ -23,6 +24,7 @@ func New(engine *authsome.Engine, router ...forge.Router) *API {
 	a := &API{engine: engine}
 	if len(router) > 0 {
 		a.router = router[0]
+		a.rootRouter = router[0]
 	}
 	return a
 }
@@ -49,8 +51,27 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 	// Capture the router so handleOpenAPI can use its dynamic spec.
 	a.router = router
 
-	registerers := []func(forge.Router) error{
+	// Well-known and JWKS routes must be registered on the root router
+	// (not the grouped router) so they appear at /.well-known/* instead
+	// of being nested under the extension group prefix.
+	rootRouter := a.rootRouter
+	if rootRouter == nil {
+		rootRouter = router
+	}
+
+	// Routes registered on the root router (not nested under extension group).
+	rootRegisterers := []func(forge.Router) error{
 		a.registerWellKnownRoutes,
+		a.registerJWKSRoutes,
+	}
+	for _, fn := range rootRegisterers {
+		if err := fn(rootRouter); err != nil {
+			return err
+		}
+	}
+
+	// Routes registered on the grouped router (nested under extension group).
+	registerers := []func(forge.Router) error{
 		a.registerAuthRoutes,
 		a.registerPasswordRoutes,
 		a.registerUserRoutes,
@@ -64,11 +85,11 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 		a.registerAppClientConfigRoutes,
 		a.registerClientConfigRoutes,
 		a.registerAuthMethodRoutes,
-		a.registerJWKSRoutes,
 		a.registerBulkRoutes,
 		a.registerSecurityEventRoutes,
 		a.registerHealthRoutes,
 		a.registerSettingsRoutes,
+		a.registerIntrospectRoutes,
 	}
 	for _, fn := range registerers {
 		if err := fn(router); err != nil {
@@ -161,8 +182,7 @@ func (a *API) handleOpenAPI(ctx forge.Context, _ *struct{}) (*map[string]any, er
 // ──────────────────────────────────────────────────
 
 func (a *API) registerHealthRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("health"))
+	g := router.Group("/v1", forge.WithGroupTags("health"))
 
 	return g.GET("/health", a.handleHealth,
 		forge.WithSummary("Health check"),

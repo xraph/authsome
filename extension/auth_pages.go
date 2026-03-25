@@ -2,6 +2,7 @@ package extension
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -188,7 +189,20 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 		UserAgent: r.UserAgent(),
 	})
 	if err != nil {
-		return "", auth.LoginError("Invalid email or password", links), nil
+		msg := "Invalid email or password"
+		switch {
+		case errors.Is(err, authsome.ErrNotStarted):
+			msg = "System is still initializing. Please try again in a moment."
+		case errors.Is(err, account.ErrEmailNotVerified):
+			msg = "Please verify your email address before signing in"
+		case errors.Is(err, account.ErrAccountLocked):
+			msg = "Account temporarily locked due to too many failed attempts"
+		case errors.Is(err, account.ErrUserBanned):
+			msg = "Account has been suspended"
+		case errors.Is(err, account.ErrPasswordExpired):
+			msg = "Password has expired and must be changed"
+		}
+		return "", auth.LoginError(msg, links), nil
 	}
 
 	// Set the session token as a cookie for dashboard auth.
@@ -253,10 +267,21 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 		req.Metadata = metadata
 	}
 
-	_, sess, err := a.engine.SignUp(r.Context(), req)
+	u, sess, err := a.engine.SignUp(r.Context(), req)
 	if err != nil {
-		comp, _ := a.renderRegisterPage(ctx, err.Error(), values, nil) //nolint:errcheck // best-effort render
+		msg := err.Error()
+		if errors.Is(err, authsome.ErrNotStarted) {
+			msg = "System is still initializing. Please try again in a moment."
+		}
+		comp, _ := a.renderRegisterPage(ctx, msg, values, nil) //nolint:errcheck // best-effort render
 		return "", comp, nil
+	}
+
+	// Auto-verify email for dashboard-created users — they don't need
+	// the email verification flow since the admin created the account.
+	if u != nil && !u.EmailVerified {
+		u.EmailVerified = true
+		_ = a.engine.Store().UpdateUser(r.Context(), u) //nolint:errcheck // best-effort
 	}
 
 	// Set the session token as a cookie for dashboard auth.

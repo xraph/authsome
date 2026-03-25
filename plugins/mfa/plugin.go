@@ -169,7 +169,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return fmt.Errorf("mfa: expected forge.Router, got %T", r)
 	}
 
-	g := router.Group("/v1/auth/mfa", forge.WithGroupTags("MFA"))
+	g := router.Group("/v1/mfa", forge.WithGroupTags("MFA"))
 
 	if err := g.POST("/enroll", p.handleEnroll,
 		forge.WithSummary("Enroll in MFA"),

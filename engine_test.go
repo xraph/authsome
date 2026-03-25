@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/store/memory"
 
@@ -26,6 +27,7 @@ func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *me
 	allOpts := append([]authsome.Option{authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate()}, opts...)
 	eng, err := authsome.NewEngine(allOpts...)
 	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
 	return eng, s
 }
 
@@ -39,7 +41,7 @@ func TestNewEngine_DefaultConfig(t *testing.T) {
 	eng, _ := newTestEngine(t)
 
 	cfg := eng.Config()
-	assert.Equal(t, "/v1/auth", cfg.BasePath)
+	assert.Equal(t, "/authsome", cfg.BasePath)
 	assert.Equal(t, 8, cfg.Password.MinLength)
 	assert.True(t, cfg.Password.RequireUppercase)
 	assert.True(t, cfg.Password.RequireLowercase)
@@ -164,4 +166,74 @@ func TestEngine_APIKeyStore_FallbackToComposite(t *testing.T) {
 	store := eng.APIKeyStore()
 	assert.NotNil(t, store)
 	assert.Equal(t, s, store, "APIKeyStore should return composite store when Keysmith is absent")
+}
+
+// ──────────────────────────────────────────────────
+// EnsureMigrated, requireStarted, HasUsers
+// ──────────────────────────────────────────────────
+
+func TestEngine_EnsureMigrated_Idempotent(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	require.NoError(t, err)
+
+	// EnsureMigrated should succeed (no-op when DisableMigrate is set)
+	require.NoError(t, eng.EnsureMigrated(context.Background()))
+
+	// Calling again should also succeed (idempotent)
+	require.NoError(t, eng.EnsureMigrated(context.Background()))
+
+	// Start should still succeed after EnsureMigrated was called
+	require.NoError(t, eng.Start(context.Background()))
+}
+
+func TestEngine_RequireStarted_SignUp(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	require.NoError(t, err)
+
+	// SignUp before Start should return ErrNotStarted
+	_, _, err = eng.SignUp(context.Background(), &account.SignUpRequest{
+		Email:    "test@example.com",
+		Password: "SecureP@ss1",
+	})
+	assert.ErrorIs(t, err, authsome.ErrNotStarted)
+
+	// After Start, SignUp should proceed (may fail for other reasons, but not ErrNotStarted)
+	require.NoError(t, eng.Start(context.Background()))
+	_, _, err = eng.SignUp(context.Background(), &account.SignUpRequest{
+		Email:    "test@example.com",
+		Password: "SecureP@ss1",
+	})
+	assert.NotErrorIs(t, err, authsome.ErrNotStarted)
+}
+
+func TestEngine_RequireStarted_SignIn(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	require.NoError(t, err)
+
+	// SignIn before Start should return ErrNotStarted
+	_, _, err = eng.SignIn(context.Background(), &account.SignInRequest{
+		Email:    "test@example.com",
+		Password: "SecureP@ss1",
+	})
+	assert.ErrorIs(t, err, authsome.ErrNotStarted)
+}
+
+func TestEngine_HasUsers_BeforeStart(t *testing.T) {
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate())
+	require.NoError(t, err)
+
+	// HasUsers should return false before Start (engine not started guard)
+	assert.False(t, eng.HasUsers(context.Background()))
 }

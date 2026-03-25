@@ -5,15 +5,14 @@ package components
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import (
-	"time"
+import "github.com/a-h/templ"
+import templruntime "github.com/a-h/templ/runtime"
 
-	"github.com/a-h/templ"
-	templruntime "github.com/a-h/templ/runtime"
+import (
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/table"
-
-	"github.com/xraph/authsome/session"
+	"time"
 )
 
 // isSessionExpired reports whether the session has passed its expiry time.

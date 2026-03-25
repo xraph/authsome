@@ -17,8 +17,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerAppSessionConfigRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base+"/admin",
+	g := router.Group("/v1/admin",
 		forge.WithGroupTags("admin", "app-session-config"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),

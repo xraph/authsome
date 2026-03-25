@@ -34,7 +34,6 @@ export interface AdminStatsRequest {
 }
 
 export interface AdminStatsResponse {
-  total_organizations: number;
   total_users: number;
 }
 
@@ -51,11 +50,39 @@ export interface AdminUserListResponse {
   users: User[];
 }
 
+export interface AuthMethod {
+  label: string;
+  linked_at?: string;
+  provider: string;
+  type: string;
+}
+
 export interface AuthResponse {
   expires_at: string;
   refresh_token: string;
   session_token: string;
   user: User;
+}
+
+export interface BulkError {
+  email?: string;
+  error: string;
+  index: number;
+}
+
+export interface BulkImportResult {
+  created: number;
+  errors?: BulkError[];
+  skipped: number;
+}
+
+export interface BulkRevokeSessionsRequest {
+  UserID: string;
+}
+
+export interface BulkRevokeSessionsResponse {
+  revoked: number;
+  user_id: string;
 }
 
 export interface CallbackRequest {
@@ -88,6 +115,105 @@ export interface CheckSlugRequest {
   Slug: string;
 }
 
+export interface ClientConfigBranding {
+  app_name?: string;
+  logo_url?: string;
+}
+
+export interface ClientConfigFieldValidation {
+  max?: number;
+  max_len?: number;
+  min?: number;
+  min_len?: number;
+  pattern?: string;
+  required?: boolean;
+}
+
+export interface ClientConfigMFA {
+  enabled: boolean;
+  methods: string[];
+}
+
+export interface ClientConfigResponse {
+  app_id: string;
+  branding?: ClientConfigBranding;
+  magiclink?: ClientConfigToggle;
+  mfa?: ClientConfigMFA;
+  passkey?: ClientConfigToggle;
+  password?: ClientConfigToggle;
+  signup_fields?: ClientConfigSignupField[];
+  social?: ClientConfigSocial;
+  sso?: ClientConfigSSO;
+  supported_plugins: string[];
+  version: string;
+}
+
+export interface ClientConfigSSO {
+  connections: ClientConfigSSOConnection[];
+  enabled: boolean;
+}
+
+export interface ClientConfigSSOConnection {
+  id: string;
+  name: string;
+}
+
+export interface ClientConfigSelectOption {
+  label: string;
+  value: string;
+}
+
+export interface ClientConfigSignupField {
+  default?: string;
+  description?: string;
+  key: string;
+  label: string;
+  options?: ClientConfigSelectOption[];
+  order: number;
+  placeholder?: string;
+  type: string;
+  validation?: ClientConfigFieldValidation;
+}
+
+export interface ClientConfigSocial {
+  enabled: boolean;
+  providers: ClientConfigSocialProvider[];
+}
+
+export interface ClientConfigSocialProvider {
+  id: string;
+  name: string;
+}
+
+export interface ClientConfigToggle {
+  enabled: boolean;
+}
+
+export interface CloneEnvironmentResponse {
+  environment: unknown;
+  permissions_cloned: number;
+  role_id_map: Record<string, unknown>;
+  roles_cloned: number;
+  webhooks_cloned: number;
+}
+
+export interface Config {
+  app_id: string;
+  app_name?: string;
+  created_at: string;
+  id: string;
+  logo_url?: string;
+  magic_link_enabled?: boolean;
+  mfa_enabled?: boolean;
+  mfa_methods?: string[];
+  passkey_enabled?: boolean;
+  password_enabled?: boolean;
+  social_enabled?: boolean;
+  social_providers?: string[];
+  sso_enabled?: boolean;
+  updated_at: string;
+}
+
 export interface CreateKeyRequest {
   app_id: string;
   name: string;
@@ -102,6 +228,8 @@ export interface CreateKeyResponse {
   key: string;
   key_prefix: string;
   name: string;
+  public_key: string;
+  public_key_prefix: string;
   scopes?: string[];
 }
 
@@ -112,7 +240,35 @@ export interface CredentialInfo {
   transport: string[];
 }
 
+export interface Definition {
+  category: string;
+  default: string;
+  description: string;
+  display_name: string;
+  enforceable: boolean;
+  key: string;
+  namespace: string;
+  scopes: string[];
+  sensitive: boolean;
+  type: string;
+  ui?: UIMetadata;
+}
+
+export interface DefinitionGroup {
+  category: string;
+  definitions: Definition[];
+  namespace: string;
+}
+
 export interface DeleteAccountRequest {
+}
+
+export interface DeleteAppClientConfigRequest {
+  AppID: string;
+}
+
+export interface DeleteAppSessionConfigRequest {
+  AppID: string;
 }
 
 export interface DeleteDeviceRequest {
@@ -131,8 +287,10 @@ export interface DeleteResponse {
   status: string;
 }
 
-export interface DeleteRoleRequest {
-  RoleID: string;
+export interface DeleteSettingRequest {
+  Key: string;
+  Scope: string;
+  ScopeID: string;
 }
 
 export interface DeleteTeamRequest {
@@ -145,19 +303,21 @@ export interface DeleteWebhookRequest {
 }
 
 export interface Device {
-  app_id: ID;
+  app_id: string;
   browser?: string;
   created_at: string;
+  env_id: string;
   fingerprint?: string;
-  id: ID;
+  id: string;
   ip_address?: string;
   last_seen_at: string;
   name?: string;
   os?: string;
   trusted: boolean;
+  trusted_until?: string;
   type?: string;
   updated_at: string;
-  user_id: ID;
+  user_id: string;
 }
 
 export interface DeviceListResponse {
@@ -183,11 +343,50 @@ export interface EnrollResponse {
   secret: string;
 }
 
+export interface Environment {
+  app_id: string;
+  cloned_from?: string;
+  color?: string;
+  created_at: string;
+  description?: string;
+  id: string;
+  is_default: boolean;
+  metadata?: Record<string, unknown>;
+  name: string;
+  settings?: Settings;
+  slug: string;
+  type: string;
+  updated_at: string;
+}
+
+export interface EnvironmentListResponse {
+  environments: unknown;
+  total: number;
+}
+
+export interface EnvironmentSettingsResponse {
+  overrides?: Settings;
+  settings?: Settings;
+  type_defaults?: Settings;
+}
+
 export interface ExportDataRequest {
 }
 
 export interface ForgotPasswordResponse {
   status: string;
+}
+
+export interface GetAppClientConfigRequest {
+  AppID: string;
+}
+
+export interface GetAppSessionConfigRequest {
+  AppID: string;
+}
+
+export interface GetClientConfigRequest {
+  Key?: string;
 }
 
 export interface GetDeviceRequest {
@@ -199,10 +398,6 @@ export interface GetMeRequest {
 
 export interface GetOrgRequest {
   OrgID: string;
-}
-
-export interface GetRoleRequest {
-  RoleID: string;
 }
 
 export interface GetTeamRequest {
@@ -219,16 +414,13 @@ export interface HealthResponse {
   status: string;
 }
 
-export interface ID {
-}
-
 export interface Invitation {
   created_at: string;
   email: string;
   expires_at: string;
-  id: ID;
-  inviter_id: ID;
-  org_id: ID;
+  id: string;
+  inviter_id: string;
+  org_id: string;
   role: string;
   status: string;
 }
@@ -244,11 +436,28 @@ export interface KeyListItem {
   key_prefix: string;
   last_used_at?: string;
   name: string;
+  public_key_prefix?: string;
   revoked: boolean;
   scopes?: string[];
 }
 
+export interface ListAuthMethodsRequest {
+}
+
+export interface ListAuthMethodsResponse {
+  methods: AuthMethod[];
+}
+
+export interface ListDefinitionsResponse {
+  groups: DefinitionGroup[];
+  total: number;
+}
+
 export interface ListDevicesRequest {
+}
+
+export interface ListEnvironmentsRequest {
+  AppID: string;
 }
 
 export interface ListInvitationsRequest {
@@ -269,6 +478,10 @@ export interface ListMembersRequest {
   OrgID: string;
 }
 
+export interface ListNamespaceDefinitionsRequest {
+  Namespace: string;
+}
+
 export interface ListOrgsRequest {
 }
 
@@ -279,10 +492,6 @@ export interface ListResponse {
   credentials: CredentialInfo[];
 }
 
-export interface ListRolePermissionsRequest {
-  RoleID: string;
-}
-
 export interface ListRolesRequest {
   AppID: string;
 }
@@ -290,12 +499,13 @@ export interface ListRolesRequest {
 export interface ListSessionsRequest {
 }
 
-export interface ListTeamsRequest {
-  OrgID: string;
+export interface ListSettingsDefinitionsRequest {
+  Category: string;
+  Namespace: string;
 }
 
-export interface ListUserRolesRequest {
-  UserID: string;
+export interface ListTeamsRequest {
+  OrgID: string;
 }
 
 export interface ListWebhooksRequest {
@@ -329,11 +539,11 @@ export interface LoginResponse {
 
 export interface Member {
   created_at: string;
-  id: ID;
-  org_id: ID;
+  id: string;
+  org_id: string;
   role: string;
   updated_at: string;
-  user_id: ID;
+  user_id: string;
 }
 
 export interface MemberListResponse {
@@ -343,15 +553,27 @@ export interface MemberListResponse {
 export interface Object {
 }
 
+export interface ObjectFieldDef {
+  display_name: string;
+  help_text?: string;
+  input_type: string;
+  key: string;
+  options?: SelectOption[];
+  placeholder?: string;
+  required?: boolean;
+  sensitive?: boolean;
+}
+
 export interface OrgListResponse {
   organizations: Organization[];
 }
 
 export interface Organization {
-  app_id: ID;
+  app_id: string;
   created_at: string;
-  created_by: ID;
-  id: ID;
+  created_by: string;
+  env_id: string;
+  id: string;
   logo?: string;
   metadata?: Record<string, unknown>;
   name: string;
@@ -408,9 +630,34 @@ export interface RemoveMemberRequest {
   OrgID: string;
 }
 
-export interface RemovePermissionRequest {
-  PermissionID: string;
-  RoleID: string;
+export interface ResolveSettingRequest {
+  AppID: string;
+  Key: string;
+  OrgID: string;
+  UserID: string;
+}
+
+export interface ResolveSettingsRequest {
+  AppID: string;
+  Namespace: string;
+  OrgID: string;
+  UserID: string;
+}
+
+export interface ResolvedSetting {
+  can_override: boolean;
+  definition?: Definition;
+  effective_value: string;
+  enforced_at?: string;
+  scope_values: ScopeValue[];
+}
+
+export interface ResolvedSettingResponse {
+  setting?: ResolvedSetting;
+}
+
+export interface ResolvedSettingsResponse {
+  settings: ResolvedSetting[];
 }
 
 export interface RevokeKeyRequest {
@@ -425,6 +672,7 @@ export interface Role {
   app_id: string;
   created_at: string;
   description?: string;
+  env_id: string;
   id: string;
   name: string;
   parent_id?: string;
@@ -455,6 +703,21 @@ export interface SMSVerifyResponse {
   verified: boolean;
 }
 
+export interface ScopeValue {
+  enforced: boolean;
+  scope: string;
+  scope_id?: string;
+  updated_at?: string;
+  updated_by?: string;
+  value: string;
+  version?: number;
+}
+
+export interface SelectOption {
+  label: string;
+  value: string;
+}
+
 export interface SendRequest {
   app_id?: string;
   email: string;
@@ -466,6 +729,31 @@ export interface SendResponse {
 
 export interface SessionListResponse {
   sessions: Record<string, unknown>[];
+}
+
+export interface SettingValueResponse {
+  key: string;
+  scope: string;
+  scope_id?: string;
+  status: string;
+  value: string;
+}
+
+export interface Settings {
+  allow_test_credentials?: boolean;
+  check_breached?: boolean;
+  lockout_enabled?: boolean;
+  lockout_max_attempts?: number;
+  oauth_overrides?: Record<string, unknown>;
+  password_min_length?: number;
+  rate_limit_enabled?: boolean;
+  rate_limit_window_seconds?: number;
+  refresh_token_ttl_seconds?: number;
+  signin_rate_limit?: number;
+  signup_rate_limit?: number;
+  skip_email_verification?: boolean;
+  token_ttl_seconds?: number;
+  webhook_url_override?: string;
 }
 
 export interface SignOutRequest {
@@ -489,9 +777,9 @@ export interface StatusResponse {
 
 export interface Team {
   created_at: string;
-  id: ID;
+  id: string;
   name: string;
-  org_id: ID;
+  org_id: string;
   slug: string;
   updated_at: string;
 }
@@ -510,8 +798,35 @@ export interface TrustDeviceRequest {
   DeviceID: string;
 }
 
+export interface UIMetadata {
+  condition?: VisibilityCondition;
+  help_text?: string;
+  input_type: string;
+  object_fields?: ObjectFieldDef[];
+  options?: SelectOption[];
+  order: number;
+  placeholder?: string;
+  read_only?: boolean;
+  section?: string;
+  validation?: Validation;
+}
+
+export interface UnenforceSettingRequest {
+  Key: string;
+  Scope: string;
+  ScopeID: string;
+}
+
+export interface UnlinkAuthMethodRequest {
+  Provider: string;
+}
+
+export interface UnlinkAuthMethodResponse {
+  status: string;
+}
+
 export interface User {
-  app_id: ID;
+  app_id: string;
   ban_expires?: string;
   ban_reason?: string;
   banned: boolean;
@@ -520,10 +835,13 @@ export interface User {
   display_username?: string;
   email: string;
   email_verified: boolean;
-  id: ID;
+  env_id: string;
+  first_name: string;
+  id: string;
   image?: string;
+  last_name: string;
   metadata?: Record<string, unknown>;
-  name: string;
+  password_changed_at?: string;
   phone?: string;
   phone_verified: boolean;
   updated_at: string;
@@ -532,6 +850,15 @@ export interface User {
 
 export interface UserRoleListResponse {
   roles: Role[];
+}
+
+export interface Validation {
+  max?: number;
+  max_len?: number;
+  min?: number;
+  min_len?: number;
+  pattern?: string;
+  required?: boolean;
 }
 
 export interface VerifyMFARequest {
@@ -556,12 +883,19 @@ export interface VerifyResponse {
   user: User;
 }
 
+export interface VisibilityCondition {
+  key: string;
+  operator?: string;
+  value: string;
+}
+
 export interface Webhook {
   active: boolean;
-  app_id: ID;
+  app_id: string;
   created_at: string;
+  env_id: string;
   events: string[];
-  id: ID;
+  id: string;
   updated_at: string;
   url: string;
 }
@@ -572,9 +906,29 @@ export interface WebhookListResponse {
 
 // Request types for operations with bodies
 
+export type SetAppClientConfigRequest = { app_name?: string; logo_url?: string; magic_link_enabled?: boolean; mfa_enabled?: boolean; mfa_methods?: string[]; passkey_enabled?: boolean; password_enabled?: boolean; social_enabled?: boolean; social_providers?: string[]; sso_enabled?: boolean };
+
+export type SetAppSessionConfigRequest = { bind_to_device?: boolean; bind_to_ip?: boolean; max_active_sessions?: number; refresh_token_ttl_seconds?: number; rotate_refresh_token?: boolean; token_format?: string; token_ttl_seconds?: number };
+
+export type AdminBulkRevokeSessionsRequest = BulkRevokeSessionsRequest;
+
+export type AdminBulkImportUsersRequest = { app_id?: string; users: Record<string, unknown>[] };
+
+export type EnforceSettingRequest = { app_id?: string; org_id?: string; scope: string; scope_id?: string; value: string };
+
+export type SetSettingRequest = { app_id?: string; org_id?: string; scope: string; scope_id?: string; value: string };
+
 export type AdminBanUserRequest = { expires_at?: string; reason?: string };
 
 export type ChangePasswordRequest = { current_password: string; new_password: string };
+
+export type CreateEnvironmentRequest = { app_id?: string; color?: string; description?: string; name: string; settings?: Record<string, unknown>; slug: string; type: string };
+
+export type UpdateEnvironmentRequest = { color?: string; description?: string; name?: string };
+
+export type CloneEnvironmentRequest = { description?: string; name: string; settings?: Record<string, unknown>; slug: string; type: string; webhook_url_override?: string };
+
+export type UpdateEnvironmentSettingsRequest = { allow_test_credentials?: boolean; check_breached?: boolean; lockout_enabled?: boolean; lockout_max_attempts?: number; oauth_overrides?: Record<string, unknown>; password_min_length?: number; rate_limit_enabled?: boolean; rate_limit_window_seconds?: number; refresh_token_ttl_seconds?: number; signin_rate_limit?: number; signup_rate_limit?: number; skip_email_verification?: boolean; token_ttl_seconds?: number; webhook_url_override?: string };
 
 export type ForgotPasswordRequest = { app_id?: string; email: string };
 
@@ -586,7 +940,7 @@ export type SendMagicLinkRequest = SendRequest;
 
 export type VerifyMagicLinkRequest = VerifyRequest;
 
-export type UpdateMeRequest = { image?: string; name?: string; username?: string };
+export type UpdateMeRequest = { first_name?: string; image?: string; last_name?: string; username?: string };
 
 export type DeleteMeRequest = DeleteAccountRequest;
 
@@ -638,19 +992,19 @@ export type RefreshRequest = { refresh_token: string };
 
 export type ResetPasswordRequest = { new_password: string; token: string };
 
-export type CreateRoleRequest = { app_id?: string; description?: string; name: string; parent_id?: string; slug: string };
+export type AuthsomeCreateRoleRequest = { app_id?: string; description?: string; name: string; parent_id?: string; slug: string };
 
-export type UpdateRoleRequest = { description?: string; name?: string; parent_id?: string };
+export type AuthsomeUpdateRoleRequest = { description?: string; name?: string; parent_id?: string };
 
-export type AssignRoleRequest = { org_id?: string; user_id: string };
+export type AuthsomeAssignRoleRequest = { org_id?: string; user_id: string };
 
-export type AddPermissionRequest = { action: string; resource: string };
+export type AuthsomeAddPermissionRequest = { action: string; resource: string };
 
-export type UnassignRoleRequest = { user_id: string };
+export type AuthsomeUnassignRoleRequest = { user_id: string };
 
 export type SignInRequest = { app_id?: string; email?: string; password: string; username?: string };
 
-export type SignUpRequest = { app_id?: string; email: string; name?: string; password: string; username?: string };
+export type SignUpRequest = { app_id?: string; email: string; first_name?: string; last_name?: string; metadata?: Record<string, unknown>; password: string; username?: string };
 
 export type StartOAuthRequest = StartRequest;
 

@@ -77,6 +77,24 @@ func (s *Store) GetAppByPublishableKey(ctx context.Context, key string) (*app.Ap
 	return fromAppModel(&m)
 }
 
+// GetPlatformApp returns the single platform app (is_platform=true).
+func (s *Store) GetPlatformApp(ctx context.Context) (*app.App, error) {
+	var m appModel
+
+	err := s.mdb.NewFind(&m).
+		Filter(bson.M{"is_platform": true}).
+		Scan(ctx)
+	if err != nil {
+		if isNoDocuments(err) {
+			return nil, store.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("authsome/mongo: get platform app: %w", err)
+	}
+
+	return fromAppModel(&m)
+}
+
 // UpdateApp modifies an existing app.
 func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 	m := toAppModel(a)

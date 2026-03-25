@@ -71,7 +71,7 @@ func intPtr(v int) *int { return &v }
 // Config configures the API key plugin.
 type Config struct {
 	// PathPrefix is the HTTP path prefix for API key routes.
-	// Defaults to "/v1/auth/keys".
+	// Defaults to "/v1/keys".
 	PathPrefix string
 
 	// MaxKeysPerUser limits the number of active API keys per user.
@@ -115,7 +115,7 @@ func New(cfg ...Config) *Plugin {
 		c = cfg[0]
 	}
 	if c.PathPrefix == "" {
-		c.PathPrefix = "/v1/auth/keys"
+		c.PathPrefix = "/v1/keys"
 	}
 	return &Plugin{config: c}
 }

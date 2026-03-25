@@ -8,12 +8,13 @@ import "github.com/xraph/authsome/environment"
 
 // SignUpRequest binds the body for POST /signup.
 type SignUpRequest struct {
-	AppID     string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
-	Email     string `json:"email" description:"User email address"`
-	Password  string `json:"password" description:"User password"`
-	FirstName string `json:"first_name,omitempty" description:"First/given name"`
-	LastName  string `json:"last_name,omitempty" description:"Last/family name"`
-	Username  string `json:"username,omitempty" description:"Unique username"`
+	AppID     string            `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email     string            `json:"email" description:"User email address"`
+	Password  string            `json:"password" description:"User password"`
+	FirstName string            `json:"first_name,omitempty" description:"First/given name"`
+	LastName  string            `json:"last_name,omitempty" description:"Last/family name"`
+	Username  string            `json:"username,omitempty" description:"Unique username"`
+	Metadata  map[string]string `json:"metadata,omitempty" description:"Custom signup form field values"`
 }
 
 // SignInRequest binds the body for POST /signin.
@@ -484,7 +485,9 @@ type SetAppClientConfigRequest struct {
 	MFAEnabled       *bool    `json:"mfa_enabled,omitempty" description:"Enable MFA (nil = inherit)"`
 	SSOEnabled       *bool    `json:"sso_enabled,omitempty" description:"Enable SSO (nil = inherit)"`
 	SocialEnabled    *bool    `json:"social_enabled,omitempty" description:"Enable social auth (nil = inherit)"`
-	SocialProviders  []string `json:"social_providers,omitempty" description:"Allowed social providers"`
+	WaitlistEnabled           *bool    `json:"waitlist_enabled,omitempty" description:"Enable waitlist (nil = inherit)"`
+	RequireEmailVerification *bool    `json:"require_email_verification,omitempty" description:"Block sign-in until email is verified (nil = inherit)"`
+	SocialProviders          []string `json:"social_providers,omitempty" description:"Allowed social providers"`
 	MFAMethods       []string `json:"mfa_methods,omitempty" description:"Allowed MFA methods"`
 	AppName          *string  `json:"app_name,omitempty" description:"Branding app name override"`
 	LogoURL          *string  `json:"logo_url,omitempty" description:"Branding logo URL override"`
@@ -502,4 +505,36 @@ type DeleteAppClientConfigRequest struct {
 // GetClientConfigRequest binds query params for GET /client-config.
 type GetClientConfigRequest struct {
 	Key string `query:"key" optional:"true" description:"Publishable key to resolve the app"`
+}
+
+// ---------------------------------------------------------------------------
+// Token introspection (RFC 7662)
+// ---------------------------------------------------------------------------
+
+// IntrospectRequest binds the body for POST /v1/introspect.
+type IntrospectRequest struct {
+	Token string `json:"token" description:"Token to introspect (JWT or opaque session token)"`
+}
+
+// IntrospectResponse is the token introspection result.
+// When the token is invalid or expired, Active is false and all other fields
+// are empty. When valid, it contains the resolved identity claims.
+type IntrospectResponse struct {
+	Active    bool            `json:"active" description:"Whether the token is valid and active"`
+	UserID    string          `json:"user_id,omitempty" description:"Authenticated user ID"`
+	AppID     string          `json:"app_id,omitempty" description:"Application ID"`
+	OrgID     string          `json:"org_id,omitempty" description:"Organization ID"`
+	EnvID     string          `json:"env_id,omitempty" description:"Environment ID"`
+	SessionID string          `json:"session_id,omitempty" description:"Session ID"`
+	ExpiresAt string          `json:"expires_at,omitempty" description:"Token expiration time (RFC 3339)"`
+	User      *IntrospectUser `json:"user,omitempty" description:"Resolved user details"`
+}
+
+// IntrospectUser holds basic user details returned by introspection.
+type IntrospectUser struct {
+	ID        string `json:"id" description:"User ID"`
+	Email     string `json:"email" description:"User email"`
+	FirstName string `json:"first_name,omitempty" description:"First name"`
+	LastName  string `json:"last_name,omitempty" description:"Last name"`
+	Username  string `json:"username,omitempty" description:"Username"`
 }

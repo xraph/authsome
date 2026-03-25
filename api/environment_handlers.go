@@ -16,8 +16,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerEnvironmentRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("environments"))
+	g := router.Group("/v1", forge.WithGroupTags("environments"))
 
 	if err := g.POST("/environments", a.handleCreateEnvironment,
 		forge.WithSummary("Create environment"),

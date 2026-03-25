@@ -132,14 +132,27 @@ export class AuthManager {
       this.setState({ status: "authenticated", user, session });
       this.scheduleRefresh(session);
     } catch {
-      await this.clearSession();
-      this.setState({ status: "unauthenticated" });
+      // Never destroy the session on errors during initialization.
+      // The server may be temporarily unreachable (404/500/network) or the
+      // token might need refreshing. Only an explicit signOut() clears storage.
+      // Preserve whatever session we have and schedule a refresh attempt.
+      const stored = await this.storage.getItem(SESSION_KEY);
+      if (stored) {
+        const session: Session = JSON.parse(stored);
+        this.setState({ status: "authenticated", user: null as unknown as User, session });
+        this.scheduleRefresh(session);
+      } else {
+        this.setState({ status: "unauthenticated" });
+      }
     }
   }
 
   /** Sign in with email & password. */
   async signIn(credentials: SignInRequest): Promise<void> {
-    this.setState({ status: "loading" });
+    // Note: we intentionally do NOT set global state to "loading" here.
+    // The form components manage their own isSubmitting state. Setting global
+    // "loading" would cause parent components that conditionally render based
+    // on isLoading to unmount the form, losing its local state (step, fields).
     try {
       const res = await this.client.signIn(credentials);
       const session: Session = {
@@ -156,7 +169,7 @@ export class AuthManager {
 
   /** Sign up with email & password. */
   async signUp(data: SignUpRequest): Promise<void> {
-    this.setState({ status: "loading" });
+    // See signIn() comment — forms manage their own loading state.
     try {
       const res = await this.client.signUp(data);
       const session: Session = {
@@ -345,7 +358,7 @@ export class AuthManager {
     this.scheduleRefresh(session);
   }
 
-  private async refreshSession(refreshToken: string): Promise<void> {
+  private async refreshSession(refreshToken: string, attempt = 0): Promise<void> {
     try {
       const newSession = await this.client.refresh(refreshToken);
       const user = await this.client.getMe(newSession.session_token);
@@ -353,8 +366,13 @@ export class AuthManager {
       this.setState({ status: "authenticated", user, session: newSession });
       this.scheduleRefresh(newSession);
     } catch {
-      await this.clearSession();
-      this.setState({ status: "unauthenticated" });
+      // Never destroy the session on refresh failure. The refresh token
+      // may still be valid — the server could be temporarily unreachable.
+      // Schedule a retry in 30 seconds. Only explicit signOut() clears storage.
+      this.clearRefreshTimer();
+      this.refreshTimer = setTimeout(() => {
+        void this.refreshSession(refreshToken);
+      }, 30_000);
     }
   }
 

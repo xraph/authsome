@@ -141,7 +141,7 @@ func TestHandleSend_Success(t *testing.T) {
 		"email": "user@example.com",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/send", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -170,7 +170,7 @@ func TestHandleSend_MissingEmail(t *testing.T) {
 
 	body := jsonBody(t, map[string]string{})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/send", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -185,7 +185,7 @@ func TestHandleSend_InvalidJSON(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/send", bytes.NewBufferString("not json"))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", bytes.NewBufferString("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -205,7 +205,7 @@ func TestHandleSend_MailerError(t *testing.T) {
 		"email": "user@example.com",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/send", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -225,7 +225,7 @@ func TestHandleSend_WithExplicitAppID(t *testing.T) {
 		"app_id": testAppIDStr,
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/send", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/send", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -264,7 +264,7 @@ func TestHandleVerify_Success(t *testing.T) {
 		"token": v.Token,
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -289,7 +289,7 @@ func TestHandleVerify_MissingToken(t *testing.T) {
 
 	body := jsonBody(t, map[string]string{})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -308,7 +308,7 @@ func TestHandleVerify_InvalidToken(t *testing.T) {
 		"token": "nonexistent-token",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -339,7 +339,7 @@ func TestHandleVerify_ExpiredToken(t *testing.T) {
 		"token": v.Token,
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -376,7 +376,7 @@ func TestHandleVerify_AlreadyConsumed(t *testing.T) {
 		"token": v.Token,
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -396,7 +396,7 @@ func TestHandleVerify_InvalidJSON(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", bytes.NewBufferString("not json"))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", bytes.NewBufferString("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -434,7 +434,7 @@ func TestFullFlow_SendThenVerify(t *testing.T) {
 		"token": v.Token,
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/magic-link/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/magic-link/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)

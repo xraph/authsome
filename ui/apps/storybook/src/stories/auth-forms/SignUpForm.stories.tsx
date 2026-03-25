@@ -64,3 +64,40 @@ export const VerticalSocial: Story = {
     socialLayout: "vertical",
   },
 };
+
+export const LeftAligned: Story = {
+  args: {
+    ...Default.args,
+    align: "left",
+  },
+};
+
+export const FlatCard: Story = {
+  args: {
+    ...Default.args,
+    variant: "flat",
+  },
+};
+
+export const BorderedCard: Story = {
+  args: {
+    ...Default.args,
+    variant: "bordered",
+  },
+};
+
+export const WithForgotPassword: Story = {
+  args: {
+    ...Default.args,
+    forgotPasswordUrl: "/forgot-password",
+  },
+};
+
+export const LeftAlignedFlat: Story = {
+  args: {
+    ...Default.args,
+    align: "left",
+    variant: "flat",
+    forgotPasswordUrl: "/forgot-password",
+  },
+};

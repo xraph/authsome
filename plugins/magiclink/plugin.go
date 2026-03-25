@@ -165,7 +165,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return fmt.Errorf("magiclink: expected forge.Router, got %T", r)
 	}
 
-	g := router.Group("/v1/auth/magic-link", forge.WithGroupTags("Magic Link"))
+	g := router.Group("/v1/magic-link", forge.WithGroupTags("Magic Link"))
 
 	if err := g.POST("/send", p.handleSend,
 		forge.WithSummary("Send magic link"),
@@ -291,6 +291,13 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 	u, err := p.store.GetUser(ctx.Context(), v.UserID)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to resolve user: %w", err))
+	}
+
+	// Clicking a magic link proves email ownership — mark as verified.
+	if !u.EmailVerified {
+		u.EmailVerified = true
+		u.UpdatedAt = time.Now()
+		_ = p.store.UpdateUser(ctx.Context(), u) //nolint:errcheck // best-effort
 	}
 
 	// Resolve per-app session config, falling back to plugin config.

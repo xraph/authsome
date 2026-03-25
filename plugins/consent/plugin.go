@@ -11,7 +11,6 @@ import (
 
 	"github.com/xraph/forge"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -97,12 +96,7 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 		p.logger = lg.Logger()
 	}
 
-	type configGetter interface {
-		Config() authsome.Config
-	}
-	if cg, ok := engine.(configGetter); ok {
-		p.basePath = cg.Config().BasePath
-	}
+	p.basePath = "/v1"
 
 	if pc, ok := engine.(middleware.PermissionChecker); ok {
 		p.permChecker = pc

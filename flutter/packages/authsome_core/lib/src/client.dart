@@ -95,7 +95,7 @@ class AuthSomeClient extends generated.AuthClient {
   }) async {
     final body = <String, dynamic>{'code': code};
     if (enrollmentId != null) body['enrollment_id'] = enrollmentId;
-    final data = await _rawPost('/v1/auth/mfa/challenge', body: body);
+    final data = await _rawPost('/v1/mfa/challenge', body: body);
     return AuthResponse.fromJson(data);
   }
 
@@ -104,7 +104,7 @@ class AuthSomeClient extends generated.AuthClient {
   /// Like [mfaChallenge], returns a full auth response from the server.
   Future<AuthResponse> verifyRecoveryCodeWithString(String code) async {
     final data = await _rawPost(
-      '/v1/auth/mfa/recovery/verify',
+      '/v1/mfa/recovery/verify',
       body: {'code': code},
     );
     return AuthResponse.fromJson(data);
@@ -120,7 +120,7 @@ class AuthSomeClient extends generated.AuthClient {
   /// Like [mfaChallenge], returns a full auth response from the server.
   Future<AuthResponse> verifySMSCodeForMFA(String code, String token) async {
     final data = await _rawPost(
-      '/v1/auth/mfa/sms/verify',
+      '/v1/mfa/sms/verify',
       body: {'code': code},
       token: token,
     );
@@ -132,7 +132,7 @@ class AuthSomeClient extends generated.AuthClient {
   /// The config describes which auth methods are enabled so SDK
   /// components can auto-configure without manual props.
   Future<ClientConfig> fetchClientConfig([String? publishableKey]) async {
-    final uri = Uri.parse('$_rawBaseUrl/v1/auth/client-config');
+    final uri = Uri.parse('$_rawBaseUrl/v1/client-config');
     final queryUri = publishableKey != null
         ? uri.replace(queryParameters: {'key': publishableKey})
         : uri;

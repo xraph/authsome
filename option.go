@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/bridge/keysmithadapter"
+	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/bridge/wardenadapter"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/lockout"
@@ -18,6 +19,7 @@ import (
 	"github.com/xraph/authsome/tokenformat"
 
 	"github.com/xraph/keysmith"
+	xledger "github.com/xraph/ledger"
 	"github.com/xraph/warden"
 )
 
@@ -168,6 +170,17 @@ func WithDispatcher(d bridge.Dispatcher) Option {
 func WithLedger(l bridge.Ledger) Option {
 	return func(e *Engine) {
 		e.ledger = l
+	}
+}
+
+// WithLedgerEngine sets the first-class Ledger billing engine. When set,
+// the subscription plugin can access the ledger store directly for list
+// operations (plans, features, subscriptions). This also sets the
+// bridge.Ledger adapter for backward compatibility.
+func WithLedgerEngine(l *xledger.Ledger) Option {
+	return func(e *Engine) {
+		e.ledgerEng = l
+		e.ledger = ledgeradapter.New(l)
 	}
 }
 

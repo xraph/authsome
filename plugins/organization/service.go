@@ -139,12 +139,26 @@ func (p *Plugin) UpdateMemberRole(ctx context.Context, memberID id.MemberID, rol
 	}
 
 	p.plugins.EmitAfterMemberRoleChange(ctx, member)
+
+	// Resolve names for notification template variables (best-effort).
+	hookMeta := map[string]string{
+		"new_role": string(role),
+	}
+	if u, err := p.store.GetUser(ctx, member.UserID); err == nil {
+		hookMeta["user_name"] = u.Name()
+		hookMeta["email"] = u.Email
+	}
+	if org, err := p.store.GetOrganization(ctx, member.OrgID); err == nil {
+		hookMeta["org_name"] = org.Name
+	}
+
 	p.hooks.Emit(ctx, &hook.Event{
 		Action:     hook.ActionMemberRoleChange,
 		Resource:   hook.ResourceMember,
 		ResourceID: member.ID.String(),
 		ActorID:    member.UserID.String(),
 		Tenant:     member.OrgID.String(),
+		Metadata:   hookMeta,
 	})
 	p.relayEvent(ctx, "org.member.role_changed", member.OrgID.String(), map[string]string{
 		"member_id": member.ID.String(),

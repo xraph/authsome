@@ -95,7 +95,7 @@ func TestPlugin_CreateKey(t *testing.T) {
 		"scopes":  []string{"read", "write"},
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -147,7 +147,7 @@ func TestPlugin_CreateKey_ValidationErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(tt.body)
-			req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
+			req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 			assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -189,7 +189,7 @@ func TestPlugin_CreateKey_MaxKeysLimit(t *testing.T) {
 		"user_id": userID.String(),
 		"name":    "One Too Many",
 	})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -223,7 +223,7 @@ func TestPlugin_ListKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	// List by app
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/keys?app_id="+appID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/keys?app_id="+appID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -267,7 +267,7 @@ func TestPlugin_ListKeys_ByUser(t *testing.T) {
 	}
 
 	// List by user1 only
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/keys?app_id="+appID.String()+"&user_id="+user1.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/keys?app_id="+appID.String()+"&user_id="+user1.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -299,7 +299,7 @@ func TestPlugin_RevokeKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/keys/"+keyID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/keys/"+keyID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -318,7 +318,7 @@ func TestPlugin_RevokeKey_NotFound(t *testing.T) {
 	require.NoError(t, p.RegisterRoutes(mux))
 
 	fakeID := id.NewAPIKeyID()
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/keys/"+fakeID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/keys/"+fakeID.String(), nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -596,7 +596,7 @@ func TestPlugin_CreateKey_DefaultExpiry(t *testing.T) {
 		"user_id": id.NewUserID().String(),
 		"name":    "Expiring Key",
 	})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/keys", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/keys", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 

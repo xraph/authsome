@@ -10,10 +10,22 @@ import (
 	"github.com/xraph/forgeui/icons"
 )
 
+// AuthMethodToggle represents a toggleable authentication method.
+type AuthMethodToggle struct {
+	Key       string // e.g. "password_enabled"
+	Label     string // e.g. "Password"
+	Desc      string // e.g. "Email and password sign-in"
+	Enabled   bool
+	Available bool   // true if the plugin is installed
+}
+
 // SettingsPageData holds all data needed by the settings page.
 type SettingsPageData struct {
 	Config      authsome.Config
 	PluginNames []string
+	AppID       string         // platform app ID for API calls
+	BasePath    string         // authsome base path for API calls
+	AuthMethods []AuthMethodToggle
 }
 
 templ SettingsPage(data SettingsPageData) {
@@ -36,6 +48,61 @@ templ SettingsPage(data SettingsPageData) {
 				Edit Plugin Settings
 			</a>
 		</div>
+
+		<!-- Authentication Methods -->
+		if len(data.AuthMethods) > 0 {
+			@card.Card() {
+				@card.Header() {
+					<div class="flex items-center gap-2">
+						@icons.ShieldCheck(icons.WithSize(18))
+						@card.Title() {
+							Authentication Methods
+						}
+					</div>
+					@card.Description() {
+						Enable or disable sign-in methods for your application
+					}
+				}
+				@card.Content() {
+					<div
+						id="auth-methods-config"
+						data-app-id={ data.AppID }
+						data-base-path={ data.BasePath }
+						style="display:none"
+					></div>
+					<div class="divide-y">
+						for _, method := range data.AuthMethods {
+							<div class="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+								<div>
+									<p class="text-sm font-medium">{ method.Label }</p>
+									<p class="text-xs text-muted-foreground">{ method.Desc }</p>
+								</div>
+								if method.Available {
+									<label class="relative inline-flex items-center cursor-pointer">
+										<input
+											type="checkbox"
+											class="sr-only peer"
+											data-auth-method={ method.Key }
+											if method.Enabled {
+												checked
+											}
+											onchange="toggleAuthMethod(this)"
+										/>
+										<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:after:border-gray-600 peer-checked:bg-primary"></div>
+									</label>
+								} else {
+									@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+										Not installed
+									}
+								}
+							</div>
+						}
+					</div>
+					<div id="auth-method-toast" class="hidden mt-3 rounded-md border px-3 py-2 text-sm"></div>
+				}
+			}
+			@authMethodScript()
+		}
 
 		<!-- General -->
 		@card.Card() {
@@ -294,4 +361,53 @@ func algorithmLabel(a string) string {
 	default:
 		return a
 	}
+}
+
+templ authMethodScript() {
+	<script>
+		window.toggleAuthMethod = async function(el) {
+			var cfg = document.getElementById('auth-methods-config');
+			if (!cfg) return;
+			var basePath = cfg.getAttribute('data-base-path') || '';
+			var appID = cfg.getAttribute('data-app-id') || '';
+			var key = el.getAttribute('data-auth-method');
+			var enabled = el.checked;
+			var toast = document.getElementById('auth-method-toast');
+
+			var body = {};
+			body[key] = enabled;
+
+			try {
+				var resp = await fetch(basePath + '/v1/admin/apps/' + appID + '/client-config', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					credentials: 'same-origin',
+					body: JSON.stringify(body)
+				});
+
+				if (toast) {
+					toast.classList.remove('hidden', 'border-red-200', 'bg-red-50', 'text-red-700', 'border-green-200', 'bg-green-50', 'text-green-700');
+					if (resp.ok) {
+						toast.className = 'mt-3 rounded-md border px-3 py-2 text-sm border-green-200 bg-green-50 text-green-700 dark:bg-green-950/20 dark:border-green-900 dark:text-green-400';
+						toast.textContent = 'Saved';
+					} else {
+						var data = {};
+						try { data = await resp.json(); } catch(e) {}
+						toast.className = 'mt-3 rounded-md border px-3 py-2 text-sm border-red-200 bg-red-50 text-red-700 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400';
+						toast.textContent = 'Error: ' + (data.error || data.message || resp.statusText);
+						el.checked = !enabled; // revert
+					}
+					setTimeout(function() { toast.classList.add('hidden'); }, 3000);
+				}
+			} catch(err) {
+				if (toast) {
+					toast.className = 'mt-3 rounded-md border px-3 py-2 text-sm border-red-200 bg-red-50 text-red-700 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400';
+					toast.textContent = 'Network error: ' + err.message;
+					toast.classList.remove('hidden');
+					setTimeout(function() { toast.classList.add('hidden'); }, 3000);
+				}
+				el.checked = !enabled; // revert
+			}
+		};
+	</script>
 }

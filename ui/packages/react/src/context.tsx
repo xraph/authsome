@@ -43,8 +43,8 @@ export interface AuthContextValue {
 
   /** Sign in with email & password. */
   signIn: (email: string, password: string) => Promise<void>;
-  /** Sign up with email & password. */
-  signUp: (email: string, password: string, name?: string) => Promise<void>;
+  /** Sign up with email & password and optional extra fields. */
+  signUp: (email: string, password: string, fields?: Record<string, string>) => Promise<void>;
   /** Sign out. */
   signOut: () => Promise<void>;
   /** Submit MFA code. */
@@ -104,7 +104,11 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
   );
 
   const signUp = useCallback(
-    (email: string, password: string, name?: string) => manager.signUp({ email, password, name }),
+    (email: string, password: string, fields?: Record<string, string>) => {
+      const { first_name, last_name, username, ...rest } = fields ?? {};
+      const metadata = Object.keys(rest).length > 0 ? rest : undefined;
+      return manager.signUp({ email, password, first_name, last_name, username, metadata });
+    },
     [manager],
   );
 

@@ -130,7 +130,7 @@ func TestHandleStart_Success(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/social/google", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/google", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -151,7 +151,7 @@ func TestHandleStart_UnsupportedProvider(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/social/twitter", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/twitter", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -170,7 +170,7 @@ func TestHandleCallback_MissingState(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/social/google/callback?code=abc", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/google/callback?code=abc", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -190,7 +190,7 @@ func TestHandleCallback_InvalidState(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/social/google/callback?code=abc&state=invalid-state", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/google/callback?code=abc&state=invalid-state", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -211,7 +211,7 @@ func TestHandleCallback_MissingCode(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start the flow to get a valid state
-	startReq := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/social/google", nil)
+	startReq := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/google", nil)
 	startRec := httptest.NewRecorder()
 	mux.ServeHTTP(startRec, startReq)
 	require.Equal(t, http.StatusOK, startRec.Code)
@@ -223,7 +223,7 @@ func TestHandleCallback_MissingCode(t *testing.T) {
 	state := extractQueryParam(t, startResp["auth_url"], "state")
 
 	// Send callback without code
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/social/google/callback?state="+state, nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/google/callback?state="+state, nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -244,7 +244,7 @@ func TestHandleCallback_ProviderError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start the flow
-	startReq := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/social/google", nil)
+	startReq := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/google", nil)
 	startRec := httptest.NewRecorder()
 	mux.ServeHTTP(startRec, startReq)
 	require.Equal(t, http.StatusOK, startRec.Code)
@@ -255,7 +255,7 @@ func TestHandleCallback_ProviderError(t *testing.T) {
 
 	state := extractQueryParam(t, startResp["auth_url"], "state")
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/social/google/callback?state="+state+"&error=access_denied", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/google/callback?state="+state+"&error=access_denied", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -274,7 +274,7 @@ func TestHandleCallback_UnsupportedProvider(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/social/twitter/callback?code=abc&state=xyz", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/twitter/callback?code=abc&state=xyz", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -465,7 +465,7 @@ func TestFullFlow_StartCreatesState(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start flow
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/social/google", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/social/google", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -488,7 +488,7 @@ func TestFullFlow_StartCreatesState(t *testing.T) {
 	err = p2.RegisterRoutes(mux2)
 	require.NoError(t, err)
 
-	req2 := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/social/github/callback?code=abc&state="+state, nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/social/github/callback?code=abc&state="+state, nil)
 	rec2 := httptest.NewRecorder()
 	mux2.ServeHTTP(rec2, req2)
 

@@ -37,3 +37,4 @@ export {
   type GetClientConfigOptions,
 } from "./server";
 export { createCookieStorage, type CookieStorageOptions } from "./cookie-storage";
+export { createProxyHandler, type ProxyHandlerConfig } from "./proxy";

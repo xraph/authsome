@@ -26,10 +26,14 @@ export interface UserProfileCardProps {
   className?: string;
 }
 
+function getDisplayName(user: { first_name?: string; last_name?: string }): string {
+  return [user.first_name, user.last_name].filter(Boolean).join(" ");
+}
+
 /**
  * Displays the current user's profile with inline editing.
  *
- * Shows avatar, name, email, username. Allows editing name and username
+ * Shows avatar, name, email, username. Allows editing first/last name and username
  * using `client.updateMe()`.
  */
 export function UserProfileCard({
@@ -40,13 +44,15 @@ export function UserProfileCard({
   const { user, reload } = useUser();
 
   const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState("");
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const startEditing = () => {
-    setEditName(user?.name ?? "");
+    setEditFirstName(user?.first_name ?? "");
+    setEditLastName(user?.last_name ?? "");
     setEditUsername(user?.username ?? "");
     setError(null);
     setIsEditing(true);
@@ -64,7 +70,11 @@ export function UserProfileCard({
     try {
       if (session) {
         await client.updateMe(
-          { name: editName, username: editUsername || undefined },
+          {
+            first_name: editFirstName || undefined,
+            last_name: editLastName || undefined,
+            username: editUsername || undefined,
+          },
           session.session_token,
         );
       }
@@ -84,13 +94,9 @@ export function UserProfileCard({
     return null;
   }
 
-  const initials = user.name
-    ? user.name
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
+  const displayName = getDisplayName(user);
+  const initials = user.first_name
+    ? user.first_name[0].toUpperCase()
     : user.email?.[0]?.toUpperCase() ?? "?";
 
   return (
@@ -98,11 +104,11 @@ export function UserProfileCard({
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
-            {user.image && <AvatarImage src={user.image} alt={user.name} />}
+            {user.image && <AvatarImage src={user.image} alt={displayName || user.email} />}
             <AvatarFallback className="text-lg">{initials}</AvatarFallback>
           </Avatar>
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold leading-none">{user.name || "Unnamed"}</h3>
+            <h3 className="text-lg font-semibold leading-none">{displayName || "Unnamed"}</h3>
             <div className="flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">{user.email}</span>
@@ -130,13 +136,24 @@ export function UserProfileCard({
             <ErrorDisplay error={error} />
 
             <div className="grid gap-2">
-              <Label htmlFor="profile-name">Name</Label>
+              <Label htmlFor="profile-first-name">First name</Label>
               <Input
-                id="profile-name"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                id="profile-first-name"
+                value={editFirstName}
+                onChange={(e) => setEditFirstName(e.target.value)}
                 disabled={isSaving}
-                placeholder="Your name"
+                placeholder="First name"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="profile-last-name">Last name</Label>
+              <Input
+                id="profile-last-name"
+                value={editLastName}
+                onChange={(e) => setEditLastName(e.target.value)}
+                disabled={isSaving}
+                placeholder="Last name"
               />
             </div>
 
@@ -179,7 +196,7 @@ export function UserProfileCard({
           <dl className="grid gap-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Name</dt>
-              <dd className="font-medium">{user.name || "-"}</dd>
+              <dd className="font-medium">{displayName || "-"}</dd>
             </div>
             {user.username && (
               <div className="flex justify-between">

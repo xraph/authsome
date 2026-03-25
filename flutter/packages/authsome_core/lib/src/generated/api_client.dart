@@ -72,10 +72,112 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// Get per-app client config overrides
+  /// GET /v1/admin/apps/{appId}/client-config
+  Future<Config> getAppClientConfig({required String appId, required String token}) async {
+    final path = '/v1/admin/apps/$appId/client-config';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Set per-app client config overrides
+  /// PUT /v1/admin/apps/{appId}/client-config
+  Future<Config> setAppClientConfig({required String appId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/apps/$appId/client-config';
+    final res = await _request(
+'PUT',
+      path,
+      body: body,
+      token: token,
+    );
+    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete per-app client config overrides
+  /// DELETE /v1/admin/apps/{appId}/client-config
+  Future<StatusResponse> deleteAppClientConfig({required String appId, required DeleteAppClientConfigRequest body, required String token}) async {
+    final path = '/v1/admin/apps/$appId/client-config';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get per-app session config
+  /// GET /v1/admin/apps/{appId}/session-config
+  Future<Config> getAppSessionConfig({required String appId, required String token}) async {
+    final path = '/v1/admin/apps/$appId/session-config';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Set per-app session config
+  /// PUT /v1/admin/apps/{appId}/session-config
+  Future<Config> setAppSessionConfig({required String appId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/apps/$appId/session-config';
+    final res = await _request(
+'PUT',
+      path,
+      body: body,
+      token: token,
+    );
+    return Config.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete per-app session config
+  /// DELETE /v1/admin/apps/{appId}/session-config
+  Future<StatusResponse> deleteAppSessionConfig({required String appId, required DeleteAppSessionConfigRequest body, required String token}) async {
+    final path = '/v1/admin/apps/$appId/session-config';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Bulk revoke sessions (admin)
+  /// DELETE /v1/admin/bulk/sessions
+  Future<BulkRevokeSessionsResponse> adminBulkRevokeSessions({required BulkRevokeSessionsRequest body, required String token}) async {
+    final path = '/v1/admin/bulk/sessions';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return BulkRevokeSessionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Bulk import users (admin)
+  /// POST /v1/admin/bulk/users/import
+  Future<BulkImportResult> adminBulkImportUsers({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/bulk/users/import';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return BulkImportResult.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Stop impersonation (admin)
-  /// POST /v1/auth/admin/impersonate/stop
+  /// POST /v1/admin/impersonate/stop
   Future<StatusResponse> adminStopImpersonation({required AdminStopImpersonationRequest body, required String token}) async {
-    final path = '/v1/auth/admin/impersonate/stop';
+    final path = '/v1/admin/impersonate/stop';
     final res = await _request(
 'POST',
       path,
@@ -86,9 +188,9 @@ class AuthClient {
   }
 
   /// Impersonate user (admin)
-  /// POST /v1/auth/admin/impersonate/{userId}
+  /// POST /v1/admin/impersonate/{userId}
   Future<AuthResponse> adminImpersonate({required String userId, required AdminImpersonateRequest body, required String token}) async {
-    final path = '/v1/auth/admin/impersonate/$userId';
+    final path = '/v1/admin/impersonate/$userId';
     final res = await _request(
 'POST',
       path,
@@ -99,9 +201,9 @@ class AuthClient {
   }
 
   /// List organizations (admin)
-  /// GET /v1/auth/admin/orgs
+  /// GET /v1/admin/orgs
   Future<OrgListResponse> adminListOrgs({required String token}) async {
-    final path = '/v1/auth/admin/orgs';
+    final path = '/v1/admin/orgs';
     final res = await _request(
 'GET',
       path,
@@ -110,10 +212,110 @@ class AuthClient {
     return OrgListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// List all setting definitions
+  /// GET /v1/admin/settings/definitions
+  Future<ListDefinitionsResponse> listSettingsDefinitions({required String token}) async {
+    final path = '/v1/admin/settings/definitions';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListDefinitionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List definitions for a namespace
+  /// GET /v1/admin/settings/definitions/{namespace}
+  Future<ListDefinitionsResponse> listNamespaceSettingsDefinitions({required String namespace, required String token}) async {
+    final path = '/v1/admin/settings/definitions/$namespace';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListDefinitionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Enforce a setting value at a scope
+  /// PUT /v1/admin/settings/enforce/{key}
+  Future<SettingValueResponse> enforceSetting({required String key, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/settings/enforce/$key';
+    final res = await _request(
+'PUT',
+      path,
+      body: body,
+      token: token,
+    );
+    return SettingValueResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Remove enforcement from a setting
+  /// DELETE /v1/admin/settings/enforce/{key}
+  Future<StatusResponse> unenforceSetting({required String key, required UnenforceSettingRequest body, required String token}) async {
+    final path = '/v1/admin/settings/enforce/$key';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Resolve all settings at a scope
+  /// GET /v1/admin/settings/resolve
+  Future<ResolvedSettingsResponse> resolveSettings({required String token}) async {
+    final path = '/v1/admin/settings/resolve';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ResolvedSettingsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Resolve one setting with cascade details
+  /// GET /v1/admin/settings/resolve/{key}
+  Future<ResolvedSettingResponse> resolveSetting({required String key, required String token}) async {
+    final path = '/v1/admin/settings/resolve/$key';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ResolvedSettingResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Set a setting value at a scope
+  /// PUT /v1/admin/settings/values/{key}
+  Future<SettingValueResponse> setSetting({required String key, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/settings/values/$key';
+    final res = await _request(
+'PUT',
+      path,
+      body: body,
+      token: token,
+    );
+    return SettingValueResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete a setting override at a scope
+  /// DELETE /v1/admin/settings/values/{key}
+  Future<StatusResponse> deleteSetting({required String key, required DeleteSettingRequest body, required String token}) async {
+    final path = '/v1/admin/settings/values/$key';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get stats (admin)
-  /// GET /v1/auth/admin/stats
+  /// GET /v1/admin/stats
   Future<AdminStatsResponse> adminGetStats({required String token}) async {
-    final path = '/v1/auth/admin/stats';
+    final path = '/v1/admin/stats';
     final res = await _request(
 'GET',
       path,
@@ -123,9 +325,9 @@ class AuthClient {
   }
 
   /// List users (admin)
-  /// GET /v1/auth/admin/users
+  /// GET /v1/admin/users
   Future<AdminUserListResponse> adminListUsers({required String token}) async {
-    final path = '/v1/auth/admin/users';
+    final path = '/v1/admin/users';
     final res = await _request(
 'GET',
       path,
@@ -135,9 +337,9 @@ class AuthClient {
   }
 
   /// Get user (admin)
-  /// GET /v1/auth/admin/users/{userId}
+  /// GET /v1/admin/users/{userId}
   Future<User> adminGetUser({required String userId, required String token}) async {
-    final path = '/v1/auth/admin/users/$userId';
+    final path = '/v1/admin/users/$userId';
     final res = await _request(
 'GET',
       path,
@@ -147,9 +349,9 @@ class AuthClient {
   }
 
   /// Delete user (admin)
-  /// DELETE /v1/auth/admin/users/{userId}
+  /// DELETE /v1/admin/users/{userId}
   Future<StatusResponse> adminDeleteUser({required String userId, required AdminDeleteUserRequest body, required String token}) async {
-    final path = '/v1/auth/admin/users/$userId';
+    final path = '/v1/admin/users/$userId';
     final res = await _request(
 'DELETE',
       path,
@@ -160,9 +362,9 @@ class AuthClient {
   }
 
   /// Ban user (admin)
-  /// POST /v1/auth/admin/users/{userId}/ban
+  /// POST /v1/admin/users/{userId}/ban
   Future<StatusResponse> adminBanUser({required String userId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/admin/users/$userId/ban';
+    final path = '/v1/admin/users/$userId/ban';
     final res = await _request(
 'POST',
       path,
@@ -173,9 +375,9 @@ class AuthClient {
   }
 
   /// Unban user (admin)
-  /// POST /v1/auth/admin/users/{userId}/unban
+  /// POST /v1/admin/users/{userId}/unban
   Future<StatusResponse> adminUnbanUser({required String userId, required AdminUnbanUserRequest body, required String token}) async {
-    final path = '/v1/auth/admin/users/$userId/unban';
+    final path = '/v1/admin/users/$userId/unban';
     final res = await _request(
 'POST',
       path,
@@ -186,9 +388,9 @@ class AuthClient {
   }
 
   /// Change password
-  /// POST /v1/auth/change-password
+  /// POST /v1/change-password
   Future<StatusResponse> changePassword({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/change-password';
+    final path = '/v1/change-password';
     final res = await _request(
 'POST',
       path,
@@ -198,10 +400,22 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Get client configuration
+  /// GET /v1/client-config
+  Future<ClientConfigResponse> getClientConfig({required String token}) async {
+    final path = '/v1/client-config';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ClientConfigResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// List devices
-  /// GET /v1/auth/devices
+  /// GET /v1/devices
   Future<DeviceListResponse> listDevices({required String token}) async {
-    final path = '/v1/auth/devices';
+    final path = '/v1/devices';
     final res = await _request(
 'GET',
       path,
@@ -211,9 +425,9 @@ class AuthClient {
   }
 
   /// Get device
-  /// GET /v1/auth/devices/{deviceId}
+  /// GET /v1/devices/{deviceId}
   Future<Device> getDevice({required String deviceId, required String token}) async {
-    final path = '/v1/auth/devices/$deviceId';
+    final path = '/v1/devices/$deviceId';
     final res = await _request(
 'GET',
       path,
@@ -223,9 +437,9 @@ class AuthClient {
   }
 
   /// Delete device
-  /// DELETE /v1/auth/devices/{deviceId}
+  /// DELETE /v1/devices/{deviceId}
   Future<StatusResponse> deleteDevice({required String deviceId, required DeleteDeviceRequest body, required String token}) async {
-    final path = '/v1/auth/devices/$deviceId';
+    final path = '/v1/devices/$deviceId';
     final res = await _request(
 'DELETE',
       path,
@@ -236,9 +450,9 @@ class AuthClient {
   }
 
   /// Trust device
-  /// PATCH /v1/auth/devices/{deviceId}/trust
+  /// PATCH /v1/devices/{deviceId}/trust
   Future<Device> trustDevice({required String deviceId, required TrustDeviceRequest body, required String token}) async {
-    final path = '/v1/auth/devices/$deviceId/trust';
+    final path = '/v1/devices/$deviceId/trust';
     final res = await _request(
 'PATCH',
       path,
@@ -248,10 +462,122 @@ class AuthClient {
     return Device.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// List environments
+  /// GET /v1/environments
+  Future<EnvironmentListResponse> listEnvironments({required String token}) async {
+    final path = '/v1/environments';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return EnvironmentListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create environment
+  /// POST /v1/environments
+  Future<Environment> createEnvironment({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/environments';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return Environment.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get environment
+  /// GET /v1/environments/{envId}
+  Future<Environment> getEnvironment({required String envId, required String token}) async {
+    final path = '/v1/environments/$envId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Environment.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update environment
+  /// PATCH /v1/environments/{envId}
+  Future<Environment> updateEnvironment({required String envId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/environments/$envId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body,
+      token: token,
+    );
+    return Environment.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete environment
+  /// DELETE /v1/environments/{envId}
+  Future<StatusResponse> deleteEnvironment({required String envId, required String token}) async {
+    final path = '/v1/environments/$envId';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Clone environment
+  /// POST /v1/environments/{envId}/clone
+  Future<CloneEnvironmentResponse> cloneEnvironment({required String envId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/environments/$envId/clone';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return CloneEnvironmentResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Set default environment
+  /// POST /v1/environments/{envId}/set-default
+  Future<StatusResponse> setDefaultEnvironment({required String envId, required String token}) async {
+    final path = '/v1/environments/$envId/set-default';
+    final res = await _request(
+'POST',
+      path,
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get environment settings
+  /// GET /v1/environments/{envId}/settings
+  Future<EnvironmentSettingsResponse> getEnvironmentSettings({required String envId, required String token}) async {
+    final path = '/v1/environments/$envId/settings';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return EnvironmentSettingsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update environment settings
+  /// PATCH /v1/environments/{envId}/settings
+  Future<Environment> updateEnvironmentSettings({required String envId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/environments/$envId/settings';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body,
+      token: token,
+    );
+    return Environment.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Forgot password
-  /// POST /v1/auth/forgot-password
+  /// POST /v1/forgot-password
   Future<ForgotPasswordResponse> forgotPassword({required Map<String, dynamic> body}) async {
-    final path = '/v1/auth/forgot-password';
+    final path = '/v1/forgot-password';
     final res = await _request(
 'POST',
       path,
@@ -261,9 +587,9 @@ class AuthClient {
   }
 
   /// Health check
-  /// GET /v1/auth/health
+  /// GET /v1/health
   Future<HealthResponse> getHealth() async {
-    final path = '/v1/auth/health';
+    final path = '/v1/health';
     final res = await _request(
 'GET',
       path,
@@ -272,9 +598,9 @@ class AuthClient {
   }
 
   /// List API keys
-  /// GET /v1/auth/keys
+  /// GET /v1/keys
   Future<ListKeysResponse> listAPIKeys({required String token}) async {
-    final path = '/v1/auth/keys';
+    final path = '/v1/keys';
     final res = await _request(
 'GET',
       path,
@@ -284,9 +610,9 @@ class AuthClient {
   }
 
   /// Create API key
-  /// POST /v1/auth/keys
+  /// POST /v1/keys
   Future<CreateKeyResponse> createAPIKey({required CreateKeyRequest body, required String token}) async {
-    final path = '/v1/auth/keys';
+    final path = '/v1/keys';
     final res = await _request(
 'POST',
       path,
@@ -297,9 +623,9 @@ class AuthClient {
   }
 
   /// Revoke API key
-  /// DELETE /v1/auth/keys/{keyId}
+  /// DELETE /v1/keys/{keyId}
   Future<void> revokeAPIKey({required String keyId, required RevokeKeyRequest body, required String token}) async {
-    final path = '/v1/auth/keys/$keyId';
+    final path = '/v1/keys/$keyId';
     await _request(
 'DELETE',
       path,
@@ -309,9 +635,9 @@ class AuthClient {
   }
 
   /// Send magic link
-  /// POST /v1/auth/magic-link/send
+  /// POST /v1/magic-link/send
   Future<SendResponse> sendMagicLink({required SendRequest body}) async {
-    final path = '/v1/auth/magic-link/send';
+    final path = '/v1/magic-link/send';
     final res = await _request(
 'POST',
       path,
@@ -321,9 +647,9 @@ class AuthClient {
   }
 
   /// Verify magic link
-  /// POST /v1/auth/magic-link/verify
+  /// POST /v1/magic-link/verify
   Future<VerifyResponse> verifyMagicLink({required VerifyRequest body}) async {
-    final path = '/v1/auth/magic-link/verify';
+    final path = '/v1/magic-link/verify';
     final res = await _request(
 'POST',
       path,
@@ -333,9 +659,9 @@ class AuthClient {
   }
 
   /// Get current user
-  /// GET /v1/auth/me
+  /// GET /v1/me
   Future<User> getMe({required String token}) async {
-    final path = '/v1/auth/me';
+    final path = '/v1/me';
     final res = await _request(
 'GET',
       path,
@@ -345,9 +671,9 @@ class AuthClient {
   }
 
   /// Update current user
-  /// PATCH /v1/auth/me
+  /// PATCH /v1/me
   Future<User> updateMe({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/me';
+    final path = '/v1/me';
     final res = await _request(
 'PATCH',
       path,
@@ -358,9 +684,9 @@ class AuthClient {
   }
 
   /// Delete account
-  /// DELETE /v1/auth/me
-  Future<StatusResponse> deleteAccount({required DeleteAccountRequest body, required String token}) async {
-    final path = '/v1/auth/me';
+  /// DELETE /v1/me
+  Future<StatusResponse> deleteMe({required DeleteAccountRequest body, required String token}) async {
+    final path = '/v1/me';
     final res = await _request(
 'DELETE',
       path,
@@ -370,10 +696,35 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// List linked auth methods
+  /// GET /v1/me/auth-methods
+  Future<ListAuthMethodsResponse> listAuthMethods({required String token}) async {
+    final path = '/v1/me/auth-methods';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListAuthMethodsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Unlink an auth method
+  /// DELETE /v1/me/auth-methods/{provider}
+  Future<UnlinkAuthMethodResponse> unlinkAuthMethod({required String provider, required UnlinkAuthMethodRequest body, required String token}) async {
+    final path = '/v1/me/auth-methods/$provider';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return UnlinkAuthMethodResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Export user data
-  /// GET /v1/auth/me/export
-  Future<Map<String, dynamic>> exportUserData({required String token}) async {
-    final path = '/v1/auth/me/export';
+  /// GET /v1/me/export
+  Future<Map<String, dynamic>> exportMyData({required String token}) async {
+    final path = '/v1/me/export';
     final res = await _request(
 'GET',
       path,
@@ -383,9 +734,9 @@ class AuthClient {
   }
 
   /// MFA challenge
-  /// POST /v1/auth/mfa/challenge
+  /// POST /v1/mfa/challenge
   Future<ChallengeResponse> challengeMFA({required ChallengeRequest body}) async {
-    final path = '/v1/auth/mfa/challenge';
+    final path = '/v1/mfa/challenge';
     final res = await _request(
 'POST',
       path,
@@ -395,9 +746,9 @@ class AuthClient {
   }
 
   /// Enroll in MFA
-  /// POST /v1/auth/mfa/enroll
+  /// POST /v1/mfa/enroll
   Future<EnrollResponse> enrollMFA({required EnrollRequest body, required String token}) async {
-    final path = '/v1/auth/mfa/enroll';
+    final path = '/v1/mfa/enroll';
     final res = await _request(
 'POST',
       path,
@@ -408,9 +759,9 @@ class AuthClient {
   }
 
   /// Disable MFA
-  /// DELETE /v1/auth/mfa/enrollment
+  /// DELETE /v1/mfa/enrollment
   Future<DisableResponse> disableMFA({required DisableRequest body, required String token}) async {
-    final path = '/v1/auth/mfa/enrollment';
+    final path = '/v1/mfa/enrollment';
     final res = await _request(
 'DELETE',
       path,
@@ -421,9 +772,9 @@ class AuthClient {
   }
 
   /// Regenerate MFA recovery codes
-  /// POST /v1/auth/mfa/recovery/regenerate
+  /// POST /v1/mfa/recovery/regenerate
   Future<RecoveryRegenerateResponse> regenerateMFARecoveryCodes({required RecoveryRegenerateRequest body, required String token}) async {
-    final path = '/v1/auth/mfa/recovery/regenerate';
+    final path = '/v1/mfa/recovery/regenerate';
     final res = await _request(
 'POST',
       path,
@@ -434,9 +785,9 @@ class AuthClient {
   }
 
   /// Verify MFA recovery code
-  /// POST /v1/auth/mfa/recovery/verify
-  Future<RecoveryVerifyResponse> verifyMFARecovery({required RecoveryVerifyRequest body}) async {
-    final path = '/v1/auth/mfa/recovery/verify';
+  /// POST /v1/mfa/recovery/verify
+  Future<RecoveryVerifyResponse> verifyRecoveryCode({required RecoveryVerifyRequest body}) async {
+    final path = '/v1/mfa/recovery/verify';
     final res = await _request(
 'POST',
       path,
@@ -446,9 +797,9 @@ class AuthClient {
   }
 
   /// Send SMS verification code
-  /// POST /v1/auth/mfa/sms/send
+  /// POST /v1/mfa/sms/send
   Future<SMSSendResponse> sendSMSCode({required SMSSendRequest body, required String token}) async {
-    final path = '/v1/auth/mfa/sms/send';
+    final path = '/v1/mfa/sms/send';
     final res = await _request(
 'POST',
       path,
@@ -459,9 +810,9 @@ class AuthClient {
   }
 
   /// Verify SMS code
-  /// POST /v1/auth/mfa/sms/verify
+  /// POST /v1/mfa/sms/verify
   Future<SMSVerifyResponse> verifySMSCode({required SMSVerifyRequest body, required String token}) async {
-    final path = '/v1/auth/mfa/sms/verify';
+    final path = '/v1/mfa/sms/verify';
     final res = await _request(
 'POST',
       path,
@@ -472,9 +823,9 @@ class AuthClient {
   }
 
   /// Verify MFA code
-  /// POST /v1/auth/mfa/verify
+  /// POST /v1/mfa/verify
   Future<VerifyMFAResponse> verifyMFA({required VerifyMFARequest body}) async {
-    final path = '/v1/auth/mfa/verify';
+    final path = '/v1/mfa/verify';
     final res = await _request(
 'POST',
       path,
@@ -484,9 +835,9 @@ class AuthClient {
   }
 
   /// List organizations
-  /// GET /v1/auth/orgs
+  /// GET /v1/orgs
   Future<OrgListResponse> listOrganizations({required String token}) async {
-    final path = '/v1/auth/orgs';
+    final path = '/v1/orgs';
     final res = await _request(
 'GET',
       path,
@@ -496,9 +847,9 @@ class AuthClient {
   }
 
   /// Create organization
-  /// POST /v1/auth/orgs
+  /// POST /v1/orgs
   Future<Organization> createOrganization({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs';
+    final path = '/v1/orgs';
     final res = await _request(
 'POST',
       path,
@@ -509,9 +860,9 @@ class AuthClient {
   }
 
   /// Check slug availability
-  /// GET /v1/auth/orgs/check-slug
+  /// GET /v1/orgs/check-slug
   Future<SlugAvailableResponse> checkOrgSlug({required String token}) async {
-    final path = '/v1/auth/orgs/check-slug';
+    final path = '/v1/orgs/check-slug';
     final res = await _request(
 'GET',
       path,
@@ -521,9 +872,9 @@ class AuthClient {
   }
 
   /// Accept invitation
-  /// POST /v1/auth/orgs/invitations/accept
+  /// POST /v1/orgs/invitations/accept
   Future<Member> acceptInvitation({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/invitations/accept';
+    final path = '/v1/orgs/invitations/accept';
     final res = await _request(
 'POST',
       path,
@@ -534,9 +885,9 @@ class AuthClient {
   }
 
   /// Decline invitation
-  /// POST /v1/auth/orgs/invitations/decline
+  /// POST /v1/orgs/invitations/decline
   Future<StatusResponse> declineInvitation({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/invitations/decline';
+    final path = '/v1/orgs/invitations/decline';
     final res = await _request(
 'POST',
       path,
@@ -547,9 +898,9 @@ class AuthClient {
   }
 
   /// Get organization
-  /// GET /v1/auth/orgs/{orgId}
+  /// GET /v1/orgs/{orgId}
   Future<Organization> getOrganization({required String orgId, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId';
+    final path = '/v1/orgs/$orgId';
     final res = await _request(
 'GET',
       path,
@@ -559,9 +910,9 @@ class AuthClient {
   }
 
   /// Update organization
-  /// PATCH /v1/auth/orgs/{orgId}
+  /// PATCH /v1/orgs/{orgId}
   Future<Organization> updateOrganization({required String orgId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId';
+    final path = '/v1/orgs/$orgId';
     final res = await _request(
 'PATCH',
       path,
@@ -572,9 +923,9 @@ class AuthClient {
   }
 
   /// Delete organization
-  /// DELETE /v1/auth/orgs/{orgId}
+  /// DELETE /v1/orgs/{orgId}
   Future<StatusResponse> deleteOrganization({required String orgId, required DeleteOrgRequest body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId';
+    final path = '/v1/orgs/$orgId';
     final res = await _request(
 'DELETE',
       path,
@@ -585,9 +936,9 @@ class AuthClient {
   }
 
   /// List invitations
-  /// GET /v1/auth/orgs/{orgId}/invitations
+  /// GET /v1/orgs/{orgId}/invitations
   Future<InvitationListResponse> listInvitations({required String orgId, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/invitations';
+    final path = '/v1/orgs/$orgId/invitations';
     final res = await _request(
 'GET',
       path,
@@ -597,9 +948,9 @@ class AuthClient {
   }
 
   /// Create invitation
-  /// POST /v1/auth/orgs/{orgId}/invitations
+  /// POST /v1/orgs/{orgId}/invitations
   Future<Invitation> createInvitation({required String orgId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/invitations';
+    final path = '/v1/orgs/$orgId/invitations';
     final res = await _request(
 'POST',
       path,
@@ -610,9 +961,9 @@ class AuthClient {
   }
 
   /// List members
-  /// GET /v1/auth/orgs/{orgId}/members
+  /// GET /v1/orgs/{orgId}/members
   Future<MemberListResponse> listMembers({required String orgId, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/members';
+    final path = '/v1/orgs/$orgId/members';
     final res = await _request(
 'GET',
       path,
@@ -622,9 +973,9 @@ class AuthClient {
   }
 
   /// Add member
-  /// POST /v1/auth/orgs/{orgId}/members
+  /// POST /v1/orgs/{orgId}/members
   Future<Member> addMember({required String orgId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/members';
+    final path = '/v1/orgs/$orgId/members';
     final res = await _request(
 'POST',
       path,
@@ -635,9 +986,9 @@ class AuthClient {
   }
 
   /// Update member role
-  /// PATCH /v1/auth/orgs/{orgId}/members/{memberId}
+  /// PATCH /v1/orgs/{orgId}/members/{memberId}
   Future<Member> updateMember({required String orgId, required String memberId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/members/$memberId';
+    final path = '/v1/orgs/$orgId/members/$memberId';
     final res = await _request(
 'PATCH',
       path,
@@ -648,9 +999,9 @@ class AuthClient {
   }
 
   /// Remove member
-  /// DELETE /v1/auth/orgs/{orgId}/members/{memberId}
+  /// DELETE /v1/orgs/{orgId}/members/{memberId}
   Future<StatusResponse> removeMember({required String orgId, required String memberId, required RemoveMemberRequest body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/members/$memberId';
+    final path = '/v1/orgs/$orgId/members/$memberId';
     final res = await _request(
 'DELETE',
       path,
@@ -661,9 +1012,9 @@ class AuthClient {
   }
 
   /// List teams
-  /// GET /v1/auth/orgs/{orgId}/teams
+  /// GET /v1/orgs/{orgId}/teams
   Future<TeamListResponse> listTeams({required String orgId, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/teams';
+    final path = '/v1/orgs/$orgId/teams';
     final res = await _request(
 'GET',
       path,
@@ -673,9 +1024,9 @@ class AuthClient {
   }
 
   /// Create team
-  /// POST /v1/auth/orgs/{orgId}/teams
+  /// POST /v1/orgs/{orgId}/teams
   Future<Team> createTeam({required String orgId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/teams';
+    final path = '/v1/orgs/$orgId/teams';
     final res = await _request(
 'POST',
       path,
@@ -686,9 +1037,9 @@ class AuthClient {
   }
 
   /// Get team
-  /// GET /v1/auth/orgs/{orgId}/teams/{teamId}
+  /// GET /v1/orgs/{orgId}/teams/{teamId}
   Future<Team> getTeam({required String orgId, required String teamId, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/teams/$teamId';
+    final path = '/v1/orgs/$orgId/teams/$teamId';
     final res = await _request(
 'GET',
       path,
@@ -698,9 +1049,9 @@ class AuthClient {
   }
 
   /// Update team
-  /// PATCH /v1/auth/orgs/{orgId}/teams/{teamId}
+  /// PATCH /v1/orgs/{orgId}/teams/{teamId}
   Future<Team> updateTeam({required String orgId, required String teamId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/teams/$teamId';
+    final path = '/v1/orgs/$orgId/teams/$teamId';
     final res = await _request(
 'PATCH',
       path,
@@ -711,9 +1062,9 @@ class AuthClient {
   }
 
   /// Delete team
-  /// DELETE /v1/auth/orgs/{orgId}/teams/{teamId}
+  /// DELETE /v1/orgs/{orgId}/teams/{teamId}
   Future<StatusResponse> deleteTeam({required String orgId, required String teamId, required DeleteTeamRequest body, required String token}) async {
-    final path = '/v1/auth/orgs/$orgId/teams/$teamId';
+    final path = '/v1/orgs/$orgId/teams/$teamId';
     final res = await _request(
 'DELETE',
       path,
@@ -724,9 +1075,9 @@ class AuthClient {
   }
 
   /// List passkeys
-  /// GET /v1/auth/passkeys/
+  /// GET /v1/passkeys/
   Future<ListResponse> listPasskeys({required String token}) async {
-    final path = '/v1/auth/passkeys/';
+    final path = '/v1/passkeys/';
     final res = await _request(
 'GET',
       path,
@@ -736,9 +1087,9 @@ class AuthClient {
   }
 
   /// Begin passkey login
-  /// POST /v1/auth/passkeys/login/begin
+  /// POST /v1/passkeys/login/begin
   Future<LoginBeginResponse> passkeyLoginBegin({required LoginBeginRequest body}) async {
-    final path = '/v1/auth/passkeys/login/begin';
+    final path = '/v1/passkeys/login/begin';
     final res = await _request(
 'POST',
       path,
@@ -748,9 +1099,9 @@ class AuthClient {
   }
 
   /// Complete passkey login
-  /// POST /v1/auth/passkeys/login/finish
+  /// POST /v1/passkeys/login/finish
   Future<LoginFinishResponse> passkeyLoginFinish({required LoginFinishRequest body}) async {
-    final path = '/v1/auth/passkeys/login/finish';
+    final path = '/v1/passkeys/login/finish';
     final res = await _request(
 'POST',
       path,
@@ -760,9 +1111,9 @@ class AuthClient {
   }
 
   /// Begin passkey registration
-  /// POST /v1/auth/passkeys/register/begin
+  /// POST /v1/passkeys/register/begin
   Future<RegisterBeginResponse> passkeyRegisterBegin({required RegisterBeginRequest body, required String token}) async {
-    final path = '/v1/auth/passkeys/register/begin';
+    final path = '/v1/passkeys/register/begin';
     final res = await _request(
 'POST',
       path,
@@ -773,9 +1124,9 @@ class AuthClient {
   }
 
   /// Complete passkey registration
-  /// POST /v1/auth/passkeys/register/finish
+  /// POST /v1/passkeys/register/finish
   Future<RegisterFinishResponse> passkeyRegisterFinish({required RegisterFinishRequest body, required String token}) async {
-    final path = '/v1/auth/passkeys/register/finish';
+    final path = '/v1/passkeys/register/finish';
     final res = await _request(
 'POST',
       path,
@@ -786,9 +1137,9 @@ class AuthClient {
   }
 
   /// Delete passkey
-  /// DELETE /v1/auth/passkeys/{credentialId}
+  /// DELETE /v1/passkeys/{credentialId}
   Future<DeleteResponse> deletePasskey({required String credentialId, required DeleteRequest body, required String token}) async {
-    final path = '/v1/auth/passkeys/$credentialId';
+    final path = '/v1/passkeys/$credentialId';
     final res = await _request(
 'DELETE',
       path,
@@ -799,9 +1150,9 @@ class AuthClient {
   }
 
   /// Refresh tokens
-  /// POST /v1/auth/refresh
-  Future<TokenResponse> refreshTokens({required Map<String, dynamic> body}) async {
-    final path = '/v1/auth/refresh';
+  /// POST /v1/refresh
+  Future<TokenResponse> refresh({required Map<String, dynamic> body}) async {
+    final path = '/v1/refresh';
     final res = await _request(
 'POST',
       path,
@@ -811,9 +1162,9 @@ class AuthClient {
   }
 
   /// Reset password
-  /// POST /v1/auth/reset-password
+  /// POST /v1/reset-password
   Future<StatusResponse> resetPassword({required Map<String, dynamic> body}) async {
-    final path = '/v1/auth/reset-password';
+    final path = '/v1/reset-password';
     final res = await _request(
 'POST',
       path,
@@ -823,9 +1174,9 @@ class AuthClient {
   }
 
   /// List roles
-  /// GET /v1/auth/roles
-  Future<RoleListResponse> listRoles({required String token}) async {
-    final path = '/v1/auth/roles';
+  /// GET /v1/roles
+  Future<RoleListResponse> authsomeListRoles({required String token}) async {
+    final path = '/v1/roles';
     final res = await _request(
 'GET',
       path,
@@ -835,9 +1186,9 @@ class AuthClient {
   }
 
   /// Create role
-  /// POST /v1/auth/roles
-  Future<Role> createRole({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/roles';
+  /// POST /v1/roles
+  Future<Role> authsomeCreateRole({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/roles';
     final res = await _request(
 'POST',
       path,
@@ -848,9 +1199,9 @@ class AuthClient {
   }
 
   /// Get role
-  /// GET /v1/auth/roles/{roleId}
-  Future<Role> getRole({required String roleId, required String token}) async {
-    final path = '/v1/auth/roles/$roleId';
+  /// GET /v1/roles/{roleId}
+  Future<Role> authsomeGetRole({required String roleId, required String token}) async {
+    final path = '/v1/roles/$roleId';
     final res = await _request(
 'GET',
       path,
@@ -860,9 +1211,9 @@ class AuthClient {
   }
 
   /// Update role
-  /// PATCH /v1/auth/roles/{roleId}
-  Future<Role> updateRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/roles/$roleId';
+  /// PATCH /v1/roles/{roleId}
+  Future<Role> authsomeUpdateRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/roles/$roleId';
     final res = await _request(
 'PATCH',
       path,
@@ -873,22 +1224,21 @@ class AuthClient {
   }
 
   /// Delete role
-  /// DELETE /v1/auth/roles/{roleId}
-  Future<StatusResponse> deleteRole({required String roleId, required DeleteRoleRequest body, required String token}) async {
-    final path = '/v1/auth/roles/$roleId';
+  /// DELETE /v1/roles/{roleId}
+  Future<StatusResponse> authsomeDeleteRole({required String roleId, required String token}) async {
+    final path = '/v1/roles/$roleId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Assign role to user
-  /// POST /v1/auth/roles/{roleId}/assign
-  Future<StatusResponse> assignRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/roles/$roleId/assign';
+  /// POST /v1/roles/{roleId}/assign
+  Future<StatusResponse> authsomeAssignRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/roles/$roleId/assign';
     final res = await _request(
 'POST',
       path,
@@ -899,9 +1249,9 @@ class AuthClient {
   }
 
   /// List role permissions
-  /// GET /v1/auth/roles/{roleId}/permissions
-  Future<PermissionListResponse> listRolePermissions({required String roleId, required String token}) async {
-    final path = '/v1/auth/roles/$roleId/permissions';
+  /// GET /v1/roles/{roleId}/permissions
+  Future<PermissionListResponse> authsomeListRolePermissions({required String roleId, required String token}) async {
+    final path = '/v1/roles/$roleId/permissions';
     final res = await _request(
 'GET',
       path,
@@ -911,9 +1261,9 @@ class AuthClient {
   }
 
   /// Add permission to role
-  /// POST /v1/auth/roles/{roleId}/permissions
-  Future<Permission> addPermission({required String roleId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/roles/$roleId/permissions';
+  /// POST /v1/roles/{roleId}/permissions
+  Future<Permission> authsomeAddPermission({required String roleId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/roles/$roleId/permissions';
     final res = await _request(
 'POST',
       path,
@@ -924,22 +1274,21 @@ class AuthClient {
   }
 
   /// Remove permission from role
-  /// DELETE /v1/auth/roles/{roleId}/permissions/{permissionId}
-  Future<StatusResponse> removePermission({required String roleId, required String permissionId, required RemovePermissionRequest body, required String token}) async {
-    final path = '/v1/auth/roles/$roleId/permissions/$permissionId';
+  /// DELETE /v1/roles/{roleId}/permissions/{permissionId}
+  Future<StatusResponse> authsomeRemovePermission({required String roleId, required String permissionId, required String token}) async {
+    final path = '/v1/roles/$roleId/permissions/$permissionId';
     final res = await _request(
 'DELETE',
       path,
-      body: body.toJson(),
       token: token,
     );
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Unassign role from user
-  /// POST /v1/auth/roles/{roleId}/unassign
-  Future<StatusResponse> unassignRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/roles/$roleId/unassign';
+  /// POST /v1/roles/{roleId}/unassign
+  Future<StatusResponse> authsomeUnassignRole({required String roleId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/roles/$roleId/unassign';
     final res = await _request(
 'POST',
       path,
@@ -950,9 +1299,9 @@ class AuthClient {
   }
 
   /// List sessions
-  /// GET /v1/auth/sessions
+  /// GET /v1/sessions
   Future<SessionListResponse> listSessions({required String token}) async {
-    final path = '/v1/auth/sessions';
+    final path = '/v1/sessions';
     final res = await _request(
 'GET',
       path,
@@ -962,9 +1311,9 @@ class AuthClient {
   }
 
   /// Revoke session
-  /// DELETE /v1/auth/sessions/{sessionId}
+  /// DELETE /v1/sessions/{sessionId}
   Future<StatusResponse> revokeSession({required String sessionId, required RevokeSessionRequest body, required String token}) async {
-    final path = '/v1/auth/sessions/$sessionId';
+    final path = '/v1/sessions/$sessionId';
     final res = await _request(
 'DELETE',
       path,
@@ -975,9 +1324,9 @@ class AuthClient {
   }
 
   /// Sign in
-  /// POST /v1/auth/signin
+  /// POST /v1/signin
   Future<AuthResponse> signIn({required Map<String, dynamic> body}) async {
-    final path = '/v1/auth/signin';
+    final path = '/v1/signin';
     final res = await _request(
 'POST',
       path,
@@ -987,9 +1336,9 @@ class AuthClient {
   }
 
   /// Sign out
-  /// POST /v1/auth/signout
+  /// POST /v1/signout
   Future<StatusResponse> signOut({required SignOutRequest body, required String token}) async {
-    final path = '/v1/auth/signout';
+    final path = '/v1/signout';
     final res = await _request(
 'POST',
       path,
@@ -1000,9 +1349,9 @@ class AuthClient {
   }
 
   /// Sign up
-  /// POST /v1/auth/signup
+  /// POST /v1/signup
   Future<AuthResponse> signUp({required Map<String, dynamic> body}) async {
-    final path = '/v1/auth/signup';
+    final path = '/v1/signup';
     final res = await _request(
 'POST',
       path,
@@ -1012,9 +1361,9 @@ class AuthClient {
   }
 
   /// Start OAuth flow
-  /// POST /v1/auth/social/{provider}
+  /// POST /v1/social/{provider}
   Future<StartResponse> startOAuth({required String provider, required StartRequest body}) async {
-    final path = '/v1/auth/social/$provider';
+    final path = '/v1/social/$provider';
     final res = await _request(
 'POST',
       path,
@@ -1024,9 +1373,9 @@ class AuthClient {
   }
 
   /// OAuth callback
-  /// GET /v1/auth/social/{provider}/callback
+  /// GET /v1/social/{provider}/callback
   Future<CallbackResponse> oauthCallback({required String provider}) async {
-    final path = '/v1/auth/social/$provider/callback';
+    final path = '/v1/social/$provider/callback';
     final res = await _request(
 'GET',
       path,
@@ -1035,9 +1384,9 @@ class AuthClient {
   }
 
   /// SSO SAML ACS endpoint
-  /// POST /v1/auth/sso/{provider}/acs
+  /// POST /v1/sso/{provider}/acs
   Future<CallbackResponse> ssoACS({required String provider, required ACSRequest body}) async {
-    final path = '/v1/auth/sso/$provider/acs';
+    final path = '/v1/sso/$provider/acs';
     final res = await _request(
 'POST',
       path,
@@ -1047,9 +1396,9 @@ class AuthClient {
   }
 
   /// SSO callback (OIDC)
-  /// POST /v1/auth/sso/{provider}/callback
+  /// POST /v1/sso/{provider}/callback
   Future<CallbackResponse> ssoCallback({required String provider, required CallbackRequest body}) async {
-    final path = '/v1/auth/sso/$provider/callback';
+    final path = '/v1/sso/$provider/callback';
     final res = await _request(
 'POST',
       path,
@@ -1059,9 +1408,9 @@ class AuthClient {
   }
 
   /// Start SSO login flow
-  /// POST /v1/auth/sso/{provider}/login
+  /// POST /v1/sso/{provider}/login
   Future<LoginResponse> startSSOLogin({required String provider, required LoginRequest body}) async {
-    final path = '/v1/auth/sso/$provider/login';
+    final path = '/v1/sso/$provider/login';
     final res = await _request(
 'POST',
       path,
@@ -1071,9 +1420,9 @@ class AuthClient {
   }
 
   /// List user roles
-  /// GET /v1/auth/users/{userId}/roles
-  Future<UserRoleListResponse> listUserRoles({required String userId, required String token}) async {
-    final path = '/v1/auth/users/$userId/roles';
+  /// GET /v1/users/{userId}/roles
+  Future<UserRoleListResponse> authsomeListUserRoles({required String userId, required String token}) async {
+    final path = '/v1/users/$userId/roles';
     final res = await _request(
 'GET',
       path,
@@ -1083,9 +1432,9 @@ class AuthClient {
   }
 
   /// Verify email
-  /// POST /v1/auth/verify-email
+  /// POST /v1/verify-email
   Future<StatusResponse> verifyEmail({required Map<String, dynamic> body}) async {
-    final path = '/v1/auth/verify-email';
+    final path = '/v1/verify-email';
     final res = await _request(
 'POST',
       path,
@@ -1095,9 +1444,9 @@ class AuthClient {
   }
 
   /// List webhooks
-  /// GET /v1/auth/webhooks
+  /// GET /v1/webhooks
   Future<WebhookListResponse> listWebhooks({required String token}) async {
-    final path = '/v1/auth/webhooks';
+    final path = '/v1/webhooks';
     final res = await _request(
 'GET',
       path,
@@ -1107,9 +1456,9 @@ class AuthClient {
   }
 
   /// Create webhook
-  /// POST /v1/auth/webhooks
+  /// POST /v1/webhooks
   Future<Webhook> createWebhook({required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/webhooks';
+    final path = '/v1/webhooks';
     final res = await _request(
 'POST',
       path,
@@ -1120,9 +1469,9 @@ class AuthClient {
   }
 
   /// Get webhook
-  /// GET /v1/auth/webhooks/{webhookId}
+  /// GET /v1/webhooks/{webhookId}
   Future<Webhook> getWebhook({required String webhookId, required String token}) async {
-    final path = '/v1/auth/webhooks/$webhookId';
+    final path = '/v1/webhooks/$webhookId';
     final res = await _request(
 'GET',
       path,
@@ -1132,9 +1481,9 @@ class AuthClient {
   }
 
   /// Update webhook
-  /// PATCH /v1/auth/webhooks/{webhookId}
+  /// PATCH /v1/webhooks/{webhookId}
   Future<Webhook> updateWebhook({required String webhookId, required Map<String, dynamic> body, required String token}) async {
-    final path = '/v1/auth/webhooks/$webhookId';
+    final path = '/v1/webhooks/$webhookId';
     final res = await _request(
 'PATCH',
       path,
@@ -1145,9 +1494,9 @@ class AuthClient {
   }
 
   /// Delete webhook
-  /// DELETE /v1/auth/webhooks/{webhookId}
+  /// DELETE /v1/webhooks/{webhookId}
   Future<StatusResponse> deleteWebhook({required String webhookId, required DeleteWebhookRequest body, required String token}) async {
-    final path = '/v1/auth/webhooks/$webhookId';
+    final path = '/v1/webhooks/$webhookId';
     final res = await _request(
 'DELETE',
       path,

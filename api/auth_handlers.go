@@ -10,7 +10,6 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
-	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -37,9 +36,8 @@ func (a *API) rateLimitOpt(limit int) []forge.RouteOption {
 // ──────────────────────────────────────────────────
 
 func (a *API) registerAuthRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
 	rlCfg := a.engine.Config().RateLimit
-	g := router.Group(base, forge.WithGroupTags("authentication"))
+	g := router.Group("/v1", forge.WithGroupTags("authentication"))
 
 	signUpOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
 	signUpOpts = append(signUpOpts,
@@ -111,26 +109,12 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Username:  req.Username,
+		Metadata:  req.Metadata,
 		IPAddress: clientIPFromRequest(httpReq),
 		UserAgent: httpReq.UserAgent(),
 	})
 	if err != nil {
 		return nil, mapError(err)
-	}
-
-	// If this is the first user for the platform app, assign platform_owner role.
-	platformID := a.engine.PlatformAppID()
-	if appID == platformID && !platformID.IsNil() {
-		list, _ := a.engine.Store().ListUsers(ctx.Context(), &user.Query{AppID: appID, Limit: 2}) //nolint:errcheck // best-effort lookup
-		if list != nil && list.Total == 1 {
-			ownerRole, roleErr := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
-			if roleErr == nil && ownerRole != nil {
-				_ = a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{ //nolint:errcheck // best-effort role assignment
-					UserID: u.ID.String(),
-					RoleID: ownerRole.ID,
-				})
-			}
-		}
 	}
 
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())

@@ -15,8 +15,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerWebhookRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base, forge.WithGroupTags("webhooks"))
+	g := router.Group("/v1", forge.WithGroupTags("webhooks"))
 
 	if err := g.POST("/webhooks", a.handleCreateWebhook,
 		forge.WithSummary("Create webhook"),

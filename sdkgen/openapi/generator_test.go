@@ -40,29 +40,29 @@ func TestGenerator_CoreEndpoints(t *testing.T) {
 	spec := gen.Generate()
 
 	// Core auth endpoints
-	assert.NotNil(t, spec.Paths["/v1/auth/signup"])
-	assert.NotNil(t, spec.Paths["/v1/auth/signup"].Post)
+	assert.NotNil(t, spec.Paths["/v1/signup"])
+	assert.NotNil(t, spec.Paths["/v1/signup"].Post)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/signin"])
-	assert.NotNil(t, spec.Paths["/v1/auth/signin"].Post)
+	assert.NotNil(t, spec.Paths["/v1/signin"])
+	assert.NotNil(t, spec.Paths["/v1/signin"].Post)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/signout"])
-	assert.NotNil(t, spec.Paths["/v1/auth/signout"].Post)
+	assert.NotNil(t, spec.Paths["/v1/signout"])
+	assert.NotNil(t, spec.Paths["/v1/signout"].Post)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/refresh"])
-	assert.NotNil(t, spec.Paths["/v1/auth/refresh"].Post)
+	assert.NotNil(t, spec.Paths["/v1/refresh"])
+	assert.NotNil(t, spec.Paths["/v1/refresh"].Post)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/health"])
-	assert.NotNil(t, spec.Paths["/v1/auth/health"].Get)
+	assert.NotNil(t, spec.Paths["/v1/health"])
+	assert.NotNil(t, spec.Paths["/v1/health"].Get)
 
 	// User endpoints
-	assert.NotNil(t, spec.Paths["/v1/auth/me"])
-	assert.NotNil(t, spec.Paths["/v1/auth/me"].Get)
-	assert.NotNil(t, spec.Paths["/v1/auth/me"].Patch)
+	assert.NotNil(t, spec.Paths["/v1/me"])
+	assert.NotNil(t, spec.Paths["/v1/me"].Get)
+	assert.NotNil(t, spec.Paths["/v1/me"].Patch)
 
 	// Session endpoints
-	assert.NotNil(t, spec.Paths["/v1/auth/sessions"])
-	assert.NotNil(t, spec.Paths["/v1/auth/sessions/{id}"])
+	assert.NotNil(t, spec.Paths["/v1/sessions"])
+	assert.NotNil(t, spec.Paths["/v1/sessions/{id}"])
 
 	// Well-known endpoints
 	assert.NotNil(t, spec.Paths["/.well-known/authsome/manifest"])
@@ -73,24 +73,24 @@ func TestGenerator_PasswordEndpoints(t *testing.T) {
 	gen := openapi.NewGenerator(openapi.GeneratorConfig{})
 	spec := gen.Generate()
 
-	assert.NotNil(t, spec.Paths["/v1/auth/forgot-password"])
-	assert.NotNil(t, spec.Paths["/v1/auth/forgot-password"].Post)
-	assert.Equal(t, "forgotPassword", spec.Paths["/v1/auth/forgot-password"].Post.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/forgot-password"])
+	assert.NotNil(t, spec.Paths["/v1/forgot-password"].Post)
+	assert.Equal(t, "forgotPassword", spec.Paths["/v1/forgot-password"].Post.OperationID)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/reset-password"])
-	assert.NotNil(t, spec.Paths["/v1/auth/reset-password"].Post)
-	assert.Equal(t, "resetPassword", spec.Paths["/v1/auth/reset-password"].Post.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/reset-password"])
+	assert.NotNil(t, spec.Paths["/v1/reset-password"].Post)
+	assert.Equal(t, "resetPassword", spec.Paths["/v1/reset-password"].Post.OperationID)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/change-password"])
-	assert.NotNil(t, spec.Paths["/v1/auth/change-password"].Post)
-	assert.Equal(t, "changePassword", spec.Paths["/v1/auth/change-password"].Post.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/change-password"])
+	assert.NotNil(t, spec.Paths["/v1/change-password"].Post)
+	assert.Equal(t, "changePassword", spec.Paths["/v1/change-password"].Post.OperationID)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/verify-email"])
-	assert.NotNil(t, spec.Paths["/v1/auth/verify-email"].Post)
-	assert.Equal(t, "verifyEmail", spec.Paths["/v1/auth/verify-email"].Post.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/verify-email"])
+	assert.NotNil(t, spec.Paths["/v1/verify-email"].Post)
+	assert.Equal(t, "verifyEmail", spec.Paths["/v1/verify-email"].Post.OperationID)
 
 	// Change password requires auth
-	changePass := spec.Paths["/v1/auth/change-password"].Post
+	changePass := spec.Paths["/v1/change-password"].Post
 	require.NotEmpty(t, changePass.Security)
 	_, hasBearer := changePass.Security[0]["bearerAuth"]
 	assert.True(t, hasBearer)
@@ -103,41 +103,41 @@ func TestGenerator_OrgEndpoints(t *testing.T) {
 	spec := gen.Generate()
 
 	// Org CRUD
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs"])
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs"].Post)
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs"].Get)
-	assert.Equal(t, "createOrg", spec.Paths["/v1/auth/orgs"].Post.OperationID)
-	assert.Equal(t, "listOrgs", spec.Paths["/v1/auth/orgs"].Get.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/orgs"])
+	assert.NotNil(t, spec.Paths["/v1/orgs"].Post)
+	assert.NotNil(t, spec.Paths["/v1/orgs"].Get)
+	assert.Equal(t, "createOrg", spec.Paths["/v1/orgs"].Post.OperationID)
+	assert.Equal(t, "listOrgs", spec.Paths["/v1/orgs"].Get.OperationID)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}"])
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}"].Get)
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}"].Patch)
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}"].Delete)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}"])
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}"].Get)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}"].Patch)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}"].Delete)
 
 	// Members
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/members"])
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/members"].Get)
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/members"].Post)
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/members/{memberId}"])
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/members/{memberId}"].Delete)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/members"])
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/members"].Get)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/members"].Post)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/members/{memberId}"])
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/members/{memberId}"].Delete)
 
 	// Invitations
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/invitations"])
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/invitations"].Get)
-	assert.NotNil(t, spec.Paths["/v1/auth/orgs/{orgId}/invitations"].Post)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/invitations"])
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/invitations"].Get)
+	assert.NotNil(t, spec.Paths["/v1/orgs/{orgId}/invitations"].Post)
 }
 
 func TestGenerator_DeviceEndpoints(t *testing.T) {
 	gen := openapi.NewGenerator(openapi.GeneratorConfig{})
 	spec := gen.Generate()
 
-	assert.NotNil(t, spec.Paths["/v1/auth/devices"])
-	assert.NotNil(t, spec.Paths["/v1/auth/devices"].Get)
-	assert.Equal(t, "listDevices", spec.Paths["/v1/auth/devices"].Get.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/devices"])
+	assert.NotNil(t, spec.Paths["/v1/devices"].Get)
+	assert.Equal(t, "listDevices", spec.Paths["/v1/devices"].Get.OperationID)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/devices/{deviceId}"])
-	assert.NotNil(t, spec.Paths["/v1/auth/devices/{deviceId}"].Delete)
-	assert.Equal(t, "deleteDevice", spec.Paths["/v1/auth/devices/{deviceId}"].Delete.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/devices/{deviceId}"])
+	assert.NotNil(t, spec.Paths["/v1/devices/{deviceId}"].Delete)
+	assert.Equal(t, "deleteDevice", spec.Paths["/v1/devices/{deviceId}"].Delete.OperationID)
 }
 
 func TestGenerator_APIKeyEndpoints(t *testing.T) {
@@ -146,15 +146,15 @@ func TestGenerator_APIKeyEndpoints(t *testing.T) {
 	})
 	spec := gen.Generate()
 
-	assert.NotNil(t, spec.Paths["/v1/auth/keys"])
-	assert.NotNil(t, spec.Paths["/v1/auth/keys"].Post)
-	assert.NotNil(t, spec.Paths["/v1/auth/keys"].Get)
-	assert.Equal(t, "createAPIKey", spec.Paths["/v1/auth/keys"].Post.OperationID)
-	assert.Equal(t, "listAPIKeys", spec.Paths["/v1/auth/keys"].Get.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/keys"])
+	assert.NotNil(t, spec.Paths["/v1/keys"].Post)
+	assert.NotNil(t, spec.Paths["/v1/keys"].Get)
+	assert.Equal(t, "createAPIKey", spec.Paths["/v1/keys"].Post.OperationID)
+	assert.Equal(t, "listAPIKeys", spec.Paths["/v1/keys"].Get.OperationID)
 
-	assert.NotNil(t, spec.Paths["/v1/auth/keys/{keyId}"])
-	assert.NotNil(t, spec.Paths["/v1/auth/keys/{keyId}"].Delete)
-	assert.Equal(t, "revokeAPIKey", spec.Paths["/v1/auth/keys/{keyId}"].Delete.OperationID)
+	assert.NotNil(t, spec.Paths["/v1/keys/{keyId}"])
+	assert.NotNil(t, spec.Paths["/v1/keys/{keyId}"].Delete)
+	assert.Equal(t, "revokeAPIKey", spec.Paths["/v1/keys/{keyId}"].Delete.OperationID)
 }
 
 func TestGenerator_APIKeyEndpoints_NotIncludedByDefault(t *testing.T) {
@@ -162,8 +162,8 @@ func TestGenerator_APIKeyEndpoints_NotIncludedByDefault(t *testing.T) {
 	spec := gen.Generate()
 
 	// Without apikey plugin enabled, API key paths should not be present
-	assert.Nil(t, spec.Paths["/v1/auth/keys"])
-	assert.Nil(t, spec.Paths["/v1/auth/keys/{keyId}"])
+	assert.Nil(t, spec.Paths["/v1/keys"])
+	assert.Nil(t, spec.Paths["/v1/keys/{keyId}"])
 }
 
 func TestGenerator_NoPluginsExcludesPluginPaths(t *testing.T) {
@@ -171,11 +171,11 @@ func TestGenerator_NoPluginsExcludesPluginPaths(t *testing.T) {
 	spec := gen.Generate()
 
 	// Without plugins enabled, plugin paths should not be present
-	assert.Nil(t, spec.Paths["/v1/auth/orgs"])
-	assert.Nil(t, spec.Paths["/v1/auth/social/{provider}"])
-	assert.Nil(t, spec.Paths["/v1/auth/magic-link/send"])
-	assert.Nil(t, spec.Paths["/v1/auth/mfa/enroll"])
-	assert.Nil(t, spec.Paths["/v1/auth/keys"])
+	assert.Nil(t, spec.Paths["/v1/orgs"])
+	assert.Nil(t, spec.Paths["/v1/social/{provider}"])
+	assert.Nil(t, spec.Paths["/v1/magic-link/send"])
+	assert.Nil(t, spec.Paths["/v1/mfa/enroll"])
+	assert.Nil(t, spec.Paths["/v1/keys"])
 }
 
 func TestGenerator_WithSocialPlugin(t *testing.T) {
@@ -184,8 +184,8 @@ func TestGenerator_WithSocialPlugin(t *testing.T) {
 	})
 	spec := gen.Generate()
 
-	assert.NotNil(t, spec.Paths["/v1/auth/social/{provider}"])
-	assert.NotNil(t, spec.Paths["/v1/auth/social/{provider}/callback"])
+	assert.NotNil(t, spec.Paths["/v1/social/{provider}"])
+	assert.NotNil(t, spec.Paths["/v1/social/{provider}/callback"])
 }
 
 func TestGenerator_WithMagicLinkPlugin(t *testing.T) {
@@ -194,8 +194,8 @@ func TestGenerator_WithMagicLinkPlugin(t *testing.T) {
 	})
 	spec := gen.Generate()
 
-	assert.NotNil(t, spec.Paths["/v1/auth/magic-link/send"])
-	assert.NotNil(t, spec.Paths["/v1/auth/magic-link/verify"])
+	assert.NotNil(t, spec.Paths["/v1/magic-link/send"])
+	assert.NotNil(t, spec.Paths["/v1/magic-link/verify"])
 }
 
 func TestGenerator_WithMFAPlugin(t *testing.T) {
@@ -204,9 +204,9 @@ func TestGenerator_WithMFAPlugin(t *testing.T) {
 	})
 	spec := gen.Generate()
 
-	assert.NotNil(t, spec.Paths["/v1/auth/mfa/enroll"])
-	assert.NotNil(t, spec.Paths["/v1/auth/mfa/verify"])
-	assert.NotNil(t, spec.Paths["/v1/auth/mfa/challenge"])
+	assert.NotNil(t, spec.Paths["/v1/mfa/enroll"])
+	assert.NotNil(t, spec.Paths["/v1/mfa/verify"])
+	assert.NotNil(t, spec.Paths["/v1/mfa/challenge"])
 }
 
 func TestGenerator_AllPlugins(t *testing.T) {
@@ -358,7 +358,7 @@ func TestGenerator_SignUpEndpointDetails(t *testing.T) {
 	gen := openapi.NewGenerator(openapi.GeneratorConfig{})
 	spec := gen.Generate()
 
-	signup := spec.Paths["/v1/auth/signup"].Post
+	signup := spec.Paths["/v1/signup"].Post
 	require.NotNil(t, signup)
 
 	assert.Equal(t, "signUp", signup.OperationID)

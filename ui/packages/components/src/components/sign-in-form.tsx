@@ -7,7 +7,7 @@ import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
 import { Label } from "../primitives/label";
-import { AuthCard } from "./auth-card";
+import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
 import { ErrorDisplay } from "./error-display";
 import { LoadingSpinner } from "./loading-spinner";
 import { PasswordInput } from "./password-input";
@@ -18,6 +18,7 @@ import {
   type SocialProvider,
   type SocialButtonLayout,
 } from "./social-buttons";
+import { handleSocialLogin } from "../lib/social-login";
 import { ArrowLeft } from "lucide-react";
 
 export interface SignInFormComponentProps {
@@ -29,7 +30,7 @@ export interface SignInFormComponentProps {
   forgotPasswordUrl?: string;
   /** Social/OAuth providers to display below the form. */
   socialProviders?: SocialProvider[];
-  /** Callback when a social provider button is clicked. */
+  /** Callback when a social provider button is clicked. Overrides the built-in popup flow. */
   onSocialLogin?: (providerId: string) => void;
   /** Layout mode for social login buttons. */
   socialLayout?: SocialButtonLayout;
@@ -39,16 +40,12 @@ export interface SignInFormComponentProps {
   onPasskeySuccess?: () => void;
   /** Optional logo element rendered above the title. */
   logo?: React.ReactNode;
+  /** Title and description alignment. */
+  align?: AuthCardAlign;
+  /** Card visual style. */
+  variant?: AuthCardVariant;
   /** Additional CSS class names. */
   className?: string;
-}
-
-/**
- * Default social login handler: redirects to the backend OAuth initiation endpoint.
- */
-function defaultSocialLogin(providerId: string, baseURL: string) {
-  const url = `${baseURL}/v1/auth/social/${providerId}`;
-  window.location.href = url;
 }
 
 /**
@@ -70,6 +67,8 @@ export function SignInForm({
   showPasskey: showPasskeyProp,
   onPasskeySuccess,
   logo,
+  align,
+  variant,
   className,
 }: SignInFormComponentProps) {
   const { signIn, client } = useAuth();
@@ -85,12 +84,21 @@ export function SignInForm({
   // Auto-derive passkey support from client config when not explicitly provided.
   const showPasskey = showPasskeyProp ?? config?.passkey?.enabled ?? false;
 
-  // Default social login handler: full-page redirect to OAuth endpoint.
-  const baseURL = (client as any).config?.baseURL ?? "";
+  // Auto-derive password support from client config (default: true).
+  const showPassword = config?.password?.enabled ?? true;
+
+  // Default social login: popup-based OAuth flow via startOAuth API.
+  // Falls back to full-page redirect when popups are blocked.
   const onSocialLogin =
     onSocialLoginProp ??
     (socialProviders && socialProviders.length > 0
-      ? (providerId: string) => defaultSocialLogin(providerId, baseURL)
+      ? (providerId: string) =>
+          handleSocialLogin(client, providerId, () => {
+            onSuccess?.();
+            // Fallback: reload the page so the server-side middleware
+            // picks up the httpOnly session cookie set during the callback.
+            window.location.reload();
+          })
       : undefined);
 
   const hasSocial =
@@ -151,6 +159,52 @@ export function SignInForm({
     </p>
   ) : undefined;
 
+  /* ── Password disabled: show only alternative methods ── */
+
+  if (!showPassword) {
+    const hasAnyMethod = hasSocial || showPasskey;
+    return (
+      <AuthCard
+        title="Sign in"
+        description="Welcome back. Sign in to your account."
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <div className="grid gap-4">
+          {hasSocial && (
+            <SocialButtons
+              providers={socialProviders!}
+              onProviderClick={onSocialLogin!}
+              isLoading={isSubmitting}
+              layout={socialLayout}
+              showDivider={false}
+            />
+          )}
+
+          {hasSocial && showPasskey && <OrDivider />}
+
+          {showPasskey && (
+            <PasskeyLoginButton
+              onSuccess={onPasskeySuccess ?? onSuccess}
+              variant="outline"
+              className="w-full"
+            />
+          )}
+
+          {!hasAnyMethod && (
+            <p className="text-sm text-center text-muted-foreground py-4">
+              No sign-in methods are currently available. Please contact your
+              administrator.
+            </p>
+          )}
+        </div>
+      </AuthCard>
+    );
+  }
+
   /* ── Step 1: Email ──────────────────────────────────── */
 
   if (step === "email") {
@@ -160,6 +214,8 @@ export function SignInForm({
         description="Welcome back. Sign in to your account."
         logo={logo}
         footer={footer}
+        align={align}
+        variant={variant}
         className={cn(className)}
       >
         <div className="grid gap-4">
@@ -227,6 +283,8 @@ export function SignInForm({
       description={email}
       logo={logo}
       footer={footer}
+      align={align}
+      variant={variant}
       className={cn(className)}
     >
       <div className="grid gap-4">

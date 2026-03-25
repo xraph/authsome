@@ -7,7 +7,7 @@ type Config struct {
 	// AppID is the forge.Scope app identity.
 	AppID string `json:"app_id"`
 
-	// BasePath is the URL prefix for all auth routes (default: "/v1/auth").
+	// BasePath is the URL prefix for all auth routes (default: "/authsome").
 	BasePath string `json:"base_path"`
 
 	// Session configuration
@@ -188,7 +188,7 @@ func (c LockoutConfig) ResetAfter() time.Duration {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		BasePath: "/v1/auth",
+		BasePath: "/authsome",
 		Session: SessionConfig{
 			TokenTTL:        1 * time.Hour,
 			RefreshTokenTTL: 30 * 24 * time.Hour,

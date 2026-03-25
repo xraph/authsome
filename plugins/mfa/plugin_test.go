@@ -202,7 +202,7 @@ func TestHandleEnroll_Success(t *testing.T) {
 	userID := id.NewUserID()
 	u := &user.User{ID: userID, Email: "user@example.com"}
 	body := jsonBody(t, map[string]string{"method": "totp"})
-	req := authedRequestWithUser(t, "POST", "/v1/auth/mfa/enroll", body, u)
+	req := authedRequestWithUser(t, "POST", "/v1/mfa/enroll", body, u)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -227,7 +227,7 @@ func TestHandleEnroll_DefaultMethod(t *testing.T) {
 
 	userID := id.NewUserID()
 	body := jsonBody(t, map[string]string{})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/enroll", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/enroll", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -243,7 +243,7 @@ func TestHandleEnroll_UnsupportedMethod(t *testing.T) {
 
 	userID := id.NewUserID()
 	body := jsonBody(t, map[string]string{"method": "sms"})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/enroll", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/enroll", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -258,7 +258,7 @@ func TestHandleEnroll_Unauthenticated(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"method": "totp"})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/mfa/enroll", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/enroll", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -289,7 +289,7 @@ func TestHandleEnroll_AlreadyVerified(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"method": "totp"})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/enroll", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/enroll", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -330,7 +330,7 @@ func TestHandleVerify_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": code})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -372,7 +372,7 @@ func TestHandleVerify_InvalidCode(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": "000000"})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -388,7 +388,7 @@ func TestHandleVerify_MissingCode(t *testing.T) {
 
 	userID := id.NewUserID()
 	body := jsonBody(t, map[string]string{})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -404,7 +404,7 @@ func TestHandleVerify_NoEnrollment(t *testing.T) {
 
 	userID := id.NewUserID()
 	body := jsonBody(t, map[string]string{"code": "123456"})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -419,7 +419,7 @@ func TestHandleVerify_Unauthenticated(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": "123456"})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/mfa/verify", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/verify", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -459,7 +459,7 @@ func TestHandleChallenge_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": code})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/challenge", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/challenge", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -499,7 +499,7 @@ func TestHandleChallenge_NotVerified(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": code})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/challenge", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/challenge", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -531,7 +531,7 @@ func TestHandleDisable_Success(t *testing.T) {
 	err = s.CreateEnrollment(context.Background(), enrollment)
 	require.NoError(t, err)
 
-	req := authedRequest(t, "DELETE", "/v1/auth/mfa/enrollment", nil, userID)
+	req := authedRequest(t, "DELETE", "/v1/mfa/enrollment", nil, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -550,7 +550,7 @@ func TestHandleDisable_NoEnrollment(t *testing.T) {
 	require.NoError(t, err)
 
 	userID := id.NewUserID()
-	req := authedRequest(t, "DELETE", "/v1/auth/mfa/enrollment", nil, userID)
+	req := authedRequest(t, "DELETE", "/v1/mfa/enrollment", nil, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -564,7 +564,7 @@ func TestHandleDisable_Unauthenticated(t *testing.T) {
 	err := p.RegisterRoutes(mux)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/mfa/enrollment", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/mfa/enrollment", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -620,7 +620,7 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 
 	// Step 1: Enroll
 	enrollBody := jsonBody(t, map[string]string{"method": "totp"})
-	enrollReq := authedRequestWithUser(t, "POST", "/v1/auth/mfa/enroll", enrollBody, u)
+	enrollReq := authedRequestWithUser(t, "POST", "/v1/mfa/enroll", enrollBody, u)
 	enrollRec := httptest.NewRecorder()
 	mux.ServeHTTP(enrollRec, enrollReq)
 	require.Equal(t, http.StatusOK, enrollRec.Code)
@@ -635,7 +635,7 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 	require.NoError(t, err)
 
 	verifyBody := jsonBody(t, map[string]string{"code": code})
-	verifyReq := authedRequest(t, "POST", "/v1/auth/mfa/verify", verifyBody, userID)
+	verifyReq := authedRequest(t, "POST", "/v1/mfa/verify", verifyBody, userID)
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
 	require.Equal(t, http.StatusOK, verifyRec.Code)
@@ -645,13 +645,13 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 	require.NoError(t, err)
 
 	challengeBody := jsonBody(t, map[string]string{"code": code2})
-	challengeReq := authedRequest(t, "POST", "/v1/auth/mfa/challenge", challengeBody, userID)
+	challengeReq := authedRequest(t, "POST", "/v1/mfa/challenge", challengeBody, userID)
 	challengeRec := httptest.NewRecorder()
 	mux.ServeHTTP(challengeRec, challengeReq)
 	require.Equal(t, http.StatusOK, challengeRec.Code)
 
 	// Step 4: Disable
-	disableReq := authedRequest(t, "DELETE", "/v1/auth/mfa/enrollment", nil, userID)
+	disableReq := authedRequest(t, "DELETE", "/v1/mfa/enrollment", nil, userID)
 	disableRec := httptest.NewRecorder()
 	mux.ServeHTTP(disableRec, disableReq)
 	assert.Equal(t, http.StatusOK, disableRec.Code)
@@ -661,7 +661,7 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 	require.NoError(t, err)
 
 	challengeBody2 := jsonBody(t, map[string]string{"code": code3})
-	challengeReq2 := authedRequest(t, "POST", "/v1/auth/mfa/challenge", challengeBody2, userID)
+	challengeReq2 := authedRequest(t, "POST", "/v1/mfa/challenge", challengeBody2, userID)
 	challengeRec2 := httptest.NewRecorder()
 	mux.ServeHTTP(challengeRec2, challengeReq2)
 	assert.Equal(t, http.StatusNotFound, challengeRec2.Code)
@@ -781,7 +781,7 @@ func TestHandleVerify_ReturnsRecoveryCodes(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": code})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -835,7 +835,7 @@ func TestHandleRecoveryVerify_Success(t *testing.T) {
 
 	// Use the first recovery code
 	body := jsonBody(t, map[string]string{"code": plaintexts[0]})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/recovery/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/recovery/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -849,7 +849,7 @@ func TestHandleRecoveryVerify_Success(t *testing.T) {
 
 	// Same code should not work again (one-time use)
 	body2 := jsonBody(t, map[string]string{"code": plaintexts[0]})
-	req2 := authedRequest(t, "POST", "/v1/auth/mfa/recovery/verify", body2, userID)
+	req2 := authedRequest(t, "POST", "/v1/mfa/recovery/verify", body2, userID)
 	rec2 := httptest.NewRecorder()
 	mux.ServeHTTP(rec2, req2)
 
@@ -883,7 +883,7 @@ func TestHandleRecoveryVerify_InvalidCode(t *testing.T) {
 	require.NoError(t, err)
 
 	body := jsonBody(t, map[string]string{"code": "badcode1"})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/recovery/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/recovery/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -919,7 +919,7 @@ func TestHandleRecoveryRegenerate(t *testing.T) {
 
 	// Regenerate
 	body := jsonBody(t, map[string]string{})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/recovery/regenerate", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/recovery/regenerate", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -951,7 +951,7 @@ func TestHandleRecoveryVerify_NoEnrollment(t *testing.T) {
 
 	userID := id.NewUserID()
 	body := jsonBody(t, map[string]string{"code": "testcode"})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/recovery/verify", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/recovery/verify", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -967,7 +967,7 @@ func TestHandleRecoveryRegenerate_NoEnrollment(t *testing.T) {
 
 	userID := id.NewUserID()
 	body := jsonBody(t, map[string]string{})
-	req := authedRequest(t, "POST", "/v1/auth/mfa/recovery/regenerate", body, userID)
+	req := authedRequest(t, "POST", "/v1/mfa/recovery/regenerate", body, userID)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

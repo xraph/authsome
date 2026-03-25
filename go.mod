@@ -194,3 +194,17 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/xraph/warden => /Users/rexraphael/Work/xraph/forgery/warden
+
+replace github.com/xraph/relay => /Users/rexraphael/Work/xraph/forgery/relay
+
+replace github.com/xraph/chronicle => /Users/rexraphael/Work/xraph/forgery/chronicle
+
+replace github.com/xraph/herald => /Users/rexraphael/Work/xraph/forgery/herald
+
+replace github.com/xraph/ledger => /Users/rexraphael/Work/xraph/forgery/ledger
+
+replace github.com/xraph/forge => /Users/rexraphael/Work/xraph/forge
+
+replace github.com/xraph/forge/extensions/dashboard => /Users/rexraphael/Work/xraph/forge/extensions/dashboard

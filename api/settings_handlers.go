@@ -17,8 +17,7 @@ import (
 
 func (a *API) registerSettingsRoutes(router forge.Router) error {
 	// All settings endpoints require admin authentication.
-	base := a.engine.Config().BasePath
-	g := router.Group(base+"/admin/settings",
+	g := router.Group("/v1/admin/settings",
 		forge.WithGroupTags("admin", "settings"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),

@@ -5,16 +5,16 @@ package pages
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
+import "github.com/a-h/templ"
+import templruntime "github.com/a-h/templ/runtime"
+
 import (
 	"strconv"
 
-	"github.com/a-h/templ"
-	templruntime "github.com/a-h/templ/runtime"
-	"github.com/xraph/forgeui/components/card"
-	"github.com/xraph/forgeui/components/table"
-
 	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/authsome/user"
+	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/table"
 )
 
 // OverviewStats holds aggregate stats for the overview page.

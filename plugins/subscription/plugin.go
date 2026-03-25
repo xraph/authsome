@@ -142,6 +142,25 @@ type Plugin struct {
 	defaultAppID string
 }
 
+// Service returns the subscription service (nil until OnInit completes).
+func (p *Plugin) Service() *Service { return p.service }
+
+// SetLedger sets the ledger engine directly, bypassing duck-type discovery.
+func (p *Plugin) SetLedger(l *ledger.Ledger) {
+	p.ledger = l
+	if p.service != nil {
+		p.service.ledger = l
+	}
+}
+
+// SetLedgerStore sets the ledger store directly, bypassing duck-type discovery.
+func (p *Plugin) SetLedgerStore(st ledgerstore.Store) {
+	p.ledgerStore = st
+	if p.service != nil {
+		p.service.ledgerStore = st
+	}
+}
+
 // DeclareSettings implements plugin.SettingsProvider.
 func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "subscription", SettingDefaultPlan); err != nil {
@@ -182,10 +201,10 @@ func (p *Plugin) Name() string { return "subscription" }
 func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	// Discover ledger engine.
 	type ledgerEngineGetter interface {
-		Ledger() *ledger.Ledger
+		LedgerEngine() *ledger.Ledger
 	}
 	if lg, ok := engine.(ledgerEngineGetter); ok {
-		p.ledger = lg.Ledger()
+		p.ledger = lg.LedgerEngine()
 	}
 
 	// Discover ledger store (for list operations).

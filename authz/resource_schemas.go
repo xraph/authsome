@@ -27,6 +27,7 @@ func DefaultSchemas() []ResourceSchema {
 				{Name: "read", Expression: "owner or app"},
 				{Name: "update", Expression: "owner"},
 				{Name: "delete", Expression: "owner"},
+				{Name: "manage", Expression: "owner or app"},
 				{Name: "ban", Expression: "app"},
 				{Name: "impersonate", Expression: "app"},
 			},
@@ -72,6 +73,7 @@ func DefaultSchemas() []ResourceSchema {
 				{Name: "read", Expression: "member or admin or owner"},
 				{Name: "update", Expression: "admin or owner"},
 				{Name: "delete", Expression: "owner"},
+				{Name: "manage", Expression: "admin or owner"},
 				{Name: "manage_roles", Expression: "admin or owner"},
 				{Name: "manage_envs", Expression: "admin or owner"},
 			},
@@ -88,6 +90,7 @@ func DefaultSchemas() []ResourceSchema {
 				{Name: "read", Expression: "member or admin or owner"},
 				{Name: "update", Expression: "admin or owner"},
 				{Name: "delete", Expression: "owner"},
+				{Name: "manage", Expression: "admin or owner"},
 				{Name: "manage_members", Expression: "admin or owner"},
 			},
 		},
@@ -312,6 +315,7 @@ func DefaultSchemas() []ResourceSchema {
 			Permissions: []resourcetype.PermissionDef{
 				{Name: "read", Expression: "app"},
 				{Name: "update", Expression: "app"},
+				{Name: "manage", Expression: "app"},
 			},
 		},
 		{
@@ -322,6 +326,17 @@ func DefaultSchemas() []ResourceSchema {
 			},
 			Permissions: []resourcetype.PermissionDef{
 				{Name: "read", Expression: "app"},
+			},
+		},
+		{
+			Name:        "waitlist",
+			Description: "Waitlist entries",
+			Relations: []resourcetype.RelationDef{
+				{Name: "app", AllowedSubjects: []string{"app"}},
+			},
+			Permissions: []resourcetype.PermissionDef{
+				{Name: "read", Expression: "app"},
+				{Name: "manage", Expression: "app"},
 			},
 		},
 	}

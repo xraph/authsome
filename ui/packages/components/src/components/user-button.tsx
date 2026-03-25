@@ -70,8 +70,8 @@ export function UserButton({
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            {user?.name && (
-              <p className="text-sm font-medium leading-none">{user.name}</p>
+            {(user?.first_name || user?.last_name) && (
+              <p className="text-sm font-medium leading-none">{[user.first_name, user.last_name].filter(Boolean).join(" ")}</p>
             )}
             {user?.email && (
               <p className="text-xs text-muted-foreground">{user.email}</p>

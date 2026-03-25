@@ -126,7 +126,7 @@ var (
 
 var (
 	// SettingAutoRefreshEnabled controls whether near-expiry tokens are auto-refreshed in middleware.
-	SettingAutoRefreshEnabled = settings.Define("session.auto_refresh_enabled", false,
+	SettingAutoRefreshEnabled = settings.Define("session.auto_refresh_enabled", true,
 		settings.WithDisplayName("Auto-Refresh Tokens"),
 		settings.WithDescription("Automatically refresh near-expiry access tokens in middleware"),
 		settings.WithCategory("Auto-Refresh"),
@@ -154,7 +154,7 @@ var (
 
 var (
 	// SettingExtendOnActivity controls whether sessions are extended on each authenticated request.
-	SettingExtendOnActivity = settings.Define("session.extend_on_activity", false,
+	SettingExtendOnActivity = settings.Define("session.extend_on_activity", true,
 		settings.WithDisplayName("Extend Session on Activity"),
 		settings.WithDescription("Automatically extend session expiry on each authenticated request"),
 		settings.WithCategory("Session Extension"),

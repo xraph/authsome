@@ -7,7 +7,7 @@ import { cn } from "../lib/utils";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
 import { Label } from "../primitives/label";
-import { AuthCard } from "./auth-card";
+import { AuthCard, type AuthCardAlign, type AuthCardVariant } from "./auth-card";
 import { ErrorDisplay } from "./error-display";
 import { LoadingSpinner } from "./loading-spinner";
 import { MailCheck } from "lucide-react";
@@ -19,6 +19,10 @@ export interface ForgotPasswordFormProps {
   signInUrl?: string;
   /** Optional logo element rendered above the title. */
   logo?: React.ReactNode;
+  /** Title and description alignment. */
+  align?: AuthCardAlign;
+  /** Card visual style. */
+  variant?: AuthCardVariant;
   /** Additional CSS class names. */
   className?: string;
 }
@@ -33,6 +37,8 @@ export function ForgotPasswordForm({
   onSuccess,
   signInUrl,
   logo,
+  align,
+  variant,
   className,
 }: ForgotPasswordFormProps) {
   const { client } = useAuth();
@@ -80,6 +86,8 @@ export function ForgotPasswordForm({
       description="Enter your email to receive a reset link."
       logo={logo}
       footer={footer}
+      align={align}
+      variant={variant}
       className={cn(className)}
     >
       {isSuccess ? (

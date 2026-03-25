@@ -110,8 +110,10 @@ export function useAuth() {
     await manager.signIn({ email, password });
   }
 
-  async function signUp(email: string, password: string, name?: string) {
-    await manager.signUp({ email, password, name });
+  async function signUp(email: string, password: string, fields?: Record<string, string>) {
+    const { first_name, last_name, username, ...rest } = fields ?? {};
+    const metadata = Object.keys(rest).length > 0 ? rest : undefined;
+    await manager.signUp({ email, password, first_name, last_name, username, metadata });
   }
 
   async function signOut() {

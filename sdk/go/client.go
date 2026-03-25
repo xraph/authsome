@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"strings"
 )
 
 // Client is an HTTP client for the AuthSome API.
 type Client struct {
 	baseURL    string
 	token      string
+	apiKey     string
 	httpClient *http.Client
 }
 
@@ -26,16 +30,38 @@ func WithToken(token string) Option {
 	return func(c *Client) { c.token = token }
 }
 
+// WithAPIKey sets an API key for X-API-Key header authentication.
+func WithAPIKey(key string) Option {
+	return func(c *Client) { c.apiKey = key }
+}
+
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.httpClient = hc }
+}
+
+// WithCookieJar sets a cookie jar on the client so it can receive and
+// resend session cookies (e.g. authsome_session) automatically.
+func WithCookieJar(jar http.CookieJar) Option {
+	return func(c *Client) {
+		c.httpClient.Jar = jar
+	}
+}
+
+// WithSessionCookies creates a default cookie jar so the client
+// automatically persists session cookies across requests.
+func WithSessionCookies() Option {
+	return func(c *Client) {
+		jar, _ := cookiejar.New(nil)
+		c.httpClient.Jar = jar
+	}
 }
 
 // NewClient creates a new AuthSome API client.
 func NewClient(baseURL string, opts ...Option) *Client {
 	c := &Client{
 		baseURL:    baseURL,
-		httpClient: http.DefaultClient,
+		httpClient: &http.Client{},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -49,139 +75,1411 @@ func (c *Client) SetToken(token string) { c.token = token }
 // Token returns the current session token.
 func (c *Client) Token() string { return c.token }
 
+// SetAPIKey updates the API key.
+func (c *Client) SetAPIKey(key string) { c.apiKey = key }
+
+// APIKey returns the current API key.
+func (c *Client) APIKey() string { return c.apiKey }
+
 // ──────────────────────────────────────────────────
 // Generated methods
 // ──────────────────────────────────────────────────
 
-// GetManifest — API manifest
-func (c *Client) GetManifest(ctx context.Context) (*Manifest, error) {
-	var result Manifest
-	if err := c.do(ctx, "GET", "/.well-known/authsome/manifest", nil, &result); err != nil {
+// GetManifest — Get AuthSome manifest
+func (c *Client) GetManifest(ctx context.Context) (*map[string]any, error) {
+	path := "/.well-known/authsome/manifest"
+	var result map[string]any
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// GetOpenAPISpec — OpenAPI specification
-func (c *Client) GetOpenAPISpec(ctx context.Context) error {
-	return c.do(ctx, "GET", "/.well-known/authsome/openapi", nil, nil)
+// GetOpenAPI — Get OpenAPI specification
+func (c *Client) GetOpenAPI(ctx context.Context) (*map[string]any, error) {
+	path := "/.well-known/authsome/openapi"
+	var result map[string]any
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// OidcDiscovery — OpenID Connect Discovery
+func (c *Client) OidcDiscovery(ctx context.Context) (*DiscoveryResponse, error) {
+	path := "/.well-known/openid-configuration"
+	var result DiscoveryResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminListOrgs — List organizations (admin)
+func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
+	path := "/admin/orgs"
+	var result OrgListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListOrganizations — List organizations
+func (c *Client) ListOrganizations(ctx context.Context) (*OrgListResponse, error) {
+	path := "/orgs"
+	var result OrgListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrganization — Create organization
+func (c *Client) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest) (*Organization, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs"
+	var result Organization
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CheckOrgSlug — Check slug availability
+func (c *Client) CheckOrgSlug(ctx context.Context) (*SlugAvailableResponse, error) {
+	path := "/orgs/check-slug"
+	var result SlugAvailableResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AcceptInvitation — Accept invitation
+func (c *Client) AcceptInvitation(ctx context.Context, req *AcceptInvitationRequest) (*Member, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/invitations/accept"
+	var result Member
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeclineInvitation — Decline invitation
+func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/invitations/decline"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetOrganization — Get organization
+func (c *Client) GetOrganization(ctx context.Context, orgId string) (*Organization, error) {
+	path := "/orgs/{orgId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Organization
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateOrganization — Update organization
+func (c *Client) UpdateOrganization(ctx context.Context, orgId string, req *UpdateOrganizationRequest) (*Organization, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Organization
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteOrganization — Delete organization
+func (c *Client) DeleteOrganization(ctx context.Context, orgId string, req *DeleteOrganizationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListInvitations — List invitations
+func (c *Client) ListInvitations(ctx context.Context, orgId string) (*InvitationListResponse, error) {
+	path := "/orgs/{orgId}/invitations"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result InvitationListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateInvitation — Create invitation
+func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *CreateInvitationRequest) (*Invitation, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/invitations"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Invitation
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListMembers — List members
+func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
+	path := "/orgs/{orgId}/members"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result MemberListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AddMember — Add member
+func (c *Client) AddMember(ctx context.Context, orgId string, req *AddMemberRequest) (*Member, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/members"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Member
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateMember — Update member role
+func (c *Client) UpdateMember(ctx context.Context, orgId string, memberId string, req *UpdateMemberRequest) (*Member, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/members/{memberId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{memberId}", memberId, 1)
+	var result Member
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RemoveMember — Remove member
+func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string, req *RemoveMemberRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/members/{memberId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{memberId}", memberId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListTeams — List teams
+func (c *Client) ListTeams(ctx context.Context, orgId string) (*TeamListResponse, error) {
+	path := "/orgs/{orgId}/teams"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result TeamListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateTeam — Create team
+func (c *Client) CreateTeam(ctx context.Context, orgId string, req *CreateTeamRequest) (*Team, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/teams"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Team
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetTeam — Get team
+func (c *Client) GetTeam(ctx context.Context, orgId string, teamId string) (*Team, error) {
+	path := "/orgs/{orgId}/teams/{teamId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{teamId}", teamId, 1)
+	var result Team
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateTeam — Update team
+func (c *Client) UpdateTeam(ctx context.Context, orgId string, teamId string, req *UpdateTeamRequest) (*Team, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/teams/{teamId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{teamId}", teamId, 1)
+	var result Team
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteTeam — Delete team
+func (c *Client) DeleteTeam(ctx context.Context, orgId string, teamId string, req *DeleteTeamRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/orgs/{orgId}/teams/{teamId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{teamId}", teamId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimListGroups — List SCIM Groups
+func (c *Client) ScimListGroups(ctx context.Context) (*ListResponse, error) {
+	path := "/scim/v2/Groups"
+	var result ListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimCreateGroup — Create SCIM Group
+func (c *Client) ScimCreateGroup(ctx context.Context, req *ScimCreateGroupRequest) (*GroupResource, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Groups"
+	var result GroupResource
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimGetGroup — Get SCIM Group
+func (c *Client) ScimGetGroup(ctx context.Context, groupId string) (*GroupResource, error) {
+	path := "/scim/v2/Groups/{groupId}"
+	path = strings.Replace(path, "{groupId}", groupId, 1)
+	var result GroupResource
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimReplaceGroup — Replace SCIM Group
+func (c *Client) ScimReplaceGroup(ctx context.Context, groupId string, req *ScimReplaceGroupRequest) (*GroupResource, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Groups/{groupId}"
+	path = strings.Replace(path, "{groupId}", groupId, 1)
+	var result GroupResource
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimPatchGroup — Patch SCIM Group
+func (c *Client) ScimPatchGroup(ctx context.Context, groupId string, req *ScimPatchGroupRequest) (*GroupResource, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Groups/{groupId}"
+	path = strings.Replace(path, "{groupId}", groupId, 1)
+	var result GroupResource
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimDeleteGroup — Delete SCIM Group
+func (c *Client) ScimDeleteGroup(ctx context.Context, groupId string, req *ScimDeleteGroupRequest) (*Object, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Groups/{groupId}"
+	path = strings.Replace(path, "{groupId}", groupId, 1)
+	var result Object
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimResourceTypes — SCIM Resource Types
+func (c *Client) ScimResourceTypes(ctx context.Context) (*Object, error) {
+	path := "/scim/v2/ResourceTypes"
+	var result Object
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimSchemas — SCIM Schemas
+func (c *Client) ScimSchemas(ctx context.Context) (*Object, error) {
+	path := "/scim/v2/Schemas"
+	var result Object
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimServiceProviderConfig — SCIM Service Provider Configuration
+func (c *Client) ScimServiceProviderConfig(ctx context.Context) (*Object, error) {
+	path := "/scim/v2/ServiceProviderConfig"
+	var result Object
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimListUsers — List SCIM Users
+func (c *Client) ScimListUsers(ctx context.Context) (*ListResponse, error) {
+	path := "/scim/v2/Users"
+	var result ListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimCreateUser — Create SCIM User
+func (c *Client) ScimCreateUser(ctx context.Context, req *ScimCreateUserRequest) (*UserResource, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Users"
+	var result UserResource
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimGetUser — Get SCIM User
+func (c *Client) ScimGetUser(ctx context.Context, userId string) (*UserResource, error) {
+	path := "/scim/v2/Users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result UserResource
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimReplaceUser — Replace SCIM User
+func (c *Client) ScimReplaceUser(ctx context.Context, userId string, req *ScimReplaceUserRequest) (*UserResource, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result UserResource
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimPatchUser — Patch SCIM User
+func (c *Client) ScimPatchUser(ctx context.Context, userId string, req *ScimPatchUserRequest) (*UserResource, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result UserResource
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ScimDeleteUser — Delete SCIM User
+func (c *Client) ScimDeleteUser(ctx context.Context, userId string, req *ScimDeleteUserRequest) (*Object, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/scim/v2/Users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result Object
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetAppClientConfig — Get per-app client config overrides
+func (c *Client) GetAppClientConfig(ctx context.Context, appId string) (*Config, error) {
+	path := "/v1/admin/apps/{appId}/client-config"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result Config
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SetAppClientConfig — Set per-app client config overrides
+func (c *Client) SetAppClientConfig(ctx context.Context, appId string, req *SetAppClientConfigRequest) (*Config, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/apps/{appId}/client-config"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result Config
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteAppClientConfig — Delete per-app client config overrides
+func (c *Client) DeleteAppClientConfig(ctx context.Context, appId string, req *DeleteAppClientConfigRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/apps/{appId}/client-config"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetAppSessionConfig — Get per-app session config
+func (c *Client) GetAppSessionConfig(ctx context.Context, appId string) (*Config, error) {
+	path := "/v1/admin/apps/{appId}/session-config"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result Config
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SetAppSessionConfig — Set per-app session config
+func (c *Client) SetAppSessionConfig(ctx context.Context, appId string, req *SetAppSessionConfigRequest) (*Config, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/apps/{appId}/session-config"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result Config
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteAppSessionConfig — Delete per-app session config
+func (c *Client) DeleteAppSessionConfig(ctx context.Context, appId string, req *DeleteAppSessionConfigRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/apps/{appId}/session-config"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminBulkRevokeSessions — Bulk revoke sessions (admin)
+func (c *Client) AdminBulkRevokeSessions(ctx context.Context, req *AdminBulkRevokeSessionsRequest) (*BulkRevokeSessionsResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/bulk/sessions"
+	var result BulkRevokeSessionsResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminBulkImportUsers — Bulk import users (admin)
+func (c *Client) AdminBulkImportUsers(ctx context.Context, req *AdminBulkImportUsersRequest) (*BulkImportResult, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/bulk/users/import"
+	var result BulkImportResult
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // AdminStopImpersonation — Stop impersonation (admin)
-func (c *Client) AdminStopImpersonation(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/admin/impersonate/stop", nil, &result); err != nil {
+func (c *Client) AdminStopImpersonation(ctx context.Context, req *AdminStopImpersonationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/impersonate/stop"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminImpersonate — Impersonate user (admin)
-func (c *Client) AdminImpersonate(ctx context.Context) (*AuthResponse, error) {
+func (c *Client) AdminImpersonate(ctx context.Context, userId string, req *AdminImpersonateRequest) (*AuthResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/impersonate/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
 	var result AuthResponse
-	if err := c.do(ctx, "POST", "/v1/admin/impersonate/{userId}", nil, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// AdminListUsers — List all users (admin)
-func (c *Client) AdminListUsers(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "GET", "/v1/admin/users", nil, &result); err != nil {
+// ListOAuth2Clients — List OAuth2 clients
+func (c *Client) ListOAuth2Clients(ctx context.Context) (*ListClientsResponse, error) {
+	path := "/v1/admin/oauth/clients"
+	var result ListClientsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOAuth2Client — Create OAuth2 client
+func (c *Client) CreateOAuth2Client(ctx context.Context, req *CreateOAuth2ClientRequest) (*CreateClientResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/oauth/clients"
+	var result CreateClientResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteOAuth2Client — Delete OAuth2 client
+func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/oauth/clients/{clientId}"
+	path = strings.Replace(path, "{clientId}", clientId, 1)
+	return c.do(ctx, "DELETE", path, body, nil)
+}
+
+// ListSettingsDefinitions — List all setting definitions
+func (c *Client) ListSettingsDefinitions(ctx context.Context) (*ListDefinitionsResponse, error) {
+	path := "/v1/admin/settings/definitions"
+	var result ListDefinitionsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListNamespaceSettingsDefinitions — List definitions for a namespace
+func (c *Client) ListNamespaceSettingsDefinitions(ctx context.Context, namespace string) (*ListDefinitionsResponse, error) {
+	path := "/v1/admin/settings/definitions/{namespace}"
+	path = strings.Replace(path, "{namespace}", namespace, 1)
+	var result ListDefinitionsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// EnforceSetting — Enforce a setting value at a scope
+func (c *Client) EnforceSetting(ctx context.Context, key string, req *EnforceSettingRequest) (*SettingValueResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/settings/enforce/{key}"
+	path = strings.Replace(path, "{key}", key, 1)
+	var result SettingValueResponse
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UnenforceSetting — Remove enforcement from a setting
+func (c *Client) UnenforceSetting(ctx context.Context, key string, req *UnenforceSettingRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/settings/enforce/{key}"
+	path = strings.Replace(path, "{key}", key, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResolveSettings — Resolve all settings at a scope
+func (c *Client) ResolveSettings(ctx context.Context) (*ResolvedSettingsResponse, error) {
+	path := "/v1/admin/settings/resolve"
+	var result ResolvedSettingsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResolveSetting — Resolve one setting with cascade details
+func (c *Client) ResolveSetting(ctx context.Context, key string) (*ResolvedSettingResponse, error) {
+	path := "/v1/admin/settings/resolve/{key}"
+	path = strings.Replace(path, "{key}", key, 1)
+	var result ResolvedSettingResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SetSetting — Set a setting value at a scope
+func (c *Client) SetSetting(ctx context.Context, key string, req *SetSettingRequest) (*SettingValueResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/settings/values/{key}"
+	path = strings.Replace(path, "{key}", key, 1)
+	var result SettingValueResponse
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteSetting — Delete a setting override at a scope
+func (c *Client) DeleteSetting(ctx context.Context, key string, req *DeleteSettingRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/settings/values/{key}"
+	path = strings.Replace(path, "{key}", key, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminGetStats — Get stats (admin)
+func (c *Client) AdminGetStats(ctx context.Context) (*AdminStatsResponse, error) {
+	path := "/v1/admin/stats"
+	var result AdminStatsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminListUsers — List users (admin)
+func (c *Client) AdminListUsers(ctx context.Context) (*AdminUserListResponse, error) {
+	path := "/v1/admin/users"
+	var result AdminUserListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminGetUser — Get user (admin)
-func (c *Client) AdminGetUser(ctx context.Context) (*User, error) {
+func (c *Client) AdminGetUser(ctx context.Context, userId string) (*User, error) {
+	path := "/v1/admin/users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
 	var result User
-	if err := c.do(ctx, "GET", "/v1/admin/users/{userId}", nil, &result); err != nil {
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminDeleteUser — Delete user (admin)
-func (c *Client) AdminDeleteUser(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "DELETE", "/v1/admin/users/{userId}", nil, &result); err != nil {
+func (c *Client) AdminDeleteUser(ctx context.Context, userId string, req *AdminDeleteUserRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminBanUser — Ban user (admin)
-func (c *Client) AdminBanUser(ctx context.Context, req *AdminBanUserRequest) (*map[string]any, error) {
+func (c *Client) AdminBanUser(ctx context.Context, userId string, req *AdminBanUserRequest) (*StatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/admin/users/{userId}/ban", body, &result); err != nil {
+	path := "/v1/admin/users/{userId}/ban"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // AdminUnbanUser — Unban user (admin)
-func (c *Client) AdminUnbanUser(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/admin/users/{userId}/unban", nil, &result); err != nil {
+func (c *Client) AdminUnbanUser(ctx context.Context, userId string, req *AdminUnbanUserRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/users/{userId}/unban"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListCoupons — List coupons
+func (c *Client) ListCoupons(ctx context.Context) (*ListCouponsResponse, error) {
+	path := "/v1/billing/coupons"
+	var result ListCouponsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateCoupon — Create coupon
+func (c *Client) CreateCoupon(ctx context.Context, req *CreateCouponRequest) (*CouponResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/coupons"
+	var result CouponResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteCoupon — Delete coupon
+func (c *Client) DeleteCoupon(ctx context.Context, couponId string, req *DeleteCouponRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/coupons/{couponId}"
+	path = strings.Replace(path, "{couponId}", couponId, 1)
+	return c.do(ctx, "DELETE", path, body, nil)
+}
+
+// CheckEntitlement — Check feature entitlement
+func (c *Client) CheckEntitlement(ctx context.Context, featureKey string) (*EntitlementResponse, error) {
+	path := "/v1/billing/entitlements/{featureKey}"
+	path = strings.Replace(path, "{featureKey}", featureKey, 1)
+	var result EntitlementResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListInvoices — List invoices
+func (c *Client) ListInvoices(ctx context.Context) (*ListInvoicesResponse, error) {
+	path := "/v1/billing/invoices"
+	var result ListInvoicesResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetInvoice — Get invoice
+func (c *Client) GetInvoice(ctx context.Context, invoiceId string) (*InvoiceResponse, error) {
+	path := "/v1/billing/invoices/{invoiceId}"
+	path = strings.Replace(path, "{invoiceId}", invoiceId, 1)
+	var result InvoiceResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// MarkInvoicePaid — Mark invoice as paid
+func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/invoices/{invoiceId}/pay"
+	path = strings.Replace(path, "{invoiceId}", invoiceId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// VoidInvoice — Void an invoice
+func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/invoices/{invoiceId}/void"
+	path = strings.Replace(path, "{invoiceId}", invoiceId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// ListBillingPlans — List billing plans
+func (c *Client) ListBillingPlans(ctx context.Context) (*ListPlansResponse, error) {
+	path := "/v1/billing/plans"
+	var result ListPlansResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateBillingPlan — Create billing plan
+func (c *Client) CreateBillingPlan(ctx context.Context, req *CreateBillingPlanRequest) (*PlanResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/plans"
+	var result PlanResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetBillingPlan — Get billing plan
+func (c *Client) GetBillingPlan(ctx context.Context, planId string) (*PlanResponse, error) {
+	path := "/v1/billing/plans/{planId}"
+	path = strings.Replace(path, "{planId}", planId, 1)
+	var result PlanResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ActivateBillingPlan — Activate a billing plan
+func (c *Client) ActivateBillingPlan(ctx context.Context, planId string, req *ActivateBillingPlanRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/plans/{planId}/activate"
+	path = strings.Replace(path, "{planId}", planId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// ArchiveBillingPlan — Archive a billing plan
+func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string, req *ArchiveBillingPlanRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/plans/{planId}/archive"
+	path = strings.Replace(path, "{planId}", planId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// ListSubscriptions — List subscriptions
+func (c *Client) ListSubscriptions(ctx context.Context) (*ListSubscriptionsResponse, error) {
+	path := "/v1/billing/subscriptions"
+	var result ListSubscriptionsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateSubscription — Create subscription
+func (c *Client) CreateSubscription(ctx context.Context, req *CreateSubscriptionRequest) (*Response, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscriptions"
+	var result Response
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetActiveSubscription — Get active subscription
+func (c *Client) GetActiveSubscription(ctx context.Context) (*Response, error) {
+	path := "/v1/billing/subscriptions/active"
+	var result Response
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CancelSubscription — Cancel subscription
+func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscriptions/{subId}/cancel"
+	path = strings.Replace(path, "{subId}", subId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// ChangeSubscriptionPlan — Change subscription plan
+func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscriptions/{subId}/change-plan"
+	path = strings.Replace(path, "{subId}", subId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// PauseSubscription — Pause subscription
+func (c *Client) PauseSubscription(ctx context.Context, subId string, req *PauseSubscriptionRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscriptions/{subId}/pause"
+	path = strings.Replace(path, "{subId}", subId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// ResumeSubscription — Resume subscription
+func (c *Client) ResumeSubscription(ctx context.Context, subId string, req *ResumeSubscriptionRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/billing/subscriptions/{subId}/resume"
+	path = strings.Replace(path, "{subId}", subId, 1)
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// GetUsageSummary — Get usage summary
+func (c *Client) GetUsageSummary(ctx context.Context) (*UsageSummaryResponse, error) {
+	path := "/v1/billing/usage"
+	var result UsageSummaryResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ChangePassword — Change password
-func (c *Client) ChangePassword(ctx context.Context, req *ChangePasswordRequest) (*map[string]any, error) {
+func (c *Client) ChangePassword(ctx context.Context, req *ChangePasswordRequest) (*StatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/auth/change-password", body, &result); err != nil {
+	path := "/v1/change-password"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetClientConfig — Get client configuration
+func (c *Client) GetClientConfig(ctx context.Context) (*ClientConfigResponse, error) {
+	path := "/v1/client-config"
+	var result ClientConfigResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListConsents — List consents
+func (c *Client) ListConsents(ctx context.Context) (*ListResponse, error) {
+	path := "/v1/consent"
+	var result ListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GrantConsent — Grant consent
+func (c *Client) GrantConsent(ctx context.Context, req *GrantConsentRequest) (*Consent, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/consent/grant"
+	var result Consent
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RevokeConsent — Revoke consent
+func (c *Client) RevokeConsent(ctx context.Context, req *RevokeConsentRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/consent/revoke"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // ListDevices — List devices
-func (c *Client) ListDevices(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "GET", "/v1/auth/devices", nil, &result); err != nil {
+func (c *Client) ListDevices(ctx context.Context) (*DeviceListResponse, error) {
+	path := "/v1/devices"
+	var result DeviceListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetDevice — Get device
+func (c *Client) GetDevice(ctx context.Context, deviceId string) (*Device, error) {
+	path := "/v1/devices/{deviceId}"
+	path = strings.Replace(path, "{deviceId}", deviceId, 1)
+	var result Device
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
 // DeleteDevice — Delete device
-func (c *Client) DeleteDevice(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "DELETE", "/v1/auth/devices/{deviceId}", nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ForgotPassword — Request password reset
-func (c *Client) ForgotPassword(ctx context.Context, req *ForgotPasswordRequest) (*map[string]any, error) {
+func (c *Client) DeleteDevice(ctx context.Context, deviceId string, req *DeleteDeviceRequest) (*StatusResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/auth/forgot-password", body, &result); err != nil {
+	path := "/v1/devices/{deviceId}"
+	path = strings.Replace(path, "{deviceId}", deviceId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// HealthCheck — Health check
-func (c *Client) HealthCheck(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "GET", "/v1/auth/health", nil, &result); err != nil {
+// TrustDevice — Trust device
+func (c *Client) TrustDevice(ctx context.Context, deviceId string, req *TrustDeviceRequest) (*Device, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/devices/{deviceId}/trust"
+	path = strings.Replace(path, "{deviceId}", deviceId, 1)
+	var result Device
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListEnvironments — List environments
+func (c *Client) ListEnvironments(ctx context.Context) (*EnvironmentListResponse, error) {
+	path := "/v1/environments"
+	var result EnvironmentListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateEnvironment — Create environment
+func (c *Client) CreateEnvironment(ctx context.Context, req *CreateEnvironmentRequest) (*Environment, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/environments"
+	var result Environment
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetEnvironment — Get environment
+func (c *Client) GetEnvironment(ctx context.Context, envId string) (*Environment, error) {
+	path := "/v1/environments/{envId}"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result Environment
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateEnvironment — Update environment
+func (c *Client) UpdateEnvironment(ctx context.Context, envId string, req *UpdateEnvironmentRequest) (*Environment, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/environments/{envId}"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result Environment
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteEnvironment — Delete environment
+func (c *Client) DeleteEnvironment(ctx context.Context, envId string) (*StatusResponse, error) {
+	path := "/v1/environments/{envId}"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CloneEnvironment — Clone environment
+func (c *Client) CloneEnvironment(ctx context.Context, envId string, req *CloneEnvironmentRequest) (*CloneEnvironmentResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/environments/{envId}/clone"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result CloneEnvironmentResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SetDefaultEnvironment — Set default environment
+func (c *Client) SetDefaultEnvironment(ctx context.Context, envId string) (*StatusResponse, error) {
+	path := "/v1/environments/{envId}/set-default"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetEnvironmentSettings — Get environment settings
+func (c *Client) GetEnvironmentSettings(ctx context.Context, envId string) (*EnvironmentSettingsResponse, error) {
+	path := "/v1/environments/{envId}/settings"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result EnvironmentSettingsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateEnvironmentSettings — Update environment settings
+func (c *Client) UpdateEnvironmentSettings(ctx context.Context, envId string, req *UpdateEnvironmentSettingsRequest) (*Environment, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/environments/{envId}/settings"
+	path = strings.Replace(path, "{envId}", envId, 1)
+	var result Environment
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ForgotPassword — Forgot password
+func (c *Client) ForgotPassword(ctx context.Context, req *ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/forgot-password"
+	var result ForgotPasswordResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetHealth — Health check
+func (c *Client) GetHealth(ctx context.Context) (*HealthResponse, error) {
+	path := "/v1/health"
+	var result HealthResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// IntrospectToken — Introspect token
+func (c *Client) IntrospectToken(ctx context.Context, req *IntrospectTokenRequest) (*IntrospectResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/introspect"
+	var result IntrospectResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListAPIKeys — List API keys
+func (c *Client) ListAPIKeys(ctx context.Context) (*ListKeysResponse, error) {
+	path := "/v1/keys"
+	var result ListKeysResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateAPIKey — Create API key
+func (c *Client) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*CreateKeyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/keys"
+	var result CreateKeyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RevokeAPIKey — Revoke API key
+func (c *Client) RevokeAPIKey(ctx context.Context, keyId string, req *RevokeAPIKeyRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/keys/{keyId}"
+	path = strings.Replace(path, "{keyId}", keyId, 1)
+	return c.do(ctx, "DELETE", path, body, nil)
+}
+
+// SendMagicLink — Send magic link
+func (c *Client) SendMagicLink(ctx context.Context, req *SendMagicLinkRequest) (*SendResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/magic-link/send"
+	var result SendResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// VerifyMagicLink — Verify magic link
+func (c *Client) VerifyMagicLink(ctx context.Context, req *VerifyMagicLinkRequest) (*VerifyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/magic-link/verify"
+	var result VerifyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -189,144 +1487,756 @@ func (c *Client) HealthCheck(ctx context.Context) (*map[string]any, error) {
 
 // GetMe — Get current user
 func (c *Client) GetMe(ctx context.Context) (*User, error) {
+	path := "/v1/me"
 	var result User
-	if err := c.do(ctx, "GET", "/v1/auth/me", nil, &result); err != nil {
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// UpdateMe — Update current user profile
+// UpdateMe — Update current user
 func (c *Client) UpdateMe(ctx context.Context, req *UpdateMeRequest) (*User, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
+	path := "/v1/me"
 	var result User
-	if err := c.do(ctx, "PATCH", "/v1/auth/me", body, &result); err != nil {
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// DeleteAccount — Delete account (self-service)
-func (c *Client) DeleteAccount(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "DELETE", "/v1/auth/me", nil, &result); err != nil {
+// DeleteAccount — Delete account
+func (c *Client) DeleteAccount(ctx context.Context, req *DeleteAccountRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/me"
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// ExportUserData — Export user data (GDPR)
+// ListAuthMethods — List linked auth methods
+func (c *Client) ListAuthMethods(ctx context.Context) (*ListAuthMethodsResponse, error) {
+	path := "/v1/me/auth-methods"
+	var result ListAuthMethodsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UnlinkAuthMethod — Unlink an auth method
+func (c *Client) UnlinkAuthMethod(ctx context.Context, provider string, req *UnlinkAuthMethodRequest) (*UnlinkAuthMethodResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/me/auth-methods/{provider}"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	var result UnlinkAuthMethodResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ExportUserData — Export user data
 func (c *Client) ExportUserData(ctx context.Context) (*map[string]any, error) {
+	path := "/v1/me/export"
 	var result map[string]any
-	if err := c.do(ctx, "GET", "/v1/auth/me/export", nil, &result); err != nil {
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// RefreshSession — Refresh session tokens
-func (c *Client) RefreshSession(ctx context.Context, req *RefreshSessionRequest) (*TokenResponse, error) {
+// ChallengeMFA — MFA challenge
+func (c *Client) ChallengeMFA(ctx context.Context, req *ChallengeMFARequest) (*ChallengeResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
+	path := "/v1/mfa/challenge"
+	var result ChallengeResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// EnrollMFA — Enroll in MFA
+func (c *Client) EnrollMFA(ctx context.Context, req *EnrollMFARequest) (*EnrollResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/enroll"
+	var result EnrollResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DisableMFA — Disable MFA
+func (c *Client) DisableMFA(ctx context.Context, req *DisableMFARequest) (*DisableResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/enrollment"
+	var result DisableResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RegenerateMFARecoveryCodes — Regenerate MFA recovery codes
+func (c *Client) RegenerateMFARecoveryCodes(ctx context.Context, req *RegenerateMFARecoveryCodesRequest) (*RecoveryRegenerateResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/recovery/regenerate"
+	var result RecoveryRegenerateResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// VerifyMFARecovery — Verify MFA recovery code
+func (c *Client) VerifyMFARecovery(ctx context.Context, req *VerifyMFARecoveryRequest) (*RecoveryVerifyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/recovery/verify"
+	var result RecoveryVerifyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SendSMSCode — Send SMS verification code
+func (c *Client) SendSMSCode(ctx context.Context, req *SendSMSCodeRequest) (*SMSSendResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/sms/send"
+	var result SMSSendResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// VerifySMSCode — Verify SMS code
+func (c *Client) VerifySMSCode(ctx context.Context, req *VerifySMSCodeRequest) (*SMSVerifyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/sms/verify"
+	var result SMSVerifyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// VerifyMFA — Verify MFA code
+func (c *Client) VerifyMFA(ctx context.Context, req *VerifyMFARequest) (*VerifyMFAResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/mfa/verify"
+	var result VerifyMFAResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2Authorize — OAuth2 Authorization
+func (c *Client) Oauth2Authorize(ctx context.Context) (error) {
+	path := "/v1/oauth/authorize"
+	return c.do(ctx, "GET", path, nil, nil)
+}
+
+// Oauth2DeviceAuthorize — Device Authorization
+func (c *Client) Oauth2DeviceAuthorize(ctx context.Context, req *Oauth2DeviceAuthorizeRequest) (*DeviceAuthResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/oauth/device/authorize"
+	var result DeviceAuthResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2DeviceComplete — Complete device authorization
+func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceCompleteRequest) (*DeviceCompleteResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/oauth/device/complete"
+	var result DeviceCompleteResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Oauth2Revoke — Revoke token
+func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) (error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/oauth/revoke"
+	return c.do(ctx, "POST", path, body, nil)
+}
+
+// Oauth2Token — OAuth2 Token
+func (c *Client) Oauth2Token(ctx context.Context, req *Oauth2TokenRequest) (*TokenResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/oauth/token"
 	var result TokenResponse
-	if err := c.do(ctx, "POST", "/v1/auth/refresh", body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// ResendVerification — Resend email verification
-func (c *Client) ResendVerification(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/auth/resend-verification", nil, &result); err != nil {
+// Oauth2UserInfo — OIDC UserInfo
+func (c *Client) Oauth2UserInfo(ctx context.Context) (*UserInfo, error) {
+	path := "/v1/oauth/userinfo"
+	var result UserInfo
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// ResetPassword — Reset password with token
-func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (*map[string]any, error) {
+// ListPasskeys — List passkeys
+func (c *Client) ListPasskeys(ctx context.Context) (*ListResponse, error) {
+	path := "/v1/passkeys"
+	var result ListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PasskeyLoginBegin — Begin passkey login
+func (c *Client) PasskeyLoginBegin(ctx context.Context, req *PasskeyLoginBeginRequest) (*LoginBeginResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/auth/reset-password", body, &result); err != nil {
+	path := "/v1/passkeys/login/begin"
+	var result LoginBeginResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// ListSessions — List active sessions
-func (c *Client) ListSessions(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "GET", "/v1/auth/sessions", nil, &result); err != nil {
+// PasskeyLoginFinish — Complete passkey login
+func (c *Client) PasskeyLoginFinish(ctx context.Context, req *PasskeyLoginFinishRequest) (*LoginFinishResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/passkeys/login/finish"
+	var result LoginFinishResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// RevokeSession — Revoke a session
-func (c *Client) RevokeSession(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "DELETE", "/v1/auth/sessions/{id}", nil, &result); err != nil {
+// PasskeyRegisterBegin — Begin passkey registration
+func (c *Client) PasskeyRegisterBegin(ctx context.Context, req *PasskeyRegisterBeginRequest) (*RegisterBeginResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/passkeys/register/begin"
+	var result RegisterBeginResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// SignIn — Sign in with credentials
+// PasskeyRegisterFinish — Complete passkey registration
+func (c *Client) PasskeyRegisterFinish(ctx context.Context, req *PasskeyRegisterFinishRequest) (*RegisterFinishResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/passkeys/register/finish"
+	var result RegisterFinishResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePasskey — Delete passkey
+func (c *Client) DeletePasskey(ctx context.Context, credentialId string, req *DeletePasskeyRequest) (*DeleteResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/passkeys/{credentialId}"
+	path = strings.Replace(path, "{credentialId}", credentialId, 1)
+	var result DeleteResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PhoneAuthStart — Start phone authentication
+func (c *Client) PhoneAuthStart(ctx context.Context, req *PhoneAuthStartRequest) (*StartResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/phone/start"
+	var result StartResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PhoneAuthVerify — Verify phone OTP
+func (c *Client) PhoneAuthVerify(ctx context.Context, req *PhoneAuthVerifyRequest) (*VerifyResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/phone/verify"
+	var result VerifyResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RefreshTokens — Refresh tokens
+func (c *Client) RefreshTokens(ctx context.Context, req *RefreshTokensRequest) (*TokenResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/refresh"
+	var result TokenResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResetPassword — Reset password
+func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/reset-password"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeListRoles — List roles
+func (c *Client) AuthsomeListRoles(ctx context.Context) (*RoleListResponse, error) {
+	path := "/v1/roles"
+	var result RoleListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeCreateRole — Create role
+func (c *Client) AuthsomeCreateRole(ctx context.Context, req *AuthsomeCreateRoleRequest) (*Role, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/roles"
+	var result Role
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeGetRole — Get role
+func (c *Client) AuthsomeGetRole(ctx context.Context, roleId string) (*Role, error) {
+	path := "/v1/roles/{roleId}"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result Role
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeUpdateRole — Update role
+func (c *Client) AuthsomeUpdateRole(ctx context.Context, roleId string, req *AuthsomeUpdateRoleRequest) (*Role, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/roles/{roleId}"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result Role
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeDeleteRole — Delete role
+func (c *Client) AuthsomeDeleteRole(ctx context.Context, roleId string) (*StatusResponse, error) {
+	path := "/v1/roles/{roleId}"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeAssignRole — Assign role to user
+func (c *Client) AuthsomeAssignRole(ctx context.Context, roleId string, req *AuthsomeAssignRoleRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/roles/{roleId}/assign"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeListRolePermissions — List role permissions
+func (c *Client) AuthsomeListRolePermissions(ctx context.Context, roleId string) (*PermissionListResponse, error) {
+	path := "/v1/roles/{roleId}/permissions"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result PermissionListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeAddPermission — Add permission to role
+func (c *Client) AuthsomeAddPermission(ctx context.Context, roleId string, req *AuthsomeAddPermissionRequest) (*Permission, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/roles/{roleId}/permissions"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result Permission
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeRemovePermission — Remove permission from role
+func (c *Client) AuthsomeRemovePermission(ctx context.Context, roleId string, permissionId string) (*StatusResponse, error) {
+	path := "/v1/roles/{roleId}/permissions/{permissionId}"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	path = strings.Replace(path, "{permissionId}", permissionId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeUnassignRole — Unassign role from user
+func (c *Client) AuthsomeUnassignRole(ctx context.Context, roleId string, req *AuthsomeUnassignRoleRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/roles/{roleId}/unassign"
+	path = strings.Replace(path, "{roleId}", roleId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSessions — List sessions
+func (c *Client) ListSessions(ctx context.Context) (*SessionListResponse, error) {
+	path := "/v1/sessions"
+	var result SessionListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RevokeSession — Revoke session
+func (c *Client) RevokeSession(ctx context.Context, sessionId string, req *RevokeSessionRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/sessions/{sessionId}"
+	path = strings.Replace(path, "{sessionId}", sessionId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SignIn — Sign in
 func (c *Client) SignIn(ctx context.Context, req *SignInRequest) (*AuthResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
+	path := "/v1/signin"
 	var result AuthResponse
-	if err := c.do(ctx, "POST", "/v1/auth/signin", body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// SignOut — Sign out (revoke session)
-func (c *Client) SignOut(ctx context.Context) (*map[string]any, error) {
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/auth/signout", nil, &result); err != nil {
+// SignOut — Sign out
+func (c *Client) SignOut(ctx context.Context, req *SignOutRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/signout"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// SignUp — Sign up a new user
+// SignUp — Sign up
 func (c *Client) SignUp(ctx context.Context, req *SignUpRequest) (*AuthResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
+	path := "/v1/signup"
 	var result AuthResponse
-	if err := c.do(ctx, "POST", "/v1/auth/signup", body, &result); err != nil {
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// VerifyEmail — Verify email address
-func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*map[string]any, error) {
+// StartOAuth — Start OAuth flow
+func (c *Client) StartOAuth(ctx context.Context, provider string, req *StartOAuthRequest) (*StartResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	var result map[string]any
-	if err := c.do(ctx, "POST", "/v1/auth/verify-email", body, &result); err != nil {
+	path := "/v1/social/{provider}"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	var result StartResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
+
+// OauthCallback — OAuth callback
+func (c *Client) OauthCallback(ctx context.Context, provider string) (*CallbackResponse, error) {
+	path := "/v1/social/{provider}/callback"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	var result CallbackResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoACS — SSO SAML ACS endpoint
+func (c *Client) SsoACS(ctx context.Context, provider string, req *SsoACSRequest) (*CallbackResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/sso/{provider}/acs"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	var result CallbackResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoCallback — SSO callback (OIDC)
+func (c *Client) SsoCallback(ctx context.Context, provider string, req *SsoCallbackRequest) (*CallbackResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/sso/{provider}/callback"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	var result CallbackResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// StartSSOLogin — Start SSO login flow
+func (c *Client) StartSSOLogin(ctx context.Context, provider string, req *StartSSOLoginRequest) (*LoginResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/sso/{provider}/login"
+	path = strings.Replace(path, "{provider}", provider, 1)
+	var result LoginResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeListUserRoles — List user roles
+func (c *Client) AuthsomeListUserRoles(ctx context.Context, userId string) (*UserRoleListResponse, error) {
+	path := "/v1/users/{userId}/roles"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result UserRoleListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// VerifyEmail — Verify email
+func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/verify-email"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListWebhooks — List webhooks
+func (c *Client) ListWebhooks(ctx context.Context) (*WebhookListResponse, error) {
+	path := "/v1/webhooks"
+	var result WebhookListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateWebhook — Create webhook
+func (c *Client) CreateWebhook(ctx context.Context, req *CreateWebhookRequest) (*Webhook, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/webhooks"
+	var result Webhook
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetWebhook — Get webhook
+func (c *Client) GetWebhook(ctx context.Context, webhookId string) (*Webhook, error) {
+	path := "/v1/webhooks/{webhookId}"
+	path = strings.Replace(path, "{webhookId}", webhookId, 1)
+	var result Webhook
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateWebhook — Update webhook
+func (c *Client) UpdateWebhook(ctx context.Context, webhookId string, req *UpdateWebhookRequest) (*Webhook, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/webhooks/{webhookId}"
+	path = strings.Replace(path, "{webhookId}", webhookId, 1)
+	var result Webhook
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteWebhook — Delete webhook
+func (c *Client) DeleteWebhook(ctx context.Context, webhookId string, req *DeleteWebhookRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/webhooks/{webhookId}"
+	path = strings.Replace(path, "{webhookId}", webhookId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+
+// ──────────────────────────────────────────────────
+// Query parameter types
+// ──────────────────────────────────────────────────
+
 
 // ──────────────────────────────────────────────────
 // Internal HTTP helper
@@ -358,6 +2268,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -383,3 +2296,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 
 	return nil
 }
+
+// Ensure unused imports are consumed.
+var (
+	_ = strings.Replace
+	_ = url.Values{}
+)

@@ -436,8 +436,10 @@ func (p *Plugin) renderSubscriptionsPage(ctx context.Context, params contributor
 			data.Subscriptions = make([]subdash.SubscriptionView, 0, len(subs))
 			for _, s := range subs {
 				sv := toSubView(s)
-				if pl, err := p.ledger.GetPlan(ctx, s.PlanID); err == nil {
-					sv.PlanName = pl.Name
+				if p.ledger != nil {
+					if pl, err := p.ledger.GetPlan(ctx, s.PlanID); err == nil {
+						sv.PlanName = pl.Name
+					}
 				}
 				data.Subscriptions = append(data.Subscriptions, sv)
 				switch sv.Status {

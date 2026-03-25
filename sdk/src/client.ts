@@ -178,10 +178,10 @@ export class AuthClient {
 
   /**
    * Change password
-   * POST /v1/auth/change-password
+   * POST /v1/change-password
    */
   async changePassword(body: ChangePasswordRequest): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/change-password";
+    const path = "/v1/change-password";
     return this.request<Record<string, unknown>>(
       'POST',
       path,
@@ -191,10 +191,10 @@ export class AuthClient {
 
   /**
    * List devices
-   * GET /v1/auth/devices
+   * GET /v1/devices
    */
   async listDevices(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/devices";
+    const path = "/v1/devices";
     return this.request<Record<string, unknown>>(
       'GET',
       path,
@@ -204,10 +204,10 @@ export class AuthClient {
 
   /**
    * Delete device
-   * DELETE /v1/auth/devices/{deviceId}
+   * DELETE /v1/devices/{deviceId}
    */
   async deleteDevice(deviceId: string): Promise<Record<string, unknown>> {
-    const path = `/v1/auth/devices/${deviceId}`;
+    const path = `/v1/devices/${deviceId}`;
     return this.request<Record<string, unknown>>(
       'DELETE',
       path,
@@ -217,10 +217,10 @@ export class AuthClient {
 
   /**
    * Request password reset
-   * POST /v1/auth/forgot-password
+   * POST /v1/forgot-password
    */
   async forgotPassword(body: ForgotPasswordRequest): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/forgot-password";
+    const path = "/v1/forgot-password";
     return this.request<Record<string, unknown>>(
       'POST',
       path,
@@ -230,10 +230,10 @@ export class AuthClient {
 
   /**
    * Health check
-   * GET /v1/auth/health
+   * GET /v1/health
    */
   async healthCheck(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/health";
+    const path = "/v1/health";
     return this.request<Record<string, unknown>>(
       'GET',
       path,
@@ -243,10 +243,10 @@ export class AuthClient {
 
   /**
    * Get current user
-   * GET /v1/auth/me
+   * GET /v1/me
    */
   async getMe(): Promise<User> {
-    const path = "/v1/auth/me";
+    const path = "/v1/me";
     return this.request<User>(
       'GET',
       path,
@@ -256,10 +256,10 @@ export class AuthClient {
 
   /**
    * Update current user profile
-   * PATCH /v1/auth/me
+   * PATCH /v1/me
    */
   async updateMe(body: UpdateMeRequest): Promise<User> {
-    const path = "/v1/auth/me";
+    const path = "/v1/me";
     return this.request<User>(
       'PATCH',
       path,
@@ -269,10 +269,10 @@ export class AuthClient {
 
   /**
    * Delete account (self-service)
-   * DELETE /v1/auth/me
+   * DELETE /v1/me
    */
   async deleteAccount(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/me";
+    const path = "/v1/me";
     return this.request<Record<string, unknown>>(
       'DELETE',
       path,
@@ -282,10 +282,10 @@ export class AuthClient {
 
   /**
    * Export user data (GDPR)
-   * GET /v1/auth/me/export
+   * GET /v1/me/export
    */
   async exportUserData(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/me/export";
+    const path = "/v1/me/export";
     return this.request<Record<string, unknown>>(
       'GET',
       path,
@@ -295,10 +295,10 @@ export class AuthClient {
 
   /**
    * Refresh session tokens
-   * POST /v1/auth/refresh
+   * POST /v1/refresh
    */
   async refreshSession(body: RefreshSessionRequest): Promise<TokenResponse> {
-    const path = "/v1/auth/refresh";
+    const path = "/v1/refresh";
     return this.request<TokenResponse>(
       'POST',
       path,
@@ -308,10 +308,10 @@ export class AuthClient {
 
   /**
    * Resend email verification
-   * POST /v1/auth/resend-verification
+   * POST /v1/resend-verification
    */
   async resendVerification(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/resend-verification";
+    const path = "/v1/resend-verification";
     return this.request<Record<string, unknown>>(
       'POST',
       path,
@@ -321,10 +321,10 @@ export class AuthClient {
 
   /**
    * Reset password with token
-   * POST /v1/auth/reset-password
+   * POST /v1/reset-password
    */
   async resetPassword(body: ResetPasswordRequest): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/reset-password";
+    const path = "/v1/reset-password";
     return this.request<Record<string, unknown>>(
       'POST',
       path,
@@ -334,10 +334,10 @@ export class AuthClient {
 
   /**
    * List active sessions
-   * GET /v1/auth/sessions
+   * GET /v1/sessions
    */
   async listSessions(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/sessions";
+    const path = "/v1/sessions";
     return this.request<Record<string, unknown>>(
       'GET',
       path,
@@ -347,10 +347,10 @@ export class AuthClient {
 
   /**
    * Revoke a session
-   * DELETE /v1/auth/sessions/{id}
+   * DELETE /v1/sessions/{id}
    */
   async revokeSession(id: string): Promise<Record<string, unknown>> {
-    const path = `/v1/auth/sessions/${id}`;
+    const path = `/v1/sessions/${id}`;
     return this.request<Record<string, unknown>>(
       'DELETE',
       path,
@@ -360,10 +360,10 @@ export class AuthClient {
 
   /**
    * Sign in with credentials
-   * POST /v1/auth/signin
+   * POST /v1/signin
    */
   async signIn(body: SignInRequest): Promise<AuthResponse> {
-    const path = "/v1/auth/signin";
+    const path = "/v1/signin";
     return this.request<AuthResponse>(
       'POST',
       path,
@@ -373,10 +373,10 @@ export class AuthClient {
 
   /**
    * Sign out (revoke session)
-   * POST /v1/auth/signout
+   * POST /v1/signout
    */
   async signOut(): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/signout";
+    const path = "/v1/signout";
     return this.request<Record<string, unknown>>(
       'POST',
       path,
@@ -386,10 +386,10 @@ export class AuthClient {
 
   /**
    * Sign up a new user
-   * POST /v1/auth/signup
+   * POST /v1/signup
    */
   async signUp(body: SignUpRequest): Promise<AuthResponse> {
-    const path = "/v1/auth/signup";
+    const path = "/v1/signup";
     return this.request<AuthResponse>(
       'POST',
       path,
@@ -399,10 +399,10 @@ export class AuthClient {
 
   /**
    * Verify email address
-   * POST /v1/auth/verify-email
+   * POST /v1/verify-email
    */
   async verifyEmail(body: VerifyEmailRequest): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/verify-email";
+    const path = "/v1/verify-email";
     return this.request<Record<string, unknown>>(
       'POST',
       path,

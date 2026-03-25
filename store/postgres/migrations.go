@@ -808,5 +808,86 @@ ALTER TABLE authsome_sessions DROP COLUMN IF EXISTS last_activity_at;
 				return err
 			},
 		},
+
+		// Migration 14: Create settings and app_client_configs tables.
+		&migrate.Migration{
+			Name:    "create_settings_and_app_client_configs",
+			Version: "20240101000014",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_settings (
+    id          TEXT PRIMARY KEY,
+    key         TEXT NOT NULL,
+    value       JSONB DEFAULT '{}',
+    scope       TEXT NOT NULL DEFAULT 'global',
+    scope_id    TEXT NOT NULL DEFAULT '',
+    app_id      TEXT NOT NULL DEFAULT '',
+    org_id      TEXT NOT NULL DEFAULT '',
+    enforced    BOOLEAN NOT NULL DEFAULT FALSE,
+    namespace   TEXT NOT NULL DEFAULT '',
+    version     BIGINT NOT NULL DEFAULT 1,
+    updated_by  TEXT NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_settings_key_scope
+    ON authsome_settings (key, scope, scope_id);
+CREATE INDEX IF NOT EXISTS idx_authsome_settings_namespace
+    ON authsome_settings (namespace) WHERE namespace != '';
+
+CREATE TABLE IF NOT EXISTS authsome_app_client_configs (
+    id                  TEXT PRIMARY KEY,
+    app_id              TEXT NOT NULL UNIQUE,
+    password_enabled    BOOLEAN,
+    passkey_enabled     BOOLEAN,
+    magic_link_enabled  BOOLEAN,
+    mfa_enabled         BOOLEAN,
+    sso_enabled         BOOLEAN,
+    social_enabled      BOOLEAN,
+    social_providers    JSONB DEFAULT '[]',
+    mfa_methods         JSONB DEFAULT '[]',
+    app_name            TEXT,
+    logo_url            TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `
+DROP TABLE IF EXISTS authsome_app_client_configs;
+DROP TABLE IF EXISTS authsome_settings;
+`)
+				return err
+			},
+		},
+
+		// Migration 15: Add waitlist_enabled column to app_client_configs.
+		&migrate.Migration{
+			Name:    "add_waitlist_enabled_to_client_config",
+			Version: "20260322000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs ADD COLUMN IF NOT EXISTS waitlist_enabled BOOLEAN;`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs DROP COLUMN IF EXISTS waitlist_enabled;`)
+				return err
+			},
+		},
+		// Migration 16: Add require_email_verification column to app_client_configs.
+		&migrate.Migration{
+			Name:    "add_require_email_verification_to_client_config",
+			Version: "20260324000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs ADD COLUMN IF NOT EXISTS require_email_verification BOOLEAN;`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs DROP COLUMN IF EXISTS require_email_verification;`)
+				return err
+			},
+		},
 	)
 }

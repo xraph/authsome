@@ -80,18 +80,28 @@ export {
 } from "./primitives/sheet";
 
 // Shared components
-export { AuthCard, type AuthCardProps } from "./components/auth-card";
+export { AuthCard, type AuthCardProps, type AuthCardAlign, type AuthCardVariant } from "./components/auth-card";
 export { ErrorDisplay, type ErrorDisplayProps } from "./components/error-display";
 export { LoadingSpinner, type LoadingSpinnerProps } from "./components/loading-spinner";
 export { PasswordInput } from "./components/password-input";
 export { SocialButtons, OrDivider, type SocialButtonsProps, type SocialProvider, type SocialButtonLayout } from "./components/social-buttons";
+export { openOAuthPopup, handleSocialLogin } from "./lib/social-login";
 
-// Auth form components
+// Self-routing auth components (Clerk-style)
+export { SignIn, type SignInProps } from "./components/sign-in";
+export { SignUp, type SignUpProps } from "./components/sign-up";
+
+// Re-export control components from @authsome/ui-react for convenience
+export { SignedIn, SignedOut, Protect } from "@authsome/ui-react";
+export type { SignedInProps, SignedOutProps, ProtectProps } from "@authsome/ui-react";
+
+// Auth form components (lower-level)
 export { SignInForm, type SignInFormComponentProps } from "./components/sign-in-form";
 export { SignUpForm, type SignUpFormComponentProps } from "./components/sign-up-form";
 export { ForgotPasswordForm, type ForgotPasswordFormProps } from "./components/forgot-password-form";
 export { ResetPasswordForm, type ResetPasswordFormProps } from "./components/reset-password-form";
 export { MagicLinkForm, type MagicLinkFormProps } from "./components/magic-link-form";
+export { WaitlistForm, type WaitlistFormProps } from "./components/waitlist-form";
 export { MFAChallengeForm as MFAChallengeFormStyled, type MFAChallengeFormStyledProps } from "./components/mfa-challenge-form";
 export { ChangePasswordForm, type ChangePasswordFormProps } from "./components/change-password-form";
 export { EmailVerificationForm, type EmailVerificationFormProps } from "./components/email-verification-form";

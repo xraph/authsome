@@ -86,6 +86,35 @@ export interface SSOConnectionConfig {
   name: string;
 }
 
+/** A single option for select/radio/checkbox signup fields. */
+export interface SignupFieldOption {
+  label: string;
+  value: string;
+}
+
+/** Validation rules for a signup field. */
+export interface SignupFieldValidation {
+  required?: boolean;
+  min_len?: number;
+  max_len?: number;
+  pattern?: string;
+  min?: number;
+  max?: number;
+}
+
+/** A custom signup form field from the backend. */
+export interface SignupFieldConfig {
+  key: string;
+  label: string;
+  type: string;
+  placeholder?: string;
+  description?: string;
+  options?: SignupFieldOption[];
+  default?: string;
+  validation?: SignupFieldValidation;
+  order: number;
+}
+
 /**
  * Client configuration returned by the backend.
  *
@@ -107,6 +136,14 @@ export interface ClientConfig {
   sso?: { enabled: boolean; connections: SSOConnectionConfig[] };
   /** List of server-side plugin names that are installed and active. */
   supported_plugins?: string[];
+  /** Custom signup form fields configured for this app. */
+  signup_fields?: SignupFieldConfig[];
+  /** Waitlist configuration. */
+  waitlist?: { enabled: boolean };
+  /** Email verification configuration. */
+  email_verification?: { enabled: boolean; required: boolean };
+  /** Device authorization (OAuth 2.0 device code flow). */
+  device_authorization?: { enabled: boolean };
 }
 
 /** Interface for persisting tokens across sessions. */

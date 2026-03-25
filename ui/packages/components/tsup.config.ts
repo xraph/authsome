@@ -8,7 +8,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: "es2022",
-  external: ["react", "react-dom"],
+  external: ["react", "react-dom", "input-otp", "lucide-react", "@radix-ui/*"],
   banner: {
     js: '"use client";',
   },

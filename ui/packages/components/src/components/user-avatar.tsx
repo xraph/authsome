@@ -14,10 +14,16 @@ const sizeClasses = {
   lg: "h-12 w-12",
 } as const;
 
-function getInitials(user: { name?: string; email?: string } | null): string {
+function getDisplayName(user: { first_name?: string; last_name?: string; email?: string } | null): string | undefined {
+  if (!user) return undefined;
+  const parts = [user.first_name, user.last_name].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+function getInitials(user: { first_name?: string; last_name?: string; email?: string } | null): string {
   if (!user) return "?";
-  if (user.name) {
-    return user.name.charAt(0).toUpperCase();
+  if (user.first_name) {
+    return user.first_name.charAt(0).toUpperCase();
   }
   if (user.email) {
     return user.email.charAt(0).toUpperCase();
@@ -31,7 +37,7 @@ export function UserAvatar({ size = "md", className }: UserAvatarProps) {
   return (
     <Avatar className={cn(sizeClasses[size], className)}>
       {user?.image && (
-        <AvatarImage src={user.image} alt={user.name || user.email || "User"} />
+        <AvatarImage src={user.image} alt={getDisplayName(user) || user.email || "User"} />
       )}
       <AvatarFallback className="text-xs font-medium">
         {getInitials(user)}

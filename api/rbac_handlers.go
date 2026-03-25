@@ -16,8 +16,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerRBACRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base,
+	g := router.Group("/v1",
 		forge.WithGroupTags("RBAC"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),

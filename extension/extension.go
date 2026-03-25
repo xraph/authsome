@@ -27,7 +27,6 @@ import (
 	"github.com/xraph/authsome/bridge/chronicleadapter"
 	"github.com/xraph/authsome/bridge/dispatchadapter"
 	"github.com/xraph/authsome/bridge/heraldadapter"
-	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/bridge/maileradapter"
 	"github.com/xraph/authsome/bridge/relayadapter"
 	authdash "github.com/xraph/authsome/dashboard"
@@ -37,6 +36,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
+	authclient "github.com/xraph/authsome/sdk/go"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	mongostore "github.com/xraph/authsome/store/mongo"
@@ -87,6 +87,8 @@ type Extension struct {
 	opts       []authsome.Option
 	plugins    []plugin.Plugin
 	useGrove   bool
+	clientMode bool                       // true when operating as a remote client
+	client     *authclient.Client         // non-nil in client mode
 }
 
 // New creates an AuthSome Forge extension with the given options.
@@ -115,6 +117,12 @@ func (e *Extension) Register(fapp forge.App) error {
 		return err
 	}
 
+	// Client mode: delegate all auth to a remote authsome server.
+	// No local engine, no database, no migrations.
+	if e.config.ClientMode {
+		return e.initClientMode(fapp)
+	}
+
 	if err := e.init(fapp); err != nil {
 		return err
 	}
@@ -125,6 +133,47 @@ func (e *Extension) Register(fapp forge.App) error {
 	}); err != nil {
 		return fmt.Errorf("authsome: register engine in container: %w", err)
 	}
+
+	return nil
+}
+
+// initClientMode sets up the extension as a remote client. No engine or
+// database connection is created. An authclient.Client is registered in
+// the DI container for downstream extensions to use.
+func (e *Extension) initClientMode(fapp forge.App) error {
+	if e.config.PortalURL == "" {
+		return fmt.Errorf("authsome: client mode requires portal_url")
+	}
+
+	logger := e.logger
+	if logger == nil {
+		logger = e.Logger()
+	}
+	if logger == nil {
+		logger = log.NewNoopLogger()
+	}
+
+	opts := []authclient.Option{
+		authclient.WithSessionCookies(),
+	}
+	if e.config.ServiceAPIKey != "" {
+		opts = append(opts, authclient.WithAPIKey(e.config.ServiceAPIKey))
+	}
+
+	e.client = authclient.NewClient(e.config.PortalURL, opts...)
+	e.clientMode = true
+
+	// Register the client in the DI container so workspace and other
+	// extensions can inject it for org/membership operations.
+	if err := vessel.Provide(fapp.Container(), func() (*authclient.Client, error) {
+		return e.client, nil
+	}); err != nil {
+		return fmt.Errorf("authsome: register client in container: %w", err)
+	}
+
+	logger.Info("authsome: client mode enabled",
+		log.String("portal_url", e.config.PortalURL),
+	)
 
 	return nil
 }
@@ -235,7 +284,7 @@ func (e *Extension) init(fapp forge.App) error {
 
 	// ── Auto-discover Ledger (optional) ──
 	if ledgerEng, ledgerErr := vessel.Inject[*ledger.Ledger](fapp.Container()); ledgerErr == nil {
-		opts = append(opts, authsome.WithLedger(ledgeradapter.New(ledgerEng)))
+		opts = append(opts, authsome.WithLedgerEngine(ledgerEng))
 		e.Logger().Info("authsome: auto-discovered ledger")
 	} else {
 		opts = append(opts, authsome.WithLedger(bridge.NewNoopLedger()))
@@ -333,19 +382,34 @@ func (e *Extension) init(fapp forge.App) error {
 	}
 	e.engine = eng
 
+	// Run migrations eagerly so that tables exist before any route handler
+	// or dashboard auth page can access the database. This prevents
+	// "relation does not exist" errors in PostgreSQL when the dashboard
+	// loads before Start() completes. Idempotent — Start() will skip if
+	// already applied.
+	if err := eng.EnsureMigrated(context.Background()); err != nil {
+		return fmt.Errorf("authsome: eager migration: %w", err)
+	}
+
 	// Create API handler and register routes on the Forge router.
 	if !e.config.DisableRoutes {
-		e.apiHandler = api.New(eng)
+		basePath := e.config.BasePath
+		if basePath == "" {
+			basePath = "/authsome"
+		}
+
+		e.apiHandler = api.New(eng, fapp.Router())
 
 		router := fapp.Router()
 		if router != nil {
-			if err := e.apiHandler.RegisterRoutes(router); err != nil {
+			groupedRouter := router.Group(basePath)
+			if err := e.apiHandler.RegisterRoutes(groupedRouter); err != nil {
 				return fmt.Errorf("authsome: register forge routes: %w", err)
 			}
 
-			// Register plugin routes on the Forge router.
+			// Register plugin routes on the grouped router.
 			for _, rp := range eng.Plugins().RouteProviders() {
-				if err := rp.RegisterRoutes(router); err != nil {
+				if err := rp.RegisterRoutes(groupedRouter); err != nil {
 					return fmt.Errorf("authsome: register plugin routes (%T): %w", rp, err)
 				}
 			}
@@ -361,6 +425,17 @@ func (e *Extension) init(fapp forge.App) error {
 
 // Start begins the authsome engine and runs auto-migration if enabled.
 func (e *Extension) Start(ctx context.Context) error {
+	if e.clientMode {
+		// Client mode: verify Portal is reachable.
+		if _, err := e.client.GetHealth(ctx); err != nil {
+			e.Logger().Warn("authsome: portal health check failed (may not be running yet)",
+				log.String("portal_url", e.config.PortalURL),
+				log.String("error", err.Error()),
+			)
+		}
+		e.MarkStarted()
+		return nil
+	}
 	if e.engine == nil {
 		return errors.New("authsome: extension not initialized")
 	}
@@ -373,6 +448,10 @@ func (e *Extension) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down the authsome engine.
 func (e *Extension) Stop(ctx context.Context) error {
+	if e.clientMode {
+		e.MarkStopped()
+		return nil
+	}
 	if e.engine == nil {
 		e.MarkStopped()
 		return nil
@@ -384,6 +463,10 @@ func (e *Extension) Stop(ctx context.Context) error {
 
 // Health implements forge.Extension.
 func (e *Extension) Health(ctx context.Context) error {
+	if e.clientMode {
+		_, err := e.client.GetHealth(ctx)
+		return err
+	}
 	if e.engine == nil {
 		return errors.New("authsome: extension not initialized")
 	}
@@ -403,6 +486,13 @@ func (e *Extension) Handler() http.Handler {
 // middleware, session activity extension, and auto-refresh middleware
 // so Forge auto-applies them globally to all routes.
 func (e *Extension) Middlewares() []forge.Middleware {
+	if e.clientMode {
+		// Client mode: use remote token validation via introspect.
+		// No session activity or auto-refresh — those are Portal's responsibility.
+		return []forge.Middleware{
+			middleware.ClientAuthMiddleware(e.client, e.Logger()),
+		}
+	}
 	if e.engine == nil {
 		return nil
 	}

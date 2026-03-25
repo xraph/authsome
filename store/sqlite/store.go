@@ -120,6 +120,15 @@ func (s *Store) GetAppByPublishableKey(ctx context.Context, key string) (*app.Ap
 	return toApp(m)
 }
 
+func (s *Store) GetPlatformApp(ctx context.Context) (*app.App, error) {
+	m := new(AppModel)
+	err := s.sdb.NewSelect(m).Where("is_platform = ?", true).Limit(1).Scan(ctx)
+	if err != nil {
+		return nil, sqliteError(err)
+	}
+	return toApp(m)
+}
+
 func (s *Store) UpdateApp(ctx context.Context, a *app.App) error {
 	m := fromApp(a)
 	m.UpdatedAt = time.Now()
@@ -256,6 +265,12 @@ func (s *Store) ListUsers(ctx context.Context, q *user.Query) (*user.List, error
 
 	list := &user.List{
 		Users: make([]*user.User, 0, len(models)),
+		Total: len(models),
+	}
+
+	// Adjust total if we fetched the extra sentinel row (limit+1).
+	if len(models) > limit {
+		list.Total = limit
 	}
 
 	for i := range models {
@@ -1194,47 +1209,213 @@ func (s *Store) DeleteAppSessionConfig(ctx context.Context, appID id.AppID) erro
 // App Client Config Store
 // ──────────────────────────────────────────────────
 
-func (s *Store) GetAppClientConfig(_ context.Context, _ id.AppID) (*appclientconfig.Config, error) {
-	return nil, appclientconfig.ErrNotFound
+func (s *Store) GetAppClientConfig(ctx context.Context, appID id.AppID) (*appclientconfig.Config, error) {
+	m := new(AppClientConfigModel)
+	err := s.sdb.NewSelect(m).
+		Where("app_id = ?", appID.String()).
+		Scan(ctx)
+	if err != nil {
+		return nil, appclientconfig.ErrNotFound
+	}
+	return fromAppClientConfigModel(m)
 }
 
-func (s *Store) SetAppClientConfig(_ context.Context, _ *appclientconfig.Config) error {
-	return fmt.Errorf("sqlite: app client config not implemented")
+func (s *Store) SetAppClientConfig(ctx context.Context, cfg *appclientconfig.Config) error {
+	if cfg.ID.IsNil() {
+		cfg.ID = id.NewAppClientConfigID()
+	}
+	if cfg.CreatedAt.IsZero() {
+		cfg.CreatedAt = time.Now()
+	}
+	cfg.UpdatedAt = time.Now()
+
+	m := toAppClientConfigModel(cfg)
+
+	res, err := s.sdb.NewUpdate(m).
+		Where("app_id = ?", m.AppID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: set app client config (update): %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+
+	_, err = s.sdb.NewInsert(m).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: set app client config (insert): %w", err)
+	}
+	return nil
 }
 
-func (s *Store) DeleteAppClientConfig(_ context.Context, _ id.AppID) error {
-	return appclientconfig.ErrNotFound
+func (s *Store) DeleteAppClientConfig(ctx context.Context, appID id.AppID) error {
+	res, err := s.sdb.NewDelete((*AppClientConfigModel)(nil)).
+		Where("app_id = ?", appID.String()).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: delete app client config: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return appclientconfig.ErrNotFound
+	}
+	return nil
 }
 
 // ──────────────────────────────────────────────────
 // Settings Store
 // ──────────────────────────────────────────────────
 
-func (s *Store) GetSetting(_ context.Context, _ string, _ settings.Scope, _ string) (*settings.Setting, error) {
-	return nil, store.ErrNotFound
+func (s *Store) GetSetting(ctx context.Context, key string, scope settings.Scope, scopeID string) (*settings.Setting, error) {
+	m := new(SettingModel)
+	err := s.sdb.NewSelect(m).
+		Where("key = ?", key).
+		Where("scope = ?", string(scope)).
+		Where("scope_id = ?", scopeID).
+		Scan(ctx)
+	if err != nil {
+		return nil, sqliteError(err)
+	}
+	return fromSettingModel(m)
 }
 
-func (s *Store) SetSetting(_ context.Context, _ *settings.Setting) error {
-	return fmt.Errorf("sqlite: settings not implemented")
-}
+func (s *Store) SetSetting(ctx context.Context, st *settings.Setting) error {
+	m := toSettingModel(st)
 
-func (s *Store) DeleteSetting(_ context.Context, _ string, _ settings.Scope, _ string) error {
+	res, err := s.sdb.NewUpdate(m).
+		Where("key = ?", m.Key).
+		Where("scope = ?", m.Scope).
+		Where("scope_id = ?", m.ScopeID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: set setting (update): %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+
+	_, err = s.sdb.NewInsert(m).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: set setting (insert): %w", err)
+	}
 	return nil
 }
 
-func (s *Store) ListSettings(_ context.Context, _ settings.ListOpts) ([]*settings.Setting, error) {
-	return nil, nil
+func (s *Store) DeleteSetting(ctx context.Context, key string, scope settings.Scope, scopeID string) error {
+	_, err := s.sdb.NewDelete((*SettingModel)(nil)).
+		Where("key = ?", key).
+		Where("scope = ?", string(scope)).
+		Where("scope_id = ?", scopeID).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: delete setting: %w", err)
+	}
+	return nil
 }
 
-func (s *Store) ResolveSettings(_ context.Context, _ string, _ settings.ResolveOpts) ([]*settings.Setting, error) {
-	return nil, nil
+func (s *Store) ListSettings(ctx context.Context, opts settings.ListOpts) ([]*settings.Setting, error) {
+	var models []SettingModel
+
+	q := s.sdb.NewSelect(&models)
+	if opts.Namespace != "" {
+		q = q.Where("namespace = ?", opts.Namespace)
+	}
+	if opts.Scope != "" {
+		q = q.Where("scope = ?", string(opts.Scope))
+	}
+	if opts.ScopeID != "" {
+		q = q.Where("scope_id = ?", opts.ScopeID)
+	}
+	if opts.AppID != "" {
+		q = q.Where("app_id = ?", opts.AppID)
+	}
+	if opts.OrgID != "" {
+		q = q.Where("org_id = ?", opts.OrgID)
+	}
+	q = q.OrderExpr("created_at DESC")
+	if opts.Limit > 0 {
+		q = q.Limit(opts.Limit)
+	}
+	if opts.Offset > 0 {
+		q = q.Offset(opts.Offset)
+	}
+
+	if err := q.Scan(ctx); err != nil {
+		return nil, fmt.Errorf("authsome/sqlite: list settings: %w", err)
+	}
+
+	result := make([]*settings.Setting, 0, len(models))
+	for i := range models {
+		st, err := fromSettingModel(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, st)
+	}
+	return result, nil
 }
 
-func (s *Store) BatchResolve(_ context.Context, _ []string, _ settings.ResolveOpts) (map[string][]*settings.Setting, error) {
-	return nil, nil
+func (s *Store) ResolveSettings(ctx context.Context, key string, opts settings.ResolveOpts) ([]*settings.Setting, error) {
+	type scopeQuery struct {
+		scope   settings.Scope
+		scopeID string
+	}
+	queries := []scopeQuery{
+		{settings.ScopeGlobal, ""},
+	}
+	if opts.AppID != "" {
+		queries = append(queries, scopeQuery{settings.ScopeApp, opts.AppID})
+	}
+	if opts.OrgID != "" {
+		queries = append(queries, scopeQuery{settings.ScopeOrg, opts.OrgID})
+	}
+	if opts.UserID != "" {
+		queries = append(queries, scopeQuery{settings.ScopeUser, opts.UserID})
+	}
+
+	var result []*settings.Setting
+	for _, sq := range queries {
+		st, err := s.GetSetting(ctx, key, sq.scope, sq.scopeID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		result = append(result, st)
+	}
+
+	for i := 0; i < len(result); i++ {
+		for j := i + 1; j < len(result); j++ {
+			if settings.ScopePriority(result[i].Scope) > settings.ScopePriority(result[j].Scope) {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	return result, nil
 }
 
-func (s *Store) DeleteSettingsByNamespace(_ context.Context, _ string) error {
+func (s *Store) BatchResolve(ctx context.Context, keys []string, opts settings.ResolveOpts) (map[string][]*settings.Setting, error) {
+	result := make(map[string][]*settings.Setting, len(keys))
+	for _, key := range keys {
+		resolved, err := s.ResolveSettings(ctx, key, opts)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolved) > 0 {
+			result[key] = resolved
+		}
+	}
+	return result, nil
+}
+
+func (s *Store) DeleteSettingsByNamespace(ctx context.Context, namespace string) error {
+	_, err := s.sdb.NewDelete((*SettingModel)(nil)).
+		Where("namespace = ?", namespace).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: delete settings by namespace: %w", err)
+	}
 	return nil
 }
 

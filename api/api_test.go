@@ -37,6 +37,7 @@ func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 		authsome.WithAppID(testAppIDStr),
 	)
 	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
 	a := api.New(eng)
 	return a, eng
 }
@@ -99,7 +100,7 @@ func TestHandleHealth(t *testing.T) {
 	a, _ := newTestAPI(t)
 	handler := a.Handler()
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/health", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -125,7 +126,7 @@ func TestHandleSignUp_Success(t *testing.T) {
 		"name":     "Sign Up User",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -144,7 +145,7 @@ func TestHandleSignUp_InvalidBody(t *testing.T) {
 	a, _ := newTestAPI(t)
 	handler := a.Handler()
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signup", bytes.NewBufferString("not json"))
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", bytes.NewBufferString("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -162,7 +163,7 @@ func TestHandleSignUp_WeakPassword(t *testing.T) {
 		"name":     "Weak",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -183,7 +184,7 @@ func TestHandleSignUp_DuplicateEmail(t *testing.T) {
 		"name":     "Dupe",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -206,7 +207,7 @@ func TestHandleSignIn_Success(t *testing.T) {
 		"password": "SecureP@ss1",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signin", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signin", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -231,7 +232,7 @@ func TestHandleSignIn_WrongPassword(t *testing.T) {
 		"password": "WrongPassword1",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signin", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signin", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -253,7 +254,7 @@ func TestHandleSignOut_Success(t *testing.T) {
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signout", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signout", nil)
 	// Put session ID in context (normally done by auth middleware)
 	ctx := middleware.WithSessionID(req.Context(), sess.ID)
 	req = req.WithContext(ctx)
@@ -267,7 +268,7 @@ func TestHandleSignOut_Unauthenticated(t *testing.T) {
 	a, _ := newTestAPI(t)
 	handler := a.Handler()
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signout", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signout", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -288,7 +289,7 @@ func TestHandleRefresh_Success(t *testing.T) {
 		"refresh_token": refreshToken,
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/refresh", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -307,7 +308,7 @@ func TestHandleRefresh_MissingToken(t *testing.T) {
 	handler := a.Handler()
 
 	body := jsonBody(t, map[string]string{})
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/refresh", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -328,7 +329,7 @@ func TestHandleGetMe_Success(t *testing.T) {
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/me", nil)
 	ctx := middleware.WithUserID(req.Context(), sess.UserID)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -346,7 +347,7 @@ func TestHandleGetMe_Unauthenticated(t *testing.T) {
 	a, _ := newTestAPI(t)
 	handler := a.Handler()
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/me", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/me", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -370,7 +371,7 @@ func TestHandleUpdateMe_Success(t *testing.T) {
 		"first_name": "Updated Name",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "PATCH", "/v1/auth/me", body)
+	req := httptest.NewRequestWithContext(context.Background(), "PATCH", "/v1/me", body)
 	req.Header.Set("Content-Type", "application/json")
 	ctx := middleware.WithUserID(req.Context(), sess.UserID)
 	req = req.WithContext(ctx)
@@ -398,7 +399,7 @@ func TestHandleListSessions_Success(t *testing.T) {
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/sessions", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/sessions", nil)
 	ctx := middleware.WithUserID(req.Context(), sess.UserID)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -418,7 +419,7 @@ func TestHandleListSessions_Unauthenticated(t *testing.T) {
 	a, _ := newTestAPI(t)
 	handler := a.Handler()
 
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/auth/sessions", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/sessions", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -438,7 +439,7 @@ func TestHandleRevokeSession_Success(t *testing.T) {
 	sess, err := eng.ResolveSessionByToken(token)
 	require.NoError(t, err)
 
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/sessions/"+sess.ID.String(), nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/"+sess.ID.String(), nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -449,7 +450,7 @@ func TestHandleRevokeSession_InvalidID(t *testing.T) {
 	a, _ := newTestAPI(t)
 	handler := a.Handler()
 
-	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/auth/sessions/invalid-id", nil)
+	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/invalid-id", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -472,7 +473,7 @@ func TestWriteAccountError_EmailTaken(t *testing.T) {
 		"name":     "Taken",
 	})
 
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/auth/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)

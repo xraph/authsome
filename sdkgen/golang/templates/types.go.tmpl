@@ -16,7 +16,7 @@ type {{ .Name }} struct {
 // Request types
 // ──────────────────────────────────────────────────
 {{ range .Operations }}
-{{- if .HasBody }}
+{{- if and .HasBody ($.IsNewRequestType .Name) }}
 
 // {{ .Name }}Request is the request body for {{ .Name }}.
 type {{ .Name }}Request struct {

@@ -16,8 +16,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerAdminRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base+"/admin",
+	g := router.Group("/v1/admin",
 		forge.WithGroupTags("admin"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),

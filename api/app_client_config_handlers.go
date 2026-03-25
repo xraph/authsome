@@ -17,8 +17,7 @@ import (
 // ──────────────────────────────────────────────────
 
 func (a *API) registerAppClientConfigRoutes(router forge.Router) error {
-	base := a.engine.Config().BasePath
-	g := router.Group(base+"/admin",
+	g := router.Group("/v1/admin",
 		forge.WithGroupTags("admin", "app-client-config"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),
@@ -99,7 +98,9 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 		MFAEnabled:       req.MFAEnabled,
 		SSOEnabled:       req.SSOEnabled,
 		SocialEnabled:    req.SocialEnabled,
-		SocialProviders:  req.SocialProviders,
+		WaitlistEnabled:           req.WaitlistEnabled,
+		RequireEmailVerification: req.RequireEmailVerification,
+		SocialProviders:          req.SocialProviders,
 		MFAMethods:       req.MFAMethods,
 		AppName:          req.AppName,
 		LogoURL:          req.LogoURL,

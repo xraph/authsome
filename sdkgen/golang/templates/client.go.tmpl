@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
+	"strings"
 )
 
 // Client is an HTTP client for the AuthSome API.
 type Client struct {
 	baseURL    string
 	token      string
+	apiKey     string
 	httpClient *http.Client
 }
 
@@ -26,16 +30,38 @@ func WithToken(token string) Option {
 	return func(c *Client) { c.token = token }
 }
 
+// WithAPIKey sets an API key for X-API-Key header authentication.
+func WithAPIKey(key string) Option {
+	return func(c *Client) { c.apiKey = key }
+}
+
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.httpClient = hc }
+}
+
+// WithCookieJar sets a cookie jar on the client so it can receive and
+// resend session cookies (e.g. authsome_session) automatically.
+func WithCookieJar(jar http.CookieJar) Option {
+	return func(c *Client) {
+		c.httpClient.Jar = jar
+	}
+}
+
+// WithSessionCookies creates a default cookie jar so the client
+// automatically persists session cookies across requests.
+func WithSessionCookies() Option {
+	return func(c *Client) {
+		jar, _ := cookiejar.New(nil)
+		c.httpClient.Jar = jar
+	}
 }
 
 // NewClient creates a new AuthSome API client.
 func NewClient(baseURL string, opts ...Option) *Client {
 	c := &Client{
 		baseURL:    baseURL,
-		httpClient: http.DefaultClient,
+		httpClient: &http.Client{},
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -49,29 +75,69 @@ func (c *Client) SetToken(token string) { c.token = token }
 // Token returns the current session token.
 func (c *Client) Token() string { return c.token }
 
+// SetAPIKey updates the API key.
+func (c *Client) SetAPIKey(key string) { c.apiKey = key }
+
+// APIKey returns the current API key.
+func (c *Client) APIKey() string { return c.apiKey }
+
 // ──────────────────────────────────────────────────
 // Generated methods
 // ──────────────────────────────────────────────────
 {{ range .Operations }}
 // {{ .Name }} — {{ .Summary }}
-func (c *Client) {{ .Name }}(ctx context.Context{{ if .HasBody }}, req *{{ .Name }}Request{{ end }}) ({{ if .ResponseType }}*{{ .ResponseType }}, {{ end }}error) {
+func (c *Client) {{ .Name }}(ctx context.Context
+{{- range .PathParams }}, {{ unexport .GoName }} {{ .Type }}{{ end }}
+{{- if .HasBody }}, req *{{ .Name }}Request{{ end }}
+{{- if .HasQueryParams }}, params *{{ .Name }}Params{{ end }}) ({{ if .ResponseType }}*{{ .ResponseType }}, {{ end }}error) {
 {{- if .HasBody }}
 	body, err := json.Marshal(req)
 	if err != nil {
 		return {{ if .ResponseType }}nil, {{ end }}fmt.Errorf("marshal request: %w", err)
 	}
 {{- end }}
+	path := "{{ .Path }}"
+{{- range .PathParams }}
+	path = strings.Replace(path, "{{ printf "{%s}" .Name }}", {{ unexport .GoName }}, 1)
+{{- end }}
+{{- if .HasQueryParams }}
+	if params != nil {
+		q := url.Values{}
+{{- range .QueryParams }}
+		if params.{{ .GoName }} != "" {
+			q.Set("{{ .Name }}", params.{{ .GoName }})
+		}
+{{- end }}
+		if encoded := q.Encode(); encoded != "" {
+			path += "?" + encoded
+		}
+	}
+{{- end }}
 {{- if .ResponseType }}
 	var result {{ .ResponseType }}
-	if err := c.do(ctx, "{{ .Method }}", "{{ .Path }}", {{ if .HasBody }}body{{ else }}nil{{ end }}, &result); err != nil {
+	if err := c.do(ctx, "{{ .Method }}", path, {{ if .HasBody }}body{{ else }}nil{{ end }}, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 {{- else }}
-	return c.do(ctx, "{{ .Method }}", "{{ .Path }}", {{ if .HasBody }}body{{ else }}nil{{ end }}, nil)
+	return c.do(ctx, "{{ .Method }}", path, {{ if .HasBody }}body{{ else }}nil{{ end }}, nil)
 {{- end }}
 }
 {{ end }}
+
+// ──────────────────────────────────────────────────
+// Query parameter types
+// ──────────────────────────────────────────────────
+{{ range .Operations }}
+{{- if .HasQueryParams }}
+// {{ .Name }}Params holds optional query parameters for {{ .Name }}.
+type {{ .Name }}Params struct {
+{{- range .QueryParams }}
+	{{ .GoName }} {{ .Type }} `json:"{{ .Name }},omitempty"`
+{{- end }}
+}
+{{ end }}
+{{- end }}
 
 // ──────────────────────────────────────────────────
 // Internal HTTP helper
@@ -103,6 +169,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -128,3 +197,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 
 	return nil
 }
+
+// Ensure unused imports are consumed.
+var (
+	_ = strings.Replace
+	_ = url.Values{}
+)

@@ -1,10 +1,16 @@
 /**
  * Next.js App Router proxy handler for AuthSome.
  *
- * Proxies all requests from `/api/authsome/[...path]` to the AuthSome
- * backend, forwarding headers, cookies, and request bodies.
+ * Proxies all requests from your chosen catch-all route to the AuthSome
+ * backend, forwarding headers, cookies, query parameters, and request bodies.
+ * Handles OAuth redirect responses and non-JSON content (e.g. HTML callback pages).
  *
- * Usage in `app/api/authsome/[...path]/route.ts`:
+ * Usage in `app/api/auth/[...path]/route.ts`:
+ * ```ts
+ * export { GET, POST, PUT, DELETE, PATCH } from "@authsome/ui-nextjs/proxy";
+ * ```
+ *
+ * Or with custom config:
  * ```ts
  * import { createProxyHandler } from "@authsome/ui-nextjs/proxy";
  *
@@ -32,8 +38,6 @@ function forwardSetCookies(
   backendRes: Response,
   nextRes: NextResponse | Response,
 ): void {
-  // Prefer getSetCookie() (Node 18.14+) which correctly handles
-  // multiple Set-Cookie headers without merging them.
   const cookies = backendRes.headers.getSetCookie?.() ?? [];
   if (cookies.length > 0) {
     for (const cookie of cookies) {
@@ -42,8 +46,6 @@ function forwardSetCookies(
     return;
   }
 
-  // Fallback: read raw set-cookie header via get() which may merge
-  // multiple values with ", " — but for a single cookie it works fine.
   const raw = backendRes.headers.get("set-cookie");
   if (raw) {
     nextRes.headers.append("Set-Cookie", raw);
@@ -56,9 +58,11 @@ function forwardSetCookies(
  *
  * The handler:
  * - Forwards `Authorization` and `Cookie` headers
+ * - Forwards query parameters (needed for OAuth callbacks)
  * - Proxies request bodies for non-GET/HEAD methods
  * - Forwards `Set-Cookie` response headers back to the browser
- * - Parses JSON responses with a text fallback
+ * - Handles redirect responses (OAuth flows) with `redirect: 'manual'`
+ * - Preserves non-JSON content types (e.g. HTML callback pages)
  */
 export function createProxyHandler(config: ProxyHandlerConfig) {
   return async function handler(
@@ -66,19 +70,18 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
     { params }: { params: Promise<{ path: string[] }> },
   ) {
     const { path } = await params;
-    const target = `${config.baseURL}/${path.join("/")}`;
+    const queryString = request.nextUrl.search;
+    const target = `${config.baseURL}/${path.join("/")}${queryString}`;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    // Forward authorization header if present.
     const authHeader = request.headers.get("Authorization");
     if (authHeader) {
       headers["Authorization"] = authHeader;
     }
 
-    // Forward cookies for session-based auth.
     const cookie = request.headers.get("Cookie");
     if (cookie) {
       headers["Cookie"] = cookie;
@@ -91,9 +94,35 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
         request.method !== "GET" && request.method !== "HEAD"
           ? await request.text()
           : undefined,
+      redirect: "manual",
     });
 
+    // Forward redirect responses (e.g. OAuth social login redirects).
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("Location");
+      if (location) {
+        const response = NextResponse.redirect(
+          location,
+          res.status as 301 | 302 | 303 | 307 | 308,
+        );
+        forwardSetCookies(res, response);
+        return response;
+      }
+    }
+
+    const contentType = res.headers.get("Content-Type") ?? "";
     const text = await res.text();
+
+    // Pass through non-JSON responses (e.g. HTML callback pages) with
+    // the original Content-Type so the browser renders them correctly.
+    if (!contentType.includes("application/json")) {
+      const response = new NextResponse(text, {
+        status: res.status,
+        headers: { "Content-Type": contentType },
+      });
+      forwardSetCookies(res, response);
+      return response;
+    }
 
     try {
       const data = JSON.parse(text);
@@ -101,9 +130,30 @@ export function createProxyHandler(config: ProxyHandlerConfig) {
       forwardSetCookies(res, response);
       return response;
     } catch {
-      const fallbackResp = new NextResponse(text, { status: res.status });
-      forwardSetCookies(res, fallbackResp);
-      return fallbackResp;
+      const response = new NextResponse(text, { status: res.status });
+      forwardSetCookies(res, response);
+      return response;
     }
   };
 }
+
+/**
+ * Default proxy handler using `NEXT_PUBLIC_AUTHSOME_API_URL` env var.
+ * Export this directly from your route file for zero-config setup:
+ *
+ * ```ts
+ * // app/api/auth/[...path]/route.ts
+ * export { GET, POST, PUT, DELETE, PATCH } from "@authsome/ui-nextjs/proxy";
+ * ```
+ */
+const defaultHandler = createProxyHandler({
+  baseURL: (typeof process !== "undefined" ? process.env?.NEXT_PUBLIC_AUTHSOME_API_URL : undefined) ?? "",
+});
+
+export {
+  defaultHandler as GET,
+  defaultHandler as POST,
+  defaultHandler as PUT,
+  defaultHandler as DELETE,
+  defaultHandler as PATCH,
+};

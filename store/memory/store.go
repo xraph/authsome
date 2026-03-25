@@ -403,6 +403,17 @@ func (s *Store) GetAppByPublishableKey(_ context.Context, key string) (*app.App,
 	return nil, store.ErrNotFound
 }
 
+func (s *Store) GetPlatformApp(_ context.Context) (*app.App, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, a := range s.apps {
+		if a.IsPlatform {
+			return a, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
 func (s *Store) UpdateApp(_ context.Context, a *app.App) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

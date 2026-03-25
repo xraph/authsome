@@ -466,7 +466,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return fmt.Errorf("social: expected forge.Router, got %T", r)
 	}
 
-	g := router.Group("/v1/auth/social", forge.WithGroupTags("Social OAuth"))
+	g := router.Group("/v1/social", forge.WithGroupTags("Social OAuth"))
 
 	if err := g.POST("/:provider", p.handleStart,
 		forge.WithSummary("Start OAuth flow"),
@@ -522,10 +522,35 @@ type CallbackResponse struct {
 // ──────────────────────────────────────────────────
 
 // handleStart initiates the OAuth flow by returning the authorization URL.
+// resolveAppID returns the app ID from the request scope, falling back to
+// the plugin-level default. This allows multi-app deployments where each
+// app can initiate its own social login flow.
+func (p *Plugin) resolveAppID(ctx forge.Context) (id.AppID, error) {
+	if scopeAppID := forge.AppIDFrom(ctx.Context()); scopeAppID != "" {
+		return id.ParseAppID(scopeAppID)
+	}
+	if p.appID != "" {
+		return id.ParseAppID(p.appID)
+	}
+	return id.AppID{}, fmt.Errorf("no app_id available")
+}
+
 func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartResponse, error) {
 	provider, ok := p.resolveProvider(ctx.Context(), req.Provider)
 	if !ok {
 		return nil, forge.BadRequest(fmt.Sprintf("unsupported provider: %s", req.Provider))
+	}
+
+	appID, err := p.resolveAppID(ctx)
+	if err != nil {
+		return nil, forge.BadRequest("unable to determine app_id for social login")
+	}
+
+	// Resolve the default environment so the callback knows which env
+	// the user should be created in (supports multi-app / multi-env).
+	var envIDStr string
+	if env, _ := p.store.GetDefaultEnvironment(ctx.Context(), appID); env != nil {
+		envIDStr = env.ID.String()
 	}
 
 	state, err := generateState()
@@ -533,8 +558,14 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
 	}
 
-	// Store the state for CSRF protection
-	stateData, _ := json.Marshal(map[string]string{"provider": req.Provider})             //nolint:errcheck // marshaling known types
+	// Store the state for CSRF protection, including app and env IDs so the
+	// callback can resolve them without relying on global defaults.
+	stateInfo := map[string]string{
+		"provider": req.Provider,
+		"app_id":   appID.String(),
+		"env_id":   envIDStr,
+	}
+	stateData, _ := json.Marshal(stateInfo)                                                //nolint:errcheck // marshaling known types
 	_ = p.ceremonies.Set(ctx.Context(), "social:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	cfg := provider.OAuth2Config()
@@ -566,6 +597,17 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.BadRequest("invalid state parameter")
 	}
 
+	// Resolve the app ID from the state (set during handleStart).
+	appIDStr := stateInfo["app_id"]
+	if appIDStr == "" {
+		// Fallback for states created before app_id was stored.
+		appIDStr = p.appID
+	}
+	appID, err := id.ParseAppID(appIDStr)
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("invalid app_id in OAuth state: %w", err))
+	}
+
 	// Check for error from provider
 	if req.Error != "" {
 		return nil, forge.BadRequest(fmt.Sprintf("provider error: %s", req.Error))
@@ -588,13 +630,19 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.InternalError(fmt.Errorf("failed to fetch user from provider: %w", err))
 	}
 
-	appIDStr := p.appID
-	appID, err := id.ParseAppID(appIDStr)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("invalid app_id configuration: %w", err))
-	}
-
 	goCtx := ctx.Context()
+
+	// Resolve env ID from the state (set during handleStart). Fall back to
+	// the default environment when the state doesn't carry one.
+	var envID id.EnvironmentID
+	if eid := stateInfo["env_id"]; eid != "" {
+		envID, _ = id.ParseEnvironmentID(eid) //nolint:errcheck // best-effort; zero value is safe
+	}
+	if envID.IsNil() {
+		if env, _ := p.store.GetDefaultEnvironment(goCtx, appID); env != nil {
+			envID = env.ID
+		}
+	}
 
 	// Check if an OAuth connection already exists
 	var u *user.User
@@ -624,7 +672,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 				u = &user.User{
 					ID:        id.NewUserID(),
 					AppID:     appID,
-					Email:     strings.ToLower(providerUser.Email),
+					EnvID:     envID,
+					Email:         strings.ToLower(providerUser.Email),
+					EmailVerified: true, // Social-authenticated emails are pre-verified by the provider.
 					FirstName: providerUser.FirstName,
 					LastName:  providerUser.LastName,
 					Image:     providerUser.AvatarURL,
@@ -643,6 +693,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 			u = &user.User{
 				ID:        id.NewUserID(),
 				AppID:     appID,
+				EnvID:     envID,
 				FirstName: providerUser.FirstName,
 				LastName:  providerUser.LastName,
 				Image:     providerUser.AvatarURL,
@@ -690,6 +741,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", err))
 	}
+	sess.EnvID = envID
 
 	if err := p.store.CreateSession(goCtx, sess); err != nil {
 		return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
@@ -707,6 +759,18 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 
 	// Set httpOnly session cookie for browser-based flows.
 	p.setSessionCookie(ctx, sess.Token, int(sessCfg.TokenTTL.Seconds()))
+
+	// Browser-based OAuth callbacks arrive as GET redirects. Respond with a
+	// small HTML page that closes the popup (or redirects to "/" for
+	// non-popup flows) so the parent window can pick up the session cookie.
+	if ctx.Request().Method == http.MethodGet {
+		ctx.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
+		ctx.Response().WriteHeader(http.StatusOK)
+		_, _ = ctx.Response().Write([]byte(`<!DOCTYPE html><html><head><title>Login successful</title></head><body><script>` +
+			`if(window.opener){window.close()}else{window.location.href="/"}` +
+			`</script><p>Login successful. You can close this window.</p></body></html>`))
+		return nil, nil
+	}
 
 	return &CallbackResponse{
 		User:         u,
@@ -777,21 +841,72 @@ func (p *Plugin) UnlinkAuthMethod(ctx context.Context, userID id.UserID, provide
 // Cookie helpers
 // ──────────────────────────────────────────────────
 
+// resolveCookieSetting is a helper that reads a string setting from the
+// settings manager, returning fallback when the key is unregistered or empty.
+func (p *Plugin) resolveCookieSetting(ctx context.Context, key, fallback string) string {
+	if p.settingsMgr == nil {
+		return fallback
+	}
+	raw, err := p.settingsMgr.Resolve(ctx, key, settings.ResolveOpts{})
+	if err != nil {
+		return fallback
+	}
+	var v string
+	if err := json.Unmarshal(raw, &v); err != nil || v == "" {
+		return fallback
+	}
+	return v
+}
+
+// resolveCookieSettingBool reads a boolean setting from the settings manager.
+func (p *Plugin) resolveCookieSettingBool(ctx context.Context, key string, fallback bool) bool {
+	if p.settingsMgr == nil {
+		return fallback
+	}
+	raw, err := p.settingsMgr.Resolve(ctx, key, settings.ResolveOpts{})
+	if err != nil {
+		return fallback
+	}
+	var v bool
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return fallback
+	}
+	return v
+}
+
 // setSessionCookie sets an httpOnly session cookie on the response.
-// It uses the default cookie name "authsome_session_token" and auto-detects
-// HTTPS for the Secure flag. For advanced cookie configuration (custom name,
-// domain, sameSite), the core API handlers use the dynamic settings system.
+// It reads cookie configuration from the dynamic settings system (same
+// settings used by the core API handlers) so the cookie name, domain,
+// path, and security flags stay consistent across all auth flows.
 func (p *Plugin) setSessionCookie(ctx forge.Context, token string, maxAge int) {
+	goCtx := ctx.Context()
+
+	name := p.resolveCookieSetting(goCtx, "session.cookie_name", "authsome_session_token")
+	domain := p.resolveCookieSetting(goCtx, "session.cookie_domain", "")
+	cookiePath := p.resolveCookieSetting(goCtx, "session.cookie_path", "/")
+	httpOnly := p.resolveCookieSettingBool(goCtx, "session.cookie_http_only", true)
+	sameSiteStr := p.resolveCookieSetting(goCtx, "session.cookie_same_site", "lax")
+
+	sameSite := http.SameSiteLaxMode
+	switch sameSiteStr {
+	case "strict":
+		sameSite = http.SameSiteStrictMode
+	case "none":
+		sameSite = http.SameSiteNoneMode
+	}
+
 	r := ctx.Request()
 	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+
 	http.SetCookie(ctx.Response(), &http.Cookie{
-		Name:     "authsome_session_token",
+		Name:     name,
 		Value:    token,
-		Path:     "/",
+		Path:     cookiePath,
+		Domain:   domain,
 		MaxAge:   maxAge,
-		HttpOnly: true,
+		HttpOnly: httpOnly,
 		Secure:   isHTTPS,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 	})
 }
 

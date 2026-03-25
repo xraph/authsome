@@ -121,7 +121,7 @@ func (g *Generator) Generate() *Spec {
 // ──────────────────────────────────────────────────
 
 func (g *Generator) addAuthPaths(spec *Spec) {
-	spec.Paths["/v1/auth/signup"] = &PathItem{
+	spec.Paths["/v1/signup"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Sign up a new user",
 			OperationID: "signUp",
@@ -145,7 +145,7 @@ func (g *Generator) addAuthPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/signin"] = &PathItem{
+	spec.Paths["/v1/signin"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Sign in with credentials",
 			OperationID: "signIn",
@@ -167,7 +167,7 @@ func (g *Generator) addAuthPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/signout"] = &PathItem{
+	spec.Paths["/v1/signout"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Sign out (revoke session)",
 			OperationID: "signOut",
@@ -183,7 +183,7 @@ func (g *Generator) addAuthPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/refresh"] = &PathItem{
+	spec.Paths["/v1/refresh"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Refresh session tokens",
 			OperationID: "refreshSession",
@@ -203,7 +203,7 @@ func (g *Generator) addAuthPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/health"] = &PathItem{
+	spec.Paths["/v1/health"] = &PathItem{
 		Get: &Operation{
 			Summary:     "Health check",
 			OperationID: "healthCheck",
@@ -223,7 +223,7 @@ func (g *Generator) addAuthPaths(spec *Spec) {
 }
 
 func (g *Generator) addPasswordPaths(spec *Spec) {
-	spec.Paths["/v1/auth/forgot-password"] = &PathItem{
+	spec.Paths["/v1/forgot-password"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Request password reset",
 			Description: "Sends a password reset email. Always returns success to prevent email enumeration.",
@@ -247,7 +247,7 @@ func (g *Generator) addPasswordPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/reset-password"] = &PathItem{
+	spec.Paths["/v1/reset-password"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Reset password with token",
 			Description: "Resets the user password using a token from the forgot-password email.",
@@ -272,7 +272,7 @@ func (g *Generator) addPasswordPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/change-password"] = &PathItem{
+	spec.Paths["/v1/change-password"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Change password",
 			Description: "Changes the authenticated user's password.",
@@ -298,7 +298,7 @@ func (g *Generator) addPasswordPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/verify-email"] = &PathItem{
+	spec.Paths["/v1/verify-email"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Verify email address",
 			Description: "Verifies the user's email address using a verification token.",
@@ -322,7 +322,7 @@ func (g *Generator) addPasswordPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/resend-verification"] = &PathItem{
+	spec.Paths["/v1/resend-verification"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Resend email verification",
 			Description: "Resends the email verification link to the authenticated user.",
@@ -341,7 +341,7 @@ func (g *Generator) addPasswordPaths(spec *Spec) {
 }
 
 func (g *Generator) addUserPaths(spec *Spec) {
-	spec.Paths["/v1/auth/me"] = &PathItem{
+	spec.Paths["/v1/me"] = &PathItem{
 		Get: &Operation{
 			Summary:     "Get current user",
 			OperationID: "getMe",
@@ -374,7 +374,7 @@ func (g *Generator) addUserPaths(spec *Spec) {
 }
 
 func (g *Generator) addSessionPaths(spec *Spec) {
-	spec.Paths["/v1/auth/sessions"] = &PathItem{
+	spec.Paths["/v1/sessions"] = &PathItem{
 		Get: &Operation{
 			Summary:     "List active sessions",
 			OperationID: "listSessions",
@@ -392,7 +392,7 @@ func (g *Generator) addSessionPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/sessions/{id}"] = &PathItem{
+	spec.Paths["/v1/sessions/{id}"] = &PathItem{
 		Delete: &Operation{
 			Summary:     "Revoke a session",
 			OperationID: "revokeSession",
@@ -413,7 +413,7 @@ func (g *Generator) addSessionPaths(spec *Spec) {
 }
 
 func (g *Generator) addOrgPaths(spec *Spec) {
-	spec.Paths["/v1/auth/orgs"] = &PathItem{
+	spec.Paths["/v1/orgs"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Create organization",
 			Description: "Creates a new organization.",
@@ -453,7 +453,7 @@ func (g *Generator) addOrgPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/orgs/{orgId}"] = &PathItem{
+	spec.Paths["/v1/orgs/{orgId}"] = &PathItem{
 		Get: &Operation{
 			Summary:     "Get organization",
 			OperationID: "getOrg",
@@ -506,7 +506,7 @@ func (g *Generator) addOrgPaths(spec *Spec) {
 	}
 
 	// Members
-	spec.Paths["/v1/auth/orgs/{orgId}/members"] = &PathItem{
+	spec.Paths["/v1/orgs/{orgId}/members"] = &PathItem{
 		Get: &Operation{
 			Summary:     "List organization members",
 			OperationID: "listMembers",
@@ -549,7 +549,7 @@ func (g *Generator) addOrgPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/orgs/{orgId}/members/{memberId}"] = &PathItem{
+	spec.Paths["/v1/orgs/{orgId}/members/{memberId}"] = &PathItem{
 		Delete: &Operation{
 			Summary:     "Remove organization member",
 			OperationID: "removeMember",
@@ -570,7 +570,7 @@ func (g *Generator) addOrgPaths(spec *Spec) {
 	}
 
 	// Invitations
-	spec.Paths["/v1/auth/orgs/{orgId}/invitations"] = &PathItem{
+	spec.Paths["/v1/orgs/{orgId}/invitations"] = &PathItem{
 		Get: &Operation{
 			Summary:     "List organization invitations",
 			OperationID: "listInvitations",
@@ -614,7 +614,7 @@ func (g *Generator) addOrgPaths(spec *Spec) {
 }
 
 func (g *Generator) addDevicePaths(spec *Spec) {
-	spec.Paths["/v1/auth/devices"] = &PathItem{
+	spec.Paths["/v1/devices"] = &PathItem{
 		Get: &Operation{
 			Summary:     "List devices",
 			Description: "Returns all tracked devices for the authenticated user.",
@@ -633,7 +633,7 @@ func (g *Generator) addDevicePaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/devices/{deviceId}"] = &PathItem{
+	spec.Paths["/v1/devices/{deviceId}"] = &PathItem{
 		Delete: &Operation{
 			Summary:     "Delete device",
 			Description: "Removes a tracked device.",
@@ -655,7 +655,7 @@ func (g *Generator) addDevicePaths(spec *Spec) {
 }
 
 func (g *Generator) addAPIKeyPaths(spec *Spec) {
-	spec.Paths["/v1/auth/keys"] = &PathItem{
+	spec.Paths["/v1/keys"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Create API key",
 			Description: "Creates a new API key. The raw key is returned only once.",
@@ -701,7 +701,7 @@ func (g *Generator) addAPIKeyPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/keys/{keyId}"] = &PathItem{
+	spec.Paths["/v1/keys/{keyId}"] = &PathItem{
 		Delete: &Operation{
 			Summary:     "Revoke API key",
 			OperationID: "revokeAPIKey",
@@ -722,7 +722,7 @@ func (g *Generator) addAPIKeyPaths(spec *Spec) {
 }
 
 func (g *Generator) addSocialPaths(spec *Spec) {
-	spec.Paths["/v1/auth/social/{provider}"] = &PathItem{
+	spec.Paths["/v1/social/{provider}"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Start social OAuth flow",
 			OperationID: "socialStart",
@@ -741,7 +741,7 @@ func (g *Generator) addSocialPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/social/{provider}/callback"] = &PathItem{
+	spec.Paths["/v1/social/{provider}/callback"] = &PathItem{
 		Get: &Operation{
 			Summary:     "OAuth callback",
 			OperationID: "socialCallback",
@@ -761,7 +761,7 @@ func (g *Generator) addSocialPaths(spec *Spec) {
 }
 
 func (g *Generator) addMagicLinkPaths(spec *Spec) {
-	spec.Paths["/v1/auth/magic-link/send"] = &PathItem{
+	spec.Paths["/v1/magic-link/send"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Send magic link email",
 			OperationID: "magicLinkSend",
@@ -784,7 +784,7 @@ func (g *Generator) addMagicLinkPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/magic-link/verify"] = &PathItem{
+	spec.Paths["/v1/magic-link/verify"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Verify magic link token",
 			OperationID: "magicLinkVerify",
@@ -806,7 +806,7 @@ func (g *Generator) addMagicLinkPaths(spec *Spec) {
 }
 
 func (g *Generator) addMFAPaths(spec *Spec) {
-	spec.Paths["/v1/auth/mfa/enroll"] = &PathItem{
+	spec.Paths["/v1/mfa/enroll"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Enroll in MFA",
 			OperationID: "mfaEnroll",
@@ -827,7 +827,7 @@ func (g *Generator) addMFAPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/mfa/verify"] = &PathItem{
+	spec.Paths["/v1/mfa/verify"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Verify MFA code",
 			OperationID: "mfaVerify",
@@ -853,7 +853,7 @@ func (g *Generator) addMFAPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/mfa/challenge"] = &PathItem{
+	spec.Paths["/v1/mfa/challenge"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Complete MFA challenge",
 			Description: "Completes an MFA challenge during login. Returns full auth response on success.",
@@ -875,7 +875,7 @@ func (g *Generator) addMFAPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/mfa/sms/send"] = &PathItem{
+	spec.Paths["/v1/mfa/sms/send"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Send SMS verification code",
 			Description: "Sends an SMS verification code to the phone number associated with the MFA enrollment.",
@@ -899,7 +899,7 @@ func (g *Generator) addMFAPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/mfa/sms/verify"] = &PathItem{
+	spec.Paths["/v1/mfa/sms/verify"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Verify SMS code",
 			Description: "Verifies an SMS code for MFA enrollment.",
@@ -924,7 +924,7 @@ func (g *Generator) addMFAPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/mfa/recovery/verify"] = &PathItem{
+	spec.Paths["/v1/mfa/recovery/verify"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Verify MFA recovery code",
 			Description: "Verifies a recovery code as an alternative to MFA during login.",
@@ -947,7 +947,7 @@ func (g *Generator) addMFAPaths(spec *Spec) {
 }
 
 func (g *Generator) addSSOPaths(spec *Spec) {
-	spec.Paths["/v1/auth/sso/{provider}/login"] = &PathItem{
+	spec.Paths["/v1/sso/{provider}/login"] = &PathItem{
 		Post: &Operation{
 			Summary:     "Start SSO login flow",
 			OperationID: "ssoLogin",
@@ -969,7 +969,7 @@ func (g *Generator) addSSOPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/sso/{provider}/callback"] = &PathItem{
+	spec.Paths["/v1/sso/{provider}/callback"] = &PathItem{
 		Post: &Operation{
 			Summary:     "SSO OIDC callback",
 			OperationID: "ssoCallback",
@@ -993,7 +993,7 @@ func (g *Generator) addSSOPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/sso/{provider}/acs"] = &PathItem{
+	spec.Paths["/v1/sso/{provider}/acs"] = &PathItem{
 		Post: &Operation{
 			Summary:     "SSO SAML ACS endpoint",
 			OperationID: "ssoACS",
@@ -1154,7 +1154,7 @@ func (g *Generator) addAdminPaths(spec *Spec) {
 }
 
 func (g *Generator) addGDPRPaths(spec *Spec) {
-	spec.Paths["/v1/auth/me"].Delete = &Operation{
+	spec.Paths["/v1/me"].Delete = &Operation{
 		Summary:     "Delete account (self-service)",
 		Description: "Soft-deletes the authenticated user's account and anonymizes PII.",
 		OperationID: "deleteAccount",
@@ -1169,7 +1169,7 @@ func (g *Generator) addGDPRPaths(spec *Spec) {
 		},
 	}
 
-	spec.Paths["/v1/auth/me/export"] = &PathItem{
+	spec.Paths["/v1/me/export"] = &PathItem{
 		Get: &Operation{
 			Summary:     "Export user data (GDPR)",
 			Description: "Returns all data associated with the authenticated user.",

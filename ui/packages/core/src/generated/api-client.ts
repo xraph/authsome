@@ -12,21 +12,43 @@ import type {
   AdminStopImpersonationRequest,
   AdminUnbanUserRequest,
   AdminUserListResponse,
+  AuthMethod,
   AuthResponse,
+  BulkError,
+  BulkImportResult,
+  BulkRevokeSessionsRequest,
+  BulkRevokeSessionsResponse,
   CallbackRequest,
   CallbackResponse,
   ChallengeRequest,
   ChallengeResponse,
   CheckSlugRequest,
+  ClientConfigBranding,
+  ClientConfigFieldValidation,
+  ClientConfigMFA,
+  ClientConfigResponse,
+  ClientConfigSSO,
+  ClientConfigSSOConnection,
+  ClientConfigSelectOption,
+  ClientConfigSignupField,
+  ClientConfigSocial,
+  ClientConfigSocialProvider,
+  ClientConfigToggle,
+  CloneEnvironmentResponse,
+  Config,
   CreateKeyRequest,
   CreateKeyResponse,
   CredentialInfo,
+  Definition,
+  DefinitionGroup,
   DeleteAccountRequest,
+  DeleteAppClientConfigRequest,
+  DeleteAppSessionConfigRequest,
   DeleteDeviceRequest,
   DeleteOrgRequest,
   DeleteRequest,
   DeleteResponse,
-  DeleteRoleRequest,
+  DeleteSettingRequest,
   DeleteTeamRequest,
   DeleteWebhookRequest,
   Device,
@@ -35,32 +57,40 @@ import type {
   DisableResponse,
   EnrollRequest,
   EnrollResponse,
+  Environment,
+  EnvironmentListResponse,
+  EnvironmentSettingsResponse,
   ExportDataRequest,
   ForgotPasswordResponse,
+  GetAppClientConfigRequest,
+  GetAppSessionConfigRequest,
+  GetClientConfigRequest,
   GetDeviceRequest,
   GetMeRequest,
   GetOrgRequest,
-  GetRoleRequest,
   GetTeamRequest,
   GetWebhookRequest,
   HealthResponse,
-  ID,
   Invitation,
   InvitationListResponse,
   KeyListItem,
+  ListAuthMethodsRequest,
+  ListAuthMethodsResponse,
+  ListDefinitionsResponse,
   ListDevicesRequest,
+  ListEnvironmentsRequest,
   ListInvitationsRequest,
   ListKeysRequest,
   ListKeysResponse,
   ListMembersRequest,
+  ListNamespaceDefinitionsRequest,
   ListOrgsRequest,
   ListRequest,
   ListResponse,
-  ListRolePermissionsRequest,
   ListRolesRequest,
   ListSessionsRequest,
+  ListSettingsDefinitionsRequest,
   ListTeamsRequest,
-  ListUserRolesRequest,
   ListWebhooksRequest,
   LoginBeginRequest,
   LoginBeginResponse,
@@ -71,6 +101,7 @@ import type {
   Member,
   MemberListResponse,
   Object,
+  ObjectFieldDef,
   OrgListResponse,
   Organization,
   Permission,
@@ -84,7 +115,11 @@ import type {
   RegisterFinishRequest,
   RegisterFinishResponse,
   RemoveMemberRequest,
-  RemovePermissionRequest,
+  ResolveSettingRequest,
+  ResolveSettingsRequest,
+  ResolvedSetting,
+  ResolvedSettingResponse,
+  ResolvedSettingsResponse,
   RevokeKeyRequest,
   RevokeSessionRequest,
   Role,
@@ -93,9 +128,13 @@ import type {
   SMSSendResponse,
   SMSVerifyRequest,
   SMSVerifyResponse,
+  ScopeValue,
+  SelectOption,
   SendRequest,
   SendResponse,
   SessionListResponse,
+  SettingValueResponse,
+  Settings,
   SignOutRequest,
   SlugAvailableResponse,
   StartRequest,
@@ -105,16 +144,32 @@ import type {
   TeamListResponse,
   TokenResponse,
   TrustDeviceRequest,
+  UIMetadata,
+  UnenforceSettingRequest,
+  UnlinkAuthMethodRequest,
+  UnlinkAuthMethodResponse,
   User,
   UserRoleListResponse,
+  Validation,
   VerifyMFARequest,
   VerifyMFAResponse,
   VerifyRequest,
   VerifyResponse,
+  VisibilityCondition,
   Webhook,
   WebhookListResponse,
+  SetAppClientConfigRequest,
+  SetAppSessionConfigRequest,
+  AdminBulkRevokeSessionsRequest,
+  AdminBulkImportUsersRequest,
+  EnforceSettingRequest,
+  SetSettingRequest,
   AdminBanUserRequest,
   ChangePasswordRequest,
+  CreateEnvironmentRequest,
+  UpdateEnvironmentRequest,
+  CloneEnvironmentRequest,
+  UpdateEnvironmentSettingsRequest,
   ForgotPasswordRequest,
   CreateAPIKeyRequest,
   RevokeAPIKeyRequest,
@@ -146,11 +201,11 @@ import type {
   DeletePasskeyRequest,
   RefreshRequest,
   ResetPasswordRequest,
-  CreateRoleRequest,
-  UpdateRoleRequest,
-  AssignRoleRequest,
-  AddPermissionRequest,
-  UnassignRoleRequest,
+  AuthsomeCreateRoleRequest,
+  AuthsomeUpdateRoleRequest,
+  AuthsomeAssignRoleRequest,
+  AuthsomeAddPermissionRequest,
+  AuthsomeUnassignRoleRequest,
   SignInRequest,
   SignUpRequest,
   StartOAuthRequest,
@@ -209,11 +264,123 @@ export class AuthClient {
   }
 
   /**
+   * Get per-app client config overrides
+   * GET /v1/admin/apps/{appId}/client-config
+   */
+  async getAppClientConfig(appId: string, token: string): Promise<Config> {
+    const path = `/v1/admin/apps/${appId}/client-config`;
+    return this.request<Config>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Set per-app client config overrides
+   * PUT /v1/admin/apps/{appId}/client-config
+   */
+  async setAppClientConfig(appId: string, body: SetAppClientConfigRequest, token: string): Promise<Config> {
+    const path = `/v1/admin/apps/${appId}/client-config`;
+    return this.request<Config>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete per-app client config overrides
+   * DELETE /v1/admin/apps/{appId}/client-config
+   */
+  async deleteAppClientConfig(appId: string, body: DeleteAppClientConfigRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/admin/apps/${appId}/client-config`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get per-app session config
+   * GET /v1/admin/apps/{appId}/session-config
+   */
+  async getAppSessionConfig(appId: string, token: string): Promise<Config> {
+    const path = `/v1/admin/apps/${appId}/session-config`;
+    return this.request<Config>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Set per-app session config
+   * PUT /v1/admin/apps/{appId}/session-config
+   */
+  async setAppSessionConfig(appId: string, body: SetAppSessionConfigRequest, token: string): Promise<Config> {
+    const path = `/v1/admin/apps/${appId}/session-config`;
+    return this.request<Config>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete per-app session config
+   * DELETE /v1/admin/apps/{appId}/session-config
+   */
+  async deleteAppSessionConfig(appId: string, body: DeleteAppSessionConfigRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/admin/apps/${appId}/session-config`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Bulk revoke sessions (admin)
+   * DELETE /v1/admin/bulk/sessions
+   */
+  async adminBulkRevokeSessions(body: AdminBulkRevokeSessionsRequest, token: string): Promise<BulkRevokeSessionsResponse> {
+    const path = "/v1/admin/bulk/sessions";
+    return this.request<BulkRevokeSessionsResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Bulk import users (admin)
+   * POST /v1/admin/bulk/users/import
+   */
+  async adminBulkImportUsers(body: AdminBulkImportUsersRequest, token: string): Promise<BulkImportResult> {
+    const path = "/v1/admin/bulk/users/import";
+    return this.request<BulkImportResult>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Stop impersonation (admin)
-   * POST /v1/auth/admin/impersonate/stop
+   * POST /v1/admin/impersonate/stop
    */
   async adminStopImpersonation(body: AdminStopImpersonationRequest, token: string): Promise<StatusResponse> {
-    const path = "/v1/auth/admin/impersonate/stop";
+    const path = "/v1/admin/impersonate/stop";
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -224,10 +391,10 @@ export class AuthClient {
 
   /**
    * Impersonate user (admin)
-   * POST /v1/auth/admin/impersonate/{userId}
+   * POST /v1/admin/impersonate/{userId}
    */
   async adminImpersonate(userId: string, body: AdminImpersonateRequest, token: string): Promise<AuthResponse> {
-    const path = `/v1/auth/admin/impersonate/${userId}`;
+    const path = `/v1/admin/impersonate/${userId}`;
     return this.request<AuthResponse>(
       'POST',
       path,
@@ -238,10 +405,10 @@ export class AuthClient {
 
   /**
    * List organizations (admin)
-   * GET /v1/auth/admin/orgs
+   * GET /v1/admin/orgs
    */
   async adminListOrgs(token: string): Promise<OrgListResponse> {
-    const path = "/v1/auth/admin/orgs";
+    const path = "/v1/admin/orgs";
     return this.request<OrgListResponse>(
       'GET',
       path,
@@ -251,11 +418,123 @@ export class AuthClient {
   }
 
   /**
+   * List all setting definitions
+   * GET /v1/admin/settings/definitions
+   */
+  async listSettingsDefinitions(token: string): Promise<ListDefinitionsResponse> {
+    const path = "/v1/admin/settings/definitions";
+    return this.request<ListDefinitionsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * List definitions for a namespace
+   * GET /v1/admin/settings/definitions/{namespace}
+   */
+  async listNamespaceSettingsDefinitions(namespace: string, token: string): Promise<ListDefinitionsResponse> {
+    const path = `/v1/admin/settings/definitions/${namespace}`;
+    return this.request<ListDefinitionsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Enforce a setting value at a scope
+   * PUT /v1/admin/settings/enforce/{key}
+   */
+  async enforceSetting(key: string, body: EnforceSettingRequest, token: string): Promise<SettingValueResponse> {
+    const path = `/v1/admin/settings/enforce/${key}`;
+    return this.request<SettingValueResponse>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Remove enforcement from a setting
+   * DELETE /v1/admin/settings/enforce/{key}
+   */
+  async unenforceSetting(key: string, body: UnenforceSettingRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/admin/settings/enforce/${key}`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Resolve all settings at a scope
+   * GET /v1/admin/settings/resolve
+   */
+  async resolveSettings(token: string): Promise<ResolvedSettingsResponse> {
+    const path = "/v1/admin/settings/resolve";
+    return this.request<ResolvedSettingsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Resolve one setting with cascade details
+   * GET /v1/admin/settings/resolve/{key}
+   */
+  async resolveSetting(key: string, token: string): Promise<ResolvedSettingResponse> {
+    const path = `/v1/admin/settings/resolve/${key}`;
+    return this.request<ResolvedSettingResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Set a setting value at a scope
+   * PUT /v1/admin/settings/values/{key}
+   */
+  async setSetting(key: string, body: SetSettingRequest, token: string): Promise<SettingValueResponse> {
+    const path = `/v1/admin/settings/values/${key}`;
+    return this.request<SettingValueResponse>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete a setting override at a scope
+   * DELETE /v1/admin/settings/values/{key}
+   */
+  async deleteSetting(key: string, body: DeleteSettingRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/admin/settings/values/${key}`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Get stats (admin)
-   * GET /v1/auth/admin/stats
+   * GET /v1/admin/stats
    */
   async adminGetStats(token: string): Promise<AdminStatsResponse> {
-    const path = "/v1/auth/admin/stats";
+    const path = "/v1/admin/stats";
     return this.request<AdminStatsResponse>(
       'GET',
       path,
@@ -266,10 +545,10 @@ export class AuthClient {
 
   /**
    * List users (admin)
-   * GET /v1/auth/admin/users
+   * GET /v1/admin/users
    */
   async adminListUsers(token: string): Promise<AdminUserListResponse> {
-    const path = "/v1/auth/admin/users";
+    const path = "/v1/admin/users";
     return this.request<AdminUserListResponse>(
       'GET',
       path,
@@ -280,10 +559,10 @@ export class AuthClient {
 
   /**
    * Get user (admin)
-   * GET /v1/auth/admin/users/{userId}
+   * GET /v1/admin/users/{userId}
    */
   async adminGetUser(userId: string, token: string): Promise<User> {
-    const path = `/v1/auth/admin/users/${userId}`;
+    const path = `/v1/admin/users/${userId}`;
     return this.request<User>(
       'GET',
       path,
@@ -294,10 +573,10 @@ export class AuthClient {
 
   /**
    * Delete user (admin)
-   * DELETE /v1/auth/admin/users/{userId}
+   * DELETE /v1/admin/users/{userId}
    */
   async adminDeleteUser(userId: string, body: AdminDeleteUserRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/admin/users/${userId}`;
+    const path = `/v1/admin/users/${userId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -308,10 +587,10 @@ export class AuthClient {
 
   /**
    * Ban user (admin)
-   * POST /v1/auth/admin/users/{userId}/ban
+   * POST /v1/admin/users/{userId}/ban
    */
   async adminBanUser(userId: string, body: AdminBanUserRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/admin/users/${userId}/ban`;
+    const path = `/v1/admin/users/${userId}/ban`;
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -322,10 +601,10 @@ export class AuthClient {
 
   /**
    * Unban user (admin)
-   * POST /v1/auth/admin/users/{userId}/unban
+   * POST /v1/admin/users/{userId}/unban
    */
   async adminUnbanUser(userId: string, body: AdminUnbanUserRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/admin/users/${userId}/unban`;
+    const path = `/v1/admin/users/${userId}/unban`;
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -336,10 +615,10 @@ export class AuthClient {
 
   /**
    * Change password
-   * POST /v1/auth/change-password
+   * POST /v1/change-password
    */
   async changePassword(body: ChangePasswordRequest, token: string): Promise<StatusResponse> {
-    const path = "/v1/auth/change-password";
+    const path = "/v1/change-password";
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -349,11 +628,25 @@ export class AuthClient {
   }
 
   /**
+   * Get client configuration
+   * GET /v1/client-config
+   */
+  async getClientConfig(token: string): Promise<ClientConfigResponse> {
+    const path = "/v1/client-config";
+    return this.request<ClientConfigResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
    * List devices
-   * GET /v1/auth/devices
+   * GET /v1/devices
    */
   async listDevices(token: string): Promise<DeviceListResponse> {
-    const path = "/v1/auth/devices";
+    const path = "/v1/devices";
     return this.request<DeviceListResponse>(
       'GET',
       path,
@@ -364,10 +657,10 @@ export class AuthClient {
 
   /**
    * Get device
-   * GET /v1/auth/devices/{deviceId}
+   * GET /v1/devices/{deviceId}
    */
   async getDevice(deviceId: string, token: string): Promise<Device> {
-    const path = `/v1/auth/devices/${deviceId}`;
+    const path = `/v1/devices/${deviceId}`;
     return this.request<Device>(
       'GET',
       path,
@@ -378,10 +671,10 @@ export class AuthClient {
 
   /**
    * Delete device
-   * DELETE /v1/auth/devices/{deviceId}
+   * DELETE /v1/devices/{deviceId}
    */
   async deleteDevice(deviceId: string, body: DeleteDeviceRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/devices/${deviceId}`;
+    const path = `/v1/devices/${deviceId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -392,10 +685,10 @@ export class AuthClient {
 
   /**
    * Trust device
-   * PATCH /v1/auth/devices/{deviceId}/trust
+   * PATCH /v1/devices/{deviceId}/trust
    */
   async trustDevice(deviceId: string, body: TrustDeviceRequest, token: string): Promise<Device> {
-    const path = `/v1/auth/devices/${deviceId}/trust`;
+    const path = `/v1/devices/${deviceId}/trust`;
     return this.request<Device>(
       'PATCH',
       path,
@@ -405,11 +698,137 @@ export class AuthClient {
   }
 
   /**
+   * List environments
+   * GET /v1/environments
+   */
+  async listEnvironments(token: string): Promise<EnvironmentListResponse> {
+    const path = "/v1/environments";
+    return this.request<EnvironmentListResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create environment
+   * POST /v1/environments
+   */
+  async createEnvironment(body: CreateEnvironmentRequest, token: string): Promise<Environment> {
+    const path = "/v1/environments";
+    return this.request<Environment>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get environment
+   * GET /v1/environments/{envId}
+   */
+  async getEnvironment(envId: string, token: string): Promise<Environment> {
+    const path = `/v1/environments/${envId}`;
+    return this.request<Environment>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Update environment
+   * PATCH /v1/environments/{envId}
+   */
+  async updateEnvironment(envId: string, body: UpdateEnvironmentRequest, token: string): Promise<Environment> {
+    const path = `/v1/environments/${envId}`;
+    return this.request<Environment>(
+      'PATCH',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete environment
+   * DELETE /v1/environments/{envId}
+   */
+  async deleteEnvironment(envId: string, token: string): Promise<StatusResponse> {
+    const path = `/v1/environments/${envId}`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Clone environment
+   * POST /v1/environments/{envId}/clone
+   */
+  async cloneEnvironment(envId: string, body: CloneEnvironmentRequest, token: string): Promise<CloneEnvironmentResponse> {
+    const path = `/v1/environments/${envId}/clone`;
+    return this.request<CloneEnvironmentResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Set default environment
+   * POST /v1/environments/{envId}/set-default
+   */
+  async setDefaultEnvironment(envId: string, token: string): Promise<StatusResponse> {
+    const path = `/v1/environments/${envId}/set-default`;
+    return this.request<StatusResponse>(
+      'POST',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Get environment settings
+   * GET /v1/environments/{envId}/settings
+   */
+  async getEnvironmentSettings(envId: string, token: string): Promise<EnvironmentSettingsResponse> {
+    const path = `/v1/environments/${envId}/settings`;
+    return this.request<EnvironmentSettingsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Update environment settings
+   * PATCH /v1/environments/{envId}/settings
+   */
+  async updateEnvironmentSettings(envId: string, body: UpdateEnvironmentSettingsRequest, token: string): Promise<Environment> {
+    const path = `/v1/environments/${envId}/settings`;
+    return this.request<Environment>(
+      'PATCH',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Forgot password
-   * POST /v1/auth/forgot-password
+   * POST /v1/forgot-password
    */
   async forgotPassword(body: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
-    const path = "/v1/auth/forgot-password";
+    const path = "/v1/forgot-password";
     return this.request<ForgotPasswordResponse>(
       'POST',
       path,
@@ -419,10 +838,10 @@ export class AuthClient {
 
   /**
    * Health check
-   * GET /v1/auth/health
+   * GET /v1/health
    */
   async getHealth(): Promise<HealthResponse> {
-    const path = "/v1/auth/health";
+    const path = "/v1/health";
     return this.request<HealthResponse>(
       'GET',
       path,
@@ -432,10 +851,10 @@ export class AuthClient {
 
   /**
    * List API keys
-   * GET /v1/auth/keys
+   * GET /v1/keys
    */
   async listAPIKeys(token: string): Promise<ListKeysResponse> {
-    const path = "/v1/auth/keys";
+    const path = "/v1/keys";
     return this.request<ListKeysResponse>(
       'GET',
       path,
@@ -446,10 +865,10 @@ export class AuthClient {
 
   /**
    * Create API key
-   * POST /v1/auth/keys
+   * POST /v1/keys
    */
   async createAPIKey(body: CreateAPIKeyRequest, token: string): Promise<CreateKeyResponse> {
-    const path = "/v1/auth/keys";
+    const path = "/v1/keys";
     return this.request<CreateKeyResponse>(
       'POST',
       path,
@@ -460,10 +879,10 @@ export class AuthClient {
 
   /**
    * Revoke API key
-   * DELETE /v1/auth/keys/{keyId}
+   * DELETE /v1/keys/{keyId}
    */
   async revokeAPIKey(keyId: string, body: RevokeAPIKeyRequest, token: string): Promise<void> {
-    const path = `/v1/auth/keys/${keyId}`;
+    const path = `/v1/keys/${keyId}`;
     return this.request<void>(
       'DELETE',
       path,
@@ -474,10 +893,10 @@ export class AuthClient {
 
   /**
    * Send magic link
-   * POST /v1/auth/magic-link/send
+   * POST /v1/magic-link/send
    */
   async sendMagicLink(body: SendMagicLinkRequest): Promise<SendResponse> {
-    const path = "/v1/auth/magic-link/send";
+    const path = "/v1/magic-link/send";
     return this.request<SendResponse>(
       'POST',
       path,
@@ -487,10 +906,10 @@ export class AuthClient {
 
   /**
    * Verify magic link
-   * POST /v1/auth/magic-link/verify
+   * POST /v1/magic-link/verify
    */
   async verifyMagicLink(body: VerifyMagicLinkRequest): Promise<VerifyResponse> {
-    const path = "/v1/auth/magic-link/verify";
+    const path = "/v1/magic-link/verify";
     return this.request<VerifyResponse>(
       'POST',
       path,
@@ -500,10 +919,10 @@ export class AuthClient {
 
   /**
    * Get current user
-   * GET /v1/auth/me
+   * GET /v1/me
    */
   async getMe(token: string): Promise<User> {
-    const path = "/v1/auth/me";
+    const path = "/v1/me";
     return this.request<User>(
       'GET',
       path,
@@ -514,10 +933,10 @@ export class AuthClient {
 
   /**
    * Update current user
-   * PATCH /v1/auth/me
+   * PATCH /v1/me
    */
   async updateMe(body: UpdateMeRequest, token: string): Promise<User> {
-    const path = "/v1/auth/me";
+    const path = "/v1/me";
     return this.request<User>(
       'PATCH',
       path,
@@ -528,10 +947,10 @@ export class AuthClient {
 
   /**
    * Delete account
-   * DELETE /v1/auth/me
+   * DELETE /v1/me
    */
   async deleteMe(body: DeleteMeRequest, token: string): Promise<StatusResponse> {
-    const path = "/v1/auth/me";
+    const path = "/v1/me";
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -541,11 +960,39 @@ export class AuthClient {
   }
 
   /**
+   * List linked auth methods
+   * GET /v1/me/auth-methods
+   */
+  async listAuthMethods(token: string): Promise<ListAuthMethodsResponse> {
+    const path = "/v1/me/auth-methods";
+    return this.request<ListAuthMethodsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Unlink an auth method
+   * DELETE /v1/me/auth-methods/{provider}
+   */
+  async unlinkAuthMethod(provider: string, body: UnlinkAuthMethodRequest, token: string): Promise<UnlinkAuthMethodResponse> {
+    const path = `/v1/me/auth-methods/${provider}`;
+    return this.request<UnlinkAuthMethodResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Export user data
-   * GET /v1/auth/me/export
+   * GET /v1/me/export
    */
   async exportMyData(token: string): Promise<Record<string, unknown>> {
-    const path = "/v1/auth/me/export";
+    const path = "/v1/me/export";
     return this.request<Record<string, unknown>>(
       'GET',
       path,
@@ -556,10 +1003,10 @@ export class AuthClient {
 
   /**
    * MFA challenge
-   * POST /v1/auth/mfa/challenge
+   * POST /v1/mfa/challenge
    */
   async challengeMFA(body: ChallengeMFARequest): Promise<ChallengeResponse> {
-    const path = "/v1/auth/mfa/challenge";
+    const path = "/v1/mfa/challenge";
     return this.request<ChallengeResponse>(
       'POST',
       path,
@@ -569,10 +1016,10 @@ export class AuthClient {
 
   /**
    * Enroll in MFA
-   * POST /v1/auth/mfa/enroll
+   * POST /v1/mfa/enroll
    */
   async enrollMFA(body: EnrollMFARequest, token: string): Promise<EnrollResponse> {
-    const path = "/v1/auth/mfa/enroll";
+    const path = "/v1/mfa/enroll";
     return this.request<EnrollResponse>(
       'POST',
       path,
@@ -583,10 +1030,10 @@ export class AuthClient {
 
   /**
    * Disable MFA
-   * DELETE /v1/auth/mfa/enrollment
+   * DELETE /v1/mfa/enrollment
    */
   async disableMFA(body: DisableMFARequest, token: string): Promise<DisableResponse> {
-    const path = "/v1/auth/mfa/enrollment";
+    const path = "/v1/mfa/enrollment";
     return this.request<DisableResponse>(
       'DELETE',
       path,
@@ -597,10 +1044,10 @@ export class AuthClient {
 
   /**
    * Regenerate MFA recovery codes
-   * POST /v1/auth/mfa/recovery/regenerate
+   * POST /v1/mfa/recovery/regenerate
    */
   async regenerateMFARecoveryCodes(body: RegenerateMFARecoveryCodesRequest, token: string): Promise<RecoveryRegenerateResponse> {
-    const path = "/v1/auth/mfa/recovery/regenerate";
+    const path = "/v1/mfa/recovery/regenerate";
     return this.request<RecoveryRegenerateResponse>(
       'POST',
       path,
@@ -611,10 +1058,10 @@ export class AuthClient {
 
   /**
    * Verify MFA recovery code
-   * POST /v1/auth/mfa/recovery/verify
+   * POST /v1/mfa/recovery/verify
    */
   async verifyRecoveryCode(body: VerifyRecoveryCodeRequest): Promise<RecoveryVerifyResponse> {
-    const path = "/v1/auth/mfa/recovery/verify";
+    const path = "/v1/mfa/recovery/verify";
     return this.request<RecoveryVerifyResponse>(
       'POST',
       path,
@@ -624,10 +1071,10 @@ export class AuthClient {
 
   /**
    * Send SMS verification code
-   * POST /v1/auth/mfa/sms/send
+   * POST /v1/mfa/sms/send
    */
   async sendSMSCode(body: SendSMSCodeRequest, token: string): Promise<SMSSendResponse> {
-    const path = "/v1/auth/mfa/sms/send";
+    const path = "/v1/mfa/sms/send";
     return this.request<SMSSendResponse>(
       'POST',
       path,
@@ -638,10 +1085,10 @@ export class AuthClient {
 
   /**
    * Verify SMS code
-   * POST /v1/auth/mfa/sms/verify
+   * POST /v1/mfa/sms/verify
    */
   async verifySMSCode(body: VerifySMSCodeRequest, token: string): Promise<SMSVerifyResponse> {
-    const path = "/v1/auth/mfa/sms/verify";
+    const path = "/v1/mfa/sms/verify";
     return this.request<SMSVerifyResponse>(
       'POST',
       path,
@@ -652,10 +1099,10 @@ export class AuthClient {
 
   /**
    * Verify MFA code
-   * POST /v1/auth/mfa/verify
+   * POST /v1/mfa/verify
    */
   async verifyMFA(body: VerifyMFARequest): Promise<VerifyMFAResponse> {
-    const path = "/v1/auth/mfa/verify";
+    const path = "/v1/mfa/verify";
     return this.request<VerifyMFAResponse>(
       'POST',
       path,
@@ -665,10 +1112,10 @@ export class AuthClient {
 
   /**
    * List organizations
-   * GET /v1/auth/orgs
+   * GET /v1/orgs
    */
   async listOrganizations(token: string): Promise<OrgListResponse> {
-    const path = "/v1/auth/orgs";
+    const path = "/v1/orgs";
     return this.request<OrgListResponse>(
       'GET',
       path,
@@ -679,10 +1126,10 @@ export class AuthClient {
 
   /**
    * Create organization
-   * POST /v1/auth/orgs
+   * POST /v1/orgs
    */
   async createOrganization(body: CreateOrganizationRequest, token: string): Promise<Organization> {
-    const path = "/v1/auth/orgs";
+    const path = "/v1/orgs";
     return this.request<Organization>(
       'POST',
       path,
@@ -693,10 +1140,10 @@ export class AuthClient {
 
   /**
    * Check slug availability
-   * GET /v1/auth/orgs/check-slug
+   * GET /v1/orgs/check-slug
    */
   async checkOrgSlug(token: string): Promise<SlugAvailableResponse> {
-    const path = "/v1/auth/orgs/check-slug";
+    const path = "/v1/orgs/check-slug";
     return this.request<SlugAvailableResponse>(
       'GET',
       path,
@@ -707,10 +1154,10 @@ export class AuthClient {
 
   /**
    * Accept invitation
-   * POST /v1/auth/orgs/invitations/accept
+   * POST /v1/orgs/invitations/accept
    */
   async acceptInvitation(body: AcceptInvitationRequest, token: string): Promise<Member> {
-    const path = "/v1/auth/orgs/invitations/accept";
+    const path = "/v1/orgs/invitations/accept";
     return this.request<Member>(
       'POST',
       path,
@@ -721,10 +1168,10 @@ export class AuthClient {
 
   /**
    * Decline invitation
-   * POST /v1/auth/orgs/invitations/decline
+   * POST /v1/orgs/invitations/decline
    */
   async declineInvitation(body: DeclineInvitationRequest, token: string): Promise<StatusResponse> {
-    const path = "/v1/auth/orgs/invitations/decline";
+    const path = "/v1/orgs/invitations/decline";
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -735,10 +1182,10 @@ export class AuthClient {
 
   /**
    * Get organization
-   * GET /v1/auth/orgs/{orgId}
+   * GET /v1/orgs/{orgId}
    */
   async getOrganization(orgId: string, token: string): Promise<Organization> {
-    const path = `/v1/auth/orgs/${orgId}`;
+    const path = `/v1/orgs/${orgId}`;
     return this.request<Organization>(
       'GET',
       path,
@@ -749,10 +1196,10 @@ export class AuthClient {
 
   /**
    * Update organization
-   * PATCH /v1/auth/orgs/{orgId}
+   * PATCH /v1/orgs/{orgId}
    */
   async updateOrganization(orgId: string, body: UpdateOrganizationRequest, token: string): Promise<Organization> {
-    const path = `/v1/auth/orgs/${orgId}`;
+    const path = `/v1/orgs/${orgId}`;
     return this.request<Organization>(
       'PATCH',
       path,
@@ -763,10 +1210,10 @@ export class AuthClient {
 
   /**
    * Delete organization
-   * DELETE /v1/auth/orgs/{orgId}
+   * DELETE /v1/orgs/{orgId}
    */
   async deleteOrganization(orgId: string, body: DeleteOrganizationRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/orgs/${orgId}`;
+    const path = `/v1/orgs/${orgId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -777,10 +1224,10 @@ export class AuthClient {
 
   /**
    * List invitations
-   * GET /v1/auth/orgs/{orgId}/invitations
+   * GET /v1/orgs/{orgId}/invitations
    */
   async listInvitations(orgId: string, token: string): Promise<InvitationListResponse> {
-    const path = `/v1/auth/orgs/${orgId}/invitations`;
+    const path = `/v1/orgs/${orgId}/invitations`;
     return this.request<InvitationListResponse>(
       'GET',
       path,
@@ -791,10 +1238,10 @@ export class AuthClient {
 
   /**
    * Create invitation
-   * POST /v1/auth/orgs/{orgId}/invitations
+   * POST /v1/orgs/{orgId}/invitations
    */
   async createInvitation(orgId: string, body: CreateInvitationRequest, token: string): Promise<Invitation> {
-    const path = `/v1/auth/orgs/${orgId}/invitations`;
+    const path = `/v1/orgs/${orgId}/invitations`;
     return this.request<Invitation>(
       'POST',
       path,
@@ -805,10 +1252,10 @@ export class AuthClient {
 
   /**
    * List members
-   * GET /v1/auth/orgs/{orgId}/members
+   * GET /v1/orgs/{orgId}/members
    */
   async listMembers(orgId: string, token: string): Promise<MemberListResponse> {
-    const path = `/v1/auth/orgs/${orgId}/members`;
+    const path = `/v1/orgs/${orgId}/members`;
     return this.request<MemberListResponse>(
       'GET',
       path,
@@ -819,10 +1266,10 @@ export class AuthClient {
 
   /**
    * Add member
-   * POST /v1/auth/orgs/{orgId}/members
+   * POST /v1/orgs/{orgId}/members
    */
   async addMember(orgId: string, body: AddMemberRequest, token: string): Promise<Member> {
-    const path = `/v1/auth/orgs/${orgId}/members`;
+    const path = `/v1/orgs/${orgId}/members`;
     return this.request<Member>(
       'POST',
       path,
@@ -833,10 +1280,10 @@ export class AuthClient {
 
   /**
    * Update member role
-   * PATCH /v1/auth/orgs/{orgId}/members/{memberId}
+   * PATCH /v1/orgs/{orgId}/members/{memberId}
    */
   async updateMember(orgId: string, memberId: string, body: UpdateMemberRequest, token: string): Promise<Member> {
-    const path = `/v1/auth/orgs/${orgId}/members/${memberId}`;
+    const path = `/v1/orgs/${orgId}/members/${memberId}`;
     return this.request<Member>(
       'PATCH',
       path,
@@ -847,10 +1294,10 @@ export class AuthClient {
 
   /**
    * Remove member
-   * DELETE /v1/auth/orgs/{orgId}/members/{memberId}
+   * DELETE /v1/orgs/{orgId}/members/{memberId}
    */
   async removeMember(orgId: string, memberId: string, body: RemoveMemberRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/orgs/${orgId}/members/${memberId}`;
+    const path = `/v1/orgs/${orgId}/members/${memberId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -861,10 +1308,10 @@ export class AuthClient {
 
   /**
    * List teams
-   * GET /v1/auth/orgs/{orgId}/teams
+   * GET /v1/orgs/{orgId}/teams
    */
   async listTeams(orgId: string, token: string): Promise<TeamListResponse> {
-    const path = `/v1/auth/orgs/${orgId}/teams`;
+    const path = `/v1/orgs/${orgId}/teams`;
     return this.request<TeamListResponse>(
       'GET',
       path,
@@ -875,10 +1322,10 @@ export class AuthClient {
 
   /**
    * Create team
-   * POST /v1/auth/orgs/{orgId}/teams
+   * POST /v1/orgs/{orgId}/teams
    */
   async createTeam(orgId: string, body: CreateTeamRequest, token: string): Promise<Team> {
-    const path = `/v1/auth/orgs/${orgId}/teams`;
+    const path = `/v1/orgs/${orgId}/teams`;
     return this.request<Team>(
       'POST',
       path,
@@ -889,10 +1336,10 @@ export class AuthClient {
 
   /**
    * Get team
-   * GET /v1/auth/orgs/{orgId}/teams/{teamId}
+   * GET /v1/orgs/{orgId}/teams/{teamId}
    */
   async getTeam(orgId: string, teamId: string, token: string): Promise<Team> {
-    const path = `/v1/auth/orgs/${orgId}/teams/${teamId}`;
+    const path = `/v1/orgs/${orgId}/teams/${teamId}`;
     return this.request<Team>(
       'GET',
       path,
@@ -903,10 +1350,10 @@ export class AuthClient {
 
   /**
    * Update team
-   * PATCH /v1/auth/orgs/{orgId}/teams/{teamId}
+   * PATCH /v1/orgs/{orgId}/teams/{teamId}
    */
   async updateTeam(orgId: string, teamId: string, body: UpdateTeamRequest, token: string): Promise<Team> {
-    const path = `/v1/auth/orgs/${orgId}/teams/${teamId}`;
+    const path = `/v1/orgs/${orgId}/teams/${teamId}`;
     return this.request<Team>(
       'PATCH',
       path,
@@ -917,10 +1364,10 @@ export class AuthClient {
 
   /**
    * Delete team
-   * DELETE /v1/auth/orgs/{orgId}/teams/{teamId}
+   * DELETE /v1/orgs/{orgId}/teams/{teamId}
    */
   async deleteTeam(orgId: string, teamId: string, body: DeleteTeamRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/orgs/${orgId}/teams/${teamId}`;
+    const path = `/v1/orgs/${orgId}/teams/${teamId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -931,10 +1378,10 @@ export class AuthClient {
 
   /**
    * List passkeys
-   * GET /v1/auth/passkeys/
+   * GET /v1/passkeys/
    */
   async listPasskeys(token: string): Promise<ListResponse> {
-    const path = "/v1/auth/passkeys/";
+    const path = "/v1/passkeys/";
     return this.request<ListResponse>(
       'GET',
       path,
@@ -945,10 +1392,10 @@ export class AuthClient {
 
   /**
    * Begin passkey login
-   * POST /v1/auth/passkeys/login/begin
+   * POST /v1/passkeys/login/begin
    */
   async passkeyLoginBegin(body: PasskeyLoginBeginRequest): Promise<LoginBeginResponse> {
-    const path = "/v1/auth/passkeys/login/begin";
+    const path = "/v1/passkeys/login/begin";
     return this.request<LoginBeginResponse>(
       'POST',
       path,
@@ -958,10 +1405,10 @@ export class AuthClient {
 
   /**
    * Complete passkey login
-   * POST /v1/auth/passkeys/login/finish
+   * POST /v1/passkeys/login/finish
    */
   async passkeyLoginFinish(body: PasskeyLoginFinishRequest): Promise<LoginFinishResponse> {
-    const path = "/v1/auth/passkeys/login/finish";
+    const path = "/v1/passkeys/login/finish";
     return this.request<LoginFinishResponse>(
       'POST',
       path,
@@ -971,10 +1418,10 @@ export class AuthClient {
 
   /**
    * Begin passkey registration
-   * POST /v1/auth/passkeys/register/begin
+   * POST /v1/passkeys/register/begin
    */
   async passkeyRegisterBegin(body: PasskeyRegisterBeginRequest, token: string): Promise<RegisterBeginResponse> {
-    const path = "/v1/auth/passkeys/register/begin";
+    const path = "/v1/passkeys/register/begin";
     return this.request<RegisterBeginResponse>(
       'POST',
       path,
@@ -985,10 +1432,10 @@ export class AuthClient {
 
   /**
    * Complete passkey registration
-   * POST /v1/auth/passkeys/register/finish
+   * POST /v1/passkeys/register/finish
    */
   async passkeyRegisterFinish(body: PasskeyRegisterFinishRequest, token: string): Promise<RegisterFinishResponse> {
-    const path = "/v1/auth/passkeys/register/finish";
+    const path = "/v1/passkeys/register/finish";
     return this.request<RegisterFinishResponse>(
       'POST',
       path,
@@ -999,10 +1446,10 @@ export class AuthClient {
 
   /**
    * Delete passkey
-   * DELETE /v1/auth/passkeys/{credentialId}
+   * DELETE /v1/passkeys/{credentialId}
    */
   async deletePasskey(credentialId: string, body: DeletePasskeyRequest, token: string): Promise<DeleteResponse> {
-    const path = `/v1/auth/passkeys/${credentialId}`;
+    const path = `/v1/passkeys/${credentialId}`;
     return this.request<DeleteResponse>(
       'DELETE',
       path,
@@ -1013,10 +1460,10 @@ export class AuthClient {
 
   /**
    * Refresh tokens
-   * POST /v1/auth/refresh
+   * POST /v1/refresh
    */
   async refresh(body: RefreshRequest): Promise<TokenResponse> {
-    const path = "/v1/auth/refresh";
+    const path = "/v1/refresh";
     return this.request<TokenResponse>(
       'POST',
       path,
@@ -1026,10 +1473,10 @@ export class AuthClient {
 
   /**
    * Reset password
-   * POST /v1/auth/reset-password
+   * POST /v1/reset-password
    */
   async resetPassword(body: ResetPasswordRequest): Promise<StatusResponse> {
-    const path = "/v1/auth/reset-password";
+    const path = "/v1/reset-password";
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -1039,10 +1486,10 @@ export class AuthClient {
 
   /**
    * List roles
-   * GET /v1/auth/roles
+   * GET /v1/roles
    */
-  async listRoles(token: string): Promise<RoleListResponse> {
-    const path = "/v1/auth/roles";
+  async authsomeListRoles(token: string): Promise<RoleListResponse> {
+    const path = "/v1/roles";
     return this.request<RoleListResponse>(
       'GET',
       path,
@@ -1053,10 +1500,10 @@ export class AuthClient {
 
   /**
    * Create role
-   * POST /v1/auth/roles
+   * POST /v1/roles
    */
-  async createRole(body: CreateRoleRequest, token: string): Promise<Role> {
-    const path = "/v1/auth/roles";
+  async authsomeCreateRole(body: AuthsomeCreateRoleRequest, token: string): Promise<Role> {
+    const path = "/v1/roles";
     return this.request<Role>(
       'POST',
       path,
@@ -1067,10 +1514,10 @@ export class AuthClient {
 
   /**
    * Get role
-   * GET /v1/auth/roles/{roleId}
+   * GET /v1/roles/{roleId}
    */
-  async getRole(roleId: string, token: string): Promise<Role> {
-    const path = `/v1/auth/roles/${roleId}`;
+  async authsomeGetRole(roleId: string, token: string): Promise<Role> {
+    const path = `/v1/roles/${roleId}`;
     return this.request<Role>(
       'GET',
       path,
@@ -1081,10 +1528,10 @@ export class AuthClient {
 
   /**
    * Update role
-   * PATCH /v1/auth/roles/{roleId}
+   * PATCH /v1/roles/{roleId}
    */
-  async updateRole(roleId: string, body: UpdateRoleRequest, token: string): Promise<Role> {
-    const path = `/v1/auth/roles/${roleId}`;
+  async authsomeUpdateRole(roleId: string, body: AuthsomeUpdateRoleRequest, token: string): Promise<Role> {
+    const path = `/v1/roles/${roleId}`;
     return this.request<Role>(
       'PATCH',
       path,
@@ -1095,24 +1542,24 @@ export class AuthClient {
 
   /**
    * Delete role
-   * DELETE /v1/auth/roles/{roleId}
+   * DELETE /v1/roles/{roleId}
    */
-  async deleteRole(roleId: string, body: DeleteRoleRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/roles/${roleId}`;
+  async authsomeDeleteRole(roleId: string, token: string): Promise<StatusResponse> {
+    const path = `/v1/roles/${roleId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
-      body,
+      undefined,
       token,
     );
   }
 
   /**
    * Assign role to user
-   * POST /v1/auth/roles/{roleId}/assign
+   * POST /v1/roles/{roleId}/assign
    */
-  async assignRole(roleId: string, body: AssignRoleRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/roles/${roleId}/assign`;
+  async authsomeAssignRole(roleId: string, body: AuthsomeAssignRoleRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/roles/${roleId}/assign`;
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -1123,10 +1570,10 @@ export class AuthClient {
 
   /**
    * List role permissions
-   * GET /v1/auth/roles/{roleId}/permissions
+   * GET /v1/roles/{roleId}/permissions
    */
-  async listRolePermissions(roleId: string, token: string): Promise<PermissionListResponse> {
-    const path = `/v1/auth/roles/${roleId}/permissions`;
+  async authsomeListRolePermissions(roleId: string, token: string): Promise<PermissionListResponse> {
+    const path = `/v1/roles/${roleId}/permissions`;
     return this.request<PermissionListResponse>(
       'GET',
       path,
@@ -1137,10 +1584,10 @@ export class AuthClient {
 
   /**
    * Add permission to role
-   * POST /v1/auth/roles/{roleId}/permissions
+   * POST /v1/roles/{roleId}/permissions
    */
-  async addPermission(roleId: string, body: AddPermissionRequest, token: string): Promise<Permission> {
-    const path = `/v1/auth/roles/${roleId}/permissions`;
+  async authsomeAddPermission(roleId: string, body: AuthsomeAddPermissionRequest, token: string): Promise<Permission> {
+    const path = `/v1/roles/${roleId}/permissions`;
     return this.request<Permission>(
       'POST',
       path,
@@ -1151,24 +1598,24 @@ export class AuthClient {
 
   /**
    * Remove permission from role
-   * DELETE /v1/auth/roles/{roleId}/permissions/{permissionId}
+   * DELETE /v1/roles/{roleId}/permissions/{permissionId}
    */
-  async removePermission(roleId: string, permissionId: string, body: RemovePermissionRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/roles/${roleId}/permissions/${permissionId}`;
+  async authsomeRemovePermission(roleId: string, permissionId: string, token: string): Promise<StatusResponse> {
+    const path = `/v1/roles/${roleId}/permissions/${permissionId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
-      body,
+      undefined,
       token,
     );
   }
 
   /**
    * Unassign role from user
-   * POST /v1/auth/roles/{roleId}/unassign
+   * POST /v1/roles/{roleId}/unassign
    */
-  async unassignRole(roleId: string, body: UnassignRoleRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/roles/${roleId}/unassign`;
+  async authsomeUnassignRole(roleId: string, body: AuthsomeUnassignRoleRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/roles/${roleId}/unassign`;
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -1179,10 +1626,10 @@ export class AuthClient {
 
   /**
    * List sessions
-   * GET /v1/auth/sessions
+   * GET /v1/sessions
    */
   async listSessions(token: string): Promise<SessionListResponse> {
-    const path = "/v1/auth/sessions";
+    const path = "/v1/sessions";
     return this.request<SessionListResponse>(
       'GET',
       path,
@@ -1193,10 +1640,10 @@ export class AuthClient {
 
   /**
    * Revoke session
-   * DELETE /v1/auth/sessions/{sessionId}
+   * DELETE /v1/sessions/{sessionId}
    */
   async revokeSession(sessionId: string, body: RevokeSessionRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/sessions/${sessionId}`;
+    const path = `/v1/sessions/${sessionId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,
@@ -1207,10 +1654,10 @@ export class AuthClient {
 
   /**
    * Sign in
-   * POST /v1/auth/signin
+   * POST /v1/signin
    */
   async signIn(body: SignInRequest): Promise<AuthResponse> {
-    const path = "/v1/auth/signin";
+    const path = "/v1/signin";
     return this.request<AuthResponse>(
       'POST',
       path,
@@ -1220,10 +1667,10 @@ export class AuthClient {
 
   /**
    * Sign out
-   * POST /v1/auth/signout
+   * POST /v1/signout
    */
   async signOut(body: SignOutRequest, token: string): Promise<StatusResponse> {
-    const path = "/v1/auth/signout";
+    const path = "/v1/signout";
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -1234,10 +1681,10 @@ export class AuthClient {
 
   /**
    * Sign up
-   * POST /v1/auth/signup
+   * POST /v1/signup
    */
   async signUp(body: SignUpRequest): Promise<AuthResponse> {
-    const path = "/v1/auth/signup";
+    const path = "/v1/signup";
     return this.request<AuthResponse>(
       'POST',
       path,
@@ -1247,10 +1694,10 @@ export class AuthClient {
 
   /**
    * Start OAuth flow
-   * POST /v1/auth/social/{provider}
+   * POST /v1/social/{provider}
    */
   async startOAuth(provider: string, body: StartOAuthRequest): Promise<StartResponse> {
-    const path = `/v1/auth/social/${provider}`;
+    const path = `/v1/social/${provider}`;
     return this.request<StartResponse>(
       'POST',
       path,
@@ -1260,10 +1707,10 @@ export class AuthClient {
 
   /**
    * OAuth callback
-   * GET /v1/auth/social/{provider}/callback
+   * GET /v1/social/{provider}/callback
    */
   async oauthCallback(provider: string): Promise<CallbackResponse> {
-    const path = `/v1/auth/social/${provider}/callback`;
+    const path = `/v1/social/${provider}/callback`;
     return this.request<CallbackResponse>(
       'GET',
       path,
@@ -1273,10 +1720,10 @@ export class AuthClient {
 
   /**
    * SSO SAML ACS endpoint
-   * POST /v1/auth/sso/{provider}/acs
+   * POST /v1/sso/{provider}/acs
    */
   async ssoACS(provider: string, body: SsoACSRequest): Promise<CallbackResponse> {
-    const path = `/v1/auth/sso/${provider}/acs`;
+    const path = `/v1/sso/${provider}/acs`;
     return this.request<CallbackResponse>(
       'POST',
       path,
@@ -1286,10 +1733,10 @@ export class AuthClient {
 
   /**
    * SSO callback (OIDC)
-   * POST /v1/auth/sso/{provider}/callback
+   * POST /v1/sso/{provider}/callback
    */
   async ssoCallback(provider: string, body: SsoCallbackRequest): Promise<CallbackResponse> {
-    const path = `/v1/auth/sso/${provider}/callback`;
+    const path = `/v1/sso/${provider}/callback`;
     return this.request<CallbackResponse>(
       'POST',
       path,
@@ -1299,10 +1746,10 @@ export class AuthClient {
 
   /**
    * Start SSO login flow
-   * POST /v1/auth/sso/{provider}/login
+   * POST /v1/sso/{provider}/login
    */
   async startSSOLogin(provider: string, body: StartSSOLoginRequest): Promise<LoginResponse> {
-    const path = `/v1/auth/sso/${provider}/login`;
+    const path = `/v1/sso/${provider}/login`;
     return this.request<LoginResponse>(
       'POST',
       path,
@@ -1312,10 +1759,10 @@ export class AuthClient {
 
   /**
    * List user roles
-   * GET /v1/auth/users/{userId}/roles
+   * GET /v1/users/{userId}/roles
    */
-  async listUserRoles(userId: string, token: string): Promise<UserRoleListResponse> {
-    const path = `/v1/auth/users/${userId}/roles`;
+  async authsomeListUserRoles(userId: string, token: string): Promise<UserRoleListResponse> {
+    const path = `/v1/users/${userId}/roles`;
     return this.request<UserRoleListResponse>(
       'GET',
       path,
@@ -1326,10 +1773,10 @@ export class AuthClient {
 
   /**
    * Verify email
-   * POST /v1/auth/verify-email
+   * POST /v1/verify-email
    */
   async verifyEmail(body: VerifyEmailRequest): Promise<StatusResponse> {
-    const path = "/v1/auth/verify-email";
+    const path = "/v1/verify-email";
     return this.request<StatusResponse>(
       'POST',
       path,
@@ -1339,10 +1786,10 @@ export class AuthClient {
 
   /**
    * List webhooks
-   * GET /v1/auth/webhooks
+   * GET /v1/webhooks
    */
   async listWebhooks(token: string): Promise<WebhookListResponse> {
-    const path = "/v1/auth/webhooks";
+    const path = "/v1/webhooks";
     return this.request<WebhookListResponse>(
       'GET',
       path,
@@ -1353,10 +1800,10 @@ export class AuthClient {
 
   /**
    * Create webhook
-   * POST /v1/auth/webhooks
+   * POST /v1/webhooks
    */
   async createWebhook(body: CreateWebhookRequest, token: string): Promise<Webhook> {
-    const path = "/v1/auth/webhooks";
+    const path = "/v1/webhooks";
     return this.request<Webhook>(
       'POST',
       path,
@@ -1367,10 +1814,10 @@ export class AuthClient {
 
   /**
    * Get webhook
-   * GET /v1/auth/webhooks/{webhookId}
+   * GET /v1/webhooks/{webhookId}
    */
   async getWebhook(webhookId: string, token: string): Promise<Webhook> {
-    const path = `/v1/auth/webhooks/${webhookId}`;
+    const path = `/v1/webhooks/${webhookId}`;
     return this.request<Webhook>(
       'GET',
       path,
@@ -1381,10 +1828,10 @@ export class AuthClient {
 
   /**
    * Update webhook
-   * PATCH /v1/auth/webhooks/{webhookId}
+   * PATCH /v1/webhooks/{webhookId}
    */
   async updateWebhook(webhookId: string, body: UpdateWebhookRequest, token: string): Promise<Webhook> {
-    const path = `/v1/auth/webhooks/${webhookId}`;
+    const path = `/v1/webhooks/${webhookId}`;
     return this.request<Webhook>(
       'PATCH',
       path,
@@ -1395,10 +1842,10 @@ export class AuthClient {
 
   /**
    * Delete webhook
-   * DELETE /v1/auth/webhooks/{webhookId}
+   * DELETE /v1/webhooks/{webhookId}
    */
   async deleteWebhook(webhookId: string, body: DeleteWebhookRequest, token: string): Promise<StatusResponse> {
-    const path = `/v1/auth/webhooks/${webhookId}`;
+    const path = `/v1/webhooks/${webhookId}`;
     return this.request<StatusResponse>(
       'DELETE',
       path,

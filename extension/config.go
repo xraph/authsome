@@ -12,7 +12,7 @@ type Config struct {
 	// DisableMigrate prevents auto-migration on start.
 	DisableMigrate bool `json:"disable_migrate" mapstructure:"disable_migrate" yaml:"disable_migrate"`
 
-	// BasePath is the URL prefix for all auth routes (default: "/v1/auth").
+	// BasePath is the URL prefix for all auth routes (default: "/authsome").
 	BasePath string `json:"base_path" mapstructure:"base_path" yaml:"base_path"`
 
 	// Debug enables verbose logging of all operations.
@@ -49,6 +49,19 @@ type Config struct {
 	// RequireConfig requires config to be present in YAML files.
 	// If true and no config is found, Register returns an error.
 	RequireConfig bool `json:"-" yaml:"-"`
+
+	// ClientMode delegates all auth operations to a remote authsome server.
+	// When true, no local engine is created and no database is required.
+	// Token validation uses the /v1/introspect endpoint on the remote server.
+	ClientMode bool `json:"client_mode" mapstructure:"client_mode" yaml:"client_mode"`
+
+	// PortalURL is the base URL of the remote authsome server (e.g. "http://portal:7901").
+	// Required when ClientMode is true.
+	PortalURL string `json:"portal_url" mapstructure:"portal_url" yaml:"portal_url"`
+
+	// ServiceAPIKey authenticates this service with the remote authsome server
+	// for service-to-service operations (e.g. org creation during bootstrap).
+	ServiceAPIKey string `json:"service_api_key" mapstructure:"service_api_key" yaml:"service_api_key"`
 }
 
 // BootstrapYAMLConfig holds bootstrap settings loadable from YAML.
@@ -255,7 +268,7 @@ func (c LockoutConfig) ResetAfter() time.Duration {
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		BasePath: "/v1/auth",
+		BasePath: "/authsome",
 		Session: SessionConfig{
 			TokenTTL:        1 * time.Hour,
 			RefreshTokenTTL: 30 * 24 * time.Hour,

@@ -187,3 +187,9 @@ export const CONFIG_WITH_BRANDING: ClientConfig = {
     logo_url: "https://placehold.co/120x40?text=ACME",
   },
 };
+
+/** Waitlist mode enabled. */
+export const CONFIG_WAITLIST_ENABLED: ClientConfig = {
+  ...CONFIG_ALL_ENABLED,
+  waitlist: { enabled: true },
+};

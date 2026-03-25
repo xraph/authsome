@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -25,13 +26,18 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/plugins/consent"
 	"github.com/xraph/authsome/plugins/magiclink"
 	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/plugins/oauth2provider"
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 	"github.com/xraph/authsome/plugins/passkey"
 	"github.com/xraph/authsome/plugins/password"
+	"github.com/xraph/authsome/plugins/phone"
+	"github.com/xraph/authsome/plugins/scim"
 	"github.com/xraph/authsome/plugins/social"
 	"github.com/xraph/authsome/plugins/sso"
+	"github.com/xraph/authsome/plugins/subscription"
 	"github.com/xraph/authsome/store/memory"
 )
 
@@ -74,6 +80,23 @@ var publicOperations = map[string]bool{
 	"challengeMFA":      true,
 	"verifyMFA":         true,
 	"verifyMFARecovery": true,
+
+	// Phone OTP (unauthenticated start + verify)
+	"phoneAuthStart":  true,
+	"phoneAuthVerify": true,
+
+	// OAuth2 Provider (token endpoint is public per RFC 6749)
+	"oauth2Token":           true,
+	"oauth2Authorize":       true,
+	"oauth2DeviceAuthorize": true,
+
+	// Token introspection (RFC 7662 — public by design, validates tokens)
+	"introspectToken": true,
+
+	// SCIM discovery endpoints (public per RFC 7644)
+	"scimGetServiceProviderConfig": true,
+	"scimGetSchemas":               true,
+	"scimGetResourceTypes":         true,
 }
 
 func main() {
@@ -93,7 +116,8 @@ func run(outPath, title, version string) error {
 	store := memory.New()
 
 	// Build the engine with every known plugin so their routes are registered.
-	// We don't call engine.Start — we only need route metadata, not runtime state.
+	// We call engine.Start so plugins receive OnInit (needed for route prefixes).
+	// Migrations are disabled via WithDisableMigrate().
 	wardenEng, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	if err != nil {
 		return fmt.Errorf("create warden engine: %w", err)
@@ -126,11 +150,33 @@ func run(outPath, title, version string) error {
 		// Passkeys / WebAuthn
 		authsome.WithPlugin(passkey.New(passkey.Config{})),
 
-		// Organizations (opt-in)
-		authsome.WithPlugin(orgplugin.New()),
+		// Organizations — explicit PathPrefix prevents OnInit from defaulting to /v1.
+		// In real deployment, the extension's grouped router provides the prefix.
+		authsome.WithPlugin(orgplugin.New(orgplugin.Config{PathPrefix: "/"})),
+
+		// SCIM (System for Cross-domain Identity Management)
+		authsome.WithPlugin(scim.New()),
+
+		// Subscription / Billing
+		authsome.WithPlugin(subscription.New()),
+
+		// Phone OTP
+		authsome.WithPlugin(phone.New()),
+
+		// Consent management
+		authsome.WithPlugin(consent.New()),
+
+		// OAuth2 / OIDC Provider
+		authsome.WithPlugin(oauth2provider.New()),
 	)
 	if err != nil {
 		return fmt.Errorf("create engine: %w", err)
+	}
+
+	// Start the engine so plugins receive OnInit (needed for route prefix setup).
+	// Migrations are disabled, so this only initializes plugins and strategies.
+	if startErr := engine.Start(context.Background()); startErr != nil {
+		return fmt.Errorf("start engine: %w", startErr)
 	}
 
 	// Create a Forge router with OpenAPI generation enabled.
@@ -179,8 +225,9 @@ func run(outPath, title, version string) error {
 		return fmt.Errorf("unmarshal spec: %w", unmarshalErr)
 	}
 
-	// Post-process: add security requirements and clean up.
+	// Post-process: add security requirements, clean up paths, fix schemas.
 	postProcess(specMap)
+	cleanPaths(specMap)
 
 	data, err := json.MarshalIndent(specMap, "", "  ")
 	if err != nil {
@@ -312,4 +359,27 @@ func patchSchemaTypes(spec map[string]any) {
 			}
 		}
 	}
+}
+
+// cleanPaths normalizes path keys: replaces double slashes with single,
+// removes trailing slashes, and ensures leading slash.
+func cleanPaths(spec map[string]any) {
+	paths, ok := spec["paths"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	cleaned := make(map[string]any, len(paths))
+	for path, value := range paths {
+		// Replace double slashes
+		for strings.Contains(path, "//") {
+			path = strings.ReplaceAll(path, "//", "/")
+		}
+		// Remove trailing slash (except root)
+		if len(path) > 1 && strings.HasSuffix(path, "/") {
+			path = strings.TrimRight(path, "/")
+		}
+		cleaned[path] = value
+	}
+	spec["paths"] = cleaned
 }

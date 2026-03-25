@@ -257,6 +257,33 @@ func TestRegistry_RouteProviders(t *testing.T) {
 	assert.Len(t, providers, 1)
 }
 
+func TestRegistry_DuplicatePlugin_Skipped(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+
+	rp1 := &routePlugin{basePlugin: basePlugin{name: "scim"}}
+	rp2 := &routePlugin{basePlugin: basePlugin{name: "scim"}}
+
+	r.Register(rp1)
+	r.Register(rp2) // duplicate name — should be skipped
+
+	// Only one plugin should be registered
+	assert.Len(t, r.Plugins(), 1)
+	assert.Len(t, r.RouteProviders(), 1)
+}
+
+func TestRegistry_DuplicatePlugin_DifferentNames(t *testing.T) {
+	r := plugin.NewRegistry(log.NewNoopLogger())
+
+	rp1 := &routePlugin{basePlugin: basePlugin{name: "scim"}}
+	rp2 := &routePlugin{basePlugin: basePlugin{name: "apikey"}}
+
+	r.Register(rp1)
+	r.Register(rp2) // different name — should be registered
+
+	assert.Len(t, r.Plugins(), 2)
+	assert.Len(t, r.RouteProviders(), 2)
+}
+
 func TestRegistry_CollectMigrationGroups(t *testing.T) {
 	r := plugin.NewRegistry(log.NewNoopLogger())
 

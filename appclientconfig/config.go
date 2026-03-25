@@ -27,6 +27,8 @@ type Config struct {
 	MFAEnabled       *bool `json:"mfa_enabled,omitempty"`
 	SSOEnabled       *bool `json:"sso_enabled,omitempty"`
 	SocialEnabled    *bool `json:"social_enabled,omitempty"`
+	WaitlistEnabled           *bool `json:"waitlist_enabled,omitempty"`
+	RequireEmailVerification *bool `json:"require_email_verification,omitempty"`
 
 	// Social provider filter. When set, only these providers (from the global
 	// plugin-level list) are exposed to the client SDK for this app.

@@ -75,6 +75,35 @@ export const VerticalSocial: Story = {
   },
 };
 
+export const LeftAligned: Story = {
+  args: {
+    ...Default.args,
+    align: "left",
+  },
+};
+
+export const FlatCard: Story = {
+  args: {
+    ...Default.args,
+    variant: "flat",
+  },
+};
+
+export const BorderedCard: Story = {
+  args: {
+    ...Default.args,
+    variant: "bordered",
+  },
+};
+
+export const LeftAlignedFlat: Story = {
+  args: {
+    ...Default.args,
+    align: "left",
+    variant: "flat",
+  },
+};
+
 export const FullFeatured: Story = {
   args: {
     signUpUrl: "/sign-up",

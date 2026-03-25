@@ -15,4 +15,7 @@ type Store interface {
 	UpdateApp(ctx context.Context, a *App) error
 	DeleteApp(ctx context.Context, appID id.AppID) error
 	ListApps(ctx context.Context) ([]*App, error)
+	// GetPlatformApp returns the single platform app (is_platform=true).
+	// Returns store.ErrNotFound if no platform app exists.
+	GetPlatformApp(ctx context.Context) (*App, error)
 }

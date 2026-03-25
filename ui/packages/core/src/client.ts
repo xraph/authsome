@@ -164,13 +164,51 @@ export class AuthClient extends GeneratedClient {
   }
 
   /**
+   * Complete a device authorization (RFC 8628).
+   *
+   * Approves or denies a device code. Requires an authenticated session —
+   * pass the session token so the backend can identify the user.
+   */
+  async completeDeviceAuthorization(
+    userCode: string,
+    action: "approve" | "deny",
+    token?: string,
+  ): Promise<{ status: string }> {
+    const base = (this as any).baseURL as string;
+    const fetchFn = (this as any).fetchFn as typeof globalThis.fetch;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetchFn(`${base}/v1/oauth/device/complete`, {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify({ user_code: userCode, action }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new AuthClientError(
+        (body as Record<string, string>).error || "Failed to authorize device",
+        res.status,
+      );
+    }
+    return res.json();
+  }
+
+  /**
    * Fetch the client configuration from the backend.
    *
    * The config describes which auth methods are enabled so SDK
    * components can auto-configure without manual props.
    */
   async fetchClientConfig(publishableKey?: string): Promise<ClientConfig> {
-    const url = new URL("/v1/auth/client-config", (this as any).config.baseURL);
+    const url = new URL("/v1/client-config", (this as any).config.baseURL);
     if (publishableKey) {
       url.searchParams.set("key", publishableKey);
     }

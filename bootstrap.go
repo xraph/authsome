@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/rbac"
+	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 )
 
@@ -193,17 +195,48 @@ func WithOnBootstrap(fn func(ctx context.Context, e *Engine, appID id.AppID) err
 
 // bootstrap creates the platform app and its default resources if it doesn't exist.
 func (e *Engine) bootstrap(ctx context.Context) error {
-	// Try to get existing platform app by slug.
+	// 1. Try to find existing platform app by slug.
 	existing, err := e.store.GetAppBySlug(ctx, e.bootstrapCfg.AppSlug)
 	if err == nil && existing != nil {
 		e.platformAppID = existing.ID
 		if e.config.AppID == "" {
 			e.config.AppID = existing.ID.String()
 		}
+		// Still run bootstrapApp to ensure roles/envs exist (idempotent).
+		if err := e.bootstrapApp(ctx, existing.ID); err != nil {
+			e.logger.Warn("bootstrap: setup existing platform app",
+				log.String("error", err.Error()),
+			)
+		}
+		return nil
+	}
+	// If the error is anything other than "not found", surface it.
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return fmt.Errorf("bootstrap: lookup platform app: %w", err)
+	}
+
+	// 2. Even if the slug doesn't match, check if ANY platform app already
+	//    exists. There must only be one platform app per database. If one
+	//    exists with a different slug, adopt it instead of creating a second.
+	if platformApp, findErr := e.store.GetPlatformApp(ctx); findErr == nil && platformApp != nil {
+		e.platformAppID = platformApp.ID
+		if e.config.AppID == "" {
+			e.config.AppID = platformApp.ID.String()
+		}
+		e.logger.Info("bootstrap: adopted existing platform app (different slug)",
+			log.String("app_id", platformApp.ID.String()),
+			log.String("existing_slug", platformApp.Slug),
+			log.String("requested_slug", e.bootstrapCfg.AppSlug),
+		)
+		if err := e.bootstrapApp(ctx, platformApp.ID); err != nil {
+			e.logger.Warn("bootstrap: setup existing platform app",
+				log.String("error", err.Error()),
+			)
+		}
 		return nil
 	}
 
-	// Create platform app.
+	// 3. No platform app exists at all — create one.
 	now := time.Now()
 	platformApp := &app.App{
 		ID:         id.NewAppID(),
@@ -274,38 +307,43 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error { //nol
 
 	// Create default roles with permissions (if an RBAC store is available).
 	if e.hasRBACStore() && !e.bootstrapCfg.SkipDefaultRoles {
-		// Pass 1: Create roles and attach permissions, collecting slug → ID map.
+		// Pass 1: Create or fetch roles and attach permissions, collecting slug → ID map.
 		slugToID := make(map[string]string, len(e.bootstrapCfg.DefaultRoles))
 		for _, role := range e.bootstrapCfg.DefaultRoles {
-			r := &rbac.Role{
-				AppID:       appID.String(),
-				Name:        role.Name,
-				Slug:        role.Slug,
-				Description: role.Description,
-			}
-			if err := e.CreateRole(ctx, r); err != nil {
-				// Ignore duplicate errors — idempotent.
-				e.logger.Debug("bootstrap: role may already exist",
+			// Check if the role already exists (idempotent restart).
+			existing, _ := e.GetRoleBySlug(ctx, appID, role.Slug) //nolint:errcheck // not-found is expected
+			var r *rbac.Role
+			if existing != nil {
+				r = existing
+				e.logger.Debug("bootstrap: role already exists, skipping create",
 					log.String("slug", role.Slug),
-					log.String("error", err.Error()),
 				)
-				// Fetch existing role to attach permissions.
-				existing, getErr := e.GetRoleBySlug(ctx, appID, role.Slug)
-				if getErr != nil {
+			} else {
+				r = &rbac.Role{
+					AppID:       appID.String(),
+					Name:        role.Name,
+					Slug:        role.Slug,
+					Description: role.Description,
+				}
+				if err := e.CreateRole(ctx, r); err != nil {
+					e.logger.Warn("bootstrap: role creation failed",
+						log.String("slug", role.Slug),
+						log.String("error", err.Error()),
+					)
 					continue
 				}
-				r = existing
 			}
 			slugToID[role.Slug] = r.ID
 
-			// Attach permissions to the role.
+			// Attach permissions to the role (AddPermission is already
+			// idempotent — duplicate permissions are looked up and reused).
 			for _, perm := range role.Permissions {
 				if err := e.AddPermission(ctx, &rbac.Permission{
 					RoleID:   r.ID,
 					Action:   perm.Action,
 					Resource: perm.Resource,
 				}); err != nil {
-					e.logger.Debug("bootstrap: permission may already exist",
+					e.logger.Debug("bootstrap: permission already exists",
 						log.String("role", role.Slug),
 						log.String("perm", perm.Action+":"+perm.Resource),
 						log.String("error", err.Error()),
@@ -342,6 +380,9 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error { //nol
 
 // HasUsers returns true if the platform app has at least one user.
 func (e *Engine) HasUsers(ctx context.Context) bool {
+	if !e.started {
+		return false
+	}
 	appID := e.PlatformAppID()
 	if appID.IsNil() {
 		return false

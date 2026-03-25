@@ -6,9 +6,7 @@ export type {
 {{- range .Types }}
   {{ .Name }},
 {{- end }}
-{{- range .Operations }}
-{{- if .HasBody }}
-  {{ .Name | pascalCase }}Request,
-{{- end }}
+{{- range .RequestTypeImports }}
+  {{ . }},
 {{- end }}
 } from './types';

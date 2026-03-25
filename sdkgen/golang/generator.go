@@ -78,6 +78,15 @@ type TemplateData struct {
 	HasSocial    bool
 	HasMagicLink bool
 	HasMFA       bool
+	// schemaNames tracks type names emitted from schemas so templates can
+	// skip duplicate request-type generation.
+	schemaNames map[string]bool
+}
+
+// IsNewRequestType returns true if the operation's request type name
+// doesn't collide with an existing schema type.
+func (d *TemplateData) IsNewRequestType(opName string) bool {
+	return !d.schemaNames[opName+"Request"]
 }
 
 // TypeDef represents a generated Go struct.
@@ -94,6 +103,13 @@ type FieldDef struct {
 	Optional bool
 }
 
+// ParamDef represents a path or query parameter for a client method.
+type ParamDef struct {
+	Name   string // original name from spec ("orgId")
+	GoName string // exported Go name ("OrgID")
+	Type   string // Go type ("string")
+}
+
 // OperationDef represents a generated client method.
 type OperationDef struct {
 	Name         string
@@ -105,7 +121,15 @@ type OperationDef struct {
 	ResponseType string
 	AuthRequired bool
 	Tags         []string
+	PathParams   []ParamDef
+	QueryParams  []ParamDef
 }
+
+// HasPathParams returns true when the operation has path parameters.
+func (o OperationDef) HasPathParams() bool { return len(o.PathParams) > 0 }
+
+// HasQueryParams returns true when the operation has query parameters.
+func (o OperationDef) HasQueryParams() bool { return len(o.QueryParams) > 0 }
 
 func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 	data := &TemplateData{
@@ -147,7 +171,10 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 					td.Fields = append(td.Fields, FieldDef{
 						Name:     exportedName(fn),
 						Type:     goType,
-						JSONTag:  fn + omitempty,
+						// Normalize to snake_case: the Forge OpenAPI generator emits
+					// PascalCase Go field names for request schemas instead of
+					// reading json tags. The actual API uses snake_case.
+					JSONTag:  normalizeJSONTag(fn) + omitempty,
 						Optional: optional,
 					})
 				}
@@ -187,6 +214,25 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				Tags:    pair.op.Tags,
 			}
 
+			// Path and query parameters
+			for _, param := range pair.op.Parameters {
+				goType := "string"
+				if param.Schema != nil {
+					goType = g.schemaToGoType(param.Schema)
+				}
+				pd := ParamDef{
+					Name:   param.Name,
+					GoName: exportedName(param.Name),
+					Type:   goType,
+				}
+				switch param.In {
+				case "path":
+					opDef.PathParams = append(opDef.PathParams, pd)
+				case "query":
+					opDef.QueryParams = append(opDef.QueryParams, pd)
+				}
+			}
+
 			// Auth required?
 			opDef.AuthRequired = g.operationRequiresAuth(pair.op)
 
@@ -203,6 +249,12 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 
 			data.Operations = append(data.Operations, opDef)
 		}
+	}
+
+	// Build schema name index for dedup in templates.
+	data.schemaNames = make(map[string]bool, len(data.Types))
+	for _, t := range data.Types {
+		data.schemaNames[t.Name] = true
 	}
 
 	// Detect plugins
@@ -288,7 +340,7 @@ func (g *Generator) schemaToGoFields(s *openapi.Schema) []FieldDef {
 		fields = append(fields, FieldDef{
 			Name:     exportedName(fn),
 			Type:     g.schemaToGoType(fs),
-			JSONTag:  fn + omitempty,
+			JSONTag:  normalizeJSONTag(fn) + omitempty,
 			Optional: optional,
 		})
 	}
@@ -315,14 +367,10 @@ func (g *Generator) responseGoType(op *openapi.Operation) string {
 
 func (g *Generator) renderTemplate(name string, data *TemplateData) (string, error) {
 	funcMap := template.FuncMap{
-		"lower": strings.ToLower,
-		"upper": strings.ToUpper,
-		"unexport": func(s string) string {
-			if s == "" {
-				return s
-			}
-			return strings.ToLower(s[:1]) + s[1:]
-		},
+		"lower":     strings.ToLower,
+		"upper":     strings.ToUpper,
+		"unexport":  unexportedName,
+		"snakecase": toSnakeCase,
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, name)
@@ -340,8 +388,97 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 	return buf.String(), nil
 }
 
+// unexportedName returns a Go unexported (camelCase) version of a name.
+// "OrgID" → "orgID", "MemberID" → "memberID", "Name" → "name"
+func unexportedName(s string) string {
+	if s == "" {
+		return s
+	}
+	// Find the boundary between leading uppercase and the rest.
+	// For "OrgID" → "orgID", for "Name" → "name", for "ID" → "id"
+	runes := []rune(s)
+	if len(runes) == 1 {
+		return strings.ToLower(s)
+	}
+	// All-uppercase (like "ID") → all-lowercase
+	allUpper := true
+	for _, r := range runes {
+		if r < 'A' || r > 'Z' {
+			allUpper = false
+			break
+		}
+	}
+	if allUpper {
+		return strings.ToLower(s)
+	}
+	// Leading uppercase followed by uppercase (acronym prefix): "OrgID" → "orgID"
+	// Find where the lowercase starts
+	i := 0
+	for i < len(runes) && runes[i] >= 'A' && runes[i] <= 'Z' {
+		i++
+	}
+	if i <= 1 {
+		// Single leading uppercase: "Name" → "name"
+		return strings.ToLower(string(runes[:1])) + string(runes[1:])
+	}
+	// Multi-uppercase prefix: lowercase all but the last uppercase char
+	// "OrgID" (i=1 after "O", but runes[1]='r' is lower) — actually just lowercase first char
+	return strings.ToLower(string(runes[:1])) + string(runes[1:])
+}
+
+// toSnakeCase converts PascalCase or camelCase to snake_case.
+// "UserID" → "user_id", "AppID" → "app_id", "FirstName" → "first_name"
+func toSnakeCase(s string) string {
+	var result strings.Builder
+	runes := []rune(s)
+	for i, r := range runes {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				// Insert underscore before uppercase if preceded by lowercase,
+				// or if this starts a new word (uppercase followed by lowercase)
+				prev := runes[i-1]
+				if prev >= 'a' && prev <= 'z' {
+					result.WriteRune('_')
+				} else if i+1 < len(runes) && runes[i+1] >= 'a' && runes[i+1] <= 'z' && prev >= 'A' && prev <= 'Z' {
+					result.WriteRune('_')
+				}
+			}
+			result.WriteRune(r - 'A' + 'a')
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
+}
+
+// normalizeJSONTag ensures a JSON tag uses snake_case. If the name is already
+// snake_case it passes through unchanged. PascalCase names (from Forge's
+// OpenAPI generator reflecting Go field names) are converted.
+func normalizeJSONTag(name string) string {
+	// Already snake_case or lowercase — pass through
+	hasUpper := false
+	for _, r := range name {
+		if r >= 'A' && r <= 'Z' {
+			hasUpper = true
+			break
+		}
+	}
+	if !hasUpper {
+		return name
+	}
+	return toSnakeCase(name)
+}
+
 // exportedName converts a snake_case or camelCase name to Go exported PascalCase.
 func exportedName(s string) string {
+	// Strip leading non-alpha characters (e.g. "$ref" → "ref")
+	for len(s) > 0 && (s[0] < 'A' || (s[0] > 'Z' && s[0] < 'a') || s[0] > 'z') {
+		s = s[1:]
+	}
+	if s == "" {
+		return "Field"
+	}
+
 	// Split on underscores and hyphens
 	parts := strings.FieldsFunc(s, func(r rune) bool {
 		return r == '_' || r == '-'

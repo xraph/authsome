@@ -104,13 +104,13 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 		p.logger = lg.Logger()
 	}
 
+	p.basePath = "/v1"
+
 	type configGetter interface {
 		Config() authsome.Config
 	}
 	if cg, ok := engine.(configGetter); ok {
-		cfg := cg.Config()
-		p.basePath = cfg.BasePath
-		p.defaultAppID = cfg.AppID
+		p.defaultAppID = cg.Config().AppID
 	}
 
 	if pc, ok := engine.(middleware.PermissionChecker); ok {

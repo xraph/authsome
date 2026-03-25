@@ -1013,3 +1013,70 @@ func TestE2E_EnvironmentClone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Staging", staging.Name)
 }
+
+// ──────────────────────────────────────────────────
+// E2E: Email normalization in SignIn
+// ──────────────────────────────────────────────────
+
+func TestE2E_SignIn_EmailNormalization(t *testing.T) {
+	eng, _ := e2eEngine(t)
+	ctx := context.Background()
+	appID := e2eAppID(t)
+
+	// Sign up with lowercase email
+	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "MixedCase@Example.COM",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+
+	// Sign in with different case should succeed (email normalization)
+	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
+		AppID:    appID,
+		Email:    "MIXEDCASE@EXAMPLE.COM",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, u)
+	assert.NotNil(t, sess)
+	assert.Equal(t, "mixedcase@example.com", u.Email)
+}
+
+// ──────────────────────────────────────────────────
+// E2E: SignIn resolves default environment
+// ──────────────────────────────────────────────────
+
+func TestE2E_SignIn_DefaultEnvResolution(t *testing.T) {
+	eng, s := e2eEngine(t)
+	ctx := context.Background()
+	appID := e2eAppID(t)
+
+	// Create a default environment for the app
+	defaultEnv := &environment.Environment{
+		ID:        id.NewEnvironmentID(),
+		AppID:     appID,
+		Name:      "Development",
+		IsDefault: true,
+	}
+	require.NoError(t, s.CreateEnvironment(ctx, defaultEnv))
+
+	// Sign up (this sets env_id on the user via default env resolution)
+	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "envtest@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+
+	// Sign in WITHOUT specifying EnvID — should resolve default env for session
+	_, sess, err := eng.SignIn(ctx, &account.SignInRequest{
+		AppID:    appID,
+		Email:    "envtest@example.com",
+		Password: "SecureP@ss1",
+		// EnvID intentionally omitted
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, sess)
+	assert.Equal(t, defaultEnv.ID, sess.EnvID, "session should have the default environment ID")
+}

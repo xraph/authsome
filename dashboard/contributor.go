@@ -603,15 +603,62 @@ func (c *Contributor) renderPlugins(_ context.Context) (templ.Component, error) 
 
 func (c *Contributor) renderSettingsPage(ctx context.Context) (templ.Component, error) {
 	cfg := c.engine.Config()
+	appID := c.defaultAppID()
 
 	pluginNames := make([]string, 0, len(c.plugins))
+	pluginSet := make(map[string]bool, len(c.plugins))
 	for _, p := range c.plugins {
 		pluginNames = append(pluginNames, p.Name())
+		pluginSet[p.Name()] = true
+	}
+
+	// Build auth method toggles from client config + installed plugins.
+	methods := []pages.AuthMethodToggle{
+		{Key: "password_enabled", Label: "Password", Desc: "Email and password sign-in", Enabled: true, Available: true}, // always available
+		{Key: "social_enabled", Label: "Social / OAuth", Desc: "Sign in with Google, GitHub, etc.", Available: pluginSet["social"]},
+		{Key: "passkey_enabled", Label: "Passkey", Desc: "Passwordless sign-in with biometrics", Available: pluginSet["passkey"]},
+		{Key: "magiclink_enabled", Label: "Magic Link", Desc: "Passwordless sign-in via email link", Available: pluginSet["magiclink"]},
+		{Key: "mfa_enabled", Label: "Multi-Factor Authentication", Desc: "Require a second factor after password", Available: pluginSet["mfa"]},
+		{Key: "sso_enabled", Label: "SSO / SAML", Desc: "Enterprise single sign-on", Available: pluginSet["sso"]},
+		{Key: "require_email_verification", Label: "Require Email Verification", Desc: "Block sign-in until email is verified", Enabled: true, Available: true},
+		{Key: "waitlist_enabled", Label: "Waitlist", Desc: "Require admin approval for new sign-ups", Available: pluginSet["waitlist"], Enabled: false},
+	}
+
+	// Load per-app overrides to reflect current toggle state.
+	if clientCfg, err := c.engine.Store().GetAppClientConfig(ctx, appID); err == nil {
+		overrides := map[string]*bool{
+			"password_enabled":  clientCfg.PasswordEnabled,
+			"social_enabled":    clientCfg.SocialEnabled,
+			"passkey_enabled":   clientCfg.PasskeyEnabled,
+			"magiclink_enabled": clientCfg.MagicLinkEnabled,
+			"mfa_enabled":       clientCfg.MFAEnabled,
+			"sso_enabled":       clientCfg.SSOEnabled,
+			"require_email_verification": clientCfg.RequireEmailVerification,
+			"waitlist_enabled":           clientCfg.WaitlistEnabled,
+		}
+		for i := range methods {
+			if val, ok := overrides[methods[i].Key]; ok && val != nil {
+				methods[i].Enabled = *val
+			} else if methods[i].Available {
+				// Default: enabled if plugin is installed (except password which defaults true above).
+				methods[i].Enabled = methods[i].Key != "password_enabled" || true
+			}
+		}
+	} else {
+		// No overrides — default to enabled for installed plugins.
+		for i := range methods {
+			if methods[i].Available && methods[i].Key != "password_enabled" {
+				methods[i].Enabled = true
+			}
+		}
 	}
 
 	data := pages.SettingsPageData{
 		Config:      cfg,
 		PluginNames: pluginNames,
+		AppID:       appID.String(),
+		BasePath:    cfg.BasePath,
+		AuthMethods: methods,
 	}
 
 	pluginSettings := c.collectPluginSettings(ctx)
@@ -873,11 +920,24 @@ func (c *Contributor) handleLogin(ctx context.Context, params contributor.Params
 	}
 
 	_, _, err := c.engine.SignIn(ctx, &account.SignInRequest{
+		AppID:    c.defaultAppID(),
 		Email:    email,
 		Password: password,
 	})
 	if err != nil {
-		return "", auth.LoginError("Invalid email or password", auth.LoginPageLinks{RegisterPath: "./register"}), nil
+		// Show the actual error so users can distinguish between wrong
+		// credentials, email-not-verified, account locked, etc.
+		msg := "Invalid email or password"
+		if errors.Is(err, account.ErrEmailNotVerified) {
+			msg = "Please verify your email address before signing in"
+		} else if errors.Is(err, account.ErrAccountLocked) {
+			msg = "Account temporarily locked due to too many failed attempts"
+		} else if errors.Is(err, account.ErrUserBanned) {
+			msg = "Account has been suspended"
+		} else if errors.Is(err, account.ErrPasswordExpired) {
+			msg = "Password has expired and must be changed"
+		}
+		return "", auth.LoginError(msg, auth.LoginPageLinks{RegisterPath: "./register"}), nil
 	}
 
 	// Redirect to dashboard root on success.
@@ -903,6 +963,7 @@ func (c *Contributor) handleRegister(ctx context.Context, params contributor.Par
 	}
 
 	req := &account.SignUpRequest{
+		AppID:     c.defaultAppID(),
 		Email:     email,
 		Password:  password,
 		FirstName: firstName,
@@ -912,9 +973,17 @@ func (c *Contributor) handleRegister(ctx context.Context, params contributor.Par
 		req.Metadata = metadata
 	}
 
-	_, _, err := c.engine.SignUp(ctx, req)
+	u, _, err := c.engine.SignUp(ctx, req)
 	if err != nil {
 		return "", auth.RegisterError(err.Error(), auth.RegisterPageLinks{LoginPath: "./login"}), nil
+	}
+
+	// Auto-verify email for dashboard-created users — they don't need
+	// to go through the email verification flow since the admin created
+	// the account directly.
+	if u != nil && !u.EmailVerified {
+		u.EmailVerified = true
+		_ = c.engine.Store().UpdateUser(ctx, u) //nolint:errcheck // best-effort
 	}
 
 	// Redirect to dashboard root on success.
@@ -1100,8 +1169,12 @@ func htmxRedirect(url string) templ.Component {
 	})
 }
 
-// defaultAppID returns the app ID from the engine config.
+// defaultAppID resolves the default app ID from the engine config.
+// When bootstrap is configured, the platform app ID takes precedence.
 func (c *Contributor) defaultAppID() id.AppID {
+	if platformID := c.engine.PlatformAppID(); !platformID.IsNil() {
+		return platformID
+	}
 	appID, _ := id.ParseAppID(c.engine.Config().AppID) //nolint:errcheck // best-effort parse
 	return appID
 }

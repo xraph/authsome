@@ -21,8 +21,7 @@ func (a *API) registerSecurityEventRoutes(router forge.Router) error {
 		return nil
 	}
 
-	base := a.engine.Config().BasePath
-	g := router.Group(base+"/admin/security-events",
+	g := router.Group("/v1/admin/security-events",
 		forge.WithGroupTags("admin", "security-events"),
 		forge.WithGroupMiddleware(
 			middleware.RequireAuth(),

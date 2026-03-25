@@ -32,6 +32,11 @@ type Service struct {
 	logger      log.Logger
 }
 
+// SetLedgerStore sets the ledger store directly, bypassing duck-type discovery.
+func (s *Service) SetLedgerStore(st ledgerstore.Store) {
+	s.ledgerStore = st
+}
+
 // ──────────────────────────────────────────────────
 // Plan operations
 // ──────────────────────────────────────────────────
