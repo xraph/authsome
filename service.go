@@ -255,20 +255,20 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	//
 	// Resolution order (first non-nil wins):
 	// 1. Per-app client config override (RequireEmailVerification)
-	// 2. Environment setting (SkipEmailVerification — inverted)
-	// 3. Default: require verification (true)
+	// 2. Environment setting (SkipEmailVerification — inverted, with type defaults merged)
+	// 3. Default: skip verification (no config = no enforcement)
 	if !u.EmailVerified {
-		requireVerif := true // default: enforce
+		requireVerif := false // default: no enforcement when unconfigured
 
 		// Check per-app override first.
 		if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.RequireEmailVerification != nil {
 			requireVerif = *appCfg.RequireEmailVerification
-		} else {
-			// Fall back to environment setting.
-			if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil && env.Settings != nil { //nolint:errcheck // best-effort env lookup
-				if env.Settings.SkipEmailVerificationEnabled() {
-					requireVerif = false
-				}
+		} else if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+			// Fall back to environment setting (merge type defaults).
+			typeDefaults := environment.DefaultSettingsForType(env.Type)
+			effective := environment.MergeSettings(typeDefaults, env.Settings)
+			if effective != nil && !effective.SkipEmailVerificationEnabled() {
+				requireVerif = true
 			}
 		}
 

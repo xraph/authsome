@@ -150,9 +150,8 @@ func run(outPath, title, version string) error {
 		// Passkeys / WebAuthn
 		authsome.WithPlugin(passkey.New(passkey.Config{})),
 
-		// Organizations — explicit PathPrefix prevents OnInit from defaulting to /v1.
-		// In real deployment, the extension's grouped router provides the prefix.
-		authsome.WithPlugin(orgplugin.New(orgplugin.Config{PathPrefix: "/"})),
+		// Organizations
+		authsome.WithPlugin(orgplugin.New(orgplugin.Config{})),
 
 		// SCIM (System for Cross-domain Identity Management)
 		authsome.WithPlugin(scim.New()),

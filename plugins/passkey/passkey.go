@@ -165,11 +165,13 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	}
 	p.wa = wa
 
-	p.chronicle = engine.Chronicle()
-	p.relay = engine.Relay()
-	p.hooks = engine.Hooks()
-	p.logger = engine.Logger()
-	p.ceremonies = engine.CeremonyStore()
+	if engine != nil {
+		p.chronicle = engine.Chronicle()
+		p.relay = engine.Relay()
+		p.hooks = engine.Hooks()
+		p.logger = engine.Logger()
+		p.ceremonies = engine.CeremonyStore()
+	}
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}

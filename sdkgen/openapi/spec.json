@@ -4725,7 +4725,7 @@
         ]
       }
     },
-    "/admin/orgs": {
+    "/v1/admin/orgs": {
       "get": {
         "description": "Returns all organizations for an app. Requires admin role.",
         "operationId": "adminListOrgs",
@@ -4892,7 +4892,7 @@
         ]
       }
     },
-    "/orgs": {
+    "/v1/orgs": {
       "get": {
         "description": "Returns all organizations the authenticated user belongs to.",
         "operationId": "listOrganizations",
@@ -5257,7 +5257,7 @@
         ]
       }
     },
-    "/orgs/check-slug": {
+    "/v1/orgs/check-slug": {
       "get": {
         "description": "Checks whether an organization slug is available.",
         "operationId": "checkOrgSlug",
@@ -5424,7 +5424,7 @@
         ]
       }
     },
-    "/orgs/invitations/accept": {
+    "/v1/orgs/invitations/accept": {
       "post": {
         "description": "Accepts a pending organization invitation using the invitation token.",
         "operationId": "acceptInvitation",
@@ -5611,7 +5611,7 @@
         ]
       }
     },
-    "/orgs/invitations/decline": {
+    "/v1/orgs/invitations/decline": {
       "post": {
         "description": "Declines a pending organization invitation using the invitation token.",
         "operationId": "declineInvitation",
@@ -5798,7 +5798,7 @@
         ]
       }
     },
-    "/orgs/{orgId}": {
+    "/v1/orgs/{orgId}": {
       "delete": {
         "description": "Deletes an organization and all its members.",
         "operationId": "deleteOrganization",
@@ -6361,7 +6361,7 @@
         ]
       }
     },
-    "/orgs/{orgId}/invitations": {
+    "/v1/orgs/{orgId}/invitations": {
       "get": {
         "description": "Returns all pending invitations for an organization.",
         "operationId": "listInvitations",
@@ -6740,7 +6740,7 @@
         ]
       }
     },
-    "/orgs/{orgId}/members": {
+    "/v1/orgs/{orgId}/members": {
       "get": {
         "description": "Returns all members of an organization.",
         "operationId": "listMembers",
@@ -7119,7 +7119,7 @@
         ]
       }
     },
-    "/orgs/{orgId}/members/{memberId}": {
+    "/v1/orgs/{orgId}/members/{memberId}": {
       "delete": {
         "description": "Removes a member from an organization.",
         "operationId": "removeMember",
@@ -7524,7 +7524,7 @@
         ]
       }
     },
-    "/orgs/{orgId}/teams": {
+    "/v1/orgs/{orgId}/teams": {
       "get": {
         "description": "Returns all teams in an organization.",
         "operationId": "listTeams",
@@ -7904,7 +7904,7 @@
         ]
       }
     },
-    "/orgs/{orgId}/teams/{teamId}": {
+    "/v1/orgs/{orgId}/teams/{teamId}": {
       "delete": {
         "description": "Deletes a team from an organization.",
         "operationId": "deleteTeam",

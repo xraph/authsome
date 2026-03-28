@@ -117,7 +117,7 @@ func (c *Client) OidcDiscovery(ctx context.Context) (*DiscoveryResponse, error) 
 
 // AdminListOrgs — List organizations (admin)
 func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
-	path := "/admin/orgs"
+	path := "/v1/admin/orgs"
 	var result OrgListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
 
 // ListOrganizations — List organizations
 func (c *Client) ListOrganizations(ctx context.Context) (*OrgListResponse, error) {
-	path := "/orgs"
+	path := "/v1/orgs"
 	var result OrgListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (c *Client) CreateOrganization(ctx context.Context, req *CreateOrganization
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs"
+	path := "/v1/orgs"
 	var result Organization
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func (c *Client) CreateOrganization(ctx context.Context, req *CreateOrganization
 
 // CheckOrgSlug — Check slug availability
 func (c *Client) CheckOrgSlug(ctx context.Context) (*SlugAvailableResponse, error) {
-	path := "/orgs/check-slug"
+	path := "/v1/orgs/check-slug"
 	var result SlugAvailableResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (c *Client) AcceptInvitation(ctx context.Context, req *AcceptInvitationRequ
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/invitations/accept"
+	path := "/v1/orgs/invitations/accept"
 	var result Member
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
@@ -179,7 +179,7 @@ func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRe
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/invitations/decline"
+	path := "/v1/orgs/invitations/decline"
 	var result StatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
@@ -189,7 +189,7 @@ func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRe
 
 // GetOrganization — Get organization
 func (c *Client) GetOrganization(ctx context.Context, orgId string) (*Organization, error) {
-	path := "/orgs/{orgId}"
+	path := "/v1/orgs/{orgId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result Organization
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -204,7 +204,7 @@ func (c *Client) UpdateOrganization(ctx context.Context, orgId string, req *Upda
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}"
+	path := "/v1/orgs/{orgId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result Organization
 	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
@@ -219,7 +219,7 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string, req *Dele
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}"
+	path := "/v1/orgs/{orgId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result StatusResponse
 	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
@@ -230,7 +230,7 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string, req *Dele
 
 // ListInvitations — List invitations
 func (c *Client) ListInvitations(ctx context.Context, orgId string) (*InvitationListResponse, error) {
-	path := "/orgs/{orgId}/invitations"
+	path := "/v1/orgs/{orgId}/invitations"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result InvitationListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -245,7 +245,7 @@ func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *Create
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/invitations"
+	path := "/v1/orgs/{orgId}/invitations"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result Invitation
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
@@ -256,7 +256,7 @@ func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *Create
 
 // ListMembers — List members
 func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
-	path := "/orgs/{orgId}/members"
+	path := "/v1/orgs/{orgId}/members"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result MemberListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -271,7 +271,7 @@ func (c *Client) AddMember(ctx context.Context, orgId string, req *AddMemberRequ
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/members"
+	path := "/v1/orgs/{orgId}/members"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result Member
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
@@ -286,7 +286,7 @@ func (c *Client) UpdateMember(ctx context.Context, orgId string, memberId string
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/members/{memberId}"
+	path := "/v1/orgs/{orgId}/members/{memberId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{memberId}", memberId, 1)
 	var result Member
@@ -302,7 +302,7 @@ func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/members/{memberId}"
+	path := "/v1/orgs/{orgId}/members/{memberId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{memberId}", memberId, 1)
 	var result StatusResponse
@@ -314,7 +314,7 @@ func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string
 
 // ListTeams — List teams
 func (c *Client) ListTeams(ctx context.Context, orgId string) (*TeamListResponse, error) {
-	path := "/orgs/{orgId}/teams"
+	path := "/v1/orgs/{orgId}/teams"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result TeamListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
@@ -329,7 +329,7 @@ func (c *Client) CreateTeam(ctx context.Context, orgId string, req *CreateTeamRe
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/teams"
+	path := "/v1/orgs/{orgId}/teams"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	var result Team
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
@@ -340,7 +340,7 @@ func (c *Client) CreateTeam(ctx context.Context, orgId string, req *CreateTeamRe
 
 // GetTeam — Get team
 func (c *Client) GetTeam(ctx context.Context, orgId string, teamId string) (*Team, error) {
-	path := "/orgs/{orgId}/teams/{teamId}"
+	path := "/v1/orgs/{orgId}/teams/{teamId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{teamId}", teamId, 1)
 	var result Team
@@ -356,7 +356,7 @@ func (c *Client) UpdateTeam(ctx context.Context, orgId string, teamId string, re
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/teams/{teamId}"
+	path := "/v1/orgs/{orgId}/teams/{teamId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{teamId}", teamId, 1)
 	var result Team
@@ -372,7 +372,7 @@ func (c *Client) DeleteTeam(ctx context.Context, orgId string, teamId string, re
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	path := "/orgs/{orgId}/teams/{teamId}"
+	path := "/v1/orgs/{orgId}/teams/{teamId}"
 	path = strings.Replace(path, "{orgId}", orgId, 1)
 	path = strings.Replace(path, "{teamId}", teamId, 1)
 	var result StatusResponse

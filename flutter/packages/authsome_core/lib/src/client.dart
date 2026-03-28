@@ -75,7 +75,7 @@ class AuthSomeClient extends generated.AuthClient {
 
   /// Refresh session tokens using a refresh token string.
   Future<TokenResponse> refreshWithToken(String refreshToken) {
-    return super.refreshTokens(body: {'refresh_token': refreshToken});
+    return super.refresh(body: {'refresh_token': refreshToken});
   }
 
   /// Sign out with a token string.
