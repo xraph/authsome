@@ -1,6 +1,6 @@
 {
   "name": "@authsome/client",
-  "version": "0.5.0",
+  "version": "1.4.0",
   "description": "TypeScript client for AuthSome API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@authsome/ui-react",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "React bindings for AuthSome authentication UI",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@authsome/ui-core": "workspace:*"
+    "@authsome/ui-core": "^1.4.0"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
