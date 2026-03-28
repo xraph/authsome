@@ -12,7 +12,6 @@ import (
 
 	"github.com/xraph/forge"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
@@ -127,55 +126,14 @@ func (p *Plugin) Name() string { return "apikey" }
 func (p *Plugin) SetStore(s apikey.Store) { p.store = s }
 
 // OnInit captures bridge references from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type apiKeyStoreGetter interface {
-		APIKeyStore() apikey.Store
-	}
-	if asg, ok := engine.(apiKeyStoreGetter); ok {
-		p.store = asg.APIKeyStore()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	type userResolver interface {
-		ResolveUser(userID string) (*user.User, error)
-	}
-	if ur, ok := engine.(userResolver); ok {
-		p.resolveUser = ur.ResolveUser
-	}
-
-	type configGetter interface {
-		Config() authsome.Config
-	}
-	if cg, ok := engine.(configGetter); ok {
-		p.defaultAppID = cg.Config().AppID
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.store = engine.APIKeyStore()
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.resolveUser = engine.ResolveUser
+	p.defaultAppID = engine.DefaultAppID()
 
 	return nil
 }
@@ -194,12 +152,7 @@ func (p *Plugin) StrategyPriority() int { return 100 }
 // ──────────────────────────────────────────────────
 
 // RegisterRoutes registers API key management routes on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("apikey: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	prefix := p.config.PathPrefix
 	g := router.Group(prefix, forge.WithGroupTags("API Keys"))
 

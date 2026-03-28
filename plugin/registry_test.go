@@ -7,6 +7,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/forge"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -99,7 +101,7 @@ type routePlugin struct {
 	registerCalled bool
 }
 
-func (p *routePlugin) RegisterRoutes(_ any) error {
+func (p *routePlugin) RegisterRoutes(_ forge.Router) error {
 	p.registerCalled = true
 	return nil
 }

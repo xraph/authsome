@@ -3,6 +3,7 @@ package apikey
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -56,8 +57,9 @@ func HashKey(raw string) string {
 }
 
 // VerifyKey checks whether the raw key matches the stored hash.
+// Uses constant-time comparison to prevent timing side-channel attacks.
 func VerifyKey(raw, hash string) bool {
-	return HashKey(raw) == hash
+	return subtle.ConstantTimeCompare([]byte(HashKey(raw)), []byte(hash)) == 1
 }
 
 // EnvironmentKeyMarker returns the key prefix marker for a given environment type.

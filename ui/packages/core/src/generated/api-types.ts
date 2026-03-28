@@ -765,6 +765,7 @@ export interface SlugAvailableResponse {
 
 export interface StartRequest {
   Provider: string;
+  redirect_url?: string;
 }
 
 export interface StartResponse {

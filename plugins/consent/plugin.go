@@ -11,6 +11,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -31,13 +32,14 @@ var (
 
 // Plugin is the consent tracking plugin.
 type Plugin struct {
+	engine      plugin.Engine
 	store       Store
 	hooks       *hook.Bus
 	relay       bridge.EventRelay
 	chronicle   bridge.Chronicle
 	logger      log.Logger
 	basePath    string
-	permChecker middleware.PermissionChecker
+	permChecker plugin.PermissionChecker
 }
 
 // New creates a new consent plugin. An in-memory consent store is used by
@@ -67,38 +69,16 @@ func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 }
 
 // OnInit captures engine capabilities.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.hooks = engine.Hooks()
+	p.relay = engine.Relay()
+	p.chronicle = engine.Chronicle()
+	p.logger = engine.Logger()
 
 	p.basePath = "/v1"
 
-	if pc, ok := engine.(middleware.PermissionChecker); ok {
+	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
 	}
 
@@ -106,15 +86,11 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 }
 
 // RegisterRoutes registers consent HTTP routes.
-func (p *Plugin) RegisterRoutes(router any) error {
-	r, ok := router.(forge.Router)
-	if !ok {
-		return fmt.Errorf("consent: expected forge.Router, got %T", router)
-	}
-
-	g := r.Group(p.basePath+"/consent",
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
+	g := router.Group(p.basePath+"/consent",
 		forge.WithGroupTags("consent"),
-		forge.WithGroupMiddleware(middleware.RequireAuth()),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session")),
 	)
 
 	if err := g.POST("/grant", p.handleGrant,

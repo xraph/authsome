@@ -115,7 +115,7 @@ func (s *SqliteStore) ListEntries(ctx context.Context, q *WaitlistQuery) (*Waitl
 	var models []waitlistModel
 	err := query.
 		OrderExpr("id ASC").
-		Limit(limit + 1).
+		Limit(limit+1).
 		Scan(ctx, &models)
 	if err != nil {
 		return nil, waitlistSqliteError(err)
@@ -143,7 +143,7 @@ func (s *SqliteStore) ListEntries(ctx context.Context, q *WaitlistQuery) (*Waitl
 	}, nil
 }
 
-func (s *SqliteStore) CountByStatus(ctx context.Context, appID id.AppID) (pending int, approved int, rejected int, err error) {
+func (s *SqliteStore) CountByStatus(ctx context.Context, appID id.AppID) (pending, approved, rejected int, err error) {
 	type countRow struct {
 		Status string `grove:"status"`
 		Count  int    `grove:"count"`

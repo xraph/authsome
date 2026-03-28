@@ -77,7 +77,8 @@ func (a *API) registerAuthRoutes(router forge.Router) error {
 		return err
 	}
 
-	return g.POST("/refresh", a.handleRefresh,
+	refreshOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	refreshOpts = append(refreshOpts,
 		forge.WithSummary("Refresh tokens"),
 		forge.WithDescription("Exchanges a refresh token for new session and refresh tokens."),
 		forge.WithOperationID("refreshTokens"),
@@ -85,6 +86,8 @@ func (a *API) registerAuthRoutes(router forge.Router) error {
 		forge.WithResponseSchema(http.StatusOK, "Refreshed tokens", TokenResponse{}),
 		forge.WithErrorResponses(),
 	)
+	refreshOpts = append(refreshOpts, a.rateLimitOpt(rlCfg.RefreshLimit)...)
+	return g.POST("/refresh", a.handleRefresh, refreshOpts...)
 }
 
 // ──────────────────────────────────────────────────
@@ -171,7 +174,11 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 		return nil, forge.BadRequest("refresh_token is required")
 	}
 
-	sess, err := a.engine.Refresh(ctx.Context(), req.RefreshToken)
+	httpReq := ctx.Request()
+	sess, err := a.engine.Refresh(ctx.Context(), req.RefreshToken, authsome.RefreshOpts{
+		IPAddress: clientIPFromRequest(httpReq),
+		UserAgent: httpReq.UserAgent(),
+	})
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -261,9 +268,9 @@ func (a *API) deleteSessionCookie(ctx forge.Context) {
 		Path:     cc.Path,
 		Domain:   cc.Domain,
 		MaxAge:   -1,
-		HttpOnly: true,
+		HttpOnly: cc.HTTPOnly,
 		Secure:   cc.Secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: cc.SameSite,
 	})
 }
 

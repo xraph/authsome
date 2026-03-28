@@ -14,8 +14,10 @@ import (
 
 func (a *API) registerIntrospectRoutes(router forge.Router) error {
 	g := router.Group("/v1", forge.WithGroupTags("introspection"))
+	rlCfg := a.engine.Config().RateLimit
 
-	return g.POST("/introspect", a.handleIntrospect,
+	introspectOpts := make([]forge.RouteOption, 0, 7) //nolint:mnd // base options + rate limit
+	introspectOpts = append(introspectOpts,
 		forge.WithSummary("Introspect token"),
 		forge.WithDescription("Validates a token and returns the associated identity. Follows RFC 7662 semantics: invalid tokens return {active: false} with 200 status."),
 		forge.WithOperationID("introspectToken"),
@@ -23,9 +25,11 @@ func (a *API) registerIntrospectRoutes(router forge.Router) error {
 		forge.WithResponseSchema(http.StatusOK, "Token introspection result", IntrospectResponse{}),
 		forge.WithErrorResponses(),
 	)
+	introspectOpts = append(introspectOpts, a.rateLimitOpt(rlCfg.IntrospectLimit)...)
+	return g.POST("/introspect", a.handleIntrospect, introspectOpts...)
 }
 
-func (a *API) handleIntrospect(ctx forge.Context, req *IntrospectRequest) (*IntrospectResponse, error) {
+func (a *API) handleIntrospect(_ forge.Context, req *IntrospectRequest) (*IntrospectResponse, error) {
 	if req.Token == "" {
 		return nil, forge.BadRequest("token is required")
 	}

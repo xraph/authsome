@@ -178,40 +178,20 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 }
 
 // OnInit discovers engine dependencies.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type loggerGetter interface{ Logger() log.Logger }
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.logger = engine.Logger()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}
 
-	type chronicleGetter interface{ Chronicle() bridge.Chronicle }
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-	type relayGetter interface{ Relay() bridge.EventRelay }
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.settingsMgr = engine.Settings()
 
-	type pluginLister interface {
-		Plugin(name string) plugin.Plugin
-	}
-	if pl, ok := engine.(pluginLister); ok {
-		if gp := pl.Plugin("geoip"); gp != nil {
-			if geoPlugin, ok := gp.(*geoip.Plugin); ok {
-				p.geoIP = geoPlugin
-			}
+	if gp := engine.Plugin("geoip"); gp != nil {
+		if geoPlugin, ok := gp.(*geoip.Plugin); ok {
+			p.geoIP = geoPlugin
 		}
-	}
-
-	type settingsGetter interface {
-		Settings() *settings.Manager
-	}
-	if sg, ok := engine.(settingsGetter); ok {
-		p.settingsMgr = sg.Settings()
 	}
 
 	return nil

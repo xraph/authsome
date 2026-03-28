@@ -81,26 +81,20 @@ type Config struct {
 	SessionRefreshTTL time.Duration
 }
 
-// sessionConfigResolver resolves per-app session configuration.
-type sessionConfigResolver interface {
-	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
-}
-
 // Plugin is the SSO authentication plugin.
 type Plugin struct {
-	config        Config
-	providers     map[string]Provider
-	store         store.Store // Core authsome store (for users/sessions)
-	ssoStore      Store       // SSO-specific store (for connections)
-	appID         string
-	sessionConfig sessionConfigResolver
+	config    Config
+	providers map[string]Provider
+	store     store.Store // Core authsome store (for users/sessions)
+	ssoStore  Store       // SSO-specific store (for connections)
+	appID     string
+	engine    plugin.Engine
 
-	chronicle   bridge.Chronicle
-	relay       bridge.EventRelay
-	hooks       *hook.Bus
-	logger      log.Logger
-	ceremonies  ceremony.Store
-	roleEnsurer roleEnsurer
+	chronicle  bridge.Chronicle
+	relay      bridge.EventRelay
+	hooks      *hook.Bus
+	logger     log.Logger
+	ceremonies ceremony.Store
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -109,11 +103,6 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	return settings.RegisterTyped(m, "sso", SettingSessionRefreshTTLSeconds)
-}
-
-// roleEnsurer assigns a default Warden role to a newly created user.
-type roleEnsurer interface {
-	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
 }
 
 // New creates a new SSO plugin.
@@ -154,58 +143,16 @@ func (p *Plugin) Connections() []string {
 }
 
 // OnInit captures the store reference and bridges from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	type ceremonyGetter interface {
-		CeremonyStore() ceremony.Store
-	}
-	if cg, ok := engine.(ceremonyGetter); ok {
-		p.ceremonies = cg.CeremonyStore()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.store = engine.Store()
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
-	}
-
-	if scr, ok := engine.(sessionConfigResolver); ok {
-		p.sessionConfig = scr
-	}
-
-	if re, ok := engine.(roleEnsurer); ok {
-		p.roleEnsurer = re
 	}
 
 	return nil
@@ -291,12 +238,7 @@ func (p *Plugin) connectionToProvider(conn *Connection) Provider {
 }
 
 // RegisterRoutes registers SSO HTTP endpoints on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("sso: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/sso", forge.WithGroupTags("SSO"))
 
 	if err := g.POST("/:provider/login", p.handleLogin,
@@ -488,8 +430,8 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 			if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
 				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 			}
-			if p.roleEnsurer != nil {
-				p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
+			if p.engine != nil {
+				p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
 			}
 			isNew = true
 		}
@@ -502,8 +444,8 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 		TokenTTL:        p.config.SessionTokenTTL,
 		RefreshTokenTTL: p.config.SessionRefreshTTL,
 	}
-	if p.sessionConfig != nil {
-		sessCfg = p.sessionConfig.SessionConfigForApp(goCtx, appID)
+	if p.engine != nil {
+		sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
 	}
 	sess, err := account.NewSession(appID, u.ID, sessCfg)
 	if err != nil {

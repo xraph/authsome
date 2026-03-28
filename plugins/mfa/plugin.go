@@ -91,48 +91,13 @@ func (p *Plugin) Name() string { return "mfa" }
 
 // OnInit is called during engine initialization. It auto-discovers the SMS
 // sender, chronicle, relay, hooks, logger, and ceremony store from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type smsSenderGetter interface {
-		SMSSender() bridge.SMSSender
-	}
-	if sg, ok := engine.(smsSenderGetter); ok {
-		p.sms = sg.SMSSender()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	type ceremonyGetter interface {
-		CeremonyStore() ceremony.Store
-	}
-	if cg, ok := engine.(ceremonyGetter); ok {
-		p.ceremonies = cg.CeremonyStore()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.sms = engine.SMSSender()
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}
@@ -163,12 +128,7 @@ func (p *Plugin) SetSMSSender(s bridge.SMSSender) {
 }
 
 // RegisterRoutes registers MFA HTTP endpoints on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("mfa: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/mfa", forge.WithGroupTags("MFA"))
 
 	if err := g.POST("/enroll", p.handleEnroll,

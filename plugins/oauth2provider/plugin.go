@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -62,24 +63,13 @@ type Config struct {
 	VerificationURI string
 }
 
-// sessionConfigResolver resolves per-app session configuration.
-type sessionConfigResolver interface {
-	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
-}
-
-// tokenFormatResolver resolves the token format for an app.
-type tokenFormatResolver interface {
-	TokenFormatForApp(appID string) tokenformat.Format
-}
-
 // Plugin is the OAuth2 provider plugin.
 type Plugin struct {
-	config        Config
-	store         store.Store
-	oauth2Store   Store
-	logger        log.Logger
-	sessionConfig sessionConfigResolver
-	tokenFormat   tokenFormatResolver
+	config      Config
+	store       store.Store
+	oauth2Store Store
+	logger      log.Logger
+	engine      plugin.Engine
 }
 
 // New creates a new OAuth2 provider plugin.
@@ -107,29 +97,28 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "oauth2provider" }
 
 // OnInit captures dependencies from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface{ Store() store.Store }
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
-
-	type loggerGetter interface{ Logger() log.Logger }
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.store = engine.Store()
+	p.logger = engine.Logger()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}
 
-	if scr, ok := engine.(sessionConfigResolver); ok {
-		p.sessionConfig = scr
+	// Create a persistent OAuth2 store from the engine's database reference.
+	// Falls back to in-memory if no database is available.
+	if p.oauth2Store == nil {
+		if db := engine.DB(); db != nil {
+			switch db.Driver().Name() {
+			case "pg":
+				p.oauth2Store = NewPostgresStore(db)
+			case "sqlite":
+				p.oauth2Store = NewSqliteStore(db)
+			case "mongo":
+				p.oauth2Store = NewMongoStore(db)
+			}
+		}
 	}
-	if tfr, ok := engine.(tokenFormatResolver); ok {
-		p.tokenFormat = tfr
-	}
-
-	// Use in-memory OAuth2 store by default.
-	// TODO: Support persistent stores via engine accessor.
 	if p.oauth2Store == nil {
 		p.oauth2Store = NewMemoryStore()
 	}
@@ -156,12 +145,7 @@ func (p *Plugin) SetStore(s store.Store) { p.store = s }
 func (p *Plugin) SetOAuth2Store(s Store) { p.oauth2Store = s }
 
 // RegisterRoutes registers OAuth2 provider HTTP endpoints.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("oauth2provider: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// Public OAuth2 endpoints
 	g := router.Group("/v1/oauth", forge.WithGroupTags("OAuth2"))
 
@@ -203,7 +187,7 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return err
 	}
 
-	// Device Authorization Grant (RFC 8628)
+	// Device Authorization Grant (RFC 8628) — public endpoint
 	if err := g.POST("/device/authorize", p.handleDeviceAuthorize,
 		forge.WithSummary("Device Authorization"),
 		forge.WithDescription("Device authorization endpoint (RFC 8628). Returns a device_code and user_code for device/CLI authentication."),
@@ -214,7 +198,16 @@ func (p *Plugin) RegisterRoutes(r any) error {
 		return err
 	}
 
-	if err := g.POST("/device/complete", p.handleDeviceComplete,
+	// Authenticated OAuth2 endpoints — require a logged-in user.
+	// The extension's global AuthMiddleware populates the user context;
+	// RequireAuthMiddleware blocks if no user was resolved.
+	authG := router.Group("/v1/oauth",
+		forge.WithGroupTags("OAuth2"),
+		forge.WithGroupAuth("session"),
+		forge.WithGroupMiddleware(authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session")),
+	)
+
+	if err := authG.POST("/device/complete", p.handleDeviceComplete,
 		forge.WithSummary("Complete device authorization"),
 		forge.WithDescription("Approve or deny a device authorization request. Requires authenticated user. Used by external verification UIs (e.g. authsome-ui)."),
 		forge.WithOperationID("oauth2DeviceComplete"),
@@ -390,6 +383,33 @@ type DeviceCompleteResponse struct {
 type OAuth2Error struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+// OAuth2HTTPError wraps OAuth2 error codes as a framework-compatible HTTP error.
+// This allows RFC 8628 device flow errors to flow through the Forge framework's
+// error handler while maintaining the OAuth2 JSON error response format.
+type OAuth2HTTPError struct {
+	httpStatus  int
+	oauthError  string
+	description string
+}
+
+func (e *OAuth2HTTPError) Error() string   { return e.description }
+func (e *OAuth2HTTPError) StatusCode() int { return e.httpStatus }
+func (e *OAuth2HTTPError) ResponseBody() any {
+	return &OAuth2Error{
+		Error:            e.oauthError,
+		ErrorDescription: e.description,
+	}
+}
+
+// newOAuth2Error creates an OAuth2HTTPError for device flow error responses.
+func newOAuth2Error(status int, errorCode, description string) *OAuth2HTTPError { //nolint:unparam // status kept for API flexibility
+	return &OAuth2HTTPError{
+		httpStatus:  status,
+		oauthError:  errorCode,
+		description: description,
+	}
 }
 
 // ──────────────────────────────────────────────────
@@ -736,8 +756,8 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 		TokenTTL:        p.config.AccessTokenTTL,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	}
-	if p.sessionConfig != nil {
-		sessCfg = p.sessionConfig.SessionConfigForApp(ctx, appID)
+	if p.engine != nil {
+		sessCfg = p.engine.SessionConfigForApp(ctx, appID)
 	}
 
 	sess, err := account.NewSession(appID, userID, sessCfg)
@@ -745,9 +765,15 @@ func (p *Plugin) issueTokens(ctx context.Context, _ *OAuth2Client, userID id.Use
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create session: %w", err))
 	}
 
+	// Bind session to the app's default environment so the FK constraint
+	// on authsome_sessions.env_id is satisfied.
+	if env, envErr := p.store.GetDefaultEnvironment(ctx, appID); envErr == nil && env != nil {
+		sess.EnvID = env.ID
+	}
+
 	// If token format is JWT, generate a JWT access token.
-	if p.tokenFormat != nil {
-		tokFmt := p.tokenFormat.TokenFormatForApp(appID.String())
+	if p.engine != nil {
+		tokFmt := p.engine.TokenFormatForApp(appID.String())
 		if tokFmt.Name() == "jwt" {
 			jwtToken, err := tokFmt.GenerateAccessToken(tokenformat.TokenClaims{
 				UserID:    userID.String(),
@@ -788,6 +814,12 @@ func (p *Plugin) issueClientToken(ctx context.Context, client *OAuth2Client) (*T
 	sess, err := account.NewSession(client.AppID, id.Nil, sessCfg)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("oauth2: create client session: %w", err))
+	}
+
+	// Bind session to the app's default environment so the FK constraint
+	// on authsome_sessions.env_id is satisfied.
+	if env, envErr := p.store.GetDefaultEnvironment(ctx, client.AppID); envErr == nil && env != nil {
+		sess.EnvID = env.ID
 	}
 
 	if err := p.store.CreateSession(ctx, sess); err != nil {
@@ -890,27 +922,17 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 	// Look up the device code.
 	dc, err := p.oauth2Store.GetDeviceCodeByDeviceCode(ctx.Context(), req.DeviceCode)
 	if err != nil {
-		// Return standard OAuth2 error JSON with HTTP 400 per RFC 8628.
-		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-			Error:            "invalid_grant",
-			ErrorDescription: "invalid device_code",
-		})
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "invalid device_code")
 	}
 
 	// Validate client_id matches.
 	if dc.ClientID != req.ClientID {
-		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-			Error:            "invalid_grant",
-			ErrorDescription: "client_id mismatch",
-		})
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "client_id mismatch")
 	}
 
 	// Check expiration.
 	if time.Now().After(dc.ExpiresAt) {
-		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-			Error:            "expired_token",
-			ErrorDescription: "the device code has expired",
-		})
+		return nil, newOAuth2Error(http.StatusBadRequest, "expired_token", "the device code has expired")
 	}
 
 	// RFC 8628 Section 3.5: enforce polling interval (slow_down).
@@ -922,10 +944,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 			dc.Interval += 5
 			dc.LastPolledAt = now
 			_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc) //nolint:errcheck // best-effort update
-			return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-				Error:            "slow_down",
-				ErrorDescription: "polling too frequently, please slow down",
-			})
+			return nil, newOAuth2Error(http.StatusBadRequest, "slow_down", "polling too frequently, please slow down")
 		}
 	}
 	// Record this poll timestamp.
@@ -937,16 +956,10 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		// Persist the updated LastPolledAt.
 		_ = p.oauth2Store.UpdateDeviceCode(ctx.Context(), dc) //nolint:errcheck // best-effort update
 		// RFC 8628 Section 3.5: authorization_pending is expected during polling.
-		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-			Error:            "authorization_pending",
-			ErrorDescription: "the user has not yet completed authorization",
-		})
+		return nil, newOAuth2Error(http.StatusBadRequest, "authorization_pending", "the user has not yet completed authorization")
 
 	case DeviceCodeStatusDenied:
-		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-			Error:            "access_denied",
-			ErrorDescription: "the user denied the authorization request",
-		})
+		return nil, newOAuth2Error(http.StatusBadRequest, "access_denied", "the user denied the authorization request")
 
 	case DeviceCodeStatusAuthorized:
 		// Success! Issue tokens.
@@ -965,10 +978,7 @@ func (p *Plugin) handleDeviceCodeGrant(ctx forge.Context, req *TokenRequest) (*T
 		return p.issueTokens(ctx.Context(), client, dc.UserID, dc.AppID, dc.Scopes)
 
 	default:
-		return nil, ctx.JSON(http.StatusBadRequest, &OAuth2Error{
-			Error:            "invalid_grant",
-			ErrorDescription: "unexpected device code status",
-		})
+		return nil, newOAuth2Error(http.StatusBadRequest, "invalid_grant", "unexpected device code status")
 	}
 }
 
@@ -980,14 +990,21 @@ func (p *Plugin) handleDeviceComplete(ctx forge.Context, req *DeviceCompleteRequ
 		return nil, forge.BadRequest("action must be 'approve' or 'deny'")
 	}
 
-	// Require authenticated user.
+	// Require authenticated user (resolved by the auth middleware on this group).
 	userID, ok := middleware.UserIDFrom(ctx.Context())
 	if !ok {
 		return nil, forge.Unauthorized("authentication required to complete device authorization")
 	}
 
+	// Normalize user code: accept both "ABCDEFGH" and "ABCD-EFGH" formats.
+	// Stored format is XXXX-XXXX, so insert dash if missing.
+	userCode := strings.ToUpper(strings.ReplaceAll(req.UserCode, "-", ""))
+	if len(userCode) == 8 {
+		userCode = userCode[:4] + "-" + userCode[4:]
+	}
+
 	// Look up device code by user code.
-	dc, err := p.oauth2Store.GetDeviceCodeByUserCode(ctx.Context(), req.UserCode)
+	dc, err := p.oauth2Store.GetDeviceCodeByUserCode(ctx.Context(), userCode)
 	if err != nil {
 		return nil, forge.NotFound("invalid or expired user code")
 	}

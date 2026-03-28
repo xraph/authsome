@@ -1,18 +1,11 @@
 package scim
 
 import (
-	"fmt"
-
 	"github.com/xraph/forge"
 )
 
 // RegisterRoutes registers SCIM 2.0 API routes on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("scim: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	prefix := p.config.BasePath
 
 	// SCIM discovery endpoints.

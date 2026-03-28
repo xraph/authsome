@@ -231,16 +231,16 @@ func (s *MongoStore) ListEntries(ctx context.Context, q *WaitlistQuery) (*Waitli
 	}, nil
 }
 
-func (s *MongoStore) CountByStatus(ctx context.Context, appID id.AppID) (pending int, approved int, rejected int, err error) {
+func (s *MongoStore) CountByStatus(ctx context.Context, appID id.AppID) (pending, approved, rejected int, err error) {
 	coll := s.mdb.Collection(waitlistColl)
 
 	countStatus := func(status WaitlistStatus) (int, error) {
-		n, err := coll.CountDocuments(ctx, bson.M{
+		n, countErr := coll.CountDocuments(ctx, bson.M{
 			"app_id": appID.String(),
 			"status": string(status),
 		})
-		if err != nil {
-			return 0, waitlistMongoError(err)
+		if countErr != nil {
+			return 0, waitlistMongoError(countErr)
 		}
 		return int(n), nil
 	}

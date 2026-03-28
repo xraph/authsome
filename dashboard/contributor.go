@@ -627,12 +627,12 @@ func (c *Contributor) renderSettingsPage(ctx context.Context) (templ.Component, 
 	// Load per-app overrides to reflect current toggle state.
 	if clientCfg, err := c.engine.Store().GetAppClientConfig(ctx, appID); err == nil {
 		overrides := map[string]*bool{
-			"password_enabled":  clientCfg.PasswordEnabled,
-			"social_enabled":    clientCfg.SocialEnabled,
-			"passkey_enabled":   clientCfg.PasskeyEnabled,
-			"magiclink_enabled": clientCfg.MagicLinkEnabled,
-			"mfa_enabled":       clientCfg.MFAEnabled,
-			"sso_enabled":       clientCfg.SSOEnabled,
+			"password_enabled":           clientCfg.PasswordEnabled,
+			"social_enabled":             clientCfg.SocialEnabled,
+			"passkey_enabled":            clientCfg.PasskeyEnabled,
+			"magiclink_enabled":          clientCfg.MagicLinkEnabled,
+			"mfa_enabled":                clientCfg.MFAEnabled,
+			"sso_enabled":                clientCfg.SSOEnabled,
 			"require_email_verification": clientCfg.RequireEmailVerification,
 			"waitlist_enabled":           clientCfg.WaitlistEnabled,
 		}
@@ -928,13 +928,14 @@ func (c *Contributor) handleLogin(ctx context.Context, params contributor.Params
 		// Show the actual error so users can distinguish between wrong
 		// credentials, email-not-verified, account locked, etc.
 		msg := "Invalid email or password"
-		if errors.Is(err, account.ErrEmailNotVerified) {
+		switch {
+		case errors.Is(err, account.ErrEmailNotVerified):
 			msg = "Please verify your email address before signing in"
-		} else if errors.Is(err, account.ErrAccountLocked) {
+		case errors.Is(err, account.ErrAccountLocked):
 			msg = "Account temporarily locked due to too many failed attempts"
-		} else if errors.Is(err, account.ErrUserBanned) {
+		case errors.Is(err, account.ErrUserBanned):
 			msg = "Account has been suspended"
-		} else if errors.Is(err, account.ErrPasswordExpired) {
+		case errors.Is(err, account.ErrPasswordExpired):
 			msg = "Password has expired and must be changed"
 		}
 		return "", auth.LoginError(msg, auth.LoginPageLinks{RegisterPath: "./register"}), nil

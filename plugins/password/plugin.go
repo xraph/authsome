@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xraph/forge"
+
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
@@ -125,7 +127,7 @@ func (p *Plugin) OnBeforeSignUp(_ context.Context, req *account.SignUpRequest) e
 
 // RegisterRoutes is a no-op for the password plugin since the core signup/signin
 // routes are already registered by the API handler.
-func (p *Plugin) RegisterRoutes(_ any) error {
+func (p *Plugin) RegisterRoutes(_ forge.Router) error {
 	return nil
 }
 
@@ -135,13 +137,8 @@ func (p *Plugin) Strategy() strategy.Strategy {
 }
 
 // OnInit captures the store from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.store = engine.Store()
 	return nil
 }
 

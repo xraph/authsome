@@ -13,28 +13,35 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/auth"
+
 	"github.com/xraph/authsome/account"
-	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/appsessionconfig"
+	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/authz"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/securityevent"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/user"
 
+	"github.com/xraph/grove"
 	"github.com/xraph/keysmith"
 	xledger "github.com/xraph/ledger"
 	ledgerstore "github.com/xraph/ledger/store"
@@ -100,7 +107,19 @@ type Engine struct {
 	bootstrapCfg  *BootstrapConfig
 	platformAppID id.AppID
 
-	started bool
+	// Database reference for plugins that need direct database access
+	// to create their own persistent stores.
+	db *grove.DB
+
+	// Cached auth middleware — built once during InitPlugins() with full
+	// capability detection (JWT + strategies + cookie bridge).
+	authMiddleware forge.Middleware
+
+	// Forge auth provider registry — plugins register their providers here.
+	authRegistry auth.Registry
+
+	pluginsInitialized bool
+	started            bool
 }
 
 // NewEngine creates a new AuthSome engine with the given options.
@@ -171,6 +190,169 @@ func (e *Engine) requireStarted() error {
 	return nil
 }
 
+// buildAuthMiddleware constructs the fully-configured auth middleware with
+// capability detection (JWT, strategies) and the cookie-to-header bridge.
+// Called once during InitPlugins so both the extension and plugins share
+// the same middleware instance.
+func (e *Engine) buildAuthMiddleware() {
+	var inner forge.Middleware
+
+	bindCfg := middleware.SessionBindingConfig{
+		CookieNameResolver: e.resolveSessionCookieName,
+		JWTSessionChecker:  e.jwtSessionChecker,
+	}
+
+	switch {
+	case e.HasJWT():
+		inner = middleware.AuthMiddlewareWithJWT(
+			e.ResolveSessionByToken,
+			e.ResolveUser,
+			e.Strategies(),
+			e,
+			e.Logger(),
+			bindCfg,
+		)
+	case e.HasStrategies():
+		inner = middleware.AuthMiddlewareWithStrategies(
+			e.ResolveSessionByToken,
+			e.ResolveUser,
+			e.Strategies(),
+			e.Logger(),
+			bindCfg,
+		)
+	default:
+		inner = middleware.AuthMiddleware(
+			e.ResolveSessionByToken,
+			e.ResolveUser,
+			e.Logger(),
+			bindCfg,
+		)
+	}
+
+	// Wrap with cookie-to-header bridge: when no Authorization header is
+	// present, read the auth_token cookie (set during browser login) or
+	// the dynamic session cookie and inject it as a Bearer token.
+	e.authMiddleware = func(next forge.Handler) forge.Handler {
+		return func(ctx forge.Context) error {
+			r := ctx.Request()
+			if r.Header.Get("Authorization") == "" {
+				if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
+					r.Header.Set("Authorization", "Bearer "+cookie.Value)
+				} else {
+					// Fall back to the dynamic session cookie name from settings.
+					cookieName := e.resolveSessionCookieName(ctx.Context())
+					if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
+						r.Header.Set("Authorization", "Bearer "+cookie.Value)
+					}
+				}
+			}
+			return inner(next)(ctx)
+		}
+	}
+}
+
+// AuthMiddleware returns the engine's fully-configured non-blocking
+// authentication middleware (cookie bridge + JWT + strategies). Populates
+// user context when a valid token is present, passes through otherwise.
+// Applied globally by the extension.
+func (e *Engine) AuthMiddleware() forge.Middleware { return e.authMiddleware }
+
+// AuthRegistry returns the forge auth provider registry. Plugins can register
+// their own auth providers and create middleware via registry.Middleware().
+func (e *Engine) AuthRegistry() auth.Registry { return e.authRegistry }
+
+// SetAuthRegistry sets the forge auth provider registry. Called by the
+// extension after obtaining the registry from the DI container.
+func (e *Engine) SetAuthRegistry(r auth.Registry) { e.authRegistry = r }
+
+// registerSessionAuthProvider registers the core "session" auth provider
+// with the forge auth registry. This must be called before plugin OnInit
+// so plugins can reference "session" in their auth declarations.
+func (e *Engine) registerSessionAuthProvider() {
+	if e.authRegistry == nil {
+		e.logger.Debug("authsome: no auth registry available, skipping session provider registration")
+		return
+	}
+	provider := authprovider.NewSessionProvider(e.ResolveSessionByToken, e.ResolveUser, e.logger, e.resolveSessionCookieName)
+	if err := e.authRegistry.Register(provider); err != nil {
+		e.logger.Warn("authsome: failed to register session auth provider",
+			log.String("error", err.Error()),
+		)
+	} else {
+		e.logger.Info("authsome: registered 'session' auth provider with forge auth registry")
+	}
+}
+
+// resolveSessionCookieName returns the session cookie name for the given
+// context by reading from dynamic settings. Falls back to the default
+// "authsome_session_token" when settings are unavailable or unset.
+func (e *Engine) resolveSessionCookieName(ctx context.Context) string {
+	mgr := e.Settings()
+	if mgr == nil {
+		return "authsome_session_token"
+	}
+	opts := settings.ResolveOpts{}
+	if appID, ok := middleware.AppIDFrom(ctx); ok {
+		opts.AppID = appID.String()
+	}
+	name, err := settings.Get(ctx, mgr, SettingCookieName, opts)
+	if err != nil || name == "" {
+		return "authsome_session_token"
+	}
+	return name
+}
+
+// jwtSessionChecker checks whether a JWT's session ID still exists in the
+// store. This enables JWT revocation — revoked sessions are rejected even if
+// the JWT signature is valid. The SettingJWTRequireActiveSession setting
+// controls whether this check is active; when disabled, a non-nil sentinel
+// session is returned to skip binding checks.
+func (e *Engine) jwtSessionChecker(sessionIDStr string) (*session.Session, error) {
+	ctx := context.Background()
+
+	// Check if the feature is enabled via dynamic settings.
+	mgr := e.Settings()
+	if mgr != nil {
+		enabled, _ := settings.Get(ctx, mgr, SettingJWTRequireActiveSession, settings.ResolveOpts{}) //nolint:errcheck // best-effort
+		if !enabled {
+			return nil, nil //nolint:nilnil // nil,nil signals "feature disabled, skip check"
+		}
+	}
+
+	sessID, err := id.ParseSessionID(sessionIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: invalid session ID in JWT: %w", err)
+	}
+	return e.store.GetSession(ctx, sessID)
+}
+
+// ensureAuthRegistry creates a local in-memory auth registry if no external
+// one was provided (e.g. forge auth extension not registered in the app).
+// This ensures AuthRegistry() never returns nil and plugins can always
+// register providers and create middleware.
+func (e *Engine) ensureAuthRegistry() {
+	if e.authRegistry != nil {
+		return
+	}
+	e.authRegistry = auth.NewRegistry(nil, e.logger)
+	e.logger.Debug("authsome: created local auth registry (forge auth extension not available)")
+}
+
+// InitPlugins builds the auth middleware, registers the session auth provider,
+// and calls OnInit on all registered plugins. Idempotent — safe to call
+// multiple times. The extension calls this before route registration so
+// plugins can set up dependencies that RegisterRoutes relies on.
+func (e *Engine) InitPlugins(ctx context.Context) {
+	if e.pluginsInitialized {
+		return
+	}
+	e.buildAuthMiddleware()
+	e.ensureAuthRegistry()
+	e.registerSessionAuthProvider()
+	e.plugins.EmitOnInit(ctx, e)
+	e.pluginsInitialized = true
+}
+
 // Start initializes the engine, runs migrations, and starts plugins.
 func (e *Engine) Start(ctx context.Context) error {
 	if e.started {
@@ -192,10 +374,9 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}
 
-	// Initialize plugins BEFORE bootstrap so that plugin-seeded resources
-	// (e.g. herald notification templates) exist when bootstrap fires
-	// notifications during first-user or role creation.
-	e.plugins.EmitOnInit(ctx, e)
+	// Initialize plugins (idempotent — may have been called earlier by
+	// the extension before route registration).
+	e.InitPlugins(ctx)
 
 	// Seed per-app session configs (from code options or YAML config).
 	for _, cfg := range e.pendingAppSessCfgs {
@@ -341,6 +522,9 @@ func (e *Engine) registerWardenResourceTypes(ctx context.Context) {
 // Accessors
 // ──────────────────────────────────────────────────
 
+// Compile-time check: *Engine must satisfy plugin.Engine.
+var _ plugin.Engine = (*Engine)(nil)
+
 // Store returns the persistence backend.
 func (e *Engine) Store() store.Store { return e.store }
 
@@ -354,8 +538,17 @@ func (e *Engine) GetUser(ctx context.Context, userID id.UserID) (*user.User, err
 // Plugins returns the plugin registry.
 func (e *Engine) Plugins() *plugin.Registry { return e.plugins }
 
+// Plugin returns a registered plugin by name, or nil if not found.
+func (e *Engine) Plugin(name string) plugin.Plugin { return e.plugins.Plugin(name) }
+
 // Hooks returns the global event bus.
 func (e *Engine) Hooks() *hook.Bus { return e.hooks }
+
+// DefaultAppID returns the configured app ID string.
+func (e *Engine) DefaultAppID() string { return e.config.AppID }
+
+// BasePath returns the URL prefix for auth routes.
+func (e *Engine) BasePath() string { return e.config.BasePath }
 
 // Strategies returns the strategy registry.
 func (e *Engine) Strategies() *strategy.Registry { return e.strategies }
@@ -453,6 +646,10 @@ func (e *Engine) Keysmith() *keysmith.Engine { return e.keysmithEng }
 // Settings returns the dynamic settings manager (may be nil).
 func (e *Engine) Settings() *settings.Manager { return e.settingsMgr }
 
+// DB returns the database handle so plugins can create their own persistent
+// stores. Returns nil if not set.
+func (e *Engine) DB() *grove.DB { return e.db }
+
 // ──────────────────────────────────────────────────
 // Client configuration types
 // ──────────────────────────────────────────────────
@@ -461,20 +658,20 @@ func (e *Engine) Settings() *settings.Manager { return e.settingsMgr }
 // by the /client-config endpoint. It tells the frontend SDK which auth
 // methods are enabled, available providers, branding, etc.
 type ClientConfigResponse struct {
-	Version              string                        `json:"version"`
-	AppID                string                        `json:"app_id"`
-	Branding             *ClientConfigBranding         `json:"branding,omitempty"`
-	Password             *ClientConfigToggle           `json:"password,omitempty"`
-	Social               *ClientConfigSocial           `json:"social,omitempty"`
-	Passkey              *ClientConfigToggle           `json:"passkey,omitempty"`
-	MFA                  *ClientConfigMFA              `json:"mfa,omitempty"`
-	MagicLink            *ClientConfigToggle           `json:"magiclink,omitempty"`
-	SSO                  *ClientConfigSSO              `json:"sso,omitempty"`
-	EmailVerification    *ClientConfigEmailVerification `json:"email_verification,omitempty"`
-	DeviceAuthorization  *ClientConfigToggle           `json:"device_authorization,omitempty"`
-	Waitlist             *ClientConfigToggle           `json:"waitlist,omitempty"`
-	SupportedPlugins     []string                      `json:"supported_plugins"`
-	SignupFields         []ClientConfigSignupField     `json:"signup_fields,omitempty"`
+	Version             string                         `json:"version"`
+	AppID               string                         `json:"app_id"`
+	Branding            *ClientConfigBranding          `json:"branding,omitempty"`
+	Password            *ClientConfigToggle            `json:"password,omitempty"`
+	Social              *ClientConfigSocial            `json:"social,omitempty"`
+	Passkey             *ClientConfigToggle            `json:"passkey,omitempty"`
+	MFA                 *ClientConfigMFA               `json:"mfa,omitempty"`
+	MagicLink           *ClientConfigToggle            `json:"magiclink,omitempty"`
+	SSO                 *ClientConfigSSO               `json:"sso,omitempty"`
+	EmailVerification   *ClientConfigEmailVerification `json:"email_verification,omitempty"`
+	DeviceAuthorization *ClientConfigToggle            `json:"device_authorization,omitempty"`
+	Waitlist            *ClientConfigToggle            `json:"waitlist,omitempty"`
+	SupportedPlugins    []string                       `json:"supported_plugins"`
+	SignupFields        []ClientConfigSignupField      `json:"signup_fields,omitempty"`
 }
 
 // ClientConfigEmailVerification represents email verification settings.
@@ -526,15 +723,15 @@ type ClientConfigSSOConnection struct {
 
 // ClientConfigSignupField describes a custom signup form field.
 type ClientConfigSignupField struct {
-	Key         string                        `json:"key"`
-	Label       string                        `json:"label"`
-	Type        string                        `json:"type"`
-	Placeholder string                        `json:"placeholder,omitempty"`
-	Description string                        `json:"description,omitempty"`
-	Options     []ClientConfigSelectOption    `json:"options,omitempty"`
-	Default     string                        `json:"default,omitempty"`
-	Validation  *ClientConfigFieldValidation  `json:"validation,omitempty"`
-	Order       int                           `json:"order"`
+	Key         string                       `json:"key"`
+	Label       string                       `json:"label"`
+	Type        string                       `json:"type"`
+	Placeholder string                       `json:"placeholder,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Options     []ClientConfigSelectOption   `json:"options,omitempty"`
+	Default     string                       `json:"default,omitempty"`
+	Validation  *ClientConfigFieldValidation `json:"validation,omitempty"`
+	Order       int                          `json:"order"`
 }
 
 // ClientConfigSelectOption represents a select/radio option.
@@ -743,7 +940,7 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 	// required based on environment settings (default: required in production).
 	if passwordEnabled {
 		emailVerifRequired := true
-		if env, _ := e.GetDefaultEnvironment(ctx, appID); env != nil && env.Settings != nil {
+		if env, _ := e.GetDefaultEnvironment(ctx, appID); env != nil && env.Settings != nil { //nolint:errcheck // best-effort env lookup
 			if env.Settings.SkipEmailVerification != nil && *env.Settings.SkipEmailVerification {
 				emailVerifRequired = false
 			}

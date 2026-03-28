@@ -154,7 +154,7 @@ func (p *Plugin) Name() string { return "passkey" }
 
 // OnInit initializes the WebAuthn library and optionally extracts bridges
 // and the ceremony store from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	wa, err := webauthn.New(&webauthn.Config{
 		RPDisplayName: p.config.RPDisplayName,
 		RPID:          p.config.RPID,
@@ -165,40 +165,11 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	}
 	p.wa = wa
 
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	type ceremonyGetter interface {
-		CeremonyStore() ceremony.Store
-	}
-	if cg, ok := engine.(ceremonyGetter); ok {
-		p.ceremonies = cg.CeremonyStore()
-	}
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}

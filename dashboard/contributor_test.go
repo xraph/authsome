@@ -10,9 +10,10 @@ import (
 
 	"github.com/xraph/authsome/store/memory"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/warden"
 	wardenmem "github.com/xraph/warden/store/memory"
+
+	authsome "github.com/xraph/authsome"
 )
 
 // TestParseAppEnvRoute verifies URL parsing for the dashboard route dispatcher.

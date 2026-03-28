@@ -29,7 +29,7 @@ export function openOAuthPopup(
  * so the caller typically just needs to redirect/reload after completion.
  */
 export async function handleSocialLogin(
-  client: { startOAuth: (provider: string, body: { Provider: string }) => Promise<{ auth_url: string }> },
+  client: { startOAuth: (provider: string, body: { Provider: string; redirect_url?: string }) => Promise<{ auth_url: string }> },
   providerId: string,
   onComplete: () => void,
   onError?: (err: unknown) => void,
@@ -37,6 +37,7 @@ export async function handleSocialLogin(
   try {
     const { auth_url } = await client.startOAuth(providerId, {
       Provider: providerId,
+      redirect_url: window.location.href,
     });
 
     const popup = openOAuthPopup(auth_url);

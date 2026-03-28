@@ -15,24 +15,67 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/auth"
 
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
+	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
+	"github.com/xraph/authsome/store"
 	memoryStore "github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/strategy"
+	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/user"
+
+	"github.com/xraph/grove"
 )
 
-// mockEngine provides the interfaces that apikey.Plugin.OnInit expects.
+// mockEngine provides a minimal mock of plugin.Engine for testing the apikey plugin.
 type mockEngine struct {
 	logger log.Logger
 	store  apikey.Store
 }
 
-func (m *mockEngine) Logger() log.Logger        { return m.logger }
-func (m *mockEngine) APIKeyStore() apikey.Store { return m.store }
+// Compile-time check.
+var _ plugin.Engine = (*mockEngine)(nil)
+
+func (m *mockEngine) Store() store.Store            { return nil }
+func (m *mockEngine) DB() *grove.DB                 { return nil }
+func (m *mockEngine) Plugins() *plugin.Registry     { return nil }
+func (m *mockEngine) Plugin(_ string) plugin.Plugin { return nil }
+func (m *mockEngine) Hooks() *hook.Bus              { return nil }
+func (m *mockEngine) Logger() log.Logger            { return m.logger }
+func (m *mockEngine) Settings() *settings.Manager   { return nil }
+func (m *mockEngine) Chronicle() bridge.Chronicle   { return nil }
+func (m *mockEngine) Relay() bridge.EventRelay      { return nil }
+func (m *mockEngine) Herald() bridge.Herald         { return nil }
+func (m *mockEngine) Mailer() bridge.Mailer         { return nil }
+func (m *mockEngine) SMSSender() bridge.SMSSender   { return nil }
+func (m *mockEngine) Ledger() bridge.Ledger         { return nil }
+func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.EnvironmentID) account.SessionConfig {
+	return account.SessionConfig{}
+}
+func (m *mockEngine) TokenFormatForApp(_ string) tokenformat.Format { return nil }
+func (m *mockEngine) CeremonyStore() ceremony.Store                 { return nil }
+func (m *mockEngine) APIKeyStore() apikey.Store                     { return m.store }
+func (m *mockEngine) ResolveSessionByToken(_ string) (*session.Session, error) {
+	return nil, errors.New("not implemented")
+}
+func (m *mockEngine) GetUser(_ context.Context, _ id.UserID) (*user.User, error) {
+	return nil, errors.New("not implemented")
+}
+func (m *mockEngine) EnsureDefaultRole(_ context.Context, _ id.AppID, _ id.UserID) {}
+func (m *mockEngine) AuthMiddleware() forge.Middleware                             { return nil }
+func (m *mockEngine) AuthRegistry() auth.Registry                                  { return nil }
+func (m *mockEngine) PlatformAppID() id.AppID                                      { return id.AppID{} }
+func (m *mockEngine) DefaultAppID() string                                         { return "" }
+func (m *mockEngine) BasePath() string                                             { return "" }
 func (m *mockEngine) ResolveUser(userID string) (*user.User, error) {
 	uid, err := id.ParseUserID(userID)
 	if err != nil {

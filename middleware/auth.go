@@ -35,6 +35,15 @@ type JWTValidator interface {
 	ValidateJWT(token string) (*tokenformat.TokenClaims, error)
 }
 
+// SessionExistsChecker checks whether a session ID still exists in the store.
+// Used for JWT revocation support — when enabled, JWT tokens are cross-checked
+// against the session store so revoked sessions are rejected immediately.
+type SessionExistsChecker func(sessionID string) (*session.Session, error)
+
+// CookieNameResolver returns the session cookie name for the current context.
+// When nil, the default "authsome_session_token" is used.
+type CookieNameResolver func(ctx context.Context) string
+
 // SessionBindingConfig controls session binding validation.
 type SessionBindingConfig struct {
 	// BindToIP rejects requests when the client IP differs from the
@@ -44,6 +53,15 @@ type SessionBindingConfig struct {
 	// BindToDevice rejects requests when the User-Agent differs from
 	// the one recorded at session creation.
 	BindToDevice bool
+
+	// CookieNameResolver returns the session cookie name for the current
+	// request context. Falls back to "authsome_session_token" if nil or empty.
+	CookieNameResolver CookieNameResolver
+
+	// JWTSessionChecker, when set, cross-checks JWT tokens against the session
+	// store. This enables JWT revocation — revoked sessions are rejected even
+	// if the JWT signature is valid. Also enables IP/device binding for JWTs.
+	JWTSessionChecker SessionExistsChecker
 }
 
 // AuthMiddleware extracts the session token from the Authorization header,
@@ -58,7 +76,8 @@ func AuthMiddleware(resolveSession SessionResolver, resolveUser UserResolver, lo
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			token := extractBearerToken(ctx.Request())
+			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
+			token := extractBearerToken(ctx.Request(), cookieName)
 			if token == "" {
 				return next(ctx)
 			}
@@ -170,7 +189,8 @@ func AuthMiddlewareWithStrategies(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			token := extractBearerToken(ctx.Request())
+			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
+			token := extractBearerToken(ctx.Request(), cookieName)
 
 			// Try bearer session resolution first (skip if token looks like an API key).
 			if token != "" && !isAPIKeyToken(token) {
@@ -210,12 +230,13 @@ func AuthMiddlewareWithJWT(
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			token := extractBearerToken(ctx.Request())
+			cookieName := resolveCookieName(bindCfg.CookieNameResolver, ctx.Context())
+			token := extractBearerToken(ctx.Request(), cookieName)
 
 			if token != "" {
 				// JWT detection: tokens with two dots are JWTs.
 				if tokenformat.IsJWT(token) && jwtValidator != nil {
-					if resolved := tryJWTAuth(ctx, token, jwtValidator, resolveUser, logger); resolved {
+					if resolved := tryJWTAuth(ctx, token, jwtValidator, resolveUser, logger, bindCfg); resolved {
 						return next(ctx)
 					}
 				}
@@ -241,12 +262,15 @@ func AuthMiddlewareWithJWT(
 }
 
 // tryJWTAuth validates a JWT token stateless and sets context from claims.
+// When a session checker is provided, the session is cross-checked against
+// the store to support JWT revocation and IP/device binding.
 func tryJWTAuth(
 	ctx forge.Context,
 	token string,
 	validator JWTValidator,
 	resolveUser UserResolver,
 	logger log.Logger,
+	bindCfg SessionBindingConfig,
 ) bool {
 	claims, err := validator.ValidateJWT(token)
 	if err != nil {
@@ -254,6 +278,48 @@ func tryJWTAuth(
 			log.String("error", err.Error()),
 		)
 		return false
+	}
+
+	// When a session checker is configured, cross-check the JWT's session ID
+	// against the store. This enables revocation and IP/device binding for JWTs.
+	// The checker returns (nil, nil) when the feature is disabled via settings.
+	if bindCfg.JWTSessionChecker != nil && claims.SessionID != "" {
+		sess, sessErr := bindCfg.JWTSessionChecker(claims.SessionID)
+		if sessErr != nil {
+			logger.Debug("auth middleware: JWT session not found in store (revoked?)",
+				log.String("session_id", claims.SessionID),
+			)
+			return false
+		}
+
+		// sess == nil && sessErr == nil means "feature disabled, skip checks".
+		if sess != nil {
+			// Validate IP binding for JWT.
+			if bindCfg.BindToIP && sess.IPAddress != "" {
+				clientIP := clientIPFromRequest(ctx.Request())
+				if clientIP != sess.IPAddress {
+					logger.Warn("auth middleware: JWT session IP mismatch",
+						log.String("session_ip", sess.IPAddress),
+						log.String("client_ip", clientIP),
+						log.String("session_id", sess.ID.String()),
+					)
+					return false
+				}
+			}
+
+			// Validate device binding for JWT.
+			if bindCfg.BindToDevice && sess.UserAgent != "" {
+				ua := ctx.Request().UserAgent()
+				if ua != sess.UserAgent {
+					logger.Warn("auth middleware: JWT session device mismatch",
+						log.String("session_ua", sess.UserAgent),
+						log.String("client_ua", ua),
+						log.String("session_id", sess.ID.String()),
+					)
+					return false
+				}
+			}
+		}
 	}
 
 	goCtx := ctx.Context()
@@ -450,7 +516,7 @@ func isAPIKeyToken(token string) bool {
 	return apikey.IsAPIKey(token)
 }
 
-func extractBearerToken(r *http.Request) string {
+func extractBearerToken(r *http.Request, cookieName string) string {
 	auth := r.Header.Get("Authorization")
 	if auth != "" {
 		parts := strings.SplitN(auth, " ", 2)
@@ -459,10 +525,23 @@ func extractBearerToken(r *http.Request) string {
 		}
 	}
 	// Fallback: read session token from httpOnly cookie set by the backend.
-	if cookie, err := r.Cookie("authsome_session_token"); err == nil && cookie.Value != "" {
+	if cookieName == "" {
+		cookieName = "authsome_session_token"
+	}
+	if cookie, err := r.Cookie(cookieName); err == nil && cookie.Value != "" {
 		return cookie.Value
 	}
 	return ""
+}
+
+// resolveCookieName returns the session cookie name using the resolver, or the default.
+func resolveCookieName(resolver CookieNameResolver, ctx context.Context) string { //nolint:revive // ctx not first param: resolver is the primary input
+	if resolver != nil {
+		if name := resolver(ctx); name != "" {
+			return name
+		}
+	}
+	return "authsome_session_token"
 }
 
 // clientIPFromRequest extracts the client IP from the request, checking

@@ -1169,36 +1169,36 @@ func fromAppSessionConfigModel(m *appSessionConfigModel) (*appsessionconfig.Conf
 type appClientConfigModel struct {
 	grove.BaseModel `grove:"table:authsome_app_client_configs"`
 
-	ID               string          `grove:"id,pk"               bson:"_id"`
-	AppID            string          `grove:"app_id"              bson:"app_id"`
-	PasswordEnabled  *bool           `grove:"password_enabled"    bson:"password_enabled,omitempty"`
-	PasskeyEnabled   *bool           `grove:"passkey_enabled"     bson:"passkey_enabled,omitempty"`
-	MagicLinkEnabled *bool           `grove:"magic_link_enabled"  bson:"magic_link_enabled,omitempty"`
-	MFAEnabled       *bool           `grove:"mfa_enabled"         bson:"mfa_enabled,omitempty"`
-	SSOEnabled       *bool           `grove:"sso_enabled"         bson:"sso_enabled,omitempty"`
-	SocialEnabled    *bool           `grove:"social_enabled"      bson:"social_enabled,omitempty"`
+	ID                       string          `grove:"id,pk"               bson:"_id"`
+	AppID                    string          `grove:"app_id"              bson:"app_id"`
+	PasswordEnabled          *bool           `grove:"password_enabled"    bson:"password_enabled,omitempty"`
+	PasskeyEnabled           *bool           `grove:"passkey_enabled"     bson:"passkey_enabled,omitempty"`
+	MagicLinkEnabled         *bool           `grove:"magic_link_enabled"  bson:"magic_link_enabled,omitempty"`
+	MFAEnabled               *bool           `grove:"mfa_enabled"         bson:"mfa_enabled,omitempty"`
+	SSOEnabled               *bool           `grove:"sso_enabled"         bson:"sso_enabled,omitempty"`
+	SocialEnabled            *bool           `grove:"social_enabled"      bson:"social_enabled,omitempty"`
 	WaitlistEnabled          *bool           `grove:"waitlist_enabled"              bson:"waitlist_enabled,omitempty"`
 	RequireEmailVerification *bool           `grove:"require_email_verification"    bson:"require_email_verification,omitempty"`
 	SocialProviders          json.RawMessage `grove:"social_providers"              bson:"social_providers,omitempty"`
-	MFAMethods       json.RawMessage `grove:"mfa_methods"         bson:"mfa_methods,omitempty"`
-	AppName          *string         `grove:"app_name"            bson:"app_name,omitempty"`
-	LogoURL          *string         `grove:"logo_url"            bson:"logo_url,omitempty"`
-	CreatedAt        time.Time       `grove:"created_at"          bson:"created_at"`
-	UpdatedAt        time.Time       `grove:"updated_at"          bson:"updated_at"`
+	MFAMethods               json.RawMessage `grove:"mfa_methods"         bson:"mfa_methods,omitempty"`
+	AppName                  *string         `grove:"app_name"            bson:"app_name,omitempty"`
+	LogoURL                  *string         `grove:"logo_url"            bson:"logo_url,omitempty"`
+	CreatedAt                time.Time       `grove:"created_at"          bson:"created_at"`
+	UpdatedAt                time.Time       `grove:"updated_at"          bson:"updated_at"`
 }
 
 func toAppClientConfigModel(c *appclientconfig.Config) *appClientConfigModel {
 	sp, _ := json.Marshal(c.SocialProviders) //nolint:errcheck // best-effort encode
 	mm, _ := json.Marshal(c.MFAMethods)      //nolint:errcheck // best-effort encode
 	return &appClientConfigModel{
-		ID:               c.ID.String(),
-		AppID:            c.AppID.String(),
-		PasswordEnabled:  c.PasswordEnabled,
-		PasskeyEnabled:   c.PasskeyEnabled,
-		MagicLinkEnabled: c.MagicLinkEnabled,
-		MFAEnabled:       c.MFAEnabled,
-		SSOEnabled:       c.SSOEnabled,
-		SocialEnabled:    c.SocialEnabled,
+		ID:                       c.ID.String(),
+		AppID:                    c.AppID.String(),
+		PasswordEnabled:          c.PasswordEnabled,
+		PasskeyEnabled:           c.PasskeyEnabled,
+		MagicLinkEnabled:         c.MagicLinkEnabled,
+		MFAEnabled:               c.MFAEnabled,
+		SSOEnabled:               c.SSOEnabled,
+		SocialEnabled:            c.SocialEnabled,
 		WaitlistEnabled:          c.WaitlistEnabled,
 		RequireEmailVerification: c.RequireEmailVerification,
 		SocialProviders:          sp,
@@ -1228,14 +1228,14 @@ func fromAppClientConfigModel(m *appClientConfigModel) (*appclientconfig.Config,
 		_ = json.Unmarshal(m.MFAMethods, &mm) //nolint:errcheck // best-effort decode
 	}
 	return &appclientconfig.Config{
-		ID:               cfgID,
-		AppID:            appID,
-		PasswordEnabled:  m.PasswordEnabled,
-		PasskeyEnabled:   m.PasskeyEnabled,
-		MagicLinkEnabled: m.MagicLinkEnabled,
-		MFAEnabled:       m.MFAEnabled,
-		SSOEnabled:       m.SSOEnabled,
-		SocialEnabled:    m.SocialEnabled,
+		ID:                       cfgID,
+		AppID:                    appID,
+		PasswordEnabled:          m.PasswordEnabled,
+		PasskeyEnabled:           m.PasskeyEnabled,
+		MagicLinkEnabled:         m.MagicLinkEnabled,
+		MFAEnabled:               m.MFAEnabled,
+		SSOEnabled:               m.SSOEnabled,
+		SocialEnabled:            m.SocialEnabled,
 		WaitlistEnabled:          m.WaitlistEnabled,
 		RequireEmailVerification: m.RequireEmailVerification,
 		SocialProviders:          sp,

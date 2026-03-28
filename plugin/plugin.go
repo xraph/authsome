@@ -9,12 +9,24 @@ package plugin
 import (
 	"context"
 
+	log "github.com/xraph/go-utils/log"
+	"github.com/xraph/grove"
+
+	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/auth"
+
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/ceremony"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
+	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/strategy"
+	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/user"
 
 	"github.com/xraph/grove/migrate"
@@ -26,14 +38,140 @@ type Plugin interface {
 }
 
 // ──────────────────────────────────────────────────
+// Engine interface
+// ──────────────────────────────────────────────────
+
+// Engine is the typed interface that plugins receive during OnInit. It
+// exposes the engine's capabilities without importing the concrete
+// authsome.Engine type (which would create an import cycle).
+//
+// All commonly-used methods are included here so plugins can call them
+// directly instead of ad-hoc type assertions. For specialised
+// capabilities that would cause import cycles (e.g. warden, keysmith,
+// ledger engines), use the optional interfaces below.
+type Engine interface {
+	// ── Persistence ──
+
+	// Store returns the aggregate persistence store.
+	Store() store.Store
+	// DB returns the raw database handle. Returns nil if not set.
+	DB() *grove.DB
+
+	// ── Plugin system ──
+
+	// Plugins returns the plugin registry.
+	Plugins() *Registry
+	// Plugin returns a registered plugin by name, or nil if not found.
+	Plugin(name string) Plugin
+	// Hooks returns the hook event bus.
+	Hooks() *hook.Bus
+
+	// ── Observability ──
+
+	// Logger returns the engine's logger.
+	Logger() log.Logger
+
+	// ── Dynamic settings ──
+
+	// Settings returns the dynamic settings manager.
+	Settings() *settings.Manager
+
+	// ── Bridges ──
+
+	Chronicle() bridge.Chronicle
+	Relay() bridge.EventRelay
+	Herald() bridge.Herald
+	Mailer() bridge.Mailer
+	SMSSender() bridge.SMSSender
+	Ledger() bridge.Ledger
+
+	// ── Session / token ──
+
+	// SessionConfigForApp resolves per-app (and optional per-environment)
+	// session configuration.
+	SessionConfigForApp(ctx context.Context, appID id.AppID, envIDs ...id.EnvironmentID) account.SessionConfig
+	// TokenFormatForApp returns the token format configured for an app.
+	TokenFormatForApp(appID string) tokenformat.Format
+	// CeremonyStore returns the store for short-lived ceremony state.
+	CeremonyStore() ceremony.Store
+	// APIKeyStore returns the API key store.
+	APIKeyStore() apikey.Store
+
+	// ── User / session resolution ──
+
+	// ResolveSessionByToken resolves a session from its opaque token.
+	ResolveSessionByToken(token string) (*session.Session, error)
+	// ResolveUser resolves a user by ID string.
+	ResolveUser(userID string) (*user.User, error)
+	// GetUser fetches a user by typed ID.
+	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
+
+	// ── Role management ──
+
+	// EnsureDefaultRole assigns the default role to a user if none is set.
+	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
+
+	// ── Auth ──
+
+	// AuthMiddleware returns the engine's non-blocking authentication
+	// middleware (cookie bridge + session resolver + JWT + strategies).
+	// Populates user context when a valid token is present but passes
+	// through unauthenticated requests. Applied globally by the extension.
+	AuthMiddleware() forge.Middleware
+
+	// AuthRegistry returns the forge auth provider registry. Plugins can:
+	// - Register custom auth providers (API keys, SSO, etc.) via Register()
+	// - Create blocking middleware via Middleware("session", "api-key")
+	// - Use forge.WithGroupAuth("session") for OpenAPI + enforcement
+	AuthRegistry() auth.Registry
+
+	// ── Config accessors ──
+	// These expose commonly-needed config values without importing
+	// authsome.Config (which would create an import cycle).
+
+	// PlatformAppID returns the platform/bootstrap app ID.
+	PlatformAppID() id.AppID
+	// DefaultAppID returns the configured app ID string.
+	DefaultAppID() string
+	// BasePath returns the URL prefix for auth routes.
+	BasePath() string
+}
+
+// ──────────────────────────────────────────────────
+// Optional engine capability interfaces
+// ──────────────────────────────────────────────────
+//
+// Plugins that need specialised engine capabilities (not on the core
+// Engine interface) can type-assert against these exported interfaces
+// instead of defining private ad-hoc interfaces.
+
+// PermissionChecker is optionally implemented by engines that support
+// RBAC permission checking. Mirrors middleware.PermissionChecker to
+// avoid importing the middleware package from the plugin package.
+type PermissionChecker interface {
+	HasPermission(ctx context.Context, userID id.UserID, action, resource string) (bool, error)
+}
+
+// LedgerEngineProvider is optionally implemented by engines with a
+// first-class billing/ledger engine.
+type LedgerEngineProvider interface {
+	LedgerEngine() any
+}
+
+// LedgerStoreProvider is optionally implemented by engines with a
+// ledger store for direct query access.
+type LedgerStoreProvider interface {
+	LedgerStore() any
+}
+
+// ──────────────────────────────────────────────────
 // Lifecycle hooks
 // ──────────────────────────────────────────────────
 
 // OnInit is called during engine initialization. The engine parameter
-// is intentionally typed as any to avoid import cycles; use the engine
-// accessor methods to interact with it.
+// provides typed access to all engine capabilities.
 type OnInit interface {
-	OnInit(ctx context.Context, engine any) error
+	OnInit(ctx context.Context, engine Engine) error
 }
 
 // OnShutdown is called during engine shutdown.
@@ -200,10 +338,8 @@ type AuthMethodUnlinker interface {
 // ──────────────────────────────────────────────────
 
 // RouteProvider allows a plugin to register additional HTTP routes.
-// The router parameter is expected to be a forge.Router; typed as any to
-// avoid a circular dependency between the plugin and forge packages.
 type RouteProvider interface {
-	RegisterRoutes(router any) error
+	RegisterRoutes(router forge.Router) error
 }
 
 // MigrationProvider allows a plugin to register its own grove migration

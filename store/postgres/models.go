@@ -13,7 +13,6 @@ import (
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/appsessionconfig"
-	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
@@ -21,6 +20,7 @@ import (
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
 	"github.com/xraph/authsome/webhook"
 )
@@ -977,10 +977,10 @@ func toEnvironment(m *EnvironmentModel) (*environment.Environment, error) {
 	if err != nil {
 		return nil, err
 	}
-	var settings *environment.Settings
+	var envSettings *environment.Settings
 	if len(m.Settings) > 0 {
-		settings = new(environment.Settings)
-		_ = json.Unmarshal(m.Settings, settings) //nolint:errcheck // best-effort decode
+		envSettings = new(environment.Settings)
+		_ = json.Unmarshal(m.Settings, envSettings) //nolint:errcheck // best-effort decode
 	}
 	md := make(environment.Metadata)
 	if len(m.Metadata) > 0 {
@@ -995,7 +995,7 @@ func toEnvironment(m *EnvironmentModel) (*environment.Environment, error) {
 		IsDefault:   m.IsDefault,
 		Color:       m.Color,
 		Description: m.Description,
-		Settings:    settings,
+		Settings:    envSettings,
 		Metadata:    md,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
@@ -1011,8 +1011,8 @@ func toEnvironment(m *EnvironmentModel) (*environment.Environment, error) {
 }
 
 func fromEnvironment(e *environment.Environment) *EnvironmentModel {
-	settings, _ := json.Marshal(e.Settings) //nolint:errcheck // best-effort encode
-	md, _ := json.Marshal(e.Metadata)       //nolint:errcheck // best-effort encode
+	envSettingsJSON, _ := json.Marshal(e.Settings) //nolint:errcheck // best-effort encode
+	md, _ := json.Marshal(e.Metadata)              //nolint:errcheck // best-effort encode
 	m := &EnvironmentModel{
 		ID:          e.ID.String(),
 		AppID:       e.AppID.String(),
@@ -1022,7 +1022,7 @@ func fromEnvironment(e *environment.Environment) *EnvironmentModel {
 		IsDefault:   e.IsDefault,
 		Color:       e.Color,
 		Description: e.Description,
-		Settings:    settings,
+		Settings:    envSettingsJSON,
 		Metadata:    md,
 		CreatedAt:   e.CreatedAt,
 		UpdatedAt:   e.UpdatedAt,
@@ -1317,44 +1317,44 @@ func fromSettingModel(m *SettingModel) (*settings.Setting, error) {
 type AppClientConfigModel struct {
 	grove.BaseModel `grove:"table:authsome_app_client_configs,alias:acc"`
 
-	ID               string          `grove:"id,pk"`
-	AppID            string          `grove:"app_id,notnull"`
-	PasswordEnabled  *bool           `grove:"password_enabled"`
-	PasskeyEnabled   *bool           `grove:"passkey_enabled"`
-	MagicLinkEnabled *bool           `grove:"magic_link_enabled"`
-	MFAEnabled       *bool           `grove:"mfa_enabled"`
-	SSOEnabled       *bool           `grove:"sso_enabled"`
-	SocialEnabled    *bool           `grove:"social_enabled"`
-	WaitlistEnabled           *bool           `grove:"waitlist_enabled"`
+	ID                       string          `grove:"id,pk"`
+	AppID                    string          `grove:"app_id,notnull"`
+	PasswordEnabled          *bool           `grove:"password_enabled"`
+	PasskeyEnabled           *bool           `grove:"passkey_enabled"`
+	MagicLinkEnabled         *bool           `grove:"magic_link_enabled"`
+	MFAEnabled               *bool           `grove:"mfa_enabled"`
+	SSOEnabled               *bool           `grove:"sso_enabled"`
+	SocialEnabled            *bool           `grove:"social_enabled"`
+	WaitlistEnabled          *bool           `grove:"waitlist_enabled"`
 	RequireEmailVerification *bool           `grove:"require_email_verification"`
 	SocialProviders          json.RawMessage `grove:"social_providers,type:jsonb"`
-	MFAMethods       json.RawMessage `grove:"mfa_methods,type:jsonb"`
-	AppName          *string         `grove:"app_name"`
-	LogoURL          *string         `grove:"logo_url"`
-	CreatedAt        time.Time       `grove:"created_at,notnull,default:now()"`
-	UpdatedAt        time.Time       `grove:"updated_at,notnull,default:now()"`
+	MFAMethods               json.RawMessage `grove:"mfa_methods,type:jsonb"`
+	AppName                  *string         `grove:"app_name"`
+	LogoURL                  *string         `grove:"logo_url"`
+	CreatedAt                time.Time       `grove:"created_at,notnull,default:now()"`
+	UpdatedAt                time.Time       `grove:"updated_at,notnull,default:now()"`
 }
 
 func toAppClientConfigModel(c *appclientconfig.Config) *AppClientConfigModel {
 	sp, _ := json.Marshal(c.SocialProviders) //nolint:errcheck // best-effort encode
 	mm, _ := json.Marshal(c.MFAMethods)      //nolint:errcheck // best-effort encode
 	return &AppClientConfigModel{
-		ID:               c.ID.String(),
-		AppID:            c.AppID.String(),
-		PasswordEnabled:  c.PasswordEnabled,
-		PasskeyEnabled:   c.PasskeyEnabled,
-		MagicLinkEnabled: c.MagicLinkEnabled,
-		MFAEnabled:       c.MFAEnabled,
-		SSOEnabled:       c.SSOEnabled,
-		SocialEnabled:    c.SocialEnabled,
-		WaitlistEnabled:           c.WaitlistEnabled,
+		ID:                       c.ID.String(),
+		AppID:                    c.AppID.String(),
+		PasswordEnabled:          c.PasswordEnabled,
+		PasskeyEnabled:           c.PasskeyEnabled,
+		MagicLinkEnabled:         c.MagicLinkEnabled,
+		MFAEnabled:               c.MFAEnabled,
+		SSOEnabled:               c.SSOEnabled,
+		SocialEnabled:            c.SocialEnabled,
+		WaitlistEnabled:          c.WaitlistEnabled,
 		RequireEmailVerification: c.RequireEmailVerification,
 		SocialProviders:          sp,
-		MFAMethods:       mm,
-		AppName:          c.AppName,
-		LogoURL:          c.LogoURL,
-		CreatedAt:        c.CreatedAt,
-		UpdatedAt:        c.UpdatedAt,
+		MFAMethods:               mm,
+		AppName:                  c.AppName,
+		LogoURL:                  c.LogoURL,
+		CreatedAt:                c.CreatedAt,
+		UpdatedAt:                c.UpdatedAt,
 	}
 }
 
@@ -1376,21 +1376,21 @@ func fromAppClientConfigModel(m *AppClientConfigModel) (*appclientconfig.Config,
 		_ = json.Unmarshal(m.MFAMethods, &mm) //nolint:errcheck // best-effort decode
 	}
 	return &appclientconfig.Config{
-		ID:               cfgID,
-		AppID:            appID,
-		PasswordEnabled:  m.PasswordEnabled,
-		PasskeyEnabled:   m.PasskeyEnabled,
-		MagicLinkEnabled: m.MagicLinkEnabled,
-		MFAEnabled:       m.MFAEnabled,
-		SSOEnabled:       m.SSOEnabled,
-		SocialEnabled:    m.SocialEnabled,
-		WaitlistEnabled:           m.WaitlistEnabled,
+		ID:                       cfgID,
+		AppID:                    appID,
+		PasswordEnabled:          m.PasswordEnabled,
+		PasskeyEnabled:           m.PasskeyEnabled,
+		MagicLinkEnabled:         m.MagicLinkEnabled,
+		MFAEnabled:               m.MFAEnabled,
+		SSOEnabled:               m.SSOEnabled,
+		SocialEnabled:            m.SocialEnabled,
+		WaitlistEnabled:          m.WaitlistEnabled,
 		RequireEmailVerification: m.RequireEmailVerification,
 		SocialProviders:          sp,
-		MFAMethods:       mm,
-		AppName:          m.AppName,
-		LogoURL:          m.LogoURL,
-		CreatedAt:        m.CreatedAt,
-		UpdatedAt:        m.UpdatedAt,
+		MFAMethods:               mm,
+		AppName:                  m.AppName,
+		LogoURL:                  m.LogoURL,
+		CreatedAt:                m.CreatedAt,
+		UpdatedAt:                m.UpdatedAt,
 	}, nil
 }

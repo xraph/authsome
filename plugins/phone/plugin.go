@@ -83,26 +83,15 @@ type Config struct {
 	AutoCreate *bool
 }
 
-// sessionConfigResolver resolves per-app session configuration.
-type sessionConfigResolver interface {
-	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
-}
-
 // Plugin is the phone authentication plugin.
 type Plugin struct {
-	config        Config
-	store         store.Store
-	sms           bridge.SMSSender
-	ceremonies    ceremony.Store
-	logger        log.Logger
-	appID         string
-	sessionConfig sessionConfigResolver
-	roleEnsurer   roleEnsurer
-}
-
-// roleEnsurer assigns a default Warden role to a newly created user.
-type roleEnsurer interface {
-	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
+	config     Config
+	store      store.Store
+	sms        bridge.SMSSender
+	ceremonies ceremony.Store
+	logger     log.Logger
+	appID      string
+	engine     plugin.Engine
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -133,55 +122,31 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "phone" }
 
 // OnInit captures dependencies from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface{ Store() store.Store }
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.store = engine.Store()
 
-	type smsSenderGetter interface{ SMSSender() bridge.SMSSender }
-	if sg, ok := engine.(smsSenderGetter); ok {
-		p.sms = sg.SMSSender()
-	}
+	p.sms = engine.SMSSender()
 	// Config-level SMS sender takes precedence.
 	if p.config.SMSSender != nil {
 		p.sms = p.config.SMSSender
 	}
 
-	type ceremonyGetter interface{ CeremonyStore() ceremony.Store }
-	if cg, ok := engine.(ceremonyGetter); ok {
-		p.ceremonies = cg.CeremonyStore()
-	}
+	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}
 
-	type loggerGetter interface{ Logger() log.Logger }
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+	p.logger = engine.Logger()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
-	}
-
-	if scr, ok := engine.(sessionConfigResolver); ok {
-		p.sessionConfig = scr
-	}
-
-	if re, ok := engine.(roleEnsurer); ok {
-		p.roleEnsurer = re
 	}
 
 	return nil
 }
 
 // RegisterRoutes registers phone auth HTTP endpoints on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("phone: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/phone", forge.WithGroupTags("Phone Auth"))
 
 	if err := g.POST("/start", p.handleStart,
@@ -369,8 +334,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		TokenTTL:        time.Hour,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
 	}
-	if p.sessionConfig != nil {
-		sessCfg = p.sessionConfig.SessionConfigForApp(ctx.Context(), appID)
+	if p.engine != nil {
+		sessCfg = p.engine.SessionConfigForApp(ctx.Context(), appID)
 	}
 	sess, err := account.NewSession(appID, u.ID, sessCfg)
 	if err != nil {
@@ -413,8 +378,8 @@ func (p *Plugin) resolveOrCreateUser(ctx context.Context, appID id.AppID, phone 
 	if err := p.store.CreateUser(ctx, newUser); err != nil {
 		return nil, false, forge.InternalError(fmt.Errorf("phone auth: create user: %w", err))
 	}
-	if p.roleEnsurer != nil {
-		p.roleEnsurer.EnsureDefaultRole(ctx, appID, newUser.ID)
+	if p.engine != nil {
+		p.engine.EnsureDefaultRole(ctx, appID, newUser.ID)
 	}
 
 	return newUser, true, nil

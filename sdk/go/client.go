@@ -736,7 +736,7 @@ func (c *Client) CreateOAuth2Client(ctx context.Context, req *CreateOAuth2Client
 }
 
 // DeleteOAuth2Client — Delete OAuth2 client
-func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) (error) {
+func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *DeleteOAuth2ClientRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -949,7 +949,7 @@ func (c *Client) CreateCoupon(ctx context.Context, req *CreateCouponRequest) (*C
 }
 
 // DeleteCoupon — Delete coupon
-func (c *Client) DeleteCoupon(ctx context.Context, couponId string, req *DeleteCouponRequest) (error) {
+func (c *Client) DeleteCoupon(ctx context.Context, couponId string, req *DeleteCouponRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -992,7 +992,7 @@ func (c *Client) GetInvoice(ctx context.Context, invoiceId string) (*InvoiceResp
 }
 
 // MarkInvoicePaid — Mark invoice as paid
-func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) (error) {
+func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *MarkInvoicePaidRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1003,7 +1003,7 @@ func (c *Client) MarkInvoicePaid(ctx context.Context, invoiceId string, req *Mar
 }
 
 // VoidInvoice — Void an invoice
-func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) (error) {
+func (c *Client) VoidInvoice(ctx context.Context, invoiceId string, req *VoidInvoiceRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1049,7 +1049,7 @@ func (c *Client) GetBillingPlan(ctx context.Context, planId string) (*PlanRespon
 }
 
 // ActivateBillingPlan — Activate a billing plan
-func (c *Client) ActivateBillingPlan(ctx context.Context, planId string, req *ActivateBillingPlanRequest) (error) {
+func (c *Client) ActivateBillingPlan(ctx context.Context, planId string, req *ActivateBillingPlanRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1060,7 +1060,7 @@ func (c *Client) ActivateBillingPlan(ctx context.Context, planId string, req *Ac
 }
 
 // ArchiveBillingPlan — Archive a billing plan
-func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string, req *ArchiveBillingPlanRequest) (error) {
+func (c *Client) ArchiveBillingPlan(ctx context.Context, planId string, req *ArchiveBillingPlanRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1105,7 +1105,7 @@ func (c *Client) GetActiveSubscription(ctx context.Context) (*Response, error) {
 }
 
 // CancelSubscription — Cancel subscription
-func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) (error) {
+func (c *Client) CancelSubscription(ctx context.Context, subId string, req *CancelSubscriptionRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1116,7 +1116,7 @@ func (c *Client) CancelSubscription(ctx context.Context, subId string, req *Canc
 }
 
 // ChangeSubscriptionPlan — Change subscription plan
-func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) (error) {
+func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *ChangeSubscriptionPlanRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1127,7 +1127,7 @@ func (c *Client) ChangeSubscriptionPlan(ctx context.Context, subId string, req *
 }
 
 // PauseSubscription — Pause subscription
-func (c *Client) PauseSubscription(ctx context.Context, subId string, req *PauseSubscriptionRequest) (error) {
+func (c *Client) PauseSubscription(ctx context.Context, subId string, req *PauseSubscriptionRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1138,7 +1138,7 @@ func (c *Client) PauseSubscription(ctx context.Context, subId string, req *Pause
 }
 
 // ResumeSubscription — Resume subscription
-func (c *Client) ResumeSubscription(ctx context.Context, subId string, req *ResumeSubscriptionRequest) (error) {
+func (c *Client) ResumeSubscription(ctx context.Context, subId string, req *ResumeSubscriptionRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1447,7 +1447,7 @@ func (c *Client) CreateAPIKey(ctx context.Context, req *CreateAPIKeyRequest) (*C
 }
 
 // RevokeAPIKey — Revoke API key
-func (c *Client) RevokeAPIKey(ctx context.Context, keyId string, req *RevokeAPIKeyRequest) (error) {
+func (c *Client) RevokeAPIKey(ctx context.Context, keyId string, req *RevokeAPIKeyRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -1671,7 +1671,7 @@ func (c *Client) VerifyMFA(ctx context.Context, req *VerifyMFARequest) (*VerifyM
 }
 
 // Oauth2Authorize — OAuth2 Authorization
-func (c *Client) Oauth2Authorize(ctx context.Context) (error) {
+func (c *Client) Oauth2Authorize(ctx context.Context) error {
 	path := "/v1/oauth/authorize"
 	return c.do(ctx, "GET", path, nil, nil)
 }
@@ -1705,7 +1705,7 @@ func (c *Client) Oauth2DeviceComplete(ctx context.Context, req *Oauth2DeviceComp
 }
 
 // Oauth2Revoke — Revoke token
-func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) (error) {
+func (c *Client) Oauth2Revoke(ctx context.Context, req *Oauth2RevokeRequest) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -2232,11 +2232,9 @@ func (c *Client) DeleteWebhook(ctx context.Context, webhookId string, req *Delet
 	return &result, nil
 }
 
-
 // ──────────────────────────────────────────────────
 // Query parameter types
 // ──────────────────────────────────────────────────
-
 
 // ──────────────────────────────────────────────────
 // Internal HTTP helper

@@ -11,6 +11,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge"
+	"github.com/xraph/forge/extensions/auth"
 	dashboard "github.com/xraph/forge/extensions/dashboard"
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
 	"github.com/xraph/forge/extensions/dashboard/contributor"
@@ -37,6 +38,7 @@ import (
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
 	authclient "github.com/xraph/authsome/sdk/go"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	mongostore "github.com/xraph/authsome/store/mongo"
@@ -87,8 +89,8 @@ type Extension struct {
 	opts       []authsome.Option
 	plugins    []plugin.Plugin
 	useGrove   bool
-	clientMode bool                       // true when operating as a remote client
-	client     *authclient.Client         // non-nil in client mode
+	clientMode bool               // true when operating as a remote client
+	client     *authclient.Client // non-nil in client mode
 }
 
 // New creates an AuthSome Forge extension with the given options.
@@ -213,7 +215,7 @@ func (e *Extension) init(fapp forge.App) error {
 			return err
 		}
 		driverName = groveDB.Driver().Name()
-		opts = append(opts, authsome.WithStore(s), authsome.WithDriverName(driverName))
+		opts = append(opts, authsome.WithStore(s), authsome.WithDriverName(driverName), authsome.WithDB(groveDB))
 		e.Logger().Info("authsome: resolved grove.DB from container (driver=" + driverName + ")")
 	} else if db, err := vessel.Inject[*grove.DB](fapp.Container()); err == nil {
 		// Backward-compatible silent auto-discovery of default grove.DB.
@@ -229,7 +231,7 @@ func (e *Extension) init(fapp forge.App) error {
 		default:
 			return fmt.Errorf("authsome: unsupported grove driver %q", driverName)
 		}
-		opts = append(opts, authsome.WithStore(s), authsome.WithDriverName(driverName))
+		opts = append(opts, authsome.WithStore(s), authsome.WithDriverName(driverName), authsome.WithDB(db))
 		e.Logger().Info("authsome: auto-discovered grove.DB from container (driver=" + driverName + ")")
 	}
 
@@ -398,6 +400,21 @@ func (e *Extension) init(fapp forge.App) error {
 			basePath = "/authsome"
 		}
 
+		// Pass the forge auth registry to the engine so it can register
+		// the "session" auth provider and expose the registry to plugins.
+		if container := fapp.Container(); container != nil {
+			func() {
+				defer func() { recover() }() //nolint:errcheck // forge.Must panics if not found
+				registry := forge.Must[auth.Registry](container, auth.RegistryKey)
+				eng.SetAuthRegistry(registry)
+			}()
+		}
+
+		// Initialize plugins BEFORE route registration so that OnInit
+		// runs first. Plugins may set up middleware, stores, or other
+		// dependencies that RegisterRoutes relies on.
+		eng.InitPlugins(context.Background())
+
 		e.apiHandler = api.New(eng, fapp.Router())
 
 		router := fapp.Router()
@@ -514,58 +531,21 @@ func (e *Extension) Middlewares() []forge.Middleware {
 // A cookie-to-header bridge is applied so that dashboard JavaScript fetch()
 // requests (which send the HttpOnly auth_token cookie but no Authorization
 // header) are authenticated by the same session-resolution pipeline.
+//
+// The middleware is built and cached by the engine during InitPlugins(),
+// ensuring the extension and all plugins share the exact same middleware.
 func (e *Extension) AuthMiddleware() forge.Middleware {
-	// Select the appropriate inner middleware based on engine capabilities.
-	var inner forge.Middleware
-
-	// Select auth middleware variant based on engine capabilities.
-	switch {
-	case e.engine.HasJWT():
-		inner = middleware.AuthMiddlewareWithJWT(
-			e.engine.ResolveSessionByToken,
-			e.engine.ResolveUser,
-			e.engine.Strategies(),
-			e.engine,
-			e.engine.Logger(),
-		)
-	case e.engine.HasStrategies():
-		inner = middleware.AuthMiddlewareWithStrategies(
-			e.engine.ResolveSessionByToken,
-			e.engine.ResolveUser,
-			e.engine.Strategies(),
-			e.engine.Logger(),
-		)
-	default:
-		inner = middleware.AuthMiddleware(
-			e.engine.ResolveSessionByToken,
-			e.engine.ResolveUser,
-			e.engine.Logger(),
-		)
-	}
-
-	// Wrap with cookie-to-header bridge: when no Authorization header is
-	// present, read the auth_token cookie (set by dashboard login) and
-	// inject it as a Bearer token. This allows dashboard JS fetch() calls
-	// (which use credentials:'same-origin') to authenticate against API
-	// endpoints that only inspect the Authorization header.
-	return func(next forge.Handler) forge.Handler {
-		return func(ctx forge.Context) error {
-			r := ctx.Request()
-			if r.Header.Get("Authorization") == "" {
-				if cookie, err := r.Cookie("auth_token"); err == nil && cookie.Value != "" {
-					r.Header.Set("Authorization", "Bearer "+cookie.Value)
-				}
-			}
-			return inner(next)(ctx)
-		}
-	}
+	return e.engine.AuthMiddleware()
 }
 
 // autoRefreshMiddleware returns a middleware that transparently refreshes
 // near-expiry access tokens based on the auto-refresh settings.
 func (e *Extension) autoRefreshMiddleware() forge.Middleware {
+	refresher := func(ctx context.Context, refreshToken string) (*session.Session, error) {
+		return e.engine.Refresh(ctx, refreshToken)
+	}
 	return middleware.AutoRefreshMiddleware(
-		e.engine.Refresh,
+		refresher,
 		func(ctx context.Context) middleware.AutoRefreshConfig {
 			mgr := e.engine.Settings()
 			if mgr == nil {
@@ -587,12 +567,16 @@ func (e *Extension) autoRefreshMiddleware() forge.Middleware {
 				thresholdSec = 300
 			}
 
+			exposeRefresh, _ := settings.Get(ctx, mgr, authsome.SettingAutoRefreshExposeRefreshToken, opts) //nolint:errcheck // best-effort
+
 			return middleware.AutoRefreshConfig{
-				Enabled:   true,
-				Threshold: time.Duration(thresholdSec) * time.Second,
+				Enabled:            true,
+				Threshold:          time.Duration(thresholdSec) * time.Second,
+				ExposeRefreshToken: exposeRefresh,
 			}
 		},
 		e.Logger(),
+		e.cookieSetter(),
 	)
 }
 
@@ -628,7 +612,60 @@ func (e *Extension) sessionActivityMiddleware() forge.Middleware {
 			}
 		},
 		e.Logger(),
+		e.cookieSetter(),
 	)
+}
+
+// cookieSetter returns a CookieSetter callback that re-sets the session
+// cookie using the engine's dynamic cookie configuration from settings.
+func (e *Extension) cookieSetter() middleware.CookieSetter {
+	return func(ctx forge.Context, token string, maxAge int) {
+		mgr := e.engine.Settings()
+		if mgr == nil {
+			return
+		}
+		goCtx := ctx.Context()
+		opts := settings.ResolveOpts{}
+		if appID, ok := middleware.AppIDFrom(goCtx); ok {
+			opts.AppID = appID.String()
+		}
+
+		name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts) //nolint:errcheck // best-effort
+		if name == "" {
+			name = "authsome_session_token"
+		}
+		domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts) //nolint:errcheck // best-effort
+		path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)     //nolint:errcheck // best-effort
+		if path == "" {
+			path = "/"
+		}
+		secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts) //nolint:errcheck // best-effort
+		httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)    //nolint:errcheck // best-effort
+		sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts) //nolint:errcheck // best-effort
+
+		r := ctx.Request()
+		isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+		secure := secureSetting && isHTTPS
+
+		sameSite := http.SameSiteLaxMode
+		switch sameSiteStr {
+		case "strict":
+			sameSite = http.SameSiteStrictMode
+		case "none":
+			sameSite = http.SameSiteNoneMode
+		}
+
+		http.SetCookie(ctx.Response(), &http.Cookie{
+			Name:     name,
+			Value:    token,
+			Path:     path,
+			Domain:   domain,
+			MaxAge:   maxAge,
+			HttpOnly: httpOnly,
+			Secure:   secure,
+			SameSite: sameSite,
+		})
+	}
 }
 
 // DashboardContributor implements dashboard.DashboardAware. It returns a

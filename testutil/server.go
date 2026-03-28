@@ -13,6 +13,8 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
+	"github.com/xraph/forge"
+
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/id"
@@ -29,7 +31,6 @@ import (
 	authclient "github.com/xraph/authsome/sdk/go"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
-	"github.com/xraph/forge"
 
 	"github.com/xraph/warden"
 	wardenmem "github.com/xraph/warden/store/memory"
@@ -92,7 +93,8 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	orgPlugin := orgplugin.New()
 
-	engineOpts := []authsome.Option{
+	engineOpts := make([]authsome.Option, 0, 13+len(cfg.plugins)) //nolint:mnd // preallocate for base opts + plugins
+	engineOpts = append(engineOpts,
 		authsome.WithStore(store),
 		authsome.WithLogger(logger),
 		authsome.WithWarden(wardenEng),
@@ -108,7 +110,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 		authsome.WithPlugin(phone.New()),
 		authsome.WithPlugin(consent.New()),
 		authsome.WithPlugin(oauth2provider.New()),
-	}
+	)
 
 	for _, p := range cfg.plugins {
 		engineOpts = append(engineOpts, authsome.WithPlugin(p))
@@ -174,7 +176,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	t.Cleanup(func() {
 		server.Close()
-		_ = engine.Stop(ctx)
+		_ = engine.Stop(ctx) //nolint:errcheck // test cleanup
 	})
 
 	return ts
@@ -183,7 +185,7 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 // Close shuts down the test server and engine.
 func (ts *TestServer) Close() {
 	ts.Server.Close()
-	_ = ts.Engine.Stop(context.Background())
+	_ = ts.Engine.Stop(context.Background()) //nolint:errcheck // test cleanup
 }
 
 // authMiddlewareHTTP is a plain net/http middleware that extracts the Bearer

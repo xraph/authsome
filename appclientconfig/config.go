@@ -21,13 +21,13 @@ type Config struct {
 	AppID id.AppID             `json:"app_id"`
 
 	// Auth method overrides (nil = inherit from plugin defaults).
-	PasswordEnabled  *bool `json:"password_enabled,omitempty"`
-	PasskeyEnabled   *bool `json:"passkey_enabled,omitempty"`
-	MagicLinkEnabled *bool `json:"magic_link_enabled,omitempty"`
-	MFAEnabled       *bool `json:"mfa_enabled,omitempty"`
-	SSOEnabled       *bool `json:"sso_enabled,omitempty"`
-	SocialEnabled    *bool `json:"social_enabled,omitempty"`
-	WaitlistEnabled           *bool `json:"waitlist_enabled,omitempty"`
+	PasswordEnabled          *bool `json:"password_enabled,omitempty"`
+	PasskeyEnabled           *bool `json:"passkey_enabled,omitempty"`
+	MagicLinkEnabled         *bool `json:"magic_link_enabled,omitempty"`
+	MFAEnabled               *bool `json:"mfa_enabled,omitempty"`
+	SSOEnabled               *bool `json:"sso_enabled,omitempty"`
+	SocialEnabled            *bool `json:"social_enabled,omitempty"`
+	WaitlistEnabled          *bool `json:"waitlist_enabled,omitempty"`
 	RequireEmailVerification *bool `json:"require_email_verification,omitempty"`
 
 	// Social provider filter. When set, only these providers (from the global

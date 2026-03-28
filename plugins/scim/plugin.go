@@ -5,7 +5,6 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/plugin"
@@ -39,7 +38,7 @@ type Plugin struct {
 	hooks        *hook.Bus
 	logger       log.Logger
 	settings     *settings.Manager
-	plugins      plugin.Registry
+	plugins      *plugin.Registry
 	defaultAppID string
 }
 
@@ -57,85 +56,26 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "scim" }
 
 // OnInit captures bridge and engine references.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	// Discover AuthSome store.
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.authStore = sg.Store()
-	}
-
-	// Discover chronicle bridge.
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	// Discover relay bridge.
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	// Discover hook bus.
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	// Discover logger.
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	// Discover settings manager.
-	type settingsGetter interface {
-		Settings() *settings.Manager
-	}
-	if sg, ok := engine.(settingsGetter); ok {
-		p.settings = sg.Settings()
-	}
-
-	// Discover plugin registry.
-	type pluginsGetter interface {
-		Plugins() plugin.Registry
-	}
-	if pg, ok := engine.(pluginsGetter); ok {
-		p.plugins = pg.Plugins()
-	}
-
-	// Discover default app ID.
-	type configGetter interface {
-		Config() authsome.Config
-	}
-	if cg, ok := engine.(configGetter); ok {
-		p.defaultAppID = cg.Config().AppID
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.authStore = engine.Store()
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.settings = engine.Settings()
+	p.plugins = engine.Plugins()
+	p.defaultAppID = engine.DefaultAppID()
 
 	// Initialize in-memory store.
 	p.scimStore = NewMemoryStore()
 
 	// Initialize the service layer.
 	p.service = &Service{
-		store:     p.scimStore,
-		authStore: p.authStore,
-		settings:  p.settings,
-		logger:    p.logger,
-	}
-
-	// Provide role ensurer for SCIM-provisioned users.
-	if re, ok := engine.(roleEnsurer); ok {
-		p.service.roleEnsurer = re
+		store:       p.scimStore,
+		authStore:   p.authStore,
+		settings:    p.settings,
+		logger:      p.logger,
+		roleEnsurer: engine,
 	}
 
 	return nil

@@ -93,32 +93,17 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 }
 
 // OnInit opens the MaxMind database and discovers engine dependencies.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	// Discover logger.
-	type loggerGetter interface{ Logger() log.Logger }
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+	p.logger = engine.Logger()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}
 
 	// Discover bridges.
-	type chronicleGetter interface{ Chronicle() bridge.Chronicle }
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-	type relayGetter interface{ Relay() bridge.EventRelay }
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type settingsGetter interface {
-		Settings() *settings.Manager
-	}
-	if sg, ok := engine.(settingsGetter); ok {
-		p.settingsMgr = sg.Settings()
-	}
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.settingsMgr = engine.Settings()
 
 	// Open MaxMind database.
 	if p.config.DatabasePath != "" {

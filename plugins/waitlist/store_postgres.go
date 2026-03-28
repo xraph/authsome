@@ -115,7 +115,7 @@ func (s *PostgresStore) ListEntries(ctx context.Context, q *WaitlistQuery) (*Wai
 	var models []waitlistModel
 	err := query.
 		OrderExpr("id ASC").
-		Limit(limit + 1).
+		Limit(limit+1).
 		Scan(ctx, &models)
 	if err != nil {
 		return nil, waitlistPgError(err)
@@ -143,7 +143,7 @@ func (s *PostgresStore) ListEntries(ctx context.Context, q *WaitlistQuery) (*Wai
 	}, nil
 }
 
-func (s *PostgresStore) CountByStatus(ctx context.Context, appID id.AppID) (pending int, approved int, rejected int, err error) {
+func (s *PostgresStore) CountByStatus(ctx context.Context, appID id.AppID) (pending, approved, rejected int, err error) {
 	type countRow struct {
 		Status string `grove:"status"`
 		Count  int    `grove:"count"`

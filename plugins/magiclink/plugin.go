@@ -99,17 +99,12 @@ type Config struct {
 	SessionRefreshTTL time.Duration
 }
 
-// sessionConfigResolver resolves per-app session configuration.
-type sessionConfigResolver interface {
-	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
-}
-
 // Plugin is the magic link authentication plugin.
 type Plugin struct {
-	config        Config
-	store         store.Store
-	appID         string
-	sessionConfig sessionConfigResolver
+	config Config
+	store  store.Store
+	appID  string
+	engine plugin.Engine
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -145,26 +140,14 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "magiclink" }
 
 // OnInit captures the store reference from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
-	if scr, ok := engine.(sessionConfigResolver); ok {
-		p.sessionConfig = scr
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.store = engine.Store()
+	p.engine = engine
 	return nil
 }
 
 // RegisterRoutes registers magic link HTTP endpoints on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("magiclink: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/magic-link", forge.WithGroupTags("Magic Link"))
 
 	if err := g.POST("/send", p.handleSend,
@@ -305,8 +288,8 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		TokenTTL:        p.config.SessionTokenTTL,
 		RefreshTokenTTL: p.config.SessionRefreshTTL,
 	}
-	if p.sessionConfig != nil {
-		sessCfg = p.sessionConfig.SessionConfigForApp(ctx.Context(), v.AppID)
+	if p.engine != nil {
+		sessCfg = p.engine.SessionConfigForApp(ctx.Context(), v.AppID)
 	}
 	sess, err := account.NewSession(v.AppID, u.ID, sessCfg)
 	if err != nil {

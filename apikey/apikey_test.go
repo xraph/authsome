@@ -111,6 +111,30 @@ func TestVerifyKey_WrongRaw(t *testing.T) {
 	assert.False(t, VerifyKey("wrong-raw-key", hash))
 }
 
+func TestVerifyKey_ConstantTimeComparison(t *testing.T) {
+	// Verify that VerifyKey correctly validates keys after the
+	// subtle.ConstantTimeCompare change (H4 security fix).
+	raw, hash, _, err := GenerateKey()
+	require.NoError(t, err)
+
+	// Correct key should verify.
+	assert.True(t, VerifyKey(raw, hash))
+
+	// Slightly modified hash should not verify.
+	if len(hash) > 0 {
+		modified := hash[:len(hash)-1] + "0"
+		if modified == hash {
+			modified = hash[:len(hash)-1] + "1"
+		}
+		assert.False(t, VerifyKey(raw, modified), "modified hash should not verify")
+	}
+
+	// Empty inputs should not verify.
+	assert.False(t, VerifyKey("", hash))
+	assert.False(t, VerifyKey(raw, ""))
+	assert.False(t, VerifyKey("", ""))
+}
+
 // ──────────────────────────────────────────────────
 // Environment key generation tests
 // ──────────────────────────────────────────────────

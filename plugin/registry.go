@@ -271,8 +271,18 @@ func (r *Registry) Plugins() []Plugin { return r.plugins }
 // Lifecycle emitters
 // ──────────────────────────────────────────────────
 
+// Plugin returns a registered plugin by name, or nil if not found.
+func (r *Registry) Plugin(name string) Plugin {
+	for _, p := range r.plugins {
+		if p.Name() == name {
+			return p
+		}
+	}
+	return nil
+}
+
 // EmitOnInit notifies all plugins that implement OnInit.
-func (r *Registry) EmitOnInit(ctx context.Context, engine any) {
+func (r *Registry) EmitOnInit(ctx context.Context, engine Engine) {
 	for _, e := range r.onInit {
 		if err := e.hook.OnInit(ctx, engine); err != nil {
 			r.logHookError("OnInit", e.name, err)

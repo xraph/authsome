@@ -41,7 +41,7 @@ export interface DeviceAuthorizationFormProps {
   autoSubmit?: boolean;
 }
 
-const REGEXP_ALPHANUMERIC = /^[A-Z0-9]*$/;
+const REGEXP_ALPHANUMERIC = /^[A-Za-z0-9]*$/;
 
 /**
  * OAuth device authorization form (RFC 8628).

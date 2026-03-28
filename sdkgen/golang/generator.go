@@ -169,12 +169,12 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 						omitempty = ",omitempty"
 					}
 					td.Fields = append(td.Fields, FieldDef{
-						Name:     exportedName(fn),
-						Type:     goType,
+						Name: exportedName(fn),
+						Type: goType,
 						// Normalize to snake_case: the Forge OpenAPI generator emits
-					// PascalCase Go field names for request schemas instead of
-					// reading json tags. The actual API uses snake_case.
-					JSONTag:  normalizeJSONTag(fn) + omitempty,
+						// PascalCase Go field names for request schemas instead of
+						// reading json tags. The actual API uses snake_case.
+						JSONTag:  normalizeJSONTag(fn) + omitempty,
 						Optional: optional,
 					})
 				}
@@ -472,7 +472,7 @@ func normalizeJSONTag(name string) string {
 // exportedName converts a snake_case or camelCase name to Go exported PascalCase.
 func exportedName(s string) string {
 	// Strip leading non-alpha characters (e.g. "$ref" → "ref")
-	for len(s) > 0 && (s[0] < 'A' || (s[0] > 'Z' && s[0] < 'a') || s[0] > 'z') {
+	for s != "" && (s[0] < 'A' || (s[0] > 'Z' && s[0] < 'a') || s[0] > 'z') {
 		s = s[1:]
 	}
 	if s == "" {

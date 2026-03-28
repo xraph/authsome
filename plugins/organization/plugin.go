@@ -6,11 +6,9 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/store"
 )
@@ -32,6 +30,7 @@ type Config struct {
 
 // Plugin is the organization management plugin.
 type Plugin struct {
+	engine       plugin.Engine
 	config       Config
 	store        store.Store
 	plugins      *plugin.Registry
@@ -41,7 +40,7 @@ type Plugin struct {
 	logger       log.Logger
 	basePath     string
 	defaultAppID string
-	permChecker  middleware.PermissionChecker
+	permChecker  plugin.PermissionChecker
 }
 
 // New creates a new organization plugin with optional configuration.
@@ -61,59 +60,19 @@ func (p *Plugin) Name() string { return "organization" }
 func (p *Plugin) SetStore(s store.Store) { p.store = s }
 
 // OnInit captures engine capabilities for use by the plugin's service layer.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
-
-	type pluginsGetter interface {
-		Plugins() *plugin.Registry
-	}
-	if pg, ok := engine.(pluginsGetter); ok {
-		p.plugins = pg.Plugins()
-	}
-
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.store = engine.Store()
+	p.plugins = engine.Plugins()
+	p.hooks = engine.Hooks()
+	p.relay = engine.Relay()
+	p.chronicle = engine.Chronicle()
+	p.logger = engine.Logger()
 
 	p.basePath = "/v1"
+	p.defaultAppID = engine.DefaultAppID()
 
-	type configGetter interface {
-		Config() authsome.Config
-	}
-	if cg, ok := engine.(configGetter); ok {
-		p.defaultAppID = cg.Config().AppID
-	}
-
-	if pc, ok := engine.(middleware.PermissionChecker); ok {
+	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
 	}
 

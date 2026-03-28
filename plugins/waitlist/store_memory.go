@@ -135,7 +135,7 @@ func (s *MemoryStore) ListEntries(_ context.Context, q *WaitlistQuery) (*Waitlis
 	}, nil
 }
 
-func (s *MemoryStore) CountByStatus(_ context.Context, appID id.AppID) (pending int, approved int, rejected int, err error) {
+func (s *MemoryStore) CountByStatus(_ context.Context, appID id.AppID) (pending, approved, rejected int, err error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

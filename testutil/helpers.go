@@ -16,7 +16,7 @@ import (
 // CreateUser signs up a user via the engine (server-side) and returns the
 // user data plus the session token. Does NOT set the token on ts.Client —
 // call CreateUserClient for that.
-func (ts *TestServer) CreateUser(t *testing.T, email, pass string) (*authclient.AuthResponse, string) {
+func (ts *TestServer) CreateUser(t *testing.T, email, pass string) (resp *authclient.AuthResponse, token string) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -32,7 +32,7 @@ func (ts *TestServer) CreateUser(t *testing.T, email, pass string) (*authclient.
 	})
 	require.NoError(t, err)
 
-	resp := &authclient.AuthResponse{
+	resp = &authclient.AuthResponse{
 		SessionToken: sess.Token,
 		RefreshToken: sess.RefreshToken,
 		User: &authclient.User{
@@ -113,7 +113,7 @@ func (ts *TestServer) NewTestUserFactory() *TestUserFactory {
 }
 
 // Next creates the next test user and returns the auth response and token.
-func (f *TestUserFactory) Next(t *testing.T) (*authclient.AuthResponse, string) {
+func (f *TestUserFactory) Next(t *testing.T) (resp *authclient.AuthResponse, token string) {
 	t.Helper()
 	f.counter++
 	email := fmt.Sprintf("testuser-%d@example.com", f.counter)

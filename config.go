@@ -133,6 +133,12 @@ type RateLimitConfig struct {
 	// SignUpLimit is the max sign-up attempts per window (default: 3).
 	SignUpLimit int `json:"signup_limit"`
 
+	// RefreshLimit is the max token refresh attempts per window (default: 10).
+	RefreshLimit int `json:"refresh_limit"`
+
+	// IntrospectLimit is the max token introspection attempts per window (default: 20).
+	IntrospectLimit int `json:"introspect_limit"`
+
 	// ForgotPasswordLimit is the max forgot-password attempts per window (default: 3).
 	ForgotPasswordLimit int `json:"forgot_password_limit"`
 
@@ -203,6 +209,8 @@ func DefaultConfig() Config {
 		RateLimit: RateLimitConfig{
 			SignInLimit:         5,
 			SignUpLimit:         3,
+			RefreshLimit:        10,
+			IntrospectLimit:     20,
 			ForgotPasswordLimit: 3,
 			MFAChallengeLimit:   5,
 			WindowSeconds:       60,

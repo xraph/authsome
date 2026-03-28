@@ -48,7 +48,7 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger) forge.Mi
 
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
-			token := extractBearerToken(ctx.Request())
+			token := extractBearerToken(ctx.Request(), "")
 			if token == "" {
 				return next(ctx)
 			}

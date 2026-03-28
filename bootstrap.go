@@ -203,9 +203,9 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 			e.config.AppID = existing.ID.String()
 		}
 		// Still run bootstrapApp to ensure roles/envs exist (idempotent).
-		if err := e.bootstrapApp(ctx, existing.ID); err != nil {
+		if setupErr := e.bootstrapApp(ctx, existing.ID); setupErr != nil {
 			e.logger.Warn("bootstrap: setup existing platform app",
-				log.String("error", err.Error()),
+				log.String("error", setupErr.Error()),
 			)
 		}
 		return nil

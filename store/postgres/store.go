@@ -1239,7 +1239,7 @@ func (s *Store) SetAppClientConfig(ctx context.Context, cfg *appclientconfig.Con
 	if err != nil {
 		return fmt.Errorf("authsome/postgres: set app client config (update): %w", err)
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
+	if n, _ := res.RowsAffected(); n > 0 { //nolint:errcheck // RowsAffected always succeeds for pgx
 		return nil
 	}
 
@@ -1258,7 +1258,7 @@ func (s *Store) DeleteAppClientConfig(ctx context.Context, appID id.AppID) error
 	if err != nil {
 		return fmt.Errorf("authsome/postgres: delete app client config: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if n, _ := res.RowsAffected(); n == 0 { //nolint:errcheck // RowsAffected always succeeds for pgx
 		return appclientconfig.ErrNotFound
 	}
 	return nil
@@ -1293,7 +1293,7 @@ func (s *Store) SetSetting(ctx context.Context, st *settings.Setting) error {
 	if err != nil {
 		return fmt.Errorf("authsome/postgres: set setting (update): %w", err)
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
+	if n, _ := res.RowsAffected(); n > 0 { //nolint:errcheck // RowsAffected always succeeds for pgx
 		return nil
 	}
 

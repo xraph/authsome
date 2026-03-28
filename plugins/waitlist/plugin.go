@@ -12,8 +12,8 @@ import (
 
 	"github.com/xraph/forge"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -26,12 +26,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ plugin.Plugin                       = (*Plugin)(nil)
-	_ plugin.OnInit                       = (*Plugin)(nil)
-	_ plugin.RouteProvider                = (*Plugin)(nil)
-	_ plugin.MigrationProvider            = (*Plugin)(nil)
+	_ plugin.Plugin                         = (*Plugin)(nil)
+	_ plugin.OnInit                         = (*Plugin)(nil)
+	_ plugin.RouteProvider                  = (*Plugin)(nil)
+	_ plugin.MigrationProvider              = (*Plugin)(nil)
 	_ plugin.NotificationMappingContributor = (*Plugin)(nil)
-	_ plugin.BeforeSignUp                 = (*Plugin)(nil)
+	_ plugin.BeforeSignUp                   = (*Plugin)(nil)
 )
 
 // Config configures the waitlist plugin.
@@ -43,17 +43,18 @@ type Config struct {
 
 // Plugin is the waitlist management plugin.
 type Plugin struct {
-	config      Config
-	store       Store
-	hooks       *hook.Bus
-	relay       bridge.EventRelay
-	chronicle   bridge.Chronicle
-	herald      bridge.Herald
-	logger      log.Logger
-	permChecker middleware.PermissionChecker
-	basePath    string
+	engine       plugin.Engine
+	config       Config
+	store        Store
+	hooks        *hook.Bus
+	relay        bridge.EventRelay
+	chronicle    bridge.Chronicle
+	herald       bridge.Herald
+	logger       log.Logger
+	permChecker  plugin.PermissionChecker
+	basePath     string
 	defaultAppID string
-	settingsMgr *settings.Manager
+	settingsMgr  *settings.Manager
 }
 
 // New creates a new waitlist plugin. An in-memory store is used by
@@ -90,63 +91,21 @@ func (p *Plugin) MigrationGroups(driverName string) []*migrate.Group {
 }
 
 // OnInit captures engine capabilities.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.hooks = engine.Hooks()
+	p.relay = engine.Relay()
+	p.chronicle = engine.Chronicle()
+	p.herald = engine.Herald()
+	p.logger = engine.Logger()
+	p.settingsMgr = engine.Settings()
+	p.defaultAppID = engine.DefaultAppID()
+	p.basePath = engine.BasePath()
 
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type heraldGetter interface {
-		Herald() bridge.Herald
-	}
-	if hg, ok := engine.(heraldGetter); ok {
-		p.herald = hg.Herald()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	if pc, ok := engine.(middleware.PermissionChecker); ok {
+	if pc, ok := engine.(plugin.PermissionChecker); ok {
 		p.permChecker = pc
 	}
 
-	type settingsGetter interface {
-		Settings() *settings.Manager
-	}
-	if sg, ok := engine.(settingsGetter); ok {
-		p.settingsMgr = sg.Settings()
-	}
-
-	type configGetter interface {
-		Config() authsome.Config
-	}
-	if cg, ok := engine.(configGetter); ok {
-		cfg := cg.Config()
-		p.defaultAppID = cfg.AppID
-		if cfg.BasePath != "" {
-			p.basePath = cfg.BasePath
-		}
-	}
 	if p.basePath == "" {
 		p.basePath = "/v1"
 	}
@@ -211,17 +170,12 @@ func (p *Plugin) OnBeforeSignUp(ctx context.Context, req *account.SignUpRequest)
 }
 
 // RegisterRoutes registers waitlist HTTP routes.
-func (p *Plugin) RegisterRoutes(router any) error {
-	r, ok := router.(forge.Router)
-	if !ok {
-		return fmt.Errorf("waitlist: expected forge.Router, got %T", router)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// ──────────────────────────────────────────────────
 	// Public routes (no auth required)
 	// ──────────────────────────────────────────────────
 
-	pub := r.Group(p.basePath+"/waitlist", forge.WithGroupTags("Waitlist"))
+	pub := router.Group(p.basePath+"/waitlist", forge.WithGroupTags("Waitlist"))
 
 	if err := pub.POST("/join", p.handleJoin,
 		forge.WithSummary("Join waitlist"),
@@ -248,13 +202,14 @@ func (p *Plugin) RegisterRoutes(router any) error {
 	// Admin routes (auth + permission required)
 	// ──────────────────────────────────────────────────
 
-	adminMiddlewares := []forge.Middleware{middleware.RequireAuth()}
+	adminMiddlewares := []forge.Middleware{authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session")}
 	if p.permChecker != nil {
 		adminMiddlewares = append(adminMiddlewares, middleware.RequirePermission(p.permChecker, "manage", "waitlist"))
 	}
 
-	admin := r.Group(p.basePath+"/admin/waitlist",
+	admin := router.Group(p.basePath+"/admin/waitlist",
 		forge.WithGroupTags("Waitlist Admin"),
+		forge.WithGroupAuth("session"),
 		forge.WithGroupMiddleware(adminMiddlewares...),
 	)
 
@@ -513,8 +468,8 @@ func (p *Plugin) handleApprove(ctx forge.Context, req *ApproveRequest) (*Waitlis
 		return nil, forge.BadRequest("invalid entry ID")
 	}
 
-	if err := p.store.UpdateEntryStatus(ctx.Context(), entryID, StatusApproved, req.Note); err != nil {
-		if errors.Is(err, ErrNotFound) {
+	if updateErr := p.store.UpdateEntryStatus(ctx.Context(), entryID, StatusApproved, req.Note); updateErr != nil {
+		if errors.Is(updateErr, ErrNotFound) {
 			return nil, forge.NotFound("waitlist entry not found")
 		}
 		return nil, forge.InternalError(fmt.Errorf("failed to approve entry"))
@@ -553,8 +508,8 @@ func (p *Plugin) handleReject(ctx forge.Context, req *RejectRequest) (*WaitlistE
 		return nil, forge.BadRequest("invalid entry ID")
 	}
 
-	if err := p.store.UpdateEntryStatus(ctx.Context(), entryID, StatusRejected, req.Note); err != nil {
-		if errors.Is(err, ErrNotFound) {
+	if updateErr := p.store.UpdateEntryStatus(ctx.Context(), entryID, StatusRejected, req.Note); updateErr != nil {
+		if errors.Is(updateErr, ErrNotFound) {
 			return nil, forge.NotFound("waitlist entry not found")
 		}
 		return nil, forge.InternalError(fmt.Errorf("failed to reject entry"))
@@ -614,7 +569,7 @@ func (p *Plugin) handleDelete(ctx forge.Context, req *DeleteRequest) (*struct{},
 // Observability helpers
 // ──────────────────────────────────────────────────
 
-func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant string, metadata map[string]string) {
+func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorID, tenant string, metadata map[string]string) { //nolint:unparam // resource kept for consistency with other audit helpers
 	if p.chronicle == nil {
 		return
 	}

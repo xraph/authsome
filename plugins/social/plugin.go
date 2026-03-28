@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -165,6 +167,12 @@ type Config struct {
 	// Providers is the list of enabled OAuth providers.
 	Providers []Provider
 
+	// Domain is the external base URL of the server (e.g. "https://api.example.com").
+	// When a provider does not specify a RedirectURL, the callback URL is
+	// auto-generated as {Domain}/v1/social/{provider}/callback.
+	// If empty, the callback URL is derived from the incoming request's Host header.
+	Domain string
+
 	// SessionTokenTTL is the lifetime of sessions created via social sign-in (default: 1 hour).
 	SessionTokenTTL time.Duration
 
@@ -172,27 +180,22 @@ type Config struct {
 	SessionRefreshTTL time.Duration
 }
 
-// sessionConfigResolver resolves per-app session configuration.
-type sessionConfigResolver interface {
-	SessionConfigForApp(ctx context.Context, appID id.AppID) account.SessionConfig
-}
-
 // Plugin is the social OAuth authentication plugin.
 type Plugin struct {
-	config        Config
-	providers     map[string]Provider
-	store         store.Store // Core authsome store (for users/sessions)
-	oauthStore    Store       // OAuth-specific store (for connections)
-	appID         string
-	sessionConfig sessionConfigResolver
-	settingsMgr   *settings.Manager
+	config      Config
+	providers   map[string]Provider
+	store       store.Store // Core authsome store (for users/sessions)
+	oauthStore  Store       // OAuth-specific store (for connections)
+	appID       string
+	engine      plugin.Engine
+	settingsMgr *settings.Manager
 
-	chronicle   bridge.Chronicle
-	relay       bridge.EventRelay
-	hooks       *hook.Bus
-	logger      log.Logger
-	ceremonies  ceremony.Store
-	roleEnsurer roleEnsurer
+	chronicle  bridge.Chronicle
+	relay      bridge.EventRelay
+	hooks      *hook.Bus
+	logger     log.Logger
+	ceremonies ceremony.Store
+	basePath   string // authsome route prefix (e.g. "/authsome", "/api/identity")
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -204,11 +207,6 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	return settings.RegisterTyped(m, "social", SettingSocialProviders)
-}
-
-// roleEnsurer assigns a default Warden role to a newly created user.
-type roleEnsurer interface {
-	EnsureDefaultRole(ctx context.Context, appID id.AppID, userID id.UserID)
 }
 
 // New creates a new social OAuth plugin.
@@ -240,66 +238,19 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "social" }
 
 // OnInit captures the store reference and bridges from the engine.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.store = sg.Store()
-	}
-
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	type ceremonyGetter interface {
-		CeremonyStore() ceremony.Store
-	}
-	if cg, ok := engine.(ceremonyGetter); ok {
-		p.ceremonies = cg.CeremonyStore()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+	p.store = engine.Store()
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.ceremonies = engine.CeremonyStore()
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}
-
-	if scr, ok := engine.(sessionConfigResolver); ok {
-		p.sessionConfig = scr
-	}
-
-	type settingsGetter interface {
-		Settings() *settings.Manager
-	}
-	if sg, ok := engine.(settingsGetter); ok {
-		p.settingsMgr = sg.Settings()
-	}
-
-	if re, ok := engine.(roleEnsurer); ok {
-		p.roleEnsurer = re
-	}
+	p.settingsMgr = engine.Settings()
+	p.basePath = engine.BasePath()
 
 	return nil
 }
@@ -460,12 +411,7 @@ func (p *Plugin) allProviderNames(ctx context.Context) []string {
 }
 
 // RegisterRoutes registers social OAuth HTTP endpoints on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("social: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/social", forge.WithGroupTags("Social OAuth"))
 
 	if err := g.POST("/:provider", p.handleStart,
@@ -491,7 +437,8 @@ func (p *Plugin) RegisterRoutes(r any) error {
 
 // StartRequest contains the path parameter for starting OAuth.
 type StartRequest struct {
-	Provider string `path:"provider"`
+	Provider    string `path:"provider"`
+	RedirectURL string `json:"redirect_url,omitempty" query:"redirect_url,omitempty"`
 }
 
 // StartResponse is returned when the OAuth flow is initiated.
@@ -549,7 +496,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	// Resolve the default environment so the callback knows which env
 	// the user should be created in (supports multi-app / multi-env).
 	var envIDStr string
-	if env, _ := p.store.GetDefaultEnvironment(ctx.Context(), appID); env != nil {
+	if env, _ := p.store.GetDefaultEnvironment(ctx.Context(), appID); env != nil { //nolint:errcheck // best-effort env lookup
 		envIDStr = env.ID.String()
 	}
 
@@ -558,18 +505,34 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
 	}
 
+	// Validate the redirect URL against the request origin to prevent open redirects.
+	origin := ctx.Request().Header.Get("Origin")
+	if origin == "" {
+		origin = ctx.Request().Header.Get("Referer")
+	}
+	safeRedirect := sanitizeRedirectURL(req.RedirectURL, origin)
+
 	// Store the state for CSRF protection, including app and env IDs so the
 	// callback can resolve them without relying on global defaults.
+	// Resolve the OAuth callback URL. If the provider has no RedirectURL
+	// configured, auto-generate one from Config.Domain or the request host.
+	cfg := provider.OAuth2Config()
+	callbackURL := p.resolveCallbackURL(ctx.Request(), cfg.RedirectURL, req.Provider)
+
 	stateInfo := map[string]string{
-		"provider": req.Provider,
-		"app_id":   appID.String(),
-		"env_id":   envIDStr,
+		"provider":     req.Provider,
+		"app_id":       appID.String(),
+		"env_id":       envIDStr,
+		"redirect_url": safeRedirect,
+		"callback_url": callbackURL,
 	}
-	stateData, _ := json.Marshal(stateInfo)                                                //nolint:errcheck // marshaling known types
+	stateData, _ := json.Marshal(stateInfo)                                               //nolint:errcheck // marshaling known types
 	_ = p.ceremonies.Set(ctx.Context(), "social:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
-	cfg := provider.OAuth2Config()
-	authURL := cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	// Clone the config so we don't mutate the provider's stored config.
+	authCfg := *cfg
+	authCfg.RedirectURL = callbackURL
+	authURL := authCfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
 
 	return &StartResponse{AuthURL: authURL}, nil
 }
@@ -619,7 +582,14 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	}
 
 	cfg := provider.OAuth2Config()
-	token, err := cfg.Exchange(ctx.Context(), req.Code)
+
+	// Use the callback URL stored during handleStart so the token exchange
+	// sends the exact same redirect_uri the authorization request used.
+	exchangeCfg := *cfg
+	if cbURL := stateInfo["callback_url"]; cbURL != "" {
+		exchangeCfg.RedirectURL = cbURL
+	}
+	token, err := exchangeCfg.Exchange(ctx.Context(), req.Code)
 	if err != nil {
 		return nil, forge.BadRequest("failed to exchange code")
 	}
@@ -639,7 +609,7 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		envID, _ = id.ParseEnvironmentID(eid) //nolint:errcheck // best-effort; zero value is safe
 	}
 	if envID.IsNil() {
-		if env, _ := p.store.GetDefaultEnvironment(goCtx, appID); env != nil {
+		if env, _ := p.store.GetDefaultEnvironment(goCtx, appID); env != nil { //nolint:errcheck // best-effort env lookup
 			envID = env.ID
 		}
 	}
@@ -670,22 +640,22 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 			if err != nil {
 				// No existing user — create one
 				u = &user.User{
-					ID:        id.NewUserID(),
-					AppID:     appID,
-					EnvID:     envID,
+					ID:            id.NewUserID(),
+					AppID:         appID,
+					EnvID:         envID,
 					Email:         strings.ToLower(providerUser.Email),
 					EmailVerified: true, // Social-authenticated emails are pre-verified by the provider.
-					FirstName: providerUser.FirstName,
-					LastName:  providerUser.LastName,
-					Image:     providerUser.AvatarURL,
-					CreatedAt: time.Now(),
-					UpdatedAt: time.Now(),
+					FirstName:     providerUser.FirstName,
+					LastName:      providerUser.LastName,
+					Image:         providerUser.AvatarURL,
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
 				}
 				if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
 					return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 				}
-				if p.roleEnsurer != nil {
-					p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
+				if p.engine != nil {
+					p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
 				}
 			}
 		} else {
@@ -703,8 +673,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 			if createErr := p.store.CreateUser(goCtx, u); createErr != nil {
 				return nil, forge.InternalError(fmt.Errorf("failed to create user: %w", createErr))
 			}
-			if p.roleEnsurer != nil {
-				p.roleEnsurer.EnsureDefaultRole(goCtx, appID, u.ID)
+			if p.engine != nil {
+				p.engine.EnsureDefaultRole(goCtx, appID, u.ID)
 			}
 		}
 
@@ -734,8 +704,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		TokenTTL:        p.config.SessionTokenTTL,
 		RefreshTokenTTL: p.config.SessionRefreshTTL,
 	}
-	if p.sessionConfig != nil {
-		sessCfg = p.sessionConfig.SessionConfigForApp(goCtx, appID)
+	if p.engine != nil {
+		sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
 	}
 	sess, err := account.NewSession(appID, u.ID, sessCfg)
 	if err != nil {
@@ -761,13 +731,20 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	p.setSessionCookie(ctx, sess.Token, int(sessCfg.TokenTTL.Seconds()))
 
 	// Browser-based OAuth callbacks arrive as GET redirects. Respond with a
-	// small HTML page that closes the popup (or redirects to "/" for
-	// non-popup flows) so the parent window can pick up the session cookie.
+	// small HTML page that closes the popup (or redirects to the stored
+	// redirect URL for non-popup flows) so the parent window can pick up
+	// the session cookie.
 	if ctx.Request().Method == http.MethodGet {
+		redirectTarget := stateInfo["redirect_url"]
+		if redirectTarget == "" {
+			redirectTarget = "/"
+		}
+		escapedRedirect := html.EscapeString(redirectTarget)
+
 		ctx.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		ctx.Response().WriteHeader(http.StatusOK)
-		_, _ = ctx.Response().Write([]byte(`<!DOCTYPE html><html><head><title>Login successful</title></head><body><script>` +
-			`if(window.opener){window.close()}else{window.location.href="/"}` +
+		_, _ = ctx.Response().Write([]byte(`<!DOCTYPE html><html><head><title>Login successful</title></head><body><script>` + //nolint:errcheck // best-effort HTML write
+			`if(window.opener){window.close()}else{window.location.href="` + escapedRedirect + `"}` +
 			`</script><p>Login successful. You can close this window.</p></body></html>`))
 		return nil, nil
 	}
@@ -920,6 +897,74 @@ func generateState() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// resolveCallbackURL returns the OAuth callback URL for a provider. If the
+// provider already has a RedirectURL configured, it is returned unchanged.
+// Otherwise the URL is constructed from:
+//  1. Config.Domain (if set), e.g. "https://api.example.com"
+//  2. The incoming request's scheme + host (fallback)
+//
+// The path includes the authsome base path (e.g. /api/identity/v1/social/{provider}/callback).
+func (p *Plugin) resolveCallbackURL(r *http.Request, providerRedirectURL, providerName string) string {
+	if providerRedirectURL != "" {
+		return providerRedirectURL
+	}
+
+	base := strings.TrimRight(p.config.Domain, "/")
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+
+	prefix := p.basePath
+	if prefix == "" {
+		prefix = "/authsome"
+	}
+	return base + prefix + "/v1/social/" + providerName + "/callback"
+}
+
+// sanitizeRedirectURL validates a redirect URL to prevent open-redirect attacks.
+// It allows relative paths unconditionally and absolute URLs only when the host
+// matches the request origin. Dangerous schemes and embedded credentials are blocked.
+func sanitizeRedirectURL(rawURL, requestOrigin string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	// Block dangerous schemes.
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "" && scheme != "http" && scheme != "https" {
+		return ""
+	}
+
+	// Block URLs with embedded credentials.
+	if parsed.User != nil {
+		return ""
+	}
+
+	// Relative paths (no host) are safe.
+	if parsed.Host == "" {
+		return rawURL
+	}
+
+	// Absolute URLs must match the request origin.
+	if requestOrigin != "" {
+		originParsed, oErr := url.Parse(requestOrigin)
+		if oErr == nil && strings.EqualFold(parsed.Host, originParsed.Host) {
+			return rawURL
+		}
+	}
+
+	return ""
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).

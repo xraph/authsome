@@ -7,18 +7,14 @@ import (
 	"github.com/xraph/forge"
 
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 )
 
 // RegisterRoutes registers organization management routes on a forge.Router.
-func (p *Plugin) RegisterRoutes(r any) error {
-	router, ok := r.(forge.Router)
-	if !ok {
-		return fmt.Errorf("organization: expected forge.Router, got %T", r)
-	}
-
+func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := p.registerOrgRoutes(router); err != nil {
 		return err
 	}
@@ -242,8 +238,9 @@ func (p *Plugin) registerOrgRoutes(router forge.Router) error {
 func (p *Plugin) registerAdminOrgRoutes(router forge.Router) error {
 	g := router.Group(p.config.PathPrefix+"/admin",
 		forge.WithGroupTags("admin"),
+		forge.WithGroupAuth("session"),
 		forge.WithGroupMiddleware(
-			middleware.RequireAuth(),
+			authprovider.RegistryMiddleware(p.engine.AuthRegistry(), "session"),
 			middleware.RequirePermission(p.permChecker, "manage", "organization"),
 		),
 	)

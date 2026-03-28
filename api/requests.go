@@ -478,19 +478,19 @@ type GetAppClientConfigRequest struct {
 
 // SetAppClientConfigRequest binds the path + body for PUT /admin/apps/:appId/client-config.
 type SetAppClientConfigRequest struct {
-	AppID            string   `path:"appId" description:"Application identifier"`
-	PasswordEnabled  *bool    `json:"password_enabled,omitempty" description:"Enable password auth (nil = inherit)"`
-	PasskeyEnabled   *bool    `json:"passkey_enabled,omitempty" description:"Enable passkey auth (nil = inherit)"`
-	MagicLinkEnabled *bool    `json:"magic_link_enabled,omitempty" description:"Enable magic link auth (nil = inherit)"`
-	MFAEnabled       *bool    `json:"mfa_enabled,omitempty" description:"Enable MFA (nil = inherit)"`
-	SSOEnabled       *bool    `json:"sso_enabled,omitempty" description:"Enable SSO (nil = inherit)"`
-	SocialEnabled    *bool    `json:"social_enabled,omitempty" description:"Enable social auth (nil = inherit)"`
-	WaitlistEnabled           *bool    `json:"waitlist_enabled,omitempty" description:"Enable waitlist (nil = inherit)"`
+	AppID                    string   `path:"appId" description:"Application identifier"`
+	PasswordEnabled          *bool    `json:"password_enabled,omitempty" description:"Enable password auth (nil = inherit)"`
+	PasskeyEnabled           *bool    `json:"passkey_enabled,omitempty" description:"Enable passkey auth (nil = inherit)"`
+	MagicLinkEnabled         *bool    `json:"magic_link_enabled,omitempty" description:"Enable magic link auth (nil = inherit)"`
+	MFAEnabled               *bool    `json:"mfa_enabled,omitempty" description:"Enable MFA (nil = inherit)"`
+	SSOEnabled               *bool    `json:"sso_enabled,omitempty" description:"Enable SSO (nil = inherit)"`
+	SocialEnabled            *bool    `json:"social_enabled,omitempty" description:"Enable social auth (nil = inherit)"`
+	WaitlistEnabled          *bool    `json:"waitlist_enabled,omitempty" description:"Enable waitlist (nil = inherit)"`
 	RequireEmailVerification *bool    `json:"require_email_verification,omitempty" description:"Block sign-in until email is verified (nil = inherit)"`
 	SocialProviders          []string `json:"social_providers,omitempty" description:"Allowed social providers"`
-	MFAMethods       []string `json:"mfa_methods,omitempty" description:"Allowed MFA methods"`
-	AppName          *string  `json:"app_name,omitempty" description:"Branding app name override"`
-	LogoURL          *string  `json:"logo_url,omitempty" description:"Branding logo URL override"`
+	MFAMethods               []string `json:"mfa_methods,omitempty" description:"Allowed MFA methods"`
+	AppName                  *string  `json:"app_name,omitempty" description:"Branding app name override"`
+	LogoURL                  *string  `json:"logo_url,omitempty" description:"Branding logo URL override"`
 }
 
 // DeleteAppClientConfigRequest binds the path for DELETE /admin/apps/:appId/client-config.

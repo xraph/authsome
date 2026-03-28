@@ -148,6 +148,34 @@ var (
 		settings.WithOrder(100),
 		settings.WithVisibleWhen("session.auto_refresh_enabled", true),
 	)
+
+	// SettingAutoRefreshExposeRefreshToken controls whether the refresh token is
+	// included in the X-Auth-Refresh-Token header during auto-refresh.
+	SettingAutoRefreshExposeRefreshToken = settings.Define("session.auto_refresh_expose_refresh_token", false,
+		settings.WithDisplayName("Expose Refresh Token in Auto-Refresh"),
+		settings.WithDescription("Include refresh token in X-Auth-Refresh-Token header during auto-refresh"),
+		settings.WithCategory("Auto-Refresh"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithHelpText("When disabled (recommended), only the access token is returned in auto-refresh headers. The refresh token should only be obtained via the /v1/refresh endpoint."),
+		settings.WithOrder(101),
+		settings.WithVisibleWhen("session.auto_refresh_enabled", true),
+	)
+)
+
+// Category: JWT Security
+
+var (
+	// SettingJWTRequireActiveSession controls whether JWT tokens are cross-checked
+	// against the session store to enable immediate revocation.
+	SettingJWTRequireActiveSession = settings.Define("session.jwt_require_active_session", false,
+		settings.WithDisplayName("Require Active Session for JWT"),
+		settings.WithDescription("Cross-check JWT tokens against the session store to enable revocation"),
+		settings.WithCategory("JWT Security"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, JWT tokens are validated against the session store on each request. This adds a DB lookup but enables instant revocation and IP/device binding for JWT tokens."),
+		settings.WithOrder(55),
+	)
 )
 
 // Category: Session Extension
@@ -165,14 +193,14 @@ var (
 	)
 
 	// SettingInactivityTimeoutSeconds controls how long a session lives without activity.
-	SettingInactivityTimeoutSeconds = settings.Define("session.inactivity_timeout_seconds", 1800,
+	SettingInactivityTimeoutSeconds = settings.Define("session.inactivity_timeout_seconds", 604800,
 		settings.WithDisplayName("Inactivity Timeout (seconds)"),
 		settings.WithDescription("Session expires after this many seconds of inactivity"),
 		settings.WithCategory("Session Extension"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
 		settings.WithInputType(formconfig.FieldNumber),
-		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(86400)}),
-		settings.WithHelpText("The session expiry is reset to now + this value on each request. Default: 1800 (30 minutes)"),
+		settings.WithUIValidation(formconfig.Validation{Required: true, Min: intPtr(60), Max: intPtr(2592000)}),
+		settings.WithHelpText("The session expiry is reset to now + this value on each request. Default: 604800 (7 days)"),
 		settings.WithOrder(106),
 		settings.WithVisibleWhen("session.extend_on_activity", true),
 	)
@@ -286,6 +314,12 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingAutoRefreshThresholdSeconds); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingAutoRefreshExposeRefreshToken); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "session", SettingJWTRequireActiveSession); err != nil {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "session", SettingExtendOnActivity); err != nil {

@@ -9,7 +9,7 @@ import (
 )
 
 // WaitlistStatus represents the approval state of a waitlist entry.
-type WaitlistStatus string
+type WaitlistStatus string //nolint:revive // exported name stutter is intentional for clarity
 
 const (
 	// StatusPending means the entry is awaiting review.
@@ -21,7 +21,7 @@ const (
 )
 
 // WaitlistEntry is a single record on the waitlist.
-type WaitlistEntry struct {
+type WaitlistEntry struct { //nolint:revive // exported name stutter is intentional for clarity
 	ID        id.WaitlistID  `json:"id"`
 	AppID     id.AppID       `json:"app_id"`
 	Email     string         `json:"email"`
@@ -35,7 +35,7 @@ type WaitlistEntry struct {
 }
 
 // WaitlistQuery holds filters for listing waitlist entries.
-type WaitlistQuery struct {
+type WaitlistQuery struct { //nolint:revive // exported name stutter is intentional for clarity
 	AppID  id.AppID       `json:"app_id"`
 	Email  string         `json:"email,omitempty"`
 	Status WaitlistStatus `json:"status,omitempty"`
@@ -44,7 +44,7 @@ type WaitlistQuery struct {
 }
 
 // WaitlistList wraps a paginated list of waitlist entries.
-type WaitlistList struct {
+type WaitlistList struct { //nolint:revive // exported name stutter is intentional for clarity
 	Entries    []*WaitlistEntry `json:"entries"`
 	Total      int              `json:"total"`
 	NextCursor string           `json:"next_cursor,omitempty"`
@@ -68,7 +68,7 @@ type Store interface {
 	ListEntries(ctx context.Context, q *WaitlistQuery) (*WaitlistList, error)
 
 	// CountByStatus returns counts of entries grouped by status for an app.
-	CountByStatus(ctx context.Context, appID id.AppID) (pending int, approved int, rejected int, err error)
+	CountByStatus(ctx context.Context, appID id.AppID) (pending, approved, rejected int, err error)
 
 	// DeleteEntry permanently removes a waitlist entry.
 	DeleteEntry(ctx context.Context, entryID id.WaitlistID) error

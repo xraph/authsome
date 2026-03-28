@@ -15,7 +15,7 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ dashboard.Plugin        = (*Plugin)(nil)
+	_ dashboard.Plugin          = (*Plugin)(nil)
 	_ dashboard.PageContributor = (*Plugin)(nil)
 )
 
@@ -24,7 +24,7 @@ var (
 // ──────────────────────────────────────────────────
 
 // DashboardWidgets returns waitlist-related widgets.
-func (p *Plugin) DashboardWidgets(ctx context.Context) []dashboard.PluginWidget {
+func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 	return []dashboard.PluginWidget{
 		{
 			ID:         "waitlist-pending",

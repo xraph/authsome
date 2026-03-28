@@ -113,20 +113,9 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "email" }
 
 // OnInit extracts the mailer bridge from the engine during initialization.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	type mailerGetter interface {
-		Mailer() bridge.Mailer
-	}
-	if mg, ok := engine.(mailerGetter); ok {
-		p.mailer = mg.Mailer()
-	}
-
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.mailer = engine.Mailer()
+	p.logger = engine.Logger()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}

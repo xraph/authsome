@@ -72,11 +72,6 @@ var (
 	)
 )
 
-// userLookup provides user email resolution for recipient lookup.
-type userLookup interface {
-	GetUser(ctx context.Context, userID id.UserID) (*user.User, error)
-}
-
 // Plugin is the Herald-backed notification plugin. It replaces the legacy
 // email plugin with a unified multi-channel notification system.
 type Plugin struct {
@@ -86,7 +81,7 @@ type Plugin struct {
 	hooks     *hook.Bus
 	logger    log.Logger
 	mappings  map[string]*Mapping
-	users     userLookup
+	engine    plugin.Engine
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -139,15 +134,12 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "notification" }
 
 // OnInit extracts the Herald bridge and hook bus from the engine during
-// initialization using duck-typing (same pattern as MFA plugin).
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
+// initialization.
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	p.engine = engine
+
 	// Discover Herald bridge (required).
-	type heraldGetter interface {
-		Herald() bridge.Herald
-	}
-	if hg, ok := engine.(heraldGetter); ok {
-		p.herald = hg.Herald()
-	}
+	p.herald = engine.Herald()
 	if p.herald == nil {
 		return bridge.ErrHeraldNotAvailable
 	}
@@ -158,47 +150,24 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	}
 
 	// Discover hook bus.
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
+	p.hooks = engine.Hooks()
 
 	// Discover logger.
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
+	p.logger = engine.Logger()
 	if p.logger == nil {
 		p.logger = log.NewNoopLogger()
 	}
 
-	// Discover user store for recipient resolution fallback.
-	// We can't use Store() because its return type (store.Store) can't
-	// be imported here without circular deps. Instead, check if the
-	// engine itself satisfies userLookup (has GetUser).
-	if ul, ok := engine.(userLookup); ok {
-		p.users = ul
-	}
-
 	// Discover plugin-contributed notification mappings.
-	type registryGetter interface {
-		Plugins() interface{ Plugins() []plugin.Plugin }
-	}
-	if rg, ok := engine.(registryGetter); ok {
-		for _, pl := range rg.Plugins().Plugins() {
-			if contributor, ok := pl.(plugin.NotificationMappingContributor); ok {
-				for action, m := range contributor.NotificationMappings() {
-					// Plugin-contributed mappings don't override user-provided config mappings.
-					if _, exists := p.mappings[action]; !exists {
-						p.mappings[action] = &Mapping{
-							Template: m.Template,
-							Channels: m.Channels,
-							Enabled:  m.Enabled,
-						}
+	for _, pl := range engine.Plugins().Plugins() {
+		if contributor, ok := pl.(plugin.NotificationMappingContributor); ok {
+			for action, m := range contributor.NotificationMappings() {
+				// Plugin-contributed mappings don't override user-provided config mappings.
+				if _, exists := p.mappings[action]; !exists {
+					p.mappings[action] = &Mapping{
+						Template: m.Template,
+						Channels: m.Channels,
+						Enabled:  m.Enabled,
 					}
 				}
 			}
@@ -209,13 +178,8 @@ func (p *Plugin) OnInit(_ context.Context, engine any) error {
 	// "template not found" on a fresh database.
 	if p.templates != nil {
 		appID := ""
-		type platformAppIDGetter interface {
-			PlatformAppID() id.AppID
-		}
-		if pg, ok := engine.(platformAppIDGetter); ok {
-			if pid := pg.PlatformAppID(); !pid.IsNil() {
-				appID = pid.String()
-			}
+		if pid := engine.PlatformAppID(); !pid.IsNil() {
+			appID = pid.String()
 		}
 		if err := p.templates.SeedDefaultTemplates(context.Background(), appID); err != nil {
 			p.logger.Warn("notification plugin: failed to seed default templates",
@@ -395,9 +359,9 @@ func (p *Plugin) handleHookEvent(ctx context.Context, event *hook.Event) error {
 	}
 
 	// Fallback: resolve email from ActorID via user store lookup.
-	if len(to) == 0 && event.ActorID != "" && p.users != nil {
+	if len(to) == 0 && event.ActorID != "" && p.engine != nil {
 		if uid, err := id.ParseUserID(event.ActorID); err == nil {
-			if u, err := p.users.GetUser(ctx, uid); err == nil && u.Email != "" {
+			if u, err := p.engine.GetUser(ctx, uid); err == nil && u.Email != "" {
 				to = []string{u.Email}
 			}
 		}

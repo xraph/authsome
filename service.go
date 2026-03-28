@@ -27,6 +27,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/user"
@@ -97,7 +98,7 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 
 	// Resolve default environment when not explicitly provided.
 	if req.EnvID.IsNil() {
-		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
 			req.EnvID = env.ID
 		}
 	}
@@ -225,7 +226,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 
 	// Resolve default environment when not explicitly provided.
 	if req.EnvID.IsNil() {
-		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil {
+		if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
 			req.EnvID = env.ID
 		}
 	}
@@ -264,7 +265,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 			requireVerif = *appCfg.RequireEmailVerification
 		} else {
 			// Fall back to environment setting.
-			if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil && env.Settings != nil {
+			if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil && env.Settings != nil { //nolint:errcheck // best-effort env lookup
 				if env.Settings.SkipEmailVerificationEnabled() {
 					requireVerif = false
 				}
@@ -393,8 +394,18 @@ func (e *Engine) SignOut(ctx context.Context, sessionID id.SessionID) error {
 	return nil
 }
 
+// RefreshOpts carries optional client context for binding validation during refresh.
+type RefreshOpts struct {
+	// IPAddress is the client IP to validate against the session's stored IP.
+	IPAddress string
+	// UserAgent is the client User-Agent to validate against the session's stored UA.
+	UserAgent string
+}
+
 // Refresh generates new tokens for an existing session using the refresh token.
-func (e *Engine) Refresh(ctx context.Context, refreshToken string) (*session.Session, error) {
+// When RefreshOpts are provided and session binding is enabled, the client IP
+// and/or User-Agent are validated against the session's stored values.
+func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
 	sess, err := e.store.GetSessionByRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return nil, account.ErrInvalidCredentials
@@ -404,6 +415,28 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string) (*session.Ses
 	if time.Now().After(sess.RefreshTokenExpiresAt) {
 		_ = e.store.DeleteSession(ctx, sess.ID) //nolint:errcheck // best-effort cleanup
 		return nil, account.ErrSessionExpired
+	}
+
+	// Session binding: validate client IP and/or device match during refresh.
+	if len(opts) > 0 {
+		o := opts[0]
+		mgr := e.Settings()
+		if mgr != nil {
+			resolveOpts := settings.ResolveOpts{}
+			if sess.AppID.Prefix() != "" {
+				resolveOpts.AppID = sess.AppID.String()
+			}
+
+			bindIP, _ := settings.Get(ctx, mgr, SettingBindToIP, resolveOpts)         //nolint:errcheck // best-effort
+			bindDevice, _ := settings.Get(ctx, mgr, SettingBindToDevice, resolveOpts) //nolint:errcheck // best-effort
+
+			if bindIP && sess.IPAddress != "" && o.IPAddress != "" && o.IPAddress != sess.IPAddress {
+				return nil, account.ErrInvalidCredentials
+			}
+			if bindDevice && sess.UserAgent != "" && o.UserAgent != "" && o.UserAgent != sess.UserAgent {
+				return nil, account.ErrInvalidCredentials
+			}
+		}
 	}
 
 	// Generate new tokens (using per-app + per-env config if available)

@@ -444,3 +444,241 @@ func TestRequireAuth_WithoutUser(t *testing.T) {
 	assert.False(t, called, "handler should not be called without authentication")
 	assert.Contains(t, rec.Body.String(), "authentication required")
 }
+
+// ──────────────────────────────────────────────────
+// Cookie name resolver tests (B2 fix)
+// ──────────────────────────────────────────────────
+
+func TestAuthMiddleware_CookieNameResolver_CustomName(t *testing.T) {
+	testUserID := id.NewUserID()
+	testAppID := id.NewAppID()
+	testSessID := id.NewSessionID()
+
+	testSession := &session.Session{
+		ID:     testSessID,
+		AppID:  testAppID,
+		UserID: testUserID,
+		Token:  "cookie-token",
+	}
+	testUser := &user.User{
+		ID:    testUserID,
+		AppID: testAppID,
+		Email: "cookie@test.com",
+	}
+
+	mw := middleware.AuthMiddleware(
+		func(token string) (*session.Session, error) {
+			if token == "cookie-token" {
+				return testSession, nil
+			}
+			return nil, errors.New("invalid")
+		},
+		func(userIDStr string) (*user.User, error) {
+			if userIDStr == testUserID.String() {
+				return testUser, nil
+			}
+			return nil, errors.New("not found")
+		},
+		log.NewNoopLogger(),
+		middleware.SessionBindingConfig{
+			CookieNameResolver: func(_ context.Context) string {
+				return "my_custom_cookie"
+			},
+		},
+	)
+
+	var gotUser bool
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		_, gotUser = middleware.UserFrom(ctx.Context())
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	// Send request with custom cookie name (no Authorization header)
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	req.AddCookie(&http.Cookie{Name: "my_custom_cookie", Value: "cookie-token"})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, gotUser, "user should be resolved from custom cookie")
+}
+
+func TestAuthMiddleware_CookieNameResolver_DefaultFallback(t *testing.T) {
+	testUserID := id.NewUserID()
+	testAppID := id.NewAppID()
+
+	testSession := &session.Session{
+		ID:     id.NewSessionID(),
+		AppID:  testAppID,
+		UserID: testUserID,
+		Token:  "default-cookie-token",
+	}
+	testUser := &user.User{
+		ID:    testUserID,
+		AppID: testAppID,
+		Email: "default@test.com",
+	}
+
+	// No CookieNameResolver — should fall back to "authsome_session_token"
+	mw := middleware.AuthMiddleware(
+		func(token string) (*session.Session, error) {
+			if token == "default-cookie-token" {
+				return testSession, nil
+			}
+			return nil, errors.New("invalid")
+		},
+		func(userIDStr string) (*user.User, error) {
+			if userIDStr == testUserID.String() {
+				return testUser, nil
+			}
+			return nil, errors.New("not found")
+		},
+		log.NewNoopLogger(),
+	)
+
+	var gotUser bool
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		_, gotUser = middleware.UserFrom(ctx.Context())
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	req.AddCookie(&http.Cookie{Name: "authsome_session_token", Value: "default-cookie-token"})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, gotUser, "user should be resolved from default cookie name")
+}
+
+// ──────────────────────────────────────────────────
+// Session binding tests (IP and device)
+// ──────────────────────────────────────────────────
+
+func TestAuthMiddleware_SessionBinding_IPMismatch_Rejects(t *testing.T) {
+	testSession := &session.Session{
+		ID:        id.NewSessionID(),
+		AppID:     id.NewAppID(),
+		UserID:    id.NewUserID(),
+		Token:     "bound-token",
+		IPAddress: "10.0.0.1",
+	}
+
+	mw := middleware.AuthMiddleware(
+		func(token string) (*session.Session, error) {
+			if token == "bound-token" {
+				return testSession, nil
+			}
+			return nil, errors.New("invalid")
+		},
+		func(_ string) (*user.User, error) {
+			return &user.User{ID: testSession.UserID}, nil
+		},
+		log.NewNoopLogger(),
+		middleware.SessionBindingConfig{BindToIP: true},
+	)
+
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer bound-token")
+	req.RemoteAddr = "192.168.1.1:12345" // different IP
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "IP mismatch should be rejected")
+}
+
+func TestAuthMiddleware_SessionBinding_DeviceMismatch_Rejects(t *testing.T) {
+	testSession := &session.Session{
+		ID:        id.NewSessionID(),
+		AppID:     id.NewAppID(),
+		UserID:    id.NewUserID(),
+		Token:     "device-token",
+		UserAgent: "Mozilla/5.0 Original",
+	}
+
+	mw := middleware.AuthMiddleware(
+		func(token string) (*session.Session, error) {
+			if token == "device-token" {
+				return testSession, nil
+			}
+			return nil, errors.New("invalid")
+		},
+		func(_ string) (*user.User, error) {
+			return &user.User{ID: testSession.UserID}, nil
+		},
+		log.NewNoopLogger(),
+		middleware.SessionBindingConfig{BindToDevice: true},
+	)
+
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer device-token")
+	req.Header.Set("User-Agent", "DifferentBrowser/1.0") // different UA
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "device mismatch should be rejected")
+}
+
+func TestAuthMiddleware_SessionBinding_Matches_Allows(t *testing.T) {
+	testUserID := id.NewUserID()
+	testSession := &session.Session{
+		ID:        id.NewSessionID(),
+		AppID:     id.NewAppID(),
+		UserID:    testUserID,
+		Token:     "matching-token",
+		IPAddress: "10.0.0.1",
+		UserAgent: "TestBrowser/1.0",
+	}
+	testUser := &user.User{ID: testUserID, Email: "bound@test.com"}
+
+	mw := middleware.AuthMiddleware(
+		func(token string) (*session.Session, error) {
+			if token == "matching-token" {
+				return testSession, nil
+			}
+			return nil, errors.New("invalid")
+		},
+		func(userIDStr string) (*user.User, error) {
+			if userIDStr == testUserID.String() {
+				return testUser, nil
+			}
+			return nil, errors.New("not found")
+		},
+		log.NewNoopLogger(),
+		middleware.SessionBindingConfig{BindToIP: true, BindToDevice: true},
+	)
+
+	var gotUser bool
+	router := forge.NewRouter()
+	router.Use(mw)
+	router.GET("/test", func(ctx forge.Context) error {
+		_, gotUser = middleware.UserFrom(ctx.Context())
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequestWithContext(context.Background(), "GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer matching-token")
+	req.Header.Set("User-Agent", "TestBrowser/1.0")
+	req.RemoteAddr = "10.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, gotUser, "matching IP and device should allow access")
+}

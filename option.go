@@ -18,6 +18,7 @@ import (
 	"github.com/xraph/authsome/strategy"
 	"github.com/xraph/authsome/tokenformat"
 
+	"github.com/xraph/grove"
 	"github.com/xraph/keysmith"
 	xledger "github.com/xraph/ledger"
 	"github.com/xraph/warden"
@@ -209,6 +210,14 @@ func WithDisableMigrate() Option {
 func WithDriverName(name string) Option {
 	return func(e *Engine) {
 		e.config.DriverName = name
+	}
+}
+
+// WithDB stores the grove database handle so plugins can create their
+// own persistent stores via Engine.DB().
+func WithDB(db *grove.DB) Option {
+	return func(e *Engine) {
+		e.db = db
 	}
 }
 

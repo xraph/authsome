@@ -1598,7 +1598,7 @@ class AuthClient {
   Future<DeviceTokenResponse> deviceToken({
     required DeviceTokenRequest body,
   }) async {
-    const path = '/v1/oauth/device/token';
+    const path = '/v1/oauth/token';
     final uri = Uri.parse('$_baseUrl$path');
     final headers = <String, String>{
       ..._defaultHeaders,
@@ -1612,29 +1612,43 @@ class AuthClient {
       body: jsonEncode(body.toJson()),
     );
 
-    final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
+    final Map<String, dynamic> responseBody;
+    try {
+      responseBody = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw AuthClientException(
+        'unexpected response (${response.statusCode}): ${response.body}',
+        code: response.statusCode,
+      );
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return DeviceTokenResponse.fromJson(responseBody);
     }
 
-    // Handle RFC 8628 error responses
-    final error = DeviceTokenError.fromJson(responseBody);
-    if (error.isPending) {
-      throw DeviceTokenPendingException();
-    }
-    if (error.isSlowDown) {
-      throw DeviceTokenSlowDownException();
-    }
-    if (error.isExpired) {
-      throw DeviceTokenExpiredException();
-    }
-    if (error.isAccessDenied) {
-      throw DeviceTokenDeniedException();
+    // Handle RFC 8628 error responses.
+    // The "error" field may come from OAuth2 format or forge framework format.
+    final errorCode = responseBody['error'] as String? ?? '';
+    final errorDesc = (responseBody['error_description']
+        ?? responseBody['message']
+        ?? responseBody['details']) as String?;
+
+    switch (errorCode) {
+      case 'authorization_pending':
+        throw DeviceTokenPendingException();
+      case 'slow_down':
+        throw DeviceTokenSlowDownException();
+      case 'expired_token':
+        throw DeviceTokenExpiredException();
+      case 'access_denied':
+        throw DeviceTokenDeniedException();
     }
 
     throw AuthClientException(
-      error.errorDescription ?? error.error,
+      errorDesc ??
+          (errorCode.isNotEmpty
+              ? errorCode
+              : 'Request failed with status ${response.statusCode}'),
       code: response.statusCode,
     );
   }

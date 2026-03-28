@@ -91,20 +91,20 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 	}
 
 	cfg := &appclientconfig.Config{
-		AppID:            appID,
-		PasswordEnabled:  req.PasswordEnabled,
-		PasskeyEnabled:   req.PasskeyEnabled,
-		MagicLinkEnabled: req.MagicLinkEnabled,
-		MFAEnabled:       req.MFAEnabled,
-		SSOEnabled:       req.SSOEnabled,
-		SocialEnabled:    req.SocialEnabled,
-		WaitlistEnabled:           req.WaitlistEnabled,
+		AppID:                    appID,
+		PasswordEnabled:          req.PasswordEnabled,
+		PasskeyEnabled:           req.PasskeyEnabled,
+		MagicLinkEnabled:         req.MagicLinkEnabled,
+		MFAEnabled:               req.MFAEnabled,
+		SSOEnabled:               req.SSOEnabled,
+		SocialEnabled:            req.SocialEnabled,
+		WaitlistEnabled:          req.WaitlistEnabled,
 		RequireEmailVerification: req.RequireEmailVerification,
 		SocialProviders:          req.SocialProviders,
-		MFAMethods:       req.MFAMethods,
-		AppName:          req.AppName,
-		LogoURL:          req.LogoURL,
-		UpdatedAt:        now,
+		MFAMethods:               req.MFAMethods,
+		AppName:                  req.AppName,
+		LogoURL:                  req.LogoURL,
+		UpdatedAt:                now,
 	}
 
 	if existing != nil {

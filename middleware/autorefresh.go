@@ -19,6 +19,12 @@ type AutoRefreshConfig struct {
 	// Threshold is the time before access token expiry to trigger refresh.
 	// Default: 5 minutes.
 	Threshold time.Duration
+
+	// ExposeRefreshToken controls whether the refresh token is included in
+	// the X-Auth-Refresh-Token response header. When false (recommended),
+	// only the access token is returned in headers. The refresh token should
+	// only be obtained via the /v1/refresh endpoint.
+	ExposeRefreshToken bool
 }
 
 // SessionRefresher refreshes a session using its refresh token and returns the
@@ -33,8 +39,11 @@ type AutoRefreshConfigResolver func(ctx context.Context) AutoRefreshConfig
 // near expiry and, if so, transparently refreshes it. New tokens are returned
 // in response headers:
 //   - X-Auth-Token: the new access token
-//   - X-Auth-Refresh-Token: the new refresh token
+//   - X-Auth-Refresh-Token: the new refresh token (only if ExposeRefreshToken is true)
 //   - X-Auth-Token-Expires-At: RFC 3339 expiration timestamp
+//
+// When a CookieSetter is provided, the session cookie is also updated with the
+// new access token so the browser cookie stays in sync.
 //
 // This middleware MUST run after AuthMiddleware so the session is on context.
 // On refresh failure, the original response is returned unchanged.
@@ -42,7 +51,13 @@ func AutoRefreshMiddleware(
 	refresher SessionRefresher,
 	configResolver AutoRefreshConfigResolver,
 	logger log.Logger,
+	cookieSetter ...CookieSetter,
 ) forge.Middleware {
+	var setter CookieSetter
+	if len(cookieSetter) > 0 {
+		setter = cookieSetter[0]
+	}
+
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			// Run the actual handler first.
@@ -85,8 +100,22 @@ func AutoRefreshMiddleware(
 
 			// Set new tokens in response headers.
 			ctx.Response().Header().Set("X-Auth-Token", refreshed.Token)
-			ctx.Response().Header().Set("X-Auth-Refresh-Token", refreshed.RefreshToken)
 			ctx.Response().Header().Set("X-Auth-Token-Expires-At", refreshed.ExpiresAt.Format(time.RFC3339))
+
+			// Only expose refresh token in headers when explicitly enabled.
+			if cfg.ExposeRefreshToken {
+				ctx.Response().Header().Set("X-Auth-Refresh-Token", refreshed.RefreshToken)
+			}
+
+			// Re-set the session cookie with the new access token so the
+			// browser cookie stays in sync after auto-refresh.
+			if setter != nil {
+				maxAge := int(time.Until(refreshed.ExpiresAt).Seconds())
+				if maxAge <= 0 {
+					maxAge = 3600
+				}
+				setter(ctx, refreshed.Token, maxAge)
+			}
 
 			logger.Debug("auto-refresh: refreshed near-expiry access token",
 				log.String("session_id", sess.ID.String()),

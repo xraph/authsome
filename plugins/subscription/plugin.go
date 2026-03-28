@@ -6,7 +6,6 @@ import (
 
 	log "github.com/xraph/go-utils/log"
 
-	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
@@ -198,86 +197,32 @@ func New(cfg ...Config) *Plugin {
 func (p *Plugin) Name() string { return "subscription" }
 
 // OnInit captures bridge and engine references.
-func (p *Plugin) OnInit(_ context.Context, engine any) error {
-	// Discover ledger engine.
-	type ledgerEngineGetter interface {
-		LedgerEngine() *ledger.Ledger
-	}
-	if lg, ok := engine.(ledgerEngineGetter); ok {
-		p.ledger = lg.LedgerEngine()
+func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	// Discover ledger engine (optional capability).
+	if lep, ok := engine.(plugin.LedgerEngineProvider); ok {
+		if l, ok := lep.LedgerEngine().(*ledger.Ledger); ok {
+			p.ledger = l
+		}
 	}
 
-	// Discover ledger store (for list operations).
-	type ledgerStoreGetter interface {
-		LedgerStore() ledgerstore.Store
-	}
-	if lsg, ok := engine.(ledgerStoreGetter); ok {
-		p.ledgerStore = lsg.LedgerStore()
+	// Discover ledger store (optional capability).
+	if lsp, ok := engine.(plugin.LedgerStoreProvider); ok {
+		if ls, ok := lsp.LedgerStore().(ledgerstore.Store); ok {
+			p.ledgerStore = ls
+		}
 	}
 
 	// Discover ledger bridge.
-	type ledgerBridgeGetter interface {
-		Ledger() bridge.Ledger
-	}
-	if lbg, ok := engine.(ledgerBridgeGetter); ok {
-		p.ledgerBrdg = lbg.Ledger()
-	}
+	p.ledgerBrdg = engine.Ledger()
 
-	// Discover AuthSome store.
-	type storeGetter interface {
-		Store() store.Store
-	}
-	if sg, ok := engine.(storeGetter); ok {
-		p.authStore = sg.Store()
-	}
-
-	// Discover chronicle bridge.
-	type chronicleGetter interface {
-		Chronicle() bridge.Chronicle
-	}
-	if cg, ok := engine.(chronicleGetter); ok {
-		p.chronicle = cg.Chronicle()
-	}
-
-	// Discover relay bridge.
-	type relayGetter interface {
-		Relay() bridge.EventRelay
-	}
-	if rg, ok := engine.(relayGetter); ok {
-		p.relay = rg.Relay()
-	}
-
-	// Discover hook bus.
-	type hooksGetter interface {
-		Hooks() *hook.Bus
-	}
-	if hg, ok := engine.(hooksGetter); ok {
-		p.hooks = hg.Hooks()
-	}
-
-	// Discover logger.
-	type loggerGetter interface {
-		Logger() log.Logger
-	}
-	if lg, ok := engine.(loggerGetter); ok {
-		p.logger = lg.Logger()
-	}
-
-	// Discover settings manager.
-	type settingsGetter interface {
-		Settings() *settings.Manager
-	}
-	if sg, ok := engine.(settingsGetter); ok {
-		p.settings = sg.Settings()
-	}
-
-	// Discover default app ID.
-	type configGetter interface {
-		Config() authsome.Config
-	}
-	if cg, ok := engine.(configGetter); ok {
-		p.defaultAppID = cg.Config().AppID
-	}
+	// Core engine references.
+	p.authStore = engine.Store()
+	p.chronicle = engine.Chronicle()
+	p.relay = engine.Relay()
+	p.hooks = engine.Hooks()
+	p.logger = engine.Logger()
+	p.settings = engine.Settings()
+	p.defaultAppID = engine.DefaultAppID()
 
 	// Initialize the service layer.
 	p.service = &Service{
