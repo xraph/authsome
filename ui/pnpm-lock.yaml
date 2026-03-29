@@ -79,11 +79,11 @@ importers:
   packages/components:
     dependencies:
       '@authsome/ui-core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.4.0
+        version: 1.4.0
       '@authsome/ui-react':
-        specifier: workspace:*
-        version: link:../react
+        specifier: ^1.4.0
+        version: 1.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-avatar':
         specifier: ^1.1.3
         version: 1.1.11(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -167,14 +167,14 @@ importers:
   packages/nextjs:
     dependencies:
       '@authsome/ui-components':
-        specifier: workspace:*
-        version: link:../components
+        specifier: ^1.4.0
+        version: 1.4.0(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@authsome/ui-core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.4.0
+        version: 1.4.0
       '@authsome/ui-react':
-        specifier: workspace:*
-        version: link:../react
+        specifier: ^1.4.0
+        version: 1.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
       '@types/node':
         specifier: ^25.5.0
@@ -204,8 +204,8 @@ importers:
   packages/react:
     dependencies:
       '@authsome/ui-core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.4.0
+        version: 1.4.0
     devDependencies:
       '@types/react':
         specifier: ^18.2.0
@@ -229,8 +229,8 @@ importers:
   packages/vue:
     dependencies:
       '@authsome/ui-core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^1.4.0
+        version: 1.4.0
     devDependencies:
       tsup:
         specifier: ^8.0.0
@@ -246,6 +246,21 @@ packages:
 
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
+
+  '@authsome/ui-components@1.4.0':
+    resolution: {integrity: sha512-c+a0mds3ggHcZdJo8Tc9iSPDEUepLyEXaaGqbaS4G0n3I9880iu6RjChR0ySoh9hWM37JAgWJhSMhgisPaP05g==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+
+  '@authsome/ui-core@1.4.0':
+    resolution: {integrity: sha512-WrvJhjwRqjaxAliK0tEWiAp14mRuntnMCpKgWE4sApeqZ5WKBlQp8azST6fpzXNW4/Z5qwf0WDtjD51KS5DW5A==}
+
+  '@authsome/ui-react@1.4.0':
+    resolution: {integrity: sha512-uvpt5VGrdoSv1KdKJ/KE/GA2A2DVeqOB2ubb0p9j4eocUyRLP2V/O5Ov42l2IjFUhY7thBb6KqgvXXPoaWPwKg==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   '@babel/code-frame@7.29.0':
     resolution: {integrity: sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==}
@@ -2998,6 +3013,40 @@ packages:
 snapshots:
 
   '@adobe/css-tools@4.4.4': {}
+
+  '@authsome/ui-components@1.4.0(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@authsome/ui-core': 1.4.0
+      '@authsome/ui-react': 1.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-avatar': 1.1.11(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-checkbox': 1.3.3(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-dialog': 1.1.15(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-dropdown-menu': 2.1.16(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-label': 2.1.8(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-select': 2.2.6(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-separator': 1.1.8(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-slot': 1.2.4(@types/react@18.3.28)(react@18.3.1)
+      '@radix-ui/react-switch': 1.2.6(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-tabs': 1.1.13(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@radix-ui/react-tooltip': 1.2.8(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      class-variance-authority: 0.7.1
+      clsx: 2.1.1
+      input-otp: 1.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      lucide-react: 0.468.0(react@18.3.1)
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      tailwind-merge: 2.6.1
+    transitivePeerDependencies:
+      - '@types/react'
+      - '@types/react-dom'
+
+  '@authsome/ui-core@1.4.0': {}
+
+  '@authsome/ui-react@1.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@authsome/ui-core': 1.4.0
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   '@babel/code-frame@7.29.0':
     dependencies:

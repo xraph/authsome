@@ -30,9 +30,9 @@ class {{ .Name }} {
     return {
 {{- range .Fields }}
 {{- if .Optional }}
-      if ({{ .Name }} != null) '{{ .JSONName }}': {{ toJsonExpr .Name .Type .Optional }},
+      if ({{ .Name }} != null) '{{ dartStringEscape .JSONName }}': {{ toJsonExpr .Name .Type .Optional }},
 {{- else }}
-      '{{ .JSONName }}': {{ toJsonExpr .Name .Type .Optional }},
+      '{{ dartStringEscape .JSONName }}': {{ toJsonExpr .Name .Type .Optional }},
 {{- end }}
 {{- end }}
     };

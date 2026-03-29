@@ -72,6 +72,206 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// OpenID Connect Discovery
+  /// GET /.well-known/openid-configuration
+  Future<DiscoveryResponse> oidcDiscovery({required String token}) async {
+    final path = '/.well-known/openid-configuration';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return DiscoveryResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List SCIM Groups
+  /// GET /scim/v2/Groups
+  Future<ListResponse> scimListGroups({required String token}) async {
+    final path = '/scim/v2/Groups';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create SCIM Group
+  /// POST /scim/v2/Groups
+  Future<GroupResource> scimCreateGroup({required Object body, required String token}) async {
+    final path = '/scim/v2/Groups';
+    final res = await _request(
+'POST',
+      path,
+      body: body is Map<String, dynamic> ? body : (body as dynamic).toJson(),
+      token: token,
+    );
+    return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get SCIM Group
+  /// GET /scim/v2/Groups/{groupId}
+  Future<GroupResource> scimGetGroup({required String groupId, required String token}) async {
+    final path = '/scim/v2/Groups/$groupId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Replace SCIM Group
+  /// PUT /scim/v2/Groups/{groupId}
+  Future<GroupResource> scimReplaceGroup({required String groupId, required scimGroupPathParam body, required String token}) async {
+    final path = '/scim/v2/Groups/$groupId';
+    final res = await _request(
+'PUT',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Patch SCIM Group
+  /// PATCH /scim/v2/Groups/{groupId}
+  Future<GroupResource> scimPatchGroup({required String groupId, required scimGroupPathParam body, required String token}) async {
+    final path = '/scim/v2/Groups/$groupId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return GroupResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete SCIM Group
+  /// DELETE /scim/v2/Groups/{groupId}
+  Future<Map<String, dynamic>> scimDeleteGroup({required String groupId, required scimGroupPathParam body, required String token}) async {
+    final path = '/scim/v2/Groups/$groupId';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// SCIM Resource Types
+  /// GET /scim/v2/ResourceTypes
+  Future<Map<String, dynamic>> scimResourceTypes({required String token}) async {
+    final path = '/scim/v2/ResourceTypes';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// SCIM Schemas
+  /// GET /scim/v2/Schemas
+  Future<Map<String, dynamic>> scimSchemas({required String token}) async {
+    final path = '/scim/v2/Schemas';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// SCIM Service Provider Configuration
+  /// GET /scim/v2/ServiceProviderConfig
+  Future<Map<String, dynamic>> scimServiceProviderConfig({required String token}) async {
+    final path = '/scim/v2/ServiceProviderConfig';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// List SCIM Users
+  /// GET /scim/v2/Users
+  Future<ListResponse> scimListUsers({required String token}) async {
+    final path = '/scim/v2/Users';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create SCIM User
+  /// POST /scim/v2/Users
+  Future<UserResource> scimCreateUser({required Object body, required String token}) async {
+    final path = '/scim/v2/Users';
+    final res = await _request(
+'POST',
+      path,
+      body: body is Map<String, dynamic> ? body : (body as dynamic).toJson(),
+      token: token,
+    );
+    return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get SCIM User
+  /// GET /scim/v2/Users/{userId}
+  Future<UserResource> scimGetUser({required String userId, required String token}) async {
+    final path = '/scim/v2/Users/$userId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Replace SCIM User
+  /// PUT /scim/v2/Users/{userId}
+  Future<UserResource> scimReplaceUser({required String userId, required scimUserPathParam body, required String token}) async {
+    final path = '/scim/v2/Users/$userId';
+    final res = await _request(
+'PUT',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Patch SCIM User
+  /// PATCH /scim/v2/Users/{userId}
+  Future<UserResource> scimPatchUser({required String userId, required scimUserPathParam body, required String token}) async {
+    final path = '/scim/v2/Users/$userId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return UserResource.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete SCIM User
+  /// DELETE /scim/v2/Users/{userId}
+  Future<Map<String, dynamic>> scimDeleteUser({required String userId, required scimUserPathParam body, required String token}) async {
+    final path = '/scim/v2/Users/$userId';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return Map<String, dynamic>.from(res as Map);
+  }
+
   /// Get per-app client config overrides
   /// GET /v1/admin/apps/{appId}/client-config
   Future<Config> getAppClientConfig({required String appId, required String token}) async {
@@ -198,6 +398,43 @@ class AuthClient {
       token: token,
     );
     return AuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List OAuth2 clients
+  /// GET /v1/admin/oauth/clients
+  Future<ListClientsResponse> listOAuth2Clients({required String token}) async {
+    final path = '/v1/admin/oauth/clients';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListClientsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create OAuth2 client
+  /// POST /v1/admin/oauth/clients
+  Future<CreateClientResponse> createOAuth2Client({required CreateClientRequest body, required String token}) async {
+    final path = '/v1/admin/oauth/clients';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return CreateClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete OAuth2 client
+  /// DELETE /v1/admin/oauth/clients/{clientId}
+  Future<void> deleteOAuth2Client({required String clientId, required DeleteClientRequest body, required String token}) async {
+    final path = '/v1/admin/oauth/clients/$clientId';
+    await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
   }
 
   /// List organizations (admin)
@@ -387,6 +624,261 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// List coupons
+  /// GET /v1/billing/coupons
+  Future<ListCouponsResponse> listCoupons({required String token}) async {
+    final path = '/v1/billing/coupons';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListCouponsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create coupon
+  /// POST /v1/billing/coupons
+  Future<CouponResponse> createCoupon({required CreateCouponRequest body, required String token}) async {
+    final path = '/v1/billing/coupons';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return CouponResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete coupon
+  /// DELETE /v1/billing/coupons/{couponId}
+  Future<void> deleteCoupon({required String couponId, required DeleteCouponRequest body, required String token}) async {
+    final path = '/v1/billing/coupons/$couponId';
+    await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Check feature entitlement
+  /// GET /v1/billing/entitlements/{featureKey}
+  Future<EntitlementResponse> checkEntitlement({required String featureKey, required String token}) async {
+    final path = '/v1/billing/entitlements/$featureKey';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return EntitlementResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List invoices
+  /// GET /v1/billing/invoices
+  Future<ListInvoicesResponse> listInvoices({required String token}) async {
+    final path = '/v1/billing/invoices';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListInvoicesResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get invoice
+  /// GET /v1/billing/invoices/{invoiceId}
+  Future<InvoiceResponse> getInvoice({required String invoiceId, required String token}) async {
+    final path = '/v1/billing/invoices/$invoiceId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return InvoiceResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Mark invoice as paid
+  /// POST /v1/billing/invoices/{invoiceId}/pay
+  Future<void> markInvoicePaid({required String invoiceId, required MarkInvoicePaidRequest body, required String token}) async {
+    final path = '/v1/billing/invoices/$invoiceId/pay';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Void an invoice
+  /// POST /v1/billing/invoices/{invoiceId}/void
+  Future<void> voidInvoice({required String invoiceId, required VoidInvoiceRequest body, required String token}) async {
+    final path = '/v1/billing/invoices/$invoiceId/void';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// List billing plans
+  /// GET /v1/billing/plans
+  Future<ListPlansResponse> listBillingPlans({required String token}) async {
+    final path = '/v1/billing/plans';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListPlansResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create billing plan
+  /// POST /v1/billing/plans
+  Future<PlanResponse> createBillingPlan({required CreatePlanRequest body, required String token}) async {
+    final path = '/v1/billing/plans';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return PlanResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get billing plan
+  /// GET /v1/billing/plans/{planId}
+  Future<PlanResponse> getBillingPlan({required String planId, required String token}) async {
+    final path = '/v1/billing/plans/$planId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return PlanResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Activate a billing plan
+  /// POST /v1/billing/plans/{planId}/activate
+  Future<void> activateBillingPlan({required String planId, required PlanIDRequest body, required String token}) async {
+    final path = '/v1/billing/plans/$planId/activate';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Archive a billing plan
+  /// POST /v1/billing/plans/{planId}/archive
+  Future<void> archiveBillingPlan({required String planId, required PlanIDRequest body, required String token}) async {
+    final path = '/v1/billing/plans/$planId/archive';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// List subscriptions
+  /// GET /v1/billing/subscriptions
+  Future<ListSubscriptionsResponse> listSubscriptions({required String token}) async {
+    final path = '/v1/billing/subscriptions';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListSubscriptionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create subscription
+  /// POST /v1/billing/subscriptions
+  Future<Response> createSubscription({required CreateSubscriptionRequest body, required String token}) async {
+    final path = '/v1/billing/subscriptions';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return Response.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get active subscription
+  /// GET /v1/billing/subscriptions/active
+  Future<Response> getActiveSubscription({required String token}) async {
+    final path = '/v1/billing/subscriptions/active';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Response.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Cancel subscription
+  /// POST /v1/billing/subscriptions/{subId}/cancel
+  Future<void> cancelSubscription({required String subId, required CancelSubscriptionRequest body, required String token}) async {
+    final path = '/v1/billing/subscriptions/$subId/cancel';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Change subscription plan
+  /// POST /v1/billing/subscriptions/{subId}/change-plan
+  Future<void> changeSubscriptionPlan({required String subId, required ChangePlanRequest body, required String token}) async {
+    final path = '/v1/billing/subscriptions/$subId/change-plan';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Pause subscription
+  /// POST /v1/billing/subscriptions/{subId}/pause
+  Future<void> pauseSubscription({required String subId, required SubIDRequest body, required String token}) async {
+    final path = '/v1/billing/subscriptions/$subId/pause';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Resume subscription
+  /// POST /v1/billing/subscriptions/{subId}/resume
+  Future<void> resumeSubscription({required String subId, required SubIDRequest body, required String token}) async {
+    final path = '/v1/billing/subscriptions/$subId/resume';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// Get usage summary
+  /// GET /v1/billing/usage
+  Future<UsageSummaryResponse> getUsageSummary({required String token}) async {
+    final path = '/v1/billing/usage';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return UsageSummaryResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Change password
   /// POST /v1/change-password
   Future<StatusResponse> changePassword({required Map<String, dynamic> body, required String token}) async {
@@ -410,6 +902,44 @@ class AuthClient {
       token: token,
     );
     return ClientConfigResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List consents
+  /// GET /v1/consent
+  Future<ListResponse> listConsents({required String token}) async {
+    final path = '/v1/consent';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Grant consent
+  /// POST /v1/consent/grant
+  Future<Consent> grantConsent({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/consent/grant';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return Consent.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Revoke consent
+  /// POST /v1/consent/revoke
+  Future<StatusResponse> revokeConsent({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/consent/revoke';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List devices
@@ -595,6 +1125,18 @@ class AuthClient {
       path,
     );
     return HealthResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Introspect token
+  /// POST /v1/introspect
+  Future<IntrospectResponse> introspectToken({required Map<String, dynamic> body}) async {
+    final path = '/v1/introspect';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+    );
+    return IntrospectResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List API keys
@@ -832,6 +1374,77 @@ class AuthClient {
       body: body.toJson(),
     );
     return VerifyMFAResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// OAuth2 Authorization
+  /// GET /v1/oauth/authorize
+  Future<void> oauth2Authorize() async {
+    final path = '/v1/oauth/authorize';
+    await _request(
+'GET',
+      path,
+    );
+  }
+
+  /// Device Authorization
+  /// POST /v1/oauth/device/authorize
+  Future<DeviceAuthResponse> oauth2DeviceAuthorize({required DeviceAuthRequest body}) async {
+    final path = '/v1/oauth/device/authorize';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+    );
+    return DeviceAuthResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Complete device authorization
+  /// POST /v1/oauth/device/complete
+  Future<DeviceCompleteResponse> oauth2DeviceComplete({required DeviceCompleteRequest body, required String token}) async {
+    final path = '/v1/oauth/device/complete';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Revoke token
+  /// POST /v1/oauth/revoke
+  Future<void> oauth2Revoke({required RevokeRequest body, required String token}) async {
+    final path = '/v1/oauth/revoke';
+    await _request(
+'POST',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+  }
+
+  /// OAuth2 Token
+  /// POST /v1/oauth/token
+  Future<TokenResponse> oauth2Token({required TokenRequest body}) async {
+    final path = '/v1/oauth/token';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+    );
+    return TokenResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// OIDC UserInfo
+  /// GET /v1/oauth/userinfo
+  Future<UserInfo> oauth2UserInfo({required String token}) async {
+    final path = '/v1/oauth/userinfo';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return UserInfo.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List organizations
@@ -1075,9 +1688,9 @@ class AuthClient {
   }
 
   /// List passkeys
-  /// GET /v1/passkeys/
+  /// GET /v1/passkeys
   Future<ListResponse> listPasskeys({required String token}) async {
-    final path = '/v1/passkeys/';
+    final path = '/v1/passkeys';
     final res = await _request(
 'GET',
       path,
@@ -1147,6 +1760,30 @@ class AuthClient {
       token: token,
     );
     return DeleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Start phone authentication
+  /// POST /v1/phone/start
+  Future<StartResponse> phoneAuthStart({required StartRequest body}) async {
+    final path = '/v1/phone/start';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+    );
+    return StartResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Verify phone OTP
+  /// POST /v1/phone/verify
+  Future<VerifyResponse> phoneAuthVerify({required VerifyRequest body}) async {
+    final path = '/v1/phone/verify';
+    final res = await _request(
+'POST',
+      path,
+      body: body.toJson(),
+    );
+    return VerifyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Refresh tokens

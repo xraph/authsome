@@ -81,6 +81,8 @@ class AuthClient {
 {{- if $op.HasBody }}
 {{- if isMapType $op.BodyType }}
       body: body,
+{{- else if eq $op.BodyType "Object" }}
+      body: body is Map<String, dynamic> ? body : (body as dynamic).toJson(),
 {{- else }}
       body: body.toJson(),
 {{- end }}

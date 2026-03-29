@@ -348,6 +348,53 @@ class AuthResponse {
   String toString() => 'AuthResponse(${toJson()})';
 }
 
+class AuthorizeRequest {
+  final String clientID;
+  final String codeChallenge;
+  final String codeChallengeMethod;
+  final String redirectURI;
+  final String responseType;
+  final String scope;
+  final String state;
+
+  const AuthorizeRequest({
+    required this.clientID,
+    required this.codeChallenge,
+    required this.codeChallengeMethod,
+    required this.redirectURI,
+    required this.responseType,
+    required this.scope,
+    required this.state,
+  });
+
+  factory AuthorizeRequest.fromJson(Map<String, dynamic> json) {
+    return AuthorizeRequest(
+      clientID: json['ClientID'] as String,
+      codeChallenge: json['CodeChallenge'] as String,
+      codeChallengeMethod: json['CodeChallengeMethod'] as String,
+      redirectURI: json['RedirectURI'] as String,
+      responseType: json['ResponseType'] as String,
+      scope: json['Scope'] as String,
+      state: json['State'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'ClientID': clientID,
+      'CodeChallenge': codeChallenge,
+      'CodeChallengeMethod': codeChallengeMethod,
+      'RedirectURI': redirectURI,
+      'ResponseType': responseType,
+      'Scope': scope,
+      'State': state,
+    };
+  }
+
+  @override
+  String toString() => 'AuthorizeRequest(${toJson()})';
+}
+
 class BulkError {
   final String? email;
   final String error;
@@ -538,6 +585,33 @@ class CallbackResponse {
   String toString() => 'CallbackResponse(${toJson()})';
 }
 
+class CancelSubscriptionRequest {
+  final String subID;
+  final bool immediately;
+
+  const CancelSubscriptionRequest({
+    required this.subID,
+    required this.immediately,
+  });
+
+  factory CancelSubscriptionRequest.fromJson(Map<String, dynamic> json) {
+    return CancelSubscriptionRequest(
+      subID: json['SubID'] as String,
+      immediately: json['immediately'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'SubID': subID,
+      'immediately': immediately,
+    };
+  }
+
+  @override
+  String toString() => 'CancelSubscriptionRequest(${toJson()})';
+}
+
 class ChallengeRequest {
   final String code;
 
@@ -586,6 +660,56 @@ class ChallengeResponse {
 
   @override
   String toString() => 'ChallengeResponse(${toJson()})';
+}
+
+class ChangePlanRequest {
+  final String subID;
+  final String newPlanId;
+
+  const ChangePlanRequest({
+    required this.subID,
+    required this.newPlanId,
+  });
+
+  factory ChangePlanRequest.fromJson(Map<String, dynamic> json) {
+    return ChangePlanRequest(
+      subID: json['SubID'] as String,
+      newPlanId: json['new_plan_id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'SubID': subID,
+      'new_plan_id': newPlanId,
+    };
+  }
+
+  @override
+  String toString() => 'ChangePlanRequest(${toJson()})';
+}
+
+class CheckEntitlementRequest {
+  final String featureKey;
+
+  const CheckEntitlementRequest({
+    required this.featureKey,
+  });
+
+  factory CheckEntitlementRequest.fromJson(Map<String, dynamic> json) {
+    return CheckEntitlementRequest(
+      featureKey: json['FeatureKey'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'FeatureKey': featureKey,
+    };
+  }
+
+  @override
+  String toString() => 'CheckEntitlementRequest(${toJson()})';
 }
 
 class CheckSlugRequest {
@@ -648,7 +772,7 @@ class ClientConfigFieldValidation {
   final int? min;
   final int? minLen;
   final String? pattern;
-  final bool? required;
+  final bool? requiredValue;
 
   const ClientConfigFieldValidation({
     this.max,
@@ -656,7 +780,7 @@ class ClientConfigFieldValidation {
     this.min,
     this.minLen,
     this.pattern,
-    this.required,
+    this.requiredValue,
   });
 
   factory ClientConfigFieldValidation.fromJson(Map<String, dynamic> json) {
@@ -666,7 +790,7 @@ class ClientConfigFieldValidation {
       min: json['min'] == null ? null : (json['min'] as num).toInt(),
       minLen: json['min_len'] == null ? null : (json['min_len'] as num).toInt(),
       pattern: json['pattern'] as String?,
-      required: json['required'] as bool?,
+      requiredValue: json['required'] as bool?,
     );
   }
 
@@ -677,7 +801,7 @@ class ClientConfigFieldValidation {
       if (min != null) 'min': min,
       if (minLen != null) 'min_len': minLen,
       if (pattern != null) 'pattern': pattern,
-      if (required != null) 'required': required,
+      if (requiredValue != null) 'required': requiredValue,
     };
   }
 
@@ -1102,6 +1226,289 @@ class Config {
   String toString() => 'Config(${toJson()})';
 }
 
+class Consent {
+  final String appId;
+  final String createdAt;
+  final bool granted;
+  final String grantedAt;
+  final String id;
+  final String ipAddress;
+  final String purpose;
+  final String? revokedAt;
+  final String updatedAt;
+  final String userId;
+  final String version;
+
+  const Consent({
+    required this.appId,
+    required this.createdAt,
+    required this.granted,
+    required this.grantedAt,
+    required this.id,
+    required this.ipAddress,
+    required this.purpose,
+    this.revokedAt,
+    required this.updatedAt,
+    required this.userId,
+    required this.version,
+  });
+
+  factory Consent.fromJson(Map<String, dynamic> json) {
+    return Consent(
+      appId: json['app_id'] as String,
+      createdAt: json['created_at'] as String,
+      granted: json['granted'] as bool,
+      grantedAt: json['granted_at'] as String,
+      id: json['id'] as String,
+      ipAddress: json['ip_address'] as String,
+      purpose: json['purpose'] as String,
+      revokedAt: json['revoked_at'] as String?,
+      updatedAt: json['updated_at'] as String,
+      userId: json['user_id'] as String,
+      version: json['version'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      'created_at': createdAt,
+      'granted': granted,
+      'granted_at': grantedAt,
+      'id': id,
+      'ip_address': ipAddress,
+      'purpose': purpose,
+      if (revokedAt != null) 'revoked_at': revokedAt,
+      'updated_at': updatedAt,
+      'user_id': userId,
+      'version': version,
+    };
+  }
+
+  @override
+  String toString() => 'Consent(${toJson()})';
+}
+
+class CouponResponse {
+  final String? amount;
+  final String appId;
+  final String code;
+  final String currency;
+  final String id;
+  final int maxRedemptions;
+  final String name;
+  final int? percentage;
+  final int timesRedeemed;
+  final String type;
+  final String? validFrom;
+  final String? validUntil;
+
+  const CouponResponse({
+    this.amount,
+    required this.appId,
+    required this.code,
+    required this.currency,
+    required this.id,
+    required this.maxRedemptions,
+    required this.name,
+    this.percentage,
+    required this.timesRedeemed,
+    required this.type,
+    this.validFrom,
+    this.validUntil,
+  });
+
+  factory CouponResponse.fromJson(Map<String, dynamic> json) {
+    return CouponResponse(
+      amount: json['amount'] as String?,
+      appId: json['app_id'] as String,
+      code: json['code'] as String,
+      currency: json['currency'] as String,
+      id: json['id'] as String,
+      maxRedemptions: (json['max_redemptions'] as num).toInt(),
+      name: json['name'] as String,
+      percentage: json['percentage'] == null ? null : (json['percentage'] as num).toInt(),
+      timesRedeemed: (json['times_redeemed'] as num).toInt(),
+      type: json['type'] as String,
+      validFrom: json['valid_from'] as String?,
+      validUntil: json['valid_until'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (amount != null) 'amount': amount,
+      'app_id': appId,
+      'code': code,
+      'currency': currency,
+      'id': id,
+      'max_redemptions': maxRedemptions,
+      'name': name,
+      if (percentage != null) 'percentage': percentage,
+      'times_redeemed': timesRedeemed,
+      'type': type,
+      if (validFrom != null) 'valid_from': validFrom,
+      if (validUntil != null) 'valid_until': validUntil,
+    };
+  }
+
+  @override
+  String toString() => 'CouponResponse(${toJson()})';
+}
+
+class CreateClientRequest {
+  final String appId;
+  final List<String>? grantTypes;
+  final String name;
+  final bool? public;
+  final List<String> redirectUris;
+  final List<String>? scopes;
+
+  const CreateClientRequest({
+    required this.appId,
+    this.grantTypes,
+    required this.name,
+    this.public,
+    required this.redirectUris,
+    this.scopes,
+  });
+
+  factory CreateClientRequest.fromJson(Map<String, dynamic> json) {
+    return CreateClientRequest(
+      appId: json['app_id'] as String,
+      grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
+      name: json['name'] as String,
+      public: json['public'] as bool?,
+      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      if (grantTypes != null) 'grant_types': grantTypes,
+      'name': name,
+      if (public != null) 'public': public,
+      'redirect_uris': redirectUris,
+      if (scopes != null) 'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'CreateClientRequest(${toJson()})';
+}
+
+class CreateClientResponse {
+  final String clientId;
+  final String? clientSecret;
+  final List<String> grantTypes;
+  final String id;
+  final String name;
+  final bool public;
+  final List<String> redirectUris;
+  final List<String> scopes;
+
+  const CreateClientResponse({
+    required this.clientId,
+    this.clientSecret,
+    required this.grantTypes,
+    required this.id,
+    required this.name,
+    required this.public,
+    required this.redirectUris,
+    required this.scopes,
+  });
+
+  factory CreateClientResponse.fromJson(Map<String, dynamic> json) {
+    return CreateClientResponse(
+      clientId: json['client_id'] as String,
+      clientSecret: json['client_secret'] as String?,
+      grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
+      id: json['id'] as String,
+      name: json['name'] as String,
+      public: json['public'] as bool,
+      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      scopes: (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      if (clientSecret != null) 'client_secret': clientSecret,
+      'grant_types': grantTypes,
+      'id': id,
+      'name': name,
+      'public': public,
+      'redirect_uris': redirectUris,
+      'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'CreateClientResponse(${toJson()})';
+}
+
+class CreateCouponRequest {
+  final int amount;
+  final String appId;
+  final String code;
+  final String currency;
+  final int maxRedemptions;
+  final String name;
+  final int percentage;
+  final String type;
+  final String? validFrom;
+  final String? validUntil;
+
+  const CreateCouponRequest({
+    required this.amount,
+    required this.appId,
+    required this.code,
+    required this.currency,
+    required this.maxRedemptions,
+    required this.name,
+    required this.percentage,
+    required this.type,
+    this.validFrom,
+    this.validUntil,
+  });
+
+  factory CreateCouponRequest.fromJson(Map<String, dynamic> json) {
+    return CreateCouponRequest(
+      amount: (json['amount'] as num).toInt(),
+      appId: json['app_id'] as String,
+      code: json['code'] as String,
+      currency: json['currency'] as String,
+      maxRedemptions: (json['max_redemptions'] as num).toInt(),
+      name: json['name'] as String,
+      percentage: (json['percentage'] as num).toInt(),
+      type: json['type'] as String,
+      validFrom: json['valid_from'] as String?,
+      validUntil: json['valid_until'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'amount': amount,
+      'app_id': appId,
+      'code': code,
+      'currency': currency,
+      'max_redemptions': maxRedemptions,
+      'name': name,
+      'percentage': percentage,
+      'type': type,
+      if (validFrom != null) 'valid_from': validFrom,
+      if (validUntil != null) 'valid_until': validUntil,
+    };
+  }
+
+  @override
+  String toString() => 'CreateCouponRequest(${toJson()})';
+}
+
 class CreateKeyRequest {
   final String appId;
   final String name;
@@ -1190,6 +1597,100 @@ class CreateKeyResponse {
 
   @override
   String toString() => 'CreateKeyResponse(${toJson()})';
+}
+
+class CreatePlanRequest {
+  final String appId;
+  final int baseAmount;
+  final String currency;
+  final String description;
+  final List<FeatureInput>? features;
+  final bool isAddon;
+  final Map<String, dynamic>? metadata;
+  final String name;
+  final String period;
+  final String slug;
+  final int trialDays;
+
+  const CreatePlanRequest({
+    required this.appId,
+    required this.baseAmount,
+    required this.currency,
+    required this.description,
+    this.features,
+    required this.isAddon,
+    this.metadata,
+    required this.name,
+    required this.period,
+    required this.slug,
+    required this.trialDays,
+  });
+
+  factory CreatePlanRequest.fromJson(Map<String, dynamic> json) {
+    return CreatePlanRequest(
+      appId: json['app_id'] as String,
+      baseAmount: (json['base_amount'] as num).toInt(),
+      currency: json['currency'] as String,
+      description: json['description'] as String,
+      features: json['features'] == null ? null : (json['features'] as List).map((e) => FeatureInput.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      isAddon: json['is_addon'] as bool,
+      metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
+      name: json['name'] as String,
+      period: json['period'] as String,
+      slug: json['slug'] as String,
+      trialDays: (json['trial_days'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      'base_amount': baseAmount,
+      'currency': currency,
+      'description': description,
+      if (features != null) 'features': features?.map((e) => e.toJson()).toList(),
+      'is_addon': isAddon,
+      if (metadata != null) 'metadata': metadata,
+      'name': name,
+      'period': period,
+      'slug': slug,
+      'trial_days': trialDays,
+    };
+  }
+
+  @override
+  String toString() => 'CreatePlanRequest(${toJson()})';
+}
+
+class CreateSubscriptionRequest {
+  final String appId;
+  final String planId;
+  final String tenantId;
+
+  const CreateSubscriptionRequest({
+    required this.appId,
+    required this.planId,
+    required this.tenantId,
+  });
+
+  factory CreateSubscriptionRequest.fromJson(Map<String, dynamic> json) {
+    return CreateSubscriptionRequest(
+      appId: json['app_id'] as String,
+      planId: json['plan_id'] as String,
+      tenantId: json['tenant_id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      'plan_id': planId,
+      'tenant_id': tenantId,
+    };
+  }
+
+  @override
+  String toString() => 'CreateSubscriptionRequest(${toJson()})';
 }
 
 class CredentialInfo {
@@ -1383,6 +1884,52 @@ class DeleteAppSessionConfigRequest {
 
   @override
   String toString() => 'DeleteAppSessionConfigRequest(${toJson()})';
+}
+
+class DeleteClientRequest {
+  final String clientID;
+
+  const DeleteClientRequest({
+    required this.clientID,
+  });
+
+  factory DeleteClientRequest.fromJson(Map<String, dynamic> json) {
+    return DeleteClientRequest(
+      clientID: json['ClientID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'ClientID': clientID,
+    };
+  }
+
+  @override
+  String toString() => 'DeleteClientRequest(${toJson()})';
+}
+
+class DeleteCouponRequest {
+  final String couponID;
+
+  const DeleteCouponRequest({
+    required this.couponID,
+  });
+
+  factory DeleteCouponRequest.fromJson(Map<String, dynamic> json) {
+    return DeleteCouponRequest(
+      couponID: json['CouponID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'CouponID': couponID,
+    };
+  }
+
+  @override
+  String toString() => 'DeleteCouponRequest(${toJson()})';
 }
 
 class DeleteDeviceRequest {
@@ -1637,6 +2184,126 @@ class Device {
   String toString() => 'Device(${toJson()})';
 }
 
+class DeviceAuthRequest {
+  final String clientId;
+  final String? scope;
+
+  const DeviceAuthRequest({
+    required this.clientId,
+    this.scope,
+  });
+
+  factory DeviceAuthRequest.fromJson(Map<String, dynamic> json) {
+    return DeviceAuthRequest(
+      clientId: json['client_id'] as String,
+      scope: json['scope'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      if (scope != null) 'scope': scope,
+    };
+  }
+
+  @override
+  String toString() => 'DeviceAuthRequest(${toJson()})';
+}
+
+class DeviceAuthResponse {
+  final String deviceCode;
+  final int expiresIn;
+  final int interval;
+  final String userCode;
+  final String verificationUri;
+  final String? verificationUriComplete;
+
+  const DeviceAuthResponse({
+    required this.deviceCode,
+    required this.expiresIn,
+    required this.interval,
+    required this.userCode,
+    required this.verificationUri,
+    this.verificationUriComplete,
+  });
+
+  factory DeviceAuthResponse.fromJson(Map<String, dynamic> json) {
+    return DeviceAuthResponse(
+      deviceCode: json['device_code'] as String,
+      expiresIn: (json['expires_in'] as num).toInt(),
+      interval: (json['interval'] as num).toInt(),
+      userCode: json['user_code'] as String,
+      verificationUri: json['verification_uri'] as String,
+      verificationUriComplete: json['verification_uri_complete'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'device_code': deviceCode,
+      'expires_in': expiresIn,
+      'interval': interval,
+      'user_code': userCode,
+      'verification_uri': verificationUri,
+      if (verificationUriComplete != null) 'verification_uri_complete': verificationUriComplete,
+    };
+  }
+
+  @override
+  String toString() => 'DeviceAuthResponse(${toJson()})';
+}
+
+class DeviceCompleteRequest {
+  final String action;
+  final String userCode;
+
+  const DeviceCompleteRequest({
+    required this.action,
+    required this.userCode,
+  });
+
+  factory DeviceCompleteRequest.fromJson(Map<String, dynamic> json) {
+    return DeviceCompleteRequest(
+      action: json['action'] as String,
+      userCode: json['user_code'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'action': action,
+      'user_code': userCode,
+    };
+  }
+
+  @override
+  String toString() => 'DeviceCompleteRequest(${toJson()})';
+}
+
+class DeviceCompleteResponse {
+  final String status;
+
+  const DeviceCompleteResponse({
+    required this.status,
+  });
+
+  factory DeviceCompleteResponse.fromJson(Map<String, dynamic> json) {
+    return DeviceCompleteResponse(
+      status: json['status'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+    };
+  }
+
+  @override
+  String toString() => 'DeviceCompleteResponse(${toJson()})';
+}
+
 class DeviceListResponse {
   final List<Device> devices;
 
@@ -1701,6 +2368,130 @@ class DisableResponse {
   String toString() => 'DisableResponse(${toJson()})';
 }
 
+class DiscoveryRequest {
+
+  const DiscoveryRequest();
+
+  factory DiscoveryRequest.fromJson(Map<String, dynamic> json) {
+    return DiscoveryRequest(
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+    };
+  }
+
+  @override
+  String toString() => 'DiscoveryRequest(${toJson()})';
+}
+
+class DiscoveryResponse {
+  final String authorizationEndpoint;
+  final List<String> codeChallengeMethodsSupported;
+  final String deviceAuthorizationEndpoint;
+  final List<String> grantTypesSupported;
+  final List<String> idTokenSigningAlgValuesSupported;
+  final String issuer;
+  final String jwksUri;
+  final List<String> responseTypesSupported;
+  final String revocationEndpoint;
+  final List<String> scopesSupported;
+  final List<String> subjectTypesSupported;
+  final String tokenEndpoint;
+  final List<String> tokenEndpointAuthMethodsSupported;
+  final String userinfoEndpoint;
+
+  const DiscoveryResponse({
+    required this.authorizationEndpoint,
+    required this.codeChallengeMethodsSupported,
+    required this.deviceAuthorizationEndpoint,
+    required this.grantTypesSupported,
+    required this.idTokenSigningAlgValuesSupported,
+    required this.issuer,
+    required this.jwksUri,
+    required this.responseTypesSupported,
+    required this.revocationEndpoint,
+    required this.scopesSupported,
+    required this.subjectTypesSupported,
+    required this.tokenEndpoint,
+    required this.tokenEndpointAuthMethodsSupported,
+    required this.userinfoEndpoint,
+  });
+
+  factory DiscoveryResponse.fromJson(Map<String, dynamic> json) {
+    return DiscoveryResponse(
+      authorizationEndpoint: json['authorization_endpoint'] as String,
+      codeChallengeMethodsSupported: (json['code_challenge_methods_supported'] as List).map((e) => e as String).toList(),
+      deviceAuthorizationEndpoint: json['device_authorization_endpoint'] as String,
+      grantTypesSupported: (json['grant_types_supported'] as List).map((e) => e as String).toList(),
+      idTokenSigningAlgValuesSupported: (json['id_token_signing_alg_values_supported'] as List).map((e) => e as String).toList(),
+      issuer: json['issuer'] as String,
+      jwksUri: json['jwks_uri'] as String,
+      responseTypesSupported: (json['response_types_supported'] as List).map((e) => e as String).toList(),
+      revocationEndpoint: json['revocation_endpoint'] as String,
+      scopesSupported: (json['scopes_supported'] as List).map((e) => e as String).toList(),
+      subjectTypesSupported: (json['subject_types_supported'] as List).map((e) => e as String).toList(),
+      tokenEndpoint: json['token_endpoint'] as String,
+      tokenEndpointAuthMethodsSupported: (json['token_endpoint_auth_methods_supported'] as List).map((e) => e as String).toList(),
+      userinfoEndpoint: json['userinfo_endpoint'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'authorization_endpoint': authorizationEndpoint,
+      'code_challenge_methods_supported': codeChallengeMethodsSupported,
+      'device_authorization_endpoint': deviceAuthorizationEndpoint,
+      'grant_types_supported': grantTypesSupported,
+      'id_token_signing_alg_values_supported': idTokenSigningAlgValuesSupported,
+      'issuer': issuer,
+      'jwks_uri': jwksUri,
+      'response_types_supported': responseTypesSupported,
+      'revocation_endpoint': revocationEndpoint,
+      'scopes_supported': scopesSupported,
+      'subject_types_supported': subjectTypesSupported,
+      'token_endpoint': tokenEndpoint,
+      'token_endpoint_auth_methods_supported': tokenEndpointAuthMethodsSupported,
+      'userinfo_endpoint': userinfoEndpoint,
+    };
+  }
+
+  @override
+  String toString() => 'DiscoveryResponse(${toJson()})';
+}
+
+class Email {
+  final bool primary;
+  final String? type;
+  final String value;
+
+  const Email({
+    required this.primary,
+    this.type,
+    required this.value,
+  });
+
+  factory Email.fromJson(Map<String, dynamic> json) {
+    return Email(
+      primary: json['primary'] as bool,
+      type: json['type'] as String?,
+      value: json['value'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'primary': primary,
+      if (type != null) 'type': type,
+      'value': value,
+    };
+  }
+
+  @override
+  String toString() => 'Email(${toJson()})';
+}
+
 class EnrollRequest {
   final String? method;
   final String? phone;
@@ -1761,6 +2552,49 @@ class EnrollResponse {
 
   @override
   String toString() => 'EnrollResponse(${toJson()})';
+}
+
+class EntitlementResponse {
+  final bool allowed;
+  final String feature;
+  final int limit;
+  final String? reason;
+  final int remaining;
+  final int used;
+
+  const EntitlementResponse({
+    required this.allowed,
+    required this.feature,
+    required this.limit,
+    this.reason,
+    required this.remaining,
+    required this.used,
+  });
+
+  factory EntitlementResponse.fromJson(Map<String, dynamic> json) {
+    return EntitlementResponse(
+      allowed: json['allowed'] as bool,
+      feature: json['feature'] as String,
+      limit: (json['limit'] as num).toInt(),
+      reason: json['reason'] as String?,
+      remaining: (json['remaining'] as num).toInt(),
+      used: (json['used'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'allowed': allowed,
+      'feature': feature,
+      'limit': limit,
+      if (reason != null) 'reason': reason,
+      'remaining': remaining,
+      'used': used,
+    };
+  }
+
+  @override
+  String toString() => 'EntitlementResponse(${toJson()})';
 }
 
 class Environment {
@@ -1910,6 +2744,49 @@ class ExportDataRequest {
   String toString() => 'ExportDataRequest(${toJson()})';
 }
 
+class FeatureInput {
+  final String key;
+  final int limit;
+  final String name;
+  final String period;
+  final bool softLimit;
+  final String type;
+
+  const FeatureInput({
+    required this.key,
+    required this.limit,
+    required this.name,
+    required this.period,
+    required this.softLimit,
+    required this.type,
+  });
+
+  factory FeatureInput.fromJson(Map<String, dynamic> json) {
+    return FeatureInput(
+      key: json['key'] as String,
+      limit: (json['limit'] as num).toInt(),
+      name: json['name'] as String,
+      period: json['period'] as String,
+      softLimit: json['soft_limit'] as bool,
+      type: json['type'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'key': key,
+      'limit': limit,
+      'name': name,
+      'period': period,
+      'soft_limit': softLimit,
+      'type': type,
+    };
+  }
+
+  @override
+  String toString() => 'FeatureInput(${toJson()})';
+}
+
 class ForgotPasswordResponse {
   final String status;
 
@@ -1931,6 +2808,33 @@ class ForgotPasswordResponse {
 
   @override
   String toString() => 'ForgotPasswordResponse(${toJson()})';
+}
+
+class GetActiveSubRequest {
+  final String appID;
+  final String tenantID;
+
+  const GetActiveSubRequest({
+    required this.appID,
+    required this.tenantID,
+  });
+
+  factory GetActiveSubRequest.fromJson(Map<String, dynamic> json) {
+    return GetActiveSubRequest(
+      appID: json['AppID'] as String,
+      tenantID: json['TenantID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+      'TenantID': tenantID,
+    };
+  }
+
+  @override
+  String toString() => 'GetActiveSubRequest(${toJson()})';
 }
 
 class GetAppClientConfigRequest {
@@ -2025,6 +2929,29 @@ class GetDeviceRequest {
   String toString() => 'GetDeviceRequest(${toJson()})';
 }
 
+class GetInvoiceRequest {
+  final String invoiceID;
+
+  const GetInvoiceRequest({
+    required this.invoiceID,
+  });
+
+  factory GetInvoiceRequest.fromJson(Map<String, dynamic> json) {
+    return GetInvoiceRequest(
+      invoiceID: json['InvoiceID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'InvoiceID': invoiceID,
+    };
+  }
+
+  @override
+  String toString() => 'GetInvoiceRequest(${toJson()})';
+}
+
 class GetMeRequest {
 
   const GetMeRequest();
@@ -2064,6 +2991,29 @@ class GetOrgRequest {
 
   @override
   String toString() => 'GetOrgRequest(${toJson()})';
+}
+
+class GetPlanRequest {
+  final String planID;
+
+  const GetPlanRequest({
+    required this.planID,
+  });
+
+  factory GetPlanRequest.fromJson(Map<String, dynamic> json) {
+    return GetPlanRequest(
+      planID: json['PlanID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'PlanID': planID,
+    };
+  }
+
+  @override
+  String toString() => 'GetPlanRequest(${toJson()})';
 }
 
 class GetTeamRequest {
@@ -2116,6 +3066,80 @@ class GetWebhookRequest {
   String toString() => 'GetWebhookRequest(${toJson()})';
 }
 
+class GroupRef {
+  final String? $ref;
+  final String? display;
+  final String value;
+
+  const GroupRef({
+    this.$ref,
+    this.display,
+    required this.value,
+  });
+
+  factory GroupRef.fromJson(Map<String, dynamic> json) {
+    return GroupRef(
+      $ref: json['\$ref'] as String?,
+      display: json['display'] as String?,
+      value: json['value'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if ($ref != null) '\$ref': $ref,
+      if (display != null) 'display': display,
+      'value': value,
+    };
+  }
+
+  @override
+  String toString() => 'GroupRef(${toJson()})';
+}
+
+class GroupResource {
+  final String displayName;
+  final String? externalId;
+  final String? id;
+  final List<MemberRef>? members;
+  final Meta? meta;
+  final List<String> schemas;
+
+  const GroupResource({
+    required this.displayName,
+    this.externalId,
+    this.id,
+    this.members,
+    this.meta,
+    required this.schemas,
+  });
+
+  factory GroupResource.fromJson(Map<String, dynamic> json) {
+    return GroupResource(
+      displayName: json['displayName'] as String,
+      externalId: json['externalId'] as String?,
+      id: json['id'] as String?,
+      members: json['members'] == null ? null : (json['members'] as List).map((e) => MemberRef.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      meta: json['meta'] == null ? null : Meta.fromJson(Map<String, dynamic>.from(json['meta'] as Map)),
+      schemas: (json['schemas'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'displayName': displayName,
+      if (externalId != null) 'externalId': externalId,
+      if (id != null) 'id': id,
+      if (members != null) 'members': members?.map((e) => e.toJson()).toList(),
+      if (meta != null) 'meta': meta?.toJson(),
+      'schemas': schemas,
+    };
+  }
+
+  @override
+  String toString() => 'GroupResource(${toJson()})';
+}
+
 class HealthResponse {
   final String? error;
   final String status;
@@ -2141,6 +3165,96 @@ class HealthResponse {
 
   @override
   String toString() => 'HealthResponse(${toJson()})';
+}
+
+class IntrospectResponse {
+  final bool active;
+  final String? appId;
+  final String? envId;
+  final String? expiresAt;
+  final String? orgId;
+  final String? sessionId;
+  final IntrospectUser? user;
+  final String? userId;
+
+  const IntrospectResponse({
+    required this.active,
+    this.appId,
+    this.envId,
+    this.expiresAt,
+    this.orgId,
+    this.sessionId,
+    this.user,
+    this.userId,
+  });
+
+  factory IntrospectResponse.fromJson(Map<String, dynamic> json) {
+    return IntrospectResponse(
+      active: json['active'] as bool,
+      appId: json['app_id'] as String?,
+      envId: json['env_id'] as String?,
+      expiresAt: json['expires_at'] as String?,
+      orgId: json['org_id'] as String?,
+      sessionId: json['session_id'] as String?,
+      user: json['user'] == null ? null : IntrospectUser.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
+      userId: json['user_id'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active': active,
+      if (appId != null) 'app_id': appId,
+      if (envId != null) 'env_id': envId,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      if (orgId != null) 'org_id': orgId,
+      if (sessionId != null) 'session_id': sessionId,
+      if (user != null) 'user': user?.toJson(),
+      if (userId != null) 'user_id': userId,
+    };
+  }
+
+  @override
+  String toString() => 'IntrospectResponse(${toJson()})';
+}
+
+class IntrospectUser {
+  final String email;
+  final String? firstName;
+  final String id;
+  final String? lastName;
+  final String? username;
+
+  const IntrospectUser({
+    required this.email,
+    this.firstName,
+    required this.id,
+    this.lastName,
+    this.username,
+  });
+
+  factory IntrospectUser.fromJson(Map<String, dynamic> json) {
+    return IntrospectUser(
+      email: json['email'] as String,
+      firstName: json['first_name'] as String?,
+      id: json['id'] as String,
+      lastName: json['last_name'] as String?,
+      username: json['username'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'email': email,
+      if (firstName != null) 'first_name': firstName,
+      'id': id,
+      if (lastName != null) 'last_name': lastName,
+      if (username != null) 'username': username,
+    };
+  }
+
+  @override
+  String toString() => 'IntrospectUser(${toJson()})';
 }
 
 class Invitation {
@@ -2215,6 +3329,57 @@ class InvitationListResponse {
 
   @override
   String toString() => 'InvitationListResponse(${toJson()})';
+}
+
+class InvoiceResponse {
+  final String currency;
+  final String id;
+  final String periodEnd;
+  final String periodStart;
+  final String status;
+  final String subscriptionId;
+  final String tenantId;
+  final String total;
+
+  const InvoiceResponse({
+    required this.currency,
+    required this.id,
+    required this.periodEnd,
+    required this.periodStart,
+    required this.status,
+    required this.subscriptionId,
+    required this.tenantId,
+    required this.total,
+  });
+
+  factory InvoiceResponse.fromJson(Map<String, dynamic> json) {
+    return InvoiceResponse(
+      currency: json['currency'] as String,
+      id: json['id'] as String,
+      periodEnd: json['period_end'] as String,
+      periodStart: json['period_start'] as String,
+      status: json['status'] as String,
+      subscriptionId: json['subscription_id'] as String,
+      tenantId: json['tenant_id'] as String,
+      total: json['total'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'currency': currency,
+      'id': id,
+      'period_end': periodEnd,
+      'period_start': periodStart,
+      'status': status,
+      'subscription_id': subscriptionId,
+      'tenant_id': tenantId,
+      'total': total,
+    };
+  }
+
+  @override
+  String toString() => 'InvoiceResponse(${toJson()})';
 }
 
 class KeyListItem {
@@ -2313,6 +3478,133 @@ class ListAuthMethodsResponse {
   String toString() => 'ListAuthMethodsResponse(${toJson()})';
 }
 
+class ListClientsRequest {
+  final String appID;
+
+  const ListClientsRequest({
+    required this.appID,
+  });
+
+  factory ListClientsRequest.fromJson(Map<String, dynamic> json) {
+    return ListClientsRequest(
+      appID: json['AppID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+    };
+  }
+
+  @override
+  String toString() => 'ListClientsRequest(${toJson()})';
+}
+
+class ListClientsResponse {
+  final List<OAuth2Client> clients;
+
+  const ListClientsResponse({
+    required this.clients,
+  });
+
+  factory ListClientsResponse.fromJson(Map<String, dynamic> json) {
+    return ListClientsResponse(
+      clients: (json['clients'] as List).map((e) => OAuth2Client.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'clients': clients.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'ListClientsResponse(${toJson()})';
+}
+
+class ListConsentsRequest {
+  final String cursor;
+  final int limit;
+  final String purpose;
+
+  const ListConsentsRequest({
+    required this.cursor,
+    required this.limit,
+    required this.purpose,
+  });
+
+  factory ListConsentsRequest.fromJson(Map<String, dynamic> json) {
+    return ListConsentsRequest(
+      cursor: json['Cursor'] as String,
+      limit: (json['Limit'] as num).toInt(),
+      purpose: json['Purpose'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'Cursor': cursor,
+      'Limit': limit,
+      'Purpose': purpose,
+    };
+  }
+
+  @override
+  String toString() => 'ListConsentsRequest(${toJson()})';
+}
+
+class ListCouponsRequest {
+  final String appID;
+
+  const ListCouponsRequest({
+    required this.appID,
+  });
+
+  factory ListCouponsRequest.fromJson(Map<String, dynamic> json) {
+    return ListCouponsRequest(
+      appID: json['AppID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+    };
+  }
+
+  @override
+  String toString() => 'ListCouponsRequest(${toJson()})';
+}
+
+class ListCouponsResponse {
+  final List<CouponResponse> coupons;
+  final int total;
+
+  const ListCouponsResponse({
+    required this.coupons,
+    required this.total,
+  });
+
+  factory ListCouponsResponse.fromJson(Map<String, dynamic> json) {
+    return ListCouponsResponse(
+      coupons: (json['coupons'] as List).map((e) => CouponResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      total: (json['total'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'coupons': coupons.map((e) => e.toJson()).toList(),
+      'total': total,
+    };
+  }
+
+  @override
+  String toString() => 'ListCouponsResponse(${toJson()})';
+}
+
 class ListDefinitionsResponse {
   final List<DefinitionGroup> groups;
   final int total;
@@ -2402,6 +3694,60 @@ class ListInvitationsRequest {
 
   @override
   String toString() => 'ListInvitationsRequest(${toJson()})';
+}
+
+class ListInvoicesRequest {
+  final String appID;
+  final String tenantID;
+
+  const ListInvoicesRequest({
+    required this.appID,
+    required this.tenantID,
+  });
+
+  factory ListInvoicesRequest.fromJson(Map<String, dynamic> json) {
+    return ListInvoicesRequest(
+      appID: json['AppID'] as String,
+      tenantID: json['TenantID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+      'TenantID': tenantID,
+    };
+  }
+
+  @override
+  String toString() => 'ListInvoicesRequest(${toJson()})';
+}
+
+class ListInvoicesResponse {
+  final List<InvoiceResponse> invoices;
+  final int total;
+
+  const ListInvoicesResponse({
+    required this.invoices,
+    required this.total,
+  });
+
+  factory ListInvoicesResponse.fromJson(Map<String, dynamic> json) {
+    return ListInvoicesResponse(
+      invoices: (json['invoices'] as List).map((e) => InvoiceResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      total: (json['total'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'invoices': invoices.map((e) => e.toJson()).toList(),
+      'total': total,
+    };
+  }
+
+  @override
+  String toString() => 'ListInvoicesResponse(${toJson()})';
 }
 
 class ListKeysRequest {
@@ -2522,6 +3868,56 @@ class ListOrgsRequest {
   String toString() => 'ListOrgsRequest(${toJson()})';
 }
 
+class ListPlansRequest {
+  final String appID;
+
+  const ListPlansRequest({
+    required this.appID,
+  });
+
+  factory ListPlansRequest.fromJson(Map<String, dynamic> json) {
+    return ListPlansRequest(
+      appID: json['AppID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+    };
+  }
+
+  @override
+  String toString() => 'ListPlansRequest(${toJson()})';
+}
+
+class ListPlansResponse {
+  final List<PlanResponse> plans;
+  final int total;
+
+  const ListPlansResponse({
+    required this.plans,
+    required this.total,
+  });
+
+  factory ListPlansResponse.fromJson(Map<String, dynamic> json) {
+    return ListPlansResponse(
+      plans: (json['plans'] as List).map((e) => PlanResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      total: (json['total'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'plans': plans.map((e) => e.toJson()).toList(),
+      'total': total,
+    };
+  }
+
+  @override
+  String toString() => 'ListPlansResponse(${toJson()})';
+}
+
 class ListRequest {
 
   const ListRequest();
@@ -2541,21 +3937,25 @@ class ListRequest {
 }
 
 class ListResponse {
-  final List<CredentialInfo> credentials;
+  final List<Consent> consents;
+  final String? nextCursor;
 
   const ListResponse({
-    required this.credentials,
+    required this.consents,
+    this.nextCursor,
   });
 
   factory ListResponse.fromJson(Map<String, dynamic> json) {
     return ListResponse(
-      credentials: (json['credentials'] as List).map((e) => CredentialInfo.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      consents: (json['consents'] as List).map((e) => Consent.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      nextCursor: json['next_cursor'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'credentials': credentials.map((e) => e.toJson()).toList(),
+      'consents': consents.map((e) => e.toJson()).toList(),
+      if (nextCursor != null) 'next_cursor': nextCursor,
     };
   }
 
@@ -2629,6 +4029,64 @@ class ListSettingsDefinitionsRequest {
 
   @override
   String toString() => 'ListSettingsDefinitionsRequest(${toJson()})';
+}
+
+class ListSubscriptionsRequest {
+  final String appID;
+  final String status;
+  final String tenantID;
+
+  const ListSubscriptionsRequest({
+    required this.appID,
+    required this.status,
+    required this.tenantID,
+  });
+
+  factory ListSubscriptionsRequest.fromJson(Map<String, dynamic> json) {
+    return ListSubscriptionsRequest(
+      appID: json['AppID'] as String,
+      status: json['Status'] as String,
+      tenantID: json['TenantID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+      'Status': status,
+      'TenantID': tenantID,
+    };
+  }
+
+  @override
+  String toString() => 'ListSubscriptionsRequest(${toJson()})';
+}
+
+class ListSubscriptionsResponse {
+  final List<Response> subscriptions;
+  final int total;
+
+  const ListSubscriptionsResponse({
+    required this.subscriptions,
+    required this.total,
+  });
+
+  factory ListSubscriptionsResponse.fromJson(Map<String, dynamic> json) {
+    return ListSubscriptionsResponse(
+      subscriptions: (json['subscriptions'] as List).map((e) => Response.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      total: (json['total'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'subscriptions': subscriptions.map((e) => e.toJson()).toList(),
+      'total': total,
+    };
+  }
+
+  @override
+  String toString() => 'ListSubscriptionsResponse(${toJson()})';
 }
 
 class ListTeamsRequest {
@@ -2818,6 +4276,33 @@ class LoginResponse {
   String toString() => 'LoginResponse(${toJson()})';
 }
 
+class MarkInvoicePaidRequest {
+  final String invoiceID;
+  final String paymentRef;
+
+  const MarkInvoicePaidRequest({
+    required this.invoiceID,
+    required this.paymentRef,
+  });
+
+  factory MarkInvoicePaidRequest.fromJson(Map<String, dynamic> json) {
+    return MarkInvoicePaidRequest(
+      invoiceID: json['InvoiceID'] as String,
+      paymentRef: json['payment_ref'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'InvoiceID': invoiceID,
+      'payment_ref': paymentRef,
+    };
+  }
+
+  @override
+  String toString() => 'MarkInvoicePaidRequest(${toJson()})';
+}
+
 class Member {
   final String createdAt;
   final String id;
@@ -2884,6 +4369,162 @@ class MemberListResponse {
   String toString() => 'MemberListResponse(${toJson()})';
 }
 
+class MemberRef {
+  final String? $ref;
+  final String? display;
+  final String value;
+
+  const MemberRef({
+    this.$ref,
+    this.display,
+    required this.value,
+  });
+
+  factory MemberRef.fromJson(Map<String, dynamic> json) {
+    return MemberRef(
+      $ref: json['\$ref'] as String?,
+      display: json['display'] as String?,
+      value: json['value'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if ($ref != null) '\$ref': $ref,
+      if (display != null) 'display': display,
+      'value': value,
+    };
+  }
+
+  @override
+  String toString() => 'MemberRef(${toJson()})';
+}
+
+class Meta {
+  final String? created;
+  final String? lastModified;
+  final String? location;
+  final String resourceType;
+
+  const Meta({
+    this.created,
+    this.lastModified,
+    this.location,
+    required this.resourceType,
+  });
+
+  factory Meta.fromJson(Map<String, dynamic> json) {
+    return Meta(
+      created: json['created'] as String?,
+      lastModified: json['lastModified'] as String?,
+      location: json['location'] as String?,
+      resourceType: json['resourceType'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (created != null) 'created': created,
+      if (lastModified != null) 'lastModified': lastModified,
+      if (location != null) 'location': location,
+      'resourceType': resourceType,
+    };
+  }
+
+  @override
+  String toString() => 'Meta(${toJson()})';
+}
+
+class Name {
+  final String familyName;
+  final String? formatted;
+  final String givenName;
+
+  const Name({
+    required this.familyName,
+    this.formatted,
+    required this.givenName,
+  });
+
+  factory Name.fromJson(Map<String, dynamic> json) {
+    return Name(
+      familyName: json['familyName'] as String,
+      formatted: json['formatted'] as String?,
+      givenName: json['givenName'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'familyName': familyName,
+      if (formatted != null) 'formatted': formatted,
+      'givenName': givenName,
+    };
+  }
+
+  @override
+  String toString() => 'Name(${toJson()})';
+}
+
+class OAuth2Client {
+  final String appId;
+  final String clientId;
+  final String createdAt;
+  final List<String> grantTypes;
+  final String id;
+  final String name;
+  final bool public;
+  final List<String> redirectUris;
+  final List<String> scopes;
+  final String updatedAt;
+
+  const OAuth2Client({
+    required this.appId,
+    required this.clientId,
+    required this.createdAt,
+    required this.grantTypes,
+    required this.id,
+    required this.name,
+    required this.public,
+    required this.redirectUris,
+    required this.scopes,
+    required this.updatedAt,
+  });
+
+  factory OAuth2Client.fromJson(Map<String, dynamic> json) {
+    return OAuth2Client(
+      appId: json['app_id'] as String,
+      clientId: json['client_id'] as String,
+      createdAt: json['created_at'] as String,
+      grantTypes: (json['grant_types'] as List).map((e) => e as String).toList(),
+      id: json['id'] as String,
+      name: json['name'] as String,
+      public: json['public'] as bool,
+      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
+      scopes: (json['scopes'] as List).map((e) => e as String).toList(),
+      updatedAt: json['updated_at'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      'client_id': clientId,
+      'created_at': createdAt,
+      'grant_types': grantTypes,
+      'id': id,
+      'name': name,
+      'public': public,
+      'redirect_uris': redirectUris,
+      'scopes': scopes,
+      'updated_at': updatedAt,
+    };
+  }
+
+  @override
+  String toString() => 'OAuth2Client(${toJson()})';
+}
+
 class ObjectFieldDef {
   final String displayName;
   final String? helpText;
@@ -2891,7 +4532,7 @@ class ObjectFieldDef {
   final String key;
   final List<SelectOption>? options;
   final String? placeholder;
-  final bool? required;
+  final bool? requiredValue;
   final bool? sensitive;
 
   const ObjectFieldDef({
@@ -2901,7 +4542,7 @@ class ObjectFieldDef {
     required this.key,
     this.options,
     this.placeholder,
-    this.required,
+    this.requiredValue,
     this.sensitive,
   });
 
@@ -2913,7 +4554,7 @@ class ObjectFieldDef {
       key: json['key'] as String,
       options: json['options'] == null ? null : (json['options'] as List).map((e) => SelectOption.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
       placeholder: json['placeholder'] as String?,
-      required: json['required'] as bool?,
+      requiredValue: json['required'] as bool?,
       sensitive: json['sensitive'] as bool?,
     );
   }
@@ -2926,7 +4567,7 @@ class ObjectFieldDef {
       'key': key,
       if (options != null) 'options': options?.map((e) => e.toJson()).toList(),
       if (placeholder != null) 'placeholder': placeholder,
-      if (required != null) 'required': required,
+      if (requiredValue != null) 'required': requiredValue,
       if (sensitive != null) 'sensitive': sensitive,
     };
   }
@@ -3073,6 +4714,100 @@ class PermissionListResponse {
 
   @override
   String toString() => 'PermissionListResponse(${toJson()})';
+}
+
+class PlanIDRequest {
+  final String planID;
+
+  const PlanIDRequest({
+    required this.planID,
+  });
+
+  factory PlanIDRequest.fromJson(Map<String, dynamic> json) {
+    return PlanIDRequest(
+      planID: json['PlanID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'PlanID': planID,
+    };
+  }
+
+  @override
+  String toString() => 'PlanIDRequest(${toJson()})';
+}
+
+class PlanResponse {
+  final String appId;
+  final String? baseAmount;
+  final String? billingPeriod;
+  final String currency;
+  final String description;
+  final int featuresCount;
+  final String id;
+  final bool isAddon;
+  final Map<String, dynamic>? metadata;
+  final String name;
+  final String slug;
+  final String status;
+  final int trialDays;
+
+  const PlanResponse({
+    required this.appId,
+    this.baseAmount,
+    this.billingPeriod,
+    required this.currency,
+    required this.description,
+    required this.featuresCount,
+    required this.id,
+    required this.isAddon,
+    this.metadata,
+    required this.name,
+    required this.slug,
+    required this.status,
+    required this.trialDays,
+  });
+
+  factory PlanResponse.fromJson(Map<String, dynamic> json) {
+    return PlanResponse(
+      appId: json['app_id'] as String,
+      baseAmount: json['base_amount'] as String?,
+      billingPeriod: json['billing_period'] as String?,
+      currency: json['currency'] as String,
+      description: json['description'] as String,
+      featuresCount: (json['features_count'] as num).toInt(),
+      id: json['id'] as String,
+      isAddon: json['is_addon'] as bool,
+      metadata: json['metadata'] == null ? null : Map<String, dynamic>.from(json['metadata'] as Map),
+      name: json['name'] as String,
+      slug: json['slug'] as String,
+      status: json['status'] as String,
+      trialDays: (json['trial_days'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      if (baseAmount != null) 'base_amount': baseAmount,
+      if (billingPeriod != null) 'billing_period': billingPeriod,
+      'currency': currency,
+      'description': description,
+      'features_count': featuresCount,
+      'id': id,
+      'is_addon': isAddon,
+      if (metadata != null) 'metadata': metadata,
+      'name': name,
+      'slug': slug,
+      'status': status,
+      'trial_days': trialDays,
+    };
+  }
+
+  @override
+  String toString() => 'PlanResponse(${toJson()})';
 }
 
 class RecoveryRegenerateRequest {
@@ -3443,6 +5178,65 @@ class ResolvedSettingsResponse {
   String toString() => 'ResolvedSettingsResponse(${toJson()})';
 }
 
+class Response {
+  final String appId;
+  final String? canceledAt;
+  final String currentPeriodEnd;
+  final String currentPeriodStart;
+  final String id;
+  final String planId;
+  final String status;
+  final String tenantId;
+  final String? trialEnd;
+  final String? trialStart;
+
+  const Response({
+    required this.appId,
+    this.canceledAt,
+    required this.currentPeriodEnd,
+    required this.currentPeriodStart,
+    required this.id,
+    required this.planId,
+    required this.status,
+    required this.tenantId,
+    this.trialEnd,
+    this.trialStart,
+  });
+
+  factory Response.fromJson(Map<String, dynamic> json) {
+    return Response(
+      appId: json['app_id'] as String,
+      canceledAt: json['canceled_at'] as String?,
+      currentPeriodEnd: json['current_period_end'] as String,
+      currentPeriodStart: json['current_period_start'] as String,
+      id: json['id'] as String,
+      planId: json['plan_id'] as String,
+      status: json['status'] as String,
+      tenantId: json['tenant_id'] as String,
+      trialEnd: json['trial_end'] as String?,
+      trialStart: json['trial_start'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'app_id': appId,
+      if (canceledAt != null) 'canceled_at': canceledAt,
+      'current_period_end': currentPeriodEnd,
+      'current_period_start': currentPeriodStart,
+      'id': id,
+      'plan_id': planId,
+      'status': status,
+      'tenant_id': tenantId,
+      if (trialEnd != null) 'trial_end': trialEnd,
+      if (trialStart != null) 'trial_start': trialStart,
+    };
+  }
+
+  @override
+  String toString() => 'Response(${toJson()})';
+}
+
 class RevokeKeyRequest {
   final String keyID;
 
@@ -3464,6 +5258,33 @@ class RevokeKeyRequest {
 
   @override
   String toString() => 'RevokeKeyRequest(${toJson()})';
+}
+
+class RevokeRequest {
+  final String token;
+  final String? tokenTypeHint;
+
+  const RevokeRequest({
+    required this.token,
+    this.tokenTypeHint,
+  });
+
+  factory RevokeRequest.fromJson(Map<String, dynamic> json) {
+    return RevokeRequest(
+      token: json['token'] as String,
+      tokenTypeHint: json['token_type_hint'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'token': token,
+      if (tokenTypeHint != null) 'token_type_hint': tokenTypeHint,
+    };
+  }
+
+  @override
+  String toString() => 'RevokeRequest(${toJson()})';
 }
 
 class RevokeSessionRequest {
@@ -3974,21 +5795,25 @@ class SlugAvailableResponse {
 }
 
 class StartRequest {
-  final String provider;
+  final String? appId;
+  final String phone;
 
   const StartRequest({
-    required this.provider,
+    this.appId,
+    required this.phone,
   });
 
   factory StartRequest.fromJson(Map<String, dynamic> json) {
     return StartRequest(
-      provider: json['Provider'] as String,
+      appId: json['app_id'] as String?,
+      phone: json['phone'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'Provider': provider,
+      if (appId != null) 'app_id': appId,
+      'phone': phone,
     };
   }
 
@@ -3997,21 +5822,25 @@ class StartRequest {
 }
 
 class StartResponse {
-  final String authUrl;
+  final int expiresIn;
+  final String status;
 
   const StartResponse({
-    required this.authUrl,
+    required this.expiresIn,
+    required this.status,
   });
 
   factory StartResponse.fromJson(Map<String, dynamic> json) {
     return StartResponse(
-      authUrl: json['auth_url'] as String,
+      expiresIn: (json['expires_in'] as num).toInt(),
+      status: json['status'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'auth_url': authUrl,
+      'expires_in': expiresIn,
+      'status': status,
     };
   }
 
@@ -4040,6 +5869,29 @@ class StatusResponse {
 
   @override
   String toString() => 'StatusResponse(${toJson()})';
+}
+
+class SubIDRequest {
+  final String subID;
+
+  const SubIDRequest({
+    required this.subID,
+  });
+
+  factory SubIDRequest.fromJson(Map<String, dynamic> json) {
+    return SubIDRequest(
+      subID: json['SubID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'SubID': subID,
+    };
+  }
+
+  @override
+  String toString() => 'SubIDRequest(${toJson()})';
 }
 
 class Team {
@@ -4106,6 +5958,53 @@ class TeamListResponse {
 
   @override
   String toString() => 'TeamListResponse(${toJson()})';
+}
+
+class TokenRequest {
+  final String? clientId;
+  final String? clientSecret;
+  final String? code;
+  final String? codeVerifier;
+  final String? deviceCode;
+  final String grantType;
+  final String? redirectUri;
+
+  const TokenRequest({
+    this.clientId,
+    this.clientSecret,
+    this.code,
+    this.codeVerifier,
+    this.deviceCode,
+    required this.grantType,
+    this.redirectUri,
+  });
+
+  factory TokenRequest.fromJson(Map<String, dynamic> json) {
+    return TokenRequest(
+      clientId: json['client_id'] as String?,
+      clientSecret: json['client_secret'] as String?,
+      code: json['code'] as String?,
+      codeVerifier: json['code_verifier'] as String?,
+      deviceCode: json['device_code'] as String?,
+      grantType: json['grant_type'] as String,
+      redirectUri: json['redirect_uri'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (clientId != null) 'client_id': clientId,
+      if (clientSecret != null) 'client_secret': clientSecret,
+      if (code != null) 'code': code,
+      if (codeVerifier != null) 'code_verifier': codeVerifier,
+      if (deviceCode != null) 'device_code': deviceCode,
+      'grant_type': grantType,
+      if (redirectUri != null) 'redirect_uri': redirectUri,
+    };
+  }
+
+  @override
+  String toString() => 'TokenRequest(${toJson()})';
 }
 
 class TokenResponse {
@@ -4298,6 +6197,103 @@ class UnlinkAuthMethodResponse {
   String toString() => 'UnlinkAuthMethodResponse(${toJson()})';
 }
 
+class UsageItemResponse {
+  final String featureKey;
+  final String featureName;
+  final String featureType;
+  final int limit;
+  final String period;
+  final int remaining;
+  final int used;
+
+  const UsageItemResponse({
+    required this.featureKey,
+    required this.featureName,
+    required this.featureType,
+    required this.limit,
+    required this.period,
+    required this.remaining,
+    required this.used,
+  });
+
+  factory UsageItemResponse.fromJson(Map<String, dynamic> json) {
+    return UsageItemResponse(
+      featureKey: json['feature_key'] as String,
+      featureName: json['feature_name'] as String,
+      featureType: json['feature_type'] as String,
+      limit: (json['limit'] as num).toInt(),
+      period: json['period'] as String,
+      remaining: (json['remaining'] as num).toInt(),
+      used: (json['used'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'feature_key': featureKey,
+      'feature_name': featureName,
+      'feature_type': featureType,
+      'limit': limit,
+      'period': period,
+      'remaining': remaining,
+      'used': used,
+    };
+  }
+
+  @override
+  String toString() => 'UsageItemResponse(${toJson()})';
+}
+
+class UsageSummaryRequest {
+  final String appID;
+  final String tenantID;
+
+  const UsageSummaryRequest({
+    required this.appID,
+    required this.tenantID,
+  });
+
+  factory UsageSummaryRequest.fromJson(Map<String, dynamic> json) {
+    return UsageSummaryRequest(
+      appID: json['AppID'] as String,
+      tenantID: json['TenantID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+      'TenantID': tenantID,
+    };
+  }
+
+  @override
+  String toString() => 'UsageSummaryRequest(${toJson()})';
+}
+
+class UsageSummaryResponse {
+  final List<UsageItemResponse> usage;
+
+  const UsageSummaryResponse({
+    required this.usage,
+  });
+
+  factory UsageSummaryResponse.fromJson(Map<String, dynamic> json) {
+    return UsageSummaryResponse(
+      usage: (json['usage'] as List).map((e) => UsageItemResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'usage': usage.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'UsageSummaryResponse(${toJson()})';
+}
+
 class User {
   final String appId;
   final String? banExpires;
@@ -4397,6 +6393,118 @@ class User {
   String toString() => 'User(${toJson()})';
 }
 
+class UserInfo {
+  final String? email;
+  final bool? emailVerified;
+  final String? name;
+  final String? phoneNumber;
+  final String sub;
+
+  const UserInfo({
+    this.email,
+    this.emailVerified,
+    this.name,
+    this.phoneNumber,
+    required this.sub,
+  });
+
+  factory UserInfo.fromJson(Map<String, dynamic> json) {
+    return UserInfo(
+      email: json['email'] as String?,
+      emailVerified: json['email_verified'] as bool?,
+      name: json['name'] as String?,
+      phoneNumber: json['phone_number'] as String?,
+      sub: json['sub'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (email != null) 'email': email,
+      if (emailVerified != null) 'email_verified': emailVerified,
+      if (name != null) 'name': name,
+      if (phoneNumber != null) 'phone_number': phoneNumber,
+      'sub': sub,
+    };
+  }
+
+  @override
+  String toString() => 'UserInfo(${toJson()})';
+}
+
+class UserInfoRequest {
+
+  const UserInfoRequest();
+
+  factory UserInfoRequest.fromJson(Map<String, dynamic> json) {
+    return UserInfoRequest(
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+    };
+  }
+
+  @override
+  String toString() => 'UserInfoRequest(${toJson()})';
+}
+
+class UserResource {
+  final bool active;
+  final List<Email>? emails;
+  final String? externalId;
+  final List<GroupRef>? groups;
+  final String? id;
+  final Meta? meta;
+  final Name name;
+  final List<String> schemas;
+  final String userName;
+
+  const UserResource({
+    required this.active,
+    this.emails,
+    this.externalId,
+    this.groups,
+    this.id,
+    this.meta,
+    required this.name,
+    required this.schemas,
+    required this.userName,
+  });
+
+  factory UserResource.fromJson(Map<String, dynamic> json) {
+    return UserResource(
+      active: json['active'] as bool,
+      emails: json['emails'] == null ? null : (json['emails'] as List).map((e) => Email.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      externalId: json['externalId'] as String?,
+      groups: json['groups'] == null ? null : (json['groups'] as List).map((e) => GroupRef.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      id: json['id'] as String?,
+      meta: json['meta'] == null ? null : Meta.fromJson(Map<String, dynamic>.from(json['meta'] as Map)),
+      name: Name.fromJson(Map<String, dynamic>.from(json['name'] as Map)),
+      schemas: (json['schemas'] as List).map((e) => e as String).toList(),
+      userName: json['userName'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active': active,
+      if (emails != null) 'emails': emails?.map((e) => e.toJson()).toList(),
+      if (externalId != null) 'externalId': externalId,
+      if (groups != null) 'groups': groups?.map((e) => e.toJson()).toList(),
+      if (id != null) 'id': id,
+      if (meta != null) 'meta': meta?.toJson(),
+      'name': name.toJson(),
+      'schemas': schemas,
+      'userName': userName,
+    };
+  }
+
+  @override
+  String toString() => 'UserResource(${toJson()})';
+}
+
 class UserRoleListResponse {
   final List<Role> roles;
 
@@ -4426,7 +6534,7 @@ class Validation {
   final int? min;
   final int? minLen;
   final String? pattern;
-  final bool? required;
+  final bool? requiredValue;
 
   const Validation({
     this.max,
@@ -4434,7 +6542,7 @@ class Validation {
     this.min,
     this.minLen,
     this.pattern,
-    this.required,
+    this.requiredValue,
   });
 
   factory Validation.fromJson(Map<String, dynamic> json) {
@@ -4444,7 +6552,7 @@ class Validation {
       min: json['min'] == null ? null : (json['min'] as num).toInt(),
       minLen: json['min_len'] == null ? null : (json['min_len'] as num).toInt(),
       pattern: json['pattern'] as String?,
-      required: json['required'] as bool?,
+      requiredValue: json['required'] as bool?,
     );
   }
 
@@ -4455,7 +6563,7 @@ class Validation {
       if (min != null) 'min': min,
       if (minLen != null) 'min_len': minLen,
       if (pattern != null) 'pattern': pattern,
-      if (required != null) 'required': required,
+      if (requiredValue != null) 'required': requiredValue,
     };
   }
 
@@ -4519,24 +6627,28 @@ class VerifyMFAResponse {
 
 class VerifyRequest {
   final String? appId;
-  final String token;
+  final String code;
+  final String phone;
 
   const VerifyRequest({
     this.appId,
-    required this.token,
+    required this.code,
+    required this.phone,
   });
 
   factory VerifyRequest.fromJson(Map<String, dynamic> json) {
     return VerifyRequest(
       appId: json['app_id'] as String?,
-      token: json['token'] as String,
+      code: json['code'] as String,
+      phone: json['phone'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       if (appId != null) 'app_id': appId,
-      'token': token,
+      'code': code,
+      'phone': phone,
     };
   }
 
@@ -4546,32 +6658,36 @@ class VerifyRequest {
 
 class VerifyResponse {
   final String expiresAt;
+  final bool newUser;
   final String refreshToken;
   final String sessionToken;
-  final User user;
+  final User? user;
 
   const VerifyResponse({
     required this.expiresAt,
+    required this.newUser,
     required this.refreshToken,
     required this.sessionToken,
-    required this.user,
+    this.user,
   });
 
   factory VerifyResponse.fromJson(Map<String, dynamic> json) {
     return VerifyResponse(
       expiresAt: json['expires_at'] as String,
+      newUser: json['new_user'] as bool,
       refreshToken: json['refresh_token'] as String,
       sessionToken: json['session_token'] as String,
-      user: User.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
+      user: json['user'] == null ? null : User.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'expires_at': expiresAt,
+      'new_user': newUser,
       'refresh_token': refreshToken,
       'session_token': sessionToken,
-      'user': user.toJson(),
+      if (user != null) 'user': user?.toJson(),
     };
   }
 
@@ -4581,19 +6697,19 @@ class VerifyResponse {
 
 class VisibilityCondition {
   final String key;
-  final String? operator;
+  final String? operatorValue;
   final String value;
 
   const VisibilityCondition({
     required this.key,
-    this.operator,
+    this.operatorValue,
     required this.value,
   });
 
   factory VisibilityCondition.fromJson(Map<String, dynamic> json) {
     return VisibilityCondition(
       key: json['key'] as String,
-      operator: json['operator'] as String?,
+      operatorValue: json['operator'] as String?,
       value: json['value'] as String,
     );
   }
@@ -4601,13 +6717,40 @@ class VisibilityCondition {
   Map<String, dynamic> toJson() {
     return {
       'key': key,
-      if (operator != null) 'operator': operator,
+      if (operatorValue != null) 'operator': operatorValue,
       'value': value,
     };
   }
 
   @override
   String toString() => 'VisibilityCondition(${toJson()})';
+}
+
+class VoidInvoiceRequest {
+  final String invoiceID;
+  final String reason;
+
+  const VoidInvoiceRequest({
+    required this.invoiceID,
+    required this.reason,
+  });
+
+  factory VoidInvoiceRequest.fromJson(Map<String, dynamic> json) {
+    return VoidInvoiceRequest(
+      invoiceID: json['InvoiceID'] as String,
+      reason: json['reason'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'InvoiceID': invoiceID,
+      'reason': reason,
+    };
+  }
+
+  @override
+  String toString() => 'VoidInvoiceRequest(${toJson()})';
 }
 
 class Webhook {
@@ -4684,296 +6827,48 @@ class WebhookListResponse {
   String toString() => 'WebhookListResponse(${toJson()})';
 }
 
-// ──────────────────────────────────────────────────
-// OAuth2 Device Authorization (RFC 8628)
-// ──────────────────────────────────────────────────
+class scimGroupPathParam {
+  final String groupID;
 
-class DeviceAuthorizationRequest {
-  final String clientId;
-  final String? scope;
-
-  const DeviceAuthorizationRequest({
-    required this.clientId,
-    this.scope,
+  const scimGroupPathParam({
+    required this.groupID,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'client_id': clientId,
-      if (scope != null) 'scope': scope,
-    };
-  }
-
-  @override
-  String toString() => 'DeviceAuthorizationRequest(${toJson()})';
-}
-
-class DeviceAuthorizationResponse {
-  final String deviceCode;
-  final String userCode;
-  final String verificationUri;
-  final String? verificationUriComplete;
-  final int expiresIn;
-  final int interval;
-
-  const DeviceAuthorizationResponse({
-    required this.deviceCode,
-    required this.userCode,
-    required this.verificationUri,
-    this.verificationUriComplete,
-    required this.expiresIn,
-    required this.interval,
-  });
-
-  factory DeviceAuthorizationResponse.fromJson(Map<String, dynamic> json) {
-    return DeviceAuthorizationResponse(
-      deviceCode: json['device_code'] as String,
-      userCode: json['user_code'] as String,
-      verificationUri: json['verification_uri'] as String,
-      verificationUriComplete: json['verification_uri_complete'] as String?,
-      expiresIn: json['expires_in'] as int,
-      interval: json['interval'] as int,
+  factory scimGroupPathParam.fromJson(Map<String, dynamic> json) {
+    return scimGroupPathParam(
+      groupID: json['GroupID'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'device_code': deviceCode,
-      'user_code': userCode,
-      'verification_uri': verificationUri,
-      if (verificationUriComplete != null)
-        'verification_uri_complete': verificationUriComplete,
-      'expires_in': expiresIn,
-      'interval': interval,
+      'GroupID': groupID,
     };
   }
 
   @override
-  String toString() => 'DeviceAuthorizationResponse(${toJson()})';
+  String toString() => 'scimGroupPathParam(${toJson()})';
 }
 
-class DeviceCompleteRequest {
-  final String userCode;
-  final String action; // "approve" or "deny"
+class scimUserPathParam {
+  final String userID;
 
-  const DeviceCompleteRequest({
-    required this.userCode,
-    required this.action,
+  const scimUserPathParam({
+    required this.userID,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'user_code': userCode,
-      'action': action,
-    };
-  }
-
-  @override
-  String toString() => 'DeviceCompleteRequest(${toJson()})';
-}
-
-class DeviceCompleteResponse {
-  final String status;
-
-  const DeviceCompleteResponse({required this.status});
-
-  factory DeviceCompleteResponse.fromJson(Map<String, dynamic> json) {
-    return DeviceCompleteResponse(
-      status: json['status'] as String,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {'status': status};
-  }
-
-  @override
-  String toString() => 'DeviceCompleteResponse(${toJson()})';
-}
-
-class DeviceTokenRequest {
-  final String grantType;
-  final String deviceCode;
-  final String clientId;
-
-  const DeviceTokenRequest({
-    this.grantType = 'urn:ietf:params:oauth:grant-type:device_code',
-    required this.deviceCode,
-    required this.clientId,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'grant_type': grantType,
-      'device_code': deviceCode,
-      'client_id': clientId,
-    };
-  }
-
-  @override
-  String toString() => 'DeviceTokenRequest(${toJson()})';
-}
-
-class DeviceTokenResponse {
-  final String accessToken;
-  final String tokenType;
-  final int expiresIn;
-  final String? refreshToken;
-  final String? scope;
-
-  const DeviceTokenResponse({
-    required this.accessToken,
-    required this.tokenType,
-    required this.expiresIn,
-    this.refreshToken,
-    this.scope,
-  });
-
-  factory DeviceTokenResponse.fromJson(Map<String, dynamic> json) {
-    return DeviceTokenResponse(
-      accessToken: json['access_token'] as String,
-      tokenType: json['token_type'] as String,
-      expiresIn: json['expires_in'] as int,
-      refreshToken: json['refresh_token'] as String?,
-      scope: json['scope'] as String?,
+  factory scimUserPathParam.fromJson(Map<String, dynamic> json) {
+    return scimUserPathParam(
+      userID: json['UserID'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'access_token': accessToken,
-      'token_type': tokenType,
-      'expires_in': expiresIn,
-      if (refreshToken != null) 'refresh_token': refreshToken,
-      if (scope != null) 'scope': scope,
+      'UserID': userID,
     };
   }
 
   @override
-  String toString() => 'DeviceTokenResponse(${toJson()})';
-}
-
-/// Error from the OAuth2 device token endpoint (RFC 8628 Section 3.5).
-class DeviceTokenError {
-  final String error;
-  final String? errorDescription;
-
-  const DeviceTokenError({
-    required this.error,
-    this.errorDescription,
-  });
-
-  factory DeviceTokenError.fromJson(Map<String, dynamic> json) {
-    return DeviceTokenError(
-      error: json['error'] as String,
-      errorDescription: json['error_description'] as String?,
-    );
-  }
-
-  /// User hasn't approved yet — keep polling.
-  bool get isPending => error == 'authorization_pending';
-
-  /// Polling too fast — increase interval.
-  bool get isSlowDown => error == 'slow_down';
-
-  /// Device code expired — restart flow.
-  bool get isExpired => error == 'expired_token';
-
-  /// User denied — stop polling.
-  bool get isAccessDenied => error == 'access_denied';
-
-  @override
-  String toString() =>
-      'DeviceTokenError($error${errorDescription != null ? ': $errorDescription' : ''})';
-}
-
-class OidcDiscoveryDocument {
-  final String issuer;
-  final String? authorizationEndpoint;
-  final String? tokenEndpoint;
-  final String? userinfoEndpoint;
-  final String? jwksUri;
-  final String? deviceAuthorizationEndpoint;
-  final List<String>? grantTypesSupported;
-  final List<String>? scopesSupported;
-  final List<String>? responseTypesSupported;
-
-  const OidcDiscoveryDocument({
-    required this.issuer,
-    this.authorizationEndpoint,
-    this.tokenEndpoint,
-    this.userinfoEndpoint,
-    this.jwksUri,
-    this.deviceAuthorizationEndpoint,
-    this.grantTypesSupported,
-    this.scopesSupported,
-    this.responseTypesSupported,
-  });
-
-  factory OidcDiscoveryDocument.fromJson(Map<String, dynamic> json) {
-    return OidcDiscoveryDocument(
-      issuer: json['issuer'] as String,
-      authorizationEndpoint: json['authorization_endpoint'] as String?,
-      tokenEndpoint: json['token_endpoint'] as String?,
-      userinfoEndpoint: json['userinfo_endpoint'] as String?,
-      jwksUri: json['jwks_uri'] as String?,
-      deviceAuthorizationEndpoint:
-          json['device_authorization_endpoint'] as String?,
-      grantTypesSupported: (json['grant_types_supported'] as List<dynamic>?)
-          ?.cast<String>(),
-      scopesSupported:
-          (json['scopes_supported'] as List<dynamic>?)?.cast<String>(),
-      responseTypesSupported:
-          (json['response_types_supported'] as List<dynamic>?)?.cast<String>(),
-    );
-  }
-
-  bool get supportsDeviceFlow =>
-      grantTypesSupported?.contains(
-          'urn:ietf:params:oauth:grant-type:device_code') ??
-      false;
-
-  @override
-  String toString() => 'OidcDiscoveryDocument(issuer: $issuer)';
-}
-
-class OidcUserInfoResponse {
-  final String sub;
-  final String? email;
-  final bool emailVerified;
-  final String? name;
-  final String? givenName;
-  final String? familyName;
-  final String? preferredUsername;
-  final String? picture;
-  final String? phoneNumber;
-
-  const OidcUserInfoResponse({
-    required this.sub,
-    this.email,
-    this.emailVerified = false,
-    this.name,
-    this.givenName,
-    this.familyName,
-    this.preferredUsername,
-    this.picture,
-    this.phoneNumber,
-  });
-
-  factory OidcUserInfoResponse.fromJson(Map<String, dynamic> json) {
-    return OidcUserInfoResponse(
-      sub: json['sub'] as String,
-      email: json['email'] as String?,
-      emailVerified: json['email_verified'] as bool? ?? false,
-      name: json['name'] as String?,
-      givenName: json['given_name'] as String?,
-      familyName: json['family_name'] as String?,
-      preferredUsername: json['preferred_username'] as String?,
-      picture: json['picture'] as String?,
-      phoneNumber: json['phone_number'] as String?,
-    );
-  }
-
-  @override
-  String toString() => 'OidcUserInfoResponse(sub: $sub, email: $email)';
+  String toString() => 'scimUserPathParam(${toJson()})';
 }

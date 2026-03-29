@@ -3789,26 +3789,21 @@
       },
       "TokenResponse": {
         "properties": {
-          "access_token": {
+          "session_token": {
             "type": "string"
-          },
-          "expires_in": {
-            "type": "integer"
           },
           "refresh_token": {
             "type": "string"
           },
-          "scope": {
-            "type": "string"
-          },
-          "token_type": {
-            "type": "string"
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
-          "access_token",
-          "token_type",
-          "expires_in"
+          "session_token",
+          "refresh_token",
+          "expires_at"
         ],
         "type": "object"
       },

@@ -202,7 +202,7 @@ func (g *Generator) buildTemplateData(spec *openapi.Spec) *TemplateData {
 				for _, fn := range fieldNames {
 					fs := schema.Properties[fn]
 					td.Fields = append(td.Fields, FieldDef{
-						Name:     toCamelCase(fn),
+						Name:     safeDartFieldName(toCamelCase(fn)),
 						JSONName: fn,
 						Type:     g.schemaToDartType(fs),
 						Optional: !requiredSet[fn],
@@ -495,6 +495,9 @@ func (g *Generator) renderTemplate(name string, data *TemplateData) (string, err
 		"fromJsonExpr":     buildFromJSONExpr,
 		"toJsonExpr":       buildToJSONExpr,
 		"responseFromJson": buildResponseFromJSON,
+		"dartStringEscape": func(s string) string {
+			return strings.ReplaceAll(s, "$", `\$`)
+		},
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, name)
@@ -541,6 +544,39 @@ func isDartReservedTypeName(name string) bool {
 		"Record":   true,
 	}
 	return reserved[name]
+}
+
+// isDartReservedKeyword returns true if the given name is a Dart language
+// keyword that cannot be used as a field or variable identifier.
+func isDartReservedKeyword(name string) bool {
+	keywords := map[string]bool{
+		"abstract": true, "as": true, "assert": true, "async": true,
+		"await": true, "break": true, "case": true, "catch": true,
+		"class": true, "const": true, "continue": true, "covariant": true,
+		"default": true, "deferred": true, "do": true, "dynamic": true,
+		"else": true, "enum": true, "export": true, "extends": true,
+		"extension": true, "external": true, "factory": true, "false": true,
+		"final": true, "finally": true, "for": true, "get": true,
+		"if": true, "implements": true, "import": true, "in": true,
+		"interface": true, "is": true, "late": true, "library": true,
+		"mixin": true, "new": true, "null": true, "on": true,
+		"operator": true, "part": true, "required": true, "rethrow": true,
+		"return": true, "set": true, "show": true, "static": true,
+		"super": true, "switch": true, "sync": true, "this": true,
+		"throw": true, "true": true, "try": true, "typedef": true,
+		"var": true, "void": true, "while": true, "with": true,
+		"yield": true,
+	}
+	return keywords[name]
+}
+
+// safeDartFieldName returns a safe Dart identifier for a field name,
+// appending a "$" suffix if the name is a reserved keyword.
+func safeDartFieldName(name string) string {
+	if isDartReservedKeyword(name) {
+		return name + "Value"
+	}
+	return name
 }
 
 // toCamelCase converts a string to camelCase.
@@ -595,10 +631,8 @@ func toCamelCase(s string) string {
 
 // buildFromJSONExpr generates a Dart expression to extract a field from a JSON map.
 func buildFromJSONExpr(jsonKey, dartType string, optional bool) string {
-	accessor := "json['" + jsonKey + "']"
-	if optional {
-		accessor = "json['" + jsonKey + "']"
-	}
+	safeKey := strings.ReplaceAll(jsonKey, `$`, `\$`)
+	accessor := "json['" + safeKey + "']"
 
 	switch dartType {
 	case "String":
