@@ -9,19 +9,19 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
-	github.com/xraph/chronicle v1.4.0
-	github.com/xraph/forge v1.4.0
-	github.com/xraph/forge/extensions/auth v1.4.0
+	github.com/xraph/chronicle v1.4.1
+	github.com/xraph/forge v1.4.1
+	github.com/xraph/forge/extensions/auth v1.4.1
 	github.com/xraph/forgeui v1.4.0
-	github.com/xraph/grove v1.4.0
-	github.com/xraph/grove/drivers/mongodriver v1.4.0
-	github.com/xraph/grove/drivers/pgdriver v1.4.0
-	github.com/xraph/grove/drivers/sqlitedriver v1.4.0
-	github.com/xraph/herald v1.4.0
-	github.com/xraph/keysmith v1.4.0
-	github.com/xraph/relay v1.4.0
+	github.com/xraph/grove v1.4.1
+	github.com/xraph/grove/drivers/mongodriver v1.4.1
+	github.com/xraph/grove/drivers/pgdriver v1.4.1
+	github.com/xraph/grove/drivers/sqlitedriver v1.4.1
+	github.com/xraph/herald v1.4.1
+	github.com/xraph/keysmith v1.4.1
+	github.com/xraph/relay v1.4.1
 	github.com/xraph/vessel v1.0.0
-	github.com/xraph/warden v1.4.0
+	github.com/xraph/warden v1.4.1
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.48.0
@@ -158,7 +158,7 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/uptrace/bunrouter v1.0.23 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/xraph/confy v0.1.0 // indirect
+	github.com/xraph/confy v0.5.0 // indirect
 	github.com/xraph/dispatch v1.4.0
 	github.com/xraph/go-utils v1.1.0
 	github.com/xraph/ledger v1.4.0
