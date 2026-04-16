@@ -315,6 +315,25 @@ type AdminDeleteUserRequest struct {
 	UserID string `path:"userId" description:"User identifier"`
 }
 
+// AdminUpdateUserRequest binds path + body for PATCH /admin/users/:userId.
+type AdminUpdateUserRequest struct {
+	UserID        string  `path:"userId" description:"User identifier"`
+	FirstName     *string `json:"first_name,omitempty" description:"First/given name"`
+	LastName      *string `json:"last_name,omitempty" description:"Last/family name"`
+	Username      *string `json:"username,omitempty" description:"Unique username"`
+	EmailVerified *bool   `json:"email_verified,omitempty" description:"Email verification status"`
+}
+
+// AdminCreateUserRequest binds the body for POST /admin/users/create.
+type AdminCreateUserRequest struct {
+	AppID     string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email     string `json:"email" description:"User email address"`
+	Password  string `json:"password" description:"User password"`
+	FirstName string `json:"first_name,omitempty" description:"First/given name"`
+	LastName  string `json:"last_name,omitempty" description:"Last/family name"`
+	Username  string `json:"username,omitempty" description:"Unique username"`
+}
+
 // AdminStatsRequest is an empty request for GET /admin/stats.
 type AdminStatsRequest struct {
 	AppID string `query:"app_id" description:"Application ID"`
@@ -479,6 +498,7 @@ type GetAppClientConfigRequest struct {
 // SetAppClientConfigRequest binds the path + body for PUT /admin/apps/:appId/client-config.
 type SetAppClientConfigRequest struct {
 	AppID                    string   `path:"appId" description:"Application identifier"`
+	SignupEnabled            *bool    `json:"signup_enabled,omitempty" description:"Enable new user signup (nil = enabled by default)"`
 	PasswordEnabled          *bool    `json:"password_enabled,omitempty" description:"Enable password auth (nil = inherit)"`
 	PasskeyEnabled           *bool    `json:"passkey_enabled,omitempty" description:"Enable passkey auth (nil = inherit)"`
 	MagicLinkEnabled         *bool    `json:"magic_link_enabled,omitempty" description:"Enable magic link auth (nil = inherit)"`

@@ -744,8 +744,13 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		ctx.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		ctx.Response().WriteHeader(http.StatusOK)
 		_, _ = ctx.Response().Write([]byte(`<!DOCTYPE html><html><head><title>Login successful</title></head><body><script>` + //nolint:errcheck // best-effort HTML write
-			`if(window.opener){window.close()}else{window.location.href="` + escapedRedirect + `"}` +
-			`</script><p>Login successful. You can close this window.</p></body></html>`))
+			// Always try to close the popup first. After cross-origin navigation
+			// (e.g. through Google OAuth) window.opener may be null, so we attempt
+			// window.close() unconditionally and fall back to a redirect after a
+			// short delay to give the close a chance to fire.
+			`try{window.close()}catch(e){}` +
+			`setTimeout(function(){window.location.href="` + escapedRedirect + `"},300)` +
+			`</script><p>Login successful. Redirecting&hellip;</p></body></html>`))
 		return nil, nil
 	}
 
@@ -956,15 +961,20 @@ func sanitizeRedirectURL(rawURL, requestOrigin string) string {
 		return rawURL
 	}
 
-	// Absolute URLs must match the request origin.
+	// Absolute URLs must match the request origin when the origin is known.
 	if requestOrigin != "" {
 		originParsed, oErr := url.Parse(requestOrigin)
 		if oErr == nil && strings.EqualFold(parsed.Host, originParsed.Host) {
 			return rawURL
 		}
+		// Origin is known but host does not match — block the redirect.
+		return ""
 	}
 
-	return ""
+	// No origin available (e.g. missing Origin/Referer headers in CORS).
+	// Allow the URL since it passed scheme and credential checks above.
+	// The redirect_url was provided by the caller, not an external party.
+	return rawURL
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).

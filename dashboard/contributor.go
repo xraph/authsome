@@ -194,7 +194,9 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 	case "/users":
 		return c.renderUsers(ctx, appID, params)
 	case "/users/detail":
-		return c.renderUserDetail(ctx, params)
+		return c.renderUserDetail(ctx, appID, params)
+	case "/users/create":
+		return c.renderUserCreate(ctx, appID, params)
 	case "/sessions":
 		return c.renderSessions(ctx, params)
 	case "/devices":
@@ -358,7 +360,7 @@ func (c *Contributor) renderUsers(ctx context.Context, appID id.AppID, params co
 	return pages.UsersPage(userList, cursor, basePath), nil
 }
 
-func (c *Contributor) renderUserDetail(ctx context.Context, params contributor.Params) (templ.Component, error) {
+func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, params contributor.Params) (templ.Component, error) {
 	userIDStr := params.PathParams["id"]
 	if userIDStr == "" {
 		userIDStr = params.QueryParams["id"]
@@ -373,13 +375,75 @@ func (c *Contributor) renderUserDetail(ctx context.Context, params contributor.P
 		return nil, contributor.ErrPageNotFound
 	}
 
+	var actionSuccess, actionError string
+
+	// Handle POST actions
+	action := params.FormData["action"]
+	if action != "" {
+		nonce := params.FormData["nonce"]
+		if ConsumeNonce(nonce) {
+			// Use a zero admin ID for dashboard actions (bridge handles auth).
+			adminID := userID // placeholder; dashboard is authenticated via middleware
+
+			switch action {
+			case "ban":
+				reason := params.FormData["reason"]
+				if banErr := c.engine.AdminBanUser(ctx, adminID, userID, reason, nil); banErr != nil {
+					actionError = "Failed to ban user: " + banErr.Error()
+				} else {
+					actionSuccess = "User has been banned."
+				}
+			case "unban":
+				if unbanErr := c.engine.AdminUnbanUser(ctx, adminID, userID); unbanErr != nil {
+					actionError = "Failed to unban user: " + unbanErr.Error()
+				} else {
+					actionSuccess = "User has been unbanned."
+				}
+			case "delete":
+				if delErr := c.engine.AdminDeleteUser(ctx, adminID, userID); delErr != nil {
+					actionError = "Failed to delete user: " + delErr.Error()
+				} else {
+					// Redirect to users list after deletion.
+					users, _ := fetchUsers(ctx, c.engine, appID, "", 25) //nolint:errcheck
+					if users == nil {
+						users = &user.List{}
+					}
+					return pages.UsersPage(users, "", "../users"), nil
+				}
+			case "revoke-sessions":
+				if count, revokeErr := c.engine.AdminBulkRevokeSessions(ctx, adminID, userID); revokeErr != nil {
+					actionError = "Failed to revoke sessions: " + revokeErr.Error()
+				} else {
+					actionSuccess = fmt.Sprintf("Revoked %d session(s).", count)
+				}
+			case "update":
+				updates := authsome.AdminUserUpdates{
+					FirstName: strPtr(params.FormData["first_name"]),
+					LastName:  strPtr(params.FormData["last_name"]),
+					Username:  strPtr(params.FormData["username"]),
+				}
+				emailVerified := params.FormData["email_verified"] == "true"
+				updates.EmailVerified = &emailVerified
+
+				if updateErr := c.engine.AdminUpdateUser(ctx, adminID, userID, updates); updateErr != nil {
+					actionError = "Failed to update user: " + updateErr.Error()
+				} else {
+					actionSuccess = "User profile updated."
+				}
+			}
+		}
+	}
+
 	u, err := c.engine.ResolveUser(userIDStr)
 	if err != nil {
 		return nil, fmt.Errorf("dashboard: resolve user: %w", err)
 	}
 
 	data := pages.UserDetailPageData{
-		User: u,
+		User:      u,
+		FormNonce: GenerateNonce(),
+		Success:   actionSuccess,
+		Error:     actionError,
 	}
 
 	// Fetch sessions for this user.
@@ -405,6 +469,49 @@ func (c *Contributor) renderUserDetail(ctx context.Context, params contributor.P
 		return pages.UserDetailPage(data).Render(childCtx, w)
 	}), nil
 }
+
+func (c *Contributor) renderUserCreate(ctx context.Context, appID id.AppID, params contributor.Params) (templ.Component, error) {
+	action := params.FormData["action"]
+	if action == "create" {
+		nonce := params.FormData["nonce"]
+		if ConsumeNonce(nonce) {
+			email := strings.TrimSpace(params.FormData["email"])
+			password := params.FormData["password"]
+			firstName := strings.TrimSpace(params.FormData["first_name"])
+			lastName := strings.TrimSpace(params.FormData["last_name"])
+			username := strings.TrimSpace(params.FormData["username"])
+
+			if email == "" || password == "" {
+				return pages.CreateUserPage(pages.CreateUserPageData{
+					FormNonce: GenerateNonce(),
+					Error:     "Email and password are required.",
+				}), nil
+			}
+
+			// Use a zero admin ID for dashboard (auth handled by dashboard middleware).
+			adminID := id.UserID{}
+			created, createErr := c.engine.AdminCreateUser(ctx, adminID, appID, id.EnvironmentID{}, email, password, firstName, lastName, username)
+			if createErr != nil {
+				return pages.CreateUserPage(pages.CreateUserPageData{
+					FormNonce: GenerateNonce(),
+					Error:     createErr.Error(),
+				}), nil
+			}
+
+			return pages.CreateUserPage(pages.CreateUserPageData{
+				FormNonce:   GenerateNonce(),
+				CreatedUser: created,
+			}), nil
+		}
+	}
+
+	return pages.CreateUserPage(pages.CreateUserPageData{
+		FormNonce: GenerateNonce(),
+	}), nil
+}
+
+// strPtr returns a pointer to s.
+func strPtr(s string) *string { return &s }
 
 func (c *Contributor) renderSessions(ctx context.Context, params contributor.Params) (templ.Component, error) {
 	userIDStr := params.QueryParams["user_id"]
@@ -614,6 +721,7 @@ func (c *Contributor) renderSettingsPage(ctx context.Context) (templ.Component, 
 
 	// Build auth method toggles from client config + installed plugins.
 	methods := []pages.AuthMethodToggle{
+		{Key: "signup_enabled", Label: "Signup", Desc: "Allow new users to register", Enabled: true, Available: true},
 		{Key: "password_enabled", Label: "Password", Desc: "Email and password sign-in", Enabled: true, Available: true}, // always available
 		{Key: "social_enabled", Label: "Social / OAuth", Desc: "Sign in with Google, GitHub, etc.", Available: pluginSet["social"]},
 		{Key: "passkey_enabled", Label: "Passkey", Desc: "Passwordless sign-in with biometrics", Available: pluginSet["passkey"]},
@@ -627,6 +735,7 @@ func (c *Contributor) renderSettingsPage(ctx context.Context) (templ.Component, 
 	// Load per-app overrides to reflect current toggle state.
 	if clientCfg, err := c.engine.Store().GetAppClientConfig(ctx, appID); err == nil {
 		overrides := map[string]*bool{
+			"signup_enabled":             clientCfg.SignupEnabled,
 			"password_enabled":           clientCfg.PasswordEnabled,
 			"social_enabled":             clientCfg.SocialEnabled,
 			"passkey_enabled":            clientCfg.PasskeyEnabled,
@@ -1087,6 +1196,7 @@ var knownPageRoutes = map[string]bool{
 	"/settings/editor":     true,
 	"/apps":                true,
 	"/apps/create":         true,
+	"/users/create":        true,
 }
 
 // parseAppEnvRoute extracts app slug, env slug, and page route from a route string.

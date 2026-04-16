@@ -40,6 +40,11 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		return nil, nil, err
 	}
 
+	// Check if signup is disabled for this app.
+	if clientCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && clientCfg.SignupEnabled != nil && !*clientCfg.SignupEnabled {
+		return nil, nil, fmt.Errorf("authsome: signup is disabled for this application")
+	}
+
 	// Normalize email early so all downstream checks use the canonical form.
 	if req.Email != "" {
 		req.Email = strings.ToLower(strings.TrimSpace(req.Email))
@@ -1710,6 +1715,124 @@ func (e *Engine) AdminDeleteUser(ctx context.Context, adminID, userID id.UserID)
 	})
 
 	return nil
+}
+
+// AdminUpdateUser updates a user's profile fields. Only non-nil pointer fields
+// in the updates struct are applied.
+func (e *Engine) AdminUpdateUser(ctx context.Context, adminID, userID id.UserID, updates AdminUserUpdates) error {
+	u, err := e.store.GetUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authsome: admin update user: %w", err)
+	}
+
+	if updates.FirstName != nil {
+		u.FirstName = *updates.FirstName
+	}
+	if updates.LastName != nil {
+		u.LastName = *updates.LastName
+	}
+	if updates.Username != nil {
+		newUsername := *updates.Username
+		if newUsername != u.Username && newUsername != "" {
+			if _, lookupErr := e.store.GetUserByUsername(ctx, u.AppID, newUsername); lookupErr == nil {
+				return account.ErrUsernameTaken
+			}
+		}
+		u.Username = newUsername
+	}
+	if updates.EmailVerified != nil {
+		u.EmailVerified = *updates.EmailVerified
+	}
+
+	u.UpdatedAt = time.Now()
+
+	if err := e.store.UpdateUser(ctx, u); err != nil {
+		return fmt.Errorf("authsome: admin update user: %w", err)
+	}
+
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_update_user", "user", userID.String(), adminID.String(), u.AppID.String(), "admin", nil)
+
+	return nil
+}
+
+// AdminUserUpdates holds optional fields for an admin user update.
+type AdminUserUpdates struct {
+	FirstName     *string
+	LastName      *string
+	Username      *string
+	EmailVerified *bool
+}
+
+// AdminCreateUser creates a new user without going through the signup flow.
+// The user is created with the given password (hashed) and email marked as verified.
+func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID id.AppID, envID id.EnvironmentID, email, password, firstName, lastName, username string) (*user.User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil, fmt.Errorf("authsome: admin create user: email is required")
+	}
+
+	// Validate password
+	policy := e.passwordPolicy()
+	if err := policy.ValidatePassword(password); err != nil {
+		return nil, err
+	}
+
+	// Check email uniqueness
+	if _, err := e.store.GetUserByEmail(ctx, appID, email); err == nil {
+		return nil, account.ErrEmailTaken
+	}
+
+	// Check username uniqueness
+	if username != "" {
+		if _, err := e.store.GetUserByUsername(ctx, appID, username); err == nil {
+			return nil, account.ErrUsernameTaken
+		}
+	}
+
+	// Resolve default environment
+	if envID.IsNil() {
+		if env, _ := e.GetDefaultEnvironment(ctx, appID); env != nil {
+			envID = env.ID
+		}
+	}
+
+	// Hash password
+	hash, err := account.HashPasswordWithPolicy(password, policy)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: admin create user: hash password: %w", err)
+	}
+
+	now := time.Now()
+	u := &user.User{
+		ID:            id.NewUserID(),
+		AppID:         appID,
+		EnvID:         envID,
+		Email:         email,
+		EmailVerified: true, // admin-created users are pre-verified
+		FirstName:     firstName,
+		LastName:      lastName,
+		Username:      username,
+		PasswordHash:  hash,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := e.store.CreateUser(ctx, u); err != nil {
+		return nil, fmt.Errorf("authsome: admin create user: %w", err)
+	}
+
+	// Assign default role
+	e.EnsureDefaultRole(ctx, appID, u.ID)
+
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_create_user", "user", u.ID.String(), adminID.String(), appID.String(), "admin", nil)
+
+	e.relayEvent(ctx, "admin.user.created", appID.String(), map[string]string{
+		"user_id":  u.ID.String(),
+		"admin_id": adminID.String(),
+		"email":    email,
+	})
+
+	return u, nil
 }
 
 // ──────────────────────────────────────────────────

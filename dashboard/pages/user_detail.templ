@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
+	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/components/separator"
 	"github.com/xraph/forgeui/components/table"
 	"github.com/xraph/forgeui/icons"
@@ -16,10 +17,13 @@ import (
 
 // UserDetailPageData holds all data for the user detail view.
 type UserDetailPageData struct {
-	User     *user.User
-	Sessions []*session.Session
-	Devices  []*device.Device
-	Roles    []string
+	User      *user.User
+	Sessions  []*session.Session
+	Devices   []*device.Device
+	Roles     []string
+	FormNonce string
+	Success   string
+	Error     string
 }
 
 templ UserDetailPage(data UserDetailPageData) {
@@ -37,6 +41,18 @@ templ UserDetailPage(data UserDetailPageData) {
 		}) {
 			@icons.ChevronLeft(icons.WithSize(16))
 			Back to Users
+		}
+
+		<!-- Success / Error Messages -->
+		if data.Success != "" {
+			<div class="rounded-lg border border-green-500/50 bg-green-50 dark:bg-green-950/20 p-4">
+				<p class="text-sm font-medium text-green-800 dark:text-green-200">{ data.Success }</p>
+			</div>
+		}
+		if data.Error != "" {
+			<div class="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+				<p class="text-sm font-medium text-destructive">{ data.Error }</p>
+			</div>
 		}
 
 		<!-- User Info Card -->
@@ -95,6 +111,149 @@ templ UserDetailPage(data UserDetailPageData) {
 						@userField("Ban Reason", data.User.BanReason)
 					}
 				</dl>
+			}
+		}
+
+		<!-- Actions Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-2">
+					@icons.Settings(icons.WithSize(18))
+					@card.Title() {
+						Actions
+					}
+				</div>
+			}
+			@card.Content() {
+				<div class="flex flex-wrap gap-3">
+					<!-- Ban / Unban -->
+					if data.User.Banned {
+						<form method="POST" class="inline">
+							<input type="hidden" name="action" value="unban"/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+								@icons.ShieldCheck(icons.WithSize(16))
+								Unban User
+							}
+						</form>
+					} else {
+						<details class="group">
+							<summary class="list-none">
+								@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Attributes: templ.Attributes{"type": "button"}}) {
+									@icons.Ban(icons.WithSize(16))
+									Ban User
+								}
+							</summary>
+							<form method="POST" class="mt-3 p-4 border rounded-lg space-y-3">
+								<input type="hidden" name="action" value="ban"/>
+								<input type="hidden" name="nonce" value={ data.FormNonce }/>
+								<div>
+									<label class="text-sm font-medium mb-1.5 block" for="ban-reason">Reason</label>
+									@input.Input(input.Props{
+										Type:        "text",
+										Name:        "reason",
+										Placeholder: "Reason for banning this user",
+										Attributes:  templ.Attributes{"id": "ban-reason"},
+									})
+								</div>
+								@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Size: button.SizeSm}) {
+									Confirm Ban
+								}
+							</form>
+						</details>
+					}
+
+					<!-- Revoke Sessions -->
+					if len(data.Sessions) > 0 {
+						<form method="POST" class="inline" onsubmit="return confirm('Revoke all sessions for this user?');">
+							<input type="hidden" name="action" value="revoke-sessions"/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Variant: button.VariantOutline, Size: button.SizeSm}) {
+								@icons.LogOut(icons.WithSize(16))
+								Revoke All Sessions
+							}
+						</form>
+					}
+
+					<!-- Delete -->
+					<form method="POST" class="inline" onsubmit="return confirm('Permanently delete this user? This cannot be undone.');">
+						<input type="hidden" name="action" value="delete"/>
+						<input type="hidden" name="nonce" value={ data.FormNonce }/>
+						@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Size: button.SizeSm}) {
+							@icons.Trash(icons.WithSize(16))
+							Delete User
+						}
+					</form>
+				</div>
+			}
+		}
+
+		<!-- Edit Profile Card -->
+		@card.Card() {
+			@card.Header() {
+				<div class="flex items-center gap-2">
+					@icons.PenLine(icons.WithSize(18))
+					@card.Title() {
+						Edit Profile
+					}
+				</div>
+			}
+			@card.Content() {
+				<form method="POST" class="space-y-4">
+					<input type="hidden" name="action" value="update"/>
+					<input type="hidden" name="nonce" value={ data.FormNonce }/>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="edit-firstname">First Name</label>
+							@input.Input(input.Props{
+								Type: "text",
+								Name: "first_name",
+								Attributes: templ.Attributes{
+									"id":    "edit-firstname",
+									"value": data.User.FirstName,
+								},
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="edit-lastname">Last Name</label>
+							@input.Input(input.Props{
+								Type: "text",
+								Name: "last_name",
+								Attributes: templ.Attributes{
+									"id":    "edit-lastname",
+									"value": data.User.LastName,
+								},
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block" for="edit-username">Username</label>
+							@input.Input(input.Props{
+								Type: "text",
+								Name: "username",
+								Attributes: templ.Attributes{
+									"id":    "edit-username",
+									"value": data.User.Username,
+								},
+							})
+						</div>
+						<div>
+							<label class="text-sm font-medium mb-1.5 block">Email Verified</label>
+							<label class="flex items-center gap-2 mt-2">
+								if data.User.EmailVerified {
+									<input type="checkbox" name="email_verified" value="true" checked class="h-4 w-4 rounded border-input"/>
+								} else {
+									<input type="checkbox" name="email_verified" value="true" class="h-4 w-4 rounded border-input"/>
+								}
+								<span class="text-sm">Mark email as verified</span>
+							</label>
+						</div>
+					</div>
+					<div class="flex gap-3 pt-2">
+						@button.Button(button.Props{Type: "submit", Size: button.SizeSm}) {
+							Save Changes
+						}
+					</div>
+				</form>
 			}
 		}
 

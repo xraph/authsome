@@ -6,6 +6,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
@@ -71,6 +72,28 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		forge.WithDescription("Permanently deletes a user and all associated data. Requires admin role."),
 		forge.WithOperationID("adminDeleteUser"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := g.PATCH("/users/:userId", a.handleAdminUpdateUser,
+		forge.WithSummary("Update user (admin)"),
+		forge.WithDescription("Updates a user's profile fields. Requires admin role."),
+		forge.WithOperationID("adminUpdateUser"),
+		forge.WithRequestSchema(AdminUpdateUserRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Updated user", user.User{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := g.POST("/users/create", a.handleAdminCreateUser,
+		forge.WithSummary("Create user (admin)"),
+		forge.WithDescription("Creates a new user without going through the signup flow. The user is created with email verified. Requires admin role."),
+		forge.WithOperationID("adminCreateUser"),
+		forge.WithRequestSchema(AdminCreateUserRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Created user", user.User{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -288,4 +311,53 @@ func (a *API) handleAdminStopImpersonation(ctx forge.Context, _ *AdminStopImpers
 
 	resp := &StatusResponse{Status: "impersonation stopped"}
 	return nil, ctx.JSON(http.StatusOK, resp)
+}
+
+func (a *API) handleAdminUpdateUser(ctx forge.Context, req *AdminUpdateUserRequest) (*user.User, error) {
+	adminID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	userID, err := id.ParseUserID(req.UserID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid user_id")
+	}
+
+	updates := authsome.AdminUserUpdates{
+		FirstName:     req.FirstName,
+		LastName:      req.LastName,
+		Username:      req.Username,
+		EmailVerified: req.EmailVerified,
+	}
+
+	if err := a.engine.AdminUpdateUser(ctx.Context(), adminID, userID, updates); err != nil {
+		return nil, mapError(err)
+	}
+
+	u, err := a.engine.AdminGetUser(ctx.Context(), userID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return u, nil
+}
+
+func (a *API) handleAdminCreateUser(ctx forge.Context, req *AdminCreateUserRequest) (*user.User, error) {
+	adminID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	appID, err := a.resolveAppID(req.AppID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid app_id")
+	}
+
+	u, err := a.engine.AdminCreateUser(ctx.Context(), adminID, appID, id.EnvironmentID{}, req.Email, req.Password, req.FirstName, req.LastName, req.Username)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return nil, ctx.JSON(http.StatusOK, u)
 }

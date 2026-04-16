@@ -92,6 +92,7 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 
 	cfg := &appclientconfig.Config{
 		AppID:                    appID,
+		SignupEnabled:            req.SignupEnabled,
 		PasswordEnabled:          req.PasswordEnabled,
 		PasskeyEnabled:           req.PasskeyEnabled,
 		MagicLinkEnabled:         req.MagicLinkEnabled,

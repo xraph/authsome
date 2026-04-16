@@ -180,6 +180,7 @@ func (a *API) handleRefresh(ctx forge.Context, req *RefreshRequest) (*TokenRespo
 		UserAgent: httpReq.UserAgent(),
 	})
 	if err != nil {
+		a.deleteSessionCookie(ctx)
 		return nil, mapError(err)
 	}
 

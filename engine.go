@@ -660,6 +660,7 @@ func (e *Engine) DB() *grove.DB { return e.db }
 type ClientConfigResponse struct {
 	Version             string                         `json:"version"`
 	AppID               string                         `json:"app_id"`
+	SignupEnabled       bool                           `json:"signup_enabled"`
 	Branding            *ClientConfigBranding          `json:"branding,omitempty"`
 	Password            *ClientConfigToggle            `json:"password,omitempty"`
 	Social              *ClientConfigSocial            `json:"social,omitempty"`
@@ -865,6 +866,9 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		)
 	}
 
+	// Signup is enabled by default unless explicitly disabled.
+	resp.SignupEnabled = true
+
 	// Build response sections.
 	resp.Password = &ClientConfigToggle{Enabled: passwordEnabled}
 	resp.Passkey = &ClientConfigToggle{Enabled: passkeyEnabled}
@@ -973,6 +977,9 @@ func applyClientConfigOverrides(
 	_ *[]ClientConfigSSOConnection,
 	mfaMethods *[]string,
 ) {
+	if cfg.SignupEnabled != nil {
+		resp.SignupEnabled = *cfg.SignupEnabled
+	}
 	if cfg.PasswordEnabled != nil {
 		*passwordEnabled = *cfg.PasswordEnabled
 	}

@@ -760,5 +760,18 @@ DROP TABLE IF EXISTS authsome_settings;
 				return err
 			},
 		},
+		// Migration 17: Add signup_enabled column to app_client_configs.
+		&migrate.Migration{
+			Name:    "add_signup_enabled_to_client_config",
+			Version: "20260330000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs ADD COLUMN signup_enabled INTEGER;`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs DROP COLUMN signup_enabled;`)
+				return err
+			},
+		},
 	)
 }

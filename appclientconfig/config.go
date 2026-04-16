@@ -20,6 +20,9 @@ type Config struct {
 	ID    id.AppClientConfigID `json:"id"`
 	AppID id.AppID             `json:"app_id"`
 
+	// Signup toggle (nil = enabled by default).
+	SignupEnabled *bool `json:"signup_enabled,omitempty"`
+
 	// Auth method overrides (nil = inherit from plugin defaults).
 	PasswordEnabled          *bool `json:"password_enabled,omitempty"`
 	PasskeyEnabled           *bool `json:"passkey_enabled,omitempty"`

@@ -1319,6 +1319,7 @@ type AppClientConfigModel struct {
 
 	ID                       string          `grove:"id,pk"`
 	AppID                    string          `grove:"app_id,notnull"`
+	SignupEnabled            *bool           `grove:"signup_enabled"`
 	PasswordEnabled          *bool           `grove:"password_enabled"`
 	PasskeyEnabled           *bool           `grove:"passkey_enabled"`
 	MagicLinkEnabled         *bool           `grove:"magic_link_enabled"`
@@ -1341,6 +1342,7 @@ func toAppClientConfigModel(c *appclientconfig.Config) *AppClientConfigModel {
 	return &AppClientConfigModel{
 		ID:                       c.ID.String(),
 		AppID:                    c.AppID.String(),
+		SignupEnabled:            c.SignupEnabled,
 		PasswordEnabled:          c.PasswordEnabled,
 		PasskeyEnabled:           c.PasskeyEnabled,
 		MagicLinkEnabled:         c.MagicLinkEnabled,
@@ -1378,6 +1380,7 @@ func fromAppClientConfigModel(m *AppClientConfigModel) (*appclientconfig.Config,
 	return &appclientconfig.Config{
 		ID:                       cfgID,
 		AppID:                    appID,
+		SignupEnabled:            m.SignupEnabled,
 		PasswordEnabled:          m.PasswordEnabled,
 		PasskeyEnabled:           m.PasskeyEnabled,
 		MagicLinkEnabled:         m.MagicLinkEnabled,

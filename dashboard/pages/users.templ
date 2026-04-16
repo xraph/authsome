@@ -6,9 +6,11 @@ import (
 	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/authsome/user"
 	"github.com/xraph/forgeui/components/badge"
+	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/components/pagination"
+	"github.com/xraph/forgeui/icons"
 )
 
 templ UsersPage(users *user.List, cursor string, basePath string) {
@@ -21,6 +23,18 @@ templ UsersPage(users *user.List, cursor string, basePath string) {
 					{ strconv.Itoa(users.Total) }
 				}
 			</div>
+			@button.Button(button.Props{
+				Size: button.SizeSm,
+				Attributes: templ.Attributes{
+					"hx-get":      basePath + "/create",
+					"hx-target":   "#content",
+					"hx-swap":     "innerHTML",
+					"hx-push-url": "true",
+				},
+			}) {
+				@icons.UserPlus(icons.WithSize(16))
+				Add User
+			}
 		</div>
 
 		<!-- Search -->
