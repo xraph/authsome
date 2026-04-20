@@ -24,6 +24,7 @@ import (
 	"github.com/xraph/authsome/authprovider"
 	"github.com/xraph/authsome/authz"
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/bridge/ledgeradapter"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
@@ -611,6 +612,47 @@ func (e *Engine) LedgerStore() ledgerstore.Store {
 		return e.ledgerEng.Store()
 	}
 	return nil
+}
+
+// SetLedgerEngine wires a ledger engine into the authsome engine after
+// construction. This is the late-binding counterpart to WithLedgerEngine,
+// intended for hosts that cannot resolve the ledger at engine-build time
+// (typical when both authsome and ledger live in a DI container whose
+// registration order is not guaranteed).
+//
+// It also updates the bridge.Ledger adapter so hook-based consumers see a
+// real ledger instead of the noop. Callers are still responsible for
+// propagating the new ledger to plugins that captured their own reference
+// during OnInit — see Engine.rebindLedgerOnPlugins.
+func (e *Engine) SetLedgerEngine(l *xledger.Ledger) {
+	e.ledgerEng = l
+	if l != nil {
+		e.ledger = ledgeradapter.New(l)
+	}
+}
+
+// ledgerRebindable is the optional interface implemented by plugins that
+// captured a ledger reference during OnInit and need to be notified when
+// the engine's ledger is rebound after construction.
+type ledgerRebindable interface {
+	SetLedger(*xledger.Ledger)
+	SetLedgerStore(ledgerstore.Store)
+}
+
+// RebindLedgerOnPlugins pushes the engine's current ledger engine and store
+// into any plugin that implements SetLedger / SetLedgerStore. Safe to call
+// multiple times; no-op when the engine has no ledger.
+func (e *Engine) RebindLedgerOnPlugins() {
+	if e.ledgerEng == nil || e.plugins == nil {
+		return
+	}
+	store := e.ledgerEng.Store()
+	for _, p := range e.plugins.Plugins() {
+		if rb, ok := p.(ledgerRebindable); ok {
+			rb.SetLedger(e.ledgerEng)
+			rb.SetLedgerStore(store)
+		}
+	}
 }
 
 // MetricsCollector returns the metrics collector bridge (may be nil).

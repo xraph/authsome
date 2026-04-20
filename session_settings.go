@@ -9,8 +9,24 @@ import (
 )
 
 // ──────────────────────────────────────────────────
-// Core session settings (registered as "session" namespace)
+// Core settings
 // ──────────────────────────────────────────────────
+
+// Category: Authentication
+
+var (
+	// SettingRequireEmailVerification controls whether unverified email addresses
+	// block sign-in. When enabled, users must verify their email before they can log in.
+	SettingRequireEmailVerification = settings.Define("auth.require_email_verification", false,
+		settings.WithDisplayName("Require Email Verification"),
+		settings.WithDescription("Block sign-in for accounts with unverified email addresses"),
+		settings.WithCategory("Authentication"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("When enabled, users must verify their email before signing in."),
+		settings.WithOrder(5),
+	)
+)
 
 // Category: Token Lifetimes
 
@@ -286,6 +302,9 @@ var (
 
 // registerCoreSessionSettings registers all core session settings under the "session" namespace.
 func registerCoreSessionSettings(m *settings.Manager) error {
+	if err := settings.RegisterTyped(m, "auth", SettingRequireEmailVerification); err != nil {
+		return err
+	}
 	if err := settings.RegisterTyped(m, "session", SettingTokenTTLSeconds); err != nil {
 		return err
 	}

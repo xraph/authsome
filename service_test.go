@@ -2,6 +2,7 @@ package authsome_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 )
 
@@ -269,6 +271,54 @@ func TestSignIn_BannedUser(t *testing.T) {
 		Password: "SecureP@ss1",
 	})
 	assert.ErrorIs(t, err, account.ErrUserBanned)
+}
+
+// ──────────────────────────────────────────────────
+// Email verification (dynamic setting) tests
+// ──────────────────────────────────────────────────
+
+func TestSignIn_EmailVerificationRequired_DynamicSetting(t *testing.T) {
+	eng, _ := newTestEngine(t)
+	ctx := context.Background()
+	appID := testAppID(t)
+
+	// Enable email verification via the dynamic setting.
+	mgr := eng.Settings()
+	require.NotNil(t, mgr)
+	err := mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`true`),
+		settings.ScopeGlobal, "", "", "", "test-admin")
+	require.NoError(t, err)
+
+	// Sign up a user (EmailVerified defaults to false).
+	signUpTestUser(t, eng, "unverified@example.com", "SecureP@ss1")
+
+	// Attempt sign-in — should fail with ErrEmailNotVerified.
+	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
+		AppID:    appID,
+		Email:    "unverified@example.com",
+		Password: "SecureP@ss1",
+	})
+	assert.Nil(t, sess)
+	assert.NotNil(t, u)
+	assert.ErrorIs(t, err, account.ErrEmailNotVerified)
+}
+
+func TestSignIn_EmailVerificationDisabled_DynamicSetting(t *testing.T) {
+	eng, _ := newTestEngine(t)
+	ctx := context.Background()
+	appID := testAppID(t)
+
+	// Leave default (false) — sign-in should succeed for unverified users.
+	signUpTestUser(t, eng, "unverified2@example.com", "SecureP@ss1")
+
+	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
+		AppID:    appID,
+		Email:    "unverified2@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, u)
+	assert.NotNil(t, sess)
 }
 
 // ──────────────────────────────────────────────────

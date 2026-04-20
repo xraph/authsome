@@ -404,8 +404,8 @@ func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, para
 					actionError = "Failed to delete user: " + delErr.Error()
 				} else {
 					// Redirect to users list after deletion.
-					users, _ := fetchUsers(ctx, c.engine, appID, "", 25) //nolint:errcheck
-					if users == nil {
+					users, err := fetchUsers(ctx, c.engine, appID, "", 25)
+					if users == nil || err != nil {
 						users = &user.List{}
 					}
 					return pages.UsersPage(users, "", "../users"), nil

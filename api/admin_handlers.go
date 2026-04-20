@@ -331,8 +331,8 @@ func (a *API) handleAdminUpdateUser(ctx forge.Context, req *AdminUpdateUserReque
 		EmailVerified: req.EmailVerified,
 	}
 
-	if err := a.engine.AdminUpdateUser(ctx.Context(), adminID, userID, updates); err != nil {
-		return nil, mapError(err)
+	if err2 := a.engine.AdminUpdateUser(ctx.Context(), adminID, userID, updates); err2 != nil {
+		return nil, mapError(err2)
 	}
 
 	u, err := a.engine.AdminGetUser(ctx.Context(), userID)

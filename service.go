@@ -258,22 +258,36 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// Enforce email verification. Users whose email is not verified are
 	// blocked from signing in unless enforcement is explicitly disabled.
 	//
-	// Resolution order (first non-nil wins):
-	// 1. Per-app client config override (RequireEmailVerification)
-	// 2. Environment setting (SkipEmailVerification — inverted, with type defaults merged)
-	// 3. Default: skip verification (no config = no enforcement)
+	// Resolution order (first match wins):
+	// 1. Dynamic setting (auth.require_email_verification — dashboard-configurable)
+	// 2. Per-app client config override (RequireEmailVerification)
+	// 3. Environment setting (SkipEmailVerification — inverted, with type defaults merged)
+	// 4. Default: skip verification (no config = no enforcement)
 	if !u.EmailVerified {
 		requireVerif := false // default: no enforcement when unconfigured
 
-		// Check per-app override first.
-		if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.RequireEmailVerification != nil {
-			requireVerif = *appCfg.RequireEmailVerification
-		} else if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
-			// Fall back to environment setting (merge type defaults).
-			typeDefaults := environment.DefaultSettingsForType(env.Type)
-			effective := environment.MergeSettings(typeDefaults, env.Settings)
-			if effective != nil && !effective.SkipEmailVerificationEnabled() {
+		// 1. Check dynamic setting (highest priority — dashboard-configurable).
+		if mgr := e.Settings(); mgr != nil {
+			resolveOpts := settings.ResolveOpts{}
+			if req.AppID.Prefix() != "" {
+				resolveOpts.AppID = req.AppID.String()
+			}
+			if dynVal, err := settings.Get(ctx, mgr, SettingRequireEmailVerification, resolveOpts); err == nil && dynVal {
 				requireVerif = true
+			}
+		}
+
+		// 2. Per-app client config override (existing).
+		if !requireVerif {
+			if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.RequireEmailVerification != nil {
+				requireVerif = *appCfg.RequireEmailVerification
+			} else if env, _ := e.GetDefaultEnvironment(ctx, req.AppID); env != nil { //nolint:errcheck // best-effort env lookup
+				// 3. Environment setting (merge type defaults).
+				typeDefaults := environment.DefaultSettingsForType(env.Type)
+				effective := environment.MergeSettings(typeDefaults, env.Settings)
+				if effective != nil && !effective.SkipEmailVerificationEnabled() {
+					requireVerif = true
+				}
 			}
 		}
 
@@ -1791,7 +1805,7 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 
 	// Resolve default environment
 	if envID.IsNil() {
-		if env, _ := e.GetDefaultEnvironment(ctx, appID); env != nil {
+		if env, err := e.GetDefaultEnvironment(ctx, appID); err == nil && env != nil {
 			envID = env.ID
 		}
 	}

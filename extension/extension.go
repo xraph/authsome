@@ -456,6 +456,21 @@ func (e *Extension) Start(ctx context.Context) error {
 	if e.engine == nil {
 		return errors.New("authsome: extension not initialized")
 	}
+
+	// Late ledger binding. If ledger wasn't resolvable at Register time
+	// (DI registration order is not guaranteed across extensions), retry
+	// discovery now and push the result into the engine and any plugins
+	// that captured a ledger reference during OnInit. Without this,
+	// plugins like subscription silently operate on a nil ledger store
+	// even when a ledger extension is present in the app.
+	if e.engine.LedgerEngine() == nil {
+		if ledgerEng, err := vessel.Inject[*ledger.Ledger](e.App().Container()); err == nil && ledgerEng != nil {
+			e.engine.SetLedgerEngine(ledgerEng)
+			e.engine.RebindLedgerOnPlugins()
+			e.Logger().Info("authsome: late-bound ledger engine at start")
+		}
+	}
+
 	if err := e.engine.Start(ctx); err != nil {
 		return err
 	}
