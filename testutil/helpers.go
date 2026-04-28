@@ -11,6 +11,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	authclient "github.com/xraph/authsome/sdk/go"
+	"github.com/xraph/authsome/session"
 )
 
 // CreateUser signs up a user via the engine (server-side) and returns the
@@ -126,4 +127,52 @@ func (f *TestUserFactory) NextClient(t *testing.T) *authclient.Client {
 	f.counter++
 	email := fmt.Sprintf("testuser-%d@example.com", f.counter)
 	return f.ts.CreateUserClient(t, email, "SecureP@ss1")
+}
+
+// SwitchOrg flips the active organization on a session by calling the
+// engine directly (server-side). Returns the updated session for
+// assertion. Use this when a test needs to verify
+// /me/switch-org-equivalent flows without driving the SDK.
+func (ts *TestServer) SwitchOrg(t *testing.T, sessionID, orgID string) *session.Session {
+	t.Helper()
+	ctx := context.Background()
+
+	parsedSession, err := id.ParseSessionID(sessionID)
+	require.NoError(t, err, "parse session id %q", sessionID)
+
+	var parsedOrg id.OrgID
+	if orgID != "" {
+		parsedOrg, err = id.ParseOrgID(orgID)
+		require.NoError(t, err, "parse org id %q", orgID)
+	}
+
+	updated, err := ts.Engine.SwitchActiveOrg(ctx, parsedSession, parsedOrg)
+	require.NoError(t, err, "SwitchActiveOrg")
+	return updated
+}
+
+// SetMemberRole mutates the role of an existing org member. Works
+// off the member ID returned by AddMember. Panics via t.Fatal when
+// the member doesn't exist or the org plugin rejects the change.
+//
+// Use this to set up role-gate tests (owner vs admin vs member) on
+// the same user without recreating the org.
+func (ts *TestServer) SetMemberRole(t *testing.T, memberID string, role organization.MemberRole) *organization.Member {
+	t.Helper()
+	parsed, err := id.ParseMemberID(memberID)
+	require.NoError(t, err, "parse member id %q", memberID)
+
+	updated, err := ts.OrgPlugin.UpdateMemberRole(context.Background(), parsed, role)
+	require.NoError(t, err, "UpdateMemberRole")
+	return updated
+}
+
+// SessionByToken fetches a session by its bearer token. Useful for
+// asserting session state (e.g. OrgID after a switch-org call) in
+// tests that drive the SDK and only have the token in hand.
+func (ts *TestServer) SessionByToken(t *testing.T, token string) *session.Session {
+	t.Helper()
+	sess, err := ts.Store.GetSessionByToken(context.Background(), token)
+	require.NoError(t, err, "GetSessionByToken")
+	return sess
 }
