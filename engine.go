@@ -31,6 +31,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/ratelimit"
 	"github.com/xraph/authsome/rbac"
@@ -544,6 +545,71 @@ func (e *Engine) Plugin(name string) plugin.Plugin { return e.plugins.Plugin(nam
 
 // Hooks returns the global event bus.
 func (e *Engine) Hooks() *hook.Bus { return e.hooks }
+
+// SwitchActiveOrg sets the active organization on an existing session.
+// The session's user must be a member of newOrgID — verified via the
+// organization plugin. When the user is not a member the org-plugin
+// returns ErrOrgNotMember (or equivalent) and we propagate.
+//
+// Returns the updated session so callers (HTTP handlers) can re-issue
+// the cookie / token with the new OrgID claim if appropriate.
+//
+// When newOrgID is empty the active org is cleared (legitimate use:
+// "leave the current org and stay logged out of any org").
+func (e *Engine) SwitchActiveOrg(ctx context.Context, sessionID id.SessionID, newOrgID id.OrgID) (*session.Session, error) {
+	sess, err := e.store.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: get session: %w", err)
+	}
+
+	if !newOrgID.IsNil() {
+		// Membership check via the organization plugin. Plugin name is
+		// stable so the lookup is cheap; we tolerate the plugin not
+		// being registered (auth-only deployments without orgs) by
+		// returning a clear error rather than crashing on nil.
+		orgP, ok := e.plugins.Plugin("organization").(orgMembershipChecker)
+		if !ok || orgP == nil {
+			return nil, fmt.Errorf("authsome: organization plugin not registered; cannot switch org")
+		}
+		orgs, err := orgP.ListUserOrganizations(ctx, sess.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("authsome: list user orgs for membership check: %w", err)
+		}
+		matched := false
+		for _, o := range orgs {
+			if o.ID == newOrgID {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, fmt.Errorf("authsome: user is not a member of org %s", newOrgID)
+		}
+	}
+
+	sess.OrgID = newOrgID
+	if err := e.store.UpdateSession(ctx, sess); err != nil {
+		return nil, fmt.Errorf("authsome: update session: %w", err)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionSessionCreate, // closest semantic action; bespoke ActionSessionSwitchOrg can be added later
+		Resource:   hook.ResourceSession,
+		ResourceID: sess.ID.String(),
+		ActorID:    sess.UserID.String(),
+		Tenant:     newOrgID.String(),
+		Metadata:   map[string]string{"event": "switch_active_org"},
+	})
+
+	return sess, nil
+}
+
+// orgMembershipChecker is the narrow contract SwitchActiveOrg needs
+// from the organization plugin. Defined locally so the engine doesn't
+// import plugins/organization (would create a cycle).
+type orgMembershipChecker interface {
+	ListUserOrganizations(ctx context.Context, userID id.UserID) ([]*organization.Organization, error)
+}
 
 // DefaultAppID returns the configured app ID string.
 func (e *Engine) DefaultAppID() string { return e.config.AppID }

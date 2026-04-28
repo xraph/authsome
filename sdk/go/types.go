@@ -678,6 +678,17 @@ type GetInvoiceRequest struct {
 type GetMeRequest struct {
 }
 
+// SwitchOrgRequest is the body for POST /v1/me/switch-org.
+type SwitchOrgRequest struct {
+	OrgID string `json:"org_id"`
+}
+
+// SwitchOrgResponse is the body returned by POST /v1/me/switch-org.
+type SwitchOrgResponse struct {
+	SessionID string `json:"session_id"`
+	OrgID     string `json:"org_id,omitempty"`
+}
+
 // GetOrgRequest represents the GetOrgRequest schema.
 type GetOrgRequest struct {
 	OrgID string `json:"org_id"`

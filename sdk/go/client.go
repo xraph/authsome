@@ -254,6 +254,21 @@ func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *Create
 	return &result, nil
 }
 
+// SwitchOrg sets the calling user's active organization on their
+// session. The user must be a member of orgID. An empty orgID clears
+// the active org. Returns the updated session ID and OrgID.
+func (c *Client) SwitchOrg(ctx context.Context, orgID string) (*SwitchOrgResponse, error) {
+	body, err := json.Marshal(&SwitchOrgRequest{OrgID: orgID})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	var result SwitchOrgResponse
+	if err := c.do(ctx, "POST", "/v1/me/switch-org", body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListMembers — List members
 func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
 	path := "/v1/orgs/{orgId}/members"

@@ -75,6 +75,19 @@ type UpdateMeRequest struct {
 	Username  *string `json:"username,omitempty" description:"Unique username"`
 }
 
+// SwitchOrgRequest binds the body for POST /me/switch-org. An empty
+// org_id clears the active organization on the session (legitimate
+// "leave org" flow without logging out).
+type SwitchOrgRequest struct {
+	OrgID string `json:"org_id" description:"Organization ID to activate; empty to clear"`
+}
+
+// SwitchOrgResponse is the body returned by POST /me/switch-org.
+type SwitchOrgResponse struct {
+	SessionID string `json:"session_id"`
+	OrgID     string `json:"org_id,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Session requests
 // ---------------------------------------------------------------------------

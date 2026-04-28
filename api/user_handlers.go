@@ -5,6 +5,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
 )
@@ -32,6 +33,17 @@ func (a *API) registerUserRoutes(router forge.Router) error {
 		forge.WithOperationID("updateMe"),
 		forge.WithRequestSchema(UpdateMeRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Updated user", user.User{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := g.POST("/me/switch-org", a.handleSwitchOrg,
+		forge.WithSummary("Switch active organization"),
+		forge.WithDescription("Sets the active organization on the caller's session. The user must be a member of the target org. An empty org_id clears the active org."),
+		forge.WithOperationID("switchOrg"),
+		forge.WithRequestSchema(SwitchOrgRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Updated session", SwitchOrgResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {
 		return err
@@ -103,6 +115,35 @@ func (a *API) handleUpdateMe(ctx forge.Context, req *UpdateMeRequest) (*user.Use
 	}
 
 	return u, nil
+}
+
+func (a *API) handleSwitchOrg(ctx forge.Context, req *SwitchOrgRequest) (*SwitchOrgResponse, error) {
+	sessionID, ok := middleware.SessionIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	var newOrgID id.OrgID
+	if req.OrgID != "" {
+		parsed, err := id.ParseOrgID(req.OrgID)
+		if err != nil {
+			return nil, forge.BadRequest("invalid org_id")
+		}
+		newOrgID = parsed
+	}
+
+	updated, err := a.engine.SwitchActiveOrg(ctx.Context(), sessionID, newOrgID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	resp := &SwitchOrgResponse{
+		SessionID: updated.ID.String(),
+	}
+	if !updated.OrgID.IsNil() {
+		resp.OrgID = updated.OrgID.String()
+	}
+	return resp, nil
 }
 
 func (a *API) handleDeleteAccount(ctx forge.Context, _ *DeleteAccountRequest) (*StatusResponse, error) {
