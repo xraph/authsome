@@ -205,15 +205,7 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 		return "", auth.LoginError(msg, links), nil
 	}
 
-	// Set the session token as a cookie for dashboard auth.
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    sess.Token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
-	})
+	setSessionCookie(ctx, sess.Token, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -284,15 +276,7 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 		_ = a.engine.Store().UpdateUser(r.Context(), u) //nolint:errcheck // best-effort
 	}
 
-	// Set the session token as a cookie for dashboard auth.
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    sess.Token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
-	})
+	setSessionCookie(ctx, sess.Token, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -327,7 +311,25 @@ func (a *authPages) handleLogout(ctx *router.PageContext) (string, templ.Compone
 		}
 	}
 
-	// Clear the auth cookie.
+	clearSessionCookie(ctx, isSecureRequest(r))
+
+	return a.basePath + "/login", nil, nil
+}
+
+// setSessionCookie writes the dashboard auth_token cookie.
+func setSessionCookie(ctx *router.PageContext, token string, secure bool) {
+	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
+		Name:     "auth_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+	})
+}
+
+// clearSessionCookie expires the dashboard auth_token cookie.
+func clearSessionCookie(ctx *router.PageContext, secure bool) {
 	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
 		Name:     "auth_token",
 		Value:    "",
@@ -335,10 +337,8 @@ func (a *authPages) handleLogout(ctx *router.PageContext) (string, templ.Compone
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   isSecureRequest(r),
+		Secure:   secure,
 	})
-
-	return a.basePath + "/login", nil, nil
 }
 
 // authChecker implements dashauth.AuthChecker for the authsome extension.

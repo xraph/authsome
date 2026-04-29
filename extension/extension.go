@@ -431,6 +431,13 @@ func (e *Extension) init(fapp forge.App) error {
 				}
 			}
 
+			// Expose the dashboard contributor over HTTP so other Forge apps
+			// can consume it as a remote contributor without needing the full
+			// dashboard extension installed locally.
+			if err := e.registerContributorProtocol(groupedRouter); err != nil {
+				return err
+			}
+
 			e.Logger().Info("authsome: registered routes on forge router")
 		} else {
 			e.Logger().Warn("authsome: forge router not available, API routes not registered")
@@ -686,7 +693,18 @@ func (e *Extension) cookieSetter() middleware.CookieSetter {
 // DashboardContributor implements dashboard.DashboardAware. It returns a
 // LocalContributor that renders authsome pages, widgets, and settings in the
 // Forge dashboard using templ + ForgeUI.
+//
+// In client mode no engine is available locally, so we return a thin stub
+// contributor that publishes the authsome manifest (so the icon appears in
+// the app grid) and redirects any in-process render to the remote authsome
+// dashboard. The full UI is rendered by the remote service.
 func (e *Extension) DashboardContributor() contributor.LocalContributor {
+	if e.clientMode {
+		return newProxyContributor(e.config.PortalURL, e.config.ServiceAPIKey)
+	}
+	if e.engine == nil {
+		return nil
+	}
 	return authdash.New(
 		authdash.NewManifest(e.engine, e.plugins),
 		e.engine,
@@ -699,11 +717,34 @@ func (e *Extension) DashboardContributor() contributor.LocalContributor {
 // resolver. Called automatically by the dashboard during Start() via discovery.
 func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 	basePath := dashExt.ForgeUIApp().Config().BasePath
-	dashExt.SetAuthPageProvider(&authPages{engine: e.engine, basePath: basePath})
-	dashExt.SetAuthChecker(&authChecker{engine: e.engine})
+
+	switch {
+	case e.clientMode:
+		if e.client == nil {
+			e.Logger().Warn("authsome: client mode enabled but client is nil; skipping dashboard auth registration")
+			return
+		}
+		dashExt.SetAuthPageProvider(&clientAuthPages{
+			client:   e.client,
+			basePath: basePath,
+		})
+		dashExt.SetAuthChecker(&clientAuthChecker{client: e.client})
+	default:
+		if e.engine == nil {
+			e.Logger().Warn("authsome: engine not initialised; skipping dashboard auth registration")
+			return
+		}
+		dashExt.SetAuthPageProvider(&authPages{engine: e.engine, basePath: basePath})
+		dashExt.SetAuthChecker(&authChecker{engine: e.engine})
+	}
+
 	dashExt.SetTenantResolver(dashauth.ScopeTenantResolver{})
 	dashExt.EnableAuth()
-	e.Logger().Info("authsome: registered as dashboard auth provider")
+	if e.clientMode {
+		e.Logger().Info("authsome: registered as dashboard auth provider (client mode)")
+	} else {
+		e.Logger().Info("authsome: registered as dashboard auth provider")
+	}
 }
 
 // DashboardUserDropdownActions implements dashboard.DashboardFooterContributor.
