@@ -712,11 +712,11 @@ func (e *Engine) RebindLedgerOnPlugins() {
 	if e.ledgerEng == nil || e.plugins == nil {
 		return
 	}
-	store := e.ledgerEng.Store()
+	ledgerStore := e.ledgerEng.Store()
 	for _, p := range e.plugins.Plugins() {
 		if rb, ok := p.(ledgerRebindable); ok {
 			rb.SetLedger(e.ledgerEng)
-			rb.SetLedgerStore(store)
+			rb.SetLedgerStore(ledgerStore)
 		}
 	}
 }

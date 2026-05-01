@@ -23,7 +23,8 @@
       "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/store/bun/store.go:*)",
       "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/middleware/rbac.go:*)",
       "Bash(/Users/rexraphael/Work/xraph/forgery/authsome/rbac/store_memory_test.go:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(make f *)"
     ]
   }
 }

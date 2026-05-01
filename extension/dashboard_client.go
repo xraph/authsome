@@ -95,7 +95,7 @@ func (p *proxyContributor) fetchFragment(ctx context.Context, target, basePath, 
 	target = appendQuery(target, basePathQueryParam, basePath)
 	target = appendQuery(target, pageBaseQueryParam, pageBase)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("authsome proxy: build request: %w", err)
 	}
