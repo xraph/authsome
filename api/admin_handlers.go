@@ -7,6 +7,7 @@ import (
 	"github.com/xraph/forge"
 
 	authsome "github.com/xraph/authsome"
+	authsomeapp "github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
@@ -121,11 +122,38 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
-	return g.POST("/impersonate/stop", a.handleAdminStopImpersonation,
+	if err := g.POST("/impersonate/stop", a.handleAdminStopImpersonation,
 		forge.WithSummary("Stop impersonation (admin)"),
 		forge.WithDescription("Terminates the current impersonation session. Can be called by the impersonated session itself."),
 		forge.WithOperationID("adminStopImpersonation"),
 		forge.WithResponseSchema(http.StatusOK, "Stopped", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	// Apps — multi-App tenancy admin endpoints. Caller needs the
+	// same manage:user permission as the rest of the admin group;
+	// in practice that's a platform-admin API key minted in App
+	// `studio`. Used by twinos studio's saga to spin up a fresh
+	// Authsome App per workspace under the App-per-workspace
+	// architecture.
+	if err := g.POST("/apps", a.handleAdminCreateApp,
+		forge.WithSummary("Create application (admin)"),
+		forge.WithDescription("Creates a new Authsome application. Bootstraps default environments + roles. Requires platform admin role."),
+		forge.WithOperationID("adminCreateApp"),
+		forge.WithRequestSchema(AdminCreateAppRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Created application", AdminAppResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	return g.DELETE("/apps/:appId", a.handleAdminDeleteApp,
+		forge.WithSummary("Delete application (admin)"),
+		forge.WithDescription("Permanently deletes an application and cascades to all child envs / orgs / users / sessions / OAuth clients. Requires platform admin role. Used as the rollback action for App-per-workspace provisioning."),
+		forge.WithOperationID("adminDeleteApp"),
+		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -360,4 +388,55 @@ func (a *API) handleAdminCreateUser(ctx forge.Context, req *AdminCreateUserReque
 	}
 
 	return nil, ctx.JSON(http.StatusOK, u)
+}
+
+// handleAdminCreateApp creates a brand new Authsome App. Used by
+// downstream services that need their own App per tenant — e.g.
+// TwinOS studio creates one App per workspace under the App-per-
+// workspace architecture so per-workspace device tokens / sessions
+// / OAuth clients are fully isolated.
+func (a *API) handleAdminCreateApp(ctx forge.Context, req *AdminCreateAppRequest) (*AdminAppResponse, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	if req.Name == "" || req.Slug == "" {
+		return nil, forge.BadRequest("name and slug are required")
+	}
+
+	newApp := &authsomeapp.App{
+		Name:       req.Name,
+		Slug:       req.Slug,
+		Logo:       req.Logo,
+		IsPlatform: false, // platform App is bootstrapped once at startup
+	}
+	if err := a.engine.CreateApp(ctx.Context(), newApp); err != nil {
+		return nil, mapError(err)
+	}
+
+	return &AdminAppResponse{
+		ID:             newApp.ID.String(),
+		Name:           newApp.Name,
+		Slug:           newApp.Slug,
+		Logo:           newApp.Logo,
+		PublishableKey: newApp.PublishableKey,
+		IsPlatform:     newApp.IsPlatform,
+	}, nil
+}
+
+// handleAdminDeleteApp removes an Authsome App and cascades to all
+// child entities (envs, orgs, users, sessions, OAuth clients,
+// device tokens). The saga's compensating action when downstream
+// workspace-creation steps fail.
+func (a *API) handleAdminDeleteApp(ctx forge.Context, req *AdminDeleteAppRequest) (*StatusResponse, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	parsed, err := id.ParseAppID(req.AppID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid app_id")
+	}
+	if err := a.engine.DeleteApp(ctx.Context(), parsed); err != nil {
+		return nil, mapError(err)
+	}
+	return &StatusResponse{Status: "ok"}, nil
 }

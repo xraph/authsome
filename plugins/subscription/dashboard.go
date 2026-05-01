@@ -198,9 +198,13 @@ func (p *Plugin) DashboardOrgDetailTabs(_ context.Context, _ id.OrgID) []dashboa
 }
 
 func (p *Plugin) renderOrgBillingTab(ctx context.Context, orgID id.OrgID) templ.Component {
-	appID := p.resolveAppID(ctx)
 	data := subdash.OrgBillingTabData{}
 
+	if p.ledger == nil {
+		return subdash.OrgBillingTab(data)
+	}
+
+	appID := p.resolveAppID(ctx)
 	sub, err := p.ledger.GetActiveSubscription(ctx, orgID.String(), appID)
 	if err == nil && sub != nil {
 		data.HasSub = true
@@ -212,30 +216,32 @@ func (p *Plugin) renderOrgBillingTab(ctx context.Context, orgID id.OrgID) templ.
 		}
 		data.Subscription = &sv
 
-		// Usage.
-		if summaries, err := p.service.GetUsageSummary(ctx, sub.TenantID, sub.AppID); err == nil {
-			data.Usage = make([]subdash.UsageView, 0, len(summaries))
-			for _, u := range summaries {
-				pct := 0
-				if u.Limit > 0 {
-					pct = int(float64(u.Used) / float64(u.Limit) * 100)
-					if pct > 100 {
-						pct = 100
+		if p.service != nil {
+			// Usage.
+			if summaries, err := p.service.GetUsageSummary(ctx, sub.TenantID, sub.AppID); err == nil {
+				data.Usage = make([]subdash.UsageView, 0, len(summaries))
+				for _, u := range summaries {
+					pct := 0
+					if u.Limit > 0 {
+						pct = int(float64(u.Used) / float64(u.Limit) * 100)
+						if pct > 100 {
+							pct = 100
+						}
 					}
+					data.Usage = append(data.Usage, subdash.UsageView{
+						FeatureKey: u.FeatureKey, FeatureName: u.FeatureName, FeatureType: u.FeatureType,
+						Used: u.Used, Limit: u.Limit, Remaining: u.Remaining,
+						Period: u.Period, Percentage: pct,
+					})
 				}
-				data.Usage = append(data.Usage, subdash.UsageView{
-					FeatureKey: u.FeatureKey, FeatureName: u.FeatureName, FeatureType: u.FeatureType,
-					Used: u.Used, Limit: u.Limit, Remaining: u.Remaining,
-					Period: u.Period, Percentage: pct,
-				})
 			}
-		}
 
-		// Invoices.
-		if invoices, err := p.service.ListInvoices(ctx, sub.TenantID, sub.AppID); err == nil {
-			data.Invoices = make([]subdash.InvoiceView, 0, len(invoices))
-			for _, inv := range invoices {
-				data.Invoices = append(data.Invoices, toInvoiceView(inv))
+			// Invoices.
+			if invoices, err := p.service.ListInvoices(ctx, sub.TenantID, sub.AppID); err == nil {
+				data.Invoices = make([]subdash.InvoiceView, 0, len(invoices))
+				for _, inv := range invoices {
+					data.Invoices = append(data.Invoices, toInvoiceView(inv))
+				}
 			}
 		}
 	}

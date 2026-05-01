@@ -4,7 +4,9 @@ import (
 	"strconv"
 
 	"github.com/xraph/authsome/dashboard/components"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/user"
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/card"
@@ -28,9 +30,30 @@ type OrgDetailPageData struct {
 	Members        []*organization.Member
 	Teams          []*organization.Team
 	Invitations    []*organization.Invitation
+	UserByID       map[id.UserID]*user.User
 	PluginSections []templ.Component
 	PluginTabs     []OrgDetailTabView
 	ActiveTab      string
+	FormNonce      string
+	Success        string
+	Error          string
+}
+
+// memberDisplayName returns a human-friendly label for a member, falling back
+// to the username, email, or raw ID when name fields are missing.
+func memberDisplayName(u *user.User, m *organization.Member) string {
+	if u != nil {
+		if name := u.Name(); name != "" {
+			return name
+		}
+		if u.Username != "" {
+			return u.Username
+		}
+		if u.Email != "" {
+			return u.Email
+		}
+	}
+	return m.UserID.String()
 }
 
 templ OrgDetailPage(data OrgDetailPageData) {
@@ -79,8 +102,30 @@ templ OrgDetailPage(data OrgDetailPageData) {
 								{ strconv.Itoa(len(data.Teams)) } teams
 							}
 						}
+						<form method="POST" class="inline" onsubmit="return confirm('Permanently delete this organization? This will also remove its members, teams, invitations, subscriptions and SCIM configurations. This cannot be undone.');">
+							<input type="hidden" name="action" value="delete"/>
+							<input type="hidden" name="nonce" value={ data.FormNonce }/>
+							@button.Button(button.Props{Type: "submit", Variant: button.VariantDestructive, Size: button.SizeSm}) {
+								@icons.Trash(icons.WithSize(16))
+								Delete Organization
+							}
+						</form>
 					</div>
 				</div>
+			}
+			if data.Success != "" || data.Error != "" {
+				@card.Content() {
+					if data.Success != "" {
+						<div class="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+							{ data.Success }
+						</div>
+					}
+					if data.Error != "" {
+						<div class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+							{ data.Error }
+						</div>
+					}
+				}
 			}
 		}
 		<!-- Tabs -->
@@ -287,16 +332,34 @@ templ orgMembersTab(data OrgDetailPageData) {
 					@table.Table() {
 						@table.Header() {
 							@table.Row() {
-								@table.Head() { User ID }
+								@table.Head() { Name }
+								@table.Head() { Email }
 								@table.Head() { Role }
 								@table.Head() { Joined }
 							}
 						}
 						@table.Body() {
 							for _, m := range data.Members {
+								{{ u := data.UserByID[m.UserID] }}
 								@table.Row() {
 									@table.Cell() {
-										<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ m.UserID.String() }</code>
+										<a
+											class="font-medium hover:underline"
+											hx-get={ "../users/detail?id=" + m.UserID.String() }
+											hx-target="#content"
+											hx-swap="innerHTML"
+											hx-push-url="true"
+											href="javascript:void(0)"
+										>
+											{ memberDisplayName(u, m) }
+										</a>
+									}
+									@table.Cell() {
+										if u != nil && u.Email != "" {
+											<span class="text-sm text-muted-foreground">{ u.Email }</span>
+										} else {
+											<code class="text-xs bg-muted px-1.5 py-0.5 rounded">{ m.UserID.String() }</code>
+										}
 									}
 									@table.Cell() {
 										@memberRoleBadge(m.Role)

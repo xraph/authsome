@@ -28,6 +28,15 @@ func (p *Plugin) CreateOrganization(ctx context.Context, o *organization.Organiz
 	}
 
 	if err := p.store.CreateOrganization(ctx, o); err != nil {
+		if p.logger != nil {
+			p.logger.Error("organization store: create failed",
+				log.String("org_id", o.ID.String()),
+				log.String("app_id", o.AppID.String()),
+				log.String("env_id", o.EnvID.String()),
+				log.String("slug", o.Slug),
+				log.String("error", err.Error()),
+			)
+		}
 		return fmt.Errorf("organization: create organization: %w", err)
 	}
 
@@ -40,6 +49,13 @@ func (p *Plugin) CreateOrganization(ctx context.Context, o *organization.Organiz
 		UpdatedAt: o.UpdatedAt,
 	}
 	if err := p.store.CreateMember(ctx, member); err != nil {
+		if p.logger != nil {
+			p.logger.Error("organization store: add owner member failed",
+				log.String("org_id", o.ID.String()),
+				log.String("user_id", o.CreatedBy.String()),
+				log.String("error", err.Error()),
+			)
+		}
 		return fmt.Errorf("organization: add owner member: %w", err)
 	}
 
@@ -74,8 +90,52 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 	return nil
 }
 
-// DeleteOrganization deletes an organization.
+// DeleteOrganization deletes an organization and all of its dependent records
+// (members, teams, invitations) before emitting the AfterOrgDelete hook so
+// other plugins (subscription, SCIM, …) can clean up their own org-scoped data.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
+	if members, err := p.store.ListMembers(ctx, orgID); err == nil {
+		for _, m := range members {
+			if m == nil {
+				continue
+			}
+			if err := p.store.DeleteMember(ctx, m.ID); err != nil && p.logger != nil {
+				p.logger.Warn("organization: delete member during org delete failed",
+					log.String("org_id", orgID.String()),
+					log.String("member_id", m.ID.String()),
+					log.Error(err))
+			}
+		}
+	}
+
+	if teams, err := p.store.ListTeams(ctx, orgID); err == nil {
+		for _, t := range teams {
+			if t == nil {
+				continue
+			}
+			if err := p.store.DeleteTeam(ctx, t.ID); err != nil && p.logger != nil {
+				p.logger.Warn("organization: delete team during org delete failed",
+					log.String("org_id", orgID.String()),
+					log.String("team_id", t.ID.String()),
+					log.Error(err))
+			}
+		}
+	}
+
+	if invs, err := p.store.ListInvitations(ctx, orgID); err == nil {
+		for _, inv := range invs {
+			if inv == nil {
+				continue
+			}
+			if err := p.store.DeleteInvitation(ctx, inv.ID); err != nil && p.logger != nil {
+				p.logger.Warn("organization: delete invitation during org delete failed",
+					log.String("org_id", orgID.String()),
+					log.String("invitation_id", inv.ID.String()),
+					log.Error(err))
+			}
+		}
+	}
+
 	if err := p.store.DeleteOrganization(ctx, orgID); err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
@@ -393,4 +453,22 @@ func (p *Plugin) resolveAppID(raw string) (id.AppID, error) {
 		return id.ParseAppID(raw)
 	}
 	return id.ParseAppID(p.defaultAppID)
+}
+
+// resolveDefaultEnv looks up the default environment for an app. Used
+// when an org-create call comes in without env_id resolved on the
+// request context (e.g. a client that doesn't pass X-Environment-ID
+// and skipped the EnvironmentMiddleware). Surfaces a non-nil error
+// when the app has no default env configured — the caller should
+// translate that into a 4xx rather than letting the store's NOT NULL
+// constraint blow up with a 500.
+func (p *Plugin) resolveDefaultEnv(ctx context.Context, appID id.AppID) (id.EnvironmentID, error) {
+	env, err := p.store.GetDefaultEnvironment(ctx, appID)
+	if err != nil {
+		return id.EnvironmentID{}, fmt.Errorf("get default env: %w", err)
+	}
+	if env == nil {
+		return id.EnvironmentID{}, fmt.Errorf("app %s has no default environment", appID)
+	}
+	return env.ID, nil
 }

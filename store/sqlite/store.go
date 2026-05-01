@@ -621,6 +621,11 @@ func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitati
 	return sqliteError(err)
 }
 
+func (s *Store) DeleteInvitation(ctx context.Context, invID id.InvitationID) error {
+	_, err := s.sdb.NewDelete((*InvitationModel)(nil)).Where("id = ?", invID.String()).Exec(ctx)
+	return sqliteError(err)
+}
+
 func (s *Store) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	var models []InvitationModel
 	err := s.sdb.NewSelect(&models).

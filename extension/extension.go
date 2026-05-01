@@ -161,6 +161,12 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 	if e.config.ServiceAPIKey != "" {
 		opts = append(opts, authclient.WithAPIKey(e.config.ServiceAPIKey))
 	}
+	if e.config.ServiceAppID != "" {
+		// X-App-ID stamp lets the API key strategy locate the
+		// (app_id, prefix) tuple in the store and admin gates
+		// authorize the service-account caller.
+		opts = append(opts, authclient.WithAppID(e.config.ServiceAppID))
+	}
 
 	e.client = authclient.NewClient(e.config.PortalURL, opts...)
 	e.clientMode = true
@@ -171,6 +177,35 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 		return e.client, nil
 	}); err != nil {
 		return fmt.Errorf("authsome: register client in container: %w", err)
+	}
+
+	// Self-register as a remote dashboard contributor against the upstream
+	// authsome service. Dashboard discovery (with FARP/memory backends in
+	// dev) doesn't reliably surface peer services, so we don't rely on it —
+	// we know exactly where the upstream lives in client mode (PortalURL),
+	// so we register a watcher directly. WatchRemoteContributor returns
+	// immediately and retries with backoff until the upstream is reachable,
+	// so Portal coming up before identity (the common dev case) is fine.
+	if err := forge.OnBeforeRun(fapp, "authsome-register-remote-dashboard", func(hookCtx context.Context, app forge.App) error {
+		dashExt, err := vessel.InjectType[*dashboard.Extension](app.Container())
+		if err != nil {
+			logger.Info("authsome: dashboard extension not present, skipping remote registration")
+
+			return nil //nolint:nilerr // dashboard is optional
+		}
+
+		if err := dashExt.WatchRemoteContributor(hookCtx, e.config.PortalURL, e.config.ServiceAPIKey); err != nil {
+			logger.Warn("authsome: failed to start dashboard watcher",
+				log.String("portal_url", e.config.PortalURL),
+				log.Error(err),
+			)
+			// Not fatal — the rest of the host can still come up.
+			return nil //nolint:nilerr // best-effort registration
+		}
+
+		return nil
+	}); err != nil {
+		return fmt.Errorf("authsome: register dashboard remote hook: %w", err)
 	}
 
 	logger.Info("authsome: client mode enabled",
@@ -694,13 +729,13 @@ func (e *Extension) cookieSetter() middleware.CookieSetter {
 // LocalContributor that renders authsome pages, widgets, and settings in the
 // Forge dashboard using templ + ForgeUI.
 //
-// In client mode no engine is available locally, so we return a thin stub
-// contributor that publishes the authsome manifest (so the icon appears in
-// the app grid) and redirects any in-process render to the remote authsome
-// dashboard. The full UI is rendered by the remote service.
+// In client mode no local contributor is registered. The full authsome UI is
+// expected to be exposed by the upstream authsome service and surfaced in the
+// host dashboard via discovery (RegisterRemote). Returning a local proxy here
+// would collide with the discovered remote contributor under the same name.
 func (e *Extension) DashboardContributor() contributor.LocalContributor {
 	if e.clientMode {
-		return newProxyContributor(e.config.PortalURL, e.config.ServiceAPIKey)
+		return nil
 	}
 	if e.engine == nil {
 		return nil
@@ -749,11 +784,18 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 
 // DashboardUserDropdownActions implements dashboard.DashboardFooterContributor.
 // It contributes user-related actions (Profile, Security) to the sidebar footer
-// user dropdown menu.
+// user dropdown menu. In client mode the authsome contributor is consumed via
+// discovery under /remote/authsome rather than /ext/authsome, so the link
+// prefix flips accordingly.
 func (e *Extension) DashboardUserDropdownActions(basePath string) []shell.UserDropdownAction {
+	prefix := basePath + "/ext/authsome/pages"
+	if e.clientMode {
+		prefix = basePath + "/remote/authsome/pages"
+	}
+
 	return []shell.UserDropdownAction{
-		{Label: "Profile", Icon: "user", Href: basePath + "/ext/authsome/pages/profile"},
-		{Label: "Security", Icon: "shield", Href: basePath + "/ext/authsome/pages/security"},
+		{Label: "Profile", Icon: "user", Href: prefix + "/profile"},
+		{Label: "Security", Icon: "shield", Href: prefix + "/security"},
 	}
 }
 

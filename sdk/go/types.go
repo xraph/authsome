@@ -1707,7 +1707,16 @@ type AdminBulkImportUsersRequest struct {
 }
 
 // CreateOAuth2ClientRequest is the request body for CreateOAuth2Client.
+// Mirrors the upstream oauth2provider plugin's CreateClientRequest.
+// Public=true issues a public client (no client_secret) — required
+// for browser/SPA flows that use PKCE.
 type CreateOAuth2ClientRequest struct {
+	AppID        string   `json:"app_id"`
+	Name         string   `json:"name"`
+	RedirectURIs []string `json:"redirect_uris"`
+	Scopes       []string `json:"scopes,omitempty"`
+	GrantTypes   []string `json:"grant_types,omitempty"`
+	Public       bool     `json:"public,omitempty"`
 }
 
 // DeleteOAuth2ClientRequest is the request body for DeleteOAuth2Client.
@@ -2030,4 +2039,49 @@ type UpdateWebhookRequest struct {
 	Active bool     `json:"active,omitempty"`
 	Events []string `json:"events,omitempty"`
 	URL    string   `json:"url,omitempty"`
+}
+
+// AdminCreateAppRequest is the request body for POST /v1/admin/apps.
+// Slug must be globally unique within the Authsome instance.
+type AdminCreateAppRequest struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Logo string `json:"logo,omitempty"`
+}
+
+// AdminAppResponse is the response from POST /v1/admin/apps.
+// PublishableKey is returned only at creation time — Authsome does
+// not expose a re-fetch endpoint for the existing key, so callers
+// that need it must persist it from this response.
+type AdminAppResponse struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Slug           string `json:"slug"`
+	Logo           string `json:"logo,omitempty"`
+	PublishableKey string `json:"publishable_key,omitempty"`
+	IsPlatform     bool   `json:"is_platform"`
+}
+
+// AdminCreateSSOConnectionRequest is the body for
+// POST /v1/admin/sso/connections.
+type AdminCreateSSOConnectionRequest struct {
+	AppID        string `json:"app_id"`
+	OrgID        string `json:"org_id,omitempty"`
+	Provider     string `json:"provider"`
+	Protocol     string `json:"protocol"` // "oidc" | "saml"
+	Domain       string `json:"domain"`
+	Issuer       string `json:"issuer,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+	MetadataURL  string `json:"metadata_url,omitempty"`
+}
+
+// AdminCreateSSOConnectionResponse is the response shape.
+type AdminCreateSSOConnectionResponse struct {
+	ID       string `json:"id"`
+	AppID    string `json:"app_id"`
+	Provider string `json:"provider"`
+	Protocol string `json:"protocol"`
+	Domain   string `json:"domain"`
+	Active   bool   `json:"active"`
 }

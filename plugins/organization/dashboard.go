@@ -2,6 +2,7 @@ package organization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,6 +15,8 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugins/organization/dashui"
+	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 )
 
 // Compile-time interface checks.
@@ -198,7 +201,27 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 
 	org, err := p.GetOrganization(ctx, orgID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, contributor.ErrPageNotFound
+		}
 		return nil, fmt.Errorf("organization dashboard: resolve organization: %w", err)
+	}
+	if org == nil {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	var actionSuccess, actionError string
+	if action := params.FormData["action"]; action == "delete" {
+		nonce := params.FormData["nonce"]
+		if dashboard.ConsumeNonce(nonce) {
+			if delErr := p.DeleteOrganization(ctx, orgID); delErr != nil {
+				actionError = "Failed to delete organization: " + delErr.Error()
+			} else {
+				return p.renderOrgList(ctx, params)
+			}
+		} else {
+			actionError = "Form expired, please try again."
+		}
 	}
 
 	members, err := p.ListMembers(ctx, orgID)
@@ -215,6 +238,8 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 	if err != nil {
 		invitations = nil
 	}
+
+	userByID := p.loadMemberUsers(ctx, members)
 
 	// Collect legacy plugin-contributed sections (rendered in Overview tab).
 	pluginSections := p.collectOrgDetailSections(ctx, orgID)
@@ -233,12 +258,39 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 		Members:        members,
 		Teams:          teams,
 		Invitations:    invitations,
+		UserByID:       userByID,
 		PluginSections: pluginSections,
 		PluginTabs:     pluginTabs,
 		ActiveTab:      activeTab,
+		FormNonce:      dashboard.GenerateNonce(),
+		Success:        actionSuccess,
+		Error:          actionError,
 	}
 
 	return dashui.OrgDetailPage(data), nil
+}
+
+// loadMemberUsers fetches the user record for each org member. Lookup errors
+// are tolerated — the templ falls back to the raw ID when an entry is missing.
+func (p *Plugin) loadMemberUsers(ctx context.Context, members []*organization.Member) map[id.UserID]*user.User {
+	if len(members) == 0 || p.engine == nil {
+		return nil
+	}
+	out := make(map[id.UserID]*user.User, len(members))
+	for _, m := range members {
+		if m == nil {
+			continue
+		}
+		if _, ok := out[m.UserID]; ok {
+			continue
+		}
+		u, err := p.engine.GetUser(ctx, m.UserID)
+		if err != nil || u == nil {
+			continue
+		}
+		out[m.UserID] = u
+	}
+	return out
 }
 
 // ──────────────────────────────────────────────────

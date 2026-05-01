@@ -259,10 +259,26 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		return err
 	}
 
-	return g.POST("/:provider/acs", p.handleACS,
+	if err := g.POST("/:provider/acs", p.handleACS,
 		forge.WithSummary("SSO SAML ACS endpoint"),
 		forge.WithOperationID("ssoACS"),
 		forge.WithResponseSchema(http.StatusOK, "Authentication result", CallbackResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	// Admin: create SSO connection scoped to a target App. Used by
+	// platform-admin clients (e.g. TwinOS studio) to register an
+	// upstream IdP per workspace App at create time. Caller must
+	// authenticate with a platform-admin API key.
+	admin := router.Group("/v1/admin/sso", forge.WithGroupTags("SSO Admin"))
+	return admin.POST("/connections", p.handleAdminCreateConnection,
+		forge.WithSummary("Create SSO connection (admin)"),
+		forge.WithDescription("Registers an OIDC or SAML SSO connection on a target App. Used by platform-admin clients to provision per-tenant IdPs."),
+		forge.WithOperationID("ssoAdminCreateConnection"),
+		forge.WithRequestSchema(AdminCreateConnectionRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Connection created", AdminCreateConnectionResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -416,9 +432,30 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 	if ssoUser.Email != "" {
 		u, err = p.store.GetUserByEmail(goCtx, appID, strings.ToLower(ssoUser.Email))
 		if err != nil {
-			// No existing user -- create one.
+			// No existing user -- create one. Prefer the upstream
+			// IdP's user_id (sub claim) as the local user_id when
+			// it parses as a valid Authsome UserID. This makes the
+			// federated user's identity stable across Apps: if a
+			// user authenticates from upstream App `studio` (where
+			// they have user_id = ausr_X) into a workspace App via
+			// federation, the local user_id is also ausr_X.
+			//
+			// Stable-across-Apps identity is what makes Warden
+			// assignments + introspect lookups agree. Without this,
+			// the saga would assign roles by the upstream user_id
+			// while the workspace App's introspect returns a fresh
+			// local user_id — guaranteed mismatch on every request.
+			//
+			// Falls back to a fresh local id when the upstream sub
+			// doesn't parse (non-Authsome IdPs like Google / GitHub).
+			localID := id.NewUserID()
+			if ssoUser.ProviderUserID != "" {
+				if parsed, parseErr := id.ParseUserID(ssoUser.ProviderUserID); parseErr == nil {
+					localID = parsed
+				}
+			}
 			u = &user.User{
-				ID:            id.NewUserID(),
+				ID:            localID,
 				AppID:         appID,
 				Email:         strings.ToLower(ssoUser.Email),
 				EmailVerified: true, // SSO-authenticated emails are verified
@@ -524,4 +561,106 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 		ActorID:    actorID,
 		Tenant:     tenant,
 	})
+}
+
+// ──────────────────────────────────────────────────
+// Admin endpoints
+// ──────────────────────────────────────────────────
+
+// AdminCreateConnectionRequest is the body for
+// POST /v1/admin/sso/connections. Caller specifies the target App
+// + the IdP details. Domain is required and must be unique within
+// the App so the dispatch path (`/v1/sso/:provider/login`) can
+// resolve the right connection.
+type AdminCreateConnectionRequest struct {
+	AppID        string `json:"app_id" description:"Target Application ID"`
+	OrgID        string `json:"org_id,omitempty" description:"Optional Org scope inside the App"`
+	Provider     string `json:"provider" description:"Stable name for this IdP (e.g. 'studio', 'okta')"`
+	Protocol     string `json:"protocol" description:"oidc or saml"`
+	Domain       string `json:"domain" description:"Email-domain or IdP host this connection covers"`
+	Issuer       string `json:"issuer,omitempty" description:"OIDC issuer URL (required for oidc)"`
+	ClientID     string `json:"client_id,omitempty" description:"OIDC client ID"`
+	ClientSecret string `json:"client_secret,omitempty" description:"OIDC client secret (omit for public flows)"`
+	MetadataURL  string `json:"metadata_url,omitempty" description:"SAML metadata URL (required for saml)"`
+}
+
+// AdminCreateConnectionResponse is the response from
+// POST /v1/admin/sso/connections.
+type AdminCreateConnectionResponse struct {
+	ID       string `json:"id"`
+	AppID    string `json:"app_id"`
+	Provider string `json:"provider"`
+	Protocol string `json:"protocol"`
+	Domain   string `json:"domain"`
+	Active   bool   `json:"active"`
+}
+
+// handleAdminCreateConnection registers an SSO connection on a
+// target App. Mirrors the dashboard's connection-creation flow so
+// the same store-level invariants apply.
+func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreateConnectionRequest) (*AdminCreateConnectionResponse, error) {
+	if p.ssoStore == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+	}
+	if strings.TrimSpace(req.AppID) == "" {
+		return nil, forge.BadRequest("app_id is required")
+	}
+	if strings.TrimSpace(req.Provider) == "" || strings.TrimSpace(req.Protocol) == "" || strings.TrimSpace(req.Domain) == "" {
+		return nil, forge.BadRequest("provider, protocol, and domain are required")
+	}
+	if req.Protocol != "oidc" && req.Protocol != "saml" {
+		return nil, forge.BadRequest("protocol must be 'oidc' or 'saml'")
+	}
+
+	appID, err := id.ParseAppID(req.AppID)
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+	}
+	var orgID id.OrgID
+	if strings.TrimSpace(req.OrgID) != "" {
+		orgID, err = id.ParseOrgID(req.OrgID)
+		if err != nil {
+			return nil, forge.BadRequest(fmt.Sprintf("invalid org_id: %v", err))
+		}
+	}
+
+	now := time.Now()
+	conn := &Connection{
+		ID:        id.NewSSOConnectionID(),
+		AppID:     appID,
+		OrgID:     orgID,
+		Provider:  req.Provider,
+		Protocol:  req.Protocol,
+		Domain:    req.Domain,
+		Active:    true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	switch req.Protocol {
+	case "oidc":
+		if strings.TrimSpace(req.Issuer) == "" || strings.TrimSpace(req.ClientID) == "" {
+			return nil, forge.BadRequest("OIDC connections require issuer and client_id")
+		}
+		conn.Issuer = req.Issuer
+		conn.ClientID = req.ClientID
+		conn.ClientSecret = req.ClientSecret
+	case "saml":
+		if strings.TrimSpace(req.MetadataURL) == "" {
+			return nil, forge.BadRequest("SAML connections require metadata_url")
+		}
+		conn.MetadataURL = req.MetadataURL
+	}
+
+	if err := p.ssoStore.CreateConnection(ctx.Context(), conn); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("sso: create connection: %w", err))
+	}
+
+	return &AdminCreateConnectionResponse{
+		ID:       conn.ID.String(),
+		AppID:    conn.AppID.String(),
+		Provider: conn.Provider,
+		Protocol: conn.Protocol,
+		Domain:   conn.Domain,
+		Active:   conn.Active,
+	}, nil
 }

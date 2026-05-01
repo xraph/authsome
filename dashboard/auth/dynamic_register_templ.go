@@ -5,20 +5,20 @@ package auth
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
+import "github.com/a-h/templ"
+import templruntime "github.com/a-h/templ/runtime"
+
 import (
 	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/a-h/templ"
-	templruntime "github.com/a-h/templ/runtime"
 	"github.com/xraph/forgeui/components/button"
 	"github.com/xraph/forgeui/components/checkbox"
 	"github.com/xraph/forgeui/components/input"
 	"github.com/xraph/forgeui/components/label"
 	"github.com/xraph/forgeui/components/radio"
 	"github.com/xraph/forgeui/components/selectbox"
-
 	switchcomp "github.com/xraph/forgeui/components/switch"
 	"github.com/xraph/forgeui/components/textarea"
 	"github.com/xraph/forgeui/icons"

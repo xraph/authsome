@@ -629,6 +629,16 @@ func (s *Store) UpdateInvitation(_ context.Context, inv *organization.Invitation
 	return nil
 }
 
+func (s *Store) DeleteInvitation(_ context.Context, invID id.InvitationID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.invitations[invID.String()]; !ok {
+		return store.ErrNotFound
+	}
+	delete(s.invitations, invID.String())
+	return nil
+}
+
 func (s *Store) ListInvitations(_ context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

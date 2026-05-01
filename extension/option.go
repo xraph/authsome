@@ -107,3 +107,19 @@ func WithServiceAPIKey(key string) ExtOption {
 		e.config.ServiceAPIKey = key
 	}
 }
+
+// WithServiceAppID sets the App ID this service binds to. The
+// resolved authclient stamps it as the X-App-ID header on every
+// request — required by Authsome's API key authentication strategy
+// (which keys API keys per (app_id, prefix) tuple) and by every
+// App-scoped admin endpoint. Without this, service-account API
+// key auth fails with 401 even when WithServiceAPIKey is set.
+//
+// In TwinOS deployments this is App `studio`'s ID; identity logs
+// it at first boot and operators copy it into their service env
+// (`TWINOS_AUTH_SERVICE_APP_ID`).
+func WithServiceAppID(appID string) ExtOption {
+	return func(e *Extension) {
+		e.config.ServiceAppID = appID
+	}
+}

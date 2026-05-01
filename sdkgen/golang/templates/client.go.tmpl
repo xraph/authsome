@@ -19,6 +19,7 @@ type Client struct {
 	baseURL    string
 	token      string
 	apiKey     string
+	appID      string
 	httpClient *http.Client
 }
 
@@ -33,6 +34,13 @@ func WithToken(token string) Option {
 // WithAPIKey sets an API key for X-API-Key header authentication.
 func WithAPIKey(key string) Option {
 	return func(c *Client) { c.apiKey = key }
+}
+
+// WithAppID sets the App ID stamped onto every request as
+// X-App-ID. Required by the API key auth strategy and App-scoped
+// admin endpoints.
+func WithAppID(appID string) Option {
+	return func(c *Client) { c.appID = appID }
 }
 
 // WithHTTPClient sets a custom HTTP client.
@@ -80,6 +88,13 @@ func (c *Client) SetAPIKey(key string) { c.apiKey = key }
 
 // APIKey returns the current API key.
 func (c *Client) APIKey() string { return c.apiKey }
+
+// SetAppID updates the App ID stamped onto every request as
+// X-App-ID.
+func (c *Client) SetAppID(appID string) { c.appID = appID }
+
+// AppID returns the current App ID.
+func (c *Client) AppID() string { return c.appID }
 
 // ──────────────────────────────────────────────────
 // Generated methods
@@ -144,13 +159,42 @@ type {{ .Name }}Params struct {
 // ──────────────────────────────────────────────────
 
 // ClientError represents an error response from the API.
+//
+// RawBody and Headers preserve the upstream response so callers can
+// surface useful diagnostics when the standard error envelope is
+// empty or unfamiliar (e.g. forge.HTTPError uses {code, error,
+// details} — Message resolves from the first non-empty of error /
+// message / details, and RawBody preserves the rest verbatim).
 type ClientError struct {
 	StatusCode int
 	Message    string
+	RawBody    []byte
+	Headers    map[string]string
 }
 
+const clientErrorBodySnippetMax = 256
+
 func (e *ClientError) Error() string {
-	return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	if e.Message != "" {
+		return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	}
+	if len(e.RawBody) > 0 {
+		snippet := string(e.RawBody)
+		if len(snippet) > clientErrorBodySnippetMax {
+			snippet = snippet[:clientErrorBodySnippetMax] + "…"
+		}
+		return fmt.Sprintf("authsome: %d body=%q", e.StatusCode, snippet)
+	}
+	return fmt.Sprintf("authsome: %d (empty body)", e.StatusCode)
+}
+
+func firstNonEmptyClientErrorMessage(s ...string) string {
+	for _, v := range s {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body []byte, result any) error {
@@ -172,6 +216,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
+	if c.appID != "" {
+		req.Header.Set("X-App-ID", c.appID)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -180,13 +227,30 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		var errResp struct {
-			Error string `json:"error"`
+		// Read the body once into bytes so we can both attempt a
+		// structured decode AND preserve the raw payload for the
+		// caller. Cap at 8KiB — far more than any well-formed error
+		// envelope and bounded enough to not blow up logs.
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		var env struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+			Details string `json:"details"`
 		}
-		if decErr := json.NewDecoder(resp.Body).Decode(&errResp); decErr != nil {
-			errResp.Error = resp.Status
+		msg := ""
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &env) // best-effort
+			msg = firstNonEmptyClientErrorMessage(env.Error, env.Message, env.Details)
 		}
-		return &ClientError{StatusCode: resp.StatusCode, Message: errResp.Error}
+		return &ClientError{
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			RawBody:    raw,
+			Headers: map[string]string{
+				"Content-Type": resp.Header.Get("Content-Type"),
+				"X-Request-ID": resp.Header.Get("X-Request-ID"),
+			},
+		}
 	}
 
 	if result != nil && resp.StatusCode != http.StatusNoContent {

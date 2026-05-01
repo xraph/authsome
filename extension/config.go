@@ -62,6 +62,12 @@ type Config struct {
 	// ServiceAPIKey authenticates this service with the remote authsome server
 	// for service-to-service operations (e.g. org creation during bootstrap).
 	ServiceAPIKey string `json:"service_api_key" mapstructure:"service_api_key" yaml:"service_api_key"`
+
+	// ServiceAppID is the App ID the service binds to. Stamped as
+	// X-App-ID on every authclient request. Required by the API key
+	// auth strategy and App-scoped admin endpoints; without it,
+	// admin calls with the service API key return 401.
+	ServiceAppID string `json:"service_app_id" mapstructure:"service_app_id" yaml:"service_app_id"`
 }
 
 // BootstrapYAMLConfig holds bootstrap settings loadable from YAML.

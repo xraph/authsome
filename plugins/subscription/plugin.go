@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/session"
@@ -287,6 +288,39 @@ func (p *Plugin) OnAfterSignUp(ctx context.Context, u *user.User, s *session.Ses
 	}
 
 	return p.autoSubscribe(ctx, u.ID.String(), appID)
+}
+
+// OnAfterOrgDelete cancels every subscription whose tenant is the deleted org
+// so the ledger doesn't keep billing a tenant that no longer exists. Cancellation
+// is best-effort: failures are logged and the hook always returns nil so the
+// org-delete pipeline keeps draining other plugins.
+func (p *Plugin) OnAfterOrgDelete(ctx context.Context, orgID id.OrgID) error {
+	if p.ledger == nil || p.ledgerStore == nil {
+		return nil
+	}
+
+	tenantID := orgID.String()
+	subs, err := p.ledgerStore.ListSubscriptions(ctx, tenantID, "", subscription.ListOpts{})
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Warn("subscription: list subscriptions for deleted org failed",
+				log.String("tenant_id", tenantID), log.Error(err))
+		}
+		return nil
+	}
+
+	for _, sub := range subs {
+		if sub == nil {
+			continue
+		}
+		if err := p.ledger.CancelSubscription(ctx, sub.ID, true); err != nil && p.logger != nil {
+			p.logger.Warn("subscription: cancel subscription for deleted org failed",
+				log.String("tenant_id", tenantID),
+				log.String("subscription_id", sub.ID.String()),
+				log.Error(err))
+		}
+	}
+	return nil
 }
 
 // OnAfterMemberAdd records seat usage when a member is added to an organization.

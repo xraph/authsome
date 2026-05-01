@@ -19,6 +19,7 @@ type Client struct {
 	baseURL    string
 	token      string
 	apiKey     string
+	appID      string
 	httpClient *http.Client
 }
 
@@ -33,6 +34,19 @@ func WithToken(token string) Option {
 // WithAPIKey sets an API key for X-API-Key header authentication.
 func WithAPIKey(key string) Option {
 	return func(c *Client) { c.apiKey = key }
+}
+
+// WithAppID sets the App ID the client targets. The value is sent
+// as the X-App-ID header on every request — required by the API
+// key authentication strategy (which keys the (app_id, prefix)
+// tuple to locate the API key in the store) and by App-scoped
+// admin endpoints.
+//
+// Service-account clients should always set this so admin calls
+// authenticate. Per-user / session-token clients can leave it
+// empty; the introspect path doesn't need it.
+func WithAppID(appID string) Option {
+	return func(c *Client) { c.appID = appID }
 }
 
 // WithHTTPClient sets a custom HTTP client.
@@ -80,6 +94,14 @@ func (c *Client) SetAPIKey(key string) { c.apiKey = key }
 
 // APIKey returns the current API key.
 func (c *Client) APIKey() string { return c.apiKey }
+
+// SetAppID updates the App ID stamped onto every request as
+// X-App-ID. Used by the API key auth strategy + App-scoped admin
+// endpoints to locate the right App.
+func (c *Client) SetAppID(appID string) { c.appID = appID }
+
+// AppID returns the current App ID.
+func (c *Client) AppID() string { return c.appID }
 
 // ──────────────────────────────────────────────────
 // Generated methods
@@ -2256,13 +2278,42 @@ func (c *Client) DeleteWebhook(ctx context.Context, webhookId string, req *Delet
 // ──────────────────────────────────────────────────
 
 // ClientError represents an error response from the API.
+//
+// RawBody and Headers preserve the upstream response so callers can
+// surface useful diagnostics when the standard error envelope is
+// empty or unfamiliar (e.g. forge.HTTPError uses {code, error,
+// details} — Message resolves from the first non-empty of error /
+// message / details, and RawBody preserves the rest verbatim).
 type ClientError struct {
 	StatusCode int
 	Message    string
+	RawBody    []byte
+	Headers    map[string]string
 }
 
+const clientErrorBodySnippetMax = 256
+
 func (e *ClientError) Error() string {
-	return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	if e.Message != "" {
+		return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	}
+	if len(e.RawBody) > 0 {
+		snippet := string(e.RawBody)
+		if len(snippet) > clientErrorBodySnippetMax {
+			snippet = snippet[:clientErrorBodySnippetMax] + "…"
+		}
+		return fmt.Sprintf("authsome: %d body=%q", e.StatusCode, snippet)
+	}
+	return fmt.Sprintf("authsome: %d (empty body)", e.StatusCode)
+}
+
+func firstNonEmptyClientErrorMessage(s ...string) string {
+	for _, v := range s {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body []byte, result any) error {
@@ -2284,6 +2335,13 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
+	if c.appID != "" {
+		// Required by the API key auth strategy
+		// (plugins/apikey/plugin.go::Authenticate looks up
+		// (app_id, prefix) in the key store) and accepted by every
+		// admin endpoint scoped to a specific App.
+		req.Header.Set("X-App-ID", c.appID)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -2292,13 +2350,30 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		var errResp struct {
-			Error string `json:"error"`
+		// Read the body once into bytes so we can both attempt a
+		// structured decode AND preserve the raw payload for the
+		// caller. Cap at 8KiB — far more than any well-formed error
+		// envelope and bounded enough to not blow up logs.
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		var env struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+			Details string `json:"details"`
 		}
-		if decErr := json.NewDecoder(resp.Body).Decode(&errResp); decErr != nil {
-			errResp.Error = resp.Status
+		msg := ""
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &env) // best-effort
+			msg = firstNonEmptyClientErrorMessage(env.Error, env.Message, env.Details)
 		}
-		return &ClientError{StatusCode: resp.StatusCode, Message: errResp.Error}
+		return &ClientError{
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			RawBody:    raw,
+			Headers: map[string]string{
+				"Content-Type": resp.Header.Get("Content-Type"),
+				"X-Request-ID": resp.Header.Get("X-Request-ID"),
+			},
+		}
 	}
 
 	if result != nil && resp.StatusCode != http.StatusNoContent {
@@ -2315,3 +2390,53 @@ var (
 	_ = strings.Replace
 	_ = url.Values{}
 )
+
+// ──────────────────────────────────────────────────
+// Admin App management (handcrafted addition to the generated SDK)
+// ──────────────────────────────────────────────────
+//
+// These methods mirror POST/DELETE /v1/admin/apps. They're written
+// by hand here (rather than re-running the generator) so the
+// existing generator output stays stable. If the generator is run
+// again it should pick these up via the OpenAPI spec.
+
+// AdminCreateApp creates a new Authsome application. Caller must
+// authenticate with a platform-admin API key (manage:user
+// permission against the platform App).
+func (c *Client) AdminCreateApp(ctx context.Context, req *AdminCreateAppRequest) (*AdminAppResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	var result AdminAppResponse
+	if err := c.do(ctx, "POST", "/v1/admin/apps", body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminDeleteApp removes an Authsome application and cascades to
+// every child entity (envs, orgs, users, sessions, OAuth clients,
+// device tokens). Used as the saga's compensating action in
+// App-per-workspace provisioning.
+func (c *Client) AdminDeleteApp(ctx context.Context, appID string) error {
+	path := "/v1/admin/apps/" + appID
+	return c.do(ctx, "DELETE", path, nil, nil)
+}
+
+// AdminCreateSSOConnection registers an SSO connection on a target
+// App. Caller must authenticate with a platform-admin API key.
+// Used by TwinOS studio to install App `studio` as the trusted
+// upstream IdP on every newly-created workspace App, enabling
+// federated login via OIDC PKCE.
+func (c *Client) AdminCreateSSOConnection(ctx context.Context, req *AdminCreateSSOConnectionRequest) (*AdminCreateSSOConnectionResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	var result AdminCreateSSOConnectionResponse
+	if err := c.do(ctx, "POST", "/v1/admin/sso/connections", body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}

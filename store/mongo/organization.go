@@ -352,6 +352,22 @@ func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitati
 	return nil
 }
 
+// DeleteInvitation removes an invitation by ID.
+func (s *Store) DeleteInvitation(ctx context.Context, invID id.InvitationID) error {
+	res, err := s.mdb.NewDelete((*invitationModel)(nil)).
+		Filter(bson.M{"_id": invID.String()}).
+		Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: delete invitation: %w", err)
+	}
+
+	if res.DeletedCount() == 0 {
+		return store.ErrNotFound
+	}
+
+	return nil
+}
+
 // ListInvitations returns all invitations for an organization, ordered by creation date descending.
 func (s *Store) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	var models []invitationModel

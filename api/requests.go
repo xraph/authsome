@@ -347,6 +347,34 @@ type AdminCreateUserRequest struct {
 	Username  string `json:"username,omitempty" description:"Unique username"`
 }
 
+// AdminCreateAppRequest binds the body for POST /admin/apps. Used
+// by platform-admin clients (e.g. TwinOS studio) to spin up a fresh
+// App per tenant. Slug must be globally unique within the Authsome
+// instance — caller is responsible for adding a tenant-derived
+// suffix to avoid collisions.
+type AdminCreateAppRequest struct {
+	Name string `json:"name" description:"Human-readable app name"`
+	Slug string `json:"slug" description:"URL-safe app slug (globally unique)"`
+	Logo string `json:"logo,omitempty" description:"App logo URL"`
+}
+
+// AdminAppResponse is the create response for POST /admin/apps.
+// Includes the generated PublishableKey so the caller can hand it
+// to the frontend without a follow-up read.
+type AdminAppResponse struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Slug           string `json:"slug"`
+	Logo           string `json:"logo,omitempty"`
+	PublishableKey string `json:"publishable_key,omitempty"`
+	IsPlatform     bool   `json:"is_platform"`
+}
+
+// AdminDeleteAppRequest binds the path for DELETE /admin/apps/:appId.
+type AdminDeleteAppRequest struct {
+	AppID string `path:"appId" description:"Application identifier to delete"`
+}
+
 // AdminStatsRequest is an empty request for GET /admin/stats.
 type AdminStatsRequest struct {
 	AppID string `query:"app_id" description:"Application ID"`

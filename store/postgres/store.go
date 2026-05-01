@@ -621,6 +621,11 @@ func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitati
 	return pgError(err)
 }
 
+func (s *Store) DeleteInvitation(ctx context.Context, invID id.InvitationID) error {
+	_, err := s.pg.NewDelete((*InvitationModel)(nil)).Where("id = ?", invID.String()).Exec(ctx)
+	return pgError(err)
+}
+
 func (s *Store) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	var models []InvitationModel
 	err := s.pg.NewSelect(&models).

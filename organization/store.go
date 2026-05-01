@@ -30,6 +30,7 @@ type Store interface {
 	GetInvitation(ctx context.Context, invID id.InvitationID) (*Invitation, error)
 	GetInvitationByToken(ctx context.Context, token string) (*Invitation, error)
 	UpdateInvitation(ctx context.Context, inv *Invitation) error
+	DeleteInvitation(ctx context.Context, invID id.InvitationID) error
 	ListInvitations(ctx context.Context, orgID id.OrgID) ([]*Invitation, error)
 
 	// Teams

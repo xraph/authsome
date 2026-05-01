@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -152,6 +153,10 @@ func queryParamMap(r *http.Request) map[string]string {
 // can display its own error fragment.
 func writeFragment(ctx forge.Context, comp templ.Component, renderErr error) error {
 	if renderErr != nil {
+		if errors.Is(renderErr, contributor.ErrPageNotFound) {
+			ctx.Status(http.StatusNotFound)
+			return nil
+		}
 		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		ctx.Status(http.StatusInternalServerError)
 		_, _ = ctx.Response().Write([]byte("authsome: render failed: " + renderErr.Error())) //nolint:errcheck // best-effort
