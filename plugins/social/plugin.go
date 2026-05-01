@@ -436,8 +436,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 // ──────────────────────────────────────────────────
 
 // StartRequest contains the path parameter for starting OAuth.
+//
+// FrontendURL is the originating SPA's root (e.g. "https://app.example.com")
+// for split-origin deployments where the auth service runs on a different
+// host than the frontend. It serves two purposes:
+//  1. Trusted origin for validating RedirectURL when the request's Origin/Referer
+//     headers can't be relied on (CORS, server-to-server, popup contexts).
+//  2. Fallback redirect target when RedirectURL is empty or the auth flow
+//     fails before a redirect target can be resolved.
+//
+// RedirectURL is the post-auth destination — where to send the browser after
+// a successful login/signup. If empty, callers will fall back to FrontendURL.
 type StartRequest struct {
 	Provider    string `path:"provider"`
+	FrontendURL string `json:"frontend_url,omitempty" query:"frontend_url,omitempty"`
 	RedirectURL string `json:"redirect_url,omitempty" query:"redirect_url,omitempty"`
 }
 
@@ -455,6 +467,10 @@ type CallbackRequest struct {
 }
 
 // CallbackResponse is returned on successful OAuth authentication.
+//
+// RedirectURL and FrontendURL echo the values stashed in the OAuth state
+// during handleStart so non-browser callers (mobile apps, native flows) can
+// route the user without having to track them separately.
 type CallbackResponse struct {
 	User         any    `json:"user"`
 	SessionToken string `json:"session_token"`
@@ -462,6 +478,8 @@ type CallbackResponse struct {
 	ExpiresAt    any    `json:"expires_at"`
 	Provider     string `json:"provider"`
 	IsNewUser    bool   `json:"is_new_user"`
+	RedirectURL  string `json:"redirect_url,omitempty"`
+	FrontendURL  string `json:"frontend_url,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -505,12 +523,22 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
 	}
 
-	// Validate the redirect URL against the request origin to prevent open redirects.
-	origin := ctx.Request().Header.Get("Origin")
-	if origin == "" {
-		origin = ctx.Request().Header.Get("Referer")
+	// Validate the redirect URL. The trusted origin is, in order:
+	//   1. The caller-supplied frontend_url (for split-origin deployments where
+	//      the SPA and auth service live on different hosts).
+	//   2. The request's Origin / Referer header.
+	// frontend_url itself must be an absolute http(s) URL with no embedded
+	// credentials; relative paths are rejected because we'll use it as a
+	// fallback redirect target.
+	safeFrontend := sanitizeFrontendURL(req.FrontendURL)
+	originForRedirect := safeFrontend
+	if originForRedirect == "" {
+		originForRedirect = ctx.Request().Header.Get("Origin")
+		if originForRedirect == "" {
+			originForRedirect = ctx.Request().Header.Get("Referer")
+		}
 	}
-	safeRedirect := sanitizeRedirectURL(req.RedirectURL, origin)
+	safeRedirect := sanitizeRedirectURL(req.RedirectURL, originForRedirect)
 
 	// Store the state for CSRF protection, including app and env IDs so the
 	// callback can resolve them without relying on global defaults.
@@ -523,6 +551,7 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		"provider":     req.Provider,
 		"app_id":       appID.String(),
 		"env_id":       envIDStr,
+		"frontend_url": safeFrontend,
 		"redirect_url": safeRedirect,
 		"callback_url": callbackURL,
 	}
@@ -573,12 +602,12 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 
 	// Check for error from provider
 	if req.Error != "" {
-		return nil, forge.BadRequest(fmt.Sprintf("provider error: %s", req.Error))
+		return p.callbackError(ctx, stateInfo, fmt.Sprintf("provider error: %s", req.Error))
 	}
 
 	// Exchange code for token
 	if req.Code == "" {
-		return nil, forge.BadRequest("missing code parameter")
+		return p.callbackError(ctx, stateInfo, "missing code parameter")
 	}
 
 	cfg := provider.OAuth2Config()
@@ -737,6 +766,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if ctx.Request().Method == http.MethodGet {
 		redirectTarget := stateInfo["redirect_url"]
 		if redirectTarget == "" {
+			redirectTarget = stateInfo["frontend_url"]
+		}
+		if redirectTarget == "" {
 			redirectTarget = "/"
 		}
 		escapedRedirect := html.EscapeString(redirectTarget)
@@ -761,6 +793,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		ExpiresAt:    sess.ExpiresAt,
 		Provider:     req.Provider,
 		IsNewUser:    isNewUser,
+		RedirectURL:  stateInfo["redirect_url"],
+		FrontendURL:  stateInfo["frontend_url"],
 	}, nil
 }
 
@@ -932,49 +966,33 @@ func (p *Plugin) resolveCallbackURL(r *http.Request, providerRedirectURL, provid
 	return base + prefix + "/v1/social/" + providerName + "/callback"
 }
 
-// sanitizeRedirectURL validates a redirect URL to prevent open-redirect attacks.
-// It allows relative paths unconditionally and absolute URLs only when the host
-// matches the request origin. Dangerous schemes and embedded credentials are blocked.
-func sanitizeRedirectURL(rawURL, requestOrigin string) string {
-	if rawURL == "" {
-		return ""
+// callbackError handles a callback failure once the OAuth state is known. For
+// browser-initiated GET callbacks it redirects the user back to the SPA with
+// an `error` query parameter so the frontend can render an error UI; for
+// non-browser callers it surfaces the error as a JSON 400. The fallback chain
+// for the redirect target is: redirect_url → frontend_url → forge.BadRequest.
+func (p *Plugin) callbackError(ctx forge.Context, stateInfo map[string]string, message string) (*CallbackResponse, error) {
+	if ctx.Request().Method != http.MethodGet {
+		return nil, forge.BadRequest(message)
 	}
-
-	parsed, err := url.Parse(rawURL)
+	target := stateInfo["redirect_url"]
+	if target == "" {
+		target = stateInfo["frontend_url"]
+	}
+	if target == "" {
+		return nil, forge.BadRequest(message)
+	}
+	parsed, err := url.Parse(target)
 	if err != nil {
-		return ""
+		return nil, forge.BadRequest(message)
 	}
+	q := parsed.Query()
+	q.Set("error", message)
+	parsed.RawQuery = q.Encode()
 
-	// Block dangerous schemes.
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "" && scheme != "http" && scheme != "https" {
-		return ""
-	}
-
-	// Block URLs with embedded credentials.
-	if parsed.User != nil {
-		return ""
-	}
-
-	// Relative paths (no host) are safe.
-	if parsed.Host == "" {
-		return rawURL
-	}
-
-	// Absolute URLs must match the request origin when the origin is known.
-	if requestOrigin != "" {
-		originParsed, oErr := url.Parse(requestOrigin)
-		if oErr == nil && strings.EqualFold(parsed.Host, originParsed.Host) {
-			return rawURL
-		}
-		// Origin is known but host does not match — block the redirect.
-		return ""
-	}
-
-	// No origin available (e.g. missing Origin/Referer headers in CORS).
-	// Allow the URL since it passed scheme and credential checks above.
-	// The redirect_url was provided by the caller, not an external party.
-	return rawURL
+	ctx.Response().Header().Set("Location", parsed.String())
+	ctx.Response().WriteHeader(http.StatusFound)
+	return nil, nil
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).
