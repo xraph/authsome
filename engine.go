@@ -640,6 +640,10 @@ func (e *Engine) SessionConfigForApp(ctx context.Context, appID id.AppID, envIDs
 // Chronicle returns the audit trail bridge (may be nil).
 func (e *Engine) Chronicle() bridge.Chronicle { return e.chronicle }
 
+// SetChronicle replaces the chronicle implementation. Intended for tests;
+// not safe for concurrent use after Start.
+func (e *Engine) SetChronicle(ch bridge.Chronicle) { e.chronicle = ch }
+
 // Authorizer returns the authorization bridge (may be nil).
 func (e *Engine) Authorizer() bridge.Authorizer { return e.authorizer }
 
