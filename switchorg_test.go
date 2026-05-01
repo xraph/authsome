@@ -44,7 +44,7 @@ func TestSwitchActiveOrg_clearsActiveOrg(t *testing.T) {
 	eng, store := newTestEngine(t, authsome.WithPlugin(&fakeOrgPlugin{}))
 	ctx := context.Background()
 
-	sess := newSeedSession(t, ctx, store, id.NewOrgID())
+	sess := newSeedSession(ctx, t, store, id.NewOrgID())
 
 	// Empty newOrgID is allowed and clears the active org.
 	updated, err := eng.SwitchActiveOrg(ctx, sess.ID, id.OrgID{})
@@ -93,7 +93,7 @@ func TestSwitchActiveOrg_pluginMissing_returnsError(t *testing.T) {
 	// must error rather than panic on the nil plugin.
 	eng, store := newTestEngine(t)
 	ctx := context.Background()
-	sess := newSeedSession(t, ctx, store, id.OrgID{})
+	sess := newSeedSession(ctx, t, store, id.OrgID{})
 
 	_, err := eng.SwitchActiveOrg(ctx, sess.ID, id.NewOrgID())
 	require.Error(t, err)
@@ -103,7 +103,7 @@ func TestSwitchActiveOrg_pluginMissing_returnsError(t *testing.T) {
 // newSeedSession persists a fresh session for a synthetic user and
 // returns it. The session has no OrgID by default unless the caller
 // passes one.
-func newSeedSession(t *testing.T, ctx context.Context, store interface {
+func newSeedSession(ctx context.Context, t *testing.T, store interface {
 	CreateSession(ctx context.Context, s *session.Session) error
 }, orgID id.OrgID) *session.Session {
 	t.Helper()
