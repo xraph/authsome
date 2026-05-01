@@ -15,12 +15,48 @@ func TestSanitizeRedirectURL_NoOriginRejectsAbsolute(t *testing.T) {
 
 func TestSanitizeRedirectURL_NoOriginAllowsRelative(t *testing.T) {
 	t.Parallel()
-	cases := []string{"/", "/dashboard", "/path?x=1", "relative/path"}
+	cases := []string{"/", "/dashboard", "/path?x=1"}
 	for _, in := range cases {
 		got := sanitizeRedirectURL(in, "")
 		if got != in {
 			t.Errorf("relative %q: got %q want %q", in, got, in)
 		}
+	}
+}
+
+func TestSanitizeRedirectURL_BackslashBypass(t *testing.T) {
+	t.Parallel()
+	cases := []string{
+		`\\evil.example`,
+		`\\evil.example/path`,
+		`/\evil.example`,
+		`/\\evil.example`,
+		`\evil`,
+	}
+	for _, raw := range cases {
+		if got := sanitizeRedirectURL(raw, ""); got != "" {
+			t.Errorf("sanitizeRedirectURL(%q, \"\") = %q, want \"\" (browsers normalise \\\\ to //)", raw, got)
+		}
+		if got := sanitizeRedirectURL(raw, "https://app.example"); got != "" {
+			t.Errorf("sanitizeRedirectURL(%q, %q) = %q, want \"\"", raw, "https://app.example", got)
+		}
+	}
+}
+
+func TestSanitizeRedirectURL_RelativeRequiresLeadingSlash(t *testing.T) {
+	t.Parallel()
+	// Inputs without a host AND without a leading '/' could be interpreted
+	// against the current page in surprising ways. Reject for safety.
+	if got := sanitizeRedirectURL("relative/path", ""); got != "" {
+		t.Errorf("expected empty for non-rooted relative path; got %q", got)
+	}
+	// Empty path is allowed (caller falls back).
+	if got := sanitizeRedirectURL("", ""); got != "" {
+		t.Errorf("empty input should map to empty; got %q", got)
+	}
+	// Leading-slash relative still passes.
+	if got := sanitizeRedirectURL("/dashboard", ""); got != "/dashboard" {
+		t.Errorf("/dashboard should pass; got %q", got)
 	}
 }
 
@@ -109,43 +145,25 @@ func FuzzSanitizeRedirectURL(f *testing.F) {
 		{"javascript:alert(1)", "https://app.example"},
 		{"https://attacker.example", ""},
 		{"https://USER:p@app.example/x", "https://app.example"},
+		{`\\evil.example`, ""},
+		{`/\evil.example`, "https://app.example"},
+		{"https://app.example#@evil.example", "https://app.example"},
 	}
 	for _, s := range seeds {
 		f.Add(s.raw, s.origin)
 	}
 	f.Fuzz(func(t *testing.T, raw, origin string) {
-		got := sanitizeRedirectURL(raw, origin)
-		if got == "" {
+		out := sanitizeRedirectURL(raw, origin)
+		if out == "" {
 			return
 		}
-		// Output must be prefix-safe: relative path or http(s).
-		if !(strings.HasPrefix(got, "/") ||
-			strings.HasPrefix(strings.ToLower(got), "http://") ||
-			strings.HasPrefix(strings.ToLower(got), "https://") ||
-			// Relative paths without leading / are passed through (e.g. "foo/bar").
-			// They lack a scheme so they cannot be dangerous as long as no scheme prefix appears.
-			!containsScheme(got)) {
-			t.Fatalf("unsafe output prefix: raw=%q origin=%q got=%q", raw, origin, got)
+		if strings.ContainsRune(out, '\\') {
+			t.Fatalf("output contains backslash: %q (input %q origin %q)", out, raw, origin)
+		}
+		if !(strings.HasPrefix(out, "/") || strings.HasPrefix(out, "http://") || strings.HasPrefix(out, "https://")) {
+			t.Fatalf("output not safe-prefixed: %q (input %q origin %q)", out, raw, origin)
 		}
 	})
-}
-
-// containsScheme returns true if s looks like it has an absolute URL scheme.
-func containsScheme(s string) bool {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == ':' {
-			return i > 0
-		}
-		if c == '/' || c == '?' || c == '#' {
-			return false
-		}
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(i > 0 && ((c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.'))) {
-			return false
-		}
-	}
-	return false
 }
 
 func FuzzSanitizeFrontendURL(f *testing.F) {

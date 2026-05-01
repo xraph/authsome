@@ -23,6 +23,12 @@ func sanitizeRedirectURL(rawURL, trustedOrigin string) string {
 	if rawURL == "" {
 		return ""
 	}
+	// Reject backslashes outright. Browsers normalise '\' to '/' in
+	// Location headers, so "\\evil.example" becomes "//evil.example" — a
+	// protocol-relative redirect to attacker territory.
+	if strings.ContainsRune(rawURL, '\\') {
+		return ""
+	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return ""
@@ -35,9 +41,9 @@ func sanitizeRedirectURL(rawURL, trustedOrigin string) string {
 		return ""
 	}
 	if parsed.Host == "" {
-		// A scheme without a host is not a valid relative path
-		// (e.g. "http:" or "https:"). Reject to keep outputs prefix-safe.
-		if scheme != "" {
+		// No host: require a clean rooted path. Reject scheme-only
+		// (e.g. "http:") and non-rooted relatives (e.g. "foo/bar").
+		if scheme != "" || !strings.HasPrefix(rawURL, "/") {
 			return ""
 		}
 		return rawURL
@@ -57,6 +63,9 @@ func sanitizeRedirectURL(rawURL, trustedOrigin string) string {
 // redirect target on auth failure.
 func sanitizeFrontendURL(rawURL string) string {
 	if rawURL == "" {
+		return ""
+	}
+	if strings.ContainsRune(rawURL, '\\') {
 		return ""
 	}
 	parsed, err := url.Parse(rawURL)

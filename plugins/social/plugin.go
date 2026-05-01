@@ -532,6 +532,9 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	// fallback redirect target.
 	safeFrontend := sanitizeFrontendURL(req.FrontendURL)
 	originForRedirect := safeFrontend
+	// TODO(security/phase1.task-3): replace Origin/Referer fallback with the
+	// per-app allowed_frontend_urls allowlist so attacker-controlled fetch
+	// callers can't supply matching Origin + redirect_url.
 	if originForRedirect == "" {
 		originForRedirect = ctx.Request().Header.Get("Origin")
 		if originForRedirect == "" {
