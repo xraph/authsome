@@ -26,3 +26,13 @@ sdk/**/node_modules/
 .DS_Store
 *.pem
 .env*.local
+
+# Build artifacts (binaries built into the repo root, e.g. /specgen
+# from sdkgen/cmd/specgen, /standalone from cmd/standalone). These are
+# large, machine-specific, and should never be committed.
+/specgen
+/standalone
+
+# Editor / agent ephemera
+.claude/launch.json
+.claude/scheduled_tasks.lock
