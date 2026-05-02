@@ -31,6 +31,7 @@ import type {
   CheckEntitlementRequest,
   CheckSlugRequest,
   ClientConfigBranding,
+  ClientConfigCaptcha,
   ClientConfigEmailVerification,
   ClientConfigFieldValidation,
   ClientConfigMFA,

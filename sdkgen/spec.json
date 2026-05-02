@@ -528,6 +528,23 @@
         },
         "type": "object"
       },
+      "ClientConfigCaptcha": {
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "site_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "required"
+        ],
+        "type": "object"
+      },
       "ClientConfigEmailVerification": {
         "properties": {
           "enabled": {
@@ -591,6 +608,9 @@
           },
           "branding": {
             "$ref": "#/components/schemas/ClientConfigBranding"
+          },
+          "captcha": {
+            "$ref": "#/components/schemas/ClientConfigCaptcha"
           },
           "device_authorization": {
             "$ref": "#/components/schemas/ClientConfigToggle"

@@ -822,8 +822,19 @@ type ClientConfigResponse struct {
 	EmailVerification   *ClientConfigEmailVerification `json:"email_verification,omitempty"`
 	DeviceAuthorization *ClientConfigToggle            `json:"device_authorization,omitempty"`
 	Waitlist            *ClientConfigToggle            `json:"waitlist,omitempty"`
+	Captcha             *ClientConfigCaptcha           `json:"captcha,omitempty"`
 	SupportedPlugins    []string                       `json:"supported_plugins"`
 	SignupFields        []ClientConfigSignupField      `json:"signup_fields,omitempty"`
+}
+
+// ClientConfigCaptcha tells the frontend whether — and how — to render
+// a captcha challenge before submitting auth forms. Mirrors the
+// auth.captcha_* settings; only public-safe fields are exposed (the
+// secret_key is intentionally NOT included).
+type ClientConfigCaptcha struct {
+	Required bool   `json:"required"`
+	Provider string `json:"provider,omitempty"`
+	SiteKey  string `json:"site_key,omitempty"`
 }
 
 // ClientConfigEmailVerification represents email verification settings.
@@ -1114,7 +1125,37 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		}
 	}
 
+	// Captcha: per-app setting. Always emit the section so the frontend
+	// can branch on resp.Captcha.Required without conditional checks.
+	// Site key is public by design (visible in the rendered widget); the
+	// secret key is loaded server-side only and NEVER returned here.
+	resp.Captcha = e.clientConfigCaptcha(ctx, appID)
+
 	return resp
+}
+
+// clientConfigCaptcha resolves the public-safe captcha config for an
+// app. Returns Required=false / empty fields when settings can't be
+// resolved — captcha defaults to off so a settings-store outage never
+// locks new signups out.
+func (e *Engine) clientConfigCaptcha(ctx context.Context, appID id.AppID) *ClientConfigCaptcha {
+	out := &ClientConfigCaptcha{}
+	mgr := e.Settings()
+	if mgr == nil {
+		return out
+	}
+	resolveOpts := settings.ResolveOpts{AppID: appID.String()}
+
+	if v, err := settings.Get(ctx, mgr, SettingCaptchaRequired, resolveOpts); err == nil {
+		out.Required = v
+	}
+	if v, err := settings.Get(ctx, mgr, SettingCaptchaProvider, resolveOpts); err == nil {
+		out.Provider = v
+	}
+	if v, err := settings.Get(ctx, mgr, SettingCaptchaSiteKey, resolveOpts); err == nil {
+		out.SiteKey = v
+	}
+	return out
 }
 
 // applyClientConfigOverrides applies per-app overrides to the client config.

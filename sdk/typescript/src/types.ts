@@ -166,6 +166,12 @@ export interface ClientConfigBranding {
   logo_url?: string;
 }
 
+export interface ClientConfigCaptcha {
+  provider?: string;
+  required: boolean;
+  site_key?: string;
+}
+
 export interface ClientConfigEmailVerification {
   enabled: boolean;
   required: boolean;
@@ -188,6 +194,7 @@ export interface ClientConfigMFA {
 export interface ClientConfigResponse {
   app_id: string;
   branding?: ClientConfigBranding;
+  captcha?: ClientConfigCaptcha;
   device_authorization?: ClientConfigToggle;
   email_verification?: ClientConfigEmailVerification;
   magiclink?: ClientConfigToggle;

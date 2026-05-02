@@ -875,6 +875,37 @@ class ClientConfigBranding {
   String toString() => 'ClientConfigBranding(${toJson()})';
 }
 
+class ClientConfigCaptcha {
+  final String? provider;
+  final bool requiredValue;
+  final String? siteKey;
+
+  const ClientConfigCaptcha({
+    this.provider,
+    required this.requiredValue,
+    this.siteKey,
+  });
+
+  factory ClientConfigCaptcha.fromJson(Map<String, dynamic> json) {
+    return ClientConfigCaptcha(
+      provider: json['provider'] as String?,
+      requiredValue: json['required'] as bool,
+      siteKey: json['site_key'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (provider != null) 'provider': provider,
+      'required': requiredValue,
+      if (siteKey != null) 'site_key': siteKey,
+    };
+  }
+
+  @override
+  String toString() => 'ClientConfigCaptcha(${toJson()})';
+}
+
 class ClientConfigEmailVerification {
   final bool enabled;
   final bool requiredValue;
@@ -975,6 +1006,7 @@ class ClientConfigMFA {
 class ClientConfigResponse {
   final String appId;
   final ClientConfigBranding? branding;
+  final ClientConfigCaptcha? captcha;
   final ClientConfigToggle? deviceAuthorization;
   final ClientConfigEmailVerification? emailVerification;
   final ClientConfigToggle? magiclink;
@@ -992,6 +1024,7 @@ class ClientConfigResponse {
   const ClientConfigResponse({
     required this.appId,
     this.branding,
+    this.captcha,
     this.deviceAuthorization,
     this.emailVerification,
     this.magiclink,
@@ -1011,6 +1044,7 @@ class ClientConfigResponse {
     return ClientConfigResponse(
       appId: json['app_id'] as String,
       branding: json['branding'] == null ? null : ClientConfigBranding.fromJson(Map<String, dynamic>.from(json['branding'] as Map)),
+      captcha: json['captcha'] == null ? null : ClientConfigCaptcha.fromJson(Map<String, dynamic>.from(json['captcha'] as Map)),
       deviceAuthorization: json['device_authorization'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['device_authorization'] as Map)),
       emailVerification: json['email_verification'] == null ? null : ClientConfigEmailVerification.fromJson(Map<String, dynamic>.from(json['email_verification'] as Map)),
       magiclink: json['magiclink'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['magiclink'] as Map)),
@@ -1031,6 +1065,7 @@ class ClientConfigResponse {
     return {
       'app_id': appId,
       if (branding != null) 'branding': branding?.toJson(),
+      if (captcha != null) 'captcha': captcha?.toJson(),
       if (deviceAuthorization != null) 'device_authorization': deviceAuthorization?.toJson(),
       if (emailVerification != null) 'email_verification': emailVerification?.toJson(),
       if (magiclink != null) 'magiclink': magiclink?.toJson(),

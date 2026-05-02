@@ -198,6 +198,13 @@ type ClientConfigBranding struct {
 	LogoURL string `json:"logo_url,omitempty"`
 }
 
+// ClientConfigCaptcha represents the ClientConfigCaptcha schema.
+type ClientConfigCaptcha struct {
+	Provider string `json:"provider,omitempty"`
+	Required bool `json:"required"`
+	SiteKey string `json:"site_key,omitempty"`
+}
+
 // ClientConfigEmailVerification represents the ClientConfigEmailVerification schema.
 type ClientConfigEmailVerification struct {
 	Enabled bool `json:"enabled"`
@@ -224,6 +231,7 @@ type ClientConfigMFA struct {
 type ClientConfigResponse struct {
 	AppID string `json:"app_id"`
 	Branding *ClientConfigBranding `json:"branding,omitempty"`
+	Captcha *ClientConfigCaptcha `json:"captcha,omitempty"`
 	DeviceAuthorization *ClientConfigToggle `json:"device_authorization,omitempty"`
 	EmailVerification *ClientConfigEmailVerification `json:"email_verification,omitempty"`
 	Magiclink *ClientConfigToggle `json:"magiclink,omitempty"`
