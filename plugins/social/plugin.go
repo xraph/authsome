@@ -25,6 +25,7 @@ import (
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/settings"
@@ -417,24 +418,77 @@ func (p *Plugin) allProviderNames(ctx context.Context) []string {
 }
 
 // RegisterRoutes registers social OAuth HTTP endpoints on a forge.Router.
+//
+// Both endpoints get the same per-IP rate limit as the JSON sign-in
+// endpoint (default 5/window). Without this, an attacker can amplify
+// requests against the upstream OAuth provider — the start endpoint
+// generates state cookies and ceremony entries, the callback exchanges
+// tokens and hits the provider's siteverify-equivalent endpoint.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/social", forge.WithGroupTags("Social OAuth"))
 
-	if err := g.POST("/:provider", p.handleStart,
+	startOpts := []forge.RouteOption{
 		forge.WithSummary("Start OAuth flow"),
 		forge.WithOperationID("startOAuth"),
 		forge.WithResponseSchema(http.StatusOK, "OAuth authorization URL", StartResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}
+	startOpts = append(startOpts, p.rateLimitOpts(rateLimitForStart)...)
+	if err := g.POST("/:provider", p.handleStart, startOpts...); err != nil {
 		return err
 	}
 
-	return g.GET("/:provider/callback", p.handleCallback,
+	callbackOpts := []forge.RouteOption{
 		forge.WithSummary("OAuth callback"),
 		forge.WithOperationID("oauthCallback"),
 		forge.WithResponseSchema(http.StatusOK, "Authentication result", CallbackResponse{}),
 		forge.WithErrorResponses(),
-	)
+	}
+	callbackOpts = append(callbackOpts, p.rateLimitOpts(rateLimitForCallback)...)
+	return g.GET("/:provider/callback", p.handleCallback, callbackOpts...)
+}
+
+// rateLimitTarget selects which configured limit to apply.
+type rateLimitTarget int
+
+const (
+	// rateLimitForStart caps OAuth-flow initiation; uses the engine's
+	// configured SignUpLimit (default 3/window) so a bot can't farm
+	// state-token allocations against the ceremony store.
+	rateLimitForStart rateLimitTarget = iota
+	// rateLimitForCallback caps the redirect-back endpoint. Uses the
+	// SignInLimit (default 5/window) — slightly more generous because
+	// browsers may retry on transient network errors during the OAuth
+	// bounce.
+	rateLimitForCallback
+)
+
+// rateLimitOpts returns a forge route option applying per-IP rate limits
+// to the social endpoint, or nil when rate limiting is disabled or the
+// engine isn't the concrete *authsome.Engine (e.g. test wiring).
+func (p *Plugin) rateLimitOpts(target rateLimitTarget) []forge.RouteOption {
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil
+	}
+	rl := eng.RateLimiter()
+	cfg := eng.Config().RateLimit
+	if rl == nil || !cfg.Enabled {
+		return nil
+	}
+	limit := cfg.SignUpLimit
+	if target == rateLimitForCallback {
+		limit = cfg.SignInLimit
+	}
+	if limit <= 0 {
+		return nil
+	}
+	return []forge.RouteOption{
+		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
+			Limit:  limit,
+			Window: cfg.Window(),
+		})),
+	}
 }
 
 // ──────────────────────────────────────────────────
