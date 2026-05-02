@@ -135,17 +135,25 @@ func (p *Plugin) renderOrgCreate(ctx context.Context, params contributor.Params)
 
 	var data dashui.CreateOrgPageData
 
-	// Handle form actions (POST).
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessionIDStr := sessionID.String()
+
+	// Handle form actions (POST). Uses the HMAC-bound scoped nonce
+	// (Phase 1.4); legacy ConsumeNonce fell back to a global single-use
+	// map that wasn't bound to the user's session — a stolen nonce from
+	// one admin's session could be replayed against another via CSRF.
 	action := params.FormData["action"]
 	if action == "create" {
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessionIDStr, "org.create", nonce) {
 			data.CreatedOrg, data.Error = p.handleDashboardCreateOrg(ctx, appID, params)
+		} else {
+			data.Error = "Form expired or invalid, please try again."
 		}
 	}
 
 	// Generate a fresh nonce for the next form render.
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessionIDStr, "org.create")
 
 	// Collect plugin-contributed form fields.
 	data.PluginFields = p.collectOrgCreateFormFields(ctx)
