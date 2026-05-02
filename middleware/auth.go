@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"os"
 	"strings"
 
 	log "github.com/xraph/go-utils/log"
@@ -16,6 +18,88 @@ import (
 	"github.com/xraph/authsome/tokenformat"
 	"github.com/xraph/authsome/user"
 )
+
+// authDebugKey carries the most recent strategy/auth rejection
+// reason through the request context so RequireAuth can echo it
+// back on a 401 when AUTHSOME_DEBUG_AUTH=1. The mechanism is
+// debug-only: production deployments leave the env var unset and
+// the reason never leaves the server.
+type authDebugKey struct{}
+
+// withAuthDebug attaches a human-readable rejection reason to ctx.
+func withAuthDebug(ctx context.Context, reason string) context.Context {
+	return context.WithValue(ctx, authDebugKey{}, reason)
+}
+
+// authDebugFrom reads the most recent rejection reason from ctx.
+func authDebugFrom(ctx context.Context) string {
+	v, _ := ctx.Value(authDebugKey{}).(string) //nolint:errcheck // type-safe via key
+
+	return v
+}
+
+// authDebugEnabled reports whether the operator has opted into
+// surfacing strategy rejection reasons on 401 responses. Off by
+// default — the reason carries credential-shape details (which
+// header was missing, which app the key was minted under) that we
+// don't want to expose to unauthenticated callers in production.
+func authDebugEnabled() bool {
+	return os.Getenv("AUTHSOME_DEBUG_AUTH") == "1"
+}
+
+// summarizeAuthHeaders renders a one-line description of the
+// auth-relevant inbound headers — never the secret values, only
+// presence + length so operators can tell "client never sent it"
+// apart from "client sent it but it's malformed". Used by the
+// debug_reason surface on 401 responses.
+func summarizeAuthHeaders(r *http.Request) string {
+	parts := []string{}
+	if v := r.Header.Get("Authorization"); v != "" {
+		parts = append(parts, "Authorization=present(len="+itoaInt(len(v))+",scheme="+authScheme(v)+")")
+	} else {
+		parts = append(parts, "Authorization=absent")
+	}
+	if v := r.Header.Get("X-API-Key"); v != "" {
+		parts = append(parts, "X-API-Key=present(len="+itoaInt(len(v))+")")
+	} else {
+		parts = append(parts, "X-API-Key=absent")
+	}
+	if v := r.Header.Get("X-App-ID"); v != "" {
+		parts = append(parts, "X-App-ID=present(value="+v+")")
+	} else {
+		parts = append(parts, "X-App-ID=absent")
+	}
+	if v := r.Header.Get("Cookie"); v != "" {
+		parts = append(parts, "Cookie=present(len="+itoaInt(len(v))+")")
+	} else {
+		parts = append(parts, "Cookie=absent")
+	}
+	return strings.Join(parts, ", ")
+}
+
+func authScheme(authHeader string) string {
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) >= 1 {
+		return parts[0]
+	}
+	return "unknown"
+}
+
+func itoaInt(n int) string {
+	// Tiny inline helper to avoid importing strconv just for this
+	// debug path. n is always small (header lengths).
+	if n == 0 {
+		return "0"
+	}
+	var b [20]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
+}
 
 // StrategyAuthenticator authenticates requests using registered strategies.
 // The strategy.Registry implements this interface.
@@ -422,12 +506,48 @@ func tryStrategyAuth(
 ) bool {
 	result, err := strategies.Authenticate(ctx.Context(), ctx.Request())
 	if err != nil {
-		logger.Debug("auth middleware: strategy auth failed",
-			log.String("error", err.Error()),
-		)
+		// NotApplicableError means "no credentials of my flavor in
+		// this request" — that's silent (a JWT request hitting an
+		// API-key strategy is normal). Anything else is the
+		// strategy explicitly rejecting credentials it found
+		// (wrong key, expired, missing X-App-ID header, etc.) and
+		// the operator needs to see the reason in their logs;
+		// otherwise the 401 chain looks like an unexplained
+		// "authentication required" with no diagnostic.
+		var notApplicable strategy.NotApplicableError
+		if errors.As(err, &notApplicable) {
+			logger.Debug("auth middleware: strategy not applicable",
+				log.String("reason", err.Error()),
+			)
+			// Even NotApplicable surfaces something — record it so
+			// the operator can see *which* strategy bowed out and
+			// which inbound headers were present. Without this, the
+			// 401 chain blames "no strategy ran" with zero
+			// information about what arrived on the wire.
+			r := ctx.Request()
+			present := summarizeAuthHeaders(r)
+			ctx.WithContext(withAuthDebug(ctx.Context(),
+				"strategy NotApplicable: "+err.Error()+"; inbound auth headers: "+present))
+		} else {
+			logger.Warn("auth middleware: strategy rejected credentials",
+				log.String("error", err.Error()),
+				log.String("path", ctx.Request().URL.Path),
+				log.String("method", ctx.Request().Method),
+			)
+			// Stash the rejection reason on the context so RequireAuth
+			// can echo it on 401 — gives operators a diagnostic
+			// without needing access to the server logs.
+			ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: "+err.Error()))
+		}
 		return false
 	}
 	if result == nil || result.User == nil {
+		// Strategy returned no error but produced no user. Note this
+		// distinct outcome separately so the debug surface in
+		// RequireAuth points at the actual cause (resolveUser
+		// returned nil, or the strategy's Result was empty) rather
+		// than leaving operators thinking no strategy ran at all.
+		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: returned no user (resolveUser nil or Result empty)"))
 		return false
 	}
 
@@ -501,10 +621,25 @@ func RequireAuth() forge.Middleware {
 	return func(next forge.Handler) forge.Handler {
 		return func(ctx forge.Context) error {
 			if _, ok := UserFrom(ctx.Context()); !ok {
-				return ctx.JSON(http.StatusUnauthorized, map[string]any{
+				body := map[string]any{
 					"error": "authentication required",
 					"code":  http.StatusUnauthorized,
-				})
+				}
+				// Surface the strategy rejection reason only when the
+				// operator has opted in via AUTHSOME_DEBUG_AUTH=1. The
+				// reason carries credential-shape reconnaissance
+				// (which header was missing, scheme used, presence of
+				// app-id) that an unauthenticated caller in production
+				// must never see.
+				if authDebugEnabled() {
+					if reason := authDebugFrom(ctx.Context()); reason != "" {
+						body["debug_reason"] = reason
+					} else {
+						body["debug_reason"] = "no strategy ran (no credentials presented or all strategies returned NotApplicable)"
+					}
+				}
+
+				return ctx.JSON(http.StatusUnauthorized, body)
 			}
 			return next(ctx)
 		}

@@ -682,3 +682,48 @@ func TestAuthMiddleware_SessionBinding_Matches_Allows(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.True(t, gotUser, "matching IP and device should allow access")
 }
+
+// TestRequireAuth_DebugReasonGated confirms that the strategy
+// rejection reason — which carries credential-shape reconnaissance —
+// is omitted from 401 responses unless AUTHSOME_DEBUG_AUTH=1.
+func TestRequireAuth_DebugReasonGated(t *testing.T) {
+	t.Setenv("AUTHSOME_DEBUG_AUTH", "")
+
+	router := forge.NewRouter()
+	router.Use(middleware.RequireAuth())
+	router.GET("/protected", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	body := rec.Body.String()
+	if contains := http.CanonicalHeaderKey("debug_reason"); contains != "" {
+		_ = contains
+	}
+	assert.NotContains(t, body, "debug_reason",
+		"debug_reason must not leak to unauthenticated callers when AUTHSOME_DEBUG_AUTH is unset")
+}
+
+// TestRequireAuth_DebugReasonOptIn confirms the diagnostic surface
+// is available when operators explicitly opt in.
+func TestRequireAuth_DebugReasonOptIn(t *testing.T) {
+	t.Setenv("AUTHSOME_DEBUG_AUTH", "1")
+
+	router := forge.NewRouter()
+	router.Use(middleware.RequireAuth())
+	router.GET("/protected", func(ctx forge.Context) error {
+		return ctx.NoContent(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), "debug_reason",
+		"debug_reason must be present when AUTHSOME_DEBUG_AUTH=1")
+}
