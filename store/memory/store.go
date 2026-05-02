@@ -3,6 +3,8 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -57,6 +59,13 @@ type Store struct {
 	appClientConfigs  map[string]*appclientconfig.Config
 	settingsMap       map[string]*settings.Setting
 
+	// revokedRefreshTokens maps SHA-256(refresh_token) -> revocation record.
+	// Used to detect refresh-token replay (RFC 6819 §5.2.2.3): every
+	// successful rotation records the OLD hash with reason="rotated", and
+	// every refresh exchange checks this map first. A hit means the
+	// presented token has already been rotated — replay detected.
+	revokedRefreshTokens map[string]*session.RevokedRefreshToken
+
 	// faults is a TEST-ONLY one-shot fault map. Keys are method names
 	// (e.g. "DeleteTeam"); the named method consumes and returns the
 	// stored error on its next call. Production code MUST NOT depend on
@@ -86,6 +95,7 @@ func New() *Store {
 		appSessionConfigs: make(map[string]*appsessionconfig.Config),
 		appClientConfigs:  make(map[string]*appclientconfig.Config),
 		settingsMap:       make(map[string]*settings.Setting),
+		revokedRefreshTokens: make(map[string]*session.RevokedRefreshToken),
 		faults:            make(map[string]error),
 	}
 }
@@ -442,6 +452,90 @@ func (s *Store) ListSessions(_ context.Context, limit int) ([]*session.Session, 
 		result = result[:limit]
 	}
 	return result, nil
+}
+
+// ──────────────────────────────────────────────────
+// Refresh-token replay detection
+// ──────────────────────────────────────────────────
+
+// IsRefreshTokenRevoked reports whether tokenHash is in the revoked set.
+func (s *Store) IsRefreshTokenRevoked(_ context.Context, tokenHash string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.revokedRefreshTokens[tokenHash]
+	return ok, nil
+}
+
+// MarkRefreshTokenRevoked records tokenHash as revoked. Idempotent: a duplicate
+// insert keeps the original record (the original family + first-seen timestamp).
+func (s *Store) MarkRefreshTokenRevoked(_ context.Context, tokenHash string, familyID id.SessionFamilyID, reason string) error {
+	if tokenHash == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.revokedRefreshTokens[tokenHash]; exists {
+		return nil
+	}
+	s.revokedRefreshTokens[tokenHash] = &session.RevokedRefreshToken{
+		TokenHash: tokenHash,
+		FamilyID:  familyID,
+		RevokedAt: time.Now(),
+		Reason:    reason,
+	}
+	return nil
+}
+
+// GetRevokedRefreshTokenFamily returns the family of a previously-revoked
+// token, or store.ErrNotFound if the hash is unknown.
+func (s *Store) GetRevokedRefreshTokenFamily(_ context.Context, tokenHash string) (id.SessionFamilyID, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rec, ok := s.revokedRefreshTokens[tokenHash]
+	if !ok {
+		return id.Nil, store.ErrNotFound
+	}
+	return rec.FamilyID, nil
+}
+
+// RevokeRefreshTokenFamily revokes every active session sharing familyID. Each
+// surviving refresh-token hash is also recorded as revoked with reason so that
+// later replays of any sibling token are detected too.
+func (s *Store) RevokeRefreshTokenFamily(_ context.Context, familyID id.SessionFamilyID, reason string) error {
+	if familyID.IsNil() {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for k, sess := range s.sessions {
+		if sess == nil {
+			continue
+		}
+		if sess.FamilyID.String() != familyID.String() {
+			continue
+		}
+		if sess.RefreshToken != "" {
+			h := hashRefreshToken(sess.RefreshToken)
+			if _, exists := s.revokedRefreshTokens[h]; !exists {
+				s.revokedRefreshTokens[h] = &session.RevokedRefreshToken{
+					TokenHash: h,
+					FamilyID:  familyID,
+					RevokedAt: now,
+					Reason:    reason,
+				}
+			}
+		}
+		delete(s.sessions, k)
+	}
+	return nil
+}
+
+// hashRefreshToken returns the hex-encoded SHA-256 of a refresh token. Kept as
+// a small helper so memory + service share the exact same canonicalisation.
+func hashRefreshToken(tok string) string {
+	sum := sha256.Sum256([]byte(tok))
+	return hex.EncodeToString(sum[:])
 }
 
 // ──────────────────────────────────────────────────
