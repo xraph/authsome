@@ -105,6 +105,7 @@ export { WaitlistForm, type WaitlistFormProps } from "./components/waitlist-form
 export { MFAChallengeForm as MFAChallengeFormStyled, type MFAChallengeFormStyledProps } from "./components/mfa-challenge-form";
 export { ChangePasswordForm, type ChangePasswordFormProps } from "./components/change-password-form";
 export { EmailVerificationForm, type EmailVerificationFormProps } from "./components/email-verification-form";
+export { TurnstileWidget, type TurnstileWidgetProps } from "./components/turnstile-widget";
 
 // Passkey components
 export { PasskeyLoginButton, type PasskeyLoginButtonProps } from "./components/passkey-login-button";
