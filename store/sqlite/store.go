@@ -1450,8 +1450,43 @@ func sqliteError(err error) error {
 
 // WithTx is a best-effort no-op wrapper for now. Real backend transactions
 // require plumbing driver.Tx through every Store method, which is a multi-
-// day refactor deferred to a follow-up PR. New cascade callers should still
-// route through this entry point so the future migration is a single change.
+// day refactor deferred to a follow-up PR. Callers that need true atomic
+// cascade semantics should use the dedicated DeleteOrganizationCascade
+// method below — it uses SqliteTx natively without requiring the full
+// every-method-takes-a-tx refactor.
 func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
 	return fn(s)
+}
+
+// DeleteOrganizationCascade deletes the organization and all of its
+// dependent rows (members, teams, invitations) inside a single SqliteTx.
+// On any error the entire cascade rolls back; the orgs row is the last
+// delete so a failure mid-cascade leaves the org row visible (callers
+// can retry).
+func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error {
+	stx, err := s.sdb.BeginTxQuery(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: begin tx for org cascade: %w", err)
+	}
+	defer func() { _ = stx.Rollback() }() //nolint:errcheck // best-effort rollback after commit
+
+	orgIDStr := orgID.String()
+
+	if _, err := stx.NewDelete(&MemberModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete members: %w", sqliteError(err))
+	}
+	if _, err := stx.NewDelete(&TeamModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete teams: %w", sqliteError(err))
+	}
+	if _, err := stx.NewDelete(&InvitationModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete invitations: %w", sqliteError(err))
+	}
+	if _, err := stx.NewDelete(&OrganizationModel{}).Where("id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete org row: %w", sqliteError(err))
+	}
+
+	if err := stx.Commit(); err != nil {
+		return fmt.Errorf("authsome/sqlite: commit org cascade: %w", err)
+	}
+	return nil
 }

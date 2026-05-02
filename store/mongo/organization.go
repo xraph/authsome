@@ -9,6 +9,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/store"
+	"github.com/xraph/grove/drivers/mongodriver"
 )
 
 // ──────────────────────────────────────────────────
@@ -491,8 +492,59 @@ func (s *Store) ListTeams(ctx context.Context, orgID id.OrgID) ([]*organization.
 
 // WithTx is a best-effort no-op wrapper for now. Real backend transactions
 // require plumbing driver.Tx through every Store method, which is a multi-
-// day refactor deferred to a follow-up PR. New cascade callers should still
-// route through this entry point so the future migration is a single change.
+// day refactor deferred to a follow-up PR. Callers that need true atomic
+// cascade semantics should use the dedicated DeleteOrganizationCascade
+// method below — it uses MongoTx natively without requiring the full
+// every-method-takes-a-tx refactor.
 func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
 	return fn(s)
+}
+
+// DeleteOrganizationCascade deletes the organization and all of its
+// dependent rows (members, teams, invitations) inside a single MongoTx
+// session. On any error the entire transaction is aborted; the orgs row
+// is the last delete so a failure mid-cascade leaves the org row visible
+// (callers can retry).
+//
+// MongoDB transactions require a replica set (or sharded cluster). On a
+// standalone mongod the StartTransaction call returns
+// ErrUnsupportedDeployment — callers running against standalone instances
+// should treat that as a configuration issue rather than a code defect.
+func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error {
+	mtx, err := s.mdb.GroveTx(ctx, 0, false)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: begin tx for org cascade: %w", err)
+	}
+	tx, ok := mtx.(*mongodriver.MongoTx)
+	if !ok {
+		return fmt.Errorf("authsome/mongo: unexpected tx type %T", mtx)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback() //nolint:errcheck // best-effort rollback
+		}
+	}()
+
+	orgIDStr := orgID.String()
+	filter := bson.M{"org_id": orgIDStr}
+
+	if _, err := tx.NewDelete((*memberModel)(nil)).Filter(filter).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: delete members: %w", err)
+	}
+	if _, err := tx.NewDelete((*teamModel)(nil)).Filter(filter).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: delete teams: %w", err)
+	}
+	if _, err := tx.NewDelete((*invitationModel)(nil)).Filter(filter).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: delete invitations: %w", err)
+	}
+	if _, err := tx.NewDelete((*organizationModel)(nil)).Filter(bson.M{"_id": orgIDStr}).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: delete org row: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("authsome/mongo: commit org cascade: %w", err)
+	}
+	committed = true
+	return nil
 }

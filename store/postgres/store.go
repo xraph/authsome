@@ -1457,8 +1457,45 @@ func pgError(err error) error {
 
 // WithTx is a best-effort no-op wrapper for now. Real backend transactions
 // require plumbing driver.Tx through every Store method, which is a multi-
-// day refactor deferred to a follow-up PR. New cascade callers should still
-// route through this entry point so the future migration is a single change.
+// day refactor deferred to a follow-up PR. Callers that need true atomic
+// cascade semantics should use the dedicated DeleteOrganizationCascade
+// method below — it uses PgTx natively without requiring the full
+// every-method-takes-a-tx refactor.
 func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
 	return fn(s)
+}
+
+// DeleteOrganizationCascade deletes the organization and all of its
+// dependent rows (members, teams, invitations) inside a single PgTx.
+// On any error the entire cascade rolls back; the orgs table is the
+// last delete so a failure mid-cascade leaves the org row visible
+// (callers can retry).
+func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error {
+	ptx, err := s.pg.BeginTxQuery(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("authsome/postgres: begin tx for org cascade: %w", err)
+	}
+	// defer Rollback after Commit is a no-op (the driver returns sql.ErrTxDone
+	// which we intentionally swallow — this is the standard Go pattern).
+	defer func() { _ = ptx.Rollback() }() //nolint:errcheck // best-effort rollback after commit
+
+	orgIDStr := orgID.String()
+
+	if _, err := ptx.NewDelete(&MemberModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete members: %w", pgError(err))
+	}
+	if _, err := ptx.NewDelete(&TeamModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete teams: %w", pgError(err))
+	}
+	if _, err := ptx.NewDelete(&InvitationModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete invitations: %w", pgError(err))
+	}
+	if _, err := ptx.NewDelete(&OrganizationModel{}).Where("id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete org row: %w", pgError(err))
+	}
+
+	if err := ptx.Commit(); err != nil {
+		return fmt.Errorf("authsome/postgres: commit org cascade: %w", err)
+	}
+	return nil
 }

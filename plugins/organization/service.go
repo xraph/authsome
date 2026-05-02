@@ -94,51 +94,15 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 // (members, teams, invitations) before emitting the AfterOrgDelete hook so
 // other plugins (subscription, SCIM, …) can clean up their own org-scoped data.
 //
-// The cascade runs inside Store.WithTx so a failure midway aborts the whole
-// operation. EmitAfterOrgDelete only fires once the inner fn returns nil, so
-// downstream plugins (subscription, SCIM, …) never see an event for an org
-// that wasn't actually deleted.
+// The cascade is delegated to Store.DeleteOrganizationCascade, which each
+// backend implements with its native transaction primitive (PgTx / SqliteTx /
+// MongoTx) so a midway failure rolls back atomically. EmitAfterOrgDelete only
+// fires once the cascade returns nil, so downstream plugins never see an event
+// for an org that wasn't actually deleted.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
-	err := p.store.WithTx(ctx, func(tx organization.Store) error {
-		if members, err := tx.ListMembers(ctx, orgID); err == nil {
-			for _, m := range members {
-				if m == nil {
-					continue
-				}
-				if err := tx.DeleteMember(ctx, m.ID); err != nil {
-					return fmt.Errorf("delete member %s: %w", m.ID, err)
-				}
-			}
-		}
-		if teams, err := tx.ListTeams(ctx, orgID); err == nil {
-			for _, t := range teams {
-				if t == nil {
-					continue
-				}
-				if err := tx.DeleteTeam(ctx, t.ID); err != nil {
-					return fmt.Errorf("delete team %s: %w", t.ID, err)
-				}
-			}
-		}
-		if invs, err := tx.ListInvitations(ctx, orgID); err == nil {
-			for _, inv := range invs {
-				if inv == nil {
-					continue
-				}
-				if err := tx.DeleteInvitation(ctx, inv.ID); err != nil {
-					return fmt.Errorf("delete invitation %s: %w", inv.ID, err)
-				}
-			}
-		}
-		if err := tx.DeleteOrganization(ctx, orgID); err != nil {
-			return fmt.Errorf("delete org row: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
+	if err := p.store.DeleteOrganizationCascade(ctx, orgID); err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
-
 	p.plugins.EmitAfterOrgDelete(ctx, orgID)
 	return nil
 }

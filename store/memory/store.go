@@ -3,6 +3,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -180,6 +181,53 @@ func (s *Store) WithTx(_ context.Context, fn func(tx organization.Store) error) 
 		return err
 	}
 	return nil
+}
+
+// DeleteOrganizationCascade deletes the organization and all of its
+// dependent rows (members, teams, invitations) atomically via the
+// snapshot/restore WithTx wrapper. On any inner-store error (e.g. a
+// fault injection) the entire cascade rolls back.
+//
+// Returns nil if the org doesn't exist (idempotent — matches the
+// SQL-backend behaviour where DELETE on a missing PK is a no-op).
+func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error {
+	return s.WithTx(ctx, func(tx organization.Store) error {
+		if members, err := tx.ListMembers(ctx, orgID); err == nil {
+			for _, m := range members {
+				if m == nil {
+					continue
+				}
+				if err := tx.DeleteMember(ctx, m.ID); err != nil {
+					return fmt.Errorf("delete member %s: %w", m.ID, err)
+				}
+			}
+		}
+		if teams, err := tx.ListTeams(ctx, orgID); err == nil {
+			for _, t := range teams {
+				if t == nil {
+					continue
+				}
+				if err := tx.DeleteTeam(ctx, t.ID); err != nil {
+					return fmt.Errorf("delete team %s: %w", t.ID, err)
+				}
+			}
+		}
+		if invs, err := tx.ListInvitations(ctx, orgID); err == nil {
+			for _, inv := range invs {
+				if inv == nil {
+					continue
+				}
+				if err := tx.DeleteInvitation(ctx, inv.ID); err != nil {
+					return fmt.Errorf("delete invitation %s: %w", inv.ID, err)
+				}
+			}
+		}
+		// Idempotent: ignore not-found on the org row delete.
+		if err := tx.DeleteOrganization(ctx, orgID); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return fmt.Errorf("delete org row: %w", err)
+		}
+		return nil
+	})
 }
 
 func (s *Store) Migrate(_ context.Context, _ ...*migrate.Group) error { return nil }
