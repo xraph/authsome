@@ -39,4 +39,14 @@ type Store interface {
 	UpdateTeam(ctx context.Context, t *Team) error
 	DeleteTeam(ctx context.Context, teamID id.TeamID) error
 	ListTeams(ctx context.Context, orgID id.OrgID) ([]*Team, error)
+
+	// WithTx runs fn inside a single store transaction. The fn receives a
+	// Store handle scoped to the transaction; on error, all writes via that
+	// handle are rolled back. Implementations that don't yet support real
+	// backend transactions (postgres/sqlite/mongo at time of writing) execute
+	// fn against the parent store with best-effort semantics — callers should
+	// treat partial-failure recovery as a future-work gap, but new code is
+	// expected to use this entry point so we have one place to lift to real
+	// transactions later.
+	WithTx(ctx context.Context, fn func(tx Store) error) error
 }

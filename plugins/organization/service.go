@@ -93,52 +93,52 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 // DeleteOrganization deletes an organization and all of its dependent records
 // (members, teams, invitations) before emitting the AfterOrgDelete hook so
 // other plugins (subscription, SCIM, …) can clean up their own org-scoped data.
+//
+// The cascade runs inside Store.WithTx so a failure midway aborts the whole
+// operation. EmitAfterOrgDelete only fires once the inner fn returns nil, so
+// downstream plugins (subscription, SCIM, …) never see an event for an org
+// that wasn't actually deleted.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
-	if members, err := p.store.ListMembers(ctx, orgID); err == nil {
-		for _, m := range members {
-			if m == nil {
-				continue
-			}
-			if err := p.store.DeleteMember(ctx, m.ID); err != nil && p.logger != nil {
-				p.logger.Warn("organization: delete member during org delete failed",
-					log.String("org_id", orgID.String()),
-					log.String("member_id", m.ID.String()),
-					log.Error(err))
-			}
-		}
-	}
-
-	if teams, err := p.store.ListTeams(ctx, orgID); err == nil {
-		for _, t := range teams {
-			if t == nil {
-				continue
-			}
-			if err := p.store.DeleteTeam(ctx, t.ID); err != nil && p.logger != nil {
-				p.logger.Warn("organization: delete team during org delete failed",
-					log.String("org_id", orgID.String()),
-					log.String("team_id", t.ID.String()),
-					log.Error(err))
+	err := p.store.WithTx(ctx, func(tx organization.Store) error {
+		if members, err := tx.ListMembers(ctx, orgID); err == nil {
+			for _, m := range members {
+				if m == nil {
+					continue
+				}
+				if err := tx.DeleteMember(ctx, m.ID); err != nil {
+					return fmt.Errorf("delete member %s: %w", m.ID, err)
+				}
 			}
 		}
-	}
-
-	if invs, err := p.store.ListInvitations(ctx, orgID); err == nil {
-		for _, inv := range invs {
-			if inv == nil {
-				continue
-			}
-			if err := p.store.DeleteInvitation(ctx, inv.ID); err != nil && p.logger != nil {
-				p.logger.Warn("organization: delete invitation during org delete failed",
-					log.String("org_id", orgID.String()),
-					log.String("invitation_id", inv.ID.String()),
-					log.Error(err))
+		if teams, err := tx.ListTeams(ctx, orgID); err == nil {
+			for _, t := range teams {
+				if t == nil {
+					continue
+				}
+				if err := tx.DeleteTeam(ctx, t.ID); err != nil {
+					return fmt.Errorf("delete team %s: %w", t.ID, err)
+				}
 			}
 		}
-	}
-
-	if err := p.store.DeleteOrganization(ctx, orgID); err != nil {
+		if invs, err := tx.ListInvitations(ctx, orgID); err == nil {
+			for _, inv := range invs {
+				if inv == nil {
+					continue
+				}
+				if err := tx.DeleteInvitation(ctx, inv.ID); err != nil {
+					return fmt.Errorf("delete invitation %s: %w", inv.ID, err)
+				}
+			}
+		}
+		if err := tx.DeleteOrganization(ctx, orgID); err != nil {
+			return fmt.Errorf("delete org row: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
+
 	p.plugins.EmitAfterOrgDelete(ctx, orgID)
 	return nil
 }

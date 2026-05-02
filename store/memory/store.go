@@ -55,6 +55,12 @@ type Store struct {
 	appSessionConfigs map[string]*appsessionconfig.Config
 	appClientConfigs  map[string]*appclientconfig.Config
 	settingsMap       map[string]*settings.Setting
+
+	// faults is a TEST-ONLY one-shot fault map. Keys are method names
+	// (e.g. "DeleteTeam"); the named method consumes and returns the
+	// stored error on its next call. Production code MUST NOT depend on
+	// this field.
+	faults map[string]error
 }
 
 // New creates a new in-memory store.
@@ -79,7 +85,89 @@ func New() *Store {
 		appSessionConfigs: make(map[string]*appsessionconfig.Config),
 		appClientConfigs:  make(map[string]*appclientconfig.Config),
 		settingsMap:       make(map[string]*settings.Setting),
+		faults:            make(map[string]error),
 	}
+}
+
+// InjectOneShotFault is a TEST-ONLY helper. The next call to <method>
+// returns err. Production code must not depend on this.
+func (s *Store) InjectOneShotFault(method string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.faults == nil {
+		s.faults = make(map[string]error)
+	}
+	s.faults[method] = err
+}
+
+// takeFault consumes a one-shot fault for method, if one was injected.
+// Returns nil if no fault was queued.
+func (s *Store) takeFault(method string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err, ok := s.faults[method]; ok {
+		delete(s.faults, method)
+		return err
+	}
+	return nil
+}
+
+// orgTxSnapshot captures only the organization-related tables (orgs,
+// members, invitations, teams). It exists to support WithTx on the memory
+// store and intentionally does NOT cover other tables; do not use this
+// WithTx for cross-table mutations until the snapshot is broadened.
+type orgTxSnapshot struct {
+	orgs        map[string]*organization.Organization
+	members     map[string]*organization.Member
+	invitations map[string]*organization.Invitation
+	teams       map[string]*organization.Team
+}
+
+func (s *Store) snapshotOrgState() *orgTxSnapshot {
+	cpOrg := make(map[string]*organization.Organization, len(s.orgs))
+	for k, v := range s.orgs {
+		cpOrg[k] = v
+	}
+	cpMem := make(map[string]*organization.Member, len(s.members))
+	for k, v := range s.members {
+		cpMem[k] = v
+	}
+	cpInv := make(map[string]*organization.Invitation, len(s.invitations))
+	for k, v := range s.invitations {
+		cpInv[k] = v
+	}
+	cpTeam := make(map[string]*organization.Team, len(s.teams))
+	for k, v := range s.teams {
+		cpTeam[k] = v
+	}
+	return &orgTxSnapshot{orgs: cpOrg, members: cpMem, invitations: cpInv, teams: cpTeam}
+}
+
+func (s *Store) restoreOrgState(snap *orgTxSnapshot) {
+	s.orgs = snap.orgs
+	s.members = snap.members
+	s.invitations = snap.invitations
+	s.teams = snap.teams
+}
+
+// WithTx runs fn against the memory store with snapshot/restore semantics
+// for the four organization-related tables (orgs, members, invitations,
+// teams). On error, those tables are restored to their pre-fn state.
+//
+// snapshotOrgState covers only organization tables; do not use this
+// WithTx for cross-table mutations until the snapshot is broadened.
+func (s *Store) WithTx(_ context.Context, fn func(tx organization.Store) error) error {
+	s.mu.Lock()
+	snap := s.snapshotOrgState()
+	s.mu.Unlock()
+
+	if err := fn(s); err != nil {
+		s.mu.Lock()
+		s.restoreOrgState(snap)
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (s *Store) Migrate(_ context.Context, _ ...*migrate.Group) error { return nil }
@@ -490,6 +578,9 @@ func (s *Store) UpdateOrganization(_ context.Context, o *organization.Organizati
 }
 
 func (s *Store) DeleteOrganization(_ context.Context, orgID id.OrgID) error {
+	if err := s.takeFault("DeleteOrganization"); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.orgs, orgID.String())
@@ -570,6 +661,9 @@ func (s *Store) UpdateMember(_ context.Context, m *organization.Member) error {
 }
 
 func (s *Store) DeleteMember(_ context.Context, memberID id.MemberID) error {
+	if err := s.takeFault("DeleteMember"); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.members, memberID.String())
@@ -630,6 +724,9 @@ func (s *Store) UpdateInvitation(_ context.Context, inv *organization.Invitation
 }
 
 func (s *Store) DeleteInvitation(_ context.Context, invID id.InvitationID) error {
+	if err := s.takeFault("DeleteInvitation"); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.invitations[invID.String()]; !ok {
@@ -684,6 +781,9 @@ func (s *Store) UpdateTeam(_ context.Context, t *organization.Team) error {
 }
 
 func (s *Store) DeleteTeam(_ context.Context, teamID id.TeamID) error {
+	if err := s.takeFault("DeleteTeam"); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.teams, teamID.String())

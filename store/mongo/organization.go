@@ -488,3 +488,11 @@ func (s *Store) ListTeams(ctx context.Context, orgID id.OrgID) ([]*organization.
 
 	return result, nil
 }
+
+// WithTx is a best-effort no-op wrapper for now. Real backend transactions
+// require plumbing driver.Tx through every Store method, which is a multi-
+// day refactor deferred to a follow-up PR. New cascade callers should still
+// route through this entry point so the future migration is a single change.
+func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
+	return fn(s)
+}

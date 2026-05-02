@@ -17,6 +17,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/store/memory"
 
 	"github.com/xraph/warden"
@@ -164,6 +165,75 @@ func InitTestNonceSigner(t *testing.T) {
 	t.Helper()
 	require.NoError(t, dashboard.InitNonceSigner([]byte("secutil-test-nonce-signer-secret-32bytes!")),
 		"secutil: init nonce signer")
+}
+
+// InjectStoreFault makes the named store method return err on its next
+// call against the underlying memory store. Test-only.
+func InjectStoreFault(t *testing.T, eng *authsome.Engine, method string, err error) {
+	t.Helper()
+	memStore, ok := eng.Store().(*memory.Store)
+	if !ok {
+		t.Fatalf("InjectStoreFault requires the memory store; got %T", eng.Store())
+	}
+	memStore.InjectOneShotFault(method, err)
+}
+
+// afterOrgDeleteTestPlugin is a minimal plugin that fires fn whenever the
+// AfterOrgDelete hook is emitted. It exists so tests can observe the hook
+// without booting an entire downstream plugin.
+type afterOrgDeleteTestPlugin struct {
+	name string
+	fn   func(context.Context, id.OrgID) error
+}
+
+func (p *afterOrgDeleteTestPlugin) Name() string { return p.name }
+func (p *afterOrgDeleteTestPlugin) OnAfterOrgDelete(ctx context.Context, orgID id.OrgID) error {
+	return p.fn(ctx, orgID)
+}
+
+// onAfterOrgDeleteSeq is a process-wide counter used to give each
+// OnAfterOrgDelete test plugin a unique name. The plugin registry has no
+// Unregister entry point at time of writing, so the registered plugin
+// leaks for the remainder of the engine's lifetime — but the engine itself
+// is torn down by NewTestEngine's t.Cleanup, so the leak is bounded to the
+// test.
+var onAfterOrgDeleteSeq int64
+var onAfterOrgDeleteMu sync.Mutex
+
+// OnAfterOrgDelete registers an additional AfterOrgDelete hook for the
+// test. The registered plugin leaks for the engine's lifetime (no
+// Unregister API exists yet), which is acceptable because the engine is
+// scoped to the test via NewTestEngine.
+func OnAfterOrgDelete(t *testing.T, eng *authsome.Engine, fn func(context.Context, id.OrgID) error) {
+	t.Helper()
+	onAfterOrgDeleteMu.Lock()
+	onAfterOrgDeleteSeq++
+	name := "secutil-after-org-delete-" + itoa(onAfterOrgDeleteSeq)
+	onAfterOrgDeleteMu.Unlock()
+	eng.Plugins().Register(&afterOrgDeleteTestPlugin{name: name, fn: fn})
+}
+
+func itoa(n int64) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := false
+	if n < 0 {
+		neg = true
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
 
 func recordedActions(events []bridge.AuditEvent) []string {
