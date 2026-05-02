@@ -55,6 +55,27 @@ func TestSettingAutoRefreshExposeRefreshToken_DefaultFalse(t *testing.T) {
 	assert.False(t, val, "auto-refresh expose refresh token should default to false")
 }
 
+func TestSettingRequireEmailVerification_DefaultsToTrue(t *testing.T) {
+	// Phase 2A: default flipped from false to true so signup-created accounts
+	// can't be exploited before the user proves email ownership.
+	var val bool
+	err := json.Unmarshal(SettingRequireEmailVerification.Def.Default, &val)
+	require.NoError(t, err)
+	assert.True(t, val, "SettingRequireEmailVerification must default to true for new app configs (Phase 2A)")
+}
+
+func TestSettingRequireEmailVerification_ResolvesTrueWithNoOverrides(t *testing.T) {
+	// With no store-level overrides, Get must resolve to the registered default.
+	// This guards the runtime resolution path (settings.Get) — not just the JSON.
+	mgr := settings.NewManager(settings.NilStore{}, log.NewNoopLogger())
+	err := registerCoreSessionSettings(mgr)
+	require.NoError(t, err)
+
+	got, err := settings.Get(t.Context(), mgr, SettingRequireEmailVerification, settings.ResolveOpts{AppID: "app_test"})
+	require.NoError(t, err)
+	assert.True(t, got, "with no overrides, Get must resolve to the new default (true)")
+}
+
 func TestDefaultConfig_RefreshLimit(t *testing.T) {
 	cfg := DefaultConfig()
 	assert.Equal(t, 10, cfg.RateLimit.RefreshLimit, "refresh rate limit should default to 10")

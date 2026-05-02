@@ -308,8 +308,15 @@ func TestSignIn_EmailVerificationDisabled_DynamicSetting(t *testing.T) {
 	ctx := context.Background()
 	appID := testAppID(t)
 
-	// Leave default (false) — sign-in should succeed for unverified users.
-	signUpTestUser(t, eng, "unverified2@example.com", "SecureP@ss1")
+	// newTestEngine sets a global false override (Phase 2A bootstrap). Sign up
+	// directly so the user remains unverified — exercising the disabled gate.
+	_, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:     appID,
+		Email:     "unverified2@example.com",
+		Password:  "SecureP@ss1",
+		FirstName: "Unverified",
+	})
+	require.NoError(t, err)
 
 	u, sess, err := eng.SignIn(ctx, &account.SignInRequest{
 		AppID:    appID,

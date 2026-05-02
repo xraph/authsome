@@ -15,9 +15,17 @@ import (
 // Category: Authentication
 
 var (
-	// SettingRequireEmailVerification controls whether unverified email addresses
-	// block sign-in. When enabled, users must verify their email before they can log in.
-	SettingRequireEmailVerification = settings.Define("auth.require_email_verification", false,
+	// SettingRequireEmailVerification gates login on email-verified status.
+	//
+	// Default flipped from false to true in Phase 2A (2026-05) so signup-created
+	// accounts can't be exploited before the user proves email ownership.
+	// Existing app configs with an explicit override (true OR false) are
+	// unchanged — only the default resolution changes. Apps that relied on
+	// the previous false default and have unverified active users should
+	// either:
+	//   (a) set the global override to false during the rollout window, or
+	//   (b) batch-verify their unverified user base before deploy.
+	SettingRequireEmailVerification = settings.Define("auth.require_email_verification", true,
 		settings.WithDisplayName("Require Email Verification"),
 		settings.WithDescription("Block sign-in for accounts with unverified email addresses"),
 		settings.WithCategory("Authentication"),

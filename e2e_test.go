@@ -2,6 +2,7 @@ package authsome_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/xraph/authsome/organization"
 	orgplugin "github.com/xraph/authsome/plugins/organization"
 	"github.com/xraph/authsome/rbac"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/webhook"
@@ -52,6 +54,13 @@ func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory
 	ctx := context.Background()
 	require.NoError(t, eng.Start(ctx))
 	t.Cleanup(func() { _ = eng.Stop(ctx) })
+
+	// Phase 2A: disable email-verification requirement for E2E sign-in flows
+	// that don't exercise the verification gate. See engine_test.go for rationale.
+	if mgr := eng.Settings(); mgr != nil {
+		_ = mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test-bootstrap")
+	}
 
 	return eng, s
 }
