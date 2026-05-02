@@ -174,3 +174,17 @@ func (j *JWT) KeyID() string { return j.config.KeyID }
 
 // Algorithm returns the signing algorithm name.
 func (j *JWT) Algorithm() string { return j.config.SigningMethod.Alg() }
+
+// HMACKey returns the symmetric signing key when this JWT format uses an
+// HMAC algorithm (HS256/HS384/HS512). The second return is false for RSA or
+// ECDSA configurations, where no symmetric key exists.
+//
+// This is intended for callers that need a process-wide symmetric secret
+// to derive other HMAC keys from (e.g. the dashboard nonce signer). Never
+// expose the returned bytes over the network.
+func (j *JWT) HMACKey() ([]byte, bool) {
+	if k, ok := j.config.SigningKey.([]byte); ok {
+		return k, true
+	}
+	return nil, false
+}

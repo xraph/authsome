@@ -7,8 +7,11 @@ package authsome
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	log "github.com/xraph/go-utils/log"
@@ -1305,6 +1308,44 @@ func (e *Engine) UnlinkAuthMethod(ctx context.Context, userID id.UserID, provide
 type Metrics struct {
 	PluginsLoaded int `json:"plugins_loaded"`
 	Strategies    int `json:"strategies"`
+}
+
+// NonceSecret returns the dashboard nonce signing secret.
+//
+// It is derived from the first available HMAC JWT signing key (i.e. an entry
+// in jwtFormats whose SigningKey is a []byte) by HMAC-SHA256 with the
+// info string "authsome:dashboard:nonce-v1" — a single-step HKDF-Expand
+// equivalent that domain-separates the nonce key from the JWT key without
+// adding a new dependency.
+//
+// If no HMAC JWT key is available (e.g. RSA/ES256 only, or no JWT at all),
+// it falls back to the AUTHSOME_DASHBOARD_NONCE_SECRET environment variable.
+// If that is also empty, it returns nil and the caller (the dashboard
+// contributor) is expected to log a warning and either generate a random
+// per-process secret or leave the signer uninitialised.
+func (e *Engine) NonceSecret() []byte {
+	const info = "authsome:dashboard:nonce-v1"
+
+	for _, jwtFmt := range e.jwtFormats {
+		if jwtFmt == nil {
+			continue
+		}
+		if key, ok := jwtFmt.HMACKey(); ok && len(key) > 0 {
+			h := hmac.New(sha256.New, key)
+			h.Write([]byte(info))
+			return h.Sum(nil)
+		}
+	}
+
+	if env := os.Getenv("AUTHSOME_DASHBOARD_NONCE_SECRET"); env != "" {
+		// Domain-separate even the env-var path so a future reuse of the
+		// same env var elsewhere does not cross-contaminate.
+		h := hmac.New(sha256.New, []byte(env))
+		h.Write([]byte(info))
+		return h.Sum(nil)
+	}
+
+	return nil
 }
 
 // Metrics returns the current engine metrics.

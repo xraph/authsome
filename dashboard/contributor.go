@@ -2,12 +2,15 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/a-h/templ"
+
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 
@@ -47,6 +50,13 @@ type Contributor struct {
 }
 
 // New creates a new authsome dashboard contributor.
+//
+// Side effect: initialises the process-wide HMAC nonce signer used by
+// GenerateScopedNonce / ConsumeScopedNonce. The secret is derived from the
+// engine via Engine.NonceSecret(). If no secret is available (no HMAC JWT
+// configured and AUTHSOME_DASHBOARD_NONCE_SECRET unset), a random per-process
+// secret is generated and a warning is logged — scoped nonces still work
+// locally but will not survive a restart and are not shared across replicas.
 func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plugin.Plugin) *Contributor {
 	c := &Contributor{
 		manifest: manifest,
@@ -54,7 +64,42 @@ func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plug
 		plugins:  plugins,
 	}
 	c.pageRoutes = c.buildPageRoutes()
+
+	initNonceSignerFromEngine(engine)
+
 	return c
+}
+
+// initNonceSignerFromEngine resolves a signing secret from the engine and
+// installs the dashboard's scoped-nonce signer. It never panics or aborts
+// startup; on misconfiguration it logs a warning and falls back to a
+// process-random secret so the dashboard remains functional in dev.
+func initNonceSignerFromEngine(engine *authsome.Engine) {
+	if engine == nil {
+		return
+	}
+	logger := engine.Logger()
+	secret := engine.NonceSecret()
+	if len(secret) < 16 {
+		fallback := make([]byte, 32)
+		if _, err := rand.Read(fallback); err != nil {
+			if logger != nil {
+				logger.Warn("authsome dashboard: scoped-nonce signer unavailable (random fallback failed)",
+					log.String("error", err.Error()),
+				)
+			}
+			return
+		}
+		if logger != nil {
+			logger.Warn("authsome dashboard: nonce signer using random per-process secret; set AUTHSOME_DASHBOARD_NONCE_SECRET or configure an HMAC JWT key for stable signing across restarts and replicas")
+		}
+		secret = fallback
+	}
+	if err := InitNonceSigner(secret); err != nil && logger != nil {
+		logger.Warn("authsome dashboard: scoped-nonce signer init failed",
+			log.String("error", err.Error()),
+		)
+	}
 }
 
 // buildPageRoutes merges core knownPageRoutes with routes contributed by
