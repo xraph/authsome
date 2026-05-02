@@ -58,6 +58,7 @@ func (m *mockEngine) Herald() bridge.Herald         { return nil }
 func (m *mockEngine) Mailer() bridge.Mailer         { return nil }
 func (m *mockEngine) SMSSender() bridge.SMSSender   { return nil }
 func (m *mockEngine) Ledger() bridge.Ledger         { return nil }
+func (m *mockEngine) TokenEncryptor() bridge.Encryptor { return bridge.NoopEncryptor{} }
 func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.EnvironmentID) account.SessionConfig {
 	return account.SessionConfig{}
 }

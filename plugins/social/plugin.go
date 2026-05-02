@@ -259,6 +259,16 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	p.settingsMgr = engine.Settings()
 	p.basePath = engine.BasePath()
 
+	// If an OAuth store has been wired (via SetOAuthStore) and is not
+	// already encrypted, transparently wrap it so access/refresh tokens
+	// are encrypted at rest. Skipping when the engine's encryptor is a
+	// Noop is fine — wrapping is still semantically a passthrough.
+	if p.oauthStore != nil {
+		if _, already := p.oauthStore.(*EncryptedStore); !already {
+			p.oauthStore = NewEncryptedStore(p.oauthStore, engine.TokenEncryptor())
+		}
+	}
+
 	return nil
 }
 

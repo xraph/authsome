@@ -153,6 +153,16 @@ func WithHerald(h bridge.Herald) Option {
 	}
 }
 
+// WithTokenEncryptor sets the at-rest Encryptor used for sensitive opaque
+// payloads (third-party OAuth access/refresh tokens, etc). When not set,
+// the engine reads AUTHSOME_TOKEN_ENCRYPTION_KEY from the environment;
+// if that is also unset, it falls back to a NoopEncryptor with a warning.
+func WithTokenEncryptor(enc bridge.Encryptor) Option {
+	return func(e *Engine) {
+		e.tokenEncryptor = enc
+	}
+}
+
 // WithVault sets the secrets, feature flags, and configuration bridge.
 func WithVault(v bridge.Vault) Option {
 	return func(e *Engine) {

@@ -92,6 +92,11 @@ type Engine struct {
 	ledger       bridge.Ledger
 	metrics      bridge.MetricsCollector
 
+	// tokenEncryptor encrypts at-rest secrets such as third-party OAuth
+	// access/refresh tokens. Defaults to bridge.NoopEncryptor when no
+	// AUTHSOME_TOKEN_ENCRYPTION_KEY is configured (dev mode).
+	tokenEncryptor bridge.Encryptor
+
 	// Ceremony state store for multi-instance auth ceremonies
 	ceremonyStore ceremony.Store
 
@@ -163,6 +168,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 		return nil, fmt.Errorf("authsome: failed to register captcha settings: %w", err)
 	}
 
+	// Resolve token encryptor: WithTokenEncryptor wins, otherwise read env.
+	if e.tokenEncryptor == nil {
+		e.tokenEncryptor = resolveTokenEncryptor(e.logger)
+	}
+
 	// Register pending plugins
 	for _, p := range e.pendingPlugins {
 		e.plugins.Register(p)
@@ -204,6 +214,19 @@ func (e *Engine) requireStarted() error {
 // capability detection (JWT, strategies) and the cookie-to-header bridge.
 // Called once during InitPlugins so both the extension and plugins share
 // the same middleware instance.
+//
+// Strategy registration timing — IMPORTANT: this method runs DURING
+// InitPlugins, BEFORE plugin OnInit hooks fire and BEFORE Engine.Start
+// auto-registers plugin-provided strategies. So at build time
+// `e.HasStrategies()` is always false and `e.Strategies()` returns an
+// empty registry. We deliberately ignore HasStrategies as a switch
+// guard and always pass the registry pointer into the middleware —
+// the registry is allocated up front and the middleware reads it
+// lazily on each request, so strategies registered AFTER this build
+// are picked up automatically. Choosing the bare `AuthMiddleware`
+// variant here would permanently strip strategy support from every
+// request and turn every API-key call into a 401 with the unhelpful
+// "no strategy ran" debug_reason.
 func (e *Engine) buildAuthMiddleware() {
 	var inner forge.Middleware
 
@@ -212,8 +235,7 @@ func (e *Engine) buildAuthMiddleware() {
 		JWTSessionChecker:  e.jwtSessionChecker,
 	}
 
-	switch {
-	case e.HasJWT():
+	if e.HasJWT() {
 		inner = middleware.AuthMiddlewareWithJWT(
 			e.ResolveSessionByToken,
 			e.ResolveUser,
@@ -222,18 +244,15 @@ func (e *Engine) buildAuthMiddleware() {
 			e.Logger(),
 			bindCfg,
 		)
-	case e.HasStrategies():
+	} else {
+		// Always pass the strategies registry — even when empty at
+		// build time it will be populated by Start before the first
+		// request lands. The registry pointer is stable; the
+		// middleware iterates it on each request.
 		inner = middleware.AuthMiddlewareWithStrategies(
 			e.ResolveSessionByToken,
 			e.ResolveUser,
 			e.Strategies(),
-			e.Logger(),
-			bindCfg,
-		)
-	default:
-		inner = middleware.AuthMiddleware(
-			e.ResolveSessionByToken,
-			e.ResolveUser,
 			e.Logger(),
 			bindCfg,
 		)
@@ -672,6 +691,18 @@ func (e *Engine) Herald() bridge.Herald { return e.heraldBridge }
 
 // Vault returns the secrets/feature-flag/config bridge (may be nil).
 func (e *Engine) Vault() bridge.Vault { return e.vault }
+
+// TokenEncryptor returns the at-rest Encryptor used for sensitive opaque
+// payloads such as third-party OAuth access/refresh tokens. Always non-nil
+// after NewEngine — falls back to bridge.NoopEncryptor when no key is
+// configured. Plugins that persist provider tokens should wrap their store
+// using this encryptor (see plugins/social.NewEncryptedStore).
+func (e *Engine) TokenEncryptor() bridge.Encryptor {
+	if e.tokenEncryptor == nil {
+		return bridge.NoopEncryptor{}
+	}
+	return e.tokenEncryptor
+}
 
 // Dispatcher returns the job queue bridge (may be nil).
 func (e *Engine) Dispatcher() bridge.Dispatcher { return e.dispatcher }
