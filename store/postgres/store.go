@@ -912,6 +912,15 @@ func (s *Store) GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix st
 	return toAPIKey(m)
 }
 
+func (s *Store) FindByPrefix(ctx context.Context, prefix string) (*apikey.APIKey, error) {
+	m := new(APIKeyModel)
+	err := s.pg.NewSelect(m).Where("key_prefix = ?", prefix).Scan(ctx)
+	if err != nil {
+		return nil, pgError(err)
+	}
+	return toAPIKey(m)
+}
+
 func (s *Store) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*apikey.APIKey, error) {
 	m := new(APIKeyModel)
 	err := s.pg.NewSelect(m).

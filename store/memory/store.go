@@ -924,6 +924,17 @@ func (s *Store) GetAPIKeyByPrefix(_ context.Context, appID id.AppID, prefix stri
 	return nil, store.ErrNotFound
 }
 
+func (s *Store) FindByPrefix(_ context.Context, prefix string) (*apikey.APIKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, k := range s.apikeys {
+		if k.KeyPrefix == prefix {
+			return k, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
 func (s *Store) GetAPIKeyByPublicKey(_ context.Context, appID id.AppID, publicKey string) (*apikey.APIKey, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

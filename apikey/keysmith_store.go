@@ -64,6 +64,15 @@ func (s *KeysmithStore) GetAPIKeyByPrefix(ctx context.Context, _ id.AppID, prefi
 	return fromKeysmithKey(k)
 }
 
+func (s *KeysmithStore) FindByPrefix(ctx context.Context, prefix string) (*APIKey, error) {
+	// Keysmith's lookup is already app-agnostic — appID is metadata only.
+	k, err := s.engine.Store().Keys().GetByPrefix(ctx, "ask", prefix)
+	if err != nil {
+		return nil, keysmithError(err)
+	}
+	return fromKeysmithKey(k)
+}
+
 func (s *KeysmithStore) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*APIKey, error) {
 	// Public key is stored in keysmith metadata. List keys for the tenant
 	// and find the matching one by comparing the public key field.

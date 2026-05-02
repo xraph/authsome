@@ -58,6 +58,11 @@ type Store interface {
 	// Used during authentication to look up the key.
 	GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix string) (*APIKey, error)
 
+	// FindByPrefix is the app-agnostic counterpart to GetAPIKeyByPrefix:
+	// it resolves a key by prefix alone, used by the introspection endpoint
+	// where the caller doesn't know the appID up-front.
+	FindByPrefix(ctx context.Context, prefix string) (*APIKey, error)
+
 	// GetAPIKeyByPublicKey returns an API key by its public key.
 	GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*APIKey, error)
 
