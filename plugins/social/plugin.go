@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
+	"html/template"
 	"net/http"
 	"net/url"
 	"sort"
@@ -784,7 +784,14 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		if redirectTarget == "" {
 			redirectTarget = "/"
 		}
-		escapedRedirect := html.EscapeString(redirectTarget)
+		// The redirect target is interpolated into a JS string literal
+		// (`window.location.href="<value>"`), so we must use JS-escaping
+		// — html.EscapeString here would only stop </script> injection
+		// and leaves backslash, quote, newline, and U+2028/U+2029
+		// (which terminate JS string literals) unescaped. The sanitizer
+		// already strips most dangerous bytes upstream, but defense in
+		// depth: use template.JSEscapeString for the right context.
+		escapedRedirect := template.JSEscapeString(redirectTarget)
 
 		ctx.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		ctx.Response().WriteHeader(http.StatusOK)
