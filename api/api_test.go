@@ -61,8 +61,8 @@ func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	// sign-in flows succeed without an extra verification step. Tests that
 	// specifically exercise the gate can override back to true.
 	if mgr := eng.Settings(); mgr != nil {
-		_ = mgr.Set(context.Background(), "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap")
+		require.NoError(t, mgr.Set(context.Background(), "auth.require_email_verification", json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
 	}
 
 	a := api.New(eng)
@@ -481,6 +481,64 @@ func TestHandleSignIn_WrongPassword(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestSignIn_UnverifiedEmail_Returns403WithStableCode pins the JSON-API
+// contract for accounts that exist but haven't verified their email yet.
+// After Phase 2A flipped SettingRequireEmailVerification to default-true,
+// the account service began returning account.ErrEmailNotVerified on
+// signin for unverified users. api/helpers.go.mapError had no branch for
+// it, so every such signin fell through to forge.InternalError → HTTP
+// 500 with no distinguishable code, breaking SDK consumers that needed
+// to differentiate "needs verification" from "server fault."
+//
+// The dashboard and extension surfaces already special-case this error
+// (see dashboard/contributor.go and extension/auth_pages.go); this test
+// pins the same coverage for the JSON API.
+func TestSignIn_UnverifiedEmail_Returns403WithStableCode(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	// newTestAPI disables the verification gate globally so most tests
+	// can sign in freely. Override BACK to true here so this test
+	// exercises the production default behaviour.
+	require.NoError(t, eng.Settings().Set(
+		context.Background(),
+		"auth.require_email_verification",
+		json.RawMessage(`true`),
+		settings.ScopeGlobal, "", "", "",
+		"unverified-signin-test",
+	))
+
+	// Sign up — engine creates user with EmailVerified=false.
+	body := []byte(`{"email":"unverified@example.com","password":"SecureP@ss1"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code, "signup must succeed; body=%s", rec.Body.String())
+
+	// Now sign in — must return 403, NOT 500.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/signin", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"unverified signin must return 403; got %d body=%s", rec.Code, rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+
+	// Stable string code so SDK consumers can branch on the error
+	// without inspecting the human-readable message. The HTTP-error
+	// shape used elsewhere in the API is {"error": <message>, "code":
+	// <int status>}, so the stable string code lives in a "type" field
+	// alongside it.
+	typ, _ := resp["type"].(string)
+	require.Equal(t, "email_not_verified", typ,
+		"response missing stable error type code; got %+v", resp)
 }
 
 // ──────────────────────────────────────────────────

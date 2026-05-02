@@ -38,8 +38,8 @@ func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *me
 	// tests that specifically exercise the verification gate override this
 	// setting back to true (or write per-app/env overrides).
 	if mgr := eng.Settings(); mgr != nil {
-		_ = mgr.Set(context.Background(), "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap")
+		require.NoError(t, mgr.Set(context.Background(), "auth.require_email_verification", json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
 	}
 
 	return eng, s

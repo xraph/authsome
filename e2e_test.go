@@ -58,8 +58,8 @@ func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory
 	// Phase 2A: disable email-verification requirement for E2E sign-in flows
 	// that don't exercise the verification gate. See engine_test.go for rationale.
 	if mgr := eng.Settings(); mgr != nil {
-		_ = mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap")
+		require.NoError(t, mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
 	}
 
 	return eng, s

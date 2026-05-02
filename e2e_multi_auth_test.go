@@ -55,8 +55,8 @@ func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 	// Phase 2A: disable email-verification requirement for E2E flows that
 	// don't exercise the verification gate.
 	if mgr := eng.Settings(); mgr != nil {
-		_ = mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap")
+		require.NoError(t, mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
 	}
 
 	return eng, s
