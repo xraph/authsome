@@ -868,8 +868,9 @@ type ClientConfigSocialProvider struct {
 
 // ClientConfigMFA represents the MFA configuration.
 type ClientConfigMFA struct {
-	Enabled bool     `json:"enabled"`
-	Methods []string `json:"methods"`
+	Enabled  bool     `json:"enabled"`
+	Required bool     `json:"required"`
+	Methods  []string `json:"methods"`
 }
 
 // ClientConfigSSO represents the SSO configuration.
@@ -970,6 +971,7 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		socialEnabled    bool
 		passkeyEnabled   bool
 		mfaEnabled       bool
+		mfaRequired      bool
 		magicLinkEnabled bool
 		ssoEnabled       bool
 		waitlistEnabled  bool
@@ -1026,6 +1028,9 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 			&waitlistEnabled,
 			&socialProviders, &ssoConnections, &mfaMethods,
 		)
+		if overrides.MFARequired != nil {
+			mfaRequired = *overrides.MFARequired
+		}
 	}
 
 	// Signup is enabled by default unless explicitly disabled.
@@ -1048,8 +1053,9 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		mfaMethods = []string{}
 	}
 	resp.MFA = &ClientConfigMFA{
-		Enabled: mfaEnabled,
-		Methods: mfaMethods,
+		Enabled:  mfaEnabled,
+		Required: mfaRequired,
+		Methods:  mfaMethods,
 	}
 
 	if ssoConnections == nil {
