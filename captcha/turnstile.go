@@ -51,12 +51,25 @@ type turnstileResponse struct {
 	ErrorCodes  []string `json:"error-codes"`
 }
 
-// Verify implements Verifier. Returns nil on success; ErrMissingToken if the
-// token is empty; *VerifyError with provider codes on rejection;
-// ErrTransientFailure on network/parse errors so callers can decide policy.
-func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action string) error {
+// Verify implements Verifier.
+//
+// On success: returns (*Result, nil) with ChallengeTS, Hostname, and Action
+// populated from the provider response. If the caller supplied a non-empty
+// action and it does not match the response's action, returns
+// (nil, *VerifyError{Codes: ["action-mismatch"]}).
+//
+// On failure: returns (nil, err) — ErrMissingToken if token is empty;
+// ErrTransientFailure on network/parse/non-2xx; otherwise the classified
+// sentinel for known Turnstile error codes or a *VerifyError preserving the
+// provider codes.
+//
+// Note: Cloudflare's siteverify does NOT accept "action" as a request form
+// field; the action is bound at widget render time and echoed back in the
+// response. We therefore do not send it on the wire — we only compare the
+// echoed value against what the caller expects.
+func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action string) (*Result, error) {
 	if strings.TrimSpace(token) == "" {
-		return ErrMissingToken
+		return nil, ErrMissingToken
 	}
 
 	form := url.Values{}
@@ -65,15 +78,10 @@ func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action 
 	if remoteIP != "" {
 		form.Set("remoteip", remoteIP)
 	}
-	if action != "" {
-		// Turnstile validates the action server-side via its policy; we still
-		// pass it for symmetry with the API where supported.
-		form.Set("action", action)
-	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrTransientFailure, err)
+		return nil, fmt.Errorf("%w: %v", ErrTransientFailure, err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -82,26 +90,35 @@ func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action 
 	if err != nil {
 		// Preserve context errors so callers can detect cancellation/timeout.
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return fmt.Errorf("%w: %v", ctxErr, err)
+			return nil, fmt.Errorf("%w: %v", ctxErr, err)
 		}
-		return fmt.Errorf("%w: %v", ErrTransientFailure, err)
+		return nil, fmt.Errorf("%w: %v", ErrTransientFailure, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%w: unexpected status %d", ErrTransientFailure, resp.StatusCode)
+		return nil, fmt.Errorf("%w: unexpected status %d", ErrTransientFailure, resp.StatusCode)
 	}
 
 	var out turnstileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return fmt.Errorf("%w: %v", ErrTransientFailure, err)
+		return nil, fmt.Errorf("%w: %v", ErrTransientFailure, err)
 	}
 
-	if out.Success {
-		return nil
+	if !out.Success {
+		return nil, classifyTurnstileCodes(out.ErrorCodes)
 	}
 
-	return classifyTurnstileCodes(out.ErrorCodes)
+	if action != "" && out.Action != action {
+		return nil, &VerifyError{Codes: []string{"action-mismatch"}}
+	}
+
+	return &Result{
+		Success:     true,
+		ChallengeTS: out.ChallengeTS,
+		Hostname:    out.Hostname,
+		Action:      out.Action,
+	}, nil
 }
 
 // classifyTurnstileCodes maps Turnstile error-codes to typed sentinels.
