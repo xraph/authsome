@@ -184,6 +184,7 @@ type sessionModel struct {
 	EnvID                 string    `grove:"env_id"                    bson:"env_id"`
 	UserID                string    `grove:"user_id"                   bson:"user_id"`
 	OrgID                 string    `grove:"org_id"                    bson:"org_id,omitempty"`
+	FamilyID              string    `grove:"family_id"                 bson:"family_id,omitempty"`
 	Token                 string    `grove:"token"                     bson:"token"`
 	RefreshToken          string    `grove:"refresh_token"             bson:"refresh_token"`
 	IPAddress             string    `grove:"ip_address"                bson:"ip_address"`
@@ -221,6 +222,9 @@ func toSessionModel(s *session.Session) *sessionModel {
 	}
 	if s.ImpersonatedBy.Prefix() != "" {
 		m.ImpersonatedBy = s.ImpersonatedBy.String()
+	}
+	if s.FamilyID.Prefix() != "" {
+		m.FamilyID = s.FamilyID.String()
 	}
 	return m
 }
@@ -274,6 +278,13 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.ImpersonatedBy = impID
+	}
+	if m.FamilyID != "" {
+		famID, err := id.ParseSessionFamilyID(m.FamilyID)
+		if err != nil {
+			return nil, err
+		}
+		s.FamilyID = famID
 	}
 	return s, nil
 }
@@ -863,9 +874,21 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 		return nil, err
 	}
 	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
-	userID, err := id.ParseUserID(m.UserID)
-	if err != nil {
-		return nil, err
+	// Tolerate an empty user_id: legacy keys minted by the dashboard
+	// before the UserID-binding fix have an empty string here.
+	// Failing the model load would short-circuit GetAPIKeyByPrefix
+	// and surface as a generic 401 with no diagnostic AND skip the
+	// LastUsedAt update (so "api key usage isn't tracked" too).
+	// Returning a Nil UserID lets the auth strategy inspect the key
+	// and emit its specific "no user binding" error so operators
+	// can repair the row.
+	var userID id.UserID
+	if m.UserID != "" {
+		parsed, perr := id.ParseUserID(m.UserID)
+		if perr != nil {
+			return nil, perr
+		}
+		userID = parsed
 	}
 	k := &apikey.APIKey{
 		ID:              keyID,
@@ -1176,6 +1199,7 @@ type appClientConfigModel struct {
 	PasskeyEnabled           *bool           `grove:"passkey_enabled"     bson:"passkey_enabled,omitempty"`
 	MagicLinkEnabled         *bool           `grove:"magic_link_enabled"  bson:"magic_link_enabled,omitempty"`
 	MFAEnabled               *bool           `grove:"mfa_enabled"         bson:"mfa_enabled,omitempty"`
+	MFARequired              *bool           `grove:"mfa_required"        bson:"mfa_required,omitempty"`
 	SSOEnabled               *bool           `grove:"sso_enabled"         bson:"sso_enabled,omitempty"`
 	SocialEnabled            *bool           `grove:"social_enabled"      bson:"social_enabled,omitempty"`
 	WaitlistEnabled          *bool           `grove:"waitlist_enabled"              bson:"waitlist_enabled,omitempty"`
@@ -1199,6 +1223,7 @@ func toAppClientConfigModel(c *appclientconfig.Config) *appClientConfigModel {
 		PasskeyEnabled:           c.PasskeyEnabled,
 		MagicLinkEnabled:         c.MagicLinkEnabled,
 		MFAEnabled:               c.MFAEnabled,
+		MFARequired:              c.MFARequired,
 		SSOEnabled:               c.SSOEnabled,
 		SocialEnabled:            c.SocialEnabled,
 		WaitlistEnabled:          c.WaitlistEnabled,
@@ -1237,6 +1262,7 @@ func fromAppClientConfigModel(m *appClientConfigModel) (*appclientconfig.Config,
 		PasskeyEnabled:           m.PasskeyEnabled,
 		MagicLinkEnabled:         m.MagicLinkEnabled,
 		MFAEnabled:               m.MFAEnabled,
+		MFARequired:              m.MFARequired,
 		SSOEnabled:               m.SSOEnabled,
 		SocialEnabled:            m.SocialEnabled,
 		WaitlistEnabled:          m.WaitlistEnabled,
@@ -1310,4 +1336,19 @@ func fromSettingModel(m *settingModel) (*settings.Setting, error) {
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}, nil
+}
+
+// ──────────────────────────────────────────────────
+// Revoked refresh-token model
+// ──────────────────────────────────────────────────
+
+// revokedRefreshTokenModel is the on-disk representation of
+// session.RevokedRefreshToken used for refresh-token replay detection.
+type revokedRefreshTokenModel struct {
+	grove.BaseModel `grove:"table:authsome_revoked_refresh_tokens"`
+
+	TokenHash string    `grove:"token_hash,pk" bson:"_id"`
+	FamilyID  string    `grove:"family_id"     bson:"family_id"`
+	RevokedAt time.Time `grove:"revoked_at"    bson:"revoked_at"`
+	Reason    string    `grove:"reason"        bson:"reason"`
 }

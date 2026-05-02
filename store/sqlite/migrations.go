@@ -773,5 +773,60 @@ DROP TABLE IF EXISTS authsome_settings;
 				return err
 			},
 		},
+		// Migration 18: Add mfa_required column to app_client_configs.
+		&migrate.Migration{
+			Name:    "add_mfa_required_to_client_config",
+			Version: "20260502000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs ADD COLUMN mfa_required INTEGER;`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_app_client_configs DROP COLUMN mfa_required;`)
+				return err
+			},
+		},
+		// Migration 19: Add family_id column to sessions for refresh-token
+		// replay detection.
+		&migrate.Migration{
+			Name:    "add_session_family_id",
+			Version: "20260502000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				if _, err := exec.Exec(ctx, `ALTER TABLE authsome_sessions ADD COLUMN family_id TEXT NOT NULL DEFAULT '';`); err != nil {
+					return err
+				}
+				_, err := exec.Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_authsome_sessions_family_id ON authsome_sessions (family_id);`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				if _, err := exec.Exec(ctx, `DROP INDEX IF EXISTS idx_authsome_sessions_family_id;`); err != nil {
+					return err
+				}
+				_, err := exec.Exec(ctx, `ALTER TABLE authsome_sessions DROP COLUMN family_id;`)
+				return err
+			},
+		},
+		// Migration 20: Create authsome_revoked_refresh_tokens table.
+		&migrate.Migration{
+			Name:    "create_revoked_refresh_tokens",
+			Version: "20260502000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				if _, err := exec.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS authsome_revoked_refresh_tokens (
+    token_hash TEXT PRIMARY KEY,
+    family_id  TEXT NOT NULL,
+    revoked_at TEXT NOT NULL,
+    reason     TEXT NOT NULL DEFAULT ''
+);`); err != nil {
+					return err
+				}
+				_, err := exec.Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_authsome_revoked_refresh_tokens_family_id ON authsome_revoked_refresh_tokens (family_id);`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_revoked_refresh_tokens;`)
+				return err
+			},
+		},
 	)
 }

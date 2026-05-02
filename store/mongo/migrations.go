@@ -455,5 +455,46 @@ func init() {
 			Up:      func(_ context.Context, _ migrate.Executor) error { return nil },
 			Down:    func(_ context.Context, _ migrate.Executor) error { return nil },
 		},
+		// Migration 19: Add family_id index on sessions for refresh-token
+		// replay detection.
+		&migrate.Migration{
+			Name:    "add_session_family_id_index",
+			Version: "20260502000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.CreateIndexes(ctx, colSessions, []mongo.IndexModel{
+					{Keys: bson.D{{Key: "family_id", Value: 1}}},
+				})
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error { return nil },
+		},
+		// Migration 20: Create revoked_refresh_tokens collection with indices
+		// for refresh-token replay detection.
+		&migrate.Migration{
+			Name:    "create_revoked_refresh_tokens",
+			Version: "20260502000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				if err := mexec.CreateCollection(ctx, (*revokedRefreshTokenModel)(nil)); err != nil {
+					return err
+				}
+				return mexec.CreateIndexes(ctx, colRevokedRefreshTokens, []mongo.IndexModel{
+					{Keys: bson.D{{Key: "family_id", Value: 1}}},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.DropCollection(ctx, (*revokedRefreshTokenModel)(nil))
+			},
+		},
 	)
 }

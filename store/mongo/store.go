@@ -38,7 +38,8 @@ const (
 	colEnvironments      = "authsome_environments"
 	colFormConfigs       = "authsome_form_configs"
 	colBrandingConfigs   = "authsome_branding_configs"
-	colAppSessionConfigs = "authsome_app_session_configs"
+	colAppSessionConfigs    = "authsome_app_session_configs"
+	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens" //nolint:gosec // G101: not a credential
 )
 
 // Compile-time interface checks.
@@ -136,6 +137,10 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 			},
 			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
 			{Keys: bson.D{{Key: "expires_at", Value: 1}}},
+			{Keys: bson.D{{Key: "family_id", Value: 1}}},
+		},
+		colRevokedRefreshTokens: {
+			{Keys: bson.D{{Key: "family_id", Value: 1}}},
 		},
 		colVerifications: {
 			{
