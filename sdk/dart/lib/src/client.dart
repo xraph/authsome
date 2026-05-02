@@ -272,6 +272,32 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// Create application (admin)
+  /// POST /v1/admin/apps
+  Future<AdminAppResponse> adminCreateApp({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/apps';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminAppResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete application (admin)
+  /// DELETE /v1/admin/apps/{appId}
+  Future<StatusResponse> adminDeleteApp({required String appId, required AdminDeleteAppRequest body, required String token}) async {
+    final path = '/v1/admin/apps/$appId';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get per-app client config overrides
   /// GET /v1/admin/apps/{appId}/client-config
   Future<Config> getAppClientConfig({required String appId, required String token}) async {
@@ -439,12 +465,11 @@ class AuthClient {
 
   /// List organizations (admin)
   /// GET /v1/admin/orgs
-  Future<OrgListResponse> adminListOrgs({required String token}) async {
+  Future<OrgListResponse> adminListOrgs() async {
     final path = '/v1/admin/orgs';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return OrgListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -549,6 +574,19 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Create SSO connection (admin)
+  /// POST /v1/admin/sso/connections
+  Future<AdminCreateConnectionResponse> ssoAdminCreateConnection({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/sso/connections';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminCreateConnectionResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get stats (admin)
   /// GET /v1/admin/stats
   Future<AdminStatsResponse> adminGetStats({required String token}) async {
@@ -573,6 +611,19 @@ class AuthClient {
     return AdminUserListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Create user (admin)
+  /// POST /v1/admin/users/create
+  Future<User> adminCreateUser({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/users/create';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return User.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get user (admin)
   /// GET /v1/admin/users/{userId}
   Future<User> adminGetUser({required String userId, required String token}) async {
@@ -580,6 +631,19 @@ class AuthClient {
     final res = await _request(
 'GET',
       path,
+      token: token,
+    );
+    return User.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update user (admin)
+  /// PATCH /v1/admin/users/{userId}
+  Future<User> adminUpdateUser({required String userId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/users/$userId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body,
       token: token,
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
@@ -906,38 +970,35 @@ class AuthClient {
 
   /// List consents
   /// GET /v1/consent
-  Future<ListResponse> listConsents({required String token}) async {
+  Future<ListResponse> listConsents() async {
     final path = '/v1/consent';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Grant consent
   /// POST /v1/consent/grant
-  Future<Consent> grantConsent({required Map<String, dynamic> body, required String token}) async {
+  Future<Consent> grantConsent({required Map<String, dynamic> body}) async {
     final path = '/v1/consent/grant';
     final res = await _request(
 'POST',
       path,
       body: body,
-      token: token,
     );
     return Consent.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke consent
   /// POST /v1/consent/revoke
-  Future<StatusResponse> revokeConsent({required Map<String, dynamic> body, required String token}) async {
+  Future<StatusResponse> revokeConsent({required Map<String, dynamic> body}) async {
     final path = '/v1/consent/revoke';
     final res = await _request(
 'POST',
       path,
       body: body,
-      token: token,
     );
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -1275,6 +1336,19 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// Switch active organization
+  /// POST /v1/me/switch-org
+  Future<SwitchOrgResponse> switchOrg({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/me/switch-org';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return SwitchOrgResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// MFA challenge
   /// POST /v1/mfa/challenge
   Future<ChallengeResponse> challengeMFA({required ChallengeRequest body}) async {
@@ -1400,13 +1474,12 @@ class AuthClient {
 
   /// Complete device authorization
   /// POST /v1/oauth/device/complete
-  Future<DeviceCompleteResponse> oauth2DeviceComplete({required DeviceCompleteRequest body, required String token}) async {
+  Future<DeviceCompleteResponse> oauth2DeviceComplete({required DeviceCompleteRequest body}) async {
     final path = '/v1/oauth/device/complete';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }

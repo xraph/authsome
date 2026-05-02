@@ -33,6 +33,115 @@ class ACSRequest {
   String toString() => 'ACSRequest(${toJson()})';
 }
 
+class AdminAppResponse {
+  final String id;
+  final bool isPlatform;
+  final String? logo;
+  final String name;
+  final String? publishableKey;
+  final String slug;
+
+  const AdminAppResponse({
+    required this.id,
+    required this.isPlatform,
+    this.logo,
+    required this.name,
+    this.publishableKey,
+    required this.slug,
+  });
+
+  factory AdminAppResponse.fromJson(Map<String, dynamic> json) {
+    return AdminAppResponse(
+      id: json['id'] as String,
+      isPlatform: json['is_platform'] as bool,
+      logo: json['logo'] as String?,
+      name: json['name'] as String,
+      publishableKey: json['publishable_key'] as String?,
+      slug: json['slug'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'is_platform': isPlatform,
+      if (logo != null) 'logo': logo,
+      'name': name,
+      if (publishableKey != null) 'publishable_key': publishableKey,
+      'slug': slug,
+    };
+  }
+
+  @override
+  String toString() => 'AdminAppResponse(${toJson()})';
+}
+
+class AdminCreateConnectionResponse {
+  final bool active;
+  final String appId;
+  final String domain;
+  final String id;
+  final String protocol;
+  final String provider;
+
+  const AdminCreateConnectionResponse({
+    required this.active,
+    required this.appId,
+    required this.domain,
+    required this.id,
+    required this.protocol,
+    required this.provider,
+  });
+
+  factory AdminCreateConnectionResponse.fromJson(Map<String, dynamic> json) {
+    return AdminCreateConnectionResponse(
+      active: json['active'] as bool,
+      appId: json['app_id'] as String,
+      domain: json['domain'] as String,
+      id: json['id'] as String,
+      protocol: json['protocol'] as String,
+      provider: json['provider'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active': active,
+      'app_id': appId,
+      'domain': domain,
+      'id': id,
+      'protocol': protocol,
+      'provider': provider,
+    };
+  }
+
+  @override
+  String toString() => 'AdminCreateConnectionResponse(${toJson()})';
+}
+
+class AdminDeleteAppRequest {
+  final String appID;
+
+  const AdminDeleteAppRequest({
+    required this.appID,
+  });
+
+  factory AdminDeleteAppRequest.fromJson(Map<String, dynamic> json) {
+    return AdminDeleteAppRequest(
+      appID: json['AppID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+    };
+  }
+
+  @override
+  String toString() => 'AdminDeleteAppRequest(${toJson()})';
+}
+
 class AdminDeleteUserRequest {
   final String userID;
 
@@ -766,6 +875,33 @@ class ClientConfigBranding {
   String toString() => 'ClientConfigBranding(${toJson()})';
 }
 
+class ClientConfigEmailVerification {
+  final bool enabled;
+  final bool requiredValue;
+
+  const ClientConfigEmailVerification({
+    required this.enabled,
+    required this.requiredValue,
+  });
+
+  factory ClientConfigEmailVerification.fromJson(Map<String, dynamic> json) {
+    return ClientConfigEmailVerification(
+      enabled: json['enabled'] as bool,
+      requiredValue: json['required'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      'required': requiredValue,
+    };
+  }
+
+  @override
+  String toString() => 'ClientConfigEmailVerification(${toJson()})';
+}
+
 class ClientConfigFieldValidation {
   final int? max;
   final int? maxLen;
@@ -839,43 +975,55 @@ class ClientConfigMFA {
 class ClientConfigResponse {
   final String appId;
   final ClientConfigBranding? branding;
+  final ClientConfigToggle? deviceAuthorization;
+  final ClientConfigEmailVerification? emailVerification;
   final ClientConfigToggle? magiclink;
   final ClientConfigMFA? mfa;
   final ClientConfigToggle? passkey;
   final ClientConfigToggle? password;
+  final bool signupEnabled;
   final List<ClientConfigSignupField>? signupFields;
   final ClientConfigSocial? social;
   final ClientConfigSSO? sso;
   final List<String> supportedPlugins;
   final String version;
+  final ClientConfigToggle? waitlist;
 
   const ClientConfigResponse({
     required this.appId,
     this.branding,
+    this.deviceAuthorization,
+    this.emailVerification,
     this.magiclink,
     this.mfa,
     this.passkey,
     this.password,
+    required this.signupEnabled,
     this.signupFields,
     this.social,
     this.sso,
     required this.supportedPlugins,
     required this.version,
+    this.waitlist,
   });
 
   factory ClientConfigResponse.fromJson(Map<String, dynamic> json) {
     return ClientConfigResponse(
       appId: json['app_id'] as String,
       branding: json['branding'] == null ? null : ClientConfigBranding.fromJson(Map<String, dynamic>.from(json['branding'] as Map)),
+      deviceAuthorization: json['device_authorization'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['device_authorization'] as Map)),
+      emailVerification: json['email_verification'] == null ? null : ClientConfigEmailVerification.fromJson(Map<String, dynamic>.from(json['email_verification'] as Map)),
       magiclink: json['magiclink'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['magiclink'] as Map)),
       mfa: json['mfa'] == null ? null : ClientConfigMFA.fromJson(Map<String, dynamic>.from(json['mfa'] as Map)),
       passkey: json['passkey'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['passkey'] as Map)),
       password: json['password'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['password'] as Map)),
+      signupEnabled: json['signup_enabled'] as bool,
       signupFields: json['signup_fields'] == null ? null : (json['signup_fields'] as List).map((e) => ClientConfigSignupField.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
       social: json['social'] == null ? null : ClientConfigSocial.fromJson(Map<String, dynamic>.from(json['social'] as Map)),
       sso: json['sso'] == null ? null : ClientConfigSSO.fromJson(Map<String, dynamic>.from(json['sso'] as Map)),
       supportedPlugins: (json['supported_plugins'] as List).map((e) => e as String).toList(),
       version: json['version'] as String,
+      waitlist: json['waitlist'] == null ? null : ClientConfigToggle.fromJson(Map<String, dynamic>.from(json['waitlist'] as Map)),
     );
   }
 
@@ -883,15 +1031,19 @@ class ClientConfigResponse {
     return {
       'app_id': appId,
       if (branding != null) 'branding': branding?.toJson(),
+      if (deviceAuthorization != null) 'device_authorization': deviceAuthorization?.toJson(),
+      if (emailVerification != null) 'email_verification': emailVerification?.toJson(),
       if (magiclink != null) 'magiclink': magiclink?.toJson(),
       if (mfa != null) 'mfa': mfa?.toJson(),
       if (passkey != null) 'passkey': passkey?.toJson(),
       if (password != null) 'password': password?.toJson(),
+      'signup_enabled': signupEnabled,
       if (signupFields != null) 'signup_fields': signupFields?.map((e) => e.toJson()).toList(),
       if (social != null) 'social': social?.toJson(),
       if (sso != null) 'sso': sso?.toJson(),
       'supported_plugins': supportedPlugins,
       'version': version,
+      if (waitlist != null) 'waitlist': waitlist?.toJson(),
     };
   }
 
@@ -1162,10 +1314,13 @@ class Config {
   final List<String>? mfaMethods;
   final bool? passkeyEnabled;
   final bool? passwordEnabled;
+  final bool? requireEmailVerification;
+  final bool? signupEnabled;
   final bool? socialEnabled;
   final List<String>? socialProviders;
   final bool? ssoEnabled;
   final String updatedAt;
+  final bool? waitlistEnabled;
 
   const Config({
     required this.appId,
@@ -1178,10 +1333,13 @@ class Config {
     this.mfaMethods,
     this.passkeyEnabled,
     this.passwordEnabled,
+    this.requireEmailVerification,
+    this.signupEnabled,
     this.socialEnabled,
     this.socialProviders,
     this.ssoEnabled,
     required this.updatedAt,
+    this.waitlistEnabled,
   });
 
   factory Config.fromJson(Map<String, dynamic> json) {
@@ -1196,10 +1354,13 @@ class Config {
       mfaMethods: json['mfa_methods'] == null ? null : (json['mfa_methods'] as List).map((e) => e as String).toList(),
       passkeyEnabled: json['passkey_enabled'] as bool?,
       passwordEnabled: json['password_enabled'] as bool?,
+      requireEmailVerification: json['require_email_verification'] as bool?,
+      signupEnabled: json['signup_enabled'] as bool?,
       socialEnabled: json['social_enabled'] as bool?,
       socialProviders: json['social_providers'] == null ? null : (json['social_providers'] as List).map((e) => e as String).toList(),
       ssoEnabled: json['sso_enabled'] as bool?,
       updatedAt: json['updated_at'] as String,
+      waitlistEnabled: json['waitlist_enabled'] as bool?,
     );
   }
 
@@ -1215,10 +1376,13 @@ class Config {
       if (mfaMethods != null) 'mfa_methods': mfaMethods,
       if (passkeyEnabled != null) 'passkey_enabled': passkeyEnabled,
       if (passwordEnabled != null) 'password_enabled': passwordEnabled,
+      if (requireEmailVerification != null) 'require_email_verification': requireEmailVerification,
+      if (signupEnabled != null) 'signup_enabled': signupEnabled,
       if (socialEnabled != null) 'social_enabled': socialEnabled,
       if (socialProviders != null) 'social_providers': socialProviders,
       if (ssoEnabled != null) 'sso_enabled': ssoEnabled,
       'updated_at': updatedAt,
+      if (waitlistEnabled != null) 'waitlist_enabled': waitlistEnabled,
     };
   }
 
@@ -5894,6 +6058,33 @@ class SubIDRequest {
   String toString() => 'SubIDRequest(${toJson()})';
 }
 
+class SwitchOrgResponse {
+  final String? orgId;
+  final String sessionId;
+
+  const SwitchOrgResponse({
+    this.orgId,
+    required this.sessionId,
+  });
+
+  factory SwitchOrgResponse.fromJson(Map<String, dynamic> json) {
+    return SwitchOrgResponse(
+      orgId: json['org_id'] as String?,
+      sessionId: json['session_id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (orgId != null) 'org_id': orgId,
+      'session_id': sessionId,
+    };
+  }
+
+  @override
+  String toString() => 'SwitchOrgResponse(${toJson()})';
+}
+
 class Team {
   final String createdAt;
   final String id;
@@ -6008,29 +6199,37 @@ class TokenRequest {
 }
 
 class TokenResponse {
-  final String expiresAt;
-  final String refreshToken;
-  final String sessionToken;
+  final String accessToken;
+  final int expiresIn;
+  final String? refreshToken;
+  final String? scope;
+  final String tokenType;
 
   const TokenResponse({
-    required this.expiresAt,
-    required this.refreshToken,
-    required this.sessionToken,
+    required this.accessToken,
+    required this.expiresIn,
+    this.refreshToken,
+    this.scope,
+    required this.tokenType,
   });
 
   factory TokenResponse.fromJson(Map<String, dynamic> json) {
     return TokenResponse(
-      expiresAt: json['expires_at'] as String,
-      refreshToken: json['refresh_token'] as String,
-      sessionToken: json['session_token'] as String,
+      accessToken: json['access_token'] as String,
+      expiresIn: (json['expires_in'] as num).toInt(),
+      refreshToken: json['refresh_token'] as String?,
+      scope: json['scope'] as String?,
+      tokenType: json['token_type'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'expires_at': expiresAt,
-      'refresh_token': refreshToken,
-      'session_token': sessionToken,
+      'access_token': accessToken,
+      'expires_in': expiresIn,
+      if (refreshToken != null) 'refresh_token': refreshToken,
+      if (scope != null) 'scope': scope,
+      'token_type': tokenType,
     };
   }
 

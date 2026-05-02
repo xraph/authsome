@@ -33,6 +33,16 @@ func (ts *TestServer) CreateUser(t *testing.T, email, pass string) (resp *authcl
 	})
 	require.NoError(t, err)
 
+	// Phase 2A flipped SettingRequireEmailVerification to true by
+	// default, so a freshly signed-up user can't sign in until their
+	// email is verified. The verification flow is tested explicitly
+	// elsewhere; for the SDK / integration helpers we mark verified
+	// inline so the helper retains its "ready-to-sign-in" contract.
+	if !u.EmailVerified {
+		u.EmailVerified = true
+		require.NoError(t, ts.Engine.Store().UpdateUser(ctx, u))
+	}
+
 	resp = &authclient.AuthResponse{
 		SessionToken: sess.Token,
 		RefreshToken: sess.RefreshToken,

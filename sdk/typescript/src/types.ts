@@ -6,6 +6,28 @@ export interface ACSRequest {
   SAMLResponse: string;
 }
 
+export interface AdminAppResponse {
+  id: string;
+  is_platform: boolean;
+  logo?: string;
+  name: string;
+  publishable_key?: string;
+  slug: string;
+}
+
+export interface AdminCreateConnectionResponse {
+  active: boolean;
+  app_id: string;
+  domain: string;
+  id: string;
+  protocol: string;
+  provider: string;
+}
+
+export interface AdminDeleteAppRequest {
+  AppID: string;
+}
+
 export interface AdminDeleteUserRequest {
   UserID: string;
 }
@@ -64,6 +86,16 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface AuthorizeRequest {
+  ClientID: string;
+  CodeChallenge: string;
+  CodeChallengeMethod: string;
+  RedirectURI: string;
+  ResponseType: string;
+  Scope: string;
+  State: string;
+}
+
 export interface BulkError {
   email?: string;
   error: string;
@@ -101,6 +133,11 @@ export interface CallbackResponse {
   user: User;
 }
 
+export interface CancelSubscriptionRequest {
+  SubID: string;
+  immediately: boolean;
+}
+
 export interface ChallengeRequest {
   code: string;
 }
@@ -108,6 +145,15 @@ export interface ChallengeRequest {
 export interface ChallengeResponse {
   challenge_passed: boolean;
   method: string;
+}
+
+export interface ChangePlanRequest {
+  SubID: string;
+  new_plan_id: string;
+}
+
+export interface CheckEntitlementRequest {
+  FeatureKey: string;
 }
 
 export interface CheckSlugRequest {
@@ -118,6 +164,11 @@ export interface CheckSlugRequest {
 export interface ClientConfigBranding {
   app_name?: string;
   logo_url?: string;
+}
+
+export interface ClientConfigEmailVerification {
+  enabled: boolean;
+  required: boolean;
 }
 
 export interface ClientConfigFieldValidation {
@@ -137,15 +188,19 @@ export interface ClientConfigMFA {
 export interface ClientConfigResponse {
   app_id: string;
   branding?: ClientConfigBranding;
+  device_authorization?: ClientConfigToggle;
+  email_verification?: ClientConfigEmailVerification;
   magiclink?: ClientConfigToggle;
   mfa?: ClientConfigMFA;
   passkey?: ClientConfigToggle;
   password?: ClientConfigToggle;
+  signup_enabled: boolean;
   signup_fields?: ClientConfigSignupField[];
   social?: ClientConfigSocial;
   sso?: ClientConfigSSO;
   supported_plugins: string[];
   version: string;
+  waitlist?: ClientConfigToggle;
 }
 
 export interface ClientConfigSSO {
@@ -208,10 +263,75 @@ export interface Config {
   mfa_methods?: string[];
   passkey_enabled?: boolean;
   password_enabled?: boolean;
+  require_email_verification?: boolean;
+  signup_enabled?: boolean;
   social_enabled?: boolean;
   social_providers?: string[];
   sso_enabled?: boolean;
   updated_at: string;
+  waitlist_enabled?: boolean;
+}
+
+export interface Consent {
+  app_id: string;
+  created_at: string;
+  granted: boolean;
+  granted_at: string;
+  id: string;
+  ip_address: string;
+  purpose: string;
+  revoked_at?: string;
+  updated_at: string;
+  user_id: string;
+  version: string;
+}
+
+export interface CouponResponse {
+  amount?: string;
+  app_id: string;
+  code: string;
+  currency: string;
+  id: string;
+  max_redemptions: number;
+  name: string;
+  percentage?: number;
+  times_redeemed: number;
+  type: string;
+  valid_from?: string;
+  valid_until?: string;
+}
+
+export interface CreateClientRequest {
+  app_id: string;
+  grant_types?: string[];
+  name: string;
+  public?: boolean;
+  redirect_uris: string[];
+  scopes?: string[];
+}
+
+export interface CreateClientResponse {
+  client_id: string;
+  client_secret?: string;
+  grant_types: string[];
+  id: string;
+  name: string;
+  public: boolean;
+  redirect_uris: string[];
+  scopes: string[];
+}
+
+export interface CreateCouponRequest {
+  amount: number;
+  app_id: string;
+  code: string;
+  currency: string;
+  max_redemptions: number;
+  name: string;
+  percentage: number;
+  type: string;
+  valid_from?: string;
+  valid_until?: string;
 }
 
 export interface CreateKeyRequest {
@@ -231,6 +351,26 @@ export interface CreateKeyResponse {
   public_key: string;
   public_key_prefix: string;
   scopes?: string[];
+}
+
+export interface CreatePlanRequest {
+  app_id: string;
+  base_amount: number;
+  currency: string;
+  description: string;
+  features?: FeatureInput[];
+  is_addon: boolean;
+  metadata?: Record<string, unknown>;
+  name: string;
+  period: string;
+  slug: string;
+  trial_days: number;
+}
+
+export interface CreateSubscriptionRequest {
+  app_id: string;
+  plan_id: string;
+  tenant_id: string;
 }
 
 export interface CredentialInfo {
@@ -269,6 +409,14 @@ export interface DeleteAppClientConfigRequest {
 
 export interface DeleteAppSessionConfigRequest {
   AppID: string;
+}
+
+export interface DeleteClientRequest {
+  ClientID: string;
+}
+
+export interface DeleteCouponRequest {
+  CouponID: string;
 }
 
 export interface DeleteDeviceRequest {
@@ -320,6 +468,29 @@ export interface Device {
   user_id: string;
 }
 
+export interface DeviceAuthRequest {
+  client_id: string;
+  scope?: string;
+}
+
+export interface DeviceAuthResponse {
+  device_code: string;
+  expires_in: number;
+  interval: number;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete?: string;
+}
+
+export interface DeviceCompleteRequest {
+  action: string;
+  user_code: string;
+}
+
+export interface DeviceCompleteResponse {
+  status: string;
+}
+
 export interface DeviceListResponse {
   devices: Device[];
 }
@@ -329,6 +500,32 @@ export interface DisableRequest {
 
 export interface DisableResponse {
   status: string;
+}
+
+export interface DiscoveryRequest {
+}
+
+export interface DiscoveryResponse {
+  authorization_endpoint: string;
+  code_challenge_methods_supported: string[];
+  device_authorization_endpoint: string;
+  grant_types_supported: string[];
+  id_token_signing_alg_values_supported: string[];
+  issuer: string;
+  jwks_uri: string;
+  response_types_supported: string[];
+  revocation_endpoint: string;
+  scopes_supported: string[];
+  subject_types_supported: string[];
+  token_endpoint: string;
+  token_endpoint_auth_methods_supported: string[];
+  userinfo_endpoint: string;
+}
+
+export interface Email {
+  primary: boolean;
+  type?: string;
+  value: string;
 }
 
 export interface EnrollRequest {
@@ -341,6 +538,15 @@ export interface EnrollResponse {
   method: string;
   otpauth_url: string;
   secret: string;
+}
+
+export interface EntitlementResponse {
+  allowed: boolean;
+  feature: string;
+  limit: number;
+  reason?: string;
+  remaining: number;
+  used: number;
 }
 
 export interface Environment {
@@ -373,8 +579,22 @@ export interface EnvironmentSettingsResponse {
 export interface ExportDataRequest {
 }
 
+export interface FeatureInput {
+  key: string;
+  limit: number;
+  name: string;
+  period: string;
+  soft_limit: boolean;
+  type: string;
+}
+
 export interface ForgotPasswordResponse {
   status: string;
+}
+
+export interface GetActiveSubRequest {
+  AppID: string;
+  TenantID: string;
 }
 
 export interface GetAppClientConfigRequest {
@@ -393,11 +613,19 @@ export interface GetDeviceRequest {
   DeviceID: string;
 }
 
+export interface GetInvoiceRequest {
+  InvoiceID: string;
+}
+
 export interface GetMeRequest {
 }
 
 export interface GetOrgRequest {
   OrgID: string;
+}
+
+export interface GetPlanRequest {
+  PlanID: string;
 }
 
 export interface GetTeamRequest {
@@ -409,9 +637,43 @@ export interface GetWebhookRequest {
   WebhookID: string;
 }
 
+export interface GroupRef {
+  $ref?: string;
+  display?: string;
+  value: string;
+}
+
+export interface GroupResource {
+  displayName: string;
+  externalId?: string;
+  id?: string;
+  members?: MemberRef[];
+  meta?: Meta;
+  schemas: string[];
+}
+
 export interface HealthResponse {
   error?: string;
   status: string;
+}
+
+export interface IntrospectResponse {
+  active: boolean;
+  app_id?: string;
+  env_id?: string;
+  expires_at?: string;
+  org_id?: string;
+  session_id?: string;
+  user?: IntrospectUser;
+  user_id?: string;
+}
+
+export interface IntrospectUser {
+  email: string;
+  first_name?: string;
+  id: string;
+  last_name?: string;
+  username?: string;
 }
 
 export interface Invitation {
@@ -427,6 +689,17 @@ export interface Invitation {
 
 export interface InvitationListResponse {
   invitations: Invitation[];
+}
+
+export interface InvoiceResponse {
+  currency: string;
+  id: string;
+  period_end: string;
+  period_start: string;
+  status: string;
+  subscription_id: string;
+  tenant_id: string;
+  total: string;
 }
 
 export interface KeyListItem {
@@ -448,6 +721,29 @@ export interface ListAuthMethodsResponse {
   methods: AuthMethod[];
 }
 
+export interface ListClientsRequest {
+  AppID: string;
+}
+
+export interface ListClientsResponse {
+  clients: OAuth2Client[];
+}
+
+export interface ListConsentsRequest {
+  Cursor: string;
+  Limit: number;
+  Purpose: string;
+}
+
+export interface ListCouponsRequest {
+  AppID: string;
+}
+
+export interface ListCouponsResponse {
+  coupons: CouponResponse[];
+  total: number;
+}
+
 export interface ListDefinitionsResponse {
   groups: DefinitionGroup[];
   total: number;
@@ -462,6 +758,16 @@ export interface ListEnvironmentsRequest {
 
 export interface ListInvitationsRequest {
   OrgID: string;
+}
+
+export interface ListInvoicesRequest {
+  AppID: string;
+  TenantID: string;
+}
+
+export interface ListInvoicesResponse {
+  invoices: InvoiceResponse[];
+  total: number;
 }
 
 export interface ListKeysRequest {
@@ -485,11 +791,21 @@ export interface ListNamespaceDefinitionsRequest {
 export interface ListOrgsRequest {
 }
 
+export interface ListPlansRequest {
+  AppID: string;
+}
+
+export interface ListPlansResponse {
+  plans: PlanResponse[];
+  total: number;
+}
+
 export interface ListRequest {
 }
 
 export interface ListResponse {
-  credentials: CredentialInfo[];
+  consents: Consent[];
+  next_cursor?: string;
 }
 
 export interface ListRolesRequest {
@@ -502,6 +818,17 @@ export interface ListSessionsRequest {
 export interface ListSettingsDefinitionsRequest {
   Category: string;
   Namespace: string;
+}
+
+export interface ListSubscriptionsRequest {
+  AppID: string;
+  Status: string;
+  TenantID: string;
+}
+
+export interface ListSubscriptionsResponse {
+  subscriptions: Response[];
+  total: number;
 }
 
 export interface ListTeamsRequest {
@@ -537,6 +864,11 @@ export interface LoginResponse {
   state: string;
 }
 
+export interface MarkInvoicePaidRequest {
+  InvoiceID: string;
+  payment_ref: string;
+}
+
 export interface Member {
   created_at: string;
   id: string;
@@ -548,6 +880,38 @@ export interface Member {
 
 export interface MemberListResponse {
   members: Member[];
+}
+
+export interface MemberRef {
+  $ref?: string;
+  display?: string;
+  value: string;
+}
+
+export interface Meta {
+  created?: string;
+  lastModified?: string;
+  location?: string;
+  resourceType: string;
+}
+
+export interface Name {
+  familyName: string;
+  formatted?: string;
+  givenName: string;
+}
+
+export interface OAuth2Client {
+  app_id: string;
+  client_id: string;
+  created_at: string;
+  grant_types: string[];
+  id: string;
+  name: string;
+  public: boolean;
+  redirect_uris: string[];
+  scopes: string[];
+  updated_at: string;
 }
 
 export interface Object {
@@ -590,6 +954,26 @@ export interface Permission {
 
 export interface PermissionListResponse {
   permissions: Permission[];
+}
+
+export interface PlanIDRequest {
+  PlanID: string;
+}
+
+export interface PlanResponse {
+  app_id: string;
+  base_amount?: string;
+  billing_period?: string;
+  currency: string;
+  description: string;
+  features_count: number;
+  id: string;
+  is_addon: boolean;
+  metadata?: Record<string, unknown>;
+  name: string;
+  slug: string;
+  status: string;
+  trial_days: number;
 }
 
 export interface RecoveryRegenerateRequest {
@@ -660,8 +1044,26 @@ export interface ResolvedSettingsResponse {
   settings: ResolvedSetting[];
 }
 
+export interface Response {
+  app_id: string;
+  canceled_at?: string;
+  current_period_end: string;
+  current_period_start: string;
+  id: string;
+  plan_id: string;
+  status: string;
+  tenant_id: string;
+  trial_end?: string;
+  trial_start?: string;
+}
+
 export interface RevokeKeyRequest {
   KeyID: string;
+}
+
+export interface RevokeRequest {
+  token: string;
+  token_type_hint?: string;
 }
 
 export interface RevokeSessionRequest {
@@ -764,15 +1166,26 @@ export interface SlugAvailableResponse {
 }
 
 export interface StartRequest {
-  Provider: string;
+  app_id?: string;
+  phone: string;
 }
 
 export interface StartResponse {
-  auth_url: string;
+  expires_in: number;
+  status: string;
 }
 
 export interface StatusResponse {
   status: string;
+}
+
+export interface SubIDRequest {
+  SubID: string;
+}
+
+export interface SwitchOrgResponse {
+  org_id?: string;
+  session_id: string;
 }
 
 export interface Team {
@@ -788,10 +1201,22 @@ export interface TeamListResponse {
   teams: Team[];
 }
 
+export interface TokenRequest {
+  client_id?: string;
+  client_secret?: string;
+  code?: string;
+  code_verifier?: string;
+  device_code?: string;
+  grant_type: string;
+  redirect_uri?: string;
+}
+
 export interface TokenResponse {
-  expires_at: string;
-  refresh_token: string;
-  session_token: string;
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope?: string;
+  token_type: string;
 }
 
 export interface TrustDeviceRequest {
@@ -825,6 +1250,25 @@ export interface UnlinkAuthMethodResponse {
   status: string;
 }
 
+export interface UsageItemResponse {
+  feature_key: string;
+  feature_name: string;
+  feature_type: string;
+  limit: number;
+  period: string;
+  remaining: number;
+  used: number;
+}
+
+export interface UsageSummaryRequest {
+  AppID: string;
+  TenantID: string;
+}
+
+export interface UsageSummaryResponse {
+  usage: UsageItemResponse[];
+}
+
 export interface User {
   app_id: string;
   ban_expires?: string;
@@ -846,6 +1290,29 @@ export interface User {
   phone_verified: boolean;
   updated_at: string;
   username?: string;
+}
+
+export interface UserInfo {
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  phone_number?: string;
+  sub: string;
+}
+
+export interface UserInfoRequest {
+}
+
+export interface UserResource {
+  active: boolean;
+  emails?: Email[];
+  externalId?: string;
+  groups?: GroupRef[];
+  id?: string;
+  meta?: Meta;
+  name: Name;
+  schemas: string[];
+  userName: string;
 }
 
 export interface UserRoleListResponse {
@@ -873,20 +1340,27 @@ export interface VerifyMFAResponse {
 
 export interface VerifyRequest {
   app_id?: string;
-  token: string;
+  code: string;
+  phone: string;
 }
 
 export interface VerifyResponse {
   expires_at: string;
+  new_user: boolean;
   refresh_token: string;
   session_token: string;
-  user: User;
+  user?: User;
 }
 
 export interface VisibilityCondition {
   key: string;
   operator?: string;
   value: string;
+}
+
+export interface VoidInvoiceRequest {
+  InvoiceID: string;
+  reason: string;
 }
 
 export interface Webhook {
@@ -904,9 +1378,35 @@ export interface WebhookListResponse {
   webhooks: Webhook[];
 }
 
+export interface scimGroupPathParam {
+  GroupID: string;
+}
+
+export interface scimUserPathParam {
+  UserID: string;
+}
+
 // Request types for operations with bodies
 
-export type SetAppClientConfigRequest = { app_name?: string; logo_url?: string; magic_link_enabled?: boolean; mfa_enabled?: boolean; mfa_methods?: string[]; passkey_enabled?: boolean; password_enabled?: boolean; social_enabled?: boolean; social_providers?: string[]; sso_enabled?: boolean };
+export type ScimCreateGroupRequest = Object;
+
+export type ScimReplaceGroupRequest = scimGroupPathParam;
+
+export type ScimPatchGroupRequest = scimGroupPathParam;
+
+export type ScimDeleteGroupRequest = scimGroupPathParam;
+
+export type ScimCreateUserRequest = Object;
+
+export type ScimReplaceUserRequest = scimUserPathParam;
+
+export type ScimPatchUserRequest = scimUserPathParam;
+
+export type ScimDeleteUserRequest = scimUserPathParam;
+
+export type AdminCreateAppRequest = { logo?: string; name: string; slug: string };
+
+export type SetAppClientConfigRequest = { app_name?: string; logo_url?: string; magic_link_enabled?: boolean; mfa_enabled?: boolean; mfa_methods?: string[]; passkey_enabled?: boolean; password_enabled?: boolean; require_email_verification?: boolean; signup_enabled?: boolean; social_enabled?: boolean; social_providers?: string[]; sso_enabled?: boolean; waitlist_enabled?: boolean };
 
 export type SetAppSessionConfigRequest = { bind_to_device?: boolean; bind_to_ip?: boolean; max_active_sessions?: number; refresh_token_ttl_seconds?: number; rotate_refresh_token?: boolean; token_format?: string; token_ttl_seconds?: number };
 
@@ -914,13 +1414,39 @@ export type AdminBulkRevokeSessionsRequest = BulkRevokeSessionsRequest;
 
 export type AdminBulkImportUsersRequest = { app_id?: string; users: Record<string, unknown>[] };
 
+export type CreateOAuth2ClientRequest = CreateClientRequest;
+
+export type DeleteOAuth2ClientRequest = DeleteClientRequest;
+
 export type EnforceSettingRequest = { app_id?: string; org_id?: string; scope: string; scope_id?: string; value: string };
 
 export type SetSettingRequest = { app_id?: string; org_id?: string; scope: string; scope_id?: string; value: string };
 
+export type SsoAdminCreateConnectionRequest = { app_id: string; client_id?: string; client_secret?: string; domain: string; issuer?: string; metadata_url?: string; org_id?: string; protocol: string; provider: string };
+
+export type AdminCreateUserRequest = { app_id?: string; email: string; first_name?: string; last_name?: string; password: string; username?: string };
+
+export type AdminUpdateUserRequest = { email_verified?: boolean; first_name?: string; last_name?: string; username?: string };
+
 export type AdminBanUserRequest = { expires_at?: string; reason?: string };
 
+export type CreateBillingPlanRequest = CreatePlanRequest;
+
+export type ActivateBillingPlanRequest = PlanIDRequest;
+
+export type ArchiveBillingPlanRequest = PlanIDRequest;
+
+export type ChangeSubscriptionPlanRequest = ChangePlanRequest;
+
+export type PauseSubscriptionRequest = SubIDRequest;
+
+export type ResumeSubscriptionRequest = SubIDRequest;
+
 export type ChangePasswordRequest = { current_password: string; new_password: string };
+
+export type GrantConsentRequest = { app_id?: string; purpose: string; version?: string };
+
+export type RevokeConsentRequest = { app_id?: string; purpose: string };
 
 export type CreateEnvironmentRequest = { app_id?: string; color?: string; description?: string; name: string; settings?: Record<string, unknown>; slug: string; type: string };
 
@@ -932,6 +1458,8 @@ export type UpdateEnvironmentSettingsRequest = { allow_test_credentials?: boolea
 
 export type ForgotPasswordRequest = { app_id?: string; email: string };
 
+export type IntrospectTokenRequest = { token: string };
+
 export type CreateAPIKeyRequest = CreateKeyRequest;
 
 export type RevokeAPIKeyRequest = RevokeKeyRequest;
@@ -941,6 +1469,8 @@ export type SendMagicLinkRequest = SendRequest;
 export type VerifyMagicLinkRequest = VerifyRequest;
 
 export type UpdateMeRequest = { first_name?: string; image?: string; last_name?: string; username?: string };
+
+export type SwitchOrgRequest = { org_id: string };
 
 export type ChallengeMFARequest = ChallengeRequest;
 
@@ -955,6 +1485,14 @@ export type VerifyMFARecoveryRequest = RecoveryVerifyRequest;
 export type SendSMSCodeRequest = SMSSendRequest;
 
 export type VerifySMSCodeRequest = SMSVerifyRequest;
+
+export type Oauth2DeviceAuthorizeRequest = DeviceAuthRequest;
+
+export type Oauth2DeviceCompleteRequest = DeviceCompleteRequest;
+
+export type Oauth2RevokeRequest = RevokeRequest;
+
+export type Oauth2TokenRequest = TokenRequest;
 
 export type CreateOrganizationRequest = { app_id?: string; logo?: string; name: string; slug: string };
 
@@ -986,6 +1524,10 @@ export type PasskeyRegisterFinishRequest = RegisterFinishRequest;
 
 export type DeletePasskeyRequest = DeleteRequest;
 
+export type PhoneAuthStartRequest = StartRequest;
+
+export type PhoneAuthVerifyRequest = VerifyRequest;
+
 export type RefreshTokensRequest = { refresh_token: string };
 
 export type ResetPasswordRequest = { new_password: string; token: string };
@@ -1000,9 +1542,9 @@ export type AuthsomeAddPermissionRequest = { action: string; resource: string };
 
 export type AuthsomeUnassignRoleRequest = { user_id: string };
 
-export type SignInRequest = { app_id?: string; email?: string; password: string; username?: string };
+export type SignInRequest = { app_id?: string; captcha_token?: string; email?: string; password: string; username?: string };
 
-export type SignUpRequest = { app_id?: string; email: string; first_name?: string; last_name?: string; metadata?: Record<string, unknown>; password: string; username?: string };
+export type SignUpRequest = { app_id?: string; captcha_token?: string; email: string; first_name?: string; last_name?: string; metadata?: Record<string, unknown>; password: string; username?: string };
 
 export type StartOAuthRequest = StartRequest;
 

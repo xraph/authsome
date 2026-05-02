@@ -74,16 +74,24 @@ func TestClient_SignUp_DuplicateEmail(t *testing.T) {
 
 	ts.CreateUser(t, "dup@example.com", "SecureP@ss1")
 
-	_, err := ts.Client.SignUp(ctx, &authclient.SignUpRequest{
+	// Phase 2A: duplicate signup must NOT return 4xx — that would
+	// leak which emails are already registered. Instead the server
+	// returns 200 with a synthetic-shape AuthResponse so a probing
+	// attacker can't tell new vs existing apart. We assert on the
+	// no-error contract here; the enumeration-resistance contract is
+	// covered exhaustively in api/api_test.go's signup tests.
+	resp, err := ts.Client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:    "dup@example.com",
 		Password: "SecureP@ss1",
 	})
-	assert.Error(t, err)
+	require.NoError(t, err, "duplicate signup must not error — would leak email existence")
 
-	var ce *authclient.ClientError
-	if errors.As(err, &ce) {
-		assert.True(t, ce.StatusCode == 400 || ce.StatusCode == 409, "expected 400 or 409, got %d", ce.StatusCode)
-	}
+	// The synthetic response carries a non-functional session token so
+	// the byte shape matches a real signup; the SDK consumer's UI
+	// should branch on `verification_sent` (server-side flag) rather
+	// than on session_token presence to know whether to log the user
+	// in. For the raw SDK we just assert the response decoded.
+	require.NotNil(t, resp)
 }
 
 func TestClient_SignIn_WrongPassword(t *testing.T) {

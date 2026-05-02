@@ -8,21 +8,23 @@ import "github.com/xraph/authsome/environment"
 
 // SignUpRequest binds the body for POST /signup.
 type SignUpRequest struct {
-	AppID     string            `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
-	Email     string            `json:"email" description:"User email address"`
-	Password  string            `json:"password" description:"User password"`
-	FirstName string            `json:"first_name,omitempty" description:"First/given name"`
-	LastName  string            `json:"last_name,omitempty" description:"Last/family name"`
-	Username  string            `json:"username,omitempty" description:"Unique username"`
-	Metadata  map[string]string `json:"metadata,omitempty" description:"Custom signup form field values"`
+	AppID        string            `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email        string            `json:"email" description:"User email address"`
+	Password     string            `json:"password" description:"User password"`
+	FirstName    string            `json:"first_name,omitempty" description:"First/given name"`
+	LastName     string            `json:"last_name,omitempty" description:"Last/family name"`
+	Username     string            `json:"username,omitempty" description:"Unique username"`
+	Metadata     map[string]string `json:"metadata,omitempty" description:"Custom signup form field values"`
+	CaptchaToken string            `json:"captcha_token,omitempty" description:"Cloudflare Turnstile / hCaptcha challenge token; required when the app has captcha enabled (auth.captcha_required setting). Can also be sent via X-Captcha-Token header."`
 }
 
 // SignInRequest binds the body for POST /signin.
 type SignInRequest struct {
-	AppID    string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
-	Email    string `json:"email,omitempty" description:"User email address"`
-	Username string `json:"username,omitempty" description:"Username (alternative to email)"`
-	Password string `json:"password" description:"User password"`
+	AppID        string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email        string `json:"email,omitempty" description:"User email address"`
+	Username     string `json:"username,omitempty" description:"Username (alternative to email)"`
+	Password     string `json:"password" description:"User password"`
+	CaptchaToken string `json:"captcha_token,omitempty" description:"Cloudflare Turnstile / hCaptcha challenge token; required when the app has captcha enabled (auth.captcha_required setting). Can also be sent via X-Captcha-Token header."`
 }
 
 // SignOutRequest is an empty request for POST /signout (session from context).
