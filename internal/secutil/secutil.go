@@ -16,6 +16,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
+	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/store/memory"
 
 	"github.com/xraph/warden"
@@ -143,6 +144,26 @@ func AssertNoAuditEvent(t *testing.T, c *BufferedChronicle, action string) {
 				action, events[i])
 		}
 	}
+}
+
+// AttachChronicle replaces the engine's chronicle with the given buffered
+// chronicle so a test can assert against recorded events. Call sites that
+// emit audit via plugin-cached references should re-resolve from the engine
+// after this call (see organization.Plugin.SetChronicleForTest).
+func AttachChronicle(t *testing.T, eng *authsome.Engine, ch *BufferedChronicle) {
+	t.Helper()
+	require.NotNil(t, eng, "secutil: AttachChronicle: nil engine")
+	require.NotNil(t, ch, "secutil: AttachChronicle: nil chronicle")
+	eng.SetChronicle(ch)
+}
+
+// InitTestNonceSigner installs a deterministic process-wide nonce signer so
+// tests that exercise GenerateScopedNonce / ConsumeScopedNonce code paths
+// don't have to wire one themselves.
+func InitTestNonceSigner(t *testing.T) {
+	t.Helper()
+	require.NoError(t, dashboard.InitNonceSigner([]byte("secutil-test-nonce-signer-secret-32bytes!")),
+		"secutil: init nonce signer")
 }
 
 func recordedActions(events []bridge.AuditEvent) []string {

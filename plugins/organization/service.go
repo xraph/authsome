@@ -428,6 +428,40 @@ func (p *Plugin) IsOrgSlugAvailable(ctx context.Context, appID id.AppID, slug st
 	return false, nil
 }
 
+// canDeleteOrg returns true when actor is allowed to delete org. The owner
+// (org.CreatedBy) always passes; otherwise the actor must hold the engine-
+// level "org.delete" permission on the org's resource ID.
+func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organization.Organization) bool {
+	if org == nil {
+		return false
+	}
+	// id.UserID is a typed ULID; treat the zero value as "no actor".
+	var zero id.UserID
+	if actor == zero {
+		return false
+	}
+	if actor == org.CreatedBy {
+		return true
+	}
+	if p.permChecker == nil {
+		return false
+	}
+	ok, err := p.permChecker.HasPermission(ctx, actor, "org.delete", org.ID.String())
+	return err == nil && ok
+}
+
+// chronicleOrNil returns the cached chronicle, falling back to the engine's
+// current chronicle (so tests that swap the chronicle via Engine.SetChronicle
+// after OnInit are still observed).
+func (p *Plugin) chronicleOrNil() bridge.Chronicle {
+	if p.engine != nil {
+		if ch := p.engine.Chronicle(); ch != nil {
+			return ch
+		}
+	}
+	return p.chronicle
+}
+
 // ──────────────────────────────────────────────────
 // Internal helpers
 // ──────────────────────────────────────────────────

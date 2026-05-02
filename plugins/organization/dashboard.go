@@ -11,8 +11,10 @@ import (
 
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugins/organization/dashui"
 	"github.com/xraph/authsome/store"
@@ -211,16 +213,36 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 	}
 
 	var actionSuccess, actionError string
+	actorID, _ := middleware.UserIDFrom(ctx)
+	sessionID, _ := middleware.SessionIDFrom(ctx)
 	if action := params.FormData["action"]; action == "delete" {
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		switch {
+		case !dashboard.ConsumeScopedNonce(sessionID.String(), "org.delete", nonce):
+			actionError = "Form expired or invalid, please try again."
+		case !p.canDeleteOrg(ctx, actorID, org):
+			actionError = "You don't have permission to delete this organization."
+		default:
+			// Audit BEFORE delete so the attempt is recorded even if the
+			// cascade fails partway through.
+			if ch := p.chronicleOrNil(); ch != nil {
+				_ = ch.Record(ctx, &bridge.AuditEvent{
+					Action:     "org.delete",
+					Severity:   bridge.SeverityCritical,
+					ActorID:    actorID.String(),
+					ResourceID: org.ID.String(),
+					Outcome:    bridge.OutcomeSuccess,
+					Metadata: map[string]string{
+						"slug":   org.Slug,
+						"app_id": org.AppID.String(),
+					},
+				})
+			}
 			if delErr := p.DeleteOrganization(ctx, orgID); delErr != nil {
 				actionError = "Failed to delete organization: " + delErr.Error()
 			} else {
 				return p.renderOrgList(ctx, params)
 			}
-		} else {
-			actionError = "Form expired, please try again."
 		}
 	}
 
@@ -262,7 +284,7 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 		PluginSections: pluginSections,
 		PluginTabs:     pluginTabs,
 		ActiveTab:      activeTab,
-		FormNonce:      dashboard.GenerateNonce(),
+		FormNonce:      dashboard.GenerateScopedNonce(sessionID.String(), "org.delete"),
 		Success:        actionSuccess,
 		Error:          actionError,
 	}
