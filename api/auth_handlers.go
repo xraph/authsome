@@ -1,9 +1,12 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/xraph/forge"
 
@@ -134,7 +137,15 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		// is still ambiguous to an attacker — could be a fresh signup
 		// awaiting verification — so it is strictly better than 409.
 		if errors.Is(err, account.ErrEmailTaken) {
-			return nil, ctx.JSON(http.StatusCreated, syntheticSignupResponse())
+			// Run a dummy password hash on the duplicate path so the
+			// HTTP-response timing is indistinguishable from a fresh
+			// signup (which spends ~100ms in argon2id/bcrypt). Without
+			// this, an attacker can probe /v1/signup with arbitrary
+			// emails and use the response time to enumerate registered
+			// addresses (duplicate ~1ms vs fresh ~100ms+). Result is
+			// discarded.
+			a.consumeDummyHashBudget(req.Password)
+			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email))
 		}
 		return nil, mapError(err)
 	}
@@ -143,16 +154,86 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 	return nil, ctx.JSON(http.StatusCreated, authResponse(u, sess))
 }
 
-// syntheticSignupResponse returns a response shaped like a real signup but
-// with zero-value user/token fields. Used for the duplicate-email path so
-// attackers cannot enumerate registered emails by probing /v1/signup.
-func syntheticSignupResponse() map[string]any {
-	return map[string]any{
-		"user":          nil,
-		"session_token": "",
-		"refresh_token": "",
-		"expires_at":    nil,
+// consumeDummyHashBudget runs the engine's configured password hashing
+// algorithm against the supplied password and discards the result. Used on
+// the duplicate-email path so the response time matches a real signup. Any
+// error from the hash function is intentionally ignored — this is purely a
+// time-budget consumer.
+func (a *API) consumeDummyHashBudget(password string) {
+	if password == "" {
+		// Match the synthetic case where we still want to spend the
+		// time budget. Hash a fixed sentinel.
+		password = "x"
 	}
+	cfg := a.engine.Config().Password
+	policy := account.PasswordPolicy{
+		BcryptCost: cfg.BcryptCost,
+		Algorithm:  cfg.Algorithm,
+		Argon2Params: account.Argon2Params{
+			Memory:      cfg.Argon2.Memory,
+			Iterations:  cfg.Argon2.Iterations,
+			Parallelism: cfg.Argon2.Parallelism,
+			SaltLength:  cfg.Argon2.SaltLength,
+			KeyLength:   cfg.Argon2.KeyLength,
+		},
+	}
+	_, _ = account.HashPasswordWithPolicy(password, policy)
+}
+
+// syntheticSignupResponse returns a response shaped exactly like a real
+// fresh-signup response — populated user, non-empty session_token /
+// refresh_token, and a forward-dated expires_at — so an attacker cannot use
+// the response shape itself to distinguish duplicate-email signups from
+// fresh ones. The synthetic tokens are generated via crypto/rand and will
+// not validate against the session store; any attacker probe that tries to
+// USE one in a follow-up request gets the same "invalid session" response
+// they would get from a fully forged token.
+//
+// This is a Phase 2A Task 4 stopgap. Once RequireEmailVerification defaults
+// to true, fresh signups will also return empty tokens until verification
+// completes, at which point this synthesis can be collapsed.
+func (a *API) syntheticSignupResponse(email string) map[string]any {
+	token, err := syntheticOpaqueToken()
+	if err != nil {
+		token = ""
+	}
+	refresh, err := syntheticOpaqueToken()
+	if err != nil {
+		refresh = ""
+	}
+
+	ttl := a.engine.Config().Session.TokenTTL
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	expiresAt := time.Now().Add(ttl)
+
+	syntheticUser := &user.User{
+		ID:        id.NewUserID(),
+		Email:     strings.ToLower(strings.TrimSpace(email)),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if appID, err := id.ParseAppID(a.engine.Config().AppID); err == nil {
+		syntheticUser.AppID = appID
+	}
+
+	return map[string]any{
+		"user":          syntheticUser,
+		"session_token": token,
+		"refresh_token": refresh,
+		"expires_at":    expiresAt,
+	}
+}
+
+// syntheticOpaqueToken returns a 64-character hex string (32 random bytes)
+// matching the shape of real session tokens produced by account.NewSession.
+func syntheticOpaqueToken() (string, error) {
+	b := make([]byte, 32) //nolint:mnd // matches account.generateSecureToken default
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse, error) {

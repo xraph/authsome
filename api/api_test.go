@@ -328,6 +328,102 @@ func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
 	}
 }
 
+// TestSignup_DuplicateRunsDummyHash verifies that the duplicate-email path
+// runs a dummy password hash so an attacker cannot use HTTP-response timing
+// to distinguish duplicate signups (which would otherwise skip argon2id
+// entirely and return in ~1ms) from fresh signups (~100ms argon2id). The
+// threshold is intentionally generous — CI noise dominates short measurements
+// — so we only guard against the "duplicate is 100x faster" oracle case.
+func TestSignup_DuplicateRunsDummyHash(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	// First, create the user.
+	bodyA := []byte(`{"email":"timing@example.com","password":"SecureP@ss1"}`)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	// Time a fresh signup (different email, same password length).
+	freshBody := []byte(`{"email":"new1@example.com","password":"SecureP@ss1"}`)
+	freshStart := time.Now()
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(freshBody)))
+	freshDuration := time.Since(freshStart)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	// Time a duplicate signup (same email, different password).
+	dupBody := []byte(`{"email":"timing@example.com","password":"DifferentP@ss2"}`)
+	dupStart := time.Now()
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(dupBody)))
+	dupDuration := time.Since(dupStart)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	// Duplicate response time must be at least 50% of the fresh signup
+	// time (i.e. argon2/bcrypt ran on the duplicate path too). Loose
+	// threshold because CI is noisy; we're just guarding against the
+	// "duplicate is 100x faster" case.
+	minDuration := freshDuration / 2
+	if dupDuration < minDuration {
+		t.Errorf("duplicate signup was suspiciously fast (%v) compared to fresh (%v); expected dummy hash to consume comparable time", dupDuration, freshDuration)
+	}
+}
+
+// TestSignup_DuplicateReturnsPlausibleTokenShape verifies that the duplicate
+// path returns synthetic session_token / refresh_token values shaped like
+// real tokens. Empty tokens on duplicate (vs. always non-empty on fresh
+// signup) would itself be the enumeration oracle.
+func TestSignup_DuplicateReturnsPlausibleTokenShape(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	// First signup.
+	body := []byte(`{"email":"shape@example.com","password":"SecureP@ss1"}`)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(body)))
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var first map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&first))
+	realToken, _ := first["session_token"].(string)
+	require.NotEmpty(t, realToken)
+
+	// Duplicate.
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(body)))
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var dup map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&dup))
+	dupToken, _ := dup["session_token"].(string)
+
+	if dupToken == "" {
+		t.Fatal("duplicate signup returned empty session_token; this is a shape oracle (fresh signups always return a non-empty token)")
+	}
+	if dupToken == realToken {
+		t.Fatal("duplicate returned the existing user's token — account hijack")
+	}
+	// Same length category as a real token.
+	abs := func(a, b int) int {
+		if a > b {
+			return a - b
+		}
+		return b - a
+	}
+	if abs(len(dupToken), len(realToken)) > 4 {
+		t.Errorf("duplicate token length %d differs significantly from real token length %d", len(dupToken), len(realToken))
+	}
+	// expires_at must be present and non-zero so its presence/absence
+	// is not itself an oracle.
+	if exp, ok := dup["expires_at"]; !ok || exp == nil {
+		t.Error("duplicate response missing expires_at; presence/absence is a shape oracle")
+	}
+	if rt, _ := dup["refresh_token"].(string); rt == "" {
+		t.Error("duplicate response missing refresh_token; presence/absence is a shape oracle")
+	}
+}
+
 // ──────────────────────────────────────────────────
 // SignIn endpoint
 // ──────────────────────────────────────────────────
