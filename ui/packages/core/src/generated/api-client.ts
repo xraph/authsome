@@ -2802,6 +2802,11 @@ export class AuthClient {
 
 export class AuthClientError extends Error {
   code?: number;
+  // Stable string error code from the backend envelope (e.g.
+  // "email_not_verified", "captcha_required"). Lets the UI branch
+  // on specific failure modes instead of pattern-matching on the
+  // human-readable message. Optional — only present on errors the
+  // backend has tagged.
   type?: string;
 
   constructor(message: string, code?: number, type?: string) {

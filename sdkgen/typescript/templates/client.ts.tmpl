@@ -117,7 +117,7 @@ export class AuthClient {
     });
 
     if (!response.ok) {
-      let apiError: { error?: string; code?: number } | undefined;
+      let apiError: { error?: string; code?: number; type?: string } | undefined;
       try {
         apiError = await response.json();
       } catch {
@@ -126,6 +126,7 @@ export class AuthClient {
       throw new AuthClientError(
         apiError?.error ?? `Request failed with status ${response.status}`,
         apiError?.code ?? response.status,
+        apiError?.type,
       );
     }
 
@@ -139,11 +140,18 @@ export class AuthClient {
 
 export class AuthClientError extends Error {
   code?: number;
+  // Stable string error code from the backend envelope (e.g.
+  // "email_not_verified", "captcha_required"). Lets the UI branch
+  // on specific failure modes instead of pattern-matching on the
+  // human-readable message. Optional — only present on errors the
+  // backend has tagged.
+  type?: string;
 
-  constructor(message: string, code?: number) {
+  constructor(message: string, code?: number, type?: string) {
     super(message);
     this.name = 'AuthClientError';
     this.code = code;
+    this.type = type;
   }
 }
 {{ else }}
