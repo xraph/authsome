@@ -20,6 +20,7 @@ import (
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
@@ -57,13 +58,8 @@ func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	require.NoError(t, eng.Start(context.Background()))
 
 	// Phase 2A: SettingRequireEmailVerification defaults to true. API tests
-	// generally don't exercise the verification gate; disable globally so
-	// sign-in flows succeed without an extra verification step. Tests that
-	// specifically exercise the gate can override back to true.
-	if mgr := eng.Settings(); mgr != nil {
-		require.NoError(t, mgr.Set(context.Background(), "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
-	}
+	// generally don't exercise the verification gate.
+	secutil.RelaxAuthDefaults(t, eng)
 
 	a := api.New(eng)
 	return a, eng

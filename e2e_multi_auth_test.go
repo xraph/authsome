@@ -2,7 +2,6 @@ package authsome_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,10 +15,10 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
 	apikeyPlugin "github.com/xraph/authsome/plugins/apikey"
 	"github.com/xraph/authsome/session"
-	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
 	"github.com/xraph/authsome/user"
 
@@ -54,10 +53,7 @@ func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 
 	// Phase 2A: disable email-verification requirement for E2E flows that
 	// don't exercise the verification gate.
-	if mgr := eng.Settings(); mgr != nil {
-		require.NoError(t, mgr.Set(ctx, "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
-	}
+	secutil.RelaxAuthDefaults(t, eng)
 
 	return eng, s
 }

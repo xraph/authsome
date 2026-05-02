@@ -6,6 +6,7 @@ package secutil
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,7 @@ import (
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
 
 	"github.com/xraph/warden"
@@ -165,6 +167,35 @@ func InitTestNonceSigner(t *testing.T) {
 	t.Helper()
 	require.NoError(t, dashboard.InitNonceSigner([]byte("secutil-test-nonce-signer-secret-32bytes!")),
 		"secutil: init nonce signer")
+}
+
+// RelaxAuthDefaults disables the production-secure auth defaults that would
+// otherwise break the bulk of authsome's pre-existing tests:
+//
+//   - SettingRequireEmailVerification (default true since Phase 2A) is
+//     overridden to false at the global scope so signed-up users can sign
+//     in immediately without going through the verification flow.
+//
+// Tests that specifically exercise these gates (verification-required,
+// captcha-required, etc.) should write their own per-app overrides on top
+// of this baseline; this helper covers the "I just want a usable engine
+// for a sign-in test" case.
+//
+// Centralised here so additions to the secure-by-default set don't require
+// touching every test bootstrap individually.
+func RelaxAuthDefaults(t *testing.T, eng *authsome.Engine) {
+	t.Helper()
+	require.NotNil(t, eng, "secutil: RelaxAuthDefaults: nil engine")
+	mgr := eng.Settings()
+	if mgr == nil {
+		return
+	}
+	require.NoError(t,
+		mgr.Set(context.Background(),
+			"auth.require_email_verification",
+			json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test-bootstrap"),
+		"secutil: relax auth.require_email_verification")
 }
 
 // InjectStoreFault makes the named store method return err on its next

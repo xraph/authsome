@@ -2,7 +2,6 @@ package authsome_test
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +10,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
-	"github.com/xraph/authsome/settings"
+	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/store/memory"
 
 	"github.com/xraph/keysmith"
@@ -31,16 +30,10 @@ func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *me
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))
 
-	// Phase 2A: SettingRequireEmailVerification now defaults to true. The vast
-	// majority of tests pre-date that flip and exercise sign-in flows without
-	// going through email verification. Disable the requirement at global scope
-	// here so those tests stay focused on the behaviour they intend to verify;
-	// tests that specifically exercise the verification gate override this
-	// setting back to true (or write per-app/env overrides).
-	if mgr := eng.Settings(); mgr != nil {
-		require.NoError(t, mgr.Set(context.Background(), "auth.require_email_verification", json.RawMessage(`false`),
-			settings.ScopeGlobal, "", "", "", "test-bootstrap"))
-	}
+	// Phase 2A flipped SettingRequireEmailVerification's default to true.
+	// Tests that don't exercise the verification gate use this helper to
+	// restore the pre-flip default at global scope.
+	secutil.RelaxAuthDefaults(t, eng)
 
 	return eng, s
 }
