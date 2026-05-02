@@ -99,7 +99,11 @@ func (a *clientAuthPages) handleLogin(ctx *router.PageContext) (string, templ.Co
 		return "", auth.LoginError("Invalid email or password", links), nil
 	}
 
-	setSessionCookie(ctx, resp.SessionToken, isSecureRequest(r))
+	// Client mode talks to a remote engine; pass nil so the cookie helper
+	// uses safe defaults (the remote's __Host- prefix opt-in is not
+	// observable here — ensure the client's deployment matches the
+	// upstream cookie naming if the upstream toggles SettingCookieUseHostPrefix).
+	setSessionCookie(ctx, nil, resp.SessionToken, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -151,7 +155,11 @@ func (a *clientAuthPages) handleRegister(ctx *router.PageContext) (string, templ
 		return "", auth.RegisterError(err.Error(), links), nil
 	}
 
-	setSessionCookie(ctx, resp.SessionToken, isSecureRequest(r))
+	// Client mode talks to a remote engine; pass nil so the cookie helper
+	// uses safe defaults (the remote's __Host- prefix opt-in is not
+	// observable here — ensure the client's deployment matches the
+	// upstream cookie naming if the upstream toggles SettingCookieUseHostPrefix).
+	setSessionCookie(ctx, nil, resp.SessionToken, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -193,7 +201,7 @@ func (a *clientAuthPages) handleLogout(ctx *router.PageContext) (string, templ.C
 		_, _ = a.client.SignOut(r.Context(), &authclient.SignOutRequest{}) //nolint:errcheck // best-effort sign out
 	}
 
-	clearSessionCookie(ctx, isSecureRequest(r))
+	clearSessionCookie(ctx, nil, isSecureRequest(r))
 
 	return a.basePath + "/login", nil, nil
 }

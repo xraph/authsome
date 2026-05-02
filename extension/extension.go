@@ -171,6 +171,29 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 	e.client = authclient.NewClient(e.config.PortalURL, opts...)
 	e.clientMode = true
 
+	// Auto-discover the platform App ID from the upstream authsome
+	// manifest when the operator hasn't supplied it via config.
+	// The manifest endpoint is unauthenticated and Authsome's
+	// bootstrap stamps the platform App ID into the response, so a
+	// single round-trip turns "set TWINOS_AUTH_SERVICE_APP_ID by
+	// hand" into a no-op at boot. Without this, every admin call
+	// from a service-account authclient 401s because Authsome's
+	// API key strategy needs the (app_id, prefix) tuple.
+	//
+	// Best-effort: a manifest fetch failure logs and proceeds — the
+	// authclient still works for non-admin operations and the
+	// operator can always set ServiceAppID manually.
+	if e.client.AppID() == "" {
+		discoveryCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := e.discoverPlatformAppID(discoveryCtx, logger); err != nil {
+			logger.Warn("authsome: boot-time platform app ID discovery failed; SDK will retry on the next admin call (common when upstream is still starting under forge dev)",
+				log.String("portal_url", e.config.PortalURL),
+				log.String("error", err.Error()),
+			)
+		}
+	}
+
 	// Register the client in the DI container so workspace and other
 	// extensions can inject it for org/membership operations.
 	if err := vessel.Provide(fapp.Container(), func() (*authclient.Client, error) {
@@ -675,6 +698,10 @@ func (e *Extension) sessionActivityMiddleware() forge.Middleware {
 
 // cookieSetter returns a CookieSetter callback that re-sets the session
 // cookie using the engine's dynamic cookie configuration from settings.
+//
+// Cookie name, domain, path, secure, http_only, same_site, and the
+// __Host- prefix opt-in are all resolved through authsome.SessionCookieTemplate
+// so the engine, dashboard auth pages, and social plugin all stay in sync.
 func (e *Extension) cookieSetter() middleware.CookieSetter {
 	return func(ctx forge.Context, token string, maxAge int) {
 		mgr := e.engine.Settings()
@@ -682,46 +709,19 @@ func (e *Extension) cookieSetter() middleware.CookieSetter {
 			return
 		}
 		goCtx := ctx.Context()
-		opts := settings.ResolveOpts{}
-		if appID, ok := middleware.AppIDFrom(goCtx); ok {
-			opts.AppID = appID.String()
-		}
 
-		name, _ := settings.Get(goCtx, mgr, authsome.SettingCookieName, opts) //nolint:errcheck // best-effort
-		if name == "" {
-			name = "authsome_session_token"
+		appIDStr := ""
+		if appID, ok := middleware.AppIDFrom(goCtx); ok {
+			appIDStr = appID.String()
 		}
-		domain, _ := settings.Get(goCtx, mgr, authsome.SettingCookieDomain, opts) //nolint:errcheck // best-effort
-		path, _ := settings.Get(goCtx, mgr, authsome.SettingCookiePath, opts)     //nolint:errcheck // best-effort
-		if path == "" {
-			path = "/"
-		}
-		secureSetting, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSecure, opts) //nolint:errcheck // best-effort
-		httpOnly, _ := settings.Get(goCtx, mgr, authsome.SettingCookieHTTPOnly, opts)    //nolint:errcheck // best-effort
-		sameSiteStr, _ := settings.Get(goCtx, mgr, authsome.SettingCookieSameSite, opts) //nolint:errcheck // best-effort
 
 		r := ctx.Request()
 		isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-		secure := secureSetting && isHTTPS
 
-		sameSite := http.SameSiteLaxMode
-		switch sameSiteStr {
-		case "strict":
-			sameSite = http.SameSiteStrictMode
-		case "none":
-			sameSite = http.SameSiteNoneMode
-		}
-
-		http.SetCookie(ctx.Response(), &http.Cookie{
-			Name:     name,
-			Value:    token,
-			Path:     path,
-			Domain:   domain,
-			MaxAge:   maxAge,
-			HttpOnly: httpOnly,
-			Secure:   secure,
-			SameSite: sameSite,
-		})
+		c := authsome.SessionCookieTemplate(goCtx, mgr, appIDStr, isHTTPS)
+		c.Value = token
+		c.MaxAge = maxAge
+		http.SetCookie(ctx.Response(), c)
 	}
 }
 
@@ -1204,4 +1204,41 @@ func (e *Extension) buildBootstrapOptions() []authsome.BootstrapOption {
 	}
 
 	return opts
+}
+
+// discoverPlatformAppID asks the upstream authsome service for its
+// platform App ID via the (unauthenticated) manifest endpoint and,
+// when found, stamps it onto the resolved authclient via SetAppID.
+// Called in client mode when the operator hasn't supplied
+// ServiceAppID — turns a manual env-var step into automatic
+// boot-time discovery.
+//
+// The manifest endpoint is exposed publicly by Authsome's API
+// (api/api.go::handleManifest) and includes "platform_app_id" when
+// bootstrap has set it. Failure to fetch is non-fatal; the caller
+// can still set the App ID manually via SetAppID later.
+func (e *Extension) discoverPlatformAppID(ctx context.Context, logger log.Logger) error {
+	manifest, err := e.client.GetManifest(ctx)
+	if err != nil || manifest == nil {
+		if err == nil {
+			err = fmt.Errorf("manifest response was nil")
+		}
+		return err
+	}
+	m := *manifest
+	appIDRaw, ok := m["platform_app_id"]
+	if !ok {
+		return fmt.Errorf("manifest did not include platform_app_id")
+	}
+	appID, ok := appIDRaw.(string)
+	if !ok || appID == "" {
+		return fmt.Errorf("platform_app_id was not a non-empty string (got %T)", appIDRaw)
+	}
+	e.client.SetAppID(appID)
+	if logger != nil {
+		logger.Info("authsome: platform app ID discovered from manifest",
+			log.String("app_id", appID),
+		)
+	}
+	return nil
 }

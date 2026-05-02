@@ -17,6 +17,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
@@ -868,74 +869,31 @@ func (p *Plugin) UnlinkAuthMethod(ctx context.Context, userID id.UserID, provide
 // ──────────────────────────────────────────────────
 // Cookie helpers
 // ──────────────────────────────────────────────────
-
-// resolveCookieSetting is a helper that reads a string setting from the
-// settings manager, returning fallback when the key is unregistered or empty.
-func (p *Plugin) resolveCookieSetting(ctx context.Context, key, fallback string) string {
-	if p.settingsMgr == nil {
-		return fallback
-	}
-	raw, err := p.settingsMgr.Resolve(ctx, key, settings.ResolveOpts{})
-	if err != nil {
-		return fallback
-	}
-	var v string
-	if err := json.Unmarshal(raw, &v); err != nil || v == "" {
-		return fallback
-	}
-	return v
-}
-
-// resolveCookieSettingBool reads a boolean setting from the settings manager.
-func (p *Plugin) resolveCookieSettingBool(ctx context.Context, key string, fallback bool) bool {
-	if p.settingsMgr == nil {
-		return fallback
-	}
-	raw, err := p.settingsMgr.Resolve(ctx, key, settings.ResolveOpts{})
-	if err != nil {
-		return fallback
-	}
-	var v bool
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return fallback
-	}
-	return v
-}
+//
+// (removed: resolveCookieSetting / resolveCookieSettingBool — replaced by
+// authsome.SessionCookieTemplate which centralises cookie-attribute
+// resolution and __Host- prefix handling across the engine, social, and
+// dashboard auth pages.)
 
 // setSessionCookie sets an httpOnly session cookie on the response.
-// It reads cookie configuration from the dynamic settings system (same
-// settings used by the core API handlers) so the cookie name, domain,
-// path, and security flags stay consistent across all auth flows.
+// Resolves the full cookie configuration (name, domain, path, secure,
+// http_only, same_site, and the __Host- prefix opt-in) via
+// authsome.SessionCookieTemplate so the social plugin's cookie matches
+// the engine's and dashboard's exactly.
 func (p *Plugin) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 	goCtx := ctx.Context()
-
-	name := p.resolveCookieSetting(goCtx, "session.cookie_name", "authsome_session_token")
-	domain := p.resolveCookieSetting(goCtx, "session.cookie_domain", "")
-	cookiePath := p.resolveCookieSetting(goCtx, "session.cookie_path", "/")
-	httpOnly := p.resolveCookieSettingBool(goCtx, "session.cookie_http_only", true)
-	sameSiteStr := p.resolveCookieSetting(goCtx, "session.cookie_same_site", "lax")
-
-	sameSite := http.SameSiteLaxMode
-	switch sameSiteStr {
-	case "strict":
-		sameSite = http.SameSiteStrictMode
-	case "none":
-		sameSite = http.SameSiteNoneMode
+	mgr := p.engine.Settings()
+	if mgr == nil {
+		return
 	}
 
 	r := ctx.Request()
 	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 
-	http.SetCookie(ctx.Response(), &http.Cookie{
-		Name:     name,
-		Value:    token,
-		Path:     cookiePath,
-		Domain:   domain,
-		MaxAge:   maxAge,
-		HttpOnly: httpOnly,
-		Secure:   isHTTPS,
-		SameSite: sameSite,
-	})
+	c := authsome.SessionCookieTemplate(goCtx, mgr, p.appID, isHTTPS)
+	c.Value = token
+	c.MaxAge = maxAge
+	http.SetCookie(ctx.Response(), c)
 }
 
 // ──────────────────────────────────────────────────

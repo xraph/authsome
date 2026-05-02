@@ -306,6 +306,31 @@ var (
 		settings.WithHelpText("Lax allows top-level navigations (OAuth redirects). Strict blocks all cross-site. None requires Secure=true."),
 		settings.WithOrder(160),
 	)
+
+	// SettingCookieUseHostPrefix opts the session cookie into the
+	// __Host- name prefix (RFC 6265bis §4.1.3.2). Browsers require any
+	// __Host- cookie to be Secure, have no Domain attribute, and Path=/,
+	// which closes the "sibling subdomain plants the cookie" attack on
+	// cookie-based session hijacking.
+	//
+	// Disabled by default for back-compat: enabling renames the cookie
+	// from "authsome_session_token" to "__Host-authsome_session_token"
+	// (and similarly for any custom name), invalidating sessions from
+	// before the toggle. Operators should enable in production AFTER
+	// the dashboard surfaces the rename to clients/extensions.
+	//
+	// When enabled, this setting forces Secure=true and Domain="" on the
+	// cookie regardless of the corresponding settings, because a __Host-
+	// cookie that violates those is silently rejected by the browser.
+	SettingCookieUseHostPrefix = settings.Define("session.cookie_use_host_prefix", false,
+		settings.WithDisplayName("Use __Host- Cookie Prefix"),
+		settings.WithDescription("Prepend __Host- to the session cookie name; forces Secure=true and Domain=\"\""),
+		settings.WithCategory("Cookie Configuration"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithEnforceable(),
+		settings.WithHelpText("RFC 6265bis prefix. Closes 'sibling subdomain plants the cookie' attacks on session hijacking. Renames the cookie when toggled — existing sessions become invalid until users sign in again."),
+		settings.WithOrder(170),
+	)
 )
 
 // registerCoreSessionSettings registers all core session settings under the "session" namespace.
@@ -370,7 +395,10 @@ func registerCoreSessionSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "session", SettingCookieHTTPOnly); err != nil {
 		return err
 	}
-	return settings.RegisterTyped(m, "session", SettingCookieSameSite)
+	if err := settings.RegisterTyped(m, "session", SettingCookieSameSite); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "session", SettingCookieUseHostPrefix)
 }
 
 // intPtr returns a pointer to the given int.

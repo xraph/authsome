@@ -260,7 +260,7 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 		return "", auth.LoginError(msg, links), nil
 	}
 
-	setSessionCookie(ctx, sess.Token, isSecureRequest(r))
+	setSessionCookie(ctx, a.engine, sess.Token, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -341,7 +341,7 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 		_ = a.engine.Store().UpdateUser(r.Context(), u) //nolint:errcheck // best-effort
 	}
 
-	setSessionCookie(ctx, sess.Token, isSecureRequest(r))
+	setSessionCookie(ctx, a.engine, sess.Token, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -388,34 +388,82 @@ func (a *authPages) handleLogout(ctx *router.PageContext) (string, templ.Compone
 		}
 	}
 
-	clearSessionCookie(ctx, isSecureRequest(r))
+	clearSessionCookie(ctx, a.engine, isSecureRequest(r))
 
 	return a.basePath + "/login", nil, nil
 }
 
-// setSessionCookie writes the dashboard auth_token cookie.
-func setSessionCookie(ctx *router.PageContext, token string, secure bool) {
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   secure,
-	})
+// dashboardCookieName is the dashboard's session cookie name. It's a
+// separate cookie from the engine's session_token (which uses the
+// session.cookie_name setting and may be __Host-prefixed); this one is
+// scoped to the dashboard auth flow only.
+const dashboardCookieName = "auth_token"
+
+// setSessionCookie writes the dashboard auth_token cookie. SameSite and
+// HttpOnly come from the cookie-config settings cascade so the dashboard
+// behaves consistently with the engine's session cookie. The __Host- prefix
+// opt-in is also honoured: when SettingCookieUseHostPrefix is true, the
+// cookie name becomes "__Host-auth_token" with Secure forced on and Domain
+// forced empty.
+func setSessionCookie(ctx *router.PageContext, eng *authsome.Engine, token string, secure bool) {
+	c := dashboardCookieTemplate(ctx, eng, secure)
+	c.Value = token
+	http.SetCookie(ctx.ResponseWriter, c)
 }
 
-// clearSessionCookie expires the dashboard auth_token cookie.
-func clearSessionCookie(ctx *router.PageContext, secure bool) {
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   secure,
-	})
+// clearSessionCookie expires the dashboard auth_token cookie. Mirrors
+// setSessionCookie's attributes so the browser actually replaces the
+// existing cookie (a different Path/Domain/SameSite would leave the
+// original in place).
+func clearSessionCookie(ctx *router.PageContext, eng *authsome.Engine, secure bool) {
+	c := dashboardCookieTemplate(ctx, eng, secure)
+	c.Value = ""
+	c.MaxAge = -1
+	http.SetCookie(ctx.ResponseWriter, c)
+}
+
+// dashboardCookieTemplate builds the dashboard cookie envelope using the
+// engine's settings cascade. Falls back to safe defaults (SameSite=Lax,
+// HttpOnly=true, Path=/) when the engine isn't fully wired (tests).
+func dashboardCookieTemplate(ctx *router.PageContext, eng *authsome.Engine, secure bool) *http.Cookie {
+	if eng == nil {
+		return &http.Cookie{
+			Name:     dashboardCookieName,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   secure,
+		}
+	}
+	mgr := eng.Settings()
+	if mgr == nil {
+		return &http.Cookie{
+			Name:     dashboardCookieName,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   secure,
+		}
+	}
+	// Reuse SessionCookieTemplate but force the dashboard-specific name.
+	// SessionCookieTemplate already handles SameSite, HttpOnly, Path, the
+	// __Host- prefix, and Secure-forcing under the prefix toggle.
+	c := authsome.SessionCookieTemplate(ctx.Request.Context(), mgr, "", secure)
+	// Replace the engine's cookie name with the dashboard's, preserving
+	// the __Host- prefix when it's been applied.
+	c.Name = applyHostPrefix(c.Name, dashboardCookieName)
+	return c
+}
+
+// applyHostPrefix transfers the __Host- prefix from a templated name to
+// a dashboard-specific name. If templated is "__Host-authsome_session_token"
+// the dashboard name becomes "__Host-auth_token"; otherwise it stays plain.
+func applyHostPrefix(templated, baseName string) string {
+	const hostPrefix = "__Host-"
+	if strings.HasPrefix(templated, hostPrefix) {
+		return hostPrefix + baseName
+	}
+	return baseName
 }
 
 // authChecker implements dashauth.AuthChecker for the authsome extension.
