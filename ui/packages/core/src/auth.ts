@@ -57,7 +57,7 @@ export class AuthManager {
   private state: AuthState = { status: "idle" };
   private listeners = new Set<(state: AuthState) => void>();
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
-  private onError?: (error: { error: string; code?: number }) => void;
+  private onError?: (error: { error: string; code?: number; type?: string }) => void;
 
   private publishableKey?: string;
   private clientConfig: ClientConfig | null = null;
@@ -162,6 +162,19 @@ export class AuthManager {
       };
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
+      // Specifically surface email_not_verified as a first-class state
+      // so the UI can swap to a "verify your email" panel rather than a
+      // generic error.
+      if (
+        err instanceof AuthClientError &&
+        err.type === "email_not_verified"
+      ) {
+        this.setState({
+          status: "email_not_verified",
+          email: credentials.email ?? "",
+        });
+        throw err;
+      }
       this.handleError(err);
       throw err;
     }
@@ -171,17 +184,42 @@ export class AuthManager {
   async signUp(data: SignUpRequest): Promise<void> {
     // See signIn() comment — forms manage their own loading state.
     try {
-      const res = await this.client.signUp(data);
-      const session: Session = {
-        session_token: res.session_token,
-        refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
-      };
-      await this.handleAuthResponse(res.user, session);
+      // The signup response always includes a session token, but when the
+      // backend has email verification enabled (the default) that token is
+      // unusable until the email is verified. The UI must NOT route the
+      // user into the signed-in shell — it should show a "check your inbox"
+      // panel. We therefore discard the session entirely and surface a
+      // verification_pending state.
+      //
+      // Enumeration-resistance note: when a duplicate signup is detected,
+      // the backend returns a byte-shape-identical 201 with a synthetic
+      // session token. We treat both real and duplicate signups the same.
+      await this.client.signUp(data);
+      this.setState({
+        status: "verification_pending",
+        email: data.email,
+      });
     } catch (err) {
       this.handleError(err);
       throw err;
     }
+  }
+
+  /**
+   * Resend the verification email for an unverified account.
+   *
+   * TODO(backend): the corresponding handler does not yet exist. When it's
+   * added, wire this through to the generated client (likely
+   * `POST /v1/verify-email/resend`). For now this is a no-op that logs to
+   * the console so callers can integrate the UI without blocking on the
+   * backend slice.
+   */
+  async resendVerification(email: string): Promise<void> {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[authsome] resendVerification is a stub — backend endpoint /v1/verify-email/resend not yet implemented",
+      { email },
+    );
   }
 
   /** Sign out and clear the session. */
@@ -432,6 +470,7 @@ export class AuthManager {
   private handleError(err: unknown): void {
     const message = err instanceof AuthClientError ? err.message : "An unexpected error occurred";
     const code = err instanceof AuthClientError ? err.code : undefined;
+    const type = err instanceof AuthClientError ? err.type : undefined;
 
     // MFA required is returned as a specific error code.
     if (code === 403 && message.toLowerCase().includes("mfa")) {
@@ -450,6 +489,6 @@ export class AuthManager {
     }
 
     this.setState({ status: "error", error: message });
-    this.onError?.({ error: message, code });
+    this.onError?.({ error: message, code, type });
   }
 }
