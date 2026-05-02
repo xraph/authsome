@@ -158,6 +158,11 @@ func NewEngine(opts ...Option) (*Engine, error) {
 		return nil, fmt.Errorf("authsome: failed to register core session settings: %w", err)
 	}
 
+	// Register captcha settings (Phase 2B.2).
+	if err := registerCaptchaSettings(e.settingsMgr); err != nil {
+		return nil, fmt.Errorf("authsome: failed to register captcha settings: %w", err)
+	}
+
 	// Register pending plugins
 	for _, p := range e.pendingPlugins {
 		e.plugins.Register(p)
