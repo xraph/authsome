@@ -2779,7 +2779,7 @@ export class AuthClient {
     });
 
     if (!response.ok) {
-      let apiError: { error?: string; code?: number } | undefined;
+      let apiError: { error?: string; code?: number; type?: string } | undefined;
       try {
         apiError = await response.json();
       } catch {
@@ -2788,6 +2788,7 @@ export class AuthClient {
       throw new AuthClientError(
         apiError?.error ?? `Request failed with status ${response.status}`,
         apiError?.code ?? response.status,
+        apiError?.type,
       );
     }
 
@@ -2801,11 +2802,13 @@ export class AuthClient {
 
 export class AuthClientError extends Error {
   code?: number;
+  type?: string;
 
-  constructor(message: string, code?: number) {
+  constructor(message: string, code?: number, type?: string) {
     super(message);
     this.name = 'AuthClientError';
     this.code = code;
+    this.type = type;
   }
 }
 

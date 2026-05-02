@@ -37,6 +37,12 @@ export interface Session {
 export interface APIError {
   error: string;
   code?: number;
+  /**
+   * Machine-readable error type set by the backend (e.g. "email_not_verified").
+   * Currently not part of the OpenAPI spec, so it's parsed manually from the
+   * error response body in the generated client's request helper.
+   */
+  type?: string;
 }
 
 /** Authentication state. */
@@ -46,6 +52,19 @@ export type AuthState =
   | { status: "authenticated"; user: User; session: Session }
   | { status: "unauthenticated" }
   | { status: "mfa_required"; session: Session }
+  /**
+   * Returned when a sign-in attempt is rejected because the user's email
+   * has not yet been verified, or when sign-up succeeded with email
+   * verification required. The `email` is preserved so a "resend" CTA can
+   * target the same account.
+   */
+  | { status: "email_not_verified"; email: string }
+  /**
+   * Sign-up succeeded but the account requires email verification before
+   * sign-in works. The session token returned by the API in this state is
+   * non-functional and is intentionally discarded.
+   */
+  | { status: "verification_pending"; email: string }
   | { status: "error"; error: string };
 
 /** Configuration for the AuthSome client. */
@@ -144,6 +163,12 @@ export interface ClientConfig {
   email_verification?: { enabled: boolean; required: boolean };
   /** Device authorization (OAuth 2.0 device code flow). */
   device_authorization?: { enabled: boolean };
+  /** Captcha challenge (e.g. Cloudflare Turnstile). */
+  captcha?: {
+    required: boolean;
+    provider?: string;
+    site_key?: string;
+  };
 }
 
 /** Interface for persisting tokens across sessions. */
