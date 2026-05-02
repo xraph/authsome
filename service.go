@@ -10,6 +10,7 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 
 	"github.com/xraph/forge"
@@ -296,6 +297,16 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		}
 	}
 
+	// Enforce per-app MFA policy. When MFARequired is true on the app's client
+	// config, block sign-in for users who have not yet enrolled an MFA factor.
+	// The frontend handles enrollment via the existing /mfa endpoints; once a
+	// factor is verified, subsequent sign-ins succeed.
+	if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.MFARequired != nil && *appCfg.MFARequired {
+		if !e.userHasVerifiedMFA(ctx, u.ID) {
+			return u, nil, account.ErrMFARequired
+		}
+	}
+
 	// Check password expiration
 	if e.config.Password.MaxAgeDays > 0 && u.PasswordChangedAt != nil {
 		maxAge := time.Duration(e.config.Password.MaxAgeDays) * 24 * time.Hour
@@ -421,10 +432,59 @@ type RefreshOpts struct {
 	UserAgent string
 }
 
+// hashRefreshToken returns the canonical hex-encoded SHA-256 of a refresh
+// token. This is the only form of the token that ever reaches the
+// revoked-set tables — we never persist the raw secret.
+func hashRefreshToken(tok string) string {
+	sum := sha256.Sum256([]byte(tok))
+	return hex.EncodeToString(sum[:])
+}
+
 // Refresh generates new tokens for an existing session using the refresh token.
 // When RefreshOpts are provided and session binding is enabled, the client IP
 // and/or User-Agent are validated against the session's stored values.
+//
+// Replay detection (RFC 6819 §5.2.2.3): every successful rotation records
+// the OLD refresh-token hash as revoked. If a previously-rotated token is
+// presented again, the entire session family is revoked, an audit event is
+// recorded, and a generic ErrInvalidCredentials is returned (the caller must
+// not learn that replay was the reason).
 func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
+	presentedHash := hashRefreshToken(refreshToken)
+
+	// Replay check: if the presented token's hash is already in the
+	// revoked set, this is either a leaked token being replayed or a
+	// double-spend. Either way: cascade-revoke the family and refuse.
+	if revoked, _ := e.store.IsRefreshTokenRevoked(ctx, presentedHash); revoked { //nolint:errcheck // err treated as "not revoked"
+		var ipAddr, userAgent string
+		if len(opts) > 0 {
+			ipAddr = opts[0].IPAddress
+			userAgent = opts[0].UserAgent
+		}
+		familyID, ferr := e.store.GetRevokedRefreshTokenFamily(ctx, presentedHash)
+		if ferr == nil && !familyID.IsNil() {
+			if rerr := e.store.RevokeRefreshTokenFamily(ctx, familyID, session.RevokeReasonReplayDetected); rerr != nil {
+				e.logger.Warn("authsome: revoke refresh-token family failed",
+					log.String("family_id", familyID.String()),
+					log.String("error", rerr.Error()),
+				)
+			}
+		}
+		md := map[string]string{
+			"family_id":  familyID.String(),
+			"ip":         ipAddr,
+			"user_agent": userAgent,
+		}
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:   hook.ActionRefreshTokenReplayed,
+			Resource: hook.ResourceSession,
+			Metadata: md,
+		})
+		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
+			"refresh_token_replayed", "session", "", "", "", "auth", md)
+		return nil, account.ErrInvalidCredentials
+	}
+
 	sess, err := e.store.GetSessionByRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return nil, account.ErrInvalidCredentials
@@ -458,7 +518,17 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 	}
 
-	// Generate new tokens (using per-app + per-env config if available)
+	// Lazily backfill FamilyID for legacy sessions that pre-date Phase 3E.2.
+	// Without a family, replay-cascade can't link siblings — but a single
+	// session is still safer than refusing every legacy refresh.
+	if sess.FamilyID.IsNil() {
+		sess.FamilyID = id.NewSessionFamilyID()
+	}
+	familyID := sess.FamilyID
+
+	// Generate new tokens (using per-app + per-env config if available).
+	// account.RefreshSession mutates sess in place; the new RefreshToken
+	// inherits the same FamilyID by virtue of leaving the field untouched.
 	cfg := e.sessionConfigForApp(ctx, sess.AppID, sess.EnvID)
 	if err := account.RefreshSession(sess, cfg); err != nil {
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
@@ -466,6 +536,17 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 
 	if err := e.store.UpdateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("authsome: update session: %w", err)
+	}
+
+	// Record the OLD refresh-token hash as rotated. A subsequent Refresh
+	// call presenting this same token will trigger the replay branch above.
+	if cfg.RotateRefreshToken {
+		if mErr := e.store.MarkRefreshTokenRevoked(ctx, presentedHash, familyID, session.RevokeReasonRotated); mErr != nil {
+			e.logger.Warn("authsome: mark refresh-token revoked failed",
+				log.String("family_id", familyID.String()),
+				log.String("error", mErr.Error()),
+			)
+		}
 	}
 
 	// Plugin: after session refresh
@@ -748,6 +829,25 @@ func (e *Engine) savePasswordHistory(ctx context.Context, userID id.UserID, oldH
 	if err := e.passwordHistory.SavePasswordHash(ctx, userID, oldHash); err != nil {
 		e.logger.Warn("authsome: save password history failed", log.String("error", err.Error()))
 	}
+}
+
+// mfaPluginInspector is implemented by the MFA plugin to expose enrollment lookups.
+type mfaPluginInspector interface {
+	HasMFA(ctx context.Context, userID id.UserID) bool
+}
+
+// userHasVerifiedMFA returns true when the MFA plugin reports a verified factor
+// for the user. Returns false when the plugin is not registered.
+func (e *Engine) userHasVerifiedMFA(ctx context.Context, userID id.UserID) bool {
+	for _, p := range e.plugins.Plugins() {
+		if p.Name() != "mfa" {
+			continue
+		}
+		if inspector, ok := p.(mfaPluginInspector); ok {
+			return inspector.HasMFA(ctx, userID)
+		}
+	}
+	return false
 }
 
 // lockoutKey builds a scoped lockout key from a sign-in request.
