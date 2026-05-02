@@ -9,7 +9,17 @@ import (
 
 // TopbarEnvSwitcher renders a compact environment switcher for the topbar.
 // Shows the current environment with a color dot and dropdown to switch.
-templ TopbarEnvSwitcher(current *environment.Environment, all []*environment.Environment, appSlug, currentPage, basePath string) {
+// pagesPrefix is the URL prefix under which authsome pages are mounted on the
+// consumer (e.g. "/dashboard/ext/authsome/pages" or
+// "/dashboard/remote/authsome/pages"). Empty falls back to basePath +
+// "/ext/authsome/pages" for backwards compatibility.
+templ TopbarEnvSwitcher(current *environment.Environment, all []*environment.Environment, appSlug, currentPage, basePath, pagesPrefix string) {
+	{{
+		prefix := pagesPrefix
+		if prefix == "" {
+			prefix = basePath + "/ext/authsome/pages"
+		}
+	}}
 	if len(all) > 0 {
 		@dropdown.Dropdown() {
 			@dropdown.Trigger(dropdown.TriggerProps{
@@ -30,7 +40,7 @@ templ TopbarEnvSwitcher(current *environment.Environment, all []*environment.Env
 				for _, env := range all {
 					@dropdown.Item(dropdown.ItemProps{
 						Attributes: templ.Attributes{
-							"hx-get":      basePath + "/ext/authsome/pages/" + appSlug + "/" + env.Slug + currentPage,
+							"hx-get":      prefix + "/" + appSlug + "/" + env.Slug + currentPage,
 							"hx-target":   "#content",
 							"hx-swap":     "innerHTML",
 							"hx-push-url": "true",

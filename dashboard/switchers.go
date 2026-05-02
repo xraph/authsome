@@ -6,6 +6,8 @@ import (
 
 	"github.com/a-h/templ"
 
+	"github.com/xraph/forge/extensions/dashboard/contributor"
+
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/authsome/environment"
@@ -48,6 +50,7 @@ func appSwitcherFromContext(engine *authsome.Engine) templ.Component {
 			CurrentEnvSlug: envSlug,
 			CurrentPage:    currentPage,
 			BasePath:       "",
+			PageBase:       contributor.PageBaseFromContext(ctx),
 		}).Render(ctx, w)
 	})
 }
@@ -87,6 +90,6 @@ func envSwitcherFromContext(engine *authsome.Engine) templ.Component {
 			currentPage = "/"
 		}
 
-		return components.TopbarEnvSwitcher(currentEnv, allEnvs, appSlug, currentPage, "").Render(ctx, w)
+		return components.TopbarEnvSwitcher(currentEnv, allEnvs, appSlug, currentPage, "", contributor.PageBaseFromContext(ctx)).Render(ctx, w)
 	})
 }

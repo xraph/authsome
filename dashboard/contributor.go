@@ -182,11 +182,18 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 		_, _, pageRoute = c.parseAppEnvRoute(route)
 	}
 
-	// If no app/env, redirect to default app/env URL.
+	// If no app/env, redirect to default app/env URL. Use the consumer-supplied
+	// PageBase so links resolve correctly whether authsome is mounted under
+	// /ext/authsome (local) or /remote/authsome (discovered remote).
 	if appSlug == "" || envSlug == "" {
 		defaultApp, defaultEnv := c.resolveDefaults(ctx)
-		redirectURL := fmt.Sprintf("%s/ext/authsome/pages/%s/%s%s",
-			params.BasePath, defaultApp.Slug, defaultEnv.Slug, route)
+		pageBase := params.PageBase
+		if pageBase == "" {
+			pageBase = params.BasePath + "/ext/authsome/pages"
+		}
+
+		redirectURL := fmt.Sprintf("%s/%s/%s%s",
+			pageBase, defaultApp.Slug, defaultEnv.Slug, route)
 		return htmxRedirect(redirectURL), nil
 	}
 
@@ -212,7 +219,21 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 	}
 
 	// Wrap the page component with the context script for HTMX nav link rewriting.
-	return withContextScript(comp, appSlug, envSlug, c.knownRoutesCSV()), nil
+	pagesPrefix := contextPagesPrefix(params)
+
+	return withContextScript(comp, appSlug, envSlug, c.knownRoutesCSV(), pagesPrefix), nil
+}
+
+// contextPagesPrefix returns the URL prefix for authsome pages, used by the htmx
+// interceptor to rewrite bare nav links into app/env-scoped URLs. Falls back to
+// the legacy /ext/authsome/pages/ literal when params.PageBase is unset (older
+// consumers).
+func contextPagesPrefix(params contributor.Params) string {
+	if params.PageBase != "" {
+		return params.PageBase + "/"
+	}
+
+	return "/ext/authsome/pages/"
 }
 
 // renderPageRoute dispatches to the correct page renderer based on the page route.
@@ -281,7 +302,7 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 	case "/roles/detail":
 		return c.renderRoleDetail(ctx, appID, params)
 	case "/apps":
-		return c.renderApps(ctx)
+		return c.renderApps(ctx, params)
 	case "/apps/create":
 		return c.renderAppCreate(ctx, params)
 	default:
@@ -290,9 +311,9 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 }
 
 // withContextScript wraps a page component with the auth context script for HTMX nav rewriting.
-func withContextScript(page templ.Component, appSlug, envSlug, knownRoutesCSV string) templ.Component {
+func withContextScript(page templ.Component, appSlug, envSlug, knownRoutesCSV, pagesPrefix string) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
-		if err := components.ContextScript(appSlug, envSlug, knownRoutesCSV).Render(ctx, w); err != nil {
+		if err := components.ContextScript(appSlug, envSlug, knownRoutesCSV, pagesPrefix).Render(ctx, w); err != nil {
 			return err
 		}
 		return page.Render(ctx, w)
@@ -671,7 +692,13 @@ func (c *Contributor) renderEnvironmentDetail(ctx context.Context, _ id.AppID, p
 
 	env, err := c.engine.GetEnvironment(ctx, envID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, contributor.ErrPageNotFound
+		}
 		return nil, fmt.Errorf("dashboard: resolve environment: %w", err)
+	}
+	if env == nil {
+		return nil, contributor.ErrPageNotFound
 	}
 
 	// Resolve effective settings: type defaults + per-environment overrides.
@@ -986,13 +1013,19 @@ func (c *Contributor) renderRoleDetail(ctx context.Context, _ id.AppID, params c
 	return pages.RoleDetailPage(data), nil
 }
 
-func (c *Contributor) renderApps(ctx context.Context) (templ.Component, error) {
+func (c *Contributor) renderApps(ctx context.Context, params contributor.Params) (templ.Component, error) {
 	apps, err := c.engine.ListApps(ctx)
 	if err != nil {
 		apps = nil
 	}
 
-	return pages.AppsPage(apps), nil
+	return pages.AppsPage(pages.AppsPageData{
+		Apps:           apps,
+		CurrentAppSlug: AppSlugFromContext(ctx),
+		CurrentEnvSlug: EnvSlugFromContext(ctx),
+		BasePath:       params.BasePath,
+		PageBase:       params.PageBase,
+	}), nil
 }
 
 func (c *Contributor) renderAppCreate(ctx context.Context, params contributor.Params) (templ.Component, error) {
