@@ -190,11 +190,19 @@ func (s *nonceSigner) Consume(sessionID, scope, token string) bool {
 }
 
 func (s *nonceSigner) sign(tsBytes []byte, sessionID, scope string) []byte {
+	// Length-prefix sessionID and scope so callers passing user-controlled
+	// data can't construct collisions (e.g. sign("a", "b|c") == sign("a|b", "c")
+	// under a naive separator-only encoding). Today's callers pass a TypeID
+	// session and a constant scope — no untrusted input — but the cost is
+	// trivial and the property holds for any future caller.
 	h := hmac.New(sha256.New, s.secret)
 	h.Write(tsBytes)
-	h.Write([]byte{'|'})
+	var lenBuf [4]byte
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(sessionID)))
+	h.Write(lenBuf[:])
 	h.Write([]byte(sessionID))
-	h.Write([]byte{'|'})
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(scope)))
+	h.Write(lenBuf[:])
 	h.Write([]byte(scope))
 	return h.Sum(nil)
 }
