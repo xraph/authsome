@@ -428,9 +428,18 @@ func (p *Plugin) IsOrgSlugAvailable(ctx context.Context, appID id.AppID, slug st
 	return false, nil
 }
 
-// canDeleteOrg returns true when actor is allowed to delete org. The owner
-// (org.CreatedBy) always passes; otherwise the actor must hold the engine-
-// level "org.delete" permission on the org's resource ID.
+// canDeleteOrg returns true when actor is allowed to delete org. The creator
+// (org.CreatedBy) always passes as a convenience — note "creator" is not
+// "owner"; the permission-check path is the canonical authority for non-
+// creator actors. Otherwise the actor must hold the engine-level
+// "org.delete" permission on the "org" resource type.
+//
+// RBAC convention: PermissionChecker.HasPermission's third arg is the
+// resource TYPE (e.g. "org"), not an instance ID. rbac/warden_store.go
+// forwards this directly as warden.Resource.Type, and middleware/rbac.go
+// follows the same shape (e.g. HasPermission(..., "manage", "app")).
+// Passing an instance ID here would mean no admin role grant could ever
+// match.
 func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organization.Organization) bool {
 	if org == nil {
 		return false
@@ -446,7 +455,7 @@ func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organiz
 	if p.permChecker == nil {
 		return false
 	}
-	ok, err := p.permChecker.HasPermission(ctx, actor, "org.delete", org.ID.String())
+	ok, err := p.permChecker.HasPermission(ctx, actor, "org.delete", "org")
 	return err == nil && ok
 }
 

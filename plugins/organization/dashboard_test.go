@@ -151,6 +151,50 @@ func TestOrgDelete_RequiresOwnerOrAdmin(t *testing.T) {
 	}
 }
 
+// spyPermChecker records the (action, resource) pair it was called with and
+// returns a fixed allow. Used to assert canonical RBAC arg shapes.
+type spyPermChecker struct {
+	allow    bool
+	gotUser  id.UserID
+	gotAct   string
+	gotRes   string
+	calls    int
+}
+
+func (s *spyPermChecker) HasPermission(_ context.Context, userID id.UserID, action, resource string) (bool, error) {
+	s.calls++
+	s.gotUser = userID
+	s.gotAct = action
+	s.gotRes = resource
+	return s.allow, nil
+}
+
+// TestOrgDelete_PermissionCheckUsesResourceType pins the codebase RBAC
+// convention: HasPermission's third arg is the resource TYPE ("org"), not
+// the instance ID. See middleware/rbac.go and rbac/warden_store.go.
+func TestOrgDelete_PermissionCheckUsesResourceType(t *testing.T) {
+	s := newOrgTestSetup(t)
+
+	admin := id.NewUserID()
+	spy := &spyPermChecker{allow: true}
+	s.plugin.SetPermCheckerForTest(spy)
+
+	sess := id.NewSessionID()
+	nonce := dashboard.GenerateScopedNonce(sess.String(), "org.delete")
+	s.submitDelete(t, ctxAs(admin, sess), nonce)
+
+	require.Equal(t, 1, spy.calls, "permission checker must be consulted exactly once")
+	assert.Equal(t, admin, spy.gotUser)
+	assert.Equal(t, "org.delete", spy.gotAct)
+	assert.Equal(t, "org", spy.gotRes,
+		"resource arg must be the TYPE %q, not the instance ID; codebase convention is rbac/warden_store.go forwards this as warden.Resource.Type",
+		"org")
+
+	if _, ok := s.orgExists(t); ok {
+		t.Fatalf("admin with allow=true should have deleted org")
+	}
+}
+
 func TestOrgDelete_AdminWithPermissionCanDelete(t *testing.T) {
 	s := newOrgTestSetup(t)
 
@@ -158,8 +202,10 @@ func TestOrgDelete_AdminWithPermissionCanDelete(t *testing.T) {
 	s.plugin.SetPermCheckerForTest(&stubPermChecker{
 		allow:      true,
 		wantAction: "org.delete",
-		wantRes:    s.org.ID.String(),
-		wantUser:   admin,
+		// Resource is the TYPE per the codebase RBAC convention — see
+		// rbac/warden_store.go (forwarded as warden.Resource.Type).
+		wantRes:  "org",
+		wantUser: admin,
 	})
 
 	sess := id.NewSessionID()
@@ -180,6 +226,7 @@ func TestOrgDelete_AuditEventOnSuccess(t *testing.T) {
 
 	secutil.AssertAuditEvent(t, s.ch, "org.delete", func(ev *bridge.AuditEvent) {
 		assert.Equal(t, bridge.SeverityCritical, ev.Severity)
+		assert.Equal(t, bridge.OutcomeSuccess, ev.Outcome)
 		assert.Equal(t, s.owner.String(), ev.ActorID)
 		assert.Equal(t, s.org.ID.String(), ev.ResourceID)
 		assert.Equal(t, s.org.Slug, ev.Metadata["slug"])
