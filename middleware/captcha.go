@@ -60,6 +60,112 @@ type CaptchaOptions struct {
 	Logger log.Logger
 }
 
+// CaptchaResult is the outcome of an out-of-middleware captcha check.
+// Allowed reports whether the request may proceed; when false, RejectCode is
+// the same stable type code the middleware would have written
+// ("captcha_required", "captcha_invalid", "captcha_unavailable",
+// "captcha_misconfigured"). RejectStatus is the HTTP status code that
+// matches.
+type CaptchaResult struct {
+	Allowed      bool
+	RejectCode   string
+	RejectStatus int
+	Reason       string
+}
+
+// VerifyCaptchaForRequest is a non-forge variant of CaptchaMiddleware for
+// callers that aren't part of forge's standard middleware chain (e.g.
+// dashboard auth-pages handlers, which receive a *router.PageContext rather
+// than a forge.Context). The semantics match the middleware exactly:
+//
+//   - If auth.captcha_required resolves to false: returns Allowed=true.
+//   - Token missing: Allowed=false, RejectCode="captcha_required".
+//   - Token rejected: Allowed=false, RejectCode="captcha_invalid".
+//   - Verifier transient failure: Allowed=false, RejectCode="captcha_unavailable".
+//   - Verifier construction failure: Allowed=false, RejectCode="captcha_misconfigured".
+//
+// The optional appID scopes setting resolution; pass id.AppID{} for global only.
+// Audit recording is the caller's responsibility (the middleware records it
+// internally; out-of-middleware callers may want different fields).
+func VerifyCaptchaForRequest(ctx context.Context, opts CaptchaOptions, r *http.Request, appID id.AppID, action string) CaptchaResult {
+	if opts.VerifierFor == nil {
+		opts.VerifierFor = defaultCaptchaVerifierFor
+	}
+	resolveOpts := settings.ResolveOpts{}
+	if !appID.IsNil() {
+		resolveOpts.AppID = appID.String()
+	}
+
+	required, err := captchaResolveBool(ctx, opts.Settings, captchaSettingRequired, resolveOpts)
+	if err != nil || !required {
+		return CaptchaResult{Allowed: true}
+	}
+
+	token := captchaExtractToken(r)
+	if token == "" {
+		return CaptchaResult{
+			Allowed: false, RejectCode: "captcha_required",
+			RejectStatus: http.StatusForbidden, Reason: "missing-token",
+		}
+	}
+
+	provider, _ := captchaResolveString(ctx, opts.Settings, captchaSettingProvider, resolveOpts)
+	if provider == "" {
+		provider = "turnstile"
+	}
+	secret, _ := captchaResolveString(ctx, opts.Settings, captchaSettingSecretKey, resolveOpts)
+
+	verifier, err := opts.VerifierFor(provider, secret)
+	if err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Error("captcha: build verifier failed",
+				log.String("provider", provider),
+				log.String("error", err.Error()))
+		}
+		return CaptchaResult{
+			Allowed: false, RejectCode: "captcha_misconfigured",
+			RejectStatus: http.StatusServiceUnavailable, Reason: "verifier-build-failed",
+		}
+	}
+
+	remoteIP := captchaClientIP(r)
+	if _, verifyErr := verifier.Verify(ctx, token, remoteIP, action); verifyErr != nil {
+		switch {
+		case errors.Is(verifyErr, captcha.ErrMissingToken):
+			return CaptchaResult{
+				Allowed: false, RejectCode: "captcha_required",
+				RejectStatus: http.StatusForbidden, Reason: "verifier-rejected-empty",
+			}
+		case errors.Is(verifyErr, captcha.ErrInvalidToken):
+			return CaptchaResult{
+				Allowed: false, RejectCode: "captcha_invalid",
+				RejectStatus: http.StatusForbidden, Reason: "verifier-rejected-invalid",
+			}
+		case errors.Is(verifyErr, captcha.ErrDuplicateToken):
+			return CaptchaResult{
+				Allowed: false, RejectCode: "captcha_invalid",
+				RejectStatus: http.StatusForbidden, Reason: "verifier-rejected-duplicate",
+			}
+		case errors.Is(verifyErr, captcha.ErrTransientFailure):
+			if opts.Logger != nil {
+				opts.Logger.Warn("captcha: transient verifier failure",
+					log.String("error", verifyErr.Error()))
+			}
+			return CaptchaResult{
+				Allowed: false, RejectCode: "captcha_unavailable",
+				RejectStatus: http.StatusServiceUnavailable, Reason: "transient-failure",
+			}
+		default:
+			return CaptchaResult{
+				Allowed: false, RejectCode: "captcha_invalid",
+				RejectStatus: http.StatusForbidden, Reason: "verifier-rejected-other",
+			}
+		}
+	}
+
+	return CaptchaResult{Allowed: true}
+}
+
 // CaptchaMiddleware gates a request on a successful captcha verification.
 //
 // The token is read from header X-Captcha-Token first, falling back to the

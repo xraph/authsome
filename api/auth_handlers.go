@@ -35,6 +35,32 @@ func (a *API) rateLimitOpt(limit int) []forge.RouteOption {
 	}
 }
 
+// captchaOpt returns a forge.WithMiddleware option that gates the route on
+// captcha verification when auth.captcha_required is true for the resolved
+// app. The action label is recorded on audit events and (when supported by
+// the provider) bound at widget render time.
+//
+// IMPORTANT ORDERING: this option must be appended AFTER rateLimitOpt so a
+// single IP can't burn captcha quota by spamming, and AFTER any cheap
+// validation but BEFORE the route's handler — which for /v1/signup includes
+// the dummy-hash budget consumer. If captcha runs after the handler, every
+// captcha-failed probe still pays argon2 cost server-side, turning the
+// timing-oracle defense into a CPU-DoS amplifier.
+func (a *API) captchaOpt(action string) []forge.RouteOption {
+	mgr := a.engine.Settings()
+	if mgr == nil {
+		return nil
+	}
+	return []forge.RouteOption{
+		forge.WithMiddleware(middleware.CaptchaMiddleware(middleware.CaptchaOptions{
+			Settings:  mgr,
+			Action:    action,
+			Chronicle: a.engine.Chronicle(),
+			Logger:    a.engine.Logger(),
+		})),
+	}
+}
+
 // ──────────────────────────────────────────────────
 // Auth route registration
 // ──────────────────────────────────────────────────
@@ -53,6 +79,7 @@ func (a *API) registerAuthRoutes(router forge.Router) error {
 		forge.WithErrorResponses(),
 	)
 	signUpOpts = append(signUpOpts, a.rateLimitOpt(rlCfg.SignUpLimit)...)
+	signUpOpts = append(signUpOpts, a.captchaOpt("signup")...)
 	if err := g.POST("/signup", a.handleSignUp, signUpOpts...); err != nil {
 		return err
 	}
@@ -67,6 +94,7 @@ func (a *API) registerAuthRoutes(router forge.Router) error {
 		forge.WithErrorResponses(),
 	)
 	signInOpts = append(signInOpts, a.rateLimitOpt(rlCfg.SignInLimit)...)
+	signInOpts = append(signInOpts, a.captchaOpt("signin")...)
 	if err := g.POST("/signin", a.handleSignIn, signInOpts...); err != nil {
 		return err
 	}

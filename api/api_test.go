@@ -542,6 +542,115 @@ func TestSignIn_UnverifiedEmail_Returns403WithStableCode(t *testing.T) {
 }
 
 // ──────────────────────────────────────────────────
+// Captcha middleware on signup/signin
+// ──────────────────────────────────────────────────
+
+// enableCaptcha turns on auth.captcha_required globally and seeds a secret so
+// the middleware can build a verifier. Returns a teardown that restores the
+// original false default.
+func enableCaptcha(t *testing.T, eng *authsome.Engine) {
+	t.Helper()
+	mgr := eng.Settings()
+	require.NoError(t, mgr.Set(context.Background(), "auth.captcha_required",
+		json.RawMessage(`true`),
+		settings.ScopeGlobal, "", "", "", "test"))
+	require.NoError(t, mgr.Set(context.Background(), "auth.captcha_secret_key",
+		json.RawMessage(`"test-secret"`),
+		settings.ScopeGlobal, "", "", "", "test"))
+	t.Cleanup(func() {
+		_ = mgr.Set(context.Background(), "auth.captcha_required",
+			json.RawMessage(`false`),
+			settings.ScopeGlobal, "", "", "", "test")
+	})
+}
+
+func TestSignup_CaptchaRequiredRejectsMissingToken(t *testing.T) {
+	t.Parallel()
+	a, eng := newTestAPI(t)
+	enableCaptcha(t, eng)
+	handler := a.Handler()
+
+	body := jsonBody(t, map[string]string{
+		"email":    "captcha-missing@test.com",
+		"password": "SecureP@ss1",
+	})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"signup with captcha_required=true and no token must return 403; body=%s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.Equal(t, "captcha_required", resp["type"])
+
+	// Critical security property: the captcha rejection must run BEFORE the
+	// dummy-hash budget consumer in handleSignUp. Otherwise every captcha-
+	// failed probe still pays argon2 cost server-side, turning the timing-
+	// oracle defense into a CPU-DoS amplifier. We assert this by timing the
+	// rejection — without the middleware ordering, the response would take
+	// ~argon2 time (50-200ms+); with it, it returns near-instantly.
+	start := time.Now()
+	for range 5 {
+		req2 := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", jsonBody(t, map[string]string{
+			"email":    "captcha-missing-2@test.com",
+			"password": "SecureP@ss1",
+		}))
+		req2.Header.Set("Content-Type", "application/json")
+		rec2 := httptest.NewRecorder()
+		handler.ServeHTTP(rec2, req2)
+		require.Equal(t, http.StatusForbidden, rec2.Code)
+	}
+	avg := time.Since(start) / 5
+	if avg > 50*time.Millisecond {
+		t.Fatalf("captcha rejection took ~%v on average (>50ms); ordering may have regressed and rejected probes are paying argon2 cost", avg)
+	}
+}
+
+func TestSignin_CaptchaRequiredRejectsMissingToken(t *testing.T) {
+	t.Parallel()
+	a, eng := newTestAPI(t)
+	enableCaptcha(t, eng)
+	handler := a.Handler()
+
+	body := jsonBody(t, map[string]string{
+		"email":    "any@test.com",
+		"password": "AnyPassword1",
+	})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signin", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"signin with captcha_required=true and no token must return 403; body=%s", rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	require.Equal(t, "captcha_required", resp["type"])
+}
+
+func TestSignup_CaptchaNotRequiredPassesThrough(t *testing.T) {
+	t.Parallel()
+	a, _ := newTestAPI(t) // bootstrap leaves captcha_required=false (default)
+	handler := a.Handler()
+
+	body := jsonBody(t, map[string]string{
+		"email":    "captcha-off@test.com",
+		"password": "SecureP@ss1",
+	})
+	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusCreated, rec.Code,
+		"signup must pass through when captcha_required=false; body=%s", rec.Body.String())
+}
+
+// ──────────────────────────────────────────────────
 // SignOut endpoint
 // ──────────────────────────────────────────────────
 

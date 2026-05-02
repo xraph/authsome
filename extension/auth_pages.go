@@ -17,8 +17,42 @@ import (
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
 )
+
+// captchaCheck is a small wrapper around middleware.VerifyCaptchaForRequest
+// for the auth-pages flow. Returns (allowed, userMessage). userMessage is
+// empty when allowed=true, and a human-friendly string otherwise — meant to
+// be passed straight to the templ error renderer.
+//
+// This deliberately reuses the JSON-API middleware's verifier and settings
+// resolution so a deployment can configure captcha once at the engine level
+// and have it apply to BOTH the JSON API and the dashboard's HTML forms.
+func (a *authPages) captchaCheck(r *http.Request, action string) (bool, string) {
+	mgr := a.engine.Settings()
+	if mgr == nil {
+		return true, ""
+	}
+	res := middleware.VerifyCaptchaForRequest(r.Context(), middleware.CaptchaOptions{
+		Settings:  mgr,
+		Chronicle: a.engine.Chronicle(),
+		Logger:    a.engine.Logger(),
+	}, r, a.defaultAppID(), action)
+	if res.Allowed {
+		return true, ""
+	}
+	switch res.RejectCode {
+	case "captcha_required":
+		return false, "Please complete the captcha challenge"
+	case "captcha_invalid":
+		return false, "Captcha challenge failed. Please try again."
+	case "captcha_unavailable":
+		return false, "Captcha verification temporarily unavailable. Please try again in a moment."
+	default:
+		return false, "Captcha verification failed"
+	}
+}
 
 // authPages implements dashauth.AuthPageProvider for the authsome extension.
 type authPages struct {
@@ -191,6 +225,10 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 
 	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 
+	if allowed, msg := a.captchaCheck(r, "signin"); !allowed {
+		return "", auth.LoginError(msg, links), nil
+	}
+
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
@@ -238,6 +276,11 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
 		// 303 See Other to GET — fresh token issued; no form state in history.
 		return a.basePath + "/register", nil, nil
+	}
+
+	if allowed, msg := a.captchaCheck(r, "signup"); !allowed {
+		comp, _ := a.renderRegisterPage(ctx, msg, nil, nil) //nolint:errcheck // best-effort render
+		return "", comp, nil
 	}
 
 	firstName := r.FormValue("first_name")
@@ -318,6 +361,10 @@ func (a *authPages) handleForgotPassword(ctx *router.PageContext) (string, templ
 	}
 
 	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+
+	if allowed, msg := a.captchaCheck(r, "forgot_password"); !allowed {
+		return "", auth.ForgotPasswordError(msg, links), nil
+	}
 
 	email := r.FormValue("email")
 	if email == "" {
