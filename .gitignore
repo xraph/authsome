@@ -36,3 +36,9 @@ sdk/**/node_modules/
 # Editor / agent ephemera
 .claude/launch.json
 .claude/scheduled_tasks.lock
+
+# Agent workspace scratch (subagent task notes, plan drafts, etc.).
+# Not authoritative — the source of truth lives in docs/ or commit
+# messages. Gitignored so the agent loop doesn't leak ephemeral
+# state into the repo.
+_project_files/
