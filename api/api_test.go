@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -244,11 +245,11 @@ func TestHandleSignUp_WeakPassword(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestHandleSignUp_DuplicateEmail(t *testing.T) {
+func TestHandleSignUp_DuplicateEmailReturnsSuccess(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := a.Handler()
 
-	// Pre-create user
+	// Pre-create user.
 	signUp(t, eng, "dupe@test.com", "SecureP@ss1")
 
 	body := jsonBody(t, map[string]string{
@@ -262,7 +263,69 @@ func TestHandleSignUp_DuplicateEmail(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusConflict, rec.Code)
+	// Enumeration resistance: duplicate signup must NOT return 409.
+	assert.NotEqual(t, http.StatusConflict, rec.Code, "duplicate signup must not return 409 (enumeration oracle)")
+	assert.Equal(t, http.StatusCreated, rec.Code, "duplicate signup must return same 201 as fresh signup; body=%s", rec.Body.String())
+}
+
+func TestSignup_DoesNotLeakEmailExistence(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	bodyA := []byte(`{"email":"leak-a@example.com","password":"SecureP@ss1"}`)
+
+	// First signup must succeed.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code, "first signup must succeed; body=%s", rec.Body.String())
+
+	// Second signup with the SAME email must NOT return 409 and the body
+	// must NOT contain "taken" / "exists" / similar enumeration markers.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusCreated, rec.Code, "duplicate signup must mirror fresh signup status; body=%s", rec.Body.String())
+
+	body := strings.ToLower(rec.Body.String())
+	for _, marker := range []string{"taken", "exists", "duplicate", "already"} {
+		if strings.Contains(body, marker) {
+			t.Errorf("response body leaks email existence (contains %q): %s", marker, body)
+		}
+	}
+}
+
+func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	// First signup creates user A with password P.
+	bodyA := []byte(`{"email":"hijack-a@example.com","password":"SecureP@ss1"}`)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)).WithContext(context.Background()))
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var first map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&first))
+	firstToken, _ := first["session_token"].(string)
+	require.NotEmpty(t, firstToken, "first signup must return a real token")
+
+	// Second signup uses the SAME email and a DIFFERENT password.
+	bodyB := []byte(`{"email":"hijack-a@example.com","password":"WRONGp@ss1"}`)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyB)).WithContext(context.Background()))
+	require.Equal(t, http.StatusCreated, rec.Code)
+	var second map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&second))
+
+	// The second response must NOT contain the existing user's session
+	// token (would be account hijack).
+	if tok, _ := second["session_token"].(string); tok == firstToken {
+		t.Fatal("duplicate signup returned the existing user's session token — this is account hijack")
+	}
 }
 
 // ──────────────────────────────────────────────────
@@ -534,7 +597,12 @@ func TestHandleRevokeSession_InvalidID(t *testing.T) {
 // Error response helpers
 // ──────────────────────────────────────────────────
 
-func TestWriteAccountError_EmailTaken(t *testing.T) {
+// TestWriteAccountError_EmailTaken_NoLeak verifies the duplicate-email path
+// no longer returns a 409 with an "email already taken" message. The previous
+// behaviour was an enumeration oracle. This test now asserts the synthetic
+// success shape — see TestSignup_DoesNotLeakEmailExistence for the full
+// enumeration-resistance contract.
+func TestWriteAccountError_EmailTaken_NoLeak(t *testing.T) {
 	a, eng := newTestAPI(t)
 	handler := a.Handler()
 
@@ -551,12 +619,16 @@ func TestWriteAccountError_EmailTaken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.NotEqual(t, http.StatusConflict, rec.Code, "must not leak email existence via 409")
+	assert.Equal(t, http.StatusCreated, rec.Code)
 
 	var resp map[string]any
 	err := json.NewDecoder(rec.Body).Decode(&resp)
 	require.NoError(t, err)
-	assert.Equal(t, "email already taken", resp["error"])
+	if msg, _ := resp["error"].(string); msg != "" {
+		assert.NotContains(t, strings.ToLower(msg), "taken")
+		assert.NotContains(t, strings.ToLower(msg), "exists")
+	}
 }
 
 func TestIntrospect_APIKey_ValidSecretKey(t *testing.T) {

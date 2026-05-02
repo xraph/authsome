@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -117,11 +118,41 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		UserAgent: httpReq.UserAgent(),
 	})
 	if err != nil {
+		// Enumeration resistance: a duplicate email must NOT be a probe-able
+		// oracle. Return the same 201 response shape as a fresh signup with
+		// no real session token instead of bubbling up 409. The existing
+		// user is intentionally NOT signed in (that would be account
+		// hijack); their session is left untouched and no cookie is set.
+		//
+		// NOTE: ideally we'd queue a "someone tried to register with your
+		// email" notification to the legitimate owner here, but the engine
+		// does not yet expose a notifier hook for this. Phase 2A Task 4
+		// (default-on email verification) will give every fresh signup a
+		// structurally identical "verification pending" path, at which
+		// point this synthetic shape becomes indistinguishable from a real
+		// pending verification. Until then the lack of a session token
+		// is still ambiguous to an attacker — could be a fresh signup
+		// awaiting verification — so it is strictly better than 409.
+		if errors.Is(err, account.ErrEmailTaken) {
+			return nil, ctx.JSON(http.StatusCreated, syntheticSignupResponse())
+		}
 		return nil, mapError(err)
 	}
 
 	a.setSessionCookie(ctx, sess.Token, a.sessionTokenMaxAge())
 	return nil, ctx.JSON(http.StatusCreated, authResponse(u, sess))
+}
+
+// syntheticSignupResponse returns a response shaped like a real signup but
+// with zero-value user/token fields. Used for the duplicate-email path so
+// attackers cannot enumerate registered emails by probing /v1/signup.
+func syntheticSignupResponse() map[string]any {
+	return map[string]any{
+		"user":          nil,
+		"session_token": "",
+		"refresh_token": "",
+		"expires_at":    nil,
+	}
 }
 
 func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse, error) {
