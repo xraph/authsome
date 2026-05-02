@@ -206,7 +206,10 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "social", SettingSessionRefreshTTLSeconds); err != nil {
 		return err
 	}
-	return settings.RegisterTyped(m, "social", SettingSocialProviders)
+	if err := settings.RegisterTyped(m, "social", SettingSocialProviders); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "social", SettingAllowedFrontendURLs)
 }
 
 // New creates a new social OAuth plugin.
@@ -523,22 +526,28 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
 	}
 
-	// Validate the redirect URL. The trusted origin is, in order:
-	//   1. The caller-supplied frontend_url (for split-origin deployments where
-	//      the SPA and auth service live on different hosts).
-	//   2. The request's Origin / Referer header.
-	// frontend_url itself must be an absolute http(s) URL with no embedded
-	// credentials; relative paths are rejected because we'll use it as a
-	// fallback redirect target.
+	// Validate the redirect URL. The trust authority is gated by the
+	// per-app auth.allowed_frontend_urls allowlist:
+	//   1. Caller-supplied frontend_url, IF its host is on the allowlist
+	//      (for split-origin deployments where the SPA and auth service
+	//      live on different hosts).
+	//   2. Origin / Referer header, IF its host is on the allowlist.
+	// Falling off both → safeRedirect can only accept relative paths.
+	// frontend_url itself must also be an absolute http(s) URL with no
+	// embedded credentials; relative paths are rejected because we'll use
+	// it as a fallback redirect target.
 	safeFrontend := sanitizeFrontendURL(req.FrontendURL)
+	if safeFrontend != "" && !isAllowedOrigin(ctx.Context(), p.settingsMgr, appID, safeFrontend) {
+		safeFrontend = ""
+	}
 	originForRedirect := safeFrontend
-	// TODO(security/phase1.task-3): replace Origin/Referer fallback with the
-	// per-app allowed_frontend_urls allowlist so attacker-controlled fetch
-	// callers can't supply matching Origin + redirect_url.
 	if originForRedirect == "" {
-		originForRedirect = ctx.Request().Header.Get("Origin")
-		if originForRedirect == "" {
-			originForRedirect = ctx.Request().Header.Get("Referer")
+		candidate := ctx.Request().Header.Get("Origin")
+		if candidate == "" {
+			candidate = ctx.Request().Header.Get("Referer")
+		}
+		if candidate != "" && isAllowedOrigin(ctx.Context(), p.settingsMgr, appID, candidate) {
+			originForRedirect = candidate
 		}
 	}
 	safeRedirect := sanitizeRedirectURL(req.RedirectURL, originForRedirect)
