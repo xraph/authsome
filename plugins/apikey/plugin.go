@@ -479,6 +479,15 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	if s.resolveUser == nil {
 		return nil, fmt.Errorf("apikey: user resolver not configured")
 	}
+	// Reject keys that were created without a user binding (a bug
+	// in an older dashboard handler used to mint these). Without an
+	// explicit guard, resolveUser("") below returns a generic
+	// not-found error that surfaces as the unhelpful
+	// "authentication required" 401 — we'd rather state the
+	// specific cause so operators can re-mint the key correctly.
+	if key.UserID.IsNil() {
+		return nil, fmt.Errorf("apikey: key %s has no user binding (re-mint via /v1/keys or the dashboard)", key.KeyPrefix)
+	}
 	u, err := s.resolveUser(key.UserID.String())
 	if err != nil {
 		return nil, fmt.Errorf("apikey: resolve user: %w", err)

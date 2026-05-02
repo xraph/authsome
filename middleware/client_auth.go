@@ -70,8 +70,22 @@ func ClientAuthMiddleware(client *authclient.Client, logger log.Logger) forge.Mi
 				var err error
 				resp, err = client.Introspect(goCtx, token)
 				if err != nil {
-					logger.Debug("client auth: introspect failed",
+					// Warn (not Debug): the request had a token —
+					// the operator carried a session cookie, signed
+					// in, has every reason to expect auth — but we
+					// couldn't verify it. Common causes: identity is
+					// restarting, identity is unreachable, the
+					// introspect HTTP call timed out. Without
+					// surfacing the underlying error, the downstream
+					// "no authenticated user" 500 is indistinguishable
+					// from "session expired", and the operator
+					// debugs the wrong layer for an hour. The
+					// request still proceeds unauthenticated so a
+					// transient blip doesn't pin the whole service.
+					logger.Warn("client auth: introspect failed; request will proceed unauthenticated",
 						log.String("error", err.Error()),
+						log.String("path", ctx.Request().URL.Path),
+						log.String("method", ctx.Request().Method),
 					)
 					ctx.WithContext(goCtx)
 					return next(ctx)
