@@ -167,6 +167,18 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 		// authorize the service-account caller.
 		opts = append(opts, authclient.WithAppID(e.config.ServiceAppID))
 	}
+	// Surface the SDK's lazy app-id discovery failures via the
+	// extension's logger so manifest-fetch races (common when
+	// studio + identity boot in parallel under `forge dev`) appear
+	// in the operator's log stream immediately. Without this hook
+	// the only signal is the 401 hint string the SDK appends to
+	// admin-endpoint error responses.
+	opts = append(opts, authclient.WithDiscoveryErrorHandler(func(discErr error) {
+		logger.Warn("authsome: SDK app-id discovery attempt failed; will retry on next admin call",
+			log.String("portal_url", e.config.PortalURL),
+			log.String("error", discErr.Error()),
+		)
+	}))
 
 	e.client = authclient.NewClient(e.config.PortalURL, opts...)
 	e.clientMode = true
@@ -206,9 +218,13 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 	// authsome service. Dashboard discovery (with FARP/memory backends in
 	// dev) doesn't reliably surface peer services, so we don't rely on it —
 	// we know exactly where the upstream lives in client mode (PortalURL),
-	// so we register a watcher directly. WatchRemoteContributor returns
-	// immediately and retries with backoff until the upstream is reachable,
-	// so Portal coming up before identity (the common dev case) is fine.
+	// so we register a remote contributor directly. The previous API
+	// (`dashExt.WatchRemoteContributor`) was removed upstream in
+	// forge ≥ v0.10; the replacement is a manifest fetch + manual
+	// `Registry().RegisterRemote(...)` call. We do the registration
+	// inside a goroutine with bounded retry so Portal coming up after
+	// identity (the common dev case) is still tolerated — failures
+	// during the retry window are logged but never block app boot.
 	if err := forge.OnBeforeRun(fapp, "authsome-register-remote-dashboard", func(hookCtx context.Context, app forge.App) error {
 		dashExt, err := vessel.InjectType[*dashboard.Extension](app.Container())
 		if err != nil {
@@ -217,15 +233,7 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 			return nil //nolint:nilerr // dashboard is optional
 		}
 
-		if err := dashExt.WatchRemoteContributor(hookCtx, e.config.PortalURL, e.config.ServiceAPIKey); err != nil {
-			logger.Warn("authsome: failed to start dashboard watcher",
-				log.String("portal_url", e.config.PortalURL),
-				log.Error(err),
-			)
-			// Not fatal — the rest of the host can still come up.
-			return nil //nolint:nilerr // best-effort registration
-		}
-
+		go e.registerRemoteDashboardContributor(hookCtx, dashExt, logger)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("authsome: register dashboard remote hook: %w", err)
@@ -1241,4 +1249,66 @@ func (e *Extension) discoverPlatformAppID(ctx context.Context, logger log.Logger
 		)
 	}
 	return nil
+}
+
+// registerRemoteDashboardContributor fetches the dashboard manifest
+// from the configured PortalURL and registers a RemoteContributor on
+// the dashboard extension's registry. Replaces the older one-call
+// `WatchRemoteContributor` API that was removed upstream in
+// forge ≥ v0.10.
+//
+// Retries with exponential backoff (capped at 30s) for ~5 minutes so
+// dev workflows where Portal boots after identity still converge. A
+// failure beyond the retry window is logged but never blocks the host
+// — remote contributors are an enhancement, not a hard requirement.
+func (e *Extension) registerRemoteDashboardContributor(ctx context.Context, dashExt *dashboard.Extension, logger log.Logger) {
+	const (
+		fetchTimeout = 10 * time.Second
+		maxBackoff   = 30 * time.Second
+		giveUpAfter  = 5 * time.Minute
+	)
+
+	deadline := time.Now().Add(giveUpAfter)
+	backoff := time.Second
+
+	for {
+		manifest, err := contributor.FetchManifest(ctx, e.config.PortalURL, fetchTimeout, e.config.ServiceAPIKey)
+		if err == nil {
+			opts := []contributor.RemoteContributorOption{}
+			if e.config.ServiceAPIKey != "" {
+				opts = append(opts, contributor.WithAPIKey(e.config.ServiceAPIKey))
+			}
+			rc := contributor.NewRemoteContributor(e.config.PortalURL, manifest, opts...)
+			if regErr := dashExt.Registry().RegisterRemote(rc); regErr != nil {
+				logger.Warn("authsome: register remote dashboard contributor failed",
+					log.String("portal_url", e.config.PortalURL),
+					log.Error(regErr),
+				)
+				return
+			}
+			logger.Info("authsome: registered remote dashboard contributor",
+				log.String("portal_url", e.config.PortalURL),
+				log.String("contributor", manifest.Name),
+			)
+			return
+		}
+
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			logger.Warn("authsome: gave up registering remote dashboard contributor",
+				log.String("portal_url", e.config.PortalURL),
+				log.Error(err),
+			)
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
+	}
 }
