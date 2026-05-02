@@ -42,6 +42,35 @@ func TestAuditor_RecordPopulatesEvent(t *testing.T) {
 	if got := ev.Metadata["app_id"]; got != "app-123" {
 		t.Errorf("Metadata[app_id]: got %q, want %q", got, "app-123")
 	}
+	if ev.Outcome != bridge.OutcomeSuccess {
+		t.Errorf("Outcome: got %q, want %q (Record defaults to OutcomeSuccess)", ev.Outcome, bridge.OutcomeSuccess)
+	}
+}
+
+func TestAuditor_RecordEmptyActorBecomesUnknown(t *testing.T) {
+	ch := secutil.NewBufferedChronicle()
+	a := dashboard.NewAuditor(ch)
+	a.Record(context.Background(), "user.delete", bridge.SeverityCritical, "", "res", nil)
+	events := ch.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].ActorID != "unknown" {
+		t.Errorf("ActorID: got %q, want %q (empty actor must become explicit 'unknown')", events[0].ActorID, "unknown")
+	}
+}
+
+func TestAuditor_RecordWithOutcomeOverrides(t *testing.T) {
+	ch := secutil.NewBufferedChronicle()
+	a := dashboard.NewAuditor(ch)
+	a.RecordWithOutcome(context.Background(), "user.delete", bridge.SeverityCritical, bridge.OutcomeFailure, "actor", "res", nil)
+	events := ch.Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Outcome != bridge.OutcomeFailure {
+		t.Errorf("Outcome: got %q, want %q", events[0].Outcome, bridge.OutcomeFailure)
+	}
 }
 
 func TestAuditor_NilAuditorSafe(t *testing.T) {
