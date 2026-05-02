@@ -208,18 +208,23 @@ export class AuthManager {
   /**
    * Resend the verification email for an unverified account.
    *
-   * TODO(backend): the corresponding handler does not yet exist. When it's
-   * added, wire this through to the generated client (likely
-   * `POST /v1/verify-email/resend`). For now this is a no-op that logs to
-   * the console so callers can integrate the UI without blocking on the
-   * backend slice.
+   * Always resolves; the backend returns 200 regardless of whether the
+   * email is registered, unregistered, or already verified — that's the
+   * enumeration-resistance contract. UI callers should disable the
+   * button + show a generic "if your email is registered, we sent a new
+   * link" confirmation rather than branching on the response.
    */
   async resendVerification(email: string): Promise<void> {
-    // eslint-disable-next-line no-console
-    console.warn(
-      "[authsome] resendVerification is a stub — backend endpoint /v1/verify-email/resend not yet implemented",
-      { email },
-    );
+    if (!email) return;
+    try {
+      await this.client.resendEmailVerification({ email });
+    } catch (err) {
+      // Surface transport errors via onError but don't propagate —
+      // the UI message is intentionally generic.
+      this.onError?.({
+        error: err instanceof Error ? err.message : "resend failed",
+      });
+    }
   }
 
   /** Sign out and clear the session. */

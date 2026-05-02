@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
@@ -994,4 +995,136 @@ func TestIntrospect_APIKey_RevokedReturnsInactive(t *testing.T) {
 	var resp map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
 	assert.Equal(t, false, resp["active"], "revoked key must NOT introspect as active")
+}
+
+// ──────────────────────────────────────────────────
+// POST /v1/verify-email/resend (Phase 3B follow-up)
+// ──────────────────────────────────────────────────
+
+// TestResendVerification_AlwaysReturns200 asserts the enumeration-
+// resistance contract: the endpoint never reveals whether the email
+// is registered, unregistered, or already verified.
+func TestResendVerification_AlwaysReturns200(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+
+	// We only test inputs that COULD enumerate user state. Missing-
+	// email or empty-body 400s are bind-layer rejections that don't
+	// distinguish registered from unregistered emails — they're fine
+	// from an enumeration-resistance standpoint.
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"unregistered_email", `{"email":"nobody-here@example.com"}`},
+		{"weird_local_part", `{"email":"a+b.c@example.com"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/verify-email/resend", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code,
+				"resend must return 200 for any input — leaking 4xx would enumerate registered emails. body=%s", rec.Body.String())
+
+			body := strings.ToLower(rec.Body.String())
+			for _, marker := range []string{"not found", "no such", "unverified", "already"} {
+				if strings.Contains(body, marker) {
+					t.Errorf("response leaks state (contains %q): %s", marker, body)
+				}
+			}
+		})
+	}
+}
+
+// TestResendVerification_CreatesTokenForExistingUnverifiedUser pins
+// that for a real user with EmailVerified=false, the engine actually
+// mints + persists a verification token (so a wired-up notifier could
+// deliver it).
+func TestResendVerification_CreatesTokenForExistingUnverifiedUser(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+	ctx := context.Background()
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	// Create a user, then explicitly mark unverified (Phase 2A
+	// signups now require verification, but RelaxAuthDefaults in
+	// newTestAPI flipped it back off — we set the flag directly to
+	// test the resend path against a known-unverified row).
+	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "resend-target@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+	u.EmailVerified = false
+	require.NoError(t, eng.Store().UpdateUser(ctx, u))
+
+	// Capture the hook so we can assert the token surfaced.
+	var captured map[string]string
+	eng.Hooks().On("test", func(_ context.Context, ev *hook.Event) error {
+		if ev.Action == hook.ActionEmailVerificationRequested {
+			captured = ev.Metadata
+		}
+		return nil
+	})
+
+	body := []byte(`{"email":"resend-target@example.com"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify-email/resend", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.NotNil(t, captured, "auth.email_verification_requested hook must fire for a real unverified user")
+	require.NotEmpty(t, captured["verification_token"], "hook payload must carry the token so a delivery handler can render the link")
+	require.NotEmpty(t, captured["expires_at"])
+	require.Equal(t, "resend-target@example.com", captured["email"])
+}
+
+// TestResendVerification_NoHookForVerifiedUser pins the silent no-op
+// path: a user who's already verified gets no fresh token and no hook
+// fires (otherwise an attacker could distinguish verified vs not by
+// observing the side effect).
+func TestResendVerification_NoHookForVerifiedUser(t *testing.T) {
+	t.Parallel()
+	_, eng := newTestAPI(t)
+	router := newAPIWithRouter(t, eng)
+	ctx := context.Background()
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID:    appID,
+		Email:    "already-verified@example.com",
+		Password: "SecureP@ss1",
+	})
+	require.NoError(t, err)
+	u.EmailVerified = true
+	require.NoError(t, eng.Store().UpdateUser(ctx, u))
+
+	var fired bool
+	eng.Hooks().On("test", func(_ context.Context, ev *hook.Event) error {
+		if ev.Action == hook.ActionEmailVerificationRequested {
+			fired = true
+		}
+		return nil
+	})
+
+	body := []byte(`{"email":"already-verified@example.com"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/verify-email/resend", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.False(t, fired,
+		"hook must NOT fire for an already-verified user — observing the email being sent would let an attacker enumerate verified-vs-unverified state")
 }

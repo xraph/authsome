@@ -74,6 +74,15 @@ func DefaultMappings() map[string]*Mapping {
 			Channels: []string{"email", "inapp"},
 			Enabled:  true,
 		},
+		"auth.email_verification_requested": {
+			// Delivers the link the user clicks to verify their email.
+			// The hook payload carries verification_token and expires_at;
+			// the template renders a URL like
+			// {{base_url}}/verify-email?token={{verification_token}}.
+			Template: "auth.email-verification-requested",
+			Channels: []string{"email"},
+			Enabled:  true,
+		},
 		"auth.mfa.enroll": {
 			Template: "auth.mfa-code",
 			Channels: []string{"sms"},

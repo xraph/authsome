@@ -999,6 +999,87 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 	return nil
 }
 
+// EmailVerificationTTL is the lifetime of a freshly issued email
+// verification token. 24h is the default operators expect for "click
+// the link in your inbox" flows; the token can always be reissued.
+const EmailVerificationTTL = 24 * time.Hour
+
+// SendEmailVerification mints a fresh email-verification token for a
+// known user, persists it, and emits the auth.email_verification_requested
+// hook so subscribers (notification plugin, custom mailers) can deliver
+// the verification link. Caller-side code should use this instead of
+// touching the verification store directly so the hook always fires.
+//
+// Returns the new token so callers that bypass the hook (e.g. tests
+// driving the engine in-process) can complete the flow inline.
+func (e *Engine) SendEmailVerification(ctx context.Context, u *user.User) (string, error) {
+	if err := e.requireStarted(); err != nil {
+		return "", err
+	}
+	if u == nil {
+		return "", fmt.Errorf("authsome: send email verification: nil user")
+	}
+	v, err := account.NewVerification(ctx, u.AppID, u.ID, account.VerificationEmail, EmailVerificationTTL)
+	if err != nil {
+		return "", fmt.Errorf("authsome: build verification: %w", err)
+	}
+	if storeErr := e.store.CreateVerification(ctx, v); storeErr != nil {
+		return "", fmt.Errorf("authsome: persist verification: %w", storeErr)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerificationRequested,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":              u.Email,
+			"verification_token": v.Token,
+			"expires_at":         v.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "email_verification_requested",
+		"user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
+	return v.Token, nil
+}
+
+// ResendEmailVerification is the public, enumeration-safe entry
+// point used by the dashboard "resend verification email" CTA and
+// by POST /v1/verify-email/resend. It returns nil whether or not a
+// matching user exists or is already verified — leaking either
+// signal would let an unauthenticated probe enumerate registered
+// addresses (the same trap closed on /v1/signup in Phase 2A).
+//
+// Callers that legitimately need the lookup outcome (e.g. an
+// authenticated user re-requesting their own verification email)
+// should call SendEmailVerification directly with a hydrated user.
+func (e *Engine) ResendEmailVerification(ctx context.Context, appID id.AppID, email string) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+	if email == "" {
+		return nil
+	}
+	u, err := e.store.GetUserByEmail(ctx, appID, email)
+	if err != nil || u == nil {
+		// Silent no-op: don't reveal that the email is unregistered.
+		return nil
+	}
+	if u.EmailVerified {
+		// Silent no-op: don't reveal verified-vs-unverified state.
+		return nil
+	}
+	if _, sendErr := e.SendEmailVerification(ctx, u); sendErr != nil {
+		// Log but don't surface to the caller — same enumeration
+		// reasoning. Operators can correlate via audit/log.
+		e.logger.Warn("authsome: resend verification email failed",
+			log.String("user_id", u.ID.String()),
+			log.String("error", sendErr.Error()))
+	}
+	return nil
+}
+
 // VerifyEmail verifies a user's email using a verification token.
 func (e *Engine) VerifyEmail(ctx context.Context, token string) error {
 	if err := e.requireStarted(); err != nil {

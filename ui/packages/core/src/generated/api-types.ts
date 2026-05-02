@@ -1565,6 +1565,8 @@ export type StartSSOLoginRequest = LoginRequest;
 
 export type VerifyEmailRequest = { token: string };
 
+export type ResendEmailVerificationRequest = { app_id?: string; email: string };
+
 export type CreateWebhookRequest = { app_id?: string; events: string[]; url: string };
 
 export type UpdateWebhookRequest = { active?: boolean; events?: string[]; url?: string };

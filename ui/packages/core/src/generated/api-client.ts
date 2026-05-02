@@ -310,6 +310,7 @@ import type {
   SsoCallbackRequest,
   StartSSOLoginRequest,
   VerifyEmailRequest,
+  ResendEmailVerificationRequest,
   CreateWebhookRequest,
   UpdateWebhookRequest,
 } from './api-types';
@@ -2675,6 +2676,19 @@ export class AuthClient {
    */
   async verifyEmail(body: VerifyEmailRequest): Promise<StatusResponse> {
     const path = "/v1/verify-email";
+    return this.request<StatusResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Resend email verification
+   * POST /v1/verify-email/resend
+   */
+  async resendEmailVerification(body: ResendEmailVerificationRequest): Promise<StatusResponse> {
+    const path = "/v1/verify-email/resend";
     return this.request<StatusResponse>(
       'POST',
       path,

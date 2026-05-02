@@ -2108,6 +2108,12 @@ type VerifyEmailRequest struct {
 	Token string `json:"token"`
 }
 
+// ResendEmailVerificationRequest is the request body for ResendEmailVerification.
+type ResendEmailVerificationRequest struct {
+	AppID string `json:"app_id,omitempty"`
+	Email string `json:"email"`
+}
+
 // CreateWebhookRequest is the request body for CreateWebhook.
 type CreateWebhookRequest struct {
 	AppID string `json:"app_id,omitempty"`

@@ -101,6 +101,12 @@ const (
 	ActionPasswordReset          = "auth.password_reset"
 	ActionPasswordChange         = "auth.password_change"
 	ActionEmailVerify            = "auth.email_verify"
+	// ActionEmailVerificationRequested fires when the engine mints a
+	// fresh email-verification token. Subscribers (notification plugin,
+	// custom mailers) read Metadata["verification_token"] to render the
+	// link the user clicks. Distinct from ActionEmailVerify which
+	// fires on successful verification.
+	ActionEmailVerificationRequested = "auth.email_verification_requested"
 	ActionMFAEnroll              = "auth.mfa.enroll"
 	ActionMFAChallenge           = "auth.mfa.challenge"
 	ActionMFARecoveryUsed        = "auth.mfa.recovery_used"

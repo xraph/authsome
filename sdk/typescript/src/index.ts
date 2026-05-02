@@ -311,6 +311,7 @@ export type {
   SsoCallbackRequest,
   StartSSOLoginRequest,
   VerifyEmailRequest,
+  ResendEmailVerificationRequest,
   CreateWebhookRequest,
   UpdateWebhookRequest,
 } from './types';

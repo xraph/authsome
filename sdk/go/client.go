@@ -2401,6 +2401,20 @@ func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*Sta
 	return &result, nil
 }
 
+// ResendEmailVerification — Resend email verification
+func (c *Client) ResendEmailVerification(ctx context.Context, req *ResendEmailVerificationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/verify-email/resend"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListWebhooks — List webhooks
 func (c *Client) ListWebhooks(ctx context.Context) (*WebhookListResponse, error) {
 	path := "/v1/webhooks"

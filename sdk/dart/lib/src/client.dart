@@ -2153,6 +2153,18 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Resend email verification
+  /// POST /v1/verify-email/resend
+  Future<StatusResponse> resendEmailVerification({required Map<String, dynamic> body}) async {
+    final path = '/v1/verify-email/resend';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// List webhooks
   /// GET /v1/webhooks
   Future<WebhookListResponse> listWebhooks({required String token}) async {

@@ -62,6 +62,16 @@ type VerifyEmailRequest struct {
 	Token string `json:"token" description:"Email verification token"`
 }
 
+// ResendVerificationRequest binds the body for POST /verify-email/resend.
+//
+// The endpoint always returns 200 — caller cannot tell whether the email
+// is registered or already verified — so this struct deliberately has no
+// hard-required fields. An empty body is accepted (and silently no-ops).
+type ResendVerificationRequest struct {
+	AppID string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email string `json:"email" description:"Email address of the account requesting a fresh verification token"`
+}
+
 // ---------------------------------------------------------------------------
 // User requests
 // ---------------------------------------------------------------------------
