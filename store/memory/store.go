@@ -116,6 +116,11 @@ func (s *Store) takeFault(method string) error {
 // members, invitations, teams). It exists to support WithTx on the memory
 // store and intentionally does NOT cover other tables; do not use this
 // WithTx for cross-table mutations until the snapshot is broadened.
+//
+// Map values are shared pointers (shallow copy). fn must replace map
+// entries (insert/delete) rather than mutate struct fields in place;
+// in-place mutations to a *Member, *Team, etc. survive rollback because
+// the restored map still points to the same struct.
 type orgTxSnapshot struct {
 	orgs        map[string]*organization.Organization
 	members     map[string]*organization.Member
@@ -156,6 +161,13 @@ func (s *Store) restoreOrgState(snap *orgTxSnapshot) {
 //
 // snapshotOrgState covers only organization tables; do not use this
 // WithTx for cross-table mutations until the snapshot is broadened.
+//
+// Concurrency: NOT safe for concurrent calls — the lock is released
+// while fn runs, so two concurrent WithTx calls each take their own
+// snapshot and rollback is last-writer-wins on the four org tables.
+// Real backends (postgres/sqlite/mongo) will get serializability from
+// the DB once those WithTx implementations are wired; the memory store
+// is only intended for single-threaded test paths.
 func (s *Store) WithTx(_ context.Context, fn func(tx organization.Store) error) error {
 	s.mu.Lock()
 	snap := s.snapshotOrgState()
