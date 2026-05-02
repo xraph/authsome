@@ -13,6 +13,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
@@ -93,19 +94,26 @@ func forgotPasswordLinks(basePath string) auth.ForgotPasswordPageLinks {
 func (a *authPages) RenderAuthPage(ctx *router.PageContext, pageType dashauth.AuthPageType) (templ.Component, error) {
 	switch pageType {
 	case dashauth.PageLogin:
-		return auth.LoginPage(loginLinks(a.basePath)), nil
+		links := loginLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.LoginPage(links), nil
 	case dashauth.PageRegister:
 		return a.renderRegisterPage(ctx, "", nil, nil)
 	case dashauth.PageForgotPassword:
-		return auth.ForgotPasswordPage(forgotPasswordLinks(a.basePath)), nil
+		links := forgotPasswordLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.ForgotPasswordPage(links), nil
 	default:
 		return nil, nil
 	}
 }
 
 // renderRegisterPage renders either the dynamic or static register page.
-func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) { //nolint:unparam // may receive values in future
+func (a *authPages) renderRegisterPage(ctx *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) {
 	links := registerLinks(a.basePath)
+	if ctx != nil && ctx.ResponseWriter != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+	}
 	appID := a.defaultAppID()
 
 	// Try to load a dynamic form config for this app.
@@ -137,6 +145,7 @@ func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, v
 		ErrorMsg:  errorMsg,
 		Values:    values,
 		FieldErrs: fieldErrs,
+		CSRFToken: links.CSRFToken,
 	}), nil
 }
 
@@ -171,8 +180,16 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 	links := loginLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.LoginError("Invalid form data", links), nil
 	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		// 303 See Other to GET — fresh token issued; no form state in history.
+		return a.basePath + "/login", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 
 	email := r.FormValue("email")
 	password := r.FormValue("password")
@@ -216,6 +233,11 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 	if err := r.ParseForm(); err != nil {
 		comp, _ := a.renderRegisterPage(ctx, "Invalid form data", nil, nil) //nolint:errcheck // best-effort render
 		return "", comp, nil
+	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		// 303 See Other to GET — fresh token issued; no form state in history.
+		return a.basePath + "/register", nil, nil
 	}
 
 	firstName := r.FormValue("first_name")
@@ -286,8 +308,16 @@ func (a *authPages) handleForgotPassword(ctx *router.PageContext) (string, templ
 	links := forgotPasswordLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.ForgotPasswordError("Invalid form data", links), nil
 	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		// 303 See Other to GET — fresh token issued; no form state in history.
+		return a.basePath + "/forgot-password", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 
 	email := r.FormValue("email")
 	if email == "" {

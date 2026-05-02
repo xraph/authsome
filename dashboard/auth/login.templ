@@ -7,10 +7,14 @@ import (
 	"github.com/xraph/forgeui/icons"
 )
 
-// LoginPageLinks holds navigation paths for the login page.
+// LoginPageLinks holds navigation paths and the per-request CSRF token
+// for the login page. CSRFToken mirrors the value in the
+// dashboard.FormCSRFCookieName cookie and is embedded as a hidden form
+// field so the POST handler can verify the double-submit pair.
 type LoginPageLinks struct {
 	RegisterPath       string
 	ForgotPasswordPath string
+	CSRFToken          string
 }
 
 // LoginPage renders the dashboard login form.
@@ -22,6 +26,7 @@ templ LoginPage(links LoginPageLinks) {
 	<h2 class="text-lg font-semibold text-center">Sign in</h2>
 	<p class="text-sm text-muted-foreground text-center mb-4">Enter your credentials to access the dashboard</p>
 	<form method="POST" class="space-y-4">
+		<input type="hidden" name="csrf_token" value={ links.CSRFToken }/>
 		<div class="space-y-2">
 			@label.Label(label.Props{For: "email"}) {
 				Email
@@ -78,6 +83,7 @@ templ LoginError(errorMsg string, links LoginPageLinks) {
 	<h2 class="text-lg font-semibold text-center">Sign in</h2>
 	<p class="text-sm text-muted-foreground text-center mb-4">Enter your credentials to access the dashboard</p>
 	<form method="POST" class="space-y-4">
+		<input type="hidden" name="csrf_token" value={ links.CSRFToken }/>
 		if errorMsg != "" {
 			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
 				{ errorMsg }

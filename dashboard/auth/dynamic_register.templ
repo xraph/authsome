@@ -19,6 +19,10 @@ import (
 )
 
 // DynamicRegisterProps holds the data for the dynamic register page.
+//
+// CSRFToken mirrors the value in the dashboard.FormCSRFCookieName cookie
+// and is embedded as a hidden form field so the POST handler can verify
+// the double-submit pair.
 type DynamicRegisterProps struct {
 	Links     RegisterPageLinks
 	Fields    []formconfig.FormField
@@ -26,6 +30,7 @@ type DynamicRegisterProps struct {
 	ErrorMsg  string
 	Values    map[string]string // pre-filled values for re-render
 	FieldErrs map[string]string // per-field error messages
+	CSRFToken string
 }
 
 // sortedFields returns a copy of fields sorted by Order.
@@ -134,6 +139,7 @@ templ DynamicRegisterPage(props DynamicRegisterProps) {
 		<style>{ css }</style>
 	}
 	<form method="POST" class="space-y-4">
+		<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 		if props.ErrorMsg != "" {
 			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
 				{ props.ErrorMsg }

@@ -10,6 +10,7 @@ import (
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
 	"github.com/xraph/forgeui/router"
 
+	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/dashboard/auth"
 	authclient "github.com/xraph/authsome/sdk/go"
 )
@@ -33,15 +34,21 @@ func (a *clientAuthPages) AuthPages() []dashauth.AuthPageDescriptor {
 	}
 }
 
-func (a *clientAuthPages) RenderAuthPage(_ *router.PageContext, pageType dashauth.AuthPageType) (templ.Component, error) {
+func (a *clientAuthPages) RenderAuthPage(ctx *router.PageContext, pageType dashauth.AuthPageType) (templ.Component, error) {
 	switch pageType {
 	case dashauth.PageLogin:
-		return auth.LoginPage(loginLinks(a.basePath)), nil
+		links := loginLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.LoginPage(links), nil
 	case dashauth.PageRegister:
 		// Dynamic form configs aren't exposed via the SDK yet; static page only.
-		return auth.RegisterPage(registerLinks(a.basePath)), nil
+		links := registerLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.RegisterPage(links), nil
 	case dashauth.PageForgotPassword:
-		return auth.ForgotPasswordPage(forgotPasswordLinks(a.basePath)), nil
+		links := forgotPasswordLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.ForgotPasswordPage(links), nil
 	default:
 		return nil, nil
 	}
@@ -67,8 +74,15 @@ func (a *clientAuthPages) handleLogin(ctx *router.PageContext) (string, templ.Co
 	links := loginLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.LoginError("Invalid form data", links), nil
 	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		return a.basePath + "/login", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 
 	email := r.FormValue("email")
 	password := r.FormValue("password")
@@ -95,8 +109,15 @@ func (a *clientAuthPages) handleRegister(ctx *router.PageContext) (string, templ
 	links := registerLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.RegisterError("Invalid form data", links), nil
 	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		return a.basePath + "/register", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 
 	firstName := r.FormValue("first_name")
 	lastName := r.FormValue("last_name")
@@ -140,8 +161,15 @@ func (a *clientAuthPages) handleForgotPassword(ctx *router.PageContext) (string,
 	links := forgotPasswordLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.ForgotPasswordError("Invalid form data", links), nil
 	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		return a.basePath + "/forgot-password", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 
 	email := r.FormValue("email")
 	if email == "" {
