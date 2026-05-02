@@ -3,6 +3,8 @@ package social
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -560,23 +562,130 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	cfg := provider.OAuth2Config()
 	callbackURL := p.resolveCallbackURL(ctx.Request(), cfg.RedirectURL, req.Provider)
 
-	stateInfo := map[string]string{
-		"provider":     req.Provider,
-		"app_id":       appID.String(),
-		"env_id":       envIDStr,
-		"frontend_url": safeFrontend,
-		"redirect_url": safeRedirect,
-		"callback_url": callbackURL,
+	// PKCE (RFC 7636): generate a per-flow verifier, derive its S256
+	// challenge, send the challenge in the auth URL, store the verifier
+	// in state, and present it on the token exchange. Closes the
+	// authorization-code-interception attack class — even if an attacker
+	// captures the redirect-back code (logs, browser history, hostile
+	// proxy), without the verifier they can't exchange it.
+	pkceVerifier, err := generateState()
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to generate PKCE verifier: %w", err))
 	}
-	stateData, _ := json.Marshal(stateInfo)                                               //nolint:errcheck // marshaling known types
-	_ = p.ceremonies.Set(ctx.Context(), "social:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
+
+	// OIDC nonce (OpenID Connect Core §3.1.2.1): per-flow random value
+	// echoed back in the ID token's `nonce` claim. Verifying the claim
+	// matches what we stashed in state defeats ID-token replay. We send
+	// the nonce on every flow; providers that don't issue ID tokens
+	// silently ignore it.
+	oidcNonce, err := generateState()
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to generate OIDC nonce: %w", err))
+	}
+
+	stateInfo := map[string]string{
+		"provider":      req.Provider,
+		"app_id":        appID.String(),
+		"env_id":        envIDStr,
+		"frontend_url":  safeFrontend,
+		"redirect_url":  safeRedirect,
+		"callback_url":  callbackURL,
+		"pkce_verifier": pkceVerifier,
+		"oidc_nonce":    oidcNonce,
+	}
+	stateData, _ := json.Marshal(stateInfo) //nolint:errcheck // marshaling known types
+	// Namespace the state key by app so a state minted for app A can't
+	// be replayed against app B's callback even if both share the same
+	// ceremony store. Closes the cross-tenant state-confusion attack
+	// surfaced in the Phase 1 audit.
+	_ = p.ceremonies.Set(ctx.Context(), socialStateKey(appID, state), stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	// Clone the config so we don't mutate the provider's stored config.
 	authCfg := *cfg
 	authCfg.RedirectURL = callbackURL
-	authURL := authCfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	authURL := authCfg.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.SetAuthURLParam("code_challenge", pkceChallengeS256(pkceVerifier)),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		oauth2.SetAuthURLParam("nonce", oidcNonce),
+	)
 
 	return &StartResponse{AuthURL: authURL}, nil
+}
+
+// socialStateKey is the ceremony-store key under which an OAuth state
+// envelope lives. Namespaced by app to prevent cross-tenant state replay
+// when the ceremony store is shared.
+func socialStateKey(appID id.AppID, state string) string {
+	return "social:state:" + appID.String() + ":" + state
+}
+
+// pkceChallengeS256 returns the RFC 7636 S256 code_challenge for verifier.
+// base64url-no-padding(SHA256(verifier)).
+func pkceChallengeS256(verifier string) string {
+	h := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+// loadOAuthState fetches the state envelope, trying the namespaced key
+// (Phase 2D) first and falling back to the legacy unnamespaced key for
+// states that were minted before the rollout. Returns the raw envelope
+// plus the appID under which it was found (empty when the legacy key
+// hit, so the caller can fall back to stateInfo["app_id"]).
+func (p *Plugin) loadOAuthState(ctx context.Context, appID id.AppID, state string) ([]byte, string, error) {
+	if !appID.IsNil() {
+		if data, err := p.ceremonies.Get(ctx, socialStateKey(appID, state)); err == nil {
+			_ = p.ceremonies.Delete(ctx, socialStateKey(appID, state)) //nolint:errcheck // best-effort
+			return data, appID.String(), nil
+		}
+	}
+	// Legacy key shape — for in-flight states minted before namespacing.
+	// Eligible for removal one TTL window after Phase 2D rolls.
+	legacyKey := "social:state:" + state
+	data, err := p.ceremonies.Get(ctx, legacyKey)
+	if err != nil {
+		return nil, "", err
+	}
+	_ = p.ceremonies.Delete(ctx, legacyKey) //nolint:errcheck // best-effort
+	return data, "", nil
+}
+
+// verifyOIDCNonce decodes the ID token's payload (no signature check —
+// signature verification is a separate hardening item) and returns true
+// iff the `nonce` claim equals the value stashed in state during
+// handleStart.
+//
+// Returns true when no ID token is present (provider isn't OIDC) so
+// non-OIDC providers (Twitter, GitHub legacy) keep working — those flows
+// don't carry a nonce in their callback shape.
+func verifyOIDCNonce(token *oauth2.Token, expectedNonce string) bool {
+	if expectedNonce == "" {
+		return true
+	}
+	idToken, _ := token.Extra("id_token").(string)
+	if idToken == "" {
+		// Provider didn't return an ID token; non-OIDC flow.
+		return true
+	}
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		// Some providers pad — try standard decoding too.
+		payload, err = base64.URLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return false
+		}
+	}
+	var claims struct {
+		Nonce string `json:"nonce"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return false
+	}
+	return claims.Nonce == expectedNonce
 }
 
 // handleCallback processes the OAuth callback, exchanges the code for a token,
@@ -592,11 +701,16 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.BadRequest("missing state parameter")
 	}
 
-	stateData, err := p.ceremonies.Get(ctx.Context(), "social:state:"+req.State)
+	// State is stored under a per-app key (Phase 2D); resolve the app
+	// from the request's scope first, falling back to the plugin-level
+	// default. We probe both the namespaced and legacy key shape so
+	// in-flight states minted before this change still complete during
+	// the rollout window.
+	candidateAppID, _ := p.resolveAppID(ctx) //nolint:errcheck // ok if zero — legacy probe handles it
+	stateData, stateAppID, err := p.loadOAuthState(ctx.Context(), candidateAppID, req.State)
 	if err != nil {
 		return nil, forge.BadRequest("invalid state parameter")
 	}
-	_ = p.ceremonies.Delete(ctx.Context(), "social:state:"+req.State) //nolint:errcheck // best-effort cleanup
 	var stateInfo map[string]string
 	if unmarshalErr := json.Unmarshal(stateData, &stateInfo); unmarshalErr != nil || stateInfo["provider"] != req.Provider {
 		return nil, forge.BadRequest("invalid state parameter")
@@ -604,6 +718,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 
 	// Resolve the app ID from the state (set during handleStart).
 	appIDStr := stateInfo["app_id"]
+	if appIDStr == "" {
+		appIDStr = stateAppID
+	}
 	if appIDStr == "" {
 		// Fallback for states created before app_id was stored.
 		appIDStr = p.appID
@@ -631,9 +748,24 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if cbURL := stateInfo["callback_url"]; cbURL != "" {
 		exchangeCfg.RedirectURL = cbURL
 	}
-	token, err := exchangeCfg.Exchange(ctx.Context(), req.Code)
+	exchangeOpts := []oauth2.AuthCodeOption{}
+	if verifier := stateInfo["pkce_verifier"]; verifier != "" {
+		// Present the PKCE code_verifier on token exchange (RFC 7636).
+		// Providers that didn't accept the challenge ignore this field;
+		// providers that did require it will reject mismatches.
+		exchangeOpts = append(exchangeOpts, oauth2.SetAuthURLParam("code_verifier", verifier))
+	}
+	token, err := exchangeCfg.Exchange(ctx.Context(), req.Code, exchangeOpts...)
 	if err != nil {
 		return nil, forge.BadRequest("failed to exchange code")
+	}
+
+	// OIDC nonce verification (no-op for providers that don't issue
+	// ID tokens or weren't given a nonce). Done before any further
+	// processing so a tampered ID token can't reach the provider's
+	// FetchUser path.
+	if !verifyOIDCNonce(token, stateInfo["oidc_nonce"]) {
+		return nil, forge.BadRequest("invalid id_token nonce")
 	}
 
 	// Fetch user profile from provider
