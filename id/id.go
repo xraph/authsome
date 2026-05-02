@@ -58,6 +58,7 @@ const (
 	PrefixSCIMToken       Prefix = "asct"
 	PrefixSCIMLog         Prefix = "ascl"
 	PrefixWaitlist        Prefix = "awlt"
+	PrefixSessionFamily   Prefix = "asfm"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -178,6 +179,12 @@ type SCIMLogID = ID
 
 // WaitlistID is a type-safe identifier for waitlist entries (prefix: "awlt").
 type WaitlistID = ID
+
+// SessionFamilyID is a type-safe identifier for refresh-token session families
+// (prefix: "asfm"). All sessions descended from a single sign-in (via successive
+// refresh-token rotations) share the same SessionFamilyID, enabling cascade
+// revocation when a refresh-token replay is detected (RFC 6819 §5.2.2.3).
+type SessionFamilyID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
@@ -353,6 +360,10 @@ func NewSCIMLogID() ID { return New(PrefixSCIMLog) }
 // NewWaitlistID generates a new unique waitlist entry ID.
 func NewWaitlistID() ID { return New(PrefixWaitlist) }
 
+// NewSessionFamilyID generates a new unique session-family ID. Every fresh
+// sign-in begins a new family; refresh rotations inherit the parent family.
+func NewSessionFamilyID() ID { return New(PrefixSessionFamily) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -460,6 +471,9 @@ func ParseSCIMLogID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSCIM
 
 // ParseWaitlistID parses a string and validates the "awlt" prefix.
 func ParseWaitlistID(s string) (ID, error) { return ParseWithPrefix(s, PrefixWaitlist) }
+
+// ParseSessionFamilyID parses a string and validates the "asfm" prefix.
+func ParseSessionFamilyID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSessionFamily) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }

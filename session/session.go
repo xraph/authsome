@@ -14,6 +14,12 @@ type Session struct {
 	EnvID                 id.EnvironmentID `json:"env_id"`
 	UserID                id.UserID        `json:"user_id"`
 	OrgID                 id.OrgID         `json:"org_id,omitempty"`
+	// FamilyID groups sessions descended from a single sign-in via
+	// successive refresh-token rotations. All sessions sharing a FamilyID
+	// can be revoked together when refresh-token replay is detected
+	// (RFC 6819 §5.2.2.3). Fresh sign-ins start a new family; rotations
+	// inherit the parent's FamilyID. Zero-value on legacy rows is allowed.
+	FamilyID              id.SessionFamilyID `json:"family_id,omitempty"`
 	Token                 string           `json:"-"`
 	RefreshToken          string           `json:"-"`
 	IPAddress             string           `json:"ip_address,omitempty"`

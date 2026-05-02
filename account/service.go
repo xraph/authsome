@@ -29,6 +29,7 @@ var (
 	ErrPasswordExpired    = errors.New("account: password has expired and must be changed")
 	ErrPasswordReused     = errors.New("account: password was recently used and cannot be reused")
 	ErrEmailNotVerified   = errors.New("account: email address must be verified before signing in")
+	ErrMFARequired        = errors.New("account: MFA challenge required to complete sign-in")
 )
 
 // PasswordPolicy configures password validation rules.
@@ -182,6 +183,7 @@ func NewSession(appID id.AppID, userID id.UserID, cfg SessionConfig) (*session.S
 		ID:                    id.NewSessionID(),
 		AppID:                 appID,
 		UserID:                userID,
+		FamilyID:              id.NewSessionFamilyID(),
 		Token:                 token,
 		RefreshToken:          refreshToken,
 		LastActivityAt:        now,
