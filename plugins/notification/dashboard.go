@@ -12,6 +12,7 @@ import (
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
+	"github.com/xraph/authsome/middleware"
 	notifydash "github.com/xraph/authsome/plugins/notification/dashui"
 )
 
@@ -121,12 +122,17 @@ func (p *Plugin) renderTemplateList(ctx context.Context, params contributor.Para
 
 	appID := p.appIDFromContext(ctx)
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "notification.template.list"
+
 	// Handle reset defaults action (POST).
 	var successMsg, errorMsg string
 	action := params.FormData["action"]
 	if action == "reset_defaults" {
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			if err := p.templates.ResetDefaultTemplates(ctx, appID); err != nil {
 				errorMsg = fmt.Sprintf("Failed to reset templates: %v", err)
 			} else {
@@ -160,7 +166,7 @@ func (p *Plugin) renderTemplateList(ctx context.Context, params contributor.Para
 		ActiveChannel: channel,
 		SuccessMsg:    successMsg,
 		ErrorMsg:      errorMsg,
-		FormNonce:     dashboard.GenerateNonce(),
+		FormNonce:     dashboard.GenerateScopedNonce(sessIDStr, formScope),
 	}), nil
 }
 
@@ -174,6 +180,11 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		return nil, bridge.ErrHeraldNotAvailable
 	}
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "notification.template.write"
+
 	// Handle form actions (POST).
 	action := params.FormData["action"]
 	var actionMsg, actionErr string
@@ -181,7 +192,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 	switch action {
 	case "update_version":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			actionErr = p.handleUpdateVersion(ctx, params)
 			if actionErr == "" {
 				actionMsg = "Version updated successfully."
@@ -189,7 +200,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		}
 	case "create_version":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			actionErr = p.handleCreateVersion(ctx, params, templateID)
 			if actionErr == "" {
 				actionMsg = "Version created successfully."
@@ -197,7 +208,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		}
 	case "delete_version":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			versionID := params.FormData["version_id"]
 			if err := p.templates.DeleteVersion(ctx, versionID); err != nil {
 				actionErr = fmt.Sprintf("Failed to delete version: %v", err)
@@ -207,7 +218,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		}
 	case "toggle_enabled":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			actionErr = p.handleToggleEnabled(ctx, templateID)
 			if actionErr == "" {
 				actionMsg = "Template status updated."
@@ -215,7 +226,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		}
 	case "test_send":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			actionErr = p.handleTestSend(ctx, params, templateID)
 			if actionErr == "" {
 				actionMsg = "Test notification sent."
@@ -241,7 +252,7 @@ func (p *Plugin) renderTemplateDetail(ctx context.Context, params contributor.Pa
 		Template:     tmpl,
 		Preview:      preview,
 		ActiveLocale: activeLocale,
-		FormNonce:    dashboard.GenerateNonce(),
+		FormNonce:    dashboard.GenerateScopedNonce(sessIDStr, formScope),
 		SuccessMsg:   actionMsg,
 		ErrorMsg:     actionErr,
 	}), nil
@@ -252,13 +263,18 @@ func (p *Plugin) renderTemplateCreate(ctx context.Context, params contributor.Pa
 		return nil, bridge.ErrHeraldNotAvailable
 	}
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "notification.template.create"
+
 	var data notifydash.TemplateCreateData
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 
 	action := params.FormData["action"]
 	if action == "create" {
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			created, errMsg := p.handleCreateTemplate(ctx, params)
 			if errMsg != "" {
 				data.Error = errMsg
@@ -267,7 +283,7 @@ func (p *Plugin) renderTemplateCreate(ctx context.Context, params contributor.Pa
 				data.SuccessMsg = fmt.Sprintf("Template %q created.", created.Name)
 			}
 			// Regenerate nonce for next submit.
-			data.FormNonce = dashboard.GenerateNonce()
+			data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 		}
 	}
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	ssodash "github.com/xraph/authsome/plugins/sso/dashui"
 )
 
@@ -85,12 +86,17 @@ func (p *Plugin) renderProvidersPage(ctx context.Context, params contributor.Par
 	var data ssodash.ProvidersPageData
 	data.CodeProviders = p.providerNames()
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "sso.write"
+
 	// Handle form actions (POST).
 	action := params.FormData["action"]
 	switch action {
 	case "add":
 		nonce := params.FormData["nonce"]
-		if !dashboard.ConsumeNonce(nonce) {
+		if !dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			break
 		}
 		data.Error = p.handleAddConnection(ctx, appID, params)
@@ -99,19 +105,19 @@ func (p *Plugin) renderProvidersPage(ctx context.Context, params contributor.Par
 		}
 	case "toggle":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			p.handleToggleConnection(ctx, params)
 		}
 	case "delete":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			p.handleDeleteConnection(ctx, params)
 			data.Success = "SSO connection deleted."
 		}
 	}
 
 	// Generate a fresh nonce for the next form render.
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 
 	// Load DB-managed connections.
 	if p.ssoStore != nil {
