@@ -556,6 +556,7 @@ type SetAppClientConfigRequest struct {
 	PasskeyEnabled           *bool    `json:"passkey_enabled,omitempty" description:"Enable passkey auth (nil = inherit)"`
 	MagicLinkEnabled         *bool    `json:"magic_link_enabled,omitempty" description:"Enable magic link auth (nil = inherit)"`
 	MFAEnabled               *bool    `json:"mfa_enabled,omitempty" description:"Enable MFA (nil = inherit)"`
+	MFARequired              *bool    `json:"mfa_required,omitempty" description:"Require MFA on every sign-in (nil = false)"`
 	SSOEnabled               *bool    `json:"sso_enabled,omitempty" description:"Enable SSO (nil = inherit)"`
 	SocialEnabled            *bool    `json:"social_enabled,omitempty" description:"Enable social auth (nil = inherit)"`
 	WaitlistEnabled          *bool    `json:"waitlist_enabled,omitempty" description:"Enable waitlist (nil = inherit)"`

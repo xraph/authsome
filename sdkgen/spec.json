@@ -593,10 +593,14 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "required": {
+            "type": "boolean"
           }
         },
         "required": [
           "enabled",
+          "required",
           "methods"
         ],
         "type": "object"
@@ -860,6 +864,9 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "mfa_required": {
+            "type": "boolean"
           },
           "passkey_enabled": {
             "type": "boolean"
@@ -6211,6 +6218,10 @@
                       "type": "string"
                     },
                     "type": "array"
+                  },
+                  "mfa_required": {
+                    "description": "Require MFA on every sign-in (nil = false)",
+                    "type": "boolean"
                   },
                   "passkey_enabled": {
                     "description": "Enable passkey auth (nil = inherit)",

@@ -225,6 +225,7 @@ type ClientConfigFieldValidation struct {
 type ClientConfigMFA struct {
 	Enabled bool `json:"enabled"`
 	Methods []string `json:"methods"`
+	Required bool `json:"required"`
 }
 
 // ClientConfigResponse represents the ClientConfigResponse schema.
@@ -314,6 +315,7 @@ type Config struct {
 	MagicLinkEnabled bool `json:"magic_link_enabled,omitempty"`
 	MFAEnabled bool `json:"mfa_enabled,omitempty"`
 	MFAMethods []string `json:"mfa_methods,omitempty"`
+	MFARequired bool `json:"mfa_required,omitempty"`
 	PasskeyEnabled bool `json:"passkey_enabled,omitempty"`
 	PasswordEnabled bool `json:"password_enabled,omitempty"`
 	RequireEmailVerification bool `json:"require_email_verification,omitempty"`
@@ -1670,6 +1672,7 @@ type SetAppClientConfigRequest struct {
 	MagicLinkEnabled bool `json:"magic_link_enabled,omitempty"`
 	MFAEnabled bool `json:"mfa_enabled,omitempty"`
 	MFAMethods []string `json:"mfa_methods,omitempty"`
+	MFARequired bool `json:"mfa_required,omitempty"`
 	PasskeyEnabled bool `json:"passkey_enabled,omitempty"`
 	PasswordEnabled bool `json:"password_enabled,omitempty"`
 	RequireEmailVerification bool `json:"require_email_verification,omitempty"`

@@ -189,6 +189,7 @@ export interface ClientConfigFieldValidation {
 export interface ClientConfigMFA {
   enabled: boolean;
   methods: string[];
+  required: boolean;
 }
 
 export interface ClientConfigResponse {
@@ -268,6 +269,7 @@ export interface Config {
   magic_link_enabled?: boolean;
   mfa_enabled?: boolean;
   mfa_methods?: string[];
+  mfa_required?: boolean;
   passkey_enabled?: boolean;
   password_enabled?: boolean;
   require_email_verification?: boolean;
@@ -1413,7 +1415,7 @@ export type ScimDeleteUserRequest = scimUserPathParam;
 
 export type AdminCreateAppRequest = { logo?: string; name: string; slug: string };
 
-export type SetAppClientConfigRequest = { app_name?: string; logo_url?: string; magic_link_enabled?: boolean; mfa_enabled?: boolean; mfa_methods?: string[]; passkey_enabled?: boolean; password_enabled?: boolean; require_email_verification?: boolean; signup_enabled?: boolean; social_enabled?: boolean; social_providers?: string[]; sso_enabled?: boolean; waitlist_enabled?: boolean };
+export type SetAppClientConfigRequest = { app_name?: string; logo_url?: string; magic_link_enabled?: boolean; mfa_enabled?: boolean; mfa_methods?: string[]; mfa_required?: boolean; passkey_enabled?: boolean; password_enabled?: boolean; require_email_verification?: boolean; signup_enabled?: boolean; social_enabled?: boolean; social_providers?: string[]; sso_enabled?: boolean; waitlist_enabled?: boolean };
 
 export type SetAppSessionConfigRequest = { bind_to_device?: boolean; bind_to_ip?: boolean; max_active_sessions?: number; refresh_token_ttl_seconds?: number; rotate_refresh_token?: boolean; token_format?: string; token_ttl_seconds?: number };
 

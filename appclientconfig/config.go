@@ -28,6 +28,7 @@ type Config struct {
 	PasskeyEnabled           *bool `json:"passkey_enabled,omitempty"`
 	MagicLinkEnabled         *bool `json:"magic_link_enabled,omitempty"`
 	MFAEnabled               *bool `json:"mfa_enabled,omitempty"`
+	MFARequired              *bool `json:"mfa_required,omitempty"`
 	SSOEnabled               *bool `json:"sso_enabled,omitempty"`
 	SocialEnabled            *bool `json:"social_enabled,omitempty"`
 	WaitlistEnabled          *bool `json:"waitlist_enabled,omitempty"`

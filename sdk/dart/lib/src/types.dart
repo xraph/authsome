@@ -979,16 +979,19 @@ class ClientConfigFieldValidation {
 class ClientConfigMFA {
   final bool enabled;
   final List<String> methods;
+  final bool requiredValue;
 
   const ClientConfigMFA({
     required this.enabled,
     required this.methods,
+    required this.requiredValue,
   });
 
   factory ClientConfigMFA.fromJson(Map<String, dynamic> json) {
     return ClientConfigMFA(
       enabled: json['enabled'] as bool,
       methods: (json['methods'] as List).map((e) => e as String).toList(),
+      requiredValue: json['required'] as bool,
     );
   }
 
@@ -996,6 +999,7 @@ class ClientConfigMFA {
     return {
       'enabled': enabled,
       'methods': methods,
+      'required': requiredValue,
     };
   }
 
@@ -1347,6 +1351,7 @@ class Config {
   final bool? magicLinkEnabled;
   final bool? mfaEnabled;
   final List<String>? mfaMethods;
+  final bool? mfaRequired;
   final bool? passkeyEnabled;
   final bool? passwordEnabled;
   final bool? requireEmailVerification;
@@ -1366,6 +1371,7 @@ class Config {
     this.magicLinkEnabled,
     this.mfaEnabled,
     this.mfaMethods,
+    this.mfaRequired,
     this.passkeyEnabled,
     this.passwordEnabled,
     this.requireEmailVerification,
@@ -1387,6 +1393,7 @@ class Config {
       magicLinkEnabled: json['magic_link_enabled'] as bool?,
       mfaEnabled: json['mfa_enabled'] as bool?,
       mfaMethods: json['mfa_methods'] == null ? null : (json['mfa_methods'] as List).map((e) => e as String).toList(),
+      mfaRequired: json['mfa_required'] as bool?,
       passkeyEnabled: json['passkey_enabled'] as bool?,
       passwordEnabled: json['password_enabled'] as bool?,
       requireEmailVerification: json['require_email_verification'] as bool?,
@@ -1409,6 +1416,7 @@ class Config {
       if (magicLinkEnabled != null) 'magic_link_enabled': magicLinkEnabled,
       if (mfaEnabled != null) 'mfa_enabled': mfaEnabled,
       if (mfaMethods != null) 'mfa_methods': mfaMethods,
+      if (mfaRequired != null) 'mfa_required': mfaRequired,
       if (passkeyEnabled != null) 'passkey_enabled': passkeyEnabled,
       if (passwordEnabled != null) 'password_enabled': passwordEnabled,
       if (requireEmailVerification != null) 'require_email_verification': requireEmailVerification,
