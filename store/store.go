@@ -29,6 +29,16 @@ import (
 // ErrNotFound is returned when a requested entity does not exist.
 var ErrNotFound = errors.New("authsome: not found")
 
+// ErrConflict is returned when a write would violate a backend
+// uniqueness constraint that doesn't map to a more specific
+// account-level sentinel (ErrEmailTaken, ErrUsernameTaken, etc.).
+// The mongo / postgres / sqlite stores translate raw duplicate-key
+// errors into this so the API layer can surface a 409 without
+// leaking the raw constraint name and key value (which would
+// otherwise reveal index structure and the existence of the
+// colliding row).
+var ErrConflict = errors.New("authsome: conflict")
+
 // Store is the aggregate persistence interface.
 // Each subsystem store is a composable interface.
 // A single backend (postgres, sqlite, mongo, memory) implements all of them.

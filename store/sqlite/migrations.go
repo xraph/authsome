@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS authsome_users (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_users_email
     ON authsome_users (app_id, email);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_authsome_users_username
-    ON authsome_users (app_id, username);
+    ON authsome_users (app_id, username) WHERE username != '';
 CREATE INDEX IF NOT EXISTS idx_authsome_users_app
     ON authsome_users (app_id, created_at);
 
@@ -825,6 +825,32 @@ CREATE TABLE IF NOT EXISTS authsome_revoked_refresh_tokens (
 			},
 			Down: func(ctx context.Context, exec migrate.Executor) error {
 				_, err := exec.Exec(ctx, `DROP TABLE IF EXISTS authsome_revoked_refresh_tokens;`)
+				return err
+			},
+		},
+		// Migration 21: Fix the username unique index to skip empty
+		// values. The migration 1 definition omitted the WHERE clause
+		// that postgres has, so two users without a username collide
+		// on idx_authsome_users_username with a generic UNIQUE
+		// constraint failure (now mapped to ErrUsernameTaken via
+		// sqliteError, but the deeper fix is to stop the index from
+		// indexing empty strings at all). SQLite has supported partial
+		// unique indexes since 3.8.
+		&migrate.Migration{
+			Name:    "fix_username_index_skip_empty",
+			Version: "20260502000005",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				if _, err := exec.Exec(ctx, `DROP INDEX IF EXISTS idx_authsome_users_username;`); err != nil {
+					return err
+				}
+				_, err := exec.Exec(ctx, `CREATE UNIQUE INDEX idx_authsome_users_username ON authsome_users (app_id, username) WHERE username != '';`)
+				return err
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				if _, err := exec.Exec(ctx, `DROP INDEX IF EXISTS idx_authsome_users_username;`); err != nil {
+					return err
+				}
+				_, err := exec.Exec(ctx, `CREATE UNIQUE INDEX idx_authsome_users_username ON authsome_users (app_id, username);`)
 				return err
 			},
 		},

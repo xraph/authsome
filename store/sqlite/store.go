@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xraph/grove"
@@ -1437,13 +1438,38 @@ func (s *Store) DeleteSettingsByNamespace(ctx context.Context, namespace string)
 // Helpers
 // ──────────────────────────────────────────────────
 
-// sqliteError maps sql.ErrNoRows to a standard sentinel and passes through other errors.
+// sqliteError maps low-level sqlite failures to package-level
+// sentinels. Mirrors pgError so the API layer's mapError sees the
+// same surface regardless of backend.
+//
+// Recognized translations:
+//   - sql.ErrNoRows                   → store.ErrNotFound
+//   - UNIQUE constraint failed
+//     (...email)                      → account.ErrEmailTaken
+//   - UNIQUE constraint failed
+//     (...username)                   → account.ErrUsernameTaken
+//   - other UNIQUE constraint failed  → store.ErrConflict
+//
+// SQLite reports unique violations as "UNIQUE constraint failed:
+// table.column" — substring-matching the column name picks the
+// right sentinel.
 func sqliteError(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return store.ErrNotFound
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "UNIQUE constraint failed") {
+		switch {
+		case strings.Contains(msg, "username"):
+			return account.ErrUsernameTaken
+		case strings.Contains(msg, "email"):
+			return account.ErrEmailTaken
+		default:
+			return store.ErrConflict
+		}
 	}
 	return err
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xraph/grove"
@@ -1444,13 +1445,43 @@ func (s *Store) DeleteSettingsByNamespace(ctx context.Context, namespace string)
 // Helpers
 // ──────────────────────────────────────────────────
 
-// pgError maps sql.ErrNoRows to a standard sentinel and passes through other errors.
+// pgError maps low-level pg failures to the package-level sentinels
+// the rest of the codebase reasons about. Without this, a unique-
+// constraint violation on the (app_id, email) or (app_id, username)
+// index bubbles up as a 500 carrying the raw constraint name and the
+// colliding key value — leaking schema details and signaling that
+// the email/username exists.
+//
+// Recognized translations:
+//   - sql.ErrNoRows                  → store.ErrNotFound
+//   - 23505 unique_violation on the
+//     email index                    → account.ErrEmailTaken
+//   - 23505 on the username index    → account.ErrUsernameTaken
+//   - other 23505                    → store.ErrConflict (generic 409)
+//
+// Other errors pass through unchanged so unexpected failures still
+// surface their root cause in logs.
 func pgError(err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return store.ErrNotFound
+	}
+	// pgx surfaces the SQLSTATE via PgError.Code. We match by string
+	// since the codebase doesn't import pgx/pgconn directly elsewhere
+	// and a nil-safe substring check survives any wrapping the grove
+	// layer adds.
+	msg := err.Error()
+	if strings.Contains(msg, "SQLSTATE 23505") || strings.Contains(msg, "duplicate key value") {
+		switch {
+		case strings.Contains(msg, "username"):
+			return account.ErrUsernameTaken
+		case strings.Contains(msg, "email"):
+			return account.ErrEmailTaken
+		default:
+			return store.ErrConflict
+		}
 	}
 	return err
 }

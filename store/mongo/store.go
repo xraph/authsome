@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -15,6 +16,7 @@ import (
 	"github.com/xraph/grove/drivers/mongodriver"
 	"github.com/xraph/grove/migrate"
 
+	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/store"
@@ -106,6 +108,54 @@ func isNoDocuments(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
 }
 
+// mongoIsIndexNotFound returns true when the error reports
+// "IndexNotFound" (mongo error code 27). Used by migrations that
+// drop-then-recreate an index — re-running the migration on a
+// deployment that already lacks the old index shouldn't fail.
+func mongoIsIndexNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) && cmdErr.Code == 27 {
+		return true
+	}
+	// Some driver versions surface IndexNotFound as a plain string.
+	return strings.Contains(err.Error(), "IndexNotFound") ||
+		strings.Contains(err.Error(), "index not found")
+}
+
+// mapWriteErr converts low-level mongo write failures into the
+// account-package sentinels the API layer maps to 4xx. Without
+// this, a duplicate-key violation on the (app_id, email) or
+// (app_id, username) index bubbles up as a 500 carrying the raw
+// E11000 message — which leaks both the index name and the
+// existence of the colliding row.
+//
+// Returns the original error unchanged when it isn't a recognized
+// duplicate, so callers can still distinguish "not a known mapping"
+// from "something we deliberately translated."
+func mapWriteErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if !mongo.IsDuplicateKeyError(err) {
+		return err
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "username"):
+		return account.ErrUsernameTaken
+	case strings.Contains(msg, "email"):
+		return account.ErrEmailTaken
+	default:
+		// Some other unique constraint — return a generic conflict
+		// rather than the raw E11000 message which leaks the index
+		// name and colliding key.
+		return store.ErrConflict
+	}
+}
+
 // migrationIndexes returns the index definitions for all authsome collections.
 func migrationIndexes() map[string][]mongo.IndexModel {
 	return map[string][]mongo.IndexModel{
@@ -121,8 +171,17 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 				Options: options.Index().SetUnique(true),
 			},
 			{
-				Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
-				Options: options.Index().SetUnique(true).SetSparse(true),
+				// PartialFilterExpression — NOT SetSparse — because
+				// SetSparse only excludes documents where the field
+				// is missing entirely, but our writer always includes
+				// `username: ""` for users without one. PartialFilter
+				// excludes by VALUE so empty strings don't collide.
+				// (See migration 20260502000004 that backfills this on
+				// existing deployments.)
+				Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+				Options: options.Index().
+					SetUnique(true).
+					SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
 			},
 			{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "created_at", Value: -1}}},
 		},

@@ -80,6 +80,12 @@ func mapError(err error) error {
 	if errors.Is(err, account.ErrUsernameTaken) {
 		return forge.NewHTTPError(http.StatusConflict, "username already taken")
 	}
+	if errors.Is(err, store.ErrConflict) {
+		// Generic backend uniqueness violation — the store layer didn't
+		// recognize the constraint so we return a vague 409 rather than
+		// leaking the index name and key value via the raw driver error.
+		return forge.NewHTTPError(http.StatusConflict, "conflict")
+	}
 	if errors.Is(err, account.ErrMFARequired) {
 		// Surface the ticket + available methods so the UI can
 		// transition from sign-in to challenge without a second

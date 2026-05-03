@@ -64,8 +64,15 @@ func init() {
 						Options: options.Index().SetUnique(true),
 					},
 					{
-						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
-						Options: options.Index().SetUnique(true).SetSparse(true),
+						// PartialFilterExpression — NOT SetSparse — because
+						// SetSparse only excludes documents where the field
+						// is missing entirely, and writes always include
+						// username: "" for users without one. PartialFilter
+						// excludes by VALUE so empty strings don't collide.
+						Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+						Options: options.Index().
+							SetUnique(true).
+							SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
 					},
 					{Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "created_at", Value: -1}}},
 				})
@@ -473,6 +480,67 @@ func init() {
 		},
 		// Migration 20: Create revoked_refresh_tokens collection with indices
 		// for refresh-token replay detection.
+		&migrate.Migration{
+			// Fix the username index that was created with SetSparse(true)
+			// in migration 20240101000002. SetSparse only excludes documents
+			// where the field is *missing*, but every write to authsome_users
+			// includes `username: ""` because Go's zero value serializes that
+			// way. The result: any second user without a username collides
+			// with E11000 dup key error on app_id_1_username_1, surfacing as
+			// a 500 from POST /v1/signup.
+			//
+			// Drop the index by name and recreate it with a
+			// PartialFilterExpression that excludes by VALUE — empty string
+			// stops being a key.
+			Name:    "fix_username_index_partial_filter",
+			Version: "20260502000004",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// Drop the bad index by its auto-derived name. Mongo
+				// names indexes after their keys — app_id_1_username_1.
+				// Tolerate IndexNotFound (code 27) so the migration is
+				// safe to re-run on a deployment that already fixed the
+				// index manually.
+				coll := mexec.DB().Collection(colUsers)
+				if err := coll.Indexes().DropOne(ctx, "app_id_1_username_1"); err != nil {
+					if !mongoIsIndexNotFound(err) {
+						return fmt.Errorf("drop bad username index: %w", err)
+					}
+				}
+				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+					{
+						Keys: bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+						Options: options.Index().
+							SetUnique(true).
+							SetPartialFilterExpression(bson.M{"username": bson.M{"$gt": ""}}),
+					},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				// Recreate the (broken) sparse index for completeness on
+				// rollback. Operators rolling back will hit the original
+				// E11000 bug again.
+				coll := mexec.DB().Collection(colUsers)
+				if err := coll.Indexes().DropOne(ctx, "app_id_1_username_1"); err != nil {
+					if !mongoIsIndexNotFound(err) {
+						return err
+					}
+				}
+				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+					{
+						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "username", Value: 1}},
+						Options: options.Index().SetUnique(true).SetSparse(true),
+					},
+				})
+			},
+		},
 		&migrate.Migration{
 			Name:    "create_revoked_refresh_tokens",
 			Version: "20260502000003",
