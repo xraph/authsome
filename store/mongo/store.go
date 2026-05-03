@@ -68,23 +68,60 @@ func New(db *grove.DB) *Store {
 // DB returns the underlying grove database for direct access.
 func (s *Store) DB() *grove.DB { return s.db }
 
-// Migrate creates indexes for all authsome collections.
-// The extraGroups parameter is accepted for interface compatibility but is not
-// used for MongoDB (Mongo does not use SQL migrations).
-func (s *Store) Migrate(ctx context.Context, _ ...*migrate.Group) error {
-	indexes := migrationIndexes()
+// Migrate runs the mongo migration orchestrator (the authoritative
+// path for index/schema changes — every entry in Migrations runs
+// exactly once and is tracked) and then ensures baseline indexes
+// exist for any collection that doesn't yet have them.
+//
+// The two paths coexist deliberately:
+//   - The orchestrator is the only path that can RESHAPE an existing
+//     index (drop + recreate with different options). Repair migrations
+//     like fix_username_index_partial_filter live here.
+//   - The eager ensureBaselineIndexes path is the only path that runs
+//     when an operator boots with WithDisableMigrate() (used in tests
+//     and some custom-control deployments). It tolerates index-shape
+//     conflicts so a stale index from a prior deployment doesn't block
+//     boot — the migration system is expected to repair it.
+//
+// extraGroups are concatenated after the mongo Migrations group so
+// plugins can register their own migration groups via the standard
+// MigrationProvider interface (mirrors the postgres + sqlite stores).
+func (s *Store) Migrate(ctx context.Context, extraGroups ...*migrate.Group) error {
+	executor, err := migrate.NewExecutorFor(s.mdb)
+	if err != nil {
+		return fmt.Errorf("authsome/mongo: create migration executor: %w", err)
+	}
 
-	for col, models := range indexes {
+	groups := append([]*migrate.Group{Migrations}, extraGroups...)
+	orch := migrate.NewOrchestrator(executor, groups...)
+	if _, err := orch.Migrate(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: migration failed: %w", err)
+	}
+
+	return s.ensureBaselineIndexes(ctx)
+}
+
+// ensureBaselineIndexes calls Indexes().CreateMany per collection
+// for every index in migrationIndexes(). Tolerates IndexKeySpecsConflict
+// (code 86) and IndexOptionsConflict (code 85) — the migration system
+// is the authoritative path for reshaping; the eager call's job is
+// only to ensure the baseline exists.
+//
+// Other errors abort boot.
+func (s *Store) ensureBaselineIndexes(ctx context.Context) error {
+	for col, models := range migrationIndexes() {
 		if len(models) == 0 {
 			continue
 		}
-
-		_, err := s.mdb.Collection(col).Indexes().CreateMany(ctx, models)
-		if err != nil {
-			return fmt.Errorf("authsome/mongo: migrate %s indexes: %w", col, err)
+		if _, err := s.mdb.Collection(col).Indexes().CreateMany(ctx, models); err != nil {
+			if mongoIsIndexConflict(err) {
+				// Stale index shape — migration system repairs it.
+				// Don't abort boot.
+				continue
+			}
+			return fmt.Errorf("authsome/mongo: ensure baseline indexes for %s: %w", col, err)
 		}
 	}
-
 	return nil
 }
 
@@ -106,6 +143,25 @@ func now() time.Time {
 // isNoDocuments checks if an error wraps mongo.ErrNoDocuments.
 func isNoDocuments(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
+}
+
+// mongoIsIndexConflict returns true when the error reports
+// IndexKeySpecsConflict (code 86) or IndexOptionsConflict (code 85)
+// — i.e. an index with the same name exists but has a different
+// spec. The eager index-creation path treats these as recoverable:
+// the migration system is the authoritative repair path; the eager
+// call's job is only "ensure baseline."
+func mongoIsIndexConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) && (cmdErr.Code == 85 || cmdErr.Code == 86) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "IndexKeySpecsConflict") ||
+		strings.Contains(msg, "IndexOptionsConflict")
 }
 
 // mongoIsIndexNotFound returns true when the error reports
