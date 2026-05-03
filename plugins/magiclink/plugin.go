@@ -8,10 +8,12 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 )
@@ -283,21 +285,38 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		_ = p.store.UpdateUser(ctx.Context(), u) //nolint:errcheck // best-effort
 	}
 
-	// Resolve per-app session config, falling back to plugin config.
-	sessCfg := account.SessionConfig{
-		TokenTTL:        p.config.SessionTokenTTL,
-		RefreshTokenTTL: p.config.SessionRefreshTTL,
-	}
-	if p.engine != nil {
-		sessCfg = p.engine.SessionConfigForApp(ctx.Context(), v.AppID)
-	}
-	sess, err := account.NewSession(v.AppID, u.ID, sessCfg)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", err))
-	}
-
-	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", err))
+	// Mint the session through Engine.IssueSession so the centralized
+	// MFARequired gate fires for magic-link verifications. Falls back
+	// to a direct mint if the engine isn't the concrete *authsome.Engine.
+	var sess *session.Session
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
+			User:       u,
+			AppID:      v.AppID,
+			AuthMethod: "magiclink",
+			IPAddress:  ctx.Request().RemoteAddr,
+			UserAgent:  ctx.Request().UserAgent(),
+		})
+		if issueErr != nil {
+			return nil, issueErr
+		}
+		sess = result.Session
+	} else {
+		sessCfg := account.SessionConfig{
+			TokenTTL:        p.config.SessionTokenTTL,
+			RefreshTokenTTL: p.config.SessionRefreshTTL,
+		}
+		if p.engine != nil {
+			sessCfg = p.engine.SessionConfigForApp(ctx.Context(), v.AppID)
+		}
+		var newErr error
+		sess, newErr = account.NewSession(v.AppID, u.ID, sessCfg)
+		if newErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+		}
+		if storeErr := p.store.CreateSession(ctx.Context(), sess); storeErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", storeErr))
+		}
 	}
 
 	return &VerifyResponse{
