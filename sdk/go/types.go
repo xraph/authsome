@@ -1709,6 +1709,12 @@ type AdminBulkImportUsersRequest struct {
 
 // CreateOAuth2ClientRequest is the request body for CreateOAuth2Client.
 type CreateOAuth2ClientRequest struct {
+	AppID        string   `json:"app_id"`
+	Name         string   `json:"name"`
+	RedirectURIs []string `json:"redirect_uris"`
+	Scopes       []string `json:"scopes,omitempty"`
+	GrantTypes   []string `json:"grant_types,omitempty"`
+	Public       bool     `json:"public,omitempty"`
 }
 
 // DeleteOAuth2ClientRequest is the request body for DeleteOAuth2Client.
@@ -1744,6 +1750,85 @@ type SsoAdminCreateConnectionRequest struct {
 	OrgID string `json:"org_id,omitempty"`
 	Protocol string `json:"protocol"`
 	Provider string `json:"provider"`
+}
+
+// SsoConnection represents a stored SSO connection. Mirrors
+// plugins/sso.Connection. ClientSecret is omitted — the engine never
+// returns it on read paths.
+type SsoConnection struct {
+	ID           string `json:"id"`
+	AppID        string `json:"app_id"`
+	OrgID        string `json:"org_id,omitempty"`
+	Provider     string `json:"provider"`
+	Protocol     string `json:"protocol"`
+	Domain       string `json:"domain"`
+	Issuer       string `json:"issuer,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	MetadataURL  string `json:"metadata_url,omitempty"`
+	Active       bool   `json:"active"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+// SsoAdminListConnectionsResponse is the response from SsoAdminListConnections.
+type SsoAdminListConnectionsResponse struct {
+	Connections []*SsoConnection `json:"connections"`
+}
+
+// SsoAdminUpdateConnectionRequest is the body for SsoAdminUpdateConnection.
+// Empty/zero values leave the stored value unchanged. Active is a
+// pointer so explicit `false` can be sent without ambiguity.
+type SsoAdminUpdateConnectionRequest struct {
+	Provider     string `json:"provider,omitempty"`
+	Domain       string `json:"domain,omitempty"`
+	Issuer       string `json:"issuer,omitempty"`
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+	MetadataURL  string `json:"metadata_url,omitempty"`
+	Active       *bool  `json:"active,omitempty"`
+}
+
+// SocialCatalogProvider is one entry in the static provider catalog.
+type SocialCatalogProvider struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// SocialAdminCatalogResponse is the response for SocialAdminCatalog.
+type SocialAdminCatalogResponse struct {
+	Providers []SocialCatalogProvider `json:"providers"`
+}
+
+// SocialAdminProvider is the read-side shape for a configured social
+// provider. ClientSecret is masked ("***" when set, empty when not);
+// HasSecret indicates whether a secret is currently stored.
+type SocialAdminProvider struct {
+	Name         string   `json:"name"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      bool     `json:"enabled"`
+	HasSecret    bool     `json:"has_secret"`
+}
+
+// SocialAdminListProvidersResponse is the response for SocialAdminListProviders.
+type SocialAdminListProvidersResponse struct {
+	Providers []SocialAdminProvider `json:"providers"`
+}
+
+// SocialAdminUpsertProviderRequest is the request body for SocialAdminUpsertProvider.
+type SocialAdminUpsertProviderRequest struct {
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+}
+
+// SocialAdminProviderResponse is the response after upsert.
+type SocialAdminProviderResponse struct {
+	Provider SocialAdminProvider `json:"provider"`
 }
 
 // AdminCreateUserRequest is the request body for AdminCreateUser.

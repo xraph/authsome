@@ -456,7 +456,47 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 		forge.WithErrorResponses(),
 	}
 	callbackOpts = append(callbackOpts, p.rateLimitOpts(rateLimitForCallback)...)
-	return g.GET("/:provider/callback", p.handleCallback, callbackOpts...)
+	if err := g.GET("/:provider/callback", p.handleCallback, callbackOpts...); err != nil {
+		return err
+	}
+
+	admin := router.Group("/v1/admin/social", forge.WithGroupTags("Social OAuth Admin"))
+	if err := admin.GET("/providers", p.handleAdminListProviders,
+		forge.WithSummary("List social providers (admin)"),
+		forge.WithDescription("Returns the social providers configured at the resolved scope. When app_id is supplied, providers are merged from global + app overrides. Client secrets are masked."),
+		forge.WithOperationID("socialAdminListProviders"),
+		forge.WithRequestSchema(AdminListProvidersRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Providers", AdminListProvidersResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := admin.GET("/providers/catalog", p.handleAdminCatalog,
+		forge.WithSummary("List supported social providers"),
+		forge.WithDescription("Returns every provider this build of authsome can speak to (the static catalog). Use this to populate a 'pick a provider' UI before configuring credentials."),
+		forge.WithOperationID("socialAdminCatalog"),
+		forge.WithResponseSchema(http.StatusOK, "Catalog", AdminCatalogResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := admin.PUT("/providers/:provider", p.handleAdminUpsertProvider,
+		forge.WithSummary("Configure a social provider (admin)"),
+		forge.WithDescription("Upserts the per-app provider configuration. Pass app_id to scope per-app; omit for global. Replaces any existing entry for the same provider name."),
+		forge.WithOperationID("socialAdminUpsertProvider"),
+		forge.WithRequestSchema(AdminUpsertProviderRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Provider stored", AdminProviderResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	return admin.DELETE("/providers/:provider", p.handleAdminDeleteProvider,
+		forge.WithSummary("Delete a social provider (admin)"),
+		forge.WithOperationID("socialAdminDeleteProvider"),
+		forge.WithRequestSchema(AdminDeleteProviderRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Deleted", AdminDeleteProviderResponse{}),
+		forge.WithErrorResponses(),
+	)
 }
 
 // rateLimitTarget selects which configured limit to apply.
@@ -1222,4 +1262,291 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 		ActorID:    actorID,
 		Tenant:     tenant,
 	})
+}
+
+// ──────────────────────────────────────────────────
+// Admin: social provider management
+// ──────────────────────────────────────────────────
+
+// supportedProviderCatalog is the static list of providers this build
+// can speak. Sourced from the SettingSocialProviders dropdown so the
+// admin UI shows the same set the engine can actually wire.
+var supportedProviderCatalog = []AdminCatalogProvider{
+	{ID: "google", Name: "Google"},
+	{ID: "github", Name: "GitHub"},
+	{ID: "apple", Name: "Apple"},
+	{ID: "microsoft", Name: "Microsoft"},
+	{ID: "facebook", Name: "Facebook"},
+	{ID: "linkedin", Name: "LinkedIn"},
+	{ID: "discord", Name: "Discord"},
+	{ID: "slack", Name: "Slack"},
+	{ID: "twitter", Name: "Twitter"},
+	{ID: "spotify", Name: "Spotify"},
+	{ID: "twitch", Name: "Twitch"},
+	{ID: "gitlab", Name: "GitLab"},
+	{ID: "bitbucket", Name: "Bitbucket"},
+	{ID: "dropbox", Name: "Dropbox"},
+	{ID: "yahoo", Name: "Yahoo"},
+	{ID: "amazon", Name: "Amazon"},
+	{ID: "zoom", Name: "Zoom"},
+	{ID: "pinterest", Name: "Pinterest"},
+	{ID: "strava", Name: "Strava"},
+	{ID: "patreon", Name: "Patreon"},
+	{ID: "instagram", Name: "Instagram"},
+	{ID: "line", Name: "Line"},
+}
+
+// AdminCatalogProvider is one entry in the supported-provider catalog.
+type AdminCatalogProvider struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// AdminCatalogResponse is the response for GET /v1/admin/social/providers/catalog.
+type AdminCatalogResponse struct {
+	Providers []AdminCatalogProvider `json:"providers"`
+}
+
+// AdminProvider is the read-side shape for a configured provider.
+// ClientSecret is masked (returns the literal "***" when set, empty
+// when unset) so the admin UI can render "secret is configured" without
+// echoing the value back.
+type AdminProvider struct {
+	Name         string   `json:"name"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      bool     `json:"enabled"`
+	HasSecret    bool     `json:"has_secret"`
+}
+
+// AdminListProvidersRequest binds the query for GET /v1/admin/social/providers.
+type AdminListProvidersRequest struct {
+	AppID string `query:"app_id" description:"App identifier; omit for global scope"`
+}
+
+// AdminListProvidersResponse is the listing response.
+type AdminListProvidersResponse struct {
+	Providers []AdminProvider `json:"providers"`
+}
+
+// AdminUpsertProviderRequest binds the path + body for PUT.
+type AdminUpsertProviderRequest struct {
+	Provider string `path:"provider" description:"Provider ID (google, github, ...)"`
+	AppID    string `query:"app_id" description:"App identifier; omit for global scope"`
+
+	ClientID     string   `json:"client_id"      description:"OAuth client ID"`
+	ClientSecret string   `json:"client_secret"  description:"OAuth client secret. Pass empty string to leave the existing value unchanged."`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+}
+
+// AdminProviderResponse is the response after upsert.
+type AdminProviderResponse struct {
+	Provider AdminProvider `json:"provider"`
+}
+
+// AdminDeleteProviderRequest binds the path + query for DELETE.
+type AdminDeleteProviderRequest struct {
+	Provider string `path:"provider" description:"Provider ID"`
+	AppID    string `query:"app_id"  description:"App identifier; omit for global scope"`
+}
+
+// AdminDeleteProviderResponse mirrors the StatusResponse shape.
+type AdminDeleteProviderResponse struct {
+	Status string `json:"status"`
+}
+
+// handleAdminListProviders returns the configured providers at the
+// resolved scope. With ?app_id, returns the merged view (global +
+// app overrides) so the UI shows what the public client-config
+// endpoint would return.
+func (p *Plugin) handleAdminListProviders(ctx forge.Context, req *AdminListProvidersRequest) (*AdminListProvidersResponse, error) {
+	if p.settingsMgr == nil {
+		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+	}
+	opts := settings.ResolveOpts{}
+	if v := strings.TrimSpace(req.AppID); v != "" {
+		opts.AppID = v
+	}
+	providers, err := settings.Get(ctx.Context(), p.settingsMgr, SettingSocialProviders, opts)
+	if err != nil {
+		// Cascade returns the default ([]) when no override exists; a
+		// real error means the store is broken.
+		return nil, forge.InternalError(fmt.Errorf("social: read providers: %w", err))
+	}
+	out := make([]AdminProvider, 0, len(providers))
+	for _, prov := range providers {
+		out = append(out, maskProvider(prov))
+	}
+	return &AdminListProvidersResponse{Providers: out}, nil
+}
+
+// handleAdminCatalog returns the static provider catalog.
+func (p *Plugin) handleAdminCatalog(_ forge.Context, _ *struct{}) (*AdminCatalogResponse, error) {
+	out := make([]AdminCatalogProvider, len(supportedProviderCatalog))
+	copy(out, supportedProviderCatalog)
+	return &AdminCatalogResponse{Providers: out}, nil
+}
+
+// handleAdminUpsertProvider replaces the entry for the named provider
+// at the requested scope. When ?app_id is supplied, the provider list
+// is read at App scope, mutated, and written back at App scope —
+// global is left untouched. Empty client_secret leaves the existing
+// stored secret unchanged so the UI can re-save without echoing it.
+func (p *Plugin) handleAdminUpsertProvider(ctx forge.Context, req *AdminUpsertProviderRequest) (*AdminProviderResponse, error) {
+	if p.settingsMgr == nil {
+		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+	}
+	name := strings.ToLower(strings.TrimSpace(req.Provider))
+	if name == "" {
+		return nil, forge.BadRequest("provider is required")
+	}
+	if !catalogContains(name) {
+		return nil, forge.BadRequest("unsupported provider; call GET /v1/admin/social/providers/catalog for the list")
+	}
+	if strings.TrimSpace(req.ClientID) == "" {
+		return nil, forge.BadRequest("client_id is required")
+	}
+
+	scope, scopeID := scopeFor(req.AppID)
+	current := p.readScope(ctx.Context(), scope, scopeID)
+
+	// Preserve the existing secret when caller passes empty string.
+	existingSecret := ""
+	for _, prov := range current {
+		if strings.EqualFold(prov.Name, name) {
+			existingSecret = prov.ClientSecret
+			break
+		}
+	}
+	secret := req.ClientSecret
+	if strings.TrimSpace(secret) == "" {
+		secret = existingSecret
+	}
+
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+
+	updated := ProviderSetting{
+		Name:         name,
+		ClientID:     req.ClientID,
+		ClientSecret: secret,
+		RedirectURL:  req.RedirectURL,
+		Scopes:       req.Scopes,
+		Enabled:      enabled,
+	}
+
+	out := replaceOrAppend(current, updated)
+	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
+		return nil, forge.InternalError(err)
+	}
+	return &AdminProviderResponse{Provider: maskProvider(updated)}, nil
+}
+
+// handleAdminDeleteProvider removes one provider entry from the list
+// at the requested scope. Idempotent — no error when the entry is
+// missing.
+func (p *Plugin) handleAdminDeleteProvider(ctx forge.Context, req *AdminDeleteProviderRequest) (*AdminDeleteProviderResponse, error) {
+	if p.settingsMgr == nil {
+		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+	}
+	name := strings.ToLower(strings.TrimSpace(req.Provider))
+	if name == "" {
+		return nil, forge.BadRequest("provider is required")
+	}
+	scope, scopeID := scopeFor(req.AppID)
+	current := p.readScope(ctx.Context(), scope, scopeID)
+	out := make([]ProviderSetting, 0, len(current))
+	for _, prov := range current {
+		if strings.EqualFold(prov.Name, name) {
+			continue
+		}
+		out = append(out, prov)
+	}
+	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
+		return nil, forge.InternalError(err)
+	}
+	return &AdminDeleteProviderResponse{Status: "deleted"}, nil
+}
+
+// readScope reads ProviderSetting list at exactly the named scope.
+// Returns the empty slice when nothing is stored — does NOT cascade
+// up so writes only touch the scope the caller asked for.
+func (p *Plugin) readScope(ctx context.Context, scope settings.Scope, scopeID string) []ProviderSetting {
+	if p.settingsMgr == nil || p.settingsMgr.Store() == nil {
+		return nil
+	}
+	s, err := p.settingsMgr.Store().GetSetting(ctx, SettingSocialProviders.Def.Key, scope, scopeID)
+	if err != nil || s == nil || len(s.Value) == 0 {
+		return nil
+	}
+	var out []ProviderSetting
+	if err := json.Unmarshal(s.Value, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// writeScope serialises the provider list and writes it at the named scope.
+func (p *Plugin) writeScope(ctx context.Context, scope settings.Scope, scopeID string, providers []ProviderSetting) error {
+	if p.settingsMgr == nil {
+		return fmt.Errorf("social: settings manager not wired")
+	}
+	raw, err := json.Marshal(providers)
+	if err != nil {
+		return err
+	}
+	appID := ""
+	if scope == settings.ScopeApp {
+		appID = scopeID
+	}
+	return p.settingsMgr.Set(ctx, SettingSocialProviders.Def.Key, raw, scope, scopeID, appID, "", "admin")
+}
+
+func scopeFor(appID string) (settings.Scope, string) {
+	if v := strings.TrimSpace(appID); v != "" {
+		return settings.ScopeApp, v
+	}
+	return settings.ScopeGlobal, ""
+}
+
+func catalogContains(name string) bool {
+	for _, p := range supportedProviderCatalog {
+		if p.ID == name {
+			return true
+		}
+	}
+	return false
+}
+
+func replaceOrAppend(list []ProviderSetting, entry ProviderSetting) []ProviderSetting {
+	for i, prov := range list {
+		if strings.EqualFold(prov.Name, entry.Name) {
+			out := make([]ProviderSetting, len(list))
+			copy(out, list)
+			out[i] = entry
+			return out
+		}
+	}
+	return append(list, entry)
+}
+
+func maskProvider(p ProviderSetting) AdminProvider {
+	out := AdminProvider{
+		Name:        p.Name,
+		ClientID:    p.ClientID,
+		RedirectURL: p.RedirectURL,
+		Scopes:      p.Scopes,
+		Enabled:     p.Enabled,
+		HasSecret:   strings.TrimSpace(p.ClientSecret) != "",
+	}
+	if out.HasSecret {
+		out.ClientSecret = "***"
+	}
+	return out
 }

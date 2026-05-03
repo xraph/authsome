@@ -249,7 +249,7 @@ templ settingsEditorJS() {
 							if (appID) body.app_id = appID;
 						}
 
-						var resp = await fetch(config.basePath + '/admin/settings/values/' + key, {
+						var resp = await fetch(config.basePath + '/v1/admin/settings/values/' + key, {
 							method: 'PUT',
 							headers: { 'Content-Type': 'application/json' },
 							credentials: 'same-origin',
@@ -282,7 +282,7 @@ templ settingsEditorJS() {
 			// Reset a single setting to its default
 			window.resetSetting = async function(key) {
 				var config = getConfig();
-				var url = config.basePath + '/admin/settings/values/' + key + '?scope=' + config.scope;
+				var url = config.basePath + '/v1/admin/settings/values/' + key + '?scope=' + config.scope;
 				if (config.scope === 'app' && config.appID) {
 					url += '&scope_id=' + config.appID;
 				} else if (config.scope === 'org' && config.orgID) {

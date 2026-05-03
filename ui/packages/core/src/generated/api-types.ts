@@ -1560,7 +1560,14 @@ export type SignInRequest = { app_id?: string; captcha_token?: string; email?: s
 
 export type SignUpRequest = { app_id?: string; captcha_token?: string; email: string; first_name?: string; last_name?: string; metadata?: Record<string, unknown>; password: string; username?: string };
 
-export type StartOAuthRequest = StartRequest;
+// LOCAL OVERRIDE — codegen collision: the social plugin's Go struct is also
+// named StartRequest, colliding with the phone-auth StartRequest in the
+// OpenAPI spec. The generator picks one shape (currently {phone, app_id})
+// and aliases both. The real social-OAuth body accepts {app_id?,
+// redirect_url?} and reads the provider from the path. Until the Go
+// structs are renamed and the spec regenerated, define the correct shape
+// here. Tracked in the social plugin (plugins/social/plugin.go:521).
+export type StartOAuthRequest = { app_id?: string; redirect_url?: string };
 
 export type SsoACSRequest = ACSRequest;
 

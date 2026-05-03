@@ -239,6 +239,16 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 		return fmt.Errorf("authsome: register dashboard remote hook: %w", err)
 	}
 
+	// Mount a same-origin reverse proxy for admin API calls so XHRs from
+	// pages rendered through the remote dashboard contributor (which load
+	// into the dashboard host's origin, not authsome's) reach upstream.
+	// Without this, every admin XHR (e.g. settings save) 404s because the
+	// dashboard host has no /authsome/v1/* handler. See
+	// extension/client_api_proxy.go for the full rationale.
+	if err := e.registerClientAPIProxy(fapp.Router()); err != nil {
+		return fmt.Errorf("authsome: register client API proxy: %w", err)
+	}
+
 	logger.Info("authsome: client mode enabled",
 		log.String("portal_url", e.config.PortalURL),
 	)

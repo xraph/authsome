@@ -29,16 +29,27 @@ export function openOAuthPopup(
  * so the caller typically just needs to redirect/reload after completion.
  */
 export async function handleSocialLogin(
-  client: { startOAuth: (provider: string, body: { Provider: string; redirect_url?: string }) => Promise<{ auth_url: string }> },
+  // The codegen mis-types this endpoint's response (the social-OAuth
+  // StartResponse Go struct collides with the phone-auth StartResponse,
+  // and the wrong shape wins). The real backend response is {auth_url}.
+  // We type the response loosely here and cast at the assertion site.
+  client: {
+    startOAuth: (
+      provider: string,
+      body: { app_id?: string; redirect_url?: string },
+    ) => Promise<unknown>;
+  },
   providerId: string,
   onComplete: () => void,
   onError?: (err: unknown) => void,
 ): Promise<void> {
   try {
-    const { auth_url } = await client.startOAuth(providerId, {
-      Provider: providerId,
+    // The provider is a path parameter (already passed positionally); the
+    // body only carries the post-auth redirect target.
+    const res = (await client.startOAuth(providerId, {
       redirect_url: window.location.href,
-    });
+    })) as { auth_url: string };
+    const { auth_url } = res;
 
     const popup = openOAuthPopup(auth_url);
 

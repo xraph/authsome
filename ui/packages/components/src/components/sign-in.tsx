@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useAuth } from "@authsome/ui-react";
 import { SignInForm } from "./sign-in-form";
 import { ForgotPasswordForm } from "./forgot-password-form";
 import { ResetPasswordForm } from "./reset-password-form";
@@ -106,14 +107,9 @@ export function SignIn({
   }
 
   if (subPath === "verify-email") {
-    const email =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("email") ?? ""
-        : "";
-
     return (
-      <EmailVerificationForm
-        email={email}
+      <VerifyEmailRoute
+        signInPath={path}
         onSuccess={handleSuccess}
         logo={logo}
         className={className}
@@ -127,6 +123,7 @@ export function SignIn({
       onSuccess={handleSuccess}
       signUpUrl={signUpUrl}
       forgotPasswordUrl={`${path}/forgot-password`}
+      verifyEmailUrl={`${path}/verify-email`}
       socialProviders={socialProviders}
       onSocialLogin={onSocialLogin}
       socialLayout={socialLayout}
@@ -134,6 +131,63 @@ export function SignIn({
       logo={logo}
       align={align}
       variant={variant}
+      className={className}
+    />
+  );
+}
+
+/**
+ * Renders the OTP-based EmailVerificationForm at /sign-in/verify-email,
+ * wiring `onResend` to the auth manager and routing the user back to the
+ * sign-in page on success so they can complete login. Pulls `email` from
+ * the URL query string (the SignInForm appends it on email_not_verified).
+ */
+function VerifyEmailRoute({
+  signInPath,
+  onSuccess,
+  logo,
+  className,
+}: {
+  signInPath: string;
+  onSuccess: () => void;
+  logo?: React.ReactNode;
+  className?: string;
+}) {
+  const { resendVerification } = useAuth();
+  const email =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("email") ?? ""
+      : "";
+
+  const handleResend = React.useCallback(() => {
+    if (!email) return;
+    void resendVerification(email).catch(() => {
+      // Surfaced via the form's own error handling; cooldown still applies.
+    });
+  }, [email, resendVerification]);
+
+  const handleVerified = React.useCallback(() => {
+    // verifyEmail does not issue a session — bounce back to sign-in so the
+    // user can complete login. Preserve any `redirect` param the original
+    // sign-in attempt carried so post-login routing still works.
+    if (typeof window === "undefined") {
+      onSuccess();
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get("redirect");
+    const target = redirect
+      ? `${signInPath}?redirect=${encodeURIComponent(redirect)}`
+      : signInPath;
+    window.location.href = target;
+  }, [onSuccess, signInPath]);
+
+  return (
+    <EmailVerificationForm
+      email={email}
+      onSuccess={handleVerified}
+      onResend={handleResend}
+      logo={logo}
       className={className}
     />
   );

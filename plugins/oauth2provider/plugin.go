@@ -232,6 +232,7 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	if err := admin.POST("/clients", p.handleCreateClient,
 		forge.WithSummary("Create OAuth2 client"),
 		forge.WithOperationID("createOAuth2Client"),
+		forge.WithRequestSchema(CreateClientRequest{}),
 		forge.WithResponseSchema(http.StatusCreated, "Client created", CreateClientResponse{}),
 		forge.WithErrorResponses(),
 	); err != nil {

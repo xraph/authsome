@@ -275,12 +275,54 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	// upstream IdP per workspace App at create time. Caller must
 	// authenticate with a platform-admin API key.
 	admin := router.Group("/v1/admin/sso", forge.WithGroupTags("SSO Admin"))
-	return admin.POST("/connections", p.handleAdminCreateConnection,
+	if err := admin.POST("/connections", p.handleAdminCreateConnection,
 		forge.WithSummary("Create SSO connection (admin)"),
 		forge.WithDescription("Registers an OIDC or SAML SSO connection on a target App. Used by platform-admin clients to provision per-tenant IdPs."),
 		forge.WithOperationID("ssoAdminCreateConnection"),
 		forge.WithRequestSchema(AdminCreateConnectionRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Connection created", AdminCreateConnectionResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := admin.GET("/connections", p.handleAdminListConnections,
+		forge.WithSummary("List SSO connections for an app (admin)"),
+		forge.WithDescription("Returns every SSO connection registered on the target App. Filter by ?app_id=app_..."),
+		forge.WithOperationID("ssoAdminListConnections"),
+		forge.WithRequestSchema(AdminListConnectionsRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Connections", AdminListConnectionsResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := admin.GET("/connections/:connectionId", p.handleAdminGetConnection,
+		forge.WithSummary("Get SSO connection (admin)"),
+		forge.WithOperationID("ssoAdminGetConnection"),
+		forge.WithRequestSchema(AdminConnectionPathRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Connection", Connection{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	if err := admin.PUT("/connections/:connectionId", p.handleAdminUpdateConnection,
+		forge.WithSummary("Update SSO connection (admin)"),
+		forge.WithDescription("Modify an existing SSO connection. Empty fields leave the stored value unchanged. The app_id and protocol are immutable."),
+		forge.WithOperationID("ssoAdminUpdateConnection"),
+		forge.WithRequestSchema(AdminUpdateConnectionRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Connection updated", Connection{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	return admin.DELETE("/connections/:connectionId", p.handleAdminDeleteConnection,
+		forge.WithSummary("Delete SSO connection (admin)"),
+		forge.WithOperationID("ssoAdminDeleteConnection"),
+		forge.WithRequestSchema(AdminConnectionPathRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Deleted", AdminDeleteConnectionResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -681,4 +723,146 @@ func (p *Plugin) handleAdminCreateConnection(ctx forge.Context, req *AdminCreate
 		Domain:   conn.Domain,
 		Active:   conn.Active,
 	}, nil
+}
+
+// AdminListConnectionsRequest binds the query for GET /v1/admin/sso/connections.
+type AdminListConnectionsRequest struct {
+	AppID string `query:"app_id" description:"App identifier; required"`
+}
+
+// AdminListConnectionsResponse is the listing response. Returns []
+// instead of a paged envelope because per-app connection counts are
+// expected to stay small (a few IdPs at most).
+type AdminListConnectionsResponse struct {
+	Connections []*Connection `json:"connections"`
+}
+
+// AdminConnectionPathRequest binds :connectionId for GET / DELETE.
+type AdminConnectionPathRequest struct {
+	ConnectionID string `path:"connectionId" description:"Connection identifier"`
+}
+
+// AdminUpdateConnectionRequest binds the body for PUT /connections/:id.
+// Empty/zero values are treated as "leave unchanged" so callers can
+// PATCH a single field without re-sending the entire connection.
+type AdminUpdateConnectionRequest struct {
+	ConnectionID string `path:"connectionId" description:"Connection identifier"`
+
+	Provider     string `json:"provider,omitempty" description:"Stable provider name"`
+	Domain       string `json:"domain,omitempty" description:"Email-domain or IdP host"`
+	Issuer       string `json:"issuer,omitempty" description:"OIDC issuer URL"`
+	ClientID     string `json:"client_id,omitempty" description:"OIDC client ID"`
+	ClientSecret string `json:"client_secret,omitempty" description:"OIDC client secret; pass empty string to leave unchanged"`
+	MetadataURL  string `json:"metadata_url,omitempty" description:"SAML metadata URL"`
+	Active       *bool  `json:"active,omitempty" description:"Activate/deactivate the connection without deleting it"`
+}
+
+// AdminDeleteConnectionResponse mirrors the StatusResponse shape used
+// elsewhere in the admin surface so the SDK can model deletes
+// uniformly.
+type AdminDeleteConnectionResponse struct {
+	Status string `json:"status"`
+}
+
+// handleAdminListConnections returns every connection registered on
+// the target App. Connections do not include ClientSecret (the
+// Connection struct's `json:"-"` tag strips it) so this endpoint is
+// safe to surface to authenticated workspace admins.
+func (p *Plugin) handleAdminListConnections(ctx forge.Context, req *AdminListConnectionsRequest) (*AdminListConnectionsResponse, error) {
+	if p.ssoStore == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+	}
+	if strings.TrimSpace(req.AppID) == "" {
+		return nil, forge.BadRequest("app_id is required")
+	}
+	appID, err := id.ParseAppID(req.AppID)
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+	}
+	conns, err := p.ssoStore.ListConnections(ctx.Context(), appID)
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("sso: list connections: %w", err))
+	}
+	if conns == nil {
+		conns = []*Connection{}
+	}
+	return &AdminListConnectionsResponse{Connections: conns}, nil
+}
+
+// handleAdminGetConnection returns a single connection by ID.
+func (p *Plugin) handleAdminGetConnection(ctx forge.Context, req *AdminConnectionPathRequest) (*Connection, error) {
+	if p.ssoStore == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+	}
+	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid connection_id: %v", err))
+	}
+	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
+	if err != nil {
+		return nil, forge.NotFound("sso connection not found")
+	}
+	return conn, nil
+}
+
+// handleAdminUpdateConnection modifies an existing connection. The
+// app_id and protocol are immutable — moving a connection between
+// apps would orphan the inbound /v1/sso/:provider routes; switching
+// protocols would orphan the OIDC vs SAML field set.
+func (p *Plugin) handleAdminUpdateConnection(ctx forge.Context, req *AdminUpdateConnectionRequest) (*Connection, error) {
+	if p.ssoStore == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+	}
+	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid connection_id: %v", err))
+	}
+	conn, err := p.ssoStore.GetConnection(ctx.Context(), connID)
+	if err != nil {
+		return nil, forge.NotFound("sso connection not found")
+	}
+
+	if v := strings.TrimSpace(req.Provider); v != "" {
+		conn.Provider = v
+	}
+	if v := strings.TrimSpace(req.Domain); v != "" {
+		conn.Domain = v
+	}
+	if v := strings.TrimSpace(req.Issuer); v != "" {
+		conn.Issuer = v
+	}
+	if v := strings.TrimSpace(req.ClientID); v != "" {
+		conn.ClientID = v
+	}
+	if req.ClientSecret != "" {
+		conn.ClientSecret = req.ClientSecret
+	}
+	if v := strings.TrimSpace(req.MetadataURL); v != "" {
+		conn.MetadataURL = v
+	}
+	if req.Active != nil {
+		conn.Active = *req.Active
+	}
+	conn.UpdatedAt = time.Now()
+
+	if err := p.ssoStore.UpdateConnection(ctx.Context(), conn); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("sso: update connection: %w", err))
+	}
+	return conn, nil
+}
+
+// handleAdminDeleteConnection hard-deletes the connection. Use the
+// PUT endpoint with `active=false` if a soft-disable is preferred.
+func (p *Plugin) handleAdminDeleteConnection(ctx forge.Context, req *AdminConnectionPathRequest) (*AdminDeleteConnectionResponse, error) {
+	if p.ssoStore == nil {
+		return nil, forge.InternalError(fmt.Errorf("sso plugin: store not wired"))
+	}
+	connID, err := id.ParseSSOConnectionID(req.ConnectionID)
+	if err != nil {
+		return nil, forge.BadRequest(fmt.Sprintf("invalid connection_id: %v", err))
+	}
+	if err := p.ssoStore.DeleteConnection(ctx.Context(), connID); err != nil {
+		return nil, forge.InternalError(fmt.Errorf("sso: delete connection: %w", err))
+	}
+	return &AdminDeleteConnectionResponse{Status: "deleted"}, nil
 }

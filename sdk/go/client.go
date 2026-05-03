@@ -782,6 +782,103 @@ func (c *Client) SsoAdminCreateConnection(ctx context.Context, req *SsoAdminCrea
 	return &result, nil
 }
 
+// SsoAdminListConnections — List SSO connections for an app (admin)
+func (c *Client) SsoAdminListConnections(ctx context.Context, appID string) (*SsoAdminListConnectionsResponse, error) {
+	path := "/v1/admin/sso/connections?app_id=" + appID
+	var result SsoAdminListConnectionsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminGetConnection — Get SSO connection (admin)
+func (c *Client) SsoAdminGetConnection(ctx context.Context, connectionID string) (*SsoConnection, error) {
+	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
+	var result SsoConnection
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminUpdateConnection — Update SSO connection (admin)
+func (c *Client) SsoAdminUpdateConnection(ctx context.Context, connectionID string, req *SsoAdminUpdateConnectionRequest) (*SsoConnection, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
+	var result SsoConnection
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminDeleteConnection — Delete SSO connection (admin)
+func (c *Client) SsoAdminDeleteConnection(ctx context.Context, connectionID string) (*StatusResponse, error) {
+	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminCatalog — List supported social providers
+func (c *Client) SocialAdminCatalog(ctx context.Context) (*SocialAdminCatalogResponse, error) {
+	path := "/v1/admin/social/providers/catalog"
+	var result SocialAdminCatalogResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminListProviders — List configured social providers (admin)
+func (c *Client) SocialAdminListProviders(ctx context.Context, appID string) (*SocialAdminListProvidersResponse, error) {
+	path := "/v1/admin/social/providers"
+	if appID != "" {
+		path += "?app_id=" + appID
+	}
+	var result SocialAdminListProvidersResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminUpsertProvider — Configure a social provider (admin)
+func (c *Client) SocialAdminUpsertProvider(ctx context.Context, provider, appID string, req *SocialAdminUpsertProviderRequest) (*SocialAdminProviderResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := strings.Replace("/v1/admin/social/providers/{provider}", "{provider}", provider, 1)
+	if appID != "" {
+		path += "?app_id=" + appID
+	}
+	var result SocialAdminProviderResponse
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminDeleteProvider — Delete a social provider (admin)
+func (c *Client) SocialAdminDeleteProvider(ctx context.Context, provider, appID string) (*StatusResponse, error) {
+	path := strings.Replace("/v1/admin/social/providers/{provider}", "{provider}", provider, 1)
+	if appID != "" {
+		path += "?app_id=" + appID
+	}
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // AdminGetStats — Get stats (admin)
 func (c *Client) AdminGetStats(ctx context.Context) (*AdminStatsResponse, error) {
 	path := "/v1/admin/stats"
@@ -795,6 +892,34 @@ func (c *Client) AdminGetStats(ctx context.Context) (*AdminStatsResponse, error)
 // AdminListUsers — List users (admin)
 func (c *Client) AdminListUsers(ctx context.Context) (*AdminUserListResponse, error) {
 	path := "/v1/admin/users"
+	var result AdminUserListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminListUsersInApp lists users scoped to a specific App. Supplies
+// the app_id, email, cursor, and limit query params understood by the
+// /v1/admin/users handler. Empty fields are omitted from the URL.
+func (c *Client) AdminListUsersInApp(ctx context.Context, appID, email, cursor string, limit int) (*AdminUserListResponse, error) {
+	path := "/v1/admin/users"
+	q := []string{}
+	if appID != "" {
+		q = append(q, "app_id="+appID)
+	}
+	if email != "" {
+		q = append(q, "email="+email)
+	}
+	if cursor != "" {
+		q = append(q, "cursor="+cursor)
+	}
+	if limit > 0 {
+		q = append(q, fmt.Sprintf("limit=%d", limit))
+	}
+	if len(q) > 0 {
+		path += "?" + strings.Join(q, "&")
+	}
 	var result AdminUserListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err

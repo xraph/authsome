@@ -30,6 +30,14 @@ export interface SignInFormComponentProps {
   signUpUrl?: string;
   /** URL to the forgot-password page. Renders a "Forgot password?" link. */
   forgotPasswordUrl?: string;
+  /**
+   * URL to the dedicated email verification view. When set, sign-in attempts
+   * that fail with `email_not_verified` navigate here (with `?email=`
+   * appended) instead of swapping to the inline resend panel. Pair with the
+   * `<SignIn>` composite, which exposes this view at
+   * `${path}/verify-email`.
+   */
+  verifyEmailUrl?: string;
   /** Social/OAuth providers to display below the form. */
   socialProviders?: SocialProvider[];
   /** Callback when a social provider button is clicked. Overrides the built-in popup flow. */
@@ -63,6 +71,7 @@ export function SignInForm({
   onSuccess,
   signUpUrl,
   forgotPasswordUrl,
+  verifyEmailUrl,
   socialProviders: socialProvidersProp,
   onSocialLogin: onSocialLoginProp,
   socialLayout,
@@ -148,11 +157,23 @@ export function SignInForm({
       onSuccess?.();
     } catch (err) {
       // Surface "email_not_verified" via a dedicated panel, not a generic
-      // error message.
+      // error message. When a verifyEmailUrl is provided, navigate the
+      // browser to the dedicated OTP-based verification view (and kick off
+      // a resend in the background so the user has a fresh code on
+      // arrival). Otherwise fall back to the inline resend panel.
       if (
         err instanceof AuthClientError &&
         err.type === "email_not_verified"
       ) {
+        if (verifyEmailUrl && typeof window !== "undefined") {
+          void resendVerification(email).catch(() => {
+            // Best-effort: the verify view also exposes a Resend button.
+          });
+          const sep = verifyEmailUrl.includes("?") ? "&" : "?";
+          window.location.href =
+            verifyEmailUrl + sep + "email=" + encodeURIComponent(email);
+          return;
+        }
         setStep("verify");
         return;
       }

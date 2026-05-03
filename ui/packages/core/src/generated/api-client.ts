@@ -2252,10 +2252,17 @@ export class AuthClient {
   /**
    * List passkeys
    * GET /v1/passkeys
+   *
+   * LOCAL OVERRIDE — codegen collision: the passkey plugin's Go ListResponse
+   * struct ({Credentials}) shares its OpenAPI schema name with the consents
+   * ListResponse ({Consents}), and the consents shape wins. The real backend
+   * shape is {credentials: CredentialInfo[]}. Tracked in
+   * plugins/passkey/handlers.go:124 — fix by renaming one of the Go structs
+   * and regenerating the spec.
    */
-  async listPasskeys(token: string): Promise<ListResponse> {
+  async listPasskeys(token: string): Promise<{ credentials: CredentialInfo[]; next_cursor?: string }> {
     const path = "/v1/passkeys";
-    return this.request<ListResponse>(
+    return this.request<{ credentials: CredentialInfo[]; next_cursor?: string }>(
       'GET',
       path,
       undefined,
