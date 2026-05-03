@@ -297,35 +297,11 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		}
 	}
 
-	// Enforce per-app MFA policy. When MFARequired is true on the app's client
-	// config, block sign-in for users who have not yet enrolled an MFA factor.
-	// The frontend handles enrollment via the existing /mfa endpoints; once a
-	// factor is verified, subsequent sign-ins succeed.
-	//
-	// We mint a ticket here so the API layer can return 403 + mfa_ticket and
-	// the user can complete the round-trip via /v1/mfa/challenge. This is a
-	// transitional safety net — the plan moves the gate fully into
-	// Engine.IssueSession in a follow-up commit, after which this block is
-	// removed.
-	if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.MFARequired != nil && *appCfg.MFARequired {
-		if !e.userHasVerifiedMFA(ctx, u.ID) {
-			ticket, persistErr := e.persistMFATicket(ctx, &IssueSessionRequest{
-				User:       u,
-				AppID:      req.AppID,
-				EnvID:      req.EnvID,
-				AuthMethod: "password",
-				IPAddress:  req.IPAddress,
-				UserAgent:  req.UserAgent,
-			})
-			if persistErr != nil {
-				return u, nil, fmt.Errorf("authsome: persist mfa ticket: %w", persistErr)
-			}
-			return u, nil, &MFARequiredError{
-				Ticket:           ticket,
-				AvailableMethods: e.availableMFAMethods(ctx, u.ID),
-			}
-		}
-	}
+	// MFARequired enforcement is now handled inside Engine.IssueSession
+	// (the centralized chokepoint every login path goes through). The
+	// previous inline check here was a transitional safety net; with
+	// SignIn delegating session minting to IssueSession below, the gate
+	// fires there and we don't need a duplicate here.
 
 	// Check password expiration
 	if e.config.Password.MaxAgeDays > 0 && u.PasswordChangedAt != nil {
@@ -351,44 +327,34 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		}
 	}
 
-	// Create session (using per-app + per-env config; JWT if configured)
-	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
+	// Delegate session minting to IssueSession — the centralized
+	// chokepoint that enforces MFARequired and emits session-create
+	// hooks/audit. SignIn keeps the signin-specific telemetry below
+	// (after-signin plugin hook, signin audit) since those describe
+	// the auth event rather than the session itself.
+	result, err := e.IssueSession(ctx, &IssueSessionRequest{
+		User:       u,
+		AppID:      req.AppID,
+		EnvID:      req.EnvID,
+		AuthMethod: "password",
+		IPAddress:  req.IPAddress,
+		UserAgent:  req.UserAgent,
+	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
+		return u, nil, err
 	}
+	sess := result.Session
 
-	// Bind session to device (registers or finds device via fingerprint upsert)
-	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
-
-	// Plugin: before session create
-	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
-		return nil, nil, fmt.Errorf("authsome: before session create: %w", hookErr)
-	}
-
-	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
-		return nil, nil, fmt.Errorf("authsome: create session: %w", storeErr)
-	}
-
-	// Plugin: after session create + after signin
-	e.plugins.EmitAfterSessionCreate(ctx, sess)
+	// Plugin: after signin (signin-specific; IssueSession already
+	// fired BeforeSessionCreate/AfterSessionCreate).
 	e.plugins.EmitAfterSignIn(ctx, u, sess)
 
-	// Global hook bus
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionSignIn,
-		Resource:   hook.ResourceSession,
-		ResourceID: sess.ID.String(),
-		ActorID:    u.ID.String(),
-		Tenant:     req.AppID.String(),
-		Metadata: map[string]string{
-			"email":      u.Email,
-			"user_name":  u.Name(),
-			"session_id": sess.ID.String(),
-		},
+	// Audit the signin event itself. IssueSession already emitted an
+	// "issue_session" audit row for the session record; this one
+	// captures the signin-as-auth-event with the password method.
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signin", "session", sess.ID.String(), u.ID.String(), req.AppID.String(), "auth", map[string]string{
+		"auth_method": "password",
 	})
-
-	// Audit
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signin", "session", sess.ID.String(), u.ID.String(), req.AppID.String(), "auth", nil)
 
 	// Relay
 	e.relayEvent(ctx, "auth.signin", req.AppID.String(), map[string]string{
