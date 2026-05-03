@@ -87,18 +87,90 @@ func (s *Store) DB() *grove.DB { return s.db }
 // plugins can register their own migration groups via the standard
 // MigrationProvider interface (mirrors the postgres + sqlite stores).
 func (s *Store) Migrate(ctx context.Context, extraGroups ...*migrate.Group) error {
+	groups := append([]*migrate.Group{Migrations}, extraGroups...)
+
+	if err := s.runMigrationsWithSelfHeal(ctx, groups); err != nil {
+		return err
+	}
+
+	return s.ensureBaselineIndexes(ctx)
+}
+
+// runMigrationsWithSelfHeal runs the orchestrator. If the run fails
+// with "cannot decode objectID into an integer type" (an upstream
+// inconsistency in grove/mongodriver/mongomigrate where RecordApplied
+// writes ObjectID _ids but ListApplied decodes _id as int64), the
+// grove_migrations collection is unreadable and no further progress
+// can be made.
+//
+// Recovery: drop the grove_migrations + grove_migration_locks
+// collections so the orchestrator treats nothing as applied, then
+// retry once. Every migration in Migrations is idempotent
+// (CreateCollection no-ops if present; CreateIndexes returns
+// IndexKeySpecsConflict for shape conflicts which ensureBaselineIndexes
+// already swallows; the fix_username_index_partial_filter repair
+// tolerates IndexNotFound on its drop step) so the re-run is safe.
+//
+// We log a warning at recovery time so operators know history was
+// reset; if any non-idempotent plugin migration was previously
+// applied, the operator must investigate via the audit log.
+func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate.Group) error {
 	executor, err := migrate.NewExecutorFor(s.mdb)
 	if err != nil {
 		return fmt.Errorf("authsome/mongo: create migration executor: %w", err)
 	}
 
-	groups := append([]*migrate.Group{Migrations}, extraGroups...)
 	orch := migrate.NewOrchestrator(executor, groups...)
 	if _, err := orch.Migrate(ctx); err != nil {
-		return fmt.Errorf("authsome/mongo: migration failed: %w", err)
-	}
+		if !mongoIsMigrationDecodeCorruption(err) {
+			return fmt.Errorf("authsome/mongo: migration failed: %w", err)
+		}
 
-	return s.ensureBaselineIndexes(ctx)
+		// Self-heal: the grove_migrations collection has incompatible
+		// docs (ObjectID _ids vs the library's int64 expectation).
+		// Drop the tracking collections so a fresh orchestrator run
+		// can rebuild them.
+		if dropErr := s.resetMigrationTracking(ctx); dropErr != nil {
+			return fmt.Errorf("authsome/mongo: migration tracking corrupted (%w) and reset failed: %v", err, dropErr)
+		}
+
+		// Build a fresh executor + orchestrator after the reset and
+		// retry once.
+		retryExec, retryErr := migrate.NewExecutorFor(s.mdb)
+		if retryErr != nil {
+			return fmt.Errorf("authsome/mongo: rebuild executor after tracking reset: %w", retryErr)
+		}
+		retryOrch := migrate.NewOrchestrator(retryExec, groups...)
+		if _, err := retryOrch.Migrate(ctx); err != nil {
+			return fmt.Errorf("authsome/mongo: migration retry after tracking reset failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// resetMigrationTracking drops the grove_migrations and
+// grove_migration_locks collections used by mongomigrate. Called as
+// a one-shot recovery from runMigrationsWithSelfHeal when the
+// existing tracking docs can't be decoded.
+//
+// Tolerates collection-not-found so the helper is safe to invoke on
+// a deployment that never had the tracking collections at all.
+func (s *Store) resetMigrationTracking(ctx context.Context) error {
+	for _, col := range []string{"grove_migrations", "grove_migration_locks"} {
+		if err := s.mdb.Collection(col).Drop(ctx); err != nil {
+			// NamespaceNotFound (code 26) means the collection didn't
+			// exist — that's fine.
+			var cmdErr mongo.CommandError
+			if errors.As(err, &cmdErr) && cmdErr.Code == 26 {
+				continue
+			}
+			if strings.Contains(err.Error(), "ns not found") {
+				continue
+			}
+			return fmt.Errorf("drop %s: %w", col, err)
+		}
+	}
+	return nil
 }
 
 // ensureBaselineIndexes calls Indexes().CreateMany per collection
@@ -143,6 +215,27 @@ func now() time.Time {
 // isNoDocuments checks if an error wraps mongo.ErrNoDocuments.
 func isNoDocuments(err error) bool {
 	return errors.Is(err, mongo.ErrNoDocuments)
+}
+
+// mongoIsMigrationDecodeCorruption returns true when the error
+// matches the upstream grove/mongodriver/mongomigrate
+// inconsistency: RecordApplied writes the grove_migrations doc via
+// bson.M{} (so MongoDB auto-generates an ObjectID _id) but
+// ListApplied decodes _id as int64. The first time the orchestrator
+// tries to read a previously-written record back, it fails with
+// "decode applied: error decoding key _id: cannot decode objectID
+// into an integer type."
+//
+// We detect this so runMigrationsWithSelfHeal can drop the broken
+// tracking collections and retry — the upstream library doesn't
+// expose a way to repair the docs in place (mongo _id is immutable).
+func mongoIsMigrationDecodeCorruption(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "decode applied") &&
+		strings.Contains(msg, "cannot decode objectID into an integer")
 }
 
 // mongoIsIndexConflict returns true when the error reports

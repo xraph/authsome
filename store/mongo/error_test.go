@@ -126,3 +126,38 @@ func TestMongoIsIndexConflict_OtherErrorsFalse(t *testing.T) {
 			"%v must NOT be recognized as an index conflict", e)
 	}
 }
+
+// ──────────────────────────────────────────────────
+// Migration tracking corruption (upstream library bug)
+// ──────────────────────────────────────────────────
+
+// TestMongoIsMigrationDecodeCorruption_RecognizesUpstreamBug pins
+// detection of the exact error string the broken-shape
+// grove_migrations collection produces. The substring match is
+// load-bearing: the wrapping layers add prefixes ("authsome/mongo:
+// migration failed:", "migrate: list applied:") so we have to
+// match on the inner cause.
+func TestMongoIsMigrationDecodeCorruption_RecognizesUpstreamBug(t *testing.T) {
+	t.Parallel()
+	raw := errors.New("authsome/mongo: migration failed: migrate: list applied: mongomigrate: decode applied: error decoding key _id: cannot decode objectID into an integer type")
+	assert.True(t, mongoIsMigrationDecodeCorruption(raw),
+		"the production failure message must be recognized as the upstream decode-corruption bug")
+}
+
+func TestMongoIsMigrationDecodeCorruption_NilFalse(t *testing.T) {
+	t.Parallel()
+	assert.False(t, mongoIsMigrationDecodeCorruption(nil))
+}
+
+func TestMongoIsMigrationDecodeCorruption_OtherErrorsFalse(t *testing.T) {
+	t.Parallel()
+	cases := []error{
+		errors.New("connection refused"),
+		errors.New("decode applied: cursor closed"),                           // partial match — must still fail
+		errors.New("error decoding key _id: cannot decode int into objectID"), // opposite direction — also a failure mode but not the one we self-heal
+	}
+	for _, e := range cases {
+		assert.False(t, mongoIsMigrationDecodeCorruption(e),
+			"%v must NOT trigger self-heal", e)
+	}
+}
