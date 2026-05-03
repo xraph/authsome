@@ -19,10 +19,12 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/plugins/mfa"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store/memory"
 
@@ -536,6 +538,68 @@ func TestSignIn_UnverifiedEmail_Returns403WithStableCode(t *testing.T) {
 	typ, _ := resp["type"].(string)
 	require.Equal(t, "email_not_verified", typ,
 		"response missing stable error type code; got %+v", resp)
+}
+
+// TestSignIn_MFARequired_Returns403WithTicket pins the JSON-API
+// contract for the MFA-required gate: when the per-app MFARequired
+// flag is true and the user has no verified factor, the signin
+// response MUST be 403 with a stable type code, an mfa_ticket the
+// client can use to complete the round-trip, and a list of available
+// methods. Before this fix the gate fell through to a generic 500.
+func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
+	t.Parallel()
+
+	// Build engine with the MFA plugin registered so
+	// availableMFAMethods returns a non-empty list.
+	mfaPlugin := mfa.New()
+	mfaPlugin.SetStore(mfa.NewMemoryStore())
+
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID(testAppIDStr),
+		authsome.WithPlugin(mfaPlugin),
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
+	secutil.RelaxAuthDefaults(t, eng)
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	// Sign up a user — they have no MFA enrolled.
+	signUp(t, eng, "mfa-locked@example.com", "SecureP@ss1")
+
+	// Flip MFARequired on the app's client config.
+	tru := true
+	require.NoError(t, eng.Store().SetAppClientConfig(context.Background(), &appclientconfig.Config{
+		ID:          id.NewAppClientConfigID(),
+		AppID:       appID,
+		MFARequired: &tru,
+	}))
+
+	router := newAPIWithRouter(t, eng)
+
+	body := []byte(`{"email":"mfa-locked@example.com","password":"SecureP@ss1"}`)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/signin", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code,
+		"MFA-required signin must return 403; got %d body=%s", rec.Code, rec.Body.String())
+
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	assert.Equal(t, "mfa_required", resp["type"], "stable type code expected")
+	assert.NotEmpty(t, resp["mfa_ticket"], "ticket must be present so the UI can complete the round-trip")
+	methods, ok := resp["available_methods"].([]any)
+	require.True(t, ok, "available_methods must be a list, got %T (resp=%+v)", resp["available_methods"], resp)
+	require.NotEmpty(t, methods, "available_methods must be populated when the MFA plugin is registered")
 }
 
 // ──────────────────────────────────────────────────

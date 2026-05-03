@@ -301,9 +301,29 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 	// config, block sign-in for users who have not yet enrolled an MFA factor.
 	// The frontend handles enrollment via the existing /mfa endpoints; once a
 	// factor is verified, subsequent sign-ins succeed.
+	//
+	// We mint a ticket here so the API layer can return 403 + mfa_ticket and
+	// the user can complete the round-trip via /v1/mfa/challenge. This is a
+	// transitional safety net — the plan moves the gate fully into
+	// Engine.IssueSession in a follow-up commit, after which this block is
+	// removed.
 	if appCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && appCfg.MFARequired != nil && *appCfg.MFARequired {
 		if !e.userHasVerifiedMFA(ctx, u.ID) {
-			return u, nil, account.ErrMFARequired
+			ticket, persistErr := e.persistMFATicket(ctx, &IssueSessionRequest{
+				User:       u,
+				AppID:      req.AppID,
+				EnvID:      req.EnvID,
+				AuthMethod: "password",
+				IPAddress:  req.IPAddress,
+				UserAgent:  req.UserAgent,
+			})
+			if persistErr != nil {
+				return u, nil, fmt.Errorf("authsome: persist mfa ticket: %w", persistErr)
+			}
+			return u, nil, &MFARequiredError{
+				Ticket:           ticket,
+				AvailableMethods: e.availableMFAMethods(ctx, u.ID),
+			}
 		}
 	}
 
