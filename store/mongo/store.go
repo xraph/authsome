@@ -173,6 +173,79 @@ func (s *Store) resetMigrationTracking(ctx context.Context) error {
 	return nil
 }
 
+// createIndexesReshapeConflicting calls CreateMany for the supplied
+// models. On IndexKeySpecsConflict it derives the conflicting index
+// name from the error message (Mongo includes "name: \"<name>\"" in
+// the IndexKeySpecsConflict text), drops that single index, and
+// retries CreateMany once. Other errors are returned unchanged.
+//
+// Used by migrations that re-shape an existing index after the
+// authoritative shape changed — most commonly when the migration
+// orchestrator self-heals from grove_migrations corruption (see
+// runMigrationsWithSelfHeal) and re-runs create_authsome_users
+// against a deployment that already had the OLD-shape sparse index.
+func createIndexesReshapeConflicting(ctx context.Context, coll *mongo.Collection, models []mongo.IndexModel) error {
+	if len(models) == 0 {
+		return nil
+	}
+	_, err := coll.Indexes().CreateMany(ctx, models)
+	if err == nil {
+		return nil
+	}
+	if !mongoIsIndexConflict(err) {
+		return err
+	}
+	conflicting := mongoExtractConflictingIndexName(err)
+	if conflicting == "" {
+		// Couldn't parse the name out — return the original error so
+		// operators see what went wrong instead of silently swallowing.
+		return err
+	}
+	if dropErr := coll.Indexes().DropOne(ctx, conflicting); dropErr != nil {
+		if !mongoIsIndexNotFound(dropErr) {
+			return fmt.Errorf("drop conflicting index %q: %w (original: %v)", conflicting, dropErr, err)
+		}
+	}
+	if _, retryErr := coll.Indexes().CreateMany(ctx, models); retryErr != nil {
+		return fmt.Errorf("recreate after drop %q: %w", conflicting, retryErr)
+	}
+	return nil
+}
+
+// mongoExtractConflictingIndexName parses the Mongo
+// IndexKeySpecsConflict message to recover the auto-derived name
+// of the existing index that blocks the create. Mongo's message is:
+//
+//	An existing index has the same name as the requested index. ...
+//	existing index: { v: 2, unique: true, key: {...}, name: "<name>", sparse: true }
+//
+// Best-effort substring match — returns empty when the format
+// changes (newer driver versions, locale variants).
+func mongoExtractConflictingIndexName(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	// Look for `existing index:` then the first `name: "<...>"` after it.
+	const sentinel = "existing index:"
+	idx := strings.Index(msg, sentinel)
+	if idx < 0 {
+		return ""
+	}
+	tail := msg[idx+len(sentinel):]
+	const namePrefix = `name: "`
+	nameIdx := strings.Index(tail, namePrefix)
+	if nameIdx < 0 {
+		return ""
+	}
+	rest := tail[nameIdx+len(namePrefix):]
+	end := strings.IndexByte(rest, '"')
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
 // ensureBaselineIndexes calls Indexes().CreateMany per collection
 // for every index in migrationIndexes(). Tolerates IndexKeySpecsConflict
 // (code 86) and IndexOptionsConflict (code 85) — the migration system

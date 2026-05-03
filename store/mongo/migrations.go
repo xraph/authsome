@@ -58,7 +58,14 @@ func init() {
 					return err
 				}
 
-				return mexec.CreateIndexes(ctx, colUsers, []mongo.IndexModel{
+				// Use createIndexesReshapeConflicting (not the bare
+				// mexec.CreateIndexes) because this migration may run
+				// against a deployment that already had an OLD-shape
+				// app_id_1_username_1 index from a prior install. The
+				// helper drops the conflicting index by name and retries
+				// once. See store/mongo/store.go for the recovery
+				// rationale.
+				return createIndexesReshapeConflicting(ctx, mexec.DB().Collection(colUsers), []mongo.IndexModel{
 					{
 						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "email", Value: 1}},
 						Options: options.Index().SetUnique(true),

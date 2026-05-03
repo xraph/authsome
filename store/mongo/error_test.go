@@ -161,3 +161,31 @@ func TestMongoIsMigrationDecodeCorruption_OtherErrorsFalse(t *testing.T) {
 			"%v must NOT trigger self-heal", e)
 	}
 }
+
+// ──────────────────────────────────────────────────
+// IndexKeySpecsConflict name extraction
+// ──────────────────────────────────────────────────
+
+// TestMongoExtractConflictingIndexName_ProductionMessage pins the
+// parser against the exact wire-format the user reported. If Mongo
+// changes the message format in a future driver, this regression
+// is the canary.
+func TestMongoExtractConflictingIndexName_ProductionMessage(t *testing.T) {
+	t.Parallel()
+	raw := errors.New(`mongomigrate: create indexes on "authsome_users": (IndexKeySpecsConflict) An existing index has the same name as the requested index. When index names are not specified, they are auto generated and can cause conflicts. Please refer to our documentation. Requested index: { v: 2, unique: true, key: { app_id: 1, username: 1 }, name: "app_id_1_username_1", partialFilterExpression: { username: { $gt: "" } } }, existing index: { v: 2, unique: true, key: { app_id: 1, username: 1 }, name: "app_id_1_username_1", sparse: true }`)
+	got := mongoExtractConflictingIndexName(raw)
+	assert.Equal(t, "app_id_1_username_1", got,
+		"parser must recover the existing index name so the reshape helper can drop it")
+}
+
+func TestMongoExtractConflictingIndexName_NoExistingSentinel(t *testing.T) {
+	t.Parallel()
+	raw := errors.New("some unrelated mongo failure with no 'existing index:' marker")
+	got := mongoExtractConflictingIndexName(raw)
+	assert.Equal(t, "", got, "no parse → empty string so the helper falls back to surfacing the original error")
+}
+
+func TestMongoExtractConflictingIndexName_NilSafe(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "", mongoExtractConflictingIndexName(nil))
+}
