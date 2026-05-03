@@ -132,16 +132,31 @@ func (e *Engine) IssueSession(ctx context.Context, req *IssueSessionRequest) (*I
 		req.AppID = req.User.AppID
 	}
 
-	if !req.MFAJustVerified {
-		if e.mfaRequiredFor(ctx, req.AppID) && !e.userHasVerifiedMFA(ctx, req.User.ID) {
-			ticket, err := e.persistMFATicket(ctx, req)
-			if err != nil {
-				return nil, fmt.Errorf("authsome: persist mfa ticket: %w", err)
-			}
-			return nil, &MFARequiredError{
-				Ticket:           ticket,
-				AvailableMethods: e.availableMFAMethods(ctx, req.User.ID),
-			}
+	// MFA gate. When the per-app config sets MFARequired and the
+	// caller hasn't already verified via the challenge endpoint, the
+	// gate fires regardless of whether the user has previously
+	// enrolled MFA.
+	//
+	// "MFA required" is interpreted as "demand the second factor on
+	// every login" — the modern MFA semantics every consumer expects.
+	// The earlier inline check in service.go skipped the gate when
+	// the user had a verified enrollment, which actually meant
+	// "require enrollment at any point in the past," not "require
+	// the second factor now." That weak semantics is what this
+	// centralized gate replaces.
+	//
+	// First-time enrollment for a user who has none yet is a separate
+	// flow (forced enrollment via partial-auth ticket); the challenge
+	// handler returns "no MFA enrollment for user" in that case so the
+	// UI can route to the enrollment surface.
+	if !req.MFAJustVerified && e.mfaRequiredFor(ctx, req.AppID) {
+		ticket, err := e.persistMFATicket(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("authsome: persist mfa ticket: %w", err)
+		}
+		return nil, &MFARequiredError{
+			Ticket:           ticket,
+			AvailableMethods: e.availableMFAMethods(ctx, req.User.ID),
 		}
 	}
 

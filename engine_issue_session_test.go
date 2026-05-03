@@ -77,10 +77,19 @@ func TestIssueSession_NoMFARequired_IssuesSession(t *testing.T) {
 	assert.NotEmpty(t, res.Session.Token, "session token must be issued")
 }
 
-// TestIssueSession_MFARequiredButUserVerified_IssuesSession pins that
-// a user with verified MFA still gets a session — the gate fires only
-// when the user *lacks* a verified factor.
-func TestIssueSession_MFARequiredButUserVerified_IssuesSession(t *testing.T) {
+// TestIssueSession_MFARequired_GateFiresEvenWhenUserVerified pins
+// the modern MFA semantics: when MFARequired is true on the app
+// config, EVERY login (without MFAJustVerified) must surface a
+// challenge ticket — even for users who already have a verified
+// enrollment. Anything weaker would let an attacker who has stolen
+// the password skip the second factor on the basis that the legit
+// owner enrolled MFA at some point in the past.
+//
+// The earlier semantics (skip the gate when user already has
+// verified MFA) was what the inline check in service.go did before
+// the centralization; replacing it with this stronger contract is
+// the whole point of the consolidation.
+func TestIssueSession_MFARequired_GateFiresEvenWhenUserVerified(t *testing.T) {
 	t.Parallel()
 	eng, u, appID := issueSessionFixture(t)
 	requireMFAOnApp(t, eng, appID)
@@ -103,8 +112,12 @@ func TestIssueSession_MFARequiredButUserVerified_IssuesSession(t *testing.T) {
 		AppID:      appID,
 		AuthMethod: "password",
 	})
-	require.NoError(t, err)
-	require.NotNil(t, res.Session)
+	require.Error(t, err, "MFARequired=true must always surface a ticket; previous owner-of-enrolled-MFA shortcut is gone")
+	require.Nil(t, res)
+
+	var mfaErr *authsome.MFARequiredError
+	require.True(t, errors.As(err, &mfaErr), "error must be *MFARequiredError, got %T", err)
+	assert.NotEmpty(t, mfaErr.Ticket)
 }
 
 // TestIssueSession_MFARequiredAndUserUnenrolled_ReturnsTicket pins

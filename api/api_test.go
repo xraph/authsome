@@ -1192,3 +1192,211 @@ func TestResendVerification_NoHookForVerifiedUser(t *testing.T) {
 	require.False(t, fired,
 		"hook must NOT fire for an already-verified user — observing the email being sent would let an attacker enumerate verified-vs-unverified state")
 }
+
+// ──────────────────────────────────────────────────
+// MFA challenge round-trip (Task 5/7 from MFA consolidation plan)
+// ──────────────────────────────────────────────────
+
+// TestSignIn_MFAChallenge_RoundTripIssuesSession exercises the full
+// sign-in MFA gate end-to-end with a real engine + MFA plugin
+// wired through the API router:
+//
+//   1. Sign in with password → 403 with mfa_ticket + available_methods
+//   2. POST /v1/mfa/challenge with the ticket + a valid TOTP code →
+//      200 with {user, session_token, refresh_token, expires_at}
+//   3. The minted session is real (validates against the store).
+//   4. Replaying the same ticket fails (single-use after success).
+//
+// This pins the contract Task 5 of the MFA-consolidation plan
+// established and is the only place where the full chain is
+// exercised — the plugin-package test (TestHandleChallenge_RequiresTicket)
+// only confirms the route rejects unticketed calls.
+func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
+	t.Parallel()
+
+	mfaStore := mfa.NewMemoryStore()
+	mfaPlugin := mfa.New()
+	mfaPlugin.SetStore(mfaStore)
+
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID(testAppIDStr),
+		authsome.WithPlugin(mfaPlugin),
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
+	secutil.RelaxAuthDefaults(t, eng)
+
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+
+	// Sign up a user and pre-enroll TOTP so the challenge has a
+	// secret to validate against. The flag MFARequired is flipped
+	// AFTER signup so signup itself doesn't hit the gate.
+	_, sessionToken, _ := signUp(t, eng, "mfa-roundtrip@example.com", "SecureP@ss1")
+	require.NotEmpty(t, sessionToken, "signup helper must return a session token")
+
+	// Resolve the user so we can attach an enrollment.
+	u, err := eng.Store().GetUserByEmail(context.Background(), appID, "mfa-roundtrip@example.com")
+	require.NoError(t, err)
+
+	totpKey, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{
+		Issuer:      "TestApp",
+		AccountName: "mfa-roundtrip@example.com",
+	})
+	require.NoError(t, err)
+	require.NoError(t, mfaStore.CreateEnrollment(context.Background(), &mfa.Enrollment{
+		ID:        id.NewMFAID(),
+		UserID:    u.ID,
+		Method:    "totp",
+		Secret:    totpKey.Secret(),
+		Verified:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}))
+
+	// Now flip MFARequired on so the next signin hits the gate.
+	tru := true
+	require.NoError(t, eng.Store().SetAppClientConfig(context.Background(), &appclientconfig.Config{
+		ID:          id.NewAppClientConfigID(),
+		AppID:       appID,
+		MFARequired: &tru,
+	}))
+
+	// Wire both the API routes and the MFA plugin's /v1/mfa/*
+	// routes onto the same router so the test can drive the full
+	// signin → challenge round-trip via HTTP.
+	rootRouter := forge.NewRouter()
+	a := api.New(eng, rootRouter)
+	require.NoError(t, a.RegisterRoutes(rootRouter))
+	require.NoError(t, mfaPlugin.RegisterRoutes(rootRouter))
+	router := rootRouter.Handler()
+
+	// Step 1: signin → 403 + ticket.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/signin",
+		bytes.NewReader([]byte(`{"email":"mfa-roundtrip@example.com","password":"SecureP@ss1"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code, "signin must surface the MFA gate; body=%s", rec.Body.String())
+	var gate map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&gate))
+	require.Equal(t, "mfa_required", gate["type"])
+	ticket, _ := gate["mfa_ticket"].(string)
+	require.NotEmpty(t, ticket, "ticket must be present")
+
+	// Step 2: challenge with the ticket + a TOTP code.
+	code, err := mfa.GenerateTOTPCode(totpKey.Secret())
+	require.NoError(t, err)
+	chBody, _ := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": code})
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(chBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "challenge with ticket+code must succeed; body=%s", rec.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
+	sessionTok, _ := resp["session_token"].(string)
+	require.NotEmpty(t, sessionTok, "challenge response must carry session_token")
+	require.NotEmpty(t, resp["refresh_token"], "and refresh_token")
+	require.NotEmpty(t, resp["expires_at"], "and expires_at")
+	require.NotNil(t, resp["user"])
+
+	// Step 3: the minted session must validate against the store
+	// (the round-trip wasn't just a cosmetic 200).
+	sess, err := eng.Store().GetSessionByToken(context.Background(), sessionTok)
+	require.NoError(t, err, "minted session must be persisted and resolvable")
+	require.Equal(t, u.ID.String(), sess.UserID.String())
+
+	// Step 4: replay the same ticket — must fail (single-use).
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(chBody))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusUnauthorized, rec.Code,
+		"ticket must be single-use — replay must 401; body=%s", rec.Body.String())
+}
+
+// TestMFAChallenge_BadCodeKeepsTicketUsable pins that an invalid
+// code doesn't burn the ticket — the user should be able to retry
+// within the 5-minute TTL without restarting the whole signin
+// flow. Brute force is rate-limited; ticket invalidation isn't
+// the right defence here.
+func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
+	t.Parallel()
+
+	mfaStore := mfa.NewMemoryStore()
+	mfaPlugin := mfa.New()
+	mfaPlugin.SetStore(mfaStore)
+
+	s := memory.New()
+	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
+	require.NoError(t, err)
+	eng, err := authsome.NewEngine(
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID(testAppIDStr),
+		authsome.WithPlugin(mfaPlugin),
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.Start(context.Background()))
+	secutil.RelaxAuthDefaults(t, eng)
+
+	appID, _ := id.ParseAppID(testAppIDStr)
+	signUp(t, eng, "mfa-retry@example.com", "SecureP@ss1")
+	u, _ := eng.Store().GetUserByEmail(context.Background(), appID, "mfa-retry@example.com")
+
+	totpKey, _ := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: "mfa-retry@example.com"})
+	require.NoError(t, mfaStore.CreateEnrollment(context.Background(), &mfa.Enrollment{
+		ID: id.NewMFAID(), UserID: u.ID, Method: "totp", Secret: totpKey.Secret(),
+		Verified: true, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}))
+	tru := true
+	require.NoError(t, eng.Store().SetAppClientConfig(context.Background(), &appclientconfig.Config{
+		ID: id.NewAppClientConfigID(), AppID: appID, MFARequired: &tru,
+	}))
+
+	rootRouter := forge.NewRouter()
+	a := api.New(eng, rootRouter)
+	require.NoError(t, a.RegisterRoutes(rootRouter))
+	require.NoError(t, mfaPlugin.RegisterRoutes(rootRouter))
+	router := rootRouter.Handler()
+
+	rec := httptest.NewRecorder()
+	siReq := httptest.NewRequest(http.MethodPost, "/v1/signin",
+		bytes.NewReader([]byte(`{"email":"mfa-retry@example.com","password":"SecureP@ss1"}`)))
+	siReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, siReq)
+	require.Equal(t, http.StatusForbidden, rec.Code, "signin must hit MFA gate; body=%s", rec.Body.String())
+
+	var gate map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&gate))
+	ticket, _ := gate["mfa_ticket"].(string)
+	require.NotEmpty(t, ticket, "ticket must be present; gate=%+v", gate)
+
+	// Bad code first.
+	badBody, _ := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": "000000"})
+	rec = httptest.NewRecorder()
+	badReq := httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(badBody))
+	badReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, badReq)
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "bad code must 401")
+
+	// Now real code with the SAME ticket — must succeed.
+	code, _ := mfa.GenerateTOTPCode(totpKey.Secret())
+	goodBody, _ := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": code})
+	rec = httptest.NewRecorder()
+	goodReq := httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(goodBody))
+	goodReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, goodReq)
+	require.Equal(t, http.StatusOK, rec.Code,
+		"ticket must remain usable after a bad-code attempt; body=%s", rec.Body.String())
+}
