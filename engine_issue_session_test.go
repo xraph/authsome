@@ -207,3 +207,94 @@ func TestIssueSession_AuditMetadataIncludesAuthMethod(t *testing.T) {
 		assert.Equal(t, "social:google", ev.Metadata["auth_method"])
 	})
 }
+
+// TestIssueSession_GateFiresForEveryAuthMethod pins the
+// per-plugin contract: every AuthMethod string the four bypass
+// plugins use (social/magiclink/sso/phone) — plus password — must
+// surface the same MFARequiredError when MFARequired=true. The
+// previous behavior (each plugin minted directly via store.CreateSession,
+// skipping the gate) was the bug the consolidation closed; this
+// table-driven test prevents anyone from re-introducing a bypass
+// by adding a sixth plugin that forgets the type-assertion.
+//
+// We don't spin up each plugin's full scaffolding (OAuth handshake,
+// SAML assertion, SMS challenge) — that's the e2e api_test layer's
+// job and the round-trip is already covered there for the password
+// path. What this test pins is "IssueSession is the chokepoint and
+// it doesn't care which AuthMethod the caller stamped" so the
+// guarantee is uniform.
+func TestIssueSession_GateFiresForEveryAuthMethod(t *testing.T) {
+	t.Parallel()
+
+	// Mirrors the strings each refactored plugin passes:
+	//   plugins/social/plugin.go:947     AuthMethod: "social:" + req.Provider
+	//   plugins/magiclink/plugin.go:296  AuthMethod: "magiclink"
+	//   plugins/sso/plugin.go:487        AuthMethod: "sso:" + connection.Name
+	//   plugins/phone/plugin.go:340      AuthMethod: "phone"
+	//   service.go:339 (SignIn)          AuthMethod: "password"
+	//   plugins/mfa/plugin.go            AuthMethod: <prev>+"+mfa" (MFAJustVerified=true)
+	cases := []string{
+		"password",
+		"social:google",
+		"social:github",
+		"magiclink",
+		"sso:saml-okta",
+		"sso:oidc-azure",
+		"phone",
+	}
+
+	for _, method := range cases {
+		method := method
+		t.Run(method, func(t *testing.T) {
+			t.Parallel()
+			eng, u, appID := issueSessionFixture(t)
+			requireMFAOnApp(t, eng, appID)
+
+			res, err := eng.IssueSession(context.Background(), &authsome.IssueSessionRequest{
+				User:       u,
+				AppID:      appID,
+				AuthMethod: method,
+			})
+			require.Error(t, err, "MFARequired=true with AuthMethod=%q must surface a ticket; the gate must NOT inspect AuthMethod when deciding whether to fire", method)
+			require.Nil(t, res)
+
+			var mfaErr *authsome.MFARequiredError
+			require.True(t, errors.As(err, &mfaErr),
+				"AuthMethod=%q: error must be *MFARequiredError, got %T", method, err)
+			assert.NotEmpty(t, mfaErr.Ticket,
+				"AuthMethod=%q: ticket must be non-empty so any plugin's HTTP layer can render the 403 envelope", method)
+		})
+	}
+}
+
+// TestIssueSession_MFARequiredErrorRendersAs403 pins the forge-
+// HTTP-error-interface contract: the error returned by IssueSession
+// is itself rendered by forge as a 403 with the ticket envelope —
+// no plugin needs to know about mapError or import the api package.
+// This is what makes the per-plugin handlers "just return the
+// error" pattern work end-to-end.
+func TestIssueSession_MFARequiredErrorRendersAs403(t *testing.T) {
+	t.Parallel()
+
+	type httpErr interface {
+		StatusCode() int
+		ResponseBody() any
+	}
+
+	mfaErr := &authsome.MFARequiredError{
+		Ticket:           "test-ticket-abc",
+		AvailableMethods: []string{"totp"},
+	}
+
+	var he httpErr
+	require.True(t, errors.As(mfaErr, &he),
+		"*MFARequiredError must satisfy forge's StatusCode+ResponseBody interface so plugin handlers can just return it raw")
+
+	assert.Equal(t, 403, he.StatusCode())
+
+	body, ok := he.ResponseBody().(map[string]any)
+	require.True(t, ok, "ResponseBody must be a JSON-shaped map; got %T", he.ResponseBody())
+	assert.Equal(t, "mfa_required", body["type"])
+	assert.Equal(t, "test-ticket-abc", body["mfa_ticket"])
+	assert.Equal(t, []string{"totp"}, body["available_methods"])
+}
