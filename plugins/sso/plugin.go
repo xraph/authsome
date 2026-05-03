@@ -14,6 +14,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
@@ -21,6 +22,7 @@ import (
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -476,21 +478,37 @@ func (p *Plugin) authenticateUser(ctx forge.Context, provider Provider, params m
 		return nil, forge.BadRequest("SSO provider did not return an email address")
 	}
 
-	// Resolve per-app session config, falling back to plugin config.
-	sessCfg := account.SessionConfig{
-		TokenTTL:        p.config.SessionTokenTTL,
-		RefreshTokenTTL: p.config.SessionRefreshTTL,
-	}
-	if p.engine != nil {
-		sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
-	}
-	sess, err := account.NewSession(appID, u.ID, sessCfg)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", err))
-	}
-
-	if err := p.store.CreateSession(goCtx, sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
+	// Mint the session through Engine.IssueSession so the centralized
+	// MFARequired gate fires for SAML/OIDC callbacks too.
+	var sess *session.Session
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		result, issueErr := eng.IssueSession(goCtx, &authsome.IssueSessionRequest{
+			User:       u,
+			AppID:      appID,
+			AuthMethod: "sso:" + provider.Name(),
+			IPAddress:  ctx.Request().RemoteAddr,
+			UserAgent:  ctx.Request().UserAgent(),
+		})
+		if issueErr != nil {
+			return nil, issueErr
+		}
+		sess = result.Session
+	} else {
+		sessCfg := account.SessionConfig{
+			TokenTTL:        p.config.SessionTokenTTL,
+			RefreshTokenTTL: p.config.SessionRefreshTTL,
+		}
+		if p.engine != nil {
+			sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
+		}
+		var newErr error
+		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
+		if newErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+		}
+		if storeErr := p.store.CreateSession(goCtx, sess); storeErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", storeErr))
+		}
 	}
 
 	eventType := "auth.sso.signin"
