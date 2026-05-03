@@ -162,6 +162,35 @@ export class AuthManager {
       };
       await this.handleAuthResponse(res.user, session);
     } catch (err) {
+      // MFA required: surface the ticket + available methods so the
+      // form can swap to the challenge UI. The ticket is server-side
+      // partial-auth; submitMFAChallenge below completes the round-
+      // trip and issues a real session.
+      if (
+        err instanceof AuthClientError &&
+        err.type === "mfa_required" &&
+        err.details
+      ) {
+        const ticket = typeof err.details["mfa_ticket"] === "string"
+          ? (err.details["mfa_ticket"] as string)
+          : "";
+        const methods = Array.isArray(err.details["available_methods"])
+          ? (err.details["available_methods"] as string[])
+          : [];
+        if (ticket) {
+          this.setState({
+            status: "mfa_required",
+            email: credentials.email ?? "",
+            mfaTicket: ticket,
+            availableMethods: methods,
+          });
+          // Do NOT rethrow — the form switches to the challenge view
+          // on this state, the same way it switches on
+          // verification_pending after sign-up.
+          return;
+        }
+      }
+
       // Specifically surface email_not_verified as a first-class state
       // so the UI can swap to a "verify your email" panel rather than a
       // generic error.
@@ -242,20 +271,52 @@ export class AuthManager {
     this.setState({ status: "unauthenticated" });
   }
 
-  /** Submit an MFA challenge code. */
-  async submitMFACode(enrollmentId: string, code: string): Promise<void> {
-    this.setState({ status: "loading" });
+  /**
+   * Submit the MFA challenge code against the ticket from the
+   * mfa_required state. On success: real session minted, state →
+   * "authenticated". On bad code: state stays "mfa_required" so
+   * the form can show the error inline; the ticket remains valid
+   * for the 5-minute server-side TTL.
+   *
+   * Throws if called outside the mfa_required state — the caller
+   * has nowhere to send the code.
+   */
+  async submitMFAChallenge(code: string): Promise<void> {
+    const state = this.state;
+    if (state.status !== "mfa_required") {
+      throw new Error("auth: submitMFAChallenge called outside the mfa_required state");
+    }
     try {
-      const res = await this.client.mfaChallenge({ enrollment_id: enrollmentId, code });
+      const res = await this.client.challengeMFA({
+        mfa_ticket: state.mfaTicket,
+        code,
+      });
       const session: Session = {
         session_token: res.session_token,
         refresh_token: res.refresh_token,
-        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        expires_at: res.expires_at ?? new Date(Date.now() + 3600_000).toISOString(),
       };
-      await this.handleAuthResponse(res.user, session);
+      await this.handleAuthResponse(res.user as User, session);
     } catch (err) {
-      this.handleError(err);
+      // Don't fall into the generic error handler — bad code should
+      // leave the form on the challenge view, not bounce back to the
+      // sign-in form. The caller (the challenge form) surfaces the
+      // 401 inline.
+      this.onError?.({
+        error: err instanceof Error ? err.message : "challenge failed",
+      });
+      throw err;
     }
+  }
+
+  /**
+   * @deprecated Use submitMFAChallenge(code). The old enrollment-id
+   * + partial-session shape was removed in the MFA consolidation;
+   * this thin shim only exists so older callers don't break their
+   * build, but the enrollmentId argument is now ignored.
+   */
+  async submitMFACode(_enrollmentId: string, code: string): Promise<void> {
+    return this.submitMFAChallenge(code);
   }
 
   /** Submit an MFA recovery code. */
@@ -306,15 +367,26 @@ export class AuthManager {
     await this.refreshSession(state.session.refresh_token);
   }
 
-  /** Get the current session token (if authenticated). */
+  /**
+   * Get the current session token (if authenticated). Returns null
+   * during the MFA challenge — there is no real session yet, only a
+   * ticket the challenge handler validates internally.
+   */
   getSessionToken(): string | null {
     if (this.state.status === "authenticated") {
       return this.state.session.session_token;
     }
-    if (this.state.status === "mfa_required") {
-      return this.state.session.session_token;
-    }
     return null;
+  }
+
+  /**
+   * Get the active MFA ticket (only set during the mfa_required
+   * state). Form components driving the challenge UI read this to
+   * confirm they have a partial-auth credential before letting the
+   * user submit a code.
+   */
+  getMFATicket(): string | null {
+    return this.state.status === "mfa_required" ? this.state.mfaTicket : null;
   }
 
   /** Get the current user (if authenticated). */
@@ -477,21 +549,14 @@ export class AuthManager {
     const code = err instanceof AuthClientError ? err.code : undefined;
     const type = err instanceof AuthClientError ? err.type : undefined;
 
-    // MFA required is returned as a specific error code.
-    if (code === 403 && message.toLowerCase().includes("mfa")) {
-      const token = this.getSessionToken();
-      if (token) {
-        this.setState({
-          status: "mfa_required",
-          session: {
-            session_token: token,
-            refresh_token: "",
-            expires_at: new Date(Date.now() + 300_000).toISOString(),
-          },
-        });
-        return;
-      }
-    }
+    // MFA required is now handled directly inside signIn() — the
+    // backend returns it as a structured error envelope with a
+    // mfa_ticket extra and the new contract requires that ticket
+    // be carried into state, not the (no-longer-issued) partial-
+    // session token. The legacy "code === 403 && contains 'mfa'"
+    // branch was removed; if a 403 with type:"mfa_required" reaches
+    // handleError it means signIn didn't catch it, which is a bug
+    // worth surfacing as an error rather than silently transitioning.
 
     this.setState({ status: "error", error: message });
     this.onError?.({ error: message, code, type });

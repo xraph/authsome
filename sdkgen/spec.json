@@ -451,26 +451,43 @@
       "ChallengeRequest": {
         "properties": {
           "code": {
+            "description": "TOTP code from the user's authenticator (6 digits) or recovery code",
+            "type": "string"
+          },
+          "mfa_ticket": {
+            "description": "Ticket returned by /v1/signin when MFA was required",
             "type": "string"
           }
         },
         "required": [
+          "mfa_ticket",
           "code"
         ],
         "type": "object"
       },
       "ChallengeResponse": {
         "properties": {
-          "challenge_passed": {
-            "type": "boolean"
-          },
-          "method": {
+          "expires_at": {
+            "description": "Token expiration time (RFC3339)",
             "type": "string"
+          },
+          "refresh_token": {
+            "description": "Refresh token",
+            "type": "string"
+          },
+          "session_token": {
+            "description": "Session token",
+            "type": "string"
+          },
+          "user": {
+            "description": "User object"
           }
         },
         "required": [
-          "challenge_passed",
-          "method"
+          "user",
+          "session_token",
+          "refresh_token",
+          "expires_at"
         ],
         "type": "object"
       },

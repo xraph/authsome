@@ -51,7 +51,19 @@ export type AuthState =
   | { status: "loading" }
   | { status: "authenticated"; user: User; session: Session }
   | { status: "unauthenticated" }
-  | { status: "mfa_required"; session: Session }
+  /**
+   * Sign-in returned the MFA gate (HTTP 403 with type:"mfa_required").
+   * The user must complete the second factor against the same ticket
+   * via AuthManager.submitMFAChallenge(code) — the ticket is single-
+   * use after a correct code and expires after 5 minutes server-side.
+   *
+   * `email` is preserved so the form can show "complete sign-in for
+   * <email>" and so AuthManager.signIn(...) can be retried fully.
+   *
+   * `availableMethods` is what the backend reports as enrolled and
+   * ready to validate — typically ["totp"] today.
+   */
+  | { status: "mfa_required"; email: string; mfaTicket: string; availableMethods: string[] }
   /**
    * Returned when a sign-in attempt is rejected because the user's email
    * has not yet been verified, or when sign-up succeeded with email

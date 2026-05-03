@@ -58,7 +58,17 @@ export interface AuthContextValue {
   signOut: () => Promise<void>;
   /** Resend a verification email for the given address. */
   resendVerification: (email: string) => Promise<void>;
-  /** Submit MFA code. */
+  /**
+   * Submit the MFA challenge code against the ticket carried in the
+   * mfa_required state. The post-consolidation entry — call this from
+   * the challenge form, NOT submitMFACode.
+   */
+  submitMFAChallenge: (code: string) => Promise<void>;
+  /**
+   * @deprecated Use submitMFAChallenge(code). The enrollmentId is
+   * ignored — the ticket carried in AuthState is the only credential
+   * the server needs to look up the enrollment.
+   */
   submitMFACode: (enrollmentId: string, code: string) => Promise<void>;
   /** Submit MFA recovery code. */
   submitRecoveryCode: (code: string) => Promise<void>;
@@ -148,6 +158,11 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
     [manager],
   );
 
+  const submitMFAChallenge = useCallback(
+    (code: string) => manager.submitMFAChallenge(code),
+    [manager],
+  );
+
   const submitMFACode = useCallback(
     (enrollmentId: string, code: string) => manager.submitMFACode(enrollmentId, code),
     [manager],
@@ -186,12 +201,13 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
       signUp,
       signOut,
       resendVerification,
+      submitMFAChallenge,
       submitMFACode,
       submitRecoveryCode,
       sendSMSCode,
       submitSMSCode,
     };
-  }, [state, manager, clientConfig, signIn, signUp, signOut, resendVerification, submitMFACode, submitRecoveryCode, sendSMSCode, submitSMSCode]);
+  }, [state, manager, clientConfig, signIn, signUp, signOut, resendVerification, submitMFAChallenge, submitMFACode, submitRecoveryCode, sendSMSCode, submitSMSCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

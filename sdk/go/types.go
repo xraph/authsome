@@ -167,12 +167,15 @@ type CancelSubscriptionRequest struct {
 // ChallengeRequest represents the ChallengeRequest schema.
 type ChallengeRequest struct {
 	Code string `json:"code"`
+	MFATicket string `json:"mfa_ticket"`
 }
 
 // ChallengeResponse represents the ChallengeResponse schema.
 type ChallengeResponse struct {
-	ChallengePassed bool `json:"challenge_passed"`
-	Method string `json:"method"`
+	ExpiresAt string `json:"expires_at"`
+	RefreshToken string `json:"refresh_token"`
+	SessionToken string `json:"session_token"`
+	User any `json:"user"`
 }
 
 // ChangePlanRequest represents the ChangePlanRequest schema.

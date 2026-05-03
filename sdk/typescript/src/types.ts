@@ -140,11 +140,14 @@ export interface CancelSubscriptionRequest {
 
 export interface ChallengeRequest {
   code: string;
+  mfa_ticket: string;
 }
 
 export interface ChallengeResponse {
-  challenge_passed: boolean;
-  method: string;
+  expires_at: string;
+  refresh_token: string;
+  session_token: string;
+  user: unknown;
 }
 
 export interface ChangePlanRequest {

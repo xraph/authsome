@@ -723,20 +723,24 @@ class CancelSubscriptionRequest {
 
 class ChallengeRequest {
   final String code;
+  final String mfaTicket;
 
   const ChallengeRequest({
     required this.code,
+    required this.mfaTicket,
   });
 
   factory ChallengeRequest.fromJson(Map<String, dynamic> json) {
     return ChallengeRequest(
       code: json['code'] as String,
+      mfaTicket: json['mfa_ticket'] as String,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'code': code,
+      'mfa_ticket': mfaTicket,
     };
   }
 
@@ -745,25 +749,33 @@ class ChallengeRequest {
 }
 
 class ChallengeResponse {
-  final bool challengePassed;
-  final String method;
+  final String expiresAt;
+  final String refreshToken;
+  final String sessionToken;
+  final dynamic user;
 
   const ChallengeResponse({
-    required this.challengePassed,
-    required this.method,
+    required this.expiresAt,
+    required this.refreshToken,
+    required this.sessionToken,
+    required this.user,
   });
 
   factory ChallengeResponse.fromJson(Map<String, dynamic> json) {
     return ChallengeResponse(
-      challengePassed: json['challenge_passed'] as bool,
-      method: json['method'] as String,
+      expiresAt: json['expires_at'] as String,
+      refreshToken: json['refresh_token'] as String,
+      sessionToken: json['session_token'] as String,
+      user: json['user'],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'challenge_passed': challengePassed,
-      'method': method,
+      'expires_at': expiresAt,
+      'refresh_token': refreshToken,
+      'session_token': sessionToken,
+      'user': user,
     };
   }
 

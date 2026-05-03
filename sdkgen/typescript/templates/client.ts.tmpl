@@ -117,7 +117,7 @@ export class AuthClient {
     });
 
     if (!response.ok) {
-      let apiError: { error?: string; code?: number; type?: string } | undefined;
+      let apiError: { error?: string; code?: number; type?: string; [k: string]: unknown } | undefined;
       try {
         apiError = await response.json();
       } catch {
@@ -127,6 +127,7 @@ export class AuthClient {
         apiError?.error ?? `Request failed with status ${response.status}`,
         apiError?.code ?? response.status,
         apiError?.type,
+        apiError, // full decoded body so callers can read extras like mfa_ticket / available_methods
       );
     }
 
@@ -141,17 +142,23 @@ export class AuthClient {
 export class AuthClientError extends Error {
   code?: number;
   // Stable string error code from the backend envelope (e.g.
-  // "email_not_verified", "captcha_required"). Lets the UI branch
-  // on specific failure modes instead of pattern-matching on the
-  // human-readable message. Optional — only present on errors the
-  // backend has tagged.
+  // "email_not_verified", "captcha_required", "mfa_required"). Lets
+  // the UI branch on specific failure modes instead of pattern-
+  // matching on the human-readable message.
   type?: string;
+  // Full decoded JSON body when the response body was JSON. Lets
+  // callers read tagged extras the envelope carries beyond
+  // {error, code, type} — e.g. mfa_ticket and available_methods on
+  // a 403 with type:"mfa_required". Undefined when the body wasn't
+  // JSON.
+  details?: Record<string, unknown>;
 
-  constructor(message: string, code?: number, type?: string) {
+  constructor(message: string, code?: number, type?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = 'AuthClientError';
     this.code = code;
     this.type = type;
+    this.details = details;
   }
 }
 {{ else }}
