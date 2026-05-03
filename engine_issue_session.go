@@ -69,6 +69,29 @@ func (e *MFARequiredError) Error() string { return account.ErrMFARequired.Error(
 // Unwrap exposes the sentinel for errors.Is checks.
 func (e *MFARequiredError) Unwrap() error { return account.ErrMFARequired }
 
+// StatusCode lets the forge HTTP layer treat this error directly as a
+// 403 without an explicit mapError call from every plugin handler.
+// Plugin callbacks that bubble *MFARequiredError up unchanged still
+// produce the canonical mfa_required envelope.
+func (e *MFARequiredError) StatusCode() int { return 403 }
+
+// ResponseBody returns the JSON envelope the API returns to clients.
+// Mirrors codedHTTPError in api/helpers.go so plugins don't need to
+// import the api package to render the same shape.
+func (e *MFARequiredError) ResponseBody() any {
+	methods := e.AvailableMethods
+	if methods == nil {
+		methods = []string{}
+	}
+	return map[string]any{
+		"error":             account.ErrMFARequired.Error(),
+		"code":              403,
+		"type":              "mfa_required",
+		"mfa_ticket":        e.Ticket,
+		"available_methods": methods,
+	}
+}
+
 // mfaTicketPayload is the JSON-encoded body persisted in ceremony.Store
 // under the mfa_ticket namespace.
 type mfaTicketPayload struct {

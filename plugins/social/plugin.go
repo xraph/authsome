@@ -28,6 +28,7 @@ import (
 	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -937,22 +938,46 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		}
 	}
 
-	// Resolve per-app session config, falling back to plugin config.
-	sessCfg := account.SessionConfig{
-		TokenTTL:        p.config.SessionTokenTTL,
-		RefreshTokenTTL: p.config.SessionRefreshTTL,
-	}
-	if p.engine != nil {
-		sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
-	}
-	sess, err := account.NewSession(appID, u.ID, sessCfg)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", err))
-	}
-	sess.EnvID = envID
-
-	if err := p.store.CreateSession(goCtx, sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
+	// Mint the session through Engine.IssueSession so the centralized
+	// MFARequired gate fires for OAuth callbacks too. Falls back to a
+	// direct mint if the engine isn't the concrete *authsome.Engine
+	// (e.g. test wiring without a full engine).
+	var sess *session.Session
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		result, issueErr := eng.IssueSession(goCtx, &authsome.IssueSessionRequest{
+			User:       u,
+			AppID:      appID,
+			EnvID:      envID,
+			AuthMethod: "social:" + req.Provider,
+			IPAddress:  ctx.Request().RemoteAddr,
+			UserAgent:  ctx.Request().UserAgent(),
+		})
+		if issueErr != nil {
+			// *authsome.MFARequiredError implements forge's
+			// StatusCode/ResponseBody so it renders as a 403 with the
+			// ticket envelope; other errors fall through as 500.
+			return nil, issueErr
+		}
+		sess = result.Session
+	} else {
+		// Fallback for tests that don't wire a full engine. Production
+		// always reaches the IssueSession branch.
+		sessCfg := account.SessionConfig{
+			TokenTTL:        p.config.SessionTokenTTL,
+			RefreshTokenTTL: p.config.SessionRefreshTTL,
+		}
+		if p.engine != nil {
+			sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
+		}
+		var newErr error
+		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
+		if newErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+		}
+		sess.EnvID = envID
+		if err := p.store.CreateSession(goCtx, sess); err != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
+		}
 	}
 
 	isNewUser := u.CreatedAt.After(time.Now().Add(-5 * time.Second))
@@ -965,8 +990,13 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	p.relayEvent(ctx.Context(), eventType, "", map[string]string{"user_id": u.ID.String(), "provider": req.Provider})
 	p.emitHook(ctx.Context(), hookAction, hook.ResourceUser, u.ID.String(), u.ID.String(), "")
 
-	// Set httpOnly session cookie for browser-based flows.
-	p.setSessionCookie(ctx, sess.Token, int(sessCfg.TokenTTL.Seconds()))
+	// Set httpOnly session cookie for browser-based flows. Cookie TTL
+	// mirrors the session token's remaining lifetime.
+	cookieTTL := int(time.Until(sess.ExpiresAt).Seconds())
+	if cookieTTL < 0 {
+		cookieTTL = 0
+	}
+	p.setSessionCookie(ctx, sess.Token, cookieTTL)
 
 	// Browser-based OAuth callbacks arrive as GET redirects. Respond with a
 	// small HTML page that closes the popup (or redirects to the stored
