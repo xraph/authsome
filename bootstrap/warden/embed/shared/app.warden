@@ -1,0 +1,45 @@
+// App-scoped roles. Created for every app at bootstrap (including the
+// platform app). Hierarchy: user ← admin ← owner.
+
+warden config 1
+tenant ${APP_ID}
+app ${APP_ID}
+
+namespace "app" {
+  role user {
+    name        = "User"
+    description = "Standard user access"
+    grants = [
+      "user:read",
+      "session:read",
+      "session:create",
+      "session:delete",
+      "device:read",
+      "device:create",
+      "device:update",
+      "environment:read",
+    ]
+  }
+
+  role admin : user {
+    name        = "Admin"
+    description = "Full app administration"
+    grants     += [
+      "user:*",
+      "session:*",
+      "device:*",
+      "environment:*",
+      "org:*",
+      "document:*",
+      "role:*",
+      "permission:*",
+      "app:*",
+    ]
+  }
+
+  role owner : admin {
+    name        = "Owner"
+    description = "Full app ownership"
+    is_system   = true
+  }
+}

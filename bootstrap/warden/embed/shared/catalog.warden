@@ -1,0 +1,67 @@
+// Authsome permission catalog.
+//
+// Naming convention: <resource>:<action> (warden DSL standard). The parser
+// auto-extracts Resource + Action from a bare `permission "x:y"`
+// declaration via the `:` split, so no body is needed.
+//
+// For each resource we declare:
+//   - one or more concrete permissions (e.g. "user:read", "user:write")
+//   - a per-resource wildcard ("user:*") that admin / owner roles grant
+//     instead of trying to enumerate every action.
+//
+// Warden's check engine treats Action="*" as a glob that matches any
+// requested action, so "user:*" satisfies any (user, anyAction) check.
+
+warden config 1
+tenant ${APP_ID}
+app ${APP_ID}
+
+// ── User identity ──────────────────────────────────────────────────
+permission "user:read"
+permission "user:write"
+permission "user:delete"
+permission "user:*"
+
+// ── Sessions ───────────────────────────────────────────────────────
+permission "session:read"
+permission "session:create"
+permission "session:delete"
+permission "session:*"
+
+// ── Devices ────────────────────────────────────────────────────────
+permission "device:read"
+permission "device:create"
+permission "device:update"
+permission "device:*"
+
+// ── Environments ───────────────────────────────────────────────────
+permission "environment:read"
+permission "environment:*"
+
+// ── Apps ───────────────────────────────────────────────────────────
+permission "app:manage"
+permission "app:*"
+
+// ── Org membership ─────────────────────────────────────────────────
+permission "org:read"
+permission "org:write"
+permission "org:*"
+
+// ── Documents (sample resource) ────────────────────────────────────
+permission "document:read"
+permission "document:write"
+permission "document:*"
+
+// ── RBAC management (used by middleware on /v1/roles, /v1/permissions) ──
+permission "role:create"
+permission "role:read"
+permission "role:update"
+permission "role:delete"
+permission "role:assign"
+permission "role:unassign"
+permission "role:*"
+
+permission "permission:create"
+permission "permission:read"
+permission "permission:delete"
+permission "permission:*"

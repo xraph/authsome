@@ -12,9 +12,9 @@ import (
 
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/app"
+	wardenseed "github.com/xraph/authsome/bootstrap/warden"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
-	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
 )
@@ -32,11 +32,13 @@ type BootstrapConfig struct {
 	// Whether to skip creating default environments.
 	SkipDefaultEnvs bool
 
-	// Default roles to create for every new app.
-	DefaultRoles []BootstrapRole
-
-	// Whether to skip creating default roles.
+	// Whether to skip applying the default warden DSL roles + permission catalog.
 	SkipDefaultRoles bool
+
+	// SeedOptions configures the warden DSL seed apply path. Use this to
+	// override the embedded .warden files (e.g. with a custom directory
+	// shipped via cfg.WardenDir, or a custom fs.FS).
+	SeedOptions wardenseed.ApplyOptions
 
 	// Callback for custom post-bootstrap logic.
 	OnBootstrap func(ctx context.Context, e *Engine, appID id.AppID) error
@@ -50,25 +52,12 @@ type BootstrapEnv struct {
 	IsDefault bool
 }
 
-// BootstrapPermission describes a permission to attach to a bootstrap role.
-type BootstrapPermission struct {
-	Action   string
-	Resource string
-}
-
-// BootstrapRole describes a role to auto-create.
-type BootstrapRole struct {
-	Name        string
-	Slug        string
-	Description string
-	ParentSlug  string // slug of parent role (empty = root)
-	Permissions []BootstrapPermission
-}
-
 // BootstrapOption configures the bootstrap system.
 type BootstrapOption func(*BootstrapConfig)
 
-// DefaultBootstrapConfig returns sensible defaults.
+// DefaultBootstrapConfig returns sensible defaults. Roles + permissions
+// are sourced from the embedded warden DSL files (see bootstrap/warden/embed),
+// not from this struct.
 func DefaultBootstrapConfig() *BootstrapConfig {
 	return &BootstrapConfig{
 		AppName: "Platform",
@@ -77,78 +66,6 @@ func DefaultBootstrapConfig() *BootstrapConfig {
 			{Name: "Development", Slug: "development", Type: environment.TypeDevelopment, IsDefault: true},
 			{Name: "Staging", Slug: "staging", Type: environment.TypeStaging},
 			{Name: "Production", Slug: "production", Type: environment.TypeProduction},
-		},
-		DefaultRoles: []BootstrapRole{
-			// Platform-scoped roles (cross-app access).
-			// Hierarchy: platform_user ← platform_admin ← platform_owner
-			{
-				Name:        "Platform User",
-				Slug:        rbac.PlatformUserSlug,
-				Description: "Standard cross-app access",
-				Permissions: []BootstrapPermission{
-					{Action: "read", Resource: "user"},
-					{Action: "read", Resource: "session"},
-					{Action: "read", Resource: "device"},
-					{Action: "read", Resource: "environment"},
-					{Action: "create", Resource: "session"},
-					{Action: "delete", Resource: "session"},
-					{Action: "create", Resource: "device"},
-					{Action: "update", Resource: "device"},
-				},
-			},
-			{
-				Name:        "Platform Admin",
-				Slug:        rbac.PlatformAdminSlug,
-				Description: "Admin-level cross-app access",
-				ParentSlug:  rbac.PlatformUserSlug,
-				Permissions: []BootstrapPermission{
-					{Action: "*", Resource: "*"},
-				},
-			},
-			{
-				Name:        "Platform Owner",
-				Slug:        rbac.PlatformOwnerSlug,
-				Description: "Full cross-app platform access",
-				ParentSlug:  rbac.PlatformAdminSlug,
-				Permissions: []BootstrapPermission{
-					{Action: "*", Resource: "*"},
-				},
-			},
-			// App-scoped roles.
-			// Hierarchy: user ← admin ← owner
-			{
-				Name:        "User",
-				Slug:        rbac.AppUserSlug,
-				Description: "Standard user access",
-				Permissions: []BootstrapPermission{
-					{Action: "read", Resource: "user"},
-					{Action: "read", Resource: "session"},
-					{Action: "read", Resource: "device"},
-					{Action: "read", Resource: "environment"},
-					{Action: "create", Resource: "session"},
-					{Action: "delete", Resource: "session"},
-					{Action: "create", Resource: "device"},
-					{Action: "update", Resource: "device"},
-				},
-			},
-			{
-				Name:        "Admin",
-				Slug:        rbac.AppAdminSlug,
-				Description: "Full app administration",
-				ParentSlug:  rbac.AppUserSlug,
-				Permissions: []BootstrapPermission{
-					{Action: "*", Resource: "*"},
-				},
-			},
-			{
-				Name:        "Owner",
-				Slug:        rbac.AppOwnerSlug,
-				Description: "Full app ownership",
-				ParentSlug:  rbac.AppAdminSlug,
-				Permissions: []BootstrapPermission{
-					{Action: "*", Resource: "*"},
-				},
-			},
 		},
 	}
 }
@@ -178,14 +95,34 @@ func WithSkipDefaultEnvs() BootstrapOption {
 	return func(cfg *BootstrapConfig) { cfg.SkipDefaultEnvs = true }
 }
 
-// WithBootstrapRoles overrides the default roles to create.
-func WithBootstrapRoles(roles []BootstrapRole) BootstrapOption {
-	return func(cfg *BootstrapConfig) { cfg.DefaultRoles = roles }
-}
-
-// WithSkipDefaultRoles disables automatic role creation.
+// WithSkipDefaultRoles disables automatic role + permission seeding via
+// the warden DSL.
 func WithSkipDefaultRoles() BootstrapOption {
 	return func(cfg *BootstrapConfig) { cfg.SkipDefaultRoles = true }
+}
+
+// WithBootstrapWardenDir tells bootstrap to load .warden files from the
+// given directory instead of the embedded defaults. The directory must
+// contain a `shared/` subtree (applied to every app); a `platform/`
+// subtree is consulted only for the platform app and is optional.
+func WithBootstrapWardenDir(dir string) BootstrapOption {
+	return func(cfg *BootstrapConfig) {
+		shared := wardenseed.Source{Dir: dir + "/shared"}
+		platform := wardenseed.Source{Dir: dir + "/platform"}
+		cfg.SeedOptions.SharedOverride = &shared
+		cfg.SeedOptions.PlatformOverride = &platform
+	}
+}
+
+// WithBootstrapWardenSources lets advanced callers replace the embedded
+// .warden sources with custom ones (e.g. their own fs.FS or directory).
+// Either argument may be nil to fall back to the embedded default for
+// that scope.
+func WithBootstrapWardenSources(shared, platform *wardenseed.Source) BootstrapOption {
+	return func(cfg *BootstrapConfig) {
+		cfg.SeedOptions.SharedOverride = shared
+		cfg.SeedOptions.PlatformOverride = platform
+	}
 }
 
 // WithOnBootstrap sets a callback invoked after the platform app is created.
@@ -283,8 +220,8 @@ func (e *Engine) bootstrap(ctx context.Context) error {
 	return nil
 }
 
-// bootstrapApp runs shared bootstrap logic for any app (envs, roles).
-// Called both during platform bootstrap and when any new app is created.
+// bootstrapApp runs shared bootstrap logic for any app: default
+// environments + warden DSL role/permission seeding.
 func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error { //nolint:unparam // error return reserved for future use
 	// Create default environments.
 	if !e.bootstrapCfg.SkipDefaultEnvs {
@@ -305,74 +242,32 @@ func (e *Engine) bootstrapApp(ctx context.Context, appID id.AppID) error { //nol
 		}
 	}
 
-	// Create default roles with permissions (if an RBAC store is available).
-	if e.hasRBACStore() && !e.bootstrapCfg.SkipDefaultRoles {
-		// Pass 1: Create or fetch roles and attach permissions, collecting slug → ID map.
-		slugToID := make(map[string]string, len(e.bootstrapCfg.DefaultRoles))
-		for _, role := range e.bootstrapCfg.DefaultRoles {
-			// Check if the role already exists (idempotent restart).
-			existing, _ := e.GetRoleBySlug(ctx, appID, role.Slug) //nolint:errcheck // not-found is expected
-			var r *rbac.Role
-			if existing != nil {
-				r = existing
-				e.logger.Debug("bootstrap: role already exists, skipping create",
-					log.String("slug", role.Slug),
-				)
-			} else {
-				r = &rbac.Role{
-					AppID:       appID.String(),
-					Name:        role.Name,
-					Slug:        role.Slug,
-					Description: role.Description,
-				}
-				if err := e.CreateRole(ctx, r); err != nil {
-					e.logger.Warn("bootstrap: role creation failed",
-						log.String("slug", role.Slug),
-						log.String("error", err.Error()),
-					)
-					continue
-				}
-			}
-			slugToID[role.Slug] = r.ID
+	// Apply default roles + permission catalog from the embedded warden DSL.
+	// Warden is required for RBAC, so when it isn't wired we have nothing
+	// to apply against — silently skip and let the missing-warden path
+	// elsewhere (rbacStore) surface that as a panic when something tries to
+	// touch RBAC at runtime.
+	if e.bootstrapCfg.SkipDefaultRoles || e.wardenEng == nil {
+		return nil
+	}
 
-			// Attach permissions to the role (AddPermission is already
-			// idempotent — duplicate permissions are looked up and reused).
-			for _, perm := range role.Permissions {
-				if err := e.AddPermission(ctx, &rbac.Permission{
-					RoleID:   r.ID,
-					Action:   perm.Action,
-					Resource: perm.Resource,
-				}); err != nil {
-					e.logger.Debug("bootstrap: permission already exists",
-						log.String("role", role.Slug),
-						log.String("perm", perm.Action+":"+perm.Resource),
-						log.String("error", err.Error()),
-					)
-				}
-			}
-		}
-
-		// Pass 2: Wire up role hierarchy via ParentID.
-		for _, role := range e.bootstrapCfg.DefaultRoles {
-			if role.ParentSlug == "" {
-				continue
-			}
-			childID, ok := slugToID[role.Slug]
-			if !ok {
-				continue
-			}
-			parentID, ok := slugToID[role.ParentSlug]
-			if !ok {
-				continue
-			}
-			if err := e.updateRoleParent(ctx, childID, parentID); err != nil {
-				e.logger.Debug("bootstrap: failed to set role parent",
-					log.String("child", role.Slug),
-					log.String("parent", role.ParentSlug),
-					log.String("error", err.Error()),
-				)
-			}
-		}
+	isPlatform := appID == e.platformAppID
+	res, err := wardenseed.ApplyForApp(ctx, e.wardenEng, appID, isPlatform, e.bootstrapCfg.SeedOptions)
+	if err != nil {
+		e.logger.Warn("bootstrap: warden DSL apply failed",
+			log.String("app_id", appID.String()),
+			log.String("error", err.Error()),
+		)
+		return nil
+	}
+	if res != nil && (len(res.Created) > 0 || len(res.Updated) > 0 || len(res.Deleted) > 0) {
+		e.logger.Info("bootstrap: warden DSL applied",
+			log.String("app_id", appID.String()),
+			log.Int("created", len(res.Created)),
+			log.Int("updated", len(res.Updated)),
+			log.Int("deleted", len(res.Deleted)),
+			log.Int("noops", res.NoOps),
+		)
 	}
 
 	return nil
@@ -400,14 +295,4 @@ func (e *Engine) HasUsers(ctx context.Context) bool {
 // PlatformAppID returns the platform app's ID.
 func (e *Engine) PlatformAppID() id.AppID {
 	return e.platformAppID
-}
-
-// updateRoleParent sets the parent of a role by updating it via the RBAC store.
-func (e *Engine) updateRoleParent(ctx context.Context, roleID, parentID string) error {
-	role, err := e.rbacStore().GetRole(ctx, roleID)
-	if err != nil {
-		return err
-	}
-	role.ParentID = parentID
-	return e.rbacStore().UpdateRole(ctx, role)
 }

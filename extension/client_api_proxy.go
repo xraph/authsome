@@ -50,10 +50,12 @@ func (e *Extension) registerClientAPIProxy(router forge.Router) error {
 		return fmt.Errorf("authsome: register client API proxy at %s: %w", mountPrefix, err)
 	}
 
-	e.Logger().Info("authsome: registered client-mode API proxy",
-		log.String("mount", mountPrefix),
-		log.String("portal_url", e.config.PortalURL),
-	)
+	if logger := e.Logger(); logger != nil {
+		logger.Info("authsome: registered client-mode API proxy",
+			log.String("mount", mountPrefix),
+			log.String("portal_url", e.config.PortalURL),
+		)
+	}
 	return nil
 }
 
@@ -73,7 +75,13 @@ func (e *Extension) buildClientAPIProxy() (string, *httputil.ReverseProxy, error
 	if basePath == "" {
 		basePath = "/authsome"
 	}
-	mountPrefix := basePath + "/v1/"
+	// Trailing "/*" intentionally: forge's BunRouterAdapter.Mount has a
+	// dual-register quirk (registers both the exact path and a wildcard
+	// when the input lacks "/*"), and bunrouter then panics with
+	// "routes \"/authsome/v1/\" and \"/authsome/v1/*filepath\" can't
+	// both handle GET". Passing "/*" routes through the wildcard-only
+	// branch.
+	mountPrefix := basePath + "/v1/*"
 
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {

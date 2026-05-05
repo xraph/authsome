@@ -197,3 +197,10 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+// Local development: pick up the warden DSL package which lives in the
+// sibling forgery checkout but hasn't been released as a tagged version
+// yet.
+replace github.com/xraph/warden => ../warden
+
+replace github.com/xraph/grove/drivers/mongodriver => ../grove/drivers/mongodriver

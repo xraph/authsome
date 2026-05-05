@@ -1208,17 +1208,13 @@ func (e *Extension) buildBootstrapOptions() []authsome.BootstrapOption {
 		opts = append(opts, authsome.WithBootstrapEnvs(envs))
 	}
 
-	// Override roles from YAML.
-	if len(cfg.Roles) > 0 {
-		roles := make([]authsome.BootstrapRole, len(cfg.Roles))
-		for i, role := range cfg.Roles {
-			roles[i] = authsome.BootstrapRole{
-				Name:        role.Name,
-				Slug:        role.Slug,
-				Description: role.Description,
-			}
-		}
-		opts = append(opts, authsome.WithBootstrapRoles(roles))
+	// Optional override: load custom .warden DSL files from a directory.
+	// Replaces the embedded defaults in bootstrap/warden/embed/. The
+	// directory must contain a `shared/` subtree (applied to every app);
+	// a `platform/` subtree is optional and only consulted for the
+	// platform app.
+	if cfg.WardenDir != "" {
+		opts = append(opts, authsome.WithBootstrapWardenDir(cfg.WardenDir))
 	}
 
 	return opts

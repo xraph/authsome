@@ -18,6 +18,8 @@ const (
 	// role that spans all platform capabilities. It is declared here to
 	// prevent accidental reuse of the name in unrelated roles and to serve
 	// as a single source of truth when the role is eventually introduced.
+	// TODO: Add SuperAdminSlug to IsPlatformRole when the warden DSL defines
+	// the role and it is wired up in the authorization system.
 	SuperAdminSlug = "super-admin"
 )
 
@@ -31,7 +33,7 @@ const (
 // IsPlatformRole returns true if the slug is a platform-scoped role.
 func IsPlatformRole(slug string) bool {
 	switch slug {
-	case PlatformUserSlug, PlatformAdminSlug, PlatformOwnerSlug, SuperAdminSlug:
+	case PlatformUserSlug, PlatformAdminSlug, PlatformOwnerSlug:
 		return true
 	}
 	return false

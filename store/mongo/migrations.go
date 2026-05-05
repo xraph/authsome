@@ -642,6 +642,9 @@ func init() {
 				coll := mexec.DB().Collection("warden_roles")
 
 				// 1. Remove all underscore-slug rows — always stale.
+				// This deletes across all tenants, but that's acceptable because authsome
+				// controls role creation and enforces kebab-case slugs. No tenant should
+				// ever have a legitimate "platform_admin" (underscore) role.
 				if _, err := coll.DeleteMany(ctx, bson.M{"slug": "platform_admin"}); err != nil {
 					return fmt.Errorf("remove platform_admin (underscore) roles: %w", err)
 				}

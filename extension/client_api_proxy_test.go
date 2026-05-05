@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/xraph/forge"
 )
 
 // TestBuildClientAPIProxy_ForwardsAuthCookieAsBearer pins the contract that
@@ -36,20 +38,14 @@ func TestBuildClientAPIProxy_ForwardsAuthCookieAsBearer(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	e := &Extension{
-		clientMode: true,
-		config: Config{
-			BasePath:  "/authsome",
-			PortalURL: upstream.URL,
-		},
-	}
+	e := newTestExtension(upstream.URL)
 
 	mount, proxy, err := e.buildClientAPIProxy()
 	if err != nil {
 		t.Fatalf("buildClientAPIProxy: %v", err)
 	}
-	if mount != "/authsome/v1/" {
-		t.Fatalf("mount prefix = %q, want /authsome/v1/", mount)
+	if mount != "/authsome/v1/*" {
+		t.Fatalf("mount prefix = %q, want /authsome/v1/*", mount)
 	}
 
 	req := httptest.NewRequest(http.MethodPut,
@@ -161,11 +157,43 @@ func TestBuildClientAPIProxy_NoAuthWhenAbsent(t *testing.T) {
 func TestBuildClientAPIProxy_RejectsBadPortalURL(t *testing.T) {
 	t.Parallel()
 
-	e := &Extension{
-		clientMode: true,
-		config:     Config{BasePath: "/authsome", PortalURL: "not-a-url"},
-	}
+	e := newTestExtension("not-a-url")
 	if _, _, err := e.buildClientAPIProxy(); err == nil {
 		t.Fatal("expected error for PortalURL without scheme/host, got nil")
+	}
+}
+
+// newTestExtension builds a minimal client-mode Extension wired with the
+// embedded BaseExtension that production code constructs via New(). Tests
+// that exercise the proxy directly need this so e.Logger() is safe to call.
+func newTestExtension(portalURL string) *Extension {
+	e := New()
+	e.clientMode = true
+	e.config = Config{BasePath: "/authsome", PortalURL: portalURL}
+	return e
+}
+
+// TestRegisterClientAPIProxy_OnRealRouter pins the regression that was
+// observed in the TwinOS portal: forge's BunRouterAdapter.Mount registers
+// both the exact path and a "/*filepath" wildcard for each method when the
+// supplied path lacks "/*", which makes bunrouter panic with
+//
+//	routes "/authsome/v1/" and "/authsome/v1/*filepath" can't both handle GET
+//
+// We pass "/authsome/v1/*" explicitly so the adapter's wildcard-only
+// branch fires. This test would have caught that panic before it shipped.
+func TestRegisterClientAPIProxy_OnRealRouter(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	e := newTestExtension(upstream.URL)
+
+	router := forge.NewRouter()
+	if err := e.registerClientAPIProxy(router); err != nil {
+		t.Fatalf("registerClientAPIProxy: %v", err)
 	}
 }

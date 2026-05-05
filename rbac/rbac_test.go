@@ -73,7 +73,6 @@ func TestIsPlatformRole(t *testing.T) {
 		PlatformUserSlug,
 		PlatformAdminSlug,
 		PlatformOwnerSlug,
-		SuperAdminSlug,
 	}
 	for _, slug := range platformSlugs {
 		assert.True(t, IsPlatformRole(slug), "expected IsPlatformRole(%q) = true", slug)
@@ -83,6 +82,7 @@ func TestIsPlatformRole(t *testing.T) {
 		AppOwnerSlug,
 		AppAdminSlug,
 		AppUserSlug,
+		SuperAdminSlug, // Not yet wired up in the warden DSL
 		"owner",
 		"unknown-role",
 		"",

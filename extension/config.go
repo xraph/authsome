@@ -93,8 +93,13 @@ type BootstrapYAMLConfig struct {
 	// Environments overrides the default environments to create.
 	Environments []BootstrapEnvYAML `json:"environments" mapstructure:"environments" yaml:"environments"`
 
-	// Roles overrides the default roles to create.
-	Roles []BootstrapRoleYAML `json:"roles" mapstructure:"roles" yaml:"roles"`
+	// WardenDir, when set, replaces authsome's embedded warden DSL files
+	// (bootstrap/warden/embed/) with .warden files loaded from this
+	// directory. The directory must contain a `shared/` subtree applied to
+	// every app; a `platform/` subtree is consulted only for the platform
+	// app and is optional. Use this to ship custom roles + permission
+	// catalogs without rebuilding the binary.
+	WardenDir string `json:"warden_dir" mapstructure:"warden_dir" yaml:"warden_dir"`
 }
 
 // BootstrapEnvYAML describes an environment in YAML config.
@@ -103,13 +108,6 @@ type BootstrapEnvYAML struct {
 	Slug      string `json:"slug" mapstructure:"slug" yaml:"slug"`
 	Type      string `json:"type" mapstructure:"type" yaml:"type"` // development, staging, production
 	IsDefault bool   `json:"is_default" mapstructure:"is_default" yaml:"is_default"`
-}
-
-// BootstrapRoleYAML describes a role in YAML config.
-type BootstrapRoleYAML struct {
-	Name        string `json:"name" mapstructure:"name" yaml:"name"`
-	Slug        string `json:"slug" mapstructure:"slug" yaml:"slug"`
-	Description string `json:"description" mapstructure:"description" yaml:"description"`
 }
 
 // AppSessionConfigYAML holds per-app session config in YAML format.
