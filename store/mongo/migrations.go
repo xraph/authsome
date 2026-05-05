@@ -571,5 +571,138 @@ func init() {
 				return mexec.DropCollection(ctx, (*revokedRefreshTokenModel)(nil))
 			},
 		},
+		// Refresh $jsonSchema validators on existing collections so that
+		// nullable pointer fields (e.g. *time.Time, *bool, *int, *string)
+		// accept null. The earlier grove builder emitted a strict bsonType
+		// for pointer fields, which made any insert with a nil pointer fail
+		// with "Document failed validation" — see CreateUser when both
+		// ban_expires and deleted_at default to nil. This migration reapplies
+		// the (now nullable-aware) schema via collMod for every collection
+		// the store creates. It is a no-op for fresh installs because new
+		// collections already pick up the corrected schema.
+		&migrate.Migration{
+			Name:    "refresh_validators_for_nullable_pointers",
+			Version: "20260504000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				models := []any{
+					(*appModel)(nil),
+					(*environmentModel)(nil),
+					(*userModel)(nil),
+					(*sessionModel)(nil),
+					(*verificationModel)(nil),
+					(*passwordResetModel)(nil),
+					(*organizationModel)(nil),
+					(*memberModel)(nil),
+					(*invitationModel)(nil),
+					(*teamModel)(nil),
+					(*deviceModel)(nil),
+					(*webhookModel)(nil),
+					(*notificationModel)(nil),
+					(*apiKeyModel)(nil),
+					(*revokedRefreshTokenModel)(nil),
+				}
+				for _, m := range models {
+					if err := mexec.RefreshValidator(ctx, m); err != nil {
+						return fmt.Errorf("refresh validator: %w", err)
+					}
+				}
+				return nil
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				// Rolling back would re-introduce the original bug; we leave
+				// the corrected validator in place. No-op down.
+				return nil
+			},
+		},
+		// Migration: Remove duplicate / stale platform-admin role rows that
+		// were created when authsome transitioned from a programmatic
+		// DefaultRoles bootstrap approach to the warden DSL approach. Both
+		// code paths ran against the same database, leaving orphaned rows.
+		//
+		// Strategy (idempotent):
+		//  1. Delete ALL rows with slug "platform_admin" (underscore) — these
+		//     are always stale; the new code uses the kebab form exclusively.
+		//  2. For slug "platform-admin": if more than one row exists, delete
+		//     those that have no parent_slug (the orphaned / programmatic
+		//     ones). The warden-DSL row has parent_slug = "platform-user" and
+		//     is kept. We only delete parentless rows when a parented row also
+		//     exists, so the last surviving row is never accidentally removed.
+		&migrate.Migration{
+			Name:    "remove_duplicate_platform_admin_roles",
+			Version: "20260505000001",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				coll := mexec.DB().Collection("warden_roles")
+
+				// 1. Remove all underscore-slug rows — always stale.
+				if _, err := coll.DeleteMany(ctx, bson.M{"slug": "platform_admin"}); err != nil {
+					return fmt.Errorf("remove platform_admin (underscore) roles: %w", err)
+				}
+
+				// 2. Find all rows with the kebab slug.
+				cursor, err := coll.Find(ctx, bson.M{"slug": "platform-admin"})
+				if err != nil {
+					return fmt.Errorf("find platform-admin roles: %w", err)
+				}
+				defer cursor.Close(ctx) //nolint:errcheck
+
+				type minimalRole struct {
+					ID         string  `bson:"_id"`
+					ParentSlug *string `bson:"parent_slug"`
+				}
+				var rows []minimalRole
+				if err := cursor.All(ctx, &rows); err != nil {
+					return fmt.Errorf("decode platform-admin roles: %w", err)
+				}
+
+				// Nothing to clean up if ≤1 row.
+				if len(rows) <= 1 {
+					return nil
+				}
+
+				// Check that at least one parented (warden-DSL) row exists
+				// before we start deleting parentless rows, to be conservative.
+				hasParented := false
+				for _, r := range rows {
+					if r.ParentSlug != nil && *r.ParentSlug != "" {
+						hasParented = true
+						break
+					}
+				}
+				if !hasParented {
+					// All rows are parentless — unusual state; leave them alone
+					// and let an operator investigate rather than deleting
+					// everything.
+					return nil
+				}
+
+				// Collect IDs of parentless (orphaned) rows to delete.
+				var orphanIDs []string
+				for _, r := range rows {
+					if r.ParentSlug == nil || *r.ParentSlug == "" {
+						orphanIDs = append(orphanIDs, r.ID)
+					}
+				}
+				if len(orphanIDs) == 0 {
+					return nil
+				}
+
+				if _, err := coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": orphanIDs}}); err != nil {
+					return fmt.Errorf("remove orphaned platform-admin roles: %w", err)
+				}
+				return nil
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				// Deleted orphan rows cannot be safely re-created; no-op down.
+				return nil
+			},
+		},
 	)
 }

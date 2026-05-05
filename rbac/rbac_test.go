@@ -67,3 +67,27 @@ func TestUserRole_WithOrgScope(t *testing.T) {
 	assert.NotEmpty(t, ur.OrgID)
 	assert.False(t, ur.AssignedAt.IsZero())
 }
+
+func TestIsPlatformRole(t *testing.T) {
+	platformSlugs := []string{
+		PlatformUserSlug,
+		PlatformAdminSlug,
+		PlatformOwnerSlug,
+		SuperAdminSlug,
+	}
+	for _, slug := range platformSlugs {
+		assert.True(t, IsPlatformRole(slug), "expected IsPlatformRole(%q) = true", slug)
+	}
+
+	nonPlatformSlugs := []string{
+		AppOwnerSlug,
+		AppAdminSlug,
+		AppUserSlug,
+		"owner",
+		"unknown-role",
+		"",
+	}
+	for _, slug := range nonPlatformSlugs {
+		assert.False(t, IsPlatformRole(slug), "expected IsPlatformRole(%q) = false", slug)
+	}
+}
