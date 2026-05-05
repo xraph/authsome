@@ -541,12 +541,14 @@ func tryStrategyAuth(
 		}
 		return false
 	}
-	if result == nil || result.User == nil {
-		// Strategy returned no error but produced no user. Note this
-		// distinct outcome separately so the debug surface in
-		// RequireAuth points at the actual cause (resolveUser
-		// returned nil, or the strategy's Result was empty) rather
-		// than leaving operators thinking no strategy ran at all.
+	if result == nil {
+		// Strategy returned no error but produced no result at all.
+		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: returned nil result"))
+		return false
+	}
+	isServiceAccount := result.Session != nil && result.Session.PrincipalKind == "service_account"
+	if result.User == nil && !isServiceAccount {
+		// no user and not a service account — treat as unauthenticated
 		ctx.WithContext(withAuthDebug(ctx.Context(), "strategy: returned no user (resolveUser nil or Result empty)"))
 		return false
 	}
@@ -558,7 +560,9 @@ func tryStrategyAuth(
 		goCtx = WithSession(goCtx, result.Session)
 		goCtx = WithSessionID(goCtx, result.Session.ID)
 		goCtx = WithAppID(goCtx, result.Session.AppID)
-		goCtx = WithUserID(goCtx, result.Session.UserID)
+		if !result.Session.UserID.IsNil() {
+			goCtx = WithUserID(goCtx, result.Session.UserID)
+		}
 
 		if result.Session.EnvID.Prefix() != "" {
 			goCtx = WithEnvID(goCtx, result.Session.EnvID)
@@ -571,7 +575,9 @@ func tryStrategyAuth(
 		}
 	}
 
-	goCtx = WithUser(goCtx, result.User)
+	if result.User != nil {
+		goCtx = WithUser(goCtx, result.User)
+	}
 	goCtx = WithAuthMethod(goCtx, "strategy")
 
 	ctx.WithContext(goCtx)

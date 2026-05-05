@@ -400,9 +400,13 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*struct
 		return nil, forge.InternalError(fmt.Errorf("failed to revoke key: %w", err))
 	}
 
-	p.audit(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), key.UserID.String(), "", bridge.OutcomeSuccess)
-	p.relayEvent(ctx.Context(), "apikey.revoked", "", map[string]string{"user_id": key.UserID.String()})
-	p.emitHook(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), key.UserID.String(), "")
+	principalID := key.UserID.String()
+	if key.UserID.IsNil() && !key.ServiceAccountID.IsNil() {
+		principalID = key.ServiceAccountID.String()
+	}
+	p.audit(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), principalID, "", bridge.OutcomeSuccess)
+	p.relayEvent(ctx.Context(), "apikey.revoked", "", map[string]string{"user_id": principalID})
+	p.emitHook(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), principalID, "")
 
 	return nil, ctx.NoContent(http.StatusNoContent)
 }

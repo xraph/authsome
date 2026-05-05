@@ -711,6 +711,10 @@ func toServiceAccountResponse(svc *serviceaccount.ServiceAccount) *AdminServiceA
 }
 
 func (a *API) handleAdminCreateServiceAccount(ctx forge.Context, req *AdminCreateServiceAccountRequest) (*AdminServiceAccountResponse, error) {
+	if req.Name == "" {
+		return nil, forge.BadRequest("name is required")
+	}
+
 	appID, err := a.resolveAppID(req.AppID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid app_id")
@@ -783,6 +787,10 @@ func (a *API) handleAdminDeleteServiceAccount(ctx forge.Context, req *AdminDelet
 }
 
 func (a *API) handleAdminCreateServiceAccountAPIKey(ctx forge.Context, req *AdminCreateServiceAccountAPIKeyRequest) (*AdminServiceAccountAPIKeyResponse, error) {
+	if req.Name == "" {
+		return nil, forge.BadRequest("name is required")
+	}
+
 	svcID, err := id.ParseServiceAccountID(req.ServiceAccountID)
 	if err != nil {
 		return nil, forge.BadRequest("invalid service_account_id")

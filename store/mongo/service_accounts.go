@@ -51,34 +51,52 @@ func (s *Store) ListServiceAccounts(ctx context.Context, q *serviceaccount.Query
 		filter["active"] = *q.Active
 	}
 
-	var models []serviceAccountModel
-
-	finder := s.mdb.NewFind(&models).
-		Filter(filter).
-		Sort(bson.D{{Key: "created_at", Value: -1}})
-
-	if q.Limit > 0 {
-		finder = finder.Limit(int64(q.Limit))
+	// Get total count using the base filter (before cursor filtering).
+	total, err := s.mdb.Collection(colServiceAccounts).CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("authsome/mongo: list service accounts count: %w", err)
 	}
 
-	if err := finder.Scan(ctx); err != nil {
+	// Apply cursor: the cursor is the ID of the last item from the previous page.
+	// We use $lt for descending ID order (matching the pattern used in user listing).
+	if q.Cursor != "" {
+		filter["_id"] = bson.M{"$lt": q.Cursor}
+	}
+
+	limit := q.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var models []serviceAccountModel
+
+	if err := s.mdb.NewFind(&models).
+		Filter(filter).
+		Sort(bson.D{{Key: "_id", Value: -1}}).
+		Limit(int64(limit + 1)).
+		Scan(ctx); err != nil {
 		return nil, fmt.Errorf("authsome/mongo: list service accounts: %w", err)
 	}
 
-	result := make([]*serviceaccount.ServiceAccount, 0, len(models))
+	list := &serviceaccount.List{
+		ServiceAccounts: make([]*serviceaccount.ServiceAccount, 0, len(models)),
+		Total:           int(total),
+	}
 
 	for i := range models {
+		if i >= limit {
+			list.NextCursor = models[i].ID
+			break
+		}
+
 		svc, err := fromServiceAccountModel(&models[i])
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, svc)
+		list.ServiceAccounts = append(list.ServiceAccounts, svc)
 	}
 
-	return &serviceaccount.List{
-		ServiceAccounts: result,
-		Total:           len(result),
-	}, nil
+	return list, nil
 }
 
 // UpdateServiceAccount modifies an existing service account.
