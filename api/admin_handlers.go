@@ -469,8 +469,25 @@ func (a *API) handleAdminDeleteApp(ctx forge.Context, req *AdminDeleteAppRequest
 // handleGrantPlatformOwner grants the platform-owner role to a user identified
 // by user_id or email. The caller must themselves be a platform owner.
 func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
-	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+	callerID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
 		return nil, forge.Unauthorized("authentication required")
+	}
+
+	// C1: only platform-owners may call this endpoint.
+	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	isPlatformOwner := false
+	for _, r := range roles {
+		if r.Slug == rbac.PlatformOwnerSlug {
+			isPlatformOwner = true
+			break
+		}
+	}
+	if !isPlatformOwner {
+		return nil, forge.Forbidden("platform-owner role required")
 	}
 
 	if req.UserID == "" && req.Email == "" {
@@ -518,8 +535,25 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 // handleRevokePlatformOwner revokes the platform-owner role from a user.
 // It rejects the request if the target user is the last platform owner.
 func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
-	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+	callerID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
 		return nil, forge.Unauthorized("authentication required")
+	}
+
+	// C1: only platform-owners may call this endpoint.
+	roles, err := a.engine.ListUserRoles(ctx.Context(), callerID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	isPlatformOwner := false
+	for _, r := range roles {
+		if r.Slug == rbac.PlatformOwnerSlug {
+			isPlatformOwner = true
+			break
+		}
+	}
+	if !isPlatformOwner {
+		return nil, forge.Forbidden("platform-owner role required")
 	}
 
 	targetUserID, err := id.ParseUserID(req.UserID)
@@ -540,11 +574,21 @@ func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatf
 	if err != nil {
 		return nil, mapError(err)
 	}
-	if len(owners) == 1 {
-		// Check if the sole owner is the target.
-		if owners[0].String() == targetUserID.String() {
-			return nil, forge.BadRequest("cannot revoke platform-owner from the last platform owner")
+	// I2: treat a zero-length result as a data-inconsistency error rather
+	// than silently skipping the guard.
+	if len(owners) == 0 {
+		return nil, forge.InternalError(fmt.Errorf("no platform owners found"))
+	}
+	// Check if removing this user would leave zero owners.
+	matchesTarget := false
+	for _, ownerID := range owners {
+		if ownerID == targetUserID {
+			matchesTarget = true
+			break
 		}
+	}
+	if matchesTarget && len(owners) <= 1 {
+		return nil, forge.BadRequest("cannot revoke platform-owner from the last platform owner")
 	}
 
 	roleID, err := id.Parse(ownerRole.ID)

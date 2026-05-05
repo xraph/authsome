@@ -1603,7 +1603,7 @@ func (e *Engine) ListUserRoles(ctx context.Context, userID id.UserID) ([]*rbac.R
 // assignments exist.
 func (e *Engine) ListUsersWithRole(ctx context.Context, appID id.AppID, roleSlug string) ([]id.UserID, error) {
 	if e.wardenEng == nil {
-		return nil, nil
+		return nil, fmt.Errorf("rbac: warden engine not initialized")
 	}
 
 	// Resolve the role so we have its warden ID.
