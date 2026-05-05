@@ -105,6 +105,11 @@ type BootstrapYAMLConfig struct {
 	// receive the platform-owner role on sign-up, regardless of whether they
 	// are the first user. Comparison is case-insensitive.
 	InitialOwners []string `json:"initial_owners" mapstructure:"initial_owners" yaml:"initial_owners"`
+
+	// InitialOwnerCount sets how many of the first N users to register are
+	// automatically promoted to platform-owner. Defaults to 3. Set to 1 for
+	// the original single-owner behaviour; set to 0 to disable.
+	InitialOwnerCount int `json:"initial_owner_count" mapstructure:"initial_owner_count" yaml:"initial_owner_count"`
 }
 
 // BootstrapEnvYAML describes an environment in YAML config.

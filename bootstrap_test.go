@@ -2,6 +2,7 @@ package authsome_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/store/memory"
@@ -181,7 +183,12 @@ func TestBootstrap_InitialOwner_CaseInsensitive(t *testing.T) {
 }
 
 func TestBootstrap_NonInitialOwner_NotPromoted(t *testing.T) {
-	eng, _ := newBootstrapEngine(t, authsome.WithInitialOwners("owner@example.com"))
+	// Pin count to 1 so only the very first user is auto-promoted; the second
+	// user (not in InitialOwners) must NOT receive platform-owner.
+	eng, _ := newBootstrapEngine(t,
+		authsome.WithInitialOwners("owner@example.com"),
+		authsome.WithInitialOwnerCount(1),
+	)
 	ctx := context.Background()
 	appID := eng.PlatformAppID()
 	require.False(t, appID.IsNil())
@@ -211,4 +218,85 @@ func TestBootstrap_NonInitialOwner_NotPromoted(t *testing.T) {
 		assert.NotEqual(t, rbac.PlatformOwnerSlug, r.Slug,
 			"non-listed user should NOT receive platform-owner role")
 	}
+}
+
+func TestBootstrap_InitialOwnerCount_PromotesFirstN(t *testing.T) {
+	// Default count is 3 — first 3 users should all receive platform-owner.
+	eng, _ := newBootstrapEngine(t)
+	ctx := context.Background()
+	appID := eng.PlatformAppID()
+	require.False(t, appID.IsNil())
+
+	emails := []string{"u1@example.com", "u2@example.com", "u3@example.com", "u4@example.com"}
+	var users []id.UserID
+	for i, email := range emails {
+		u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+			AppID:     appID,
+			Email:     email,
+			Password:  "SecureP@ss1",
+			FirstName: fmt.Sprintf("User%d", i+1),
+		})
+		require.NoError(t, err)
+		users = append(users, u.ID)
+	}
+
+	// Users 1–3 should have platform-owner.
+	for i := 0; i < 3; i++ {
+		roles, err := eng.ListUserRoles(ctx, users[i])
+		require.NoError(t, err)
+		hasOwner := false
+		for _, r := range roles {
+			if r.Slug == rbac.PlatformOwnerSlug {
+				hasOwner = true
+				break
+			}
+		}
+		assert.True(t, hasOwner, "user %d (index %d) should have platform-owner", i+1, i)
+	}
+
+	// User 4 (index 3) should NOT have platform-owner.
+	roles, err := eng.ListUserRoles(ctx, users[3])
+	require.NoError(t, err)
+	for _, r := range roles {
+		assert.NotEqual(t, rbac.PlatformOwnerSlug, r.Slug,
+			"4th user should not receive platform-owner when count=3")
+	}
+}
+
+func TestBootstrap_InitialOwnerCount_Zero_DisablesCountPromotion(t *testing.T) {
+	// Count=0 disables the count-based path entirely; only InitialOwners emails work.
+	eng, _ := newBootstrapEngine(t,
+		authsome.WithInitialOwnerCount(0),
+		authsome.WithInitialOwners("special@example.com"),
+	)
+	ctx := context.Background()
+	appID := eng.PlatformAppID()
+	require.False(t, appID.IsNil())
+
+	// First user — NOT in InitialOwners, count path disabled.
+	first, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID: appID, Email: "first@example.com", Password: "SecureP@ss1", FirstName: "First",
+	})
+	require.NoError(t, err)
+	roles, err := eng.ListUserRoles(ctx, first.ID)
+	require.NoError(t, err)
+	for _, r := range roles {
+		assert.NotEqual(t, rbac.PlatformOwnerSlug, r.Slug, "first user should not be promoted when count=0")
+	}
+
+	// Special user — IS in InitialOwners, should be promoted.
+	special, _, err := eng.SignUp(ctx, &account.SignUpRequest{
+		AppID: appID, Email: "special@example.com", Password: "SecureP@ss1", FirstName: "Special",
+	})
+	require.NoError(t, err)
+	roles, err = eng.ListUserRoles(ctx, special.ID)
+	require.NoError(t, err)
+	hasOwner := false
+	for _, r := range roles {
+		if r.Slug == rbac.PlatformOwnerSlug {
+			hasOwner = true
+			break
+		}
+	}
+	assert.True(t, hasOwner, "InitialOwners email should still be promoted when count=0")
 }

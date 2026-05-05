@@ -1746,10 +1746,13 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 	// Determine whether this user should be promoted.
 	shouldPromote := false
 
-	// Case 1: first user in the platform app.
-	list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: 2})
-	if err == nil && list != nil && len(list.Users) == 1 {
-		shouldPromote = true
+	// Case 1: one of the first N users in the platform app (N = InitialOwnerCount).
+	ownerCount := e.bootstrapCfg.InitialOwnerCount
+	if ownerCount > 0 {
+		list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: ownerCount + 1})
+		if err == nil && list != nil && len(list.Users) <= ownerCount {
+			shouldPromote = true
+		}
 	}
 
 	// Case 2: email is in the InitialOwners list (case-insensitive).

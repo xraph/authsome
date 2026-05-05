@@ -1223,6 +1223,12 @@ func (e *Extension) buildBootstrapOptions() []authsome.BootstrapOption {
 		opts = append(opts, authsome.WithInitialOwners(cfg.InitialOwners...))
 	}
 
+	// Override the count-based auto-promotion threshold only when explicitly
+	// set (non-zero). Zero means "use the default (3)" at the engine level.
+	if cfg.InitialOwnerCount > 0 {
+		opts = append(opts, authsome.WithInitialOwnerCount(cfg.InitialOwnerCount))
+	}
+
 	return opts
 }
 

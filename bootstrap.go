@@ -45,6 +45,13 @@ type BootstrapConfig struct {
 	// they are the first user. Comparison is case-insensitive.
 	InitialOwners []string
 
+	// InitialOwnerCount controls how many of the first N users to sign up on
+	// the platform app are automatically promoted to platform-owner. Defaults
+	// to 3. Set to 1 for the original single-owner behaviour; set to 0 to
+	// disable the count-based promotion entirely (only InitialOwners emails
+	// will be used).
+	InitialOwnerCount int
+
 	// Callback for custom post-bootstrap logic.
 	OnBootstrap func(ctx context.Context, e *Engine, appID id.AppID) error
 }
@@ -65,8 +72,9 @@ type BootstrapOption func(*BootstrapConfig)
 // not from this struct.
 func DefaultBootstrapConfig() *BootstrapConfig {
 	return &BootstrapConfig{
-		AppName: "Platform",
-		AppSlug: "platform",
+		AppName:           "Platform",
+		AppSlug:           "platform",
+		InitialOwnerCount: 3,
 		Environments: []BootstrapEnv{
 			{Name: "Development", Slug: "development", Type: environment.TypeDevelopment, IsDefault: true},
 			{Name: "Staging", Slug: "staging", Type: environment.TypeStaging},
@@ -136,6 +144,14 @@ func WithBootstrapWardenSources(shared, platform *wardenseed.Source) BootstrapOp
 // multiple times appends to the existing list.
 func WithInitialOwners(emails ...string) BootstrapOption {
 	return func(cfg *BootstrapConfig) { cfg.InitialOwners = append(cfg.InitialOwners, emails...) }
+}
+
+// WithInitialOwnerCount sets how many of the first N users to register on the
+// platform app are automatically promoted to platform-owner. The default is 3.
+// Pass 1 to restore the original single-owner behaviour; pass 0 to disable
+// count-based promotion entirely.
+func WithInitialOwnerCount(n int) BootstrapOption {
+	return func(cfg *BootstrapConfig) { cfg.InitialOwnerCount = n }
 }
 
 // WithOnBootstrap sets a callback invoked after the platform app is created.
