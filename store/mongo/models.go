@@ -18,6 +18,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -824,21 +825,22 @@ func fromNotificationModel(m *notificationModel) (*notification.Notification, er
 type apiKeyModel struct {
 	grove.BaseModel `grove:"table:authsome_api_keys"`
 
-	ID              string     `grove:"id,pk"          bson:"_id"`
-	AppID           string     `grove:"app_id"         bson:"app_id"`
-	EnvID           string     `grove:"env_id"         bson:"env_id"`
-	UserID          string     `grove:"user_id"        bson:"user_id"`
-	Name            string     `grove:"name"           bson:"name"`
-	KeyHash         string     `grove:"key_hash"            bson:"key_hash"`
-	KeyPrefix       string     `grove:"key_prefix"          bson:"key_prefix"`
-	PublicKey       string     `grove:"public_key"          bson:"public_key"`
-	PublicKeyPrefix string     `grove:"public_key_prefix"   bson:"public_key_prefix"`
-	Scopes          string     `grove:"scopes"              bson:"scopes"`
-	ExpiresAt       *time.Time `grove:"expires_at"     bson:"expires_at,omitempty"`
-	LastUsedAt      *time.Time `grove:"last_used_at"   bson:"last_used_at,omitempty"`
-	Revoked         bool       `grove:"revoked"        bson:"revoked"`
-	CreatedAt       time.Time  `grove:"created_at"     bson:"created_at"`
-	UpdatedAt       time.Time  `grove:"updated_at"     bson:"updated_at"`
+	ID               string     `grove:"id,pk"                bson:"_id"`
+	AppID            string     `grove:"app_id"               bson:"app_id"`
+	EnvID            string     `grove:"env_id"               bson:"env_id"`
+	UserID           string     `grove:"user_id"              bson:"user_id"`
+	ServiceAccountID string     `grove:"service_account_id"   bson:"service_account_id,omitempty"`
+	Name             string     `grove:"name"                 bson:"name"`
+	KeyHash          string     `grove:"key_hash"             bson:"key_hash"`
+	KeyPrefix        string     `grove:"key_prefix"           bson:"key_prefix"`
+	PublicKey        string     `grove:"public_key"           bson:"public_key"`
+	PublicKeyPrefix  string     `grove:"public_key_prefix"    bson:"public_key_prefix"`
+	Scopes           string     `grove:"scopes"               bson:"scopes"`
+	ExpiresAt        *time.Time `grove:"expires_at"           bson:"expires_at,omitempty"`
+	LastUsedAt       *time.Time `grove:"last_used_at"         bson:"last_used_at,omitempty"`
+	Revoked          bool       `grove:"revoked"              bson:"revoked"`
+	CreatedAt        time.Time  `grove:"created_at"           bson:"created_at"`
+	UpdatedAt        time.Time  `grove:"updated_at"           bson:"updated_at"`
 }
 
 func toAPIKeyModel(k *apikey.APIKey) *apiKeyModel {
@@ -860,6 +862,9 @@ func toAPIKeyModel(k *apikey.APIKey) *apiKeyModel {
 	}
 	if len(k.Scopes) > 0 {
 		m.Scopes = strings.Join(k.Scopes, ",")
+	}
+	if !k.ServiceAccountID.IsNil() {
+		m.ServiceAccountID = k.ServiceAccountID.String()
 	}
 	return m
 }
@@ -909,7 +914,71 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 	if m.Scopes != "" {
 		k.Scopes = strings.Split(m.Scopes, ",")
 	}
+	if m.ServiceAccountID != "" {
+		svcID, perr := id.ParseServiceAccountID(m.ServiceAccountID)
+		if perr != nil {
+			return nil, perr
+		}
+		k.ServiceAccountID = svcID
+	}
 	return k, nil
+}
+
+// ──────────────────────────────────────────────────
+// Service Account model
+// ──────────────────────────────────────────────────
+
+type serviceAccountModel struct {
+	grove.BaseModel `grove:"table:authsome_service_accounts"`
+
+	ID          string    `grove:"id,pk"       bson:"_id"`
+	AppID       string    `grove:"app_id"      bson:"app_id"`
+	Name        string    `grove:"name"        bson:"name"`
+	Description string    `grove:"description" bson:"description,omitempty"`
+	Scopes      string    `grove:"scopes"      bson:"scopes,omitempty"`
+	Active      bool      `grove:"active"      bson:"active"`
+	CreatedAt   time.Time `grove:"created_at"  bson:"created_at"`
+	UpdatedAt   time.Time `grove:"updated_at"  bson:"updated_at"`
+}
+
+func toServiceAccountModel(svc *serviceaccount.ServiceAccount) *serviceAccountModel {
+	m := &serviceAccountModel{
+		ID:          svc.ID.String(),
+		AppID:       svc.AppID.String(),
+		Name:        svc.Name,
+		Description: svc.Description,
+		Active:      svc.Active,
+		CreatedAt:   svc.CreatedAt,
+		UpdatedAt:   svc.UpdatedAt,
+	}
+	if len(svc.Scopes) > 0 {
+		m.Scopes = strings.Join(svc.Scopes, ",")
+	}
+	return m
+}
+
+func fromServiceAccountModel(m *serviceAccountModel) (*serviceaccount.ServiceAccount, error) {
+	svcID, err := id.ParseServiceAccountID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	svc := &serviceaccount.ServiceAccount{
+		ID:          svcID,
+		AppID:       appID,
+		Name:        m.Name,
+		Description: m.Description,
+		Active:      m.Active,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+	if m.Scopes != "" {
+		svc.Scopes = strings.Split(m.Scopes, ",")
+	}
+	return svc, nil
 }
 
 // ──────────────────────────────────────────────────

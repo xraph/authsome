@@ -314,6 +314,10 @@ func (s *WardenStore) GetRoleChildren(ctx context.Context, roleID string) ([]*Ro
 // ──────────────────────────────────────────────────
 
 func (s *WardenStore) HasPermission(ctx context.Context, userID, action, resource string) (bool, error) {
+	// TODO(service-accounts): when service account RBAC is added, this method needs to
+	// accept a principal kind parameter and route service account permission checks
+	// to a warden.SubjectServiceAccount (or similar) subject kind rather than
+	// warden.SubjectUser. For now, service accounts use API-key-level scopes only.
 	result, err := s.engine.Check(ctx, &warden.CheckRequest{
 		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID},
 		Action:   warden.Action{Name: action},

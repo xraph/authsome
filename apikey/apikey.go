@@ -15,22 +15,24 @@ import (
 var ErrNotFound = errors.New("apikey: not found")
 
 // APIKey represents an API key for programmatic access.
+// Exactly one of UserID or ServiceAccountID should be non-nil; the other will be the zero ID.
 type APIKey struct {
-	ID              id.APIKeyID      `json:"id"`
-	AppID           id.AppID         `json:"app_id"`
-	EnvID           id.EnvironmentID `json:"env_id"`
-	UserID          id.UserID        `json:"user_id"`
-	Name            string           `json:"name"`
-	KeyHash         string           `json:"-"`
-	KeyPrefix       string           `json:"key_prefix"`
-	PublicKey       string           `json:"public_key,omitempty"`
-	PublicKeyPrefix string           `json:"public_key_prefix,omitempty"`
-	Scopes          []string         `json:"scopes,omitempty"`
-	ExpiresAt       *time.Time       `json:"expires_at,omitempty"`
-	LastUsedAt      *time.Time       `json:"last_used_at,omitempty"`
-	Revoked         bool             `json:"revoked"`
-	CreatedAt       time.Time        `json:"created_at"`
-	UpdatedAt       time.Time        `json:"updated_at"`
+	ID               id.APIKeyID         `json:"id"`
+	AppID            id.AppID            `json:"app_id"`
+	EnvID            id.EnvironmentID    `json:"env_id"`
+	UserID           id.UserID           `json:"user_id"`
+	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
+	Name             string              `json:"name"`
+	KeyHash          string              `json:"-"`
+	KeyPrefix        string              `json:"key_prefix"`
+	PublicKey        string              `json:"public_key,omitempty"`
+	PublicKeyPrefix  string              `json:"public_key_prefix,omitempty"`
+	Scopes           []string            `json:"scopes,omitempty"`
+	ExpiresAt        *time.Time          `json:"expires_at,omitempty"`
+	LastUsedAt       *time.Time          `json:"last_used_at,omitempty"`
+	Revoked          bool                `json:"revoked"`
+	CreatedAt        time.Time           `json:"created_at"`
+	UpdatedAt        time.Time           `json:"updated_at"`
 }
 
 // IsExpired returns true if the API key has expired.

@@ -22,6 +22,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -59,6 +60,8 @@ type Store struct {
 	appClientConfigs  map[string]*appclientconfig.Config
 	settingsMap       map[string]*settings.Setting
 
+	serviceAccounts map[string]*serviceaccount.ServiceAccount
+
 	// revokedRefreshTokens maps SHA-256(refresh_token) -> revocation record.
 	// Used to detect refresh-token replay (RFC 6819 §5.2.2.3): every
 	// successful rotation records the OLD hash with reason="rotated", and
@@ -95,6 +98,7 @@ func New() *Store {
 		appSessionConfigs: make(map[string]*appsessionconfig.Config),
 		appClientConfigs:  make(map[string]*appclientconfig.Config),
 		settingsMap:       make(map[string]*settings.Setting),
+		serviceAccounts:      make(map[string]*serviceaccount.ServiceAccount),
 		revokedRefreshTokens: make(map[string]*session.RevokedRefreshToken),
 		faults:            make(map[string]error),
 	}
@@ -1520,5 +1524,76 @@ func (s *Store) DeleteAppClientConfig(_ context.Context, appID id.AppID) error {
 		return appclientconfig.ErrNotFound
 	}
 	delete(s.appClientConfigs, appID.String())
+	return nil
+}
+
+// ──────────────────────────────────────────────────
+// Service Account Store
+// ──────────────────────────────────────────────────
+
+func (s *Store) CreateServiceAccount(_ context.Context, svc *serviceaccount.ServiceAccount) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if svc.CreatedAt.IsZero() {
+		svc.CreatedAt = time.Now()
+	}
+	svc.UpdatedAt = svc.CreatedAt
+	// Enforce unique (app_id, name).
+	for _, existing := range s.serviceAccounts {
+		if existing.AppID.String() == svc.AppID.String() && existing.Name == svc.Name {
+			return store.ErrConflict
+		}
+	}
+	s.serviceAccounts[svc.ID.String()] = svc
+	return nil
+}
+
+func (s *Store) GetServiceAccount(_ context.Context, svcID id.ServiceAccountID) (*serviceaccount.ServiceAccount, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	svc, ok := s.serviceAccounts[svcID.String()]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	return svc, nil
+}
+
+func (s *Store) ListServiceAccounts(_ context.Context, q *serviceaccount.Query) (*serviceaccount.List, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var result []*serviceaccount.ServiceAccount
+	for _, svc := range s.serviceAccounts {
+		if svc.AppID.String() != q.AppID.String() {
+			continue
+		}
+		if q.Active != nil && svc.Active != *q.Active {
+			continue
+		}
+		result = append(result, svc)
+	}
+	if q.Limit > 0 && len(result) > q.Limit {
+		result = result[:q.Limit]
+	}
+	return &serviceaccount.List{ServiceAccounts: result, Total: len(result)}, nil
+}
+
+func (s *Store) UpdateServiceAccount(_ context.Context, svc *serviceaccount.ServiceAccount) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.serviceAccounts[svc.ID.String()]; !ok {
+		return store.ErrNotFound
+	}
+	svc.UpdatedAt = time.Now()
+	s.serviceAccounts[svc.ID.String()] = svc
+	return nil
+}
+
+func (s *Store) DeleteServiceAccount(_ context.Context, svcID id.ServiceAccountID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.serviceAccounts[svcID.String()]; !ok {
+		return store.ErrNotFound
+	}
+	delete(s.serviceAccounts, svcID.String())
 	return nil
 }

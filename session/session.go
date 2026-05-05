@@ -31,4 +31,12 @@ type Session struct {
 	RefreshTokenExpiresAt time.Time        `json:"refresh_token_expires_at"`
 	CreatedAt             time.Time        `json:"created_at"`
 	UpdatedAt             time.Time        `json:"updated_at"`
+
+	// PrincipalKind identifies the type of principal that owns this session.
+	// Valid values are "user" and "service_account". Empty string means "user"
+	// for backwards compatibility with existing sessions.
+	PrincipalKind     string              `json:"principal_kind,omitempty"`
+	// ServiceAccountID is set when PrincipalKind is "service_account".
+	// UserID is left as the zero value in that case.
+	ServiceAccountID  id.ServiceAccountID `json:"service_account_id,omitempty"`
 }

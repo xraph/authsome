@@ -36,12 +36,13 @@ const (
 	colDevices           = "authsome_devices"
 	colWebhooks          = "authsome_webhooks"
 	colNotifications     = "authsome_notifications"
-	colAPIKeys           = "authsome_api_keys" //nolint:gosec // G101: not a credential
-	colEnvironments      = "authsome_environments"
-	colFormConfigs       = "authsome_form_configs"
-	colBrandingConfigs   = "authsome_branding_configs"
+	colAPIKeys              = "authsome_api_keys" //nolint:gosec // G101: not a credential
+	colEnvironments         = "authsome_environments"
+	colFormConfigs          = "authsome_form_configs"
+	colBrandingConfigs      = "authsome_branding_configs"
 	colAppSessionConfigs    = "authsome_app_session_configs"
 	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens" //nolint:gosec // G101: not a credential
+	colServiceAccounts      = "authsome_service_accounts"
 )
 
 // Compile-time interface checks.
@@ -513,6 +514,13 @@ func migrationIndexes() map[string][]mongo.IndexModel {
 				Keys:    bson.D{{Key: "app_id", Value: 1}},
 				Options: options.Index().SetUnique(true),
 			},
+		},
+		colServiceAccounts: {
+			{
+				Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "name", Value: 1}},
+				Options: options.Index().SetUnique(true),
+			},
+			{Keys: bson.D{{Key: "app_id", Value: 1}}},
 		},
 	}
 }

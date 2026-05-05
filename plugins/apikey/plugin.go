@@ -475,6 +475,20 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	key.LastUsedAt = &now
 	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 
+	// Handle service-account keys: create a synthetic session without a user.
+	if !key.ServiceAccountID.IsNil() {
+		syntheticSession := &session.Session{
+			ID:               id.NewSessionID(),
+			AppID:            key.AppID,
+			EnvID:            key.EnvID,
+			CreatedAt:        now,
+			ExpiresAt:        now.Add(24 * time.Hour),
+			PrincipalKind:    "service_account",
+			ServiceAccountID: key.ServiceAccountID,
+		}
+		return &strategy.Result{Session: syntheticSession}, nil
+	}
+
 	// Resolve the user associated with this API key.
 	if s.resolveUser == nil {
 		return nil, fmt.Errorf("apikey: user resolver not configured")

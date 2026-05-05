@@ -631,3 +631,41 @@ type IntrospectUser struct {
 	LastName  string `json:"last_name,omitempty" description:"Last name"`
 	Username  string `json:"username,omitempty" description:"Username"`
 }
+
+// ---------------------------------------------------------------------------
+// Service Account admin requests
+// ---------------------------------------------------------------------------
+
+// AdminCreateServiceAccountRequest binds the body for POST /admin/service-accounts.
+type AdminCreateServiceAccountRequest struct {
+	AppID       string   `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Name        string   `json:"name" description:"Service account name (unique per app)"`
+	Description string   `json:"description,omitempty" description:"Human-readable description"`
+	Scopes      []string `json:"scopes,omitempty" description:"Default scopes for API keys minted for this service account"`
+}
+
+// AdminListServiceAccountsRequest binds query params for GET /admin/service-accounts.
+type AdminListServiceAccountsRequest struct {
+	AppID  string `query:"app_id" description:"Application ID"`
+	Limit  int    `query:"limit,omitempty" description:"Maximum number of results (default 20, max 100)"`
+	Cursor string `query:"cursor,omitempty" description:"Pagination cursor"`
+}
+
+// AdminGetServiceAccountRequest binds the path for GET /admin/service-accounts/:serviceAccountId.
+type AdminGetServiceAccountRequest struct {
+	ServiceAccountID string `path:"serviceAccountId" description:"Service account ID"`
+}
+
+// AdminDeleteServiceAccountRequest binds the path for DELETE /admin/service-accounts/:serviceAccountId.
+type AdminDeleteServiceAccountRequest struct {
+	ServiceAccountID string `path:"serviceAccountId" description:"Service account ID"`
+}
+
+// AdminCreateServiceAccountAPIKeyRequest binds path + body for
+// POST /admin/service-accounts/:serviceAccountId/api-keys.
+type AdminCreateServiceAccountAPIKeyRequest struct {
+	ServiceAccountID string   `path:"serviceAccountId" description:"Service account ID"`
+	Name             string   `json:"name" description:"API key name"`
+	Scopes           []string `json:"scopes,omitempty" description:"Scopes for this key"`
+	ExpiresAt        *string  `json:"expires_at,omitempty" description:"Optional expiration time (RFC 3339)"`
+}

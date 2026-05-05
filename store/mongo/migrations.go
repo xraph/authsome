@@ -618,6 +618,36 @@ func init() {
 				return nil
 			},
 		},
+		// Migration: Create service_accounts collection with indexes.
+		&migrate.Migration{
+			Name:    "create_authsome_service_accounts",
+			Version: "20260505000002",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+
+				if err := mexec.CreateCollection(ctx, (*serviceAccountModel)(nil)); err != nil {
+					return err
+				}
+
+				return mexec.CreateIndexes(ctx, colServiceAccounts, []mongo.IndexModel{
+					{
+						Keys:    bson.D{{Key: "app_id", Value: 1}, {Key: "name", Value: 1}},
+						Options: options.Index().SetUnique(true),
+					},
+					{Keys: bson.D{{Key: "app_id", Value: 1}}},
+				})
+			},
+			Down: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				return mexec.DropCollection(ctx, (*serviceAccountModel)(nil))
+			},
+		},
 		// Migration: Remove duplicate / stale platform-admin role rows that
 		// were created when authsome transitioned from a programmatic
 		// DefaultRoles bootstrap approach to the warden DSL approach. Both

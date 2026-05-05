@@ -59,6 +59,7 @@ const (
 	PrefixSCIMLog         Prefix = "ascl"
 	PrefixWaitlist        Prefix = "awlt"
 	PrefixSessionFamily   Prefix = "asfm"
+	PrefixServiceAccount  Prefix = "svc"
 )
 
 // ID is the primary identifier type for all AuthSome entities.
@@ -185,6 +186,9 @@ type WaitlistID = ID
 // refresh-token rotations) share the same SessionFamilyID, enabling cascade
 // revocation when a refresh-token replay is detected (RFC 6819 §5.2.2.3).
 type SessionFamilyID = ID
+
+// ServiceAccountID is a type-safe identifier for service accounts (prefix: "svc").
+type ServiceAccountID = ID
 
 // AnyID is a TypeID that accepts any valid prefix.
 type AnyID = ID
@@ -364,6 +368,9 @@ func NewWaitlistID() ID { return New(PrefixWaitlist) }
 // sign-in begins a new family; refresh rotations inherit the parent family.
 func NewSessionFamilyID() ID { return New(PrefixSessionFamily) }
 
+// NewServiceAccountID generates a new unique service account ID.
+func NewServiceAccountID() ID { return New(PrefixServiceAccount) }
+
 // ──────────────────────────────────────────────────
 // Convenience parsers
 // ──────────────────────────────────────────────────
@@ -474,6 +481,9 @@ func ParseWaitlistID(s string) (ID, error) { return ParseWithPrefix(s, PrefixWai
 
 // ParseSessionFamilyID parses a string and validates the "asfm" prefix.
 func ParseSessionFamilyID(s string) (ID, error) { return ParseWithPrefix(s, PrefixSessionFamily) }
+
+// ParseServiceAccountID parses a string and validates the "svc" prefix.
+func ParseServiceAccountID(s string) (ID, error) { return ParseWithPrefix(s, PrefixServiceAccount) }
 
 // ParseAny parses a string into an ID without type checking the prefix.
 func ParseAny(s string) (ID, error) { return Parse(s) }
