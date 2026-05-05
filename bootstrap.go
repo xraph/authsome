@@ -40,6 +40,11 @@ type BootstrapConfig struct {
 	// shipped via cfg.WardenDir, or a custom fs.FS).
 	SeedOptions wardenseed.ApplyOptions
 
+	// InitialOwners is a list of email addresses that should automatically
+	// receive the platform-owner role when they sign up, regardless of whether
+	// they are the first user. Comparison is case-insensitive.
+	InitialOwners []string
+
 	// Callback for custom post-bootstrap logic.
 	OnBootstrap func(ctx context.Context, e *Engine, appID id.AppID) error
 }
@@ -123,6 +128,14 @@ func WithBootstrapWardenSources(shared, platform *wardenseed.Source) BootstrapOp
 		cfg.SeedOptions.SharedOverride = shared
 		cfg.SeedOptions.PlatformOverride = platform
 	}
+}
+
+// WithInitialOwners registers email addresses that should receive the
+// platform-owner role on sign-up, regardless of whether they are the first
+// user. Comparison is case-insensitive. The option is additive — calling it
+// multiple times appends to the existing list.
+func WithInitialOwners(emails ...string) BootstrapOption {
+	return func(cfg *BootstrapConfig) { cfg.InitialOwners = append(cfg.InitialOwners, emails...) }
 }
 
 // WithOnBootstrap sets a callback invoked after the platform app is created.

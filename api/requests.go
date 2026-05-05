@@ -416,6 +416,25 @@ type AdminImpersonateRequest struct {
 // AdminStopImpersonationRequest is an empty request for POST /admin/impersonate/stop.
 type AdminStopImpersonationRequest struct{}
 
+// AdminGrantPlatformOwnerRequest binds the body for POST /admin/platform/owners.
+// Either user_id or email must be provided.
+type AdminGrantPlatformOwnerRequest struct {
+	UserID string `json:"user_id,omitempty" description:"User identifier (mutually exclusive with email)"`
+	Email  string `json:"email,omitempty" description:"User email address (mutually exclusive with user_id)"`
+}
+
+// AdminRevokePlatformOwnerRequest binds the path for DELETE /admin/platform/owners/:userID.
+type AdminRevokePlatformOwnerRequest struct {
+	UserID string `path:"userID" description:"User identifier to revoke platform-owner role from"`
+}
+
+// AdminPlatformOwnerResponse is returned by grant/revoke platform owner endpoints.
+type AdminPlatformOwnerResponse struct {
+	UserID string `json:"user_id"`
+	RoleID string `json:"role_id"`
+	Status string `json:"status"`
+}
+
 // ---------------------------------------------------------------------------
 // GDPR / Account deletion requests
 // ---------------------------------------------------------------------------

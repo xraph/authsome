@@ -15,6 +15,8 @@ import (
 
 	"github.com/xraph/forge"
 	"github.com/xraph/warden"
+	wardenassign "github.com/xraph/warden/assignment"
+	wardenid "github.com/xraph/warden/id"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
@@ -1594,6 +1596,56 @@ func (e *Engine) ListUserRoles(ctx context.Context, userID id.UserID) ([]*rbac.R
 	return e.rbacStore().ListUserRoles(ctx, userID.String())
 }
 
+// ListUsersWithRole returns the user IDs of all subjects that hold the named
+// role slug within the given app. It queries the warden assignments store
+// directly because the rbac.Store interface exposes only a user→roles
+// direction, not the reverse. Returns an empty slice (not an error) when no
+// assignments exist.
+func (e *Engine) ListUsersWithRole(ctx context.Context, appID id.AppID, roleSlug string) ([]id.UserID, error) {
+	if e.wardenEng == nil {
+		return nil, nil
+	}
+
+	// Resolve the role so we have its warden ID.
+	role, err := e.GetRoleBySlug(ctx, appID, roleSlug)
+	if err != nil || role == nil {
+		return nil, fmt.Errorf("authsome: role %q not found in app %s: %w", roleSlug, appID, err)
+	}
+
+	// Parse the role ID into a warden RoleID. The role ID stored in
+	// rbac.Role.ID is in warden format ("role_xxx").
+	wRoleID, parseErr := wardenid.ParseRoleID(role.ID)
+	if parseErr != nil {
+		// Fallback: try stripping the authsome prefix and re-parsing.
+		parts := strings.SplitN(role.ID, "_", 2)
+		if len(parts) == 2 {
+			wRoleID, parseErr = wardenid.ParseRoleID(string(wardenid.PrefixRole) + "_" + parts[1])
+		}
+		if parseErr != nil {
+			return nil, fmt.Errorf("authsome: invalid role id %q: %w", role.ID, parseErr)
+		}
+	}
+
+	assignments, err := e.wardenEng.Store().ListAssignments(ctx, &wardenassign.ListFilter{
+		TenantID:    appID.String(),
+		RoleID:      &wRoleID,
+		SubjectKind: "user",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("authsome: list assignments for role %q: %w", roleSlug, err)
+	}
+
+	userIDs := make([]id.UserID, 0, len(assignments))
+	for _, a := range assignments {
+		uid, parseErr := id.ParseUserID(a.SubjectID)
+		if parseErr != nil {
+			continue // skip malformed entries
+		}
+		userIDs = append(userIDs, uid)
+	}
+	return userIDs, nil
+}
+
 // GetRoleChildren returns the direct child roles of a parent role.
 func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac.Role, error) {
 	return e.rbacStore().GetRoleChildren(ctx, roleID.String())
@@ -1669,9 +1721,13 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 	})
 }
 
-// promoteFirstUserToOwner assigns the platform_owner (or app owner) role to
-// the first user created for an app. This must live in the engine so it works
-// regardless of entry point (API handler, dashboard, SDK, etc.).
+// promoteFirstUserToOwner assigns the platform_owner role to the signing-up
+// user when either:
+//   - this is the very first user in the platform app (original behaviour), or
+//   - the user's email is listed in bootstrapCfg.InitialOwners (case-insensitive).
+//
+// This must live in the engine so it works regardless of entry point (API
+// handler, dashboard, SDK, etc.).
 func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, userID id.UserID) {
 	if !e.hasRBACStore() {
 		return
@@ -1687,9 +1743,31 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 		return
 	}
 
+	// Determine whether this user should be promoted.
+	shouldPromote := false
+
+	// Case 1: first user in the platform app.
 	list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: 2})
-	if err != nil || list == nil || len(list.Users) != 1 {
-		return // Not the first user.
+	if err == nil && list != nil && len(list.Users) == 1 {
+		shouldPromote = true
+	}
+
+	// Case 2: email is in the InitialOwners list (case-insensitive).
+	if !shouldPromote && len(e.bootstrapCfg.InitialOwners) > 0 {
+		u, lookupErr := e.store.GetUser(ctx, userID)
+		if lookupErr == nil && u != nil {
+			email := strings.ToLower(strings.TrimSpace(u.Email))
+			for _, owner := range e.bootstrapCfg.InitialOwners {
+				if strings.ToLower(strings.TrimSpace(owner)) == email {
+					shouldPromote = true
+					break
+				}
+			}
+		}
+	}
+
+	if !shouldPromote {
+		return
 	}
 
 	ownerRole, err := e.GetRoleBySlug(ctx, appID, rbac.PlatformOwnerSlug)
@@ -1705,14 +1783,14 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 		UserID: userID.String(),
 		RoleID: ownerRole.ID,
 	}); err != nil {
-		e.logger.Warn("authsome: failed to promote first user to platform_owner",
+		e.logger.Warn("authsome: failed to promote user to platform_owner",
 			log.String("user_id", userID.String()),
 			log.String("error", err.Error()),
 		)
 		return
 	}
 
-	e.logger.Info("authsome: promoted first user to platform_owner",
+	e.logger.Info("authsome: promoted user to platform_owner",
 		log.String("user_id", userID.String()),
 		log.String("app_id", appID.String()),
 	)

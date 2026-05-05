@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/xraph/forge"
@@ -10,6 +12,7 @@ import (
 	authsomeapp "github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/middleware"
+	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/user"
 )
 
@@ -149,11 +152,33 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
-	return g.DELETE("/apps/:appId", a.handleAdminDeleteApp,
+	if err := g.DELETE("/apps/:appId", a.handleAdminDeleteApp,
 		forge.WithSummary("Delete application (admin)"),
 		forge.WithDescription("Permanently deletes an application and cascades to all child envs / orgs / users / sessions / OAuth clients. Requires platform admin role. Used as the rollback action for App-per-workspace provisioning."),
 		forge.WithOperationID("adminDeleteApp"),
 		forge.WithResponseSchema(http.StatusOK, "Deleted", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	// Platform owner management
+	if err := g.POST("/platform/owners", a.handleGrantPlatformOwner,
+		forge.WithSummary("Grant platform-owner role (admin)"),
+		forge.WithDescription("Grants the platform-owner role to a user identified by user_id or email. Requires platform-owner role."),
+		forge.WithOperationID("adminGrantPlatformOwner"),
+		forge.WithRequestSchema(AdminGrantPlatformOwnerRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Granted", AdminPlatformOwnerResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	return g.DELETE("/platform/owners/:userID", a.handleRevokePlatformOwner,
+		forge.WithSummary("Revoke platform-owner role (admin)"),
+		forge.WithDescription("Revokes the platform-owner role from a user. Fails if the target user is the last platform owner."),
+		forge.WithOperationID("adminRevokePlatformOwner"),
+		forge.WithResponseSchema(http.StatusOK, "Revoked", AdminPlatformOwnerResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -439,4 +464,101 @@ func (a *API) handleAdminDeleteApp(ctx forge.Context, req *AdminDeleteAppRequest
 		return nil, mapError(err)
 	}
 	return &StatusResponse{Status: "ok"}, nil
+}
+
+// handleGrantPlatformOwner grants the platform-owner role to a user identified
+// by user_id or email. The caller must themselves be a platform owner.
+func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	if req.UserID == "" && req.Email == "" {
+		return nil, forge.BadRequest("user_id or email is required")
+	}
+
+	appID := a.engine.PlatformAppID()
+
+	// Resolve target user.
+	var targetUserID id.UserID
+	if req.UserID != "" {
+		parsed, err := id.ParseUserID(req.UserID)
+		if err != nil {
+			return nil, forge.BadRequest("invalid user_id")
+		}
+		targetUserID = parsed
+	} else {
+		// Look up by email within the platform app.
+		u, err := a.engine.Store().GetUserByEmail(ctx.Context(), appID, strings.ToLower(strings.TrimSpace(req.Email)))
+		if err != nil {
+			return nil, mapError(err)
+		}
+		targetUserID = u.ID
+	}
+
+	ownerRole, err := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
+	if err != nil || ownerRole == nil {
+		return nil, forge.InternalError(fmt.Errorf("platform-owner role not found"))
+	}
+
+	if err := a.engine.AssignUserRole(ctx.Context(), &rbac.UserRole{
+		UserID: targetUserID.String(),
+		RoleID: ownerRole.ID,
+	}); err != nil {
+		return nil, mapError(err)
+	}
+
+	return nil, ctx.JSON(http.StatusOK, &AdminPlatformOwnerResponse{
+		UserID: targetUserID.String(),
+		RoleID: ownerRole.ID,
+		Status: "granted",
+	})
+}
+
+// handleRevokePlatformOwner revokes the platform-owner role from a user.
+// It rejects the request if the target user is the last platform owner.
+func (a *API) handleRevokePlatformOwner(ctx forge.Context, req *AdminRevokePlatformOwnerRequest) (*AdminPlatformOwnerResponse, error) {
+	if _, ok := middleware.UserIDFrom(ctx.Context()); !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+
+	targetUserID, err := id.ParseUserID(req.UserID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid user_id")
+	}
+
+	appID := a.engine.PlatformAppID()
+
+	ownerRole, err := a.engine.GetRoleBySlug(ctx.Context(), appID, rbac.PlatformOwnerSlug)
+	if err != nil || ownerRole == nil {
+		return nil, forge.InternalError(fmt.Errorf("platform-owner role not found"))
+	}
+
+	// Guard: do not allow removing the last platform owner.
+	// List all users with the platform-owner role for this app.
+	owners, err := a.engine.ListUsersWithRole(ctx.Context(), appID, rbac.PlatformOwnerSlug)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if len(owners) == 1 {
+		// Check if the sole owner is the target.
+		if owners[0].String() == targetUserID.String() {
+			return nil, forge.BadRequest("cannot revoke platform-owner from the last platform owner")
+		}
+	}
+
+	roleID, err := id.Parse(ownerRole.ID)
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("invalid platform-owner role ID"))
+	}
+
+	if err := a.engine.UnassignUserRole(ctx.Context(), targetUserID, roleID); err != nil {
+		return nil, mapError(err)
+	}
+
+	return nil, ctx.JSON(http.StatusOK, &AdminPlatformOwnerResponse{
+		UserID: targetUserID.String(),
+		RoleID: ownerRole.ID,
+		Status: "revoked",
+	})
 }

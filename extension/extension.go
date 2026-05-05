@@ -1217,6 +1217,12 @@ func (e *Extension) buildBootstrapOptions() []authsome.BootstrapOption {
 		opts = append(opts, authsome.WithBootstrapWardenDir(cfg.WardenDir))
 	}
 
+	// Pre-configure known platform owners so they receive the role on sign-up
+	// regardless of whether they are the first user.
+	if len(cfg.InitialOwners) > 0 {
+		opts = append(opts, authsome.WithInitialOwners(cfg.InitialOwners...))
+	}
+
 	return opts
 }
 

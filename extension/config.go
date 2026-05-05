@@ -100,6 +100,11 @@ type BootstrapYAMLConfig struct {
 	// app and is optional. Use this to ship custom roles + permission
 	// catalogs without rebuilding the binary.
 	WardenDir string `json:"warden_dir" mapstructure:"warden_dir" yaml:"warden_dir"`
+
+	// InitialOwners is a list of email addresses that should automatically
+	// receive the platform-owner role on sign-up, regardless of whether they
+	// are the first user. Comparison is case-insensitive.
+	InitialOwners []string `json:"initial_owners" mapstructure:"initial_owners" yaml:"initial_owners"`
 }
 
 // BootstrapEnvYAML describes an environment in YAML config.
