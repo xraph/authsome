@@ -207,7 +207,10 @@ func TestClient_ChangePassword(t *testing.T) {
 	assert.NotEmpty(t, resp.Status)
 
 	// Verify new password works.
-	newClient := authclient.NewClient(ts.Server.URL, authclient.WithSessionCookies())
+	newClient := authclient.NewClient(ts.Server.URL,
+		authclient.WithSessionCookies(),
+		authclient.WithPublishableKey(testutil.DefaultPublishableKey),
+	)
 	signInResp, err := newClient.SignIn(ctx, &authclient.SignInRequest{
 		Email:    "changepw@example.com",
 		Password: "NewSecureP@ss2",
@@ -583,7 +586,10 @@ func TestClient_Auth_WithSessionCookies(t *testing.T) {
 	jar, err := cookiejar.New(nil)
 	require.NoError(t, err)
 
-	client := authclient.NewClient(ts.Server.URL, authclient.WithCookieJar(jar))
+	client := authclient.NewClient(ts.Server.URL,
+		authclient.WithCookieJar(jar),
+		authclient.WithPublishableKey(testutil.DefaultPublishableKey),
+	)
 
 	signUpResp, err := client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:     "cookie@example.com",
@@ -604,7 +610,10 @@ func TestClient_Auth_CookiePersistence(t *testing.T) {
 	ts := testutil.NewTestServer(t)
 	ctx := context.Background()
 
-	client := authclient.NewClient(ts.Server.URL, authclient.WithSessionCookies())
+	client := authclient.NewClient(ts.Server.URL,
+		authclient.WithSessionCookies(),
+		authclient.WithPublishableKey(testutil.DefaultPublishableKey),
+	)
 
 	resp, err := client.SignUp(ctx, &authclient.SignUpRequest{
 		Email:     "persist@example.com",

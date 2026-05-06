@@ -4,6 +4,7 @@ package middleware
 import (
 	"context"
 
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/session"
@@ -25,6 +26,7 @@ const (
 	ctxKeyEnvironment
 	ctxKeyEnvironmentSettings
 	ctxKeyAuthMethod
+	ctxKeyApp
 )
 
 // WithUser stores a user in the context.
@@ -136,6 +138,19 @@ func WithEnvironmentSettings(ctx context.Context, s *environment.Settings) conte
 func EnvironmentSettingsFrom(ctx context.Context) (*environment.Settings, bool) {
 	v, ok := ctx.Value(ctxKeyEnvironmentSettings).(*environment.Settings)
 	return v, ok
+}
+
+// WithApp stores the resolved app entity in the context. Set by the
+// publishable-key middleware so handlers can validate against the full
+// app without re-querying the store.
+func WithApp(ctx context.Context, a *app.App) context.Context {
+	return context.WithValue(ctx, ctxKeyApp, a)
+}
+
+// AppFrom retrieves the resolved app from the context.
+func AppFrom(ctx context.Context) (*app.App, bool) {
+	v, ok := ctx.Value(ctxKeyApp).(*app.App)
+	return v, ok && v != nil
 }
 
 // WithAuthMethod stores the authentication method used (e.g. "session", "strategy").

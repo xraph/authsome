@@ -43,6 +43,22 @@ func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.
 		return nil, nil, err
 	}
 
+	// Defense-in-depth: validate that the AppID points to an existing
+	// app. The publishable-key middleware already guarantees this when
+	// pk_* is on the request, but a server-to-server caller may supply
+	// req.AppID directly without that middleware ever running. Without
+	// this check, an arbitrary AppID would be silently written onto the
+	// user row, producing orphaned users that no app can list or admin.
+	if req.AppID.IsNil() {
+		return nil, nil, fmt.Errorf("authsome: signup: app id is required")
+	}
+	if _, getErr := e.store.GetApp(ctx, req.AppID); getErr != nil {
+		if errors.Is(getErr, store.ErrNotFound) {
+			return nil, nil, fmt.Errorf("authsome: signup: app %s not found", req.AppID)
+		}
+		return nil, nil, fmt.Errorf("authsome: signup: load app: %w", getErr)
+	}
+
 	// Check if signup is disabled for this app.
 	if clientCfg, cfgErr := e.store.GetAppClientConfig(ctx, req.AppID); cfgErr == nil && clientCfg.SignupEnabled != nil && !*clientCfg.SignupEnabled {
 		return nil, nil, fmt.Errorf("authsome: signup is disabled for this application")

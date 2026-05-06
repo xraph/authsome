@@ -10,6 +10,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/device"
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
@@ -39,6 +40,22 @@ func e2eAppID(t *testing.T) id.AppID {
 func e2eEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) { //nolint:unparam // test helper returns store for assertions
 	t.Helper()
 	s := memory.New()
+
+	// Seed the e2e platform app at the constant AppID BEFORE engine.Start.
+	// Bootstrap then adopts it via slug "platform", so engine.PlatformAppID()
+	// matches the constant used throughout the e2e tests. Required because
+	// engine.SignUp now validates that req.AppID points to a real app.
+	now := time.Now()
+	require.NoError(t, s.CreateApp(context.Background(), &app.App{
+		ID:             e2eAppID(t),
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: "pk_test_authsome_e2e_default",
+		IsPlatform:     true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}))
+
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	baseOpts := []authsome.Option{
@@ -124,6 +141,21 @@ func TestE2E_SignUpSignInSignOut(t *testing.T) {
 func e2eEngineWithOrg(t *testing.T) (*authsome.Engine, *memory.Store, *orgplugin.Plugin) { //nolint:unparam // test helper returns store for assertions
 	t.Helper()
 	s := memory.New()
+
+	// Seed the platform app so engine.SignUp's app-existence guard
+	// (added alongside the publishable-key fix) accepts the constant
+	// e2eAppID used throughout the e2e tests.
+	now := time.Now()
+	require.NoError(t, s.CreateApp(context.Background(), &app.App{
+		ID:             e2eAppID(t),
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: "pk_test_authsome_e2e_org_default",
+		IsPlatform:     true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}))
+
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	op := orgplugin.New()

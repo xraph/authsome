@@ -76,6 +76,56 @@ class AdminAppResponse {
   String toString() => 'AdminAppResponse(${toJson()})';
 }
 
+class AdminCatalogProvider {
+  final String id;
+  final String name;
+
+  const AdminCatalogProvider({
+    required this.id,
+    required this.name,
+  });
+
+  factory AdminCatalogProvider.fromJson(Map<String, dynamic> json) {
+    return AdminCatalogProvider(
+      id: json['id'] as String,
+      name: json['name'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+    };
+  }
+
+  @override
+  String toString() => 'AdminCatalogProvider(${toJson()})';
+}
+
+class AdminCatalogResponse {
+  final List<AdminCatalogProvider> providers;
+
+  const AdminCatalogResponse({
+    required this.providers,
+  });
+
+  factory AdminCatalogResponse.fromJson(Map<String, dynamic> json) {
+    return AdminCatalogResponse(
+      providers: (json['providers'] as List).map((e) => AdminCatalogProvider.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'providers': providers.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'AdminCatalogResponse(${toJson()})';
+}
+
 class AdminCreateConnectionResponse {
   final bool active;
   final String appId;
@@ -142,6 +192,75 @@ class AdminDeleteAppRequest {
   String toString() => 'AdminDeleteAppRequest(${toJson()})';
 }
 
+class AdminDeleteConnectionResponse {
+  final String status;
+
+  const AdminDeleteConnectionResponse({
+    required this.status,
+  });
+
+  factory AdminDeleteConnectionResponse.fromJson(Map<String, dynamic> json) {
+    return AdminDeleteConnectionResponse(
+      status: json['status'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+    };
+  }
+
+  @override
+  String toString() => 'AdminDeleteConnectionResponse(${toJson()})';
+}
+
+class AdminDeleteProviderResponse {
+  final String status;
+
+  const AdminDeleteProviderResponse({
+    required this.status,
+  });
+
+  factory AdminDeleteProviderResponse.fromJson(Map<String, dynamic> json) {
+    return AdminDeleteProviderResponse(
+      status: json['status'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+    };
+  }
+
+  @override
+  String toString() => 'AdminDeleteProviderResponse(${toJson()})';
+}
+
+class AdminDeleteServiceAccountRequest {
+  final String serviceAccountID;
+
+  const AdminDeleteServiceAccountRequest({
+    required this.serviceAccountID,
+  });
+
+  factory AdminDeleteServiceAccountRequest.fromJson(Map<String, dynamic> json) {
+    return AdminDeleteServiceAccountRequest(
+      serviceAccountID: json['ServiceAccountID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'ServiceAccountID': serviceAccountID,
+    };
+  }
+
+  @override
+  String toString() => 'AdminDeleteServiceAccountRequest(${toJson()})';
+}
+
 class AdminDeleteUserRequest {
   final String userID;
 
@@ -163,6 +282,29 @@ class AdminDeleteUserRequest {
 
   @override
   String toString() => 'AdminDeleteUserRequest(${toJson()})';
+}
+
+class AdminGetServiceAccountRequest {
+  final String serviceAccountID;
+
+  const AdminGetServiceAccountRequest({
+    required this.serviceAccountID,
+  });
+
+  factory AdminGetServiceAccountRequest.fromJson(Map<String, dynamic> json) {
+    return AdminGetServiceAccountRequest(
+      serviceAccountID: json['ServiceAccountID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'ServiceAccountID': serviceAccountID,
+    };
+  }
+
+  @override
+  String toString() => 'AdminGetServiceAccountRequest(${toJson()})';
 }
 
 class AdminGetUserRequest {
@@ -211,6 +353,29 @@ class AdminImpersonateRequest {
   String toString() => 'AdminImpersonateRequest(${toJson()})';
 }
 
+class AdminListConnectionsResponse {
+  final List<Connection> connections;
+
+  const AdminListConnectionsResponse({
+    required this.connections,
+  });
+
+  factory AdminListConnectionsResponse.fromJson(Map<String, dynamic> json) {
+    return AdminListConnectionsResponse(
+      connections: (json['connections'] as List).map((e) => Connection.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'connections': connections.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'AdminListConnectionsResponse(${toJson()})';
+}
+
 class AdminListOrgsRequest {
   final String appID;
 
@@ -234,24 +399,44 @@ class AdminListOrgsRequest {
   String toString() => 'AdminListOrgsRequest(${toJson()})';
 }
 
-class AdminListUsersRequest {
+class AdminListProvidersResponse {
+  final List<AdminProvider> providers;
+
+  const AdminListProvidersResponse({
+    required this.providers,
+  });
+
+  factory AdminListProvidersResponse.fromJson(Map<String, dynamic> json) {
+    return AdminListProvidersResponse(
+      providers: (json['providers'] as List).map((e) => AdminProvider.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'providers': providers.map((e) => e.toJson()).toList(),
+    };
+  }
+
+  @override
+  String toString() => 'AdminListProvidersResponse(${toJson()})';
+}
+
+class AdminListServiceAccountsRequest {
   final String appID;
   final String cursor;
-  final String email;
   final int limit;
 
-  const AdminListUsersRequest({
+  const AdminListServiceAccountsRequest({
     required this.appID,
     required this.cursor,
-    required this.email,
     required this.limit,
   });
 
-  factory AdminListUsersRequest.fromJson(Map<String, dynamic> json) {
-    return AdminListUsersRequest(
+  factory AdminListServiceAccountsRequest.fromJson(Map<String, dynamic> json) {
+    return AdminListServiceAccountsRequest(
       appID: json['AppID'] as String,
       cursor: json['Cursor'] as String,
-      email: json['Email'] as String,
       limit: (json['Limit'] as num).toInt(),
     );
   }
@@ -260,13 +445,308 @@ class AdminListUsersRequest {
     return {
       'AppID': appID,
       'Cursor': cursor,
-      'Email': email,
       'Limit': limit,
     };
   }
 
   @override
+  String toString() => 'AdminListServiceAccountsRequest(${toJson()})';
+}
+
+class AdminListUsersRequest {
+  final String appID;
+  final String? cursor;
+  final String? email;
+  final int? limit;
+
+  const AdminListUsersRequest({
+    required this.appID,
+    this.cursor,
+    this.email,
+    this.limit,
+  });
+
+  factory AdminListUsersRequest.fromJson(Map<String, dynamic> json) {
+    return AdminListUsersRequest(
+      appID: json['AppID'] as String,
+      cursor: json['Cursor'] as String?,
+      email: json['Email'] as String?,
+      limit: json['Limit'] == null ? null : (json['Limit'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'AppID': appID,
+      if (cursor != null) 'Cursor': cursor,
+      if (email != null) 'Email': email,
+      if (limit != null) 'Limit': limit,
+    };
+  }
+
+  @override
   String toString() => 'AdminListUsersRequest(${toJson()})';
+}
+
+class AdminPlatformOwnerResponse {
+  final String roleId;
+  final String status;
+  final String userId;
+
+  const AdminPlatformOwnerResponse({
+    required this.roleId,
+    required this.status,
+    required this.userId,
+  });
+
+  factory AdminPlatformOwnerResponse.fromJson(Map<String, dynamic> json) {
+    return AdminPlatformOwnerResponse(
+      roleId: json['role_id'] as String,
+      status: json['status'] as String,
+      userId: json['user_id'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'role_id': roleId,
+      'status': status,
+      'user_id': userId,
+    };
+  }
+
+  @override
+  String toString() => 'AdminPlatformOwnerResponse(${toJson()})';
+}
+
+class AdminProvider {
+  final String clientId;
+  final String? clientSecret;
+  final bool enabled;
+  final bool hasSecret;
+  final String name;
+  final String? redirectUrl;
+  final List<String>? scopes;
+
+  const AdminProvider({
+    required this.clientId,
+    this.clientSecret,
+    required this.enabled,
+    required this.hasSecret,
+    required this.name,
+    this.redirectUrl,
+    this.scopes,
+  });
+
+  factory AdminProvider.fromJson(Map<String, dynamic> json) {
+    return AdminProvider(
+      clientId: json['client_id'] as String,
+      clientSecret: json['client_secret'] as String?,
+      enabled: json['enabled'] as bool,
+      hasSecret: json['has_secret'] as bool,
+      name: json['name'] as String,
+      redirectUrl: json['redirect_url'] as String?,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'client_id': clientId,
+      if (clientSecret != null) 'client_secret': clientSecret,
+      'enabled': enabled,
+      'has_secret': hasSecret,
+      'name': name,
+      if (redirectUrl != null) 'redirect_url': redirectUrl,
+      if (scopes != null) 'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'AdminProvider(${toJson()})';
+}
+
+class AdminProviderResponse {
+  final AdminProvider provider;
+
+  const AdminProviderResponse({
+    required this.provider,
+  });
+
+  factory AdminProviderResponse.fromJson(Map<String, dynamic> json) {
+    return AdminProviderResponse(
+      provider: AdminProvider.fromJson(Map<String, dynamic>.from(json['provider'] as Map)),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'provider': provider.toJson(),
+    };
+  }
+
+  @override
+  String toString() => 'AdminProviderResponse(${toJson()})';
+}
+
+class AdminRevokePlatformOwnerRequest {
+  final String userID;
+
+  const AdminRevokePlatformOwnerRequest({
+    required this.userID,
+  });
+
+  factory AdminRevokePlatformOwnerRequest.fromJson(Map<String, dynamic> json) {
+    return AdminRevokePlatformOwnerRequest(
+      userID: json['UserID'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'UserID': userID,
+    };
+  }
+
+  @override
+  String toString() => 'AdminRevokePlatformOwnerRequest(${toJson()})';
+}
+
+class AdminServiceAccountAPIKeyResponse {
+  final String createdAt;
+  final String? expiresAt;
+  final String id;
+  final String key;
+  final String keyPrefix;
+  final String name;
+  final String? publicKey;
+  final String? publicKeyPrefix;
+  final List<String>? scopes;
+
+  const AdminServiceAccountAPIKeyResponse({
+    required this.createdAt,
+    this.expiresAt,
+    required this.id,
+    required this.key,
+    required this.keyPrefix,
+    required this.name,
+    this.publicKey,
+    this.publicKeyPrefix,
+    this.scopes,
+  });
+
+  factory AdminServiceAccountAPIKeyResponse.fromJson(Map<String, dynamic> json) {
+    return AdminServiceAccountAPIKeyResponse(
+      createdAt: json['created_at'] as String,
+      expiresAt: json['expires_at'] as String?,
+      id: json['id'] as String,
+      key: json['key'] as String,
+      keyPrefix: json['key_prefix'] as String,
+      name: json['name'] as String,
+      publicKey: json['public_key'] as String?,
+      publicKeyPrefix: json['public_key_prefix'] as String?,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'created_at': createdAt,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'id': id,
+      'key': key,
+      'key_prefix': keyPrefix,
+      'name': name,
+      if (publicKey != null) 'public_key': publicKey,
+      if (publicKeyPrefix != null) 'public_key_prefix': publicKeyPrefix,
+      if (scopes != null) 'scopes': scopes,
+    };
+  }
+
+  @override
+  String toString() => 'AdminServiceAccountAPIKeyResponse(${toJson()})';
+}
+
+class AdminServiceAccountListResponse {
+  final String? nextCursor;
+  final List<AdminServiceAccountResponse> serviceAccounts;
+  final int total;
+
+  const AdminServiceAccountListResponse({
+    this.nextCursor,
+    required this.serviceAccounts,
+    required this.total,
+  });
+
+  factory AdminServiceAccountListResponse.fromJson(Map<String, dynamic> json) {
+    return AdminServiceAccountListResponse(
+      nextCursor: json['next_cursor'] as String?,
+      serviceAccounts: (json['service_accounts'] as List).map((e) => AdminServiceAccountResponse.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      total: (json['total'] as num).toInt(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      if (nextCursor != null) 'next_cursor': nextCursor,
+      'service_accounts': serviceAccounts.map((e) => e.toJson()).toList(),
+      'total': total,
+    };
+  }
+
+  @override
+  String toString() => 'AdminServiceAccountListResponse(${toJson()})';
+}
+
+class AdminServiceAccountResponse {
+  final bool active;
+  final String appId;
+  final String createdAt;
+  final String? description;
+  final String id;
+  final String name;
+  final List<String>? scopes;
+  final String updatedAt;
+
+  const AdminServiceAccountResponse({
+    required this.active,
+    required this.appId,
+    required this.createdAt,
+    this.description,
+    required this.id,
+    required this.name,
+    this.scopes,
+    required this.updatedAt,
+  });
+
+  factory AdminServiceAccountResponse.fromJson(Map<String, dynamic> json) {
+    return AdminServiceAccountResponse(
+      active: json['active'] as bool,
+      appId: json['app_id'] as String,
+      createdAt: json['created_at'] as String,
+      description: json['description'] as String?,
+      id: json['id'] as String,
+      name: json['name'] as String,
+      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
+      updatedAt: json['updated_at'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active': active,
+      'app_id': appId,
+      'created_at': createdAt,
+      if (description != null) 'description': description,
+      'id': id,
+      'name': name,
+      if (scopes != null) 'scopes': scopes,
+      'updated_at': updatedAt,
+    };
+  }
+
+  @override
+  String toString() => 'AdminServiceAccountResponse(${toJson()})';
 }
 
 class AdminStatsRequest {
@@ -1445,6 +1925,73 @@ class Config {
   String toString() => 'Config(${toJson()})';
 }
 
+class Connection {
+  final bool active;
+  final String appId;
+  final String? clientId;
+  final String createdAt;
+  final String domain;
+  final String id;
+  final String? issuer;
+  final String? metadataUrl;
+  final String? orgId;
+  final String protocol;
+  final String provider;
+  final String updatedAt;
+
+  const Connection({
+    required this.active,
+    required this.appId,
+    this.clientId,
+    required this.createdAt,
+    required this.domain,
+    required this.id,
+    this.issuer,
+    this.metadataUrl,
+    this.orgId,
+    required this.protocol,
+    required this.provider,
+    required this.updatedAt,
+  });
+
+  factory Connection.fromJson(Map<String, dynamic> json) {
+    return Connection(
+      active: json['active'] as bool,
+      appId: json['app_id'] as String,
+      clientId: json['client_id'] as String?,
+      createdAt: json['created_at'] as String,
+      domain: json['domain'] as String,
+      id: json['id'] as String,
+      issuer: json['issuer'] as String?,
+      metadataUrl: json['metadata_url'] as String?,
+      orgId: json['org_id'] as String?,
+      protocol: json['protocol'] as String,
+      provider: json['provider'] as String,
+      updatedAt: json['updated_at'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'active': active,
+      'app_id': appId,
+      if (clientId != null) 'client_id': clientId,
+      'created_at': createdAt,
+      'domain': domain,
+      'id': id,
+      if (issuer != null) 'issuer': issuer,
+      if (metadataUrl != null) 'metadata_url': metadataUrl,
+      if (orgId != null) 'org_id': orgId,
+      'protocol': protocol,
+      'provider': provider,
+      'updated_at': updatedAt,
+    };
+  }
+
+  @override
+  String toString() => 'Connection(${toJson()})';
+}
+
 class Consent {
   final String appId;
   final String createdAt;
@@ -1573,49 +2120,6 @@ class CouponResponse {
 
   @override
   String toString() => 'CouponResponse(${toJson()})';
-}
-
-class CreateClientRequest {
-  final String appId;
-  final List<String>? grantTypes;
-  final String name;
-  final bool? public;
-  final List<String> redirectUris;
-  final List<String>? scopes;
-
-  const CreateClientRequest({
-    required this.appId,
-    this.grantTypes,
-    required this.name,
-    this.public,
-    required this.redirectUris,
-    this.scopes,
-  });
-
-  factory CreateClientRequest.fromJson(Map<String, dynamic> json) {
-    return CreateClientRequest(
-      appId: json['app_id'] as String,
-      grantTypes: json['grant_types'] == null ? null : (json['grant_types'] as List).map((e) => e as String).toList(),
-      name: json['name'] as String,
-      public: json['public'] as bool?,
-      redirectUris: (json['redirect_uris'] as List).map((e) => e as String).toList(),
-      scopes: json['scopes'] == null ? null : (json['scopes'] as List).map((e) => e as String).toList(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'app_id': appId,
-      if (grantTypes != null) 'grant_types': grantTypes,
-      'name': name,
-      if (public != null) 'public': public,
-      'redirect_uris': redirectUris,
-      if (scopes != null) 'scopes': scopes,
-    };
-  }
-
-  @override
-  String toString() => 'CreateClientRequest(${toJson()})';
 }
 
 class CreateClientResponse {

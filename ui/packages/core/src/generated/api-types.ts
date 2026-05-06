@@ -15,6 +15,15 @@ export interface AdminAppResponse {
   slug: string;
 }
 
+export interface AdminCatalogProvider {
+  id: string;
+  name: string;
+}
+
+export interface AdminCatalogResponse {
+  providers: AdminCatalogProvider[];
+}
+
 export interface AdminCreateConnectionResponse {
   active: boolean;
   app_id: string;
@@ -28,8 +37,24 @@ export interface AdminDeleteAppRequest {
   AppID: string;
 }
 
+export interface AdminDeleteConnectionResponse {
+  status: string;
+}
+
+export interface AdminDeleteProviderResponse {
+  status: string;
+}
+
+export interface AdminDeleteServiceAccountRequest {
+  ServiceAccountID: string;
+}
+
 export interface AdminDeleteUserRequest {
   UserID: string;
+}
+
+export interface AdminGetServiceAccountRequest {
+  ServiceAccountID: string;
 }
 
 export interface AdminGetUserRequest {
@@ -40,15 +65,82 @@ export interface AdminImpersonateRequest {
   UserID: string;
 }
 
+export interface AdminListConnectionsResponse {
+  connections: Connection[];
+}
+
 export interface AdminListOrgsRequest {
   AppID: string;
 }
 
-export interface AdminListUsersRequest {
+export interface AdminListProvidersResponse {
+  providers: AdminProvider[];
+}
+
+export interface AdminListServiceAccountsRequest {
   AppID: string;
   Cursor: string;
-  Email: string;
   Limit: number;
+}
+
+export interface AdminListUsersRequest {
+  AppID: string;
+  Cursor?: string;
+  Email?: string;
+  Limit?: number;
+}
+
+export interface AdminPlatformOwnerResponse {
+  role_id: string;
+  status: string;
+  user_id: string;
+}
+
+export interface AdminProvider {
+  client_id: string;
+  client_secret?: string;
+  enabled: boolean;
+  has_secret: boolean;
+  name: string;
+  redirect_url?: string;
+  scopes?: string[];
+}
+
+export interface AdminProviderResponse {
+  provider: AdminProvider;
+}
+
+export interface AdminRevokePlatformOwnerRequest {
+  UserID: string;
+}
+
+export interface AdminServiceAccountAPIKeyResponse {
+  created_at: string;
+  expires_at?: string;
+  id: string;
+  key: string;
+  key_prefix: string;
+  name: string;
+  public_key?: string;
+  public_key_prefix?: string;
+  scopes?: string[];
+}
+
+export interface AdminServiceAccountListResponse {
+  next_cursor?: string;
+  service_accounts: AdminServiceAccountResponse[];
+  total: number;
+}
+
+export interface AdminServiceAccountResponse {
+  active: boolean;
+  app_id: string;
+  created_at: string;
+  description?: string;
+  id: string;
+  name: string;
+  scopes?: string[];
+  updated_at: string;
 }
 
 export interface AdminStatsRequest {
@@ -284,6 +376,21 @@ export interface Config {
   waitlist_enabled?: boolean;
 }
 
+export interface Connection {
+  active: boolean;
+  app_id: string;
+  client_id?: string;
+  created_at: string;
+  domain: string;
+  id: string;
+  issuer?: string;
+  metadata_url?: string;
+  org_id?: string;
+  protocol: string;
+  provider: string;
+  updated_at: string;
+}
+
 export interface Consent {
   app_id: string;
   created_at: string;
@@ -311,15 +418,6 @@ export interface CouponResponse {
   type: string;
   valid_from?: string;
   valid_until?: string;
-}
-
-export interface CreateClientRequest {
-  app_id: string;
-  grant_types?: string[];
-  name: string;
-  public?: boolean;
-  redirect_uris: string[];
-  scopes?: string[];
 }
 
 export interface CreateClientResponse {
@@ -1426,15 +1524,25 @@ export type AdminBulkRevokeSessionsRequest = BulkRevokeSessionsRequest;
 
 export type AdminBulkImportUsersRequest = { app_id?: string; users: Record<string, unknown>[] };
 
-export type CreateOAuth2ClientRequest = CreateClientRequest;
+export type CreateOAuth2ClientRequest = { app_id: string; grant_types?: string[]; name: string; public?: boolean; redirect_uris: string[]; scopes?: string[] };
 
 export type DeleteOAuth2ClientRequest = DeleteClientRequest;
+
+export type AdminGrantPlatformOwnerRequest = { email?: string; user_id?: string };
+
+export type AdminCreateServiceAccountRequest = { app_id?: string; description?: string; name: string; scopes?: string[] };
+
+export type AdminCreateServiceAccountAPIKeyRequest = { expires_at?: string; name: string; scopes?: string[] };
 
 export type EnforceSettingRequest = { app_id?: string; org_id?: string; scope: string; scope_id?: string; value: string };
 
 export type SetSettingRequest = { app_id?: string; org_id?: string; scope: string; scope_id?: string; value: string };
 
+export type SocialAdminUpsertProviderRequest = { client_id: string; client_secret: string; enabled?: boolean; redirect_url?: string; scopes?: string[] };
+
 export type SsoAdminCreateConnectionRequest = { app_id: string; client_id?: string; client_secret?: string; domain: string; issuer?: string; metadata_url?: string; org_id?: string; protocol: string; provider: string };
+
+export type SsoAdminUpdateConnectionRequest = { active?: boolean; client_id?: string; client_secret?: string; domain?: string; issuer?: string; metadata_url?: string; provider?: string };
 
 export type AdminCreateUserRequest = { app_id?: string; email: string; first_name?: string; last_name?: string; password: string; username?: string };
 
@@ -1560,14 +1668,7 @@ export type SignInRequest = { app_id?: string; captcha_token?: string; email?: s
 
 export type SignUpRequest = { app_id?: string; captcha_token?: string; email: string; first_name?: string; last_name?: string; metadata?: Record<string, unknown>; password: string; username?: string };
 
-// LOCAL OVERRIDE — codegen collision: the social plugin's Go struct is also
-// named StartRequest, colliding with the phone-auth StartRequest in the
-// OpenAPI spec. The generator picks one shape (currently {phone, app_id})
-// and aliases both. The real social-OAuth body accepts {app_id?,
-// redirect_url?} and reads the provider from the path. Until the Go
-// structs are renamed and the spec regenerated, define the correct shape
-// here. Tracked in the social plugin (plugins/social/plugin.go:521).
-export type StartOAuthRequest = { app_id?: string; redirect_url?: string };
+export type StartOAuthRequest = StartRequest;
 
 export type SsoACSRequest = ACSRequest;
 

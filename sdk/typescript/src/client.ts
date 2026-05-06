@@ -3,13 +3,29 @@
 import type {
   ACSRequest,
   AdminAppResponse,
+  AdminCatalogProvider,
+  AdminCatalogResponse,
   AdminCreateConnectionResponse,
   AdminDeleteAppRequest,
+  AdminDeleteConnectionResponse,
+  AdminDeleteProviderResponse,
+  AdminDeleteServiceAccountRequest,
   AdminDeleteUserRequest,
+  AdminGetServiceAccountRequest,
   AdminGetUserRequest,
   AdminImpersonateRequest,
+  AdminListConnectionsResponse,
   AdminListOrgsRequest,
+  AdminListProvidersResponse,
+  AdminListServiceAccountsRequest,
   AdminListUsersRequest,
+  AdminPlatformOwnerResponse,
+  AdminProvider,
+  AdminProviderResponse,
+  AdminRevokePlatformOwnerRequest,
+  AdminServiceAccountAPIKeyResponse,
+  AdminServiceAccountListResponse,
+  AdminServiceAccountResponse,
   AdminStatsRequest,
   AdminStatsResponse,
   AdminStopImpersonationRequest,
@@ -45,9 +61,9 @@ import type {
   ClientConfigToggle,
   CloneEnvironmentResponse,
   Config,
+  Connection,
   Consent,
   CouponResponse,
-  CreateClientRequest,
   CreateClientResponse,
   CreateCouponRequest,
   CreateKeyRequest,
@@ -240,9 +256,14 @@ import type {
   AdminBulkImportUsersRequest,
   CreateOAuth2ClientRequest,
   DeleteOAuth2ClientRequest,
+  AdminGrantPlatformOwnerRequest,
+  AdminCreateServiceAccountRequest,
+  AdminCreateServiceAccountAPIKeyRequest,
   EnforceSettingRequest,
   SetSettingRequest,
+  SocialAdminUpsertProviderRequest,
   SsoAdminCreateConnectionRequest,
+  SsoAdminUpdateConnectionRequest,
   AdminCreateUserRequest,
   AdminUpdateUserRequest,
   AdminBanUserRequest,
@@ -319,6 +340,15 @@ export interface AuthClientConfig {
   baseURL: string;
   /** Optional session token for authenticated requests */
   token?: string;
+  /**
+   * Publishable key (`pk_live_*` / `pk_test_*` / `pk_stg_*`) sent on every
+   * request as the X-Publishable-Key header. The server resolves this to
+   * the owning App on the public-auth path (signup, signin, forgot-
+   * password, resend-verification), so frontends never need to know — or
+   * send — the App's UUID. Without it, those endpoints reject with 400
+   * "app context required".
+   */
+  publishableKey?: string;
   /** Optional custom fetch implementation */
   fetch?: typeof globalThis.fetch;
 }
@@ -326,11 +356,13 @@ export interface AuthClientConfig {
 export class AuthClient {
   private baseURL: string;
   private token: string | undefined;
+  private publishableKey: string | undefined;
   private fetchFn: typeof globalThis.fetch;
 
   constructor(config: AuthClientConfig) {
     this.baseURL = config.baseURL.replace(/\/+$/, '');
     this.token = config.token;
+    this.publishableKey = config.publishableKey;
     this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
@@ -342,6 +374,16 @@ export class AuthClient {
   /** Get the current session token. */
   getToken(): string | undefined {
     return this.token;
+  }
+
+  /** Set the publishable key sent on every request as X-Publishable-Key. */
+  setPublishableKey(key: string | undefined): void {
+    this.publishableKey = key;
+  }
+
+  /** Get the current publishable key. */
+  getPublishableKey(): string | undefined {
+    return this.publishableKey;
   }
 
   // ──────────────────────────────────────────────────
@@ -791,6 +833,97 @@ export class AuthClient {
   }
 
   /**
+   * Grant platform-owner role (admin)
+   * POST /v1/admin/platform/owners
+   */
+  async adminGrantPlatformOwner(body: AdminGrantPlatformOwnerRequest): Promise<AdminPlatformOwnerResponse> {
+    const path = "/v1/admin/platform/owners";
+    return this.request<AdminPlatformOwnerResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Revoke platform-owner role (admin)
+   * DELETE /v1/admin/platform/owners/{userID}
+   */
+  async adminRevokePlatformOwner(userID: string, body: AdminRevokePlatformOwnerRequest): Promise<AdminPlatformOwnerResponse> {
+    const path = `/v1/admin/platform/owners/${userID}`;
+    return this.request<AdminPlatformOwnerResponse>(
+      'DELETE',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * List service accounts (admin)
+   * GET /v1/admin/service-accounts
+   */
+  async adminListServiceAccounts(): Promise<AdminServiceAccountListResponse> {
+    const path = "/v1/admin/service-accounts";
+    return this.request<AdminServiceAccountListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Create service account (admin)
+   * POST /v1/admin/service-accounts
+   */
+  async adminCreateServiceAccount(body: AdminCreateServiceAccountRequest): Promise<AdminServiceAccountResponse> {
+    const path = "/v1/admin/service-accounts";
+    return this.request<AdminServiceAccountResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Get service account (admin)
+   * GET /v1/admin/service-accounts/{serviceAccountId}
+   */
+  async adminGetServiceAccount(serviceAccountId: string): Promise<AdminServiceAccountResponse> {
+    const path = `/v1/admin/service-accounts/${serviceAccountId}`;
+    return this.request<AdminServiceAccountResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Delete service account (admin)
+   * DELETE /v1/admin/service-accounts/{serviceAccountId}
+   */
+  async adminDeleteServiceAccount(serviceAccountId: string, body: AdminDeleteServiceAccountRequest): Promise<StatusResponse> {
+    const path = `/v1/admin/service-accounts/${serviceAccountId}`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Create service account API key (admin)
+   * POST /v1/admin/service-accounts/{serviceAccountId}/api-keys
+   */
+  async adminCreateServiceAccountAPIKey(serviceAccountId: string, body: AdminCreateServiceAccountAPIKeyRequest): Promise<AdminServiceAccountAPIKeyResponse> {
+    const path = `/v1/admin/service-accounts/${serviceAccountId}/api-keys`;
+    return this.request<AdminServiceAccountAPIKeyResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
    * List all setting definitions
    * GET /v1/admin/settings/definitions
    */
@@ -895,6 +1028,83 @@ export class AuthClient {
   }
 
   /**
+   * List social providers (admin)
+   * GET /v1/admin/social/providers
+   */
+  async socialAdminListProviders(app_id: string): Promise<AdminListProvidersResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = "/v1/admin/social/providers" + (qs ? `?${qs}` : '');
+    return this.request<AdminListProvidersResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * List supported social providers
+   * GET /v1/admin/social/providers/catalog
+   */
+  async socialAdminCatalog(): Promise<AdminCatalogResponse> {
+    const path = "/v1/admin/social/providers/catalog";
+    return this.request<AdminCatalogResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Configure a social provider (admin)
+   * PUT /v1/admin/social/providers/{provider}
+   */
+  async socialAdminUpsertProvider(provider: string, body: SocialAdminUpsertProviderRequest, app_id: string): Promise<AdminProviderResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = `/v1/admin/social/providers/${provider}` + (qs ? `?${qs}` : '');
+    return this.request<AdminProviderResponse>(
+      'PUT',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Delete a social provider (admin)
+   * DELETE /v1/admin/social/providers/{provider}
+   */
+  async socialAdminDeleteProvider(provider: string, app_id: string): Promise<AdminDeleteProviderResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = `/v1/admin/social/providers/${provider}` + (qs ? `?${qs}` : '');
+    return this.request<AdminDeleteProviderResponse>(
+      'DELETE',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * List SSO connections for an app (admin)
+   * GET /v1/admin/sso/connections
+   */
+  async ssoAdminListConnections(app_id: string): Promise<AdminListConnectionsResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = "/v1/admin/sso/connections" + (qs ? `?${qs}` : '');
+    return this.request<AdminListConnectionsResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
    * Create SSO connection (admin)
    * POST /v1/admin/sso/connections
    */
@@ -904,6 +1114,45 @@ export class AuthClient {
       'POST',
       path,
       body,
+    );
+  }
+
+  /**
+   * Get SSO connection (admin)
+   * GET /v1/admin/sso/connections/{connectionId}
+   */
+  async ssoAdminGetConnection(connectionId: string): Promise<Connection> {
+    const path = `/v1/admin/sso/connections/${connectionId}`;
+    return this.request<Connection>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Update SSO connection (admin)
+   * PUT /v1/admin/sso/connections/{connectionId}
+   */
+  async ssoAdminUpdateConnection(connectionId: string, body: SsoAdminUpdateConnectionRequest): Promise<Connection> {
+    const path = `/v1/admin/sso/connections/${connectionId}`;
+    return this.request<Connection>(
+      'PUT',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Delete SSO connection (admin)
+   * DELETE /v1/admin/sso/connections/{connectionId}
+   */
+  async ssoAdminDeleteConnection(connectionId: string): Promise<AdminDeleteConnectionResponse> {
+    const path = `/v1/admin/sso/connections/${connectionId}`;
+    return this.request<AdminDeleteConnectionResponse>(
+      'DELETE',
+      path,
+      undefined,
     );
   }
 
@@ -2653,6 +2902,9 @@ export class AuthClient {
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    if (this.publishableKey) {
+      headers['X-Publishable-Key'] = this.publishableKey;
     }
 
     const response = await this.fetchFn(`${this.baseURL}${path}`, {

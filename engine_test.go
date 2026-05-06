@@ -3,6 +3,7 @@ package authsome_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -10,6 +11,8 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/store/memory"
 
@@ -23,9 +26,32 @@ import (
 func newTestEngine(t *testing.T, opts ...authsome.Option) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
+
+	// Seed the platform app at the canonical test AppID BEFORE
+	// engine.Start, so bootstrap adopts it via slug "platform" and
+	// engine.SignUp's app-existence guard (added alongside the
+	// publishable-key fix) accepts the constant ID used across tests.
+	parsedAppID, parseErr := id.ParseAppID("aapp_01jf0000000000000000000000")
+	require.NoError(t, parseErr)
+	now := time.Now()
+	require.NoError(t, s.CreateApp(context.Background(), &app.App{
+		ID:             parsedAppID,
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: "pk_test_authsome_root_default",
+		IsPlatform:     true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}))
+
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
-	allOpts := append([]authsome.Option{authsome.WithStore(s), authsome.WithWarden(w), authsome.WithDisableMigrate()}, opts...)
+	allOpts := append([]authsome.Option{
+		authsome.WithStore(s),
+		authsome.WithWarden(w),
+		authsome.WithDisableMigrate(),
+		authsome.WithAppID("aapp_01jf0000000000000000000000"),
+	}, opts...)
 	eng, err := authsome.NewEngine(allOpts...)
 	require.NoError(t, err)
 	require.NoError(t, eng.Start(context.Background()))

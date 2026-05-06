@@ -19,6 +19,7 @@ import (
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appclientconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
@@ -35,20 +36,70 @@ import (
 // newAPIWithRouter builds an API + Forge router for tests that drive the full
 // request pipeline (rather than calling handlers directly). Returns the
 // router's http.Handler so callers can ServeHTTP against it.
+//
+// The returned handler is wrapped by withTestKey so existing public-auth
+// tests (which historically relied on the silent platform-app fallback) keep
+// passing without each call site needing to attach X-Publishable-Key
+// explicitly. Tests that want to exercise the "no app context" path can
+// build raw requests via httptest.NewRequest against the bare handler.
 func newAPIWithRouter(t *testing.T, eng *authsome.Engine) http.Handler {
 	t.Helper()
 	rootRouter := forge.NewRouter()
 	a := api.New(eng, rootRouter)
 	require.NoError(t, a.RegisterRoutes(rootRouter))
-	return rootRouter.Handler()
+	return withTestKey(rootRouter.Handler())
+}
+
+// withTestKey wraps an http.Handler so requests without an explicit
+// X-Publishable-Key header pick up testPublishableKey, which the
+// publishable-key middleware resolves to the seeded testAppIDStr platform
+// app. Keeps the historic call sites short while still letting tests drive
+// the strict-resolution branches by setting the header to a fresh value
+// (or by hitting a router built without this wrapper).
+func withTestKey(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(middleware.PublishableKeyHeader) == "" {
+			r.Header.Set(middleware.PublishableKeyHeader, testPublishableKey)
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // testAppIDStr is a valid TypeID string for tests.
 const testAppIDStr = "aapp_01jf0000000000000000000000"
 
+// testPublishableKey is the publishable key seeded onto the test app so that
+// HTTP tests can drive the `X-Publishable-Key` middleware path without
+// generating a fresh key per test. The pk_test_ prefix matches the
+// production key marker recognized by the publishable-key resolver.
+const testPublishableKey = "pk_test_authsome_test_default"
+
+// seedTestPlatformApp pre-seeds an app at testAppIDStr in the store BEFORE
+// engine.Start runs. Bootstrap then adopts it via GetAppBySlug("platform"),
+// so engine.PlatformAppID() == testAppIDStr after Start. This keeps the
+// long-standing test convention of referring to the platform app by the
+// constant testAppIDStr while satisfying the engine.SignUp app-existence
+// check added alongside the publishable-key fix.
+func seedTestPlatformApp(t *testing.T, s *memory.Store) {
+	t.Helper()
+	appID, err := id.ParseAppID(testAppIDStr)
+	require.NoError(t, err)
+	now := time.Now()
+	require.NoError(t, s.CreateApp(context.Background(), &app.App{
+		ID:             appID,
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: testPublishableKey,
+		IsPlatform:     true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}))
+}
+
 func newTestAPI(t *testing.T) (*api.API, *authsome.Engine) {
 	t.Helper()
 	s := memory.New()
+	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
@@ -100,7 +151,7 @@ func jsonBody(t *testing.T, v any) *bytes.Buffer {
 
 func TestHandleManifest(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/.well-known/authsome/manifest", nil)
 	rec := httptest.NewRecorder()
@@ -131,6 +182,7 @@ func TestHandleManifest(t *testing.T) {
 // TestHandleManifest because that test doesn't exercise grouping.
 func TestHandleManifest_GroupedMount(t *testing.T) {
 	s := memory.New()
+	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
@@ -182,7 +234,7 @@ func TestHandleManifest_GroupedMount(t *testing.T) {
 
 func TestHandleHealth(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/health", nil)
 	rec := httptest.NewRecorder()
@@ -202,7 +254,7 @@ func TestHandleHealth(t *testing.T) {
 
 func TestHandleSignUp_Success(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	body := jsonBody(t, map[string]string{
 		"email":    "signup@test.com",
@@ -227,7 +279,7 @@ func TestHandleSignUp_Success(t *testing.T) {
 
 func TestHandleSignUp_InvalidBody(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signup", bytes.NewBufferString("not json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -239,7 +291,7 @@ func TestHandleSignUp_InvalidBody(t *testing.T) {
 
 func TestHandleSignUp_WeakPassword(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	body := jsonBody(t, map[string]string{
 		"email":    "weak@test.com",
@@ -257,7 +309,7 @@ func TestHandleSignUp_WeakPassword(t *testing.T) {
 
 func TestHandleSignUp_DuplicateEmailReturnsSuccess(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	// Pre-create user.
 	signUp(t, eng, "dupe@test.com", "SecureP@ss1")
@@ -440,7 +492,7 @@ func TestSignup_DuplicateReturnsPlausibleTokenShape(t *testing.T) {
 
 func TestHandleSignIn_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	signUp(t, eng, "signin@test.com", "SecureP@ss1")
 
@@ -465,7 +517,7 @@ func TestHandleSignIn_Success(t *testing.T) {
 
 func TestHandleSignIn_WrongPassword(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	signUp(t, eng, "wrong@test.com", "SecureP@ss1")
 
@@ -555,6 +607,7 @@ func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
 	mfaPlugin.SetStore(mfa.NewMemoryStore())
 
 	s := memory.New()
+	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
@@ -629,7 +682,7 @@ func TestSignup_CaptchaRequiredRejectsMissingToken(t *testing.T) {
 	t.Parallel()
 	a, eng := newTestAPI(t)
 	enableCaptcha(t, eng)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	body := jsonBody(t, map[string]string{
 		"email":    "captcha-missing@test.com",
@@ -674,7 +727,7 @@ func TestSignin_CaptchaRequiredRejectsMissingToken(t *testing.T) {
 	t.Parallel()
 	a, eng := newTestAPI(t)
 	enableCaptcha(t, eng)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	body := jsonBody(t, map[string]string{
 		"email":    "any@test.com",
@@ -696,7 +749,7 @@ func TestSignin_CaptchaRequiredRejectsMissingToken(t *testing.T) {
 func TestSignup_CaptchaNotRequiredPassesThrough(t *testing.T) {
 	t.Parallel()
 	a, _ := newTestAPI(t) // bootstrap leaves captcha_required=false (default)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	body := jsonBody(t, map[string]string{
 		"email":    "captcha-off@test.com",
@@ -717,7 +770,7 @@ func TestSignup_CaptchaNotRequiredPassesThrough(t *testing.T) {
 
 func TestHandleSignOut_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "signout@test.com", "SecureP@ss1")
 
@@ -737,7 +790,7 @@ func TestHandleSignOut_Success(t *testing.T) {
 
 func TestHandleSignOut_Unauthenticated(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/signout", nil)
 	rec := httptest.NewRecorder()
@@ -752,7 +805,7 @@ func TestHandleSignOut_Unauthenticated(t *testing.T) {
 
 func TestHandleRefresh_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	_, _, refreshToken := signUp(t, eng, "refresh@test.com", "SecureP@ss1")
 
@@ -776,7 +829,7 @@ func TestHandleRefresh_Success(t *testing.T) {
 
 func TestHandleRefresh_MissingToken(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	body := jsonBody(t, map[string]string{})
 	req := httptest.NewRequestWithContext(context.Background(), "POST", "/v1/refresh", body)
@@ -793,7 +846,7 @@ func TestHandleRefresh_MissingToken(t *testing.T) {
 
 func TestHandleGetMe_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "me@test.com", "SecureP@ss1")
 
@@ -816,7 +869,7 @@ func TestHandleGetMe_Success(t *testing.T) {
 
 func TestHandleGetMe_Unauthenticated(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/me", nil)
 	rec := httptest.NewRecorder()
@@ -831,7 +884,7 @@ func TestHandleGetMe_Unauthenticated(t *testing.T) {
 
 func TestHandleUpdateMe_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "update@test.com", "SecureP@ss1")
 
@@ -863,7 +916,7 @@ func TestHandleUpdateMe_Success(t *testing.T) {
 
 func TestHandleListSessions_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "sessions@test.com", "SecureP@ss1")
 
@@ -888,7 +941,7 @@ func TestHandleListSessions_Success(t *testing.T) {
 
 func TestHandleListSessions_Unauthenticated(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "GET", "/v1/sessions", nil)
 	rec := httptest.NewRecorder()
@@ -903,7 +956,7 @@ func TestHandleListSessions_Unauthenticated(t *testing.T) {
 
 func TestHandleRevokeSession_Success(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	_, token, _ := signUp(t, eng, "revoke@test.com", "SecureP@ss1")
 
@@ -919,7 +972,7 @@ func TestHandleRevokeSession_Success(t *testing.T) {
 
 func TestHandleRevokeSession_InvalidID(t *testing.T) {
 	a, _ := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	req := httptest.NewRequestWithContext(context.Background(), "DELETE", "/v1/sessions/invalid-id", nil)
 	rec := httptest.NewRecorder()
@@ -939,7 +992,7 @@ func TestHandleRevokeSession_InvalidID(t *testing.T) {
 // enumeration-resistance contract.
 func TestWriteAccountError_EmailTaken_NoLeak(t *testing.T) {
 	a, eng := newTestAPI(t)
-	handler := a.Handler()
+	handler := withTestKey(a.Handler())
 
 	signUp(t, eng, "taken@test.com", "SecureP@ss1")
 
@@ -1219,6 +1272,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	mfaPlugin.SetStore(mfaStore)
 
 	s := memory.New()
+	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
@@ -1275,7 +1329,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	a := api.New(eng, rootRouter)
 	require.NoError(t, a.RegisterRoutes(rootRouter))
 	require.NoError(t, mfaPlugin.RegisterRoutes(rootRouter))
-	router := rootRouter.Handler()
+	router := withTestKey(rootRouter.Handler())
 
 	// Step 1: signin → 403 + ticket.
 	rec := httptest.NewRecorder()
@@ -1337,6 +1391,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	mfaPlugin.SetStore(mfaStore)
 
 	s := memory.New()
+	seedTestPlatformApp(t, s)
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)
 	eng, err := authsome.NewEngine(
@@ -1368,7 +1423,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	a := api.New(eng, rootRouter)
 	require.NoError(t, a.RegisterRoutes(rootRouter))
 	require.NoError(t, mfaPlugin.RegisterRoutes(rootRouter))
-	router := rootRouter.Handler()
+	router := withTestKey(rootRouter.Handler())
 
 	rec := httptest.NewRecorder()
 	siReq := httptest.NewRequest(http.MethodPost, "/v1/signin",

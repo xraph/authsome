@@ -17,11 +17,12 @@ import (
 
 // Client is an HTTP client for the AuthSome API.
 type Client struct {
-	baseURL    string
-	token      string
-	apiKey     string
-	appID      string
-	httpClient *http.Client
+	baseURL        string
+	token          string
+	apiKey         string
+	appID          string
+	publishableKey string
+	httpClient     *http.Client
 	// Lazy discovery: see do() + tryDiscoverAppID. Mutex (not Once)
 	// so a failed discovery — common during boot when upstream
 	// isn't ready yet — can be retried on the next call instead of
@@ -95,6 +96,28 @@ func WithAppID(appID string) Option {
 	return func(c *Client) { c.appID = appID }
 }
 
+// WithPublishableKey sets the publishable key (`pk_live_*` / `pk_test_*` /
+// `pk_stg_*`) stamped onto every request as X-Publishable-Key. The server
+// resolves this header to an App on the public-auth path (signup, signin,
+// forgot-password, resend-verification), so unauthenticated frontends do
+// not need to know — or send — the App's UUID.
+//
+// Only publishable keys are accepted; secret keys (sk_*, ask_*) supplied
+// here are rejected because they would be silently exposed in any caller
+// that thinks it's wiring a frontend client. Use WithAPIKey for secrets.
+func WithPublishableKey(key string) Option {
+	return func(c *Client) {
+		key = strings.TrimSpace(key)
+		if key != "" && !isPublicAPIKey(key) {
+			// Quietly drop instead of panicking — keep the SDK
+			// non-destructive at construction time. Calls fail
+			// closed on the server with "app context required".
+			return
+		}
+		c.publishableKey = key
+	}
+}
+
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.httpClient = hc }
@@ -156,6 +179,20 @@ func (c *Client) SetAppID(appID string) { c.appID = appID }
 
 // AppID returns the current App ID.
 func (c *Client) AppID() string { return c.appID }
+
+// SetPublishableKey updates the publishable key sent as X-Publishable-Key.
+// Same validation as WithPublishableKey: secret keys (sk_*, ask_*) are
+// silently dropped instead of being put on the wire.
+func (c *Client) SetPublishableKey(key string) {
+	key = strings.TrimSpace(key)
+	if key != "" && !isPublicAPIKey(key) {
+		return
+	}
+	c.publishableKey = key
+}
+
+// PublishableKey returns the current publishable key.
+func (c *Client) PublishableKey() string { return c.publishableKey }
 
 // tryDiscoverAppID makes a best-effort attempt to fetch the
 // platform App ID from /.well-known/authsome/manifest when an API
@@ -2696,6 +2733,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	}
 	if c.appID != "" {
 		req.Header.Set("X-App-ID", c.appID)
+	}
+	if c.publishableKey != "" {
+		req.Header.Set("X-Publishable-Key", c.publishableKey)
 	}
 
 	resp, err := c.httpClient.Do(req)

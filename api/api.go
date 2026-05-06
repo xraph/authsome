@@ -78,6 +78,15 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 	// via AUTHSOME_HSTS_MAX_AGE so local-dev (HTTP) doesn't get pinned.
 	router.Use(middleware.SecurityHeadersForAPI(securityHeaderOptionsFromEnv()))
 
+	// Resolve X-Publishable-Key (or ?publishable_key=) into an App on the
+	// request context. Applied globally because it is a no-op when no key
+	// is present, and because public-auth handlers (signup, signin,
+	// forgot-password) must know the app *before* the body is consumed.
+	// Without this, the resolveAppID helper used to silently fall back to
+	// the platform app, routing non-platform tenants' users into the
+	// platform pool.
+	router.Use(middleware.PublishableKeyMiddleware(a.engine, a.engine.Logger()))
+
 	// Well-known and JWKS routes must be registered on the root router
 	// (not the grouped router) so they appear at /.well-known/* instead
 	// of being nested under the extension group prefix.

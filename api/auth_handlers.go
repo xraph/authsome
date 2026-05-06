@@ -131,9 +131,9 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 		return nil, forge.BadRequest("email and password are required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.resolvePublicAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	httpReq := ctx.Request()
@@ -173,7 +173,7 @@ func (a *API) handleSignUp(ctx forge.Context, req *SignUpRequest) (*AuthResponse
 			// addresses (duplicate ~1ms vs fresh ~100ms+). Result is
 			// discarded.
 			a.consumeDummyHashBudget(req.Password)
-			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email))
+			return nil, ctx.JSON(http.StatusCreated, a.syntheticSignupResponse(req.Email, appID))
 		}
 		return nil, mapError(err)
 	}
@@ -220,7 +220,7 @@ func (a *API) consumeDummyHashBudget(password string) {
 // This is a Phase 2A Task 4 stopgap. Once RequireEmailVerification defaults
 // to true, fresh signups will also return empty tokens until verification
 // completes, at which point this synthesis can be collapsed.
-func (a *API) syntheticSignupResponse(email string) map[string]any {
+func (a *API) syntheticSignupResponse(email string, appID id.AppID) map[string]any {
 	token, err := syntheticOpaqueToken()
 	if err != nil {
 		token = ""
@@ -238,12 +238,10 @@ func (a *API) syntheticSignupResponse(email string) map[string]any {
 
 	syntheticUser := &user.User{
 		ID:        id.NewUserID(),
+		AppID:     appID,
 		Email:     strings.ToLower(strings.TrimSpace(email)),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-	}
-	if appID, err := id.ParseAppID(a.engine.Config().AppID); err == nil {
-		syntheticUser.AppID = appID
 	}
 
 	return map[string]any{
@@ -272,9 +270,9 @@ func (a *API) handleSignIn(ctx forge.Context, req *SignInRequest) (*AuthResponse
 		return nil, forge.BadRequest("email or username is required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.resolvePublicAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	httpReq := ctx.Request()
@@ -433,6 +431,43 @@ func (a *API) resolveAppID(raw string) (id.AppID, error) {
 		return id.ParseAppID(raw)
 	}
 	return id.ParseAppID(a.engine.Config().AppID)
+}
+
+// resolvePublicAppID resolves the app for an unauthenticated public-auth
+// request (signup, signin, forgot-password, resend verification).
+//
+// Resolution order:
+//  1. AppID stashed on the context by PublishableKeyMiddleware — when a
+//     pk_* is on the request, the publishable key is the source of truth.
+//  2. Explicit req.AppID body field — for server-to-server callers that
+//     don't ship a publishable key.
+//  3. 400 — never silently fall back to the platform app, even on a
+//     single-app install. A signup that doesn't say which app it belongs to
+//     is a programmer error, not a default; and the silent fallback was the
+//     mechanism by which non-platform tenants' users were leaking into the
+//     platform tenant.
+//
+// If both a pk-derived context AppID AND a body app_id are present and they
+// disagree, this is a misconfigured client (or tampering): fail closed.
+func (a *API) resolvePublicAppID(ctx forge.Context, raw string) (id.AppID, error) {
+	fromKey, hasKey := middleware.AppIDFrom(ctx.Context())
+	if hasKey && raw != "" {
+		parsed, err := id.ParseAppID(raw)
+		if err != nil {
+			return id.AppID{}, forge.BadRequest("invalid app_id")
+		}
+		if parsed != fromKey {
+			return id.AppID{}, forge.BadRequest("app_id does not match publishable key")
+		}
+		return fromKey, nil
+	}
+	if hasKey {
+		return fromKey, nil
+	}
+	if raw != "" {
+		return id.ParseAppID(raw)
+	}
+	return id.AppID{}, forge.BadRequest("app context required: send X-Publishable-Key header or app_id in the body")
 }
 
 func authResponse(u *user.User, sess *session.Session) map[string]any {

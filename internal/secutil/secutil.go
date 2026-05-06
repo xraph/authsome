@@ -12,10 +12,12 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
@@ -39,6 +41,24 @@ func NewTestEngine(t *testing.T, opts ...authsome.Option) *authsome.Engine {
 	t.Helper()
 
 	s := memory.New()
+
+	// Seed the platform app at testAppID BEFORE engine.Start so bootstrap
+	// adopts it via slug "platform" and engine.SignUp's app-existence
+	// check (added alongside the publishable-key fix) succeeds for the
+	// constant testAppID used throughout the test suite.
+	parsedAppID, parseErr := id.ParseAppID(testAppID)
+	require.NoError(t, parseErr, "secutil: parse testAppID")
+	now := time.Now()
+	require.NoError(t, s.CreateApp(context.Background(), &app.App{
+		ID:             parsedAppID,
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: "pk_test_authsome_secutil_default",
+		IsPlatform:     true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}), "secutil: seed platform app")
+
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err, "secutil: build warden engine")
 

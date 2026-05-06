@@ -16,9 +16,18 @@ class AuthClientConfig {
   /// Optional HTTP client (defaults to a new [http.Client]).
   final http.Client? httpClient;
 
+  /// Publishable key (`pk_live_*` / `pk_test_*` / `pk_stg_*`) sent on every
+  /// request as the X-Publishable-Key header. The server resolves this to
+  /// the owning App on the public-auth path (signup, signin, forgot-
+  /// password, resend-verification), so frontends never need to know — or
+  /// send — the App's UUID. Without it, those endpoints reject with 400
+  /// "app context required".
+  final String? publishableKey;
+
   const AuthClientConfig({
     required this.baseUrl,
     this.httpClient,
+    this.publishableKey,
   });
 }
 
@@ -27,11 +36,13 @@ class AuthClient {
   final String _baseUrl;
   final http.Client _httpClient;
   final bool _ownsClient;
+  String? _publishableKey;
 
   AuthClient(AuthClientConfig config)
       : _baseUrl = config.baseUrl.replaceAll(RegExp(r'/+$'), ''),
         _httpClient = config.httpClient ?? http.Client(),
-        _ownsClient = config.httpClient == null;
+        _ownsClient = config.httpClient == null,
+        _publishableKey = config.publishableKey;
 
   /// Convenience constructor from base URL string.
   factory AuthClient.fromUrl(String baseUrl) {
@@ -40,6 +51,12 @@ class AuthClient {
 
   /// Access the underlying config values.
   String get baseUrl => _baseUrl;
+
+  /// Update the publishable key sent on every request as X-Publishable-Key.
+  set publishableKey(String? key) => _publishableKey = key;
+
+  /// The publishable key currently in use, if any.
+  String? get publishableKey => _publishableKey;
 
   /// Close the HTTP client (only if we created it).
   void close() {
@@ -114,6 +131,9 @@ class AuthClient {
 
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
+    }
+    if (_publishableKey != null && _publishableKey!.isNotEmpty) {
+      headers['X-Publishable-Key'] = _publishableKey!;
     }
 
     final encodedBody = body != null ? jsonEncode(body) : null;

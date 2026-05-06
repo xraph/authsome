@@ -14,6 +14,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/internal/secutil"
 	"github.com/xraph/authsome/middleware"
@@ -35,6 +36,21 @@ import (
 func e2eEngineWithAPIKey(t *testing.T) (*authsome.Engine, *memory.Store) {
 	t.Helper()
 	s := memory.New()
+
+	// Seed the platform app so engine.SignUp's app-existence guard
+	// (added alongside the publishable-key fix) accepts the constant
+	// e2eAppID used throughout the e2e tests.
+	now := time.Now()
+	require.NoError(t, s.CreateApp(context.Background(), &app.App{
+		ID:             e2eAppID(t),
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: "pk_test_authsome_e2e_multiauth_default",
+		IsPlatform:     true,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}))
+
 	akPlugin := apikeyPlugin.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err)

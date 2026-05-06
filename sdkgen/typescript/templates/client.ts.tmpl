@@ -12,17 +12,38 @@ import type {
 export interface AuthClientConfig {
   /** Base URL of the AuthSome API (e.g., "https://api.example.com") */
   baseURL: string;
+  /**
+   * Publishable key (`pk_live_*` / `pk_test_*` / `pk_stg_*`) sent on every
+   * request as the X-Publishable-Key header. The server resolves this to
+   * the owning App on the public-auth path (signup, signin, forgot-
+   * password, resend-verification), so frontends never need to know — or
+   * send — the App's UUID. Without it, those endpoints reject with 400
+   * "app context required".
+   */
+  publishableKey?: string;
   /** Optional custom fetch implementation */
   fetch?: typeof globalThis.fetch;
 }
 
 export class AuthClient {
   private baseURL: string;
+  private publishableKey: string | undefined;
   private fetchFn: typeof globalThis.fetch;
 
-  constructor(config: AuthClientConfig | Pick<{ baseURL: string; fetch?: typeof globalThis.fetch }, 'baseURL' | 'fetch'>) {
+  constructor(config: AuthClientConfig | Pick<{ baseURL: string; publishableKey?: string; fetch?: typeof globalThis.fetch }, 'baseURL' | 'publishableKey' | 'fetch'>) {
     this.baseURL = config.baseURL.replace(/\/+$/, '');
+    this.publishableKey = (config as { publishableKey?: string }).publishableKey;
     this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
+  }
+
+  /** Set the publishable key sent on every request as X-Publishable-Key. */
+  setPublishableKey(key: string | undefined): void {
+    this.publishableKey = key;
+  }
+
+  /** Get the current publishable key. */
+  getPublishableKey(): string | undefined {
+    return this.publishableKey;
   }
 {{ else }}
 export interface AuthClientConfig {
@@ -30,6 +51,15 @@ export interface AuthClientConfig {
   baseURL: string;
   /** Optional session token for authenticated requests */
   token?: string;
+  /**
+   * Publishable key (`pk_live_*` / `pk_test_*` / `pk_stg_*`) sent on every
+   * request as the X-Publishable-Key header. The server resolves this to
+   * the owning App on the public-auth path (signup, signin, forgot-
+   * password, resend-verification), so frontends never need to know — or
+   * send — the App's UUID. Without it, those endpoints reject with 400
+   * "app context required".
+   */
+  publishableKey?: string;
   /** Optional custom fetch implementation */
   fetch?: typeof globalThis.fetch;
 }
@@ -37,11 +67,13 @@ export interface AuthClientConfig {
 export class AuthClient {
   private baseURL: string;
   private token: string | undefined;
+  private publishableKey: string | undefined;
   private fetchFn: typeof globalThis.fetch;
 
   constructor(config: AuthClientConfig) {
     this.baseURL = config.baseURL.replace(/\/+$/, '');
     this.token = config.token;
+    this.publishableKey = config.publishableKey;
     this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
@@ -53,6 +85,16 @@ export class AuthClient {
   /** Get the current session token. */
   getToken(): string | undefined {
     return this.token;
+  }
+
+  /** Set the publishable key sent on every request as X-Publishable-Key. */
+  setPublishableKey(key: string | undefined): void {
+    this.publishableKey = key;
+  }
+
+  /** Get the current publishable key. */
+  getPublishableKey(): string | undefined {
+    return this.publishableKey;
   }
 {{ end }}
   // ──────────────────────────────────────────────────
@@ -108,6 +150,9 @@ export class AuthClient {
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (this.publishableKey) {
+      headers['X-Publishable-Key'] = this.publishableKey;
     }
 
     const response = await this.fetchFn(`${this.baseURL}${path}`, {
@@ -174,6 +219,9 @@ export class AuthClientError extends Error {
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    if (this.publishableKey) {
+      headers['X-Publishable-Key'] = this.publishableKey;
     }
 
     const response = await this.fetchFn(`${this.baseURL}${path}`, {

@@ -82,9 +82,9 @@ func (a *API) handleForgotPassword(ctx forge.Context, req *ForgotPasswordRequest
 		return nil, forge.BadRequest("email is required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.resolvePublicAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	// ForgotPassword returns nil, nil for unknown emails (avoids email enumeration).
@@ -142,11 +142,15 @@ func (a *API) handleVerifyEmail(ctx forge.Context, req *VerifyEmailRequest) (*St
 func (a *API) handleResendVerification(ctx forge.Context, req *ResendVerificationRequest) (*StatusResponse, error) {
 	// Anti-enumeration: never surface "no such user" or "already
 	// verified" — both leak the same registration signal /v1/signup
-	// closes off. We always return 200 with the same body.
+	// closes off. We always return 200 with the same body. A missing
+	// app context (no pk header, no app_id body) is also folded into
+	// the same 200 — emitting a 400 here would let an attacker
+	// distinguish "endpoint shape is wrong" from "nothing to do",
+	// which still narrows the search space.
 	if req.Email == "" {
 		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "ok"})
 	}
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.resolvePublicAppID(ctx, req.AppID)
 	if err != nil {
 		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "ok"})
 	}
