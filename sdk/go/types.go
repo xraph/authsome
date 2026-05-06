@@ -1841,6 +1841,16 @@ type AdminCreateUserRequest struct {
 	Username string `json:"username,omitempty"`
 }
 
+// AdminCopyUserRequest is the request body for AdminCopyUser.
+// Provisions a duplicate of SourceUserID under TargetAppID using the
+// source's stored password hash. EnvID is optional and defaults to
+// the target app's default environment when empty.
+type AdminCopyUserRequest struct {
+	SourceUserID string `json:"source_user_id"`
+	TargetAppID  string `json:"target_app_id"`
+	EnvID        string `json:"env_id,omitempty"`
+}
+
 // AdminUpdateUserRequest is the request body for AdminUpdateUser.
 type AdminUpdateUserRequest struct {
 	EmailVerified bool `json:"email_verified,omitempty"`

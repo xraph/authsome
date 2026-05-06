@@ -1612,6 +1612,15 @@ func (e *Engine) ListUserRoles(ctx context.Context, userID id.UserID) ([]*rbac.R
 	return e.rbacStore().ListUserRoles(ctx, userID.String())
 }
 
+// ListUserRolesInApp returns the roles assigned to userID within the
+// given appID. Use this when the caller's session app differs from the
+// app the role assignments live in (e.g. cross-app admin tooling like
+// TwinOS studio, where each workspace owns a separate Authsome App
+// but the calling API key authenticates against the platform App).
+func (e *Engine) ListUserRolesInApp(ctx context.Context, appID id.AppID, userID id.UserID) ([]*rbac.Role, error) {
+	return e.rbacStore().ListUserRolesForApp(ctx, appID.String(), userID.String())
+}
+
 // ListUsersWithRole returns the user IDs of all subjects that hold the named
 // role slug within the given app. It queries the warden assignments store
 // directly because the rbac.Store interface exposes only a user→roles
@@ -2111,6 +2120,78 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 	})
 
 	return u, nil
+}
+
+// AdminCopyUserToApp creates a new user record in targetAppID by
+// reusing the source user's email, profile fields, and stored password
+// hash — so the imported user can authenticate with their original
+// password without ever exposing the hash outside the engine. Returns
+// account.ErrEmailTaken if the target app already has a user with the
+// same email (caller can treat as idempotent), or a wrapped store
+// error otherwise.
+//
+// envID is resolved to the target app's default environment when
+// callers pass a zero EnvironmentID.
+func (e *Engine) AdminCopyUserToApp(ctx context.Context, adminID, sourceUserID id.UserID, targetAppID id.AppID, envID id.EnvironmentID) (*user.User, error) {
+	src, err := e.store.GetUser(ctx, sourceUserID)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: admin copy user: load source: %w", err)
+	}
+	if src.PasswordHash == "" {
+		return nil, fmt.Errorf("authsome: admin copy user: source has no password hash; passwordless users cannot be copied")
+	}
+
+	if src.AppID == targetAppID {
+		return nil, fmt.Errorf("authsome: admin copy user: source and target apps are identical")
+	}
+
+	if _, err := e.store.GetUserByEmail(ctx, targetAppID, src.Email); err == nil {
+		return nil, account.ErrEmailTaken
+	}
+
+	if envID.IsNil() {
+		if env, envErr := e.GetDefaultEnvironment(ctx, targetAppID); envErr == nil && env != nil {
+			envID = env.ID
+		}
+	}
+
+	now := time.Now()
+	dup := &user.User{
+		ID:            id.NewUserID(),
+		AppID:         targetAppID,
+		EnvID:         envID,
+		Email:         src.Email,
+		EmailVerified: src.EmailVerified,
+		FirstName:     src.FirstName,
+		LastName:      src.LastName,
+		Username:      src.Username,
+		Phone:         src.Phone,
+		PhoneVerified: src.PhoneVerified,
+		PasswordHash:  src.PasswordHash,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := e.store.CreateUser(ctx, dup); err != nil {
+		return nil, fmt.Errorf("authsome: admin copy user: %w", err)
+	}
+
+	e.EnsureDefaultRole(ctx, targetAppID, dup.ID)
+
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_copy_user", "user", dup.ID.String(), adminID.String(), targetAppID.String(), "admin", map[string]string{
+		"source_user_id": sourceUserID.String(),
+		"source_app_id":  src.AppID.String(),
+	})
+
+	e.relayEvent(ctx, "admin.user.copied", targetAppID.String(), map[string]string{
+		"user_id":        dup.ID.String(),
+		"source_user_id": sourceUserID.String(),
+		"source_app_id":  src.AppID.String(),
+		"admin_id":       adminID.String(),
+		"email":          dup.Email,
+	})
+
+	return dup, nil
 }
 
 // ──────────────────────────────────────────────────

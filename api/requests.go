@@ -280,9 +280,15 @@ type UnassignRoleRequest struct {
 	UserID string `json:"user_id" description:"User identifier"`
 }
 
-// ListUserRolesRequest binds the path for GET /users/:userId/roles.
+// ListUserRolesRequest binds path + query for GET /users/:userId/roles.
+// AppID is optional — when set the listing scopes to that app instead of
+// the engine's platform app. Cross-app admin clients (e.g. TwinOS studio,
+// where roles live in per-workspace apps but the calling API key
+// authenticates against the platform app) MUST pass app_id; without it
+// the engine queries the wrong tenant and returns an empty list.
 type ListUserRolesRequest struct {
 	UserID string `path:"userId" description:"User identifier"`
+	AppID  string `query:"app_id" description:"Optional app scope; defaults to the platform app" optional:"true"`
 }
 
 // RoleListResponse wraps a list of roles.
@@ -357,6 +363,18 @@ type AdminCreateUserRequest struct {
 	FirstName string `json:"first_name,omitempty" description:"First/given name"`
 	LastName  string `json:"last_name,omitempty" description:"Last/family name"`
 	Username  string `json:"username,omitempty" description:"Unique username"`
+}
+
+// AdminCopyUserRequest binds the body for POST /admin/users/copy.
+// Provisions a duplicate of source_user_id under target_app_id while
+// reusing the source user's stored password hash so the copy can
+// authenticate with the original password. Used by TwinOS studio's
+// "Add existing user" flow to lift an end-user from one workspace's
+// Authsome App into another's.
+type AdminCopyUserRequest struct {
+	SourceUserID string `json:"source_user_id" description:"User to duplicate"`
+	TargetAppID  string `json:"target_app_id" description:"Authsome App that will hold the duplicate"`
+	EnvID        string `json:"env_id,omitempty" description:"Optional target environment; falls back to the App's default environment"`
 }
 
 // AdminCreateAppRequest binds the body for POST /admin/apps. Used

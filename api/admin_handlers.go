@@ -104,6 +104,17 @@ func (a *API) registerAdminRoutes(router forge.Router) error {
 		return err
 	}
 
+	if err := g.POST("/users/copy", a.handleAdminCopyUser,
+		forge.WithSummary("Copy user to another app (admin)"),
+		forge.WithDescription("Provisions a new user record in target_app_id reusing the source user's email, profile, and stored password hash. The duplicated user can authenticate with their original password. 409 when the target app already has a user with the same email. Requires platform-admin role."),
+		forge.WithOperationID("adminCopyUser"),
+		forge.WithRequestSchema(AdminCopyUserRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Copied user", user.User{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
 	// Stats
 	if err := g.GET("/stats", a.handleAdminStats,
 		forge.WithSummary("Get stats (admin)"),
@@ -467,6 +478,47 @@ func (a *API) handleAdminCreateUser(ctx forge.Context, req *AdminCreateUserReque
 	}
 
 	return nil, ctx.JSON(http.StatusOK, u)
+}
+
+// handleAdminCopyUser provisions a duplicate of an existing user under
+// a different App, reusing the source's stored password hash so the
+// duplicate can sign in with the original password. Used by TwinOS
+// studio to lift end-users between workspace Apps without resetting
+// their credentials. ErrEmailTaken on the target maps to 409 via
+// mapError so callers can treat it as idempotent.
+func (a *API) handleAdminCopyUser(ctx forge.Context, req *AdminCopyUserRequest) (*user.User, error) {
+	adminID, ok := middleware.UserIDFrom(ctx.Context())
+	if !ok {
+		return nil, forge.Unauthorized("authentication required")
+	}
+	if strings.TrimSpace(req.SourceUserID) == "" || strings.TrimSpace(req.TargetAppID) == "" {
+		return nil, forge.BadRequest("source_user_id and target_app_id are required")
+	}
+
+	sourceUserID, err := id.ParseUserID(req.SourceUserID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid source_user_id")
+	}
+	targetAppID, err := id.ParseAppID(req.TargetAppID)
+	if err != nil {
+		return nil, forge.BadRequest("invalid target_app_id")
+	}
+
+	envID := id.EnvironmentID{}
+	if strings.TrimSpace(req.EnvID) != "" {
+		parsed, err := id.ParseEnvironmentID(req.EnvID)
+		if err != nil {
+			return nil, forge.BadRequest("invalid env_id")
+		}
+		envID = parsed
+	}
+
+	dup, err := a.engine.AdminCopyUserToApp(ctx.Context(), adminID, sourceUserID, targetAppID, envID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return nil, ctx.JSON(http.StatusOK, dup)
 }
 
 // handleAdminCreateApp creates a brand new Authsome App. Used by

@@ -978,6 +978,24 @@ func (c *Client) AdminCreateUser(ctx context.Context, req *AdminCreateUserReques
 	return &result, nil
 }
 
+// AdminCopyUser — Copy user to another app (admin). Reuses the source
+// user's stored password hash so the duplicate authenticates with the
+// original password. 409 from the API means the target app already
+// has a user with that email — callers should treat that as
+// idempotent.
+func (c *Client) AdminCopyUser(ctx context.Context, req *AdminCopyUserRequest) (*User, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/users/copy"
+	var result User
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // AdminGetUser — Get user (admin)
 func (c *Client) AdminGetUser(ctx context.Context, userId string) (*User, error) {
 	path := "/v1/admin/users/{userId}"
@@ -2281,6 +2299,24 @@ func (c *Client) AuthsomeListRoles(ctx context.Context) (*RoleListResponse, erro
 	return &result, nil
 }
 
+// AuthsomeListRolesInApp — List roles scoped to an explicit app_id.
+// The bare AuthsomeListRoles uses whatever app the engine derives from
+// the call's auth context (which falls back to the configured default
+// app); this variant lets cross-app admin clients (e.g. TwinOS studio,
+// which runs one query per workspace) target a specific app without
+// switching credentials.
+func (c *Client) AuthsomeListRolesInApp(ctx context.Context, appID string) (*RoleListResponse, error) {
+	path := "/v1/roles"
+	if appID != "" {
+		path = path + "?app_id=" + appID
+	}
+	var result RoleListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // AuthsomeCreateRole — Create role
 func (c *Client) AuthsomeCreateRole(ctx context.Context, req *AuthsomeCreateRoleRequest) (*Role, error) {
 	body, err := json.Marshal(req)
@@ -2542,6 +2578,25 @@ func (c *Client) StartSSOLogin(ctx context.Context, provider string, req *StartS
 func (c *Client) AuthsomeListUserRoles(ctx context.Context, userId string) (*UserRoleListResponse, error) {
 	path := "/v1/users/{userId}/roles"
 	path = strings.Replace(path, "{userId}", userId, 1)
+	var result UserRoleListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeListUserRolesInApp — List user roles scoped to an explicit
+// app_id. The bare AuthsomeListUserRoles uses the engine's platform
+// app, which is wrong for cross-app admin tooling: TwinOS studio's
+// API key authenticates against the platform app but role assignments
+// live in per-workspace apps. Pass the workspace's AppID here so the
+// engine's ListUserRolesInApp queries the right tenant.
+func (c *Client) AuthsomeListUserRolesInApp(ctx context.Context, userId, appID string) (*UserRoleListResponse, error) {
+	path := "/v1/users/{userId}/roles"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	if appID != "" {
+		path = path + "?app_id=" + appID
+	}
 	var result UserRoleListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
