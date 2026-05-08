@@ -171,7 +171,7 @@ func (p *Plugin) handleRegisterBegin(ctx forge.Context, req *RegisterBeginReques
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
 
-	options, session, err := p.wa.BeginRegistration(wau)
+	options, session, err := p.waForRequest(ctx.Request()).BeginRegistration(wau)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("passkey: begin registration: %w", err))
 	}
@@ -211,7 +211,7 @@ func (p *Plugin) handleRegisterFinish(ctx forge.Context, _ *RegisterFinishReques
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
 
-	cred, err := p.wa.FinishRegistration(wau, *cs.Data, ctx.Request())
+	cred, err := p.waForRequest(ctx.Request()).FinishRegistration(wau, *cs.Data, ctx.Request())
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("passkey: finish registration: %v", err))
 	}
@@ -246,9 +246,11 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 		return nil, forge.InternalError(fmt.Errorf("passkey: WebAuthn not initialized"))
 	}
 
+	wa := p.waForRequest(ctx.Request())
+
 	// For discoverable credentials (passkey), we can start without user identity
 	if req.Email == "" {
-		options, session, err := p.wa.BeginDiscoverableLogin()
+		options, session, err := wa.BeginDiscoverableLogin()
 		if err != nil {
 			return nil, forge.InternalError(fmt.Errorf("passkey: begin discoverable login: %w", err))
 		}
@@ -266,7 +268,7 @@ func (p *Plugin) handleLoginBegin(ctx forge.Context, req *LoginBeginRequest) (*L
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
 
-	options, session, err := p.wa.BeginLogin(wau)
+	options, session, err := wa.BeginLogin(wau)
 	if err != nil {
 		return nil, forge.InternalError(fmt.Errorf("passkey: begin login: %w", err))
 	}
@@ -302,7 +304,7 @@ func (p *Plugin) handleLoginFinish(ctx forge.Context, _ *LoginFinishRequest) (*L
 
 	wau := p.toWebAuthnUser(ctx.Context(), u)
 
-	cred, err := p.wa.FinishLogin(wau, session, ctx.Request())
+	cred, err := p.waForRequest(ctx.Request()).FinishLogin(wau, session, ctx.Request())
 	if err != nil {
 		return nil, forge.Unauthorized(fmt.Sprintf("passkey: finish login: %v", err))
 	}

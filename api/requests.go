@@ -319,9 +319,9 @@ type ForgotPasswordResponse struct {
 // AdminListUsersRequest binds query params for GET /admin/users.
 type AdminListUsersRequest struct {
 	AppID  string `query:"app_id" description:"Application ID"`
-	Email  string `query:"email" description:"Filter by email (partial match)"`
-	Cursor string `query:"cursor" description:"Pagination cursor"`
-	Limit  int    `query:"limit" description:"Maximum number of results (default 20, max 100)"`
+	Email  string `query:"email" description:"Filter by email (partial match)" optional:"true"`
+	Cursor string `query:"cursor" description:"Pagination cursor" optional:"true"`
+	Limit  int    `query:"limit" description:"Maximum number of results (default 20, max 100)" default:"20" optional:"true"`
 }
 
 // AdminGetUserRequest binds the path for GET /admin/users/:userId.

@@ -1254,11 +1254,11 @@ func TestResendVerification_NoHookForVerifiedUser(t *testing.T) {
 // sign-in MFA gate end-to-end with a real engine + MFA plugin
 // wired through the API router:
 //
-//   1. Sign in with password → 403 with mfa_ticket + available_methods
-//   2. POST /v1/mfa/challenge with the ticket + a valid TOTP code →
-//      200 with {user, session_token, refresh_token, expires_at}
-//   3. The minted session is real (validates against the store).
-//   4. Replaying the same ticket fails (single-use after success).
+//  1. Sign in with password → 403 with mfa_ticket + available_methods
+//  2. POST /v1/mfa/challenge with the ticket + a valid TOTP code →
+//     200 with {user, session_token, refresh_token, expires_at}
+//  3. The minted session is real (validates against the store).
+//  4. Replaying the same ticket fails (single-use after success).
 //
 // This pins the contract Task 5 of the MFA-consolidation plan
 // established and is the only place where the full chain is

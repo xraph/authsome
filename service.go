@@ -1825,23 +1825,22 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 }
 
 // ensureWardenScope ensures the context has a warden tenant scope set.
-// Warden's scopeFromContext uses forge.Scope.OrgID() as the tenant, but for
-// app-scoped sessions (no org) this is empty while roles are stored with
-// tenant_id = appID. We always inject the explicit warden tenant values so
-// that Warden falls back to the app ID when OrgID is absent.
+// All RBAC roles (platform-owner, platform-admin, platform-user, and any
+// app-specific roles) are stored in warden with tenant_id = appID — not
+// the org ID. We therefore always use appID as the warden tenant so that
+// role lookups succeed regardless of whether the session is org-scoped.
+// When org-level RBAC is introduced, this function should be extended to
+// check both tenants or use namespace paths for org isolation.
 func (e *Engine) ensureWardenScope(ctx context.Context) context.Context {
 	if e.wardenEng == nil {
 		return ctx
 	}
 
-	// If forge scope is set, derive the warden tenant from it. Use OrgID if
-	// present (org-scoped), otherwise fall back to AppID (app-scoped).
+	// If a forge scope is present, always use the app ID as the warden
+	// tenant. Org scope does not change where roles are stored.
 	if s, ok := forge.ScopeFrom(ctx); ok {
-		tenantID := s.OrgID()
-		if tenantID == "" {
-			tenantID = s.AppID()
-		}
-		return warden.WithTenant(ctx, s.AppID(), tenantID)
+		appID := s.AppID()
+		return warden.WithTenant(ctx, appID, appID)
 	}
 
 	// No forge scope at all — inject the platform app ID as tenant.

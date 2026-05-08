@@ -18,9 +18,9 @@ type RevokedRefreshToken struct {
 
 // Revocation reason constants for RevokedRefreshToken.Reason.
 const (
-	RevokeReasonRotated         = "rotated"
-	RevokeReasonReplayDetected  = "replay_detected"
-	RevokeReasonLogout          = "logout"
+	RevokeReasonRotated          = "rotated"
+	RevokeReasonReplayDetected   = "replay_detected"
+	RevokeReasonLogout           = "logout"
 	RevokeReasonFamilyRevocation = "family_revocation"
 )
 

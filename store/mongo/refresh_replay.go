@@ -162,4 +162,3 @@ func hashRefreshTokenMongo(tok string) string {
 	sum := sha256.Sum256([]byte(tok))
 	return hex.EncodeToString(sum[:])
 }
-

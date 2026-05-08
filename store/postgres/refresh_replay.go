@@ -147,4 +147,3 @@ var _ interface {
 	GetRevokedRefreshTokenFamily(context.Context, string) (id.SessionFamilyID, error)
 	RevokeRefreshTokenFamily(context.Context, id.SessionFamilyID, string) error
 } = (*Store)(nil)
-

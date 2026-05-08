@@ -6,10 +6,11 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/xraph/grove/drivers/mongodriver"
+
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/store"
-	"github.com/xraph/grove/drivers/mongodriver"
 )
 
 // ──────────────────────────────────────────────────

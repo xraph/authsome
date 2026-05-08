@@ -18,7 +18,9 @@ func TestSqliteError_NoRowsReturnsErrNotFound(t *testing.T) {
 }
 
 // SQLite reports unique violations as
-//   "UNIQUE constraint failed: <table>.<column>[, <table>.<column>...]"
+//
+//	"UNIQUE constraint failed: <table>.<column>[, <table>.<column>...]"
+//
 // We pin the column-substring routing so duplicate email/username
 // surface as the right account-level sentinel.
 func TestSqliteError_DuplicateEmailMapsSentinel(t *testing.T) {

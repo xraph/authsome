@@ -80,12 +80,12 @@ func TestVerifySignature_FutureTimestampWithinToleranceOK(t *testing.T) {
 func TestVerifySignature_MalformedHeaderFails(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
-		"empty":          "",
-		"no equals":      "t,1700000000,v1,abc",
-		"missing v1":     "t=1700000000",
-		"missing t":      "v1=abc",
-		"non-int ts":     "t=banana,v1=ab",
-		"non-hex sig":    "t=1700000000,v1=zzzz",
+		"empty":       "",
+		"no equals":   "t,1700000000,v1,abc",
+		"missing v1":  "t=1700000000",
+		"missing t":   "v1=abc",
+		"non-int ts":  "t=banana,v1=ab",
+		"non-hex sig": "t=1700000000,v1=zzzz",
 	}
 	for name, header := range cases {
 		header := header

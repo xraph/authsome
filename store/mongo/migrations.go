@@ -737,5 +737,31 @@ func init() {
 				return nil
 			},
 		},
+		// Migration: Backfill namespace_path="" on warden_assignments documents
+		// that were created before warden commit 566f0e1 added namespace support.
+		// The new ListRolesForSubject filters by namespace_path IN [""] when
+		// querying the tenant root; documents missing the field don't match,
+		// causing 403s on all permission checks.
+		&migrate.Migration{
+			Name:    "backfill_warden_assignment_namespace_path",
+			Version: "20260505000003",
+			Up: func(ctx context.Context, exec migrate.Executor) error {
+				mexec, ok := exec.(*mongomigrate.Executor)
+				if !ok {
+					return fmt.Errorf("expected mongomigrate executor, got %T", exec)
+				}
+				coll := mexec.DB().Collection("warden_assignments")
+				_, err := coll.UpdateMany(
+					ctx,
+					bson.M{"namespace_path": bson.M{"$exists": false}},
+					bson.M{"$set": bson.M{"namespace_path": ""}},
+				)
+				return err
+			},
+			Down: func(_ context.Context, _ migrate.Executor) error {
+				// Backfilled empty strings are equivalent to the absent field; no-op down.
+				return nil
+			},
+		},
 	)
 }

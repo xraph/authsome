@@ -84,11 +84,18 @@ func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error)
 }
 
 func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*Role, error) {
-	wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, slug)
-	if err != nil {
-		return nil, mapWardenError(err)
+	// Warden now requires an explicit namespace path. Authsome roles can live
+	// in the root namespace ("") or in the "platform" namespace (DSL-seeded
+	// platform roles). Try root first for backward compat, then fall back to
+	// "platform" so DSL-created roles are always resolvable without the caller
+	// needing to know the namespace.
+	for _, ns := range []string{"", "platform"} {
+		wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, ns, slug)
+		if err == nil {
+			return FromWardenRole(wr), nil
+		}
 	}
-	return FromWardenRole(wr), nil
+	return nil, ErrRoleNotFound
 }
 
 func (s *WardenStore) UpdateRole(ctx context.Context, r *Role) error {
@@ -142,7 +149,7 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	if err := s.engine.Store().CreatePermission(ctx, wp); err != nil {
 		// Permission may already exist (duplicate name+tenant). Look it up so we
 		// can still attach it to this role — AttachPermission is idempotent.
-		existing, findErr := s.engine.Store().GetPermissionByName(ctx, wp.TenantID, wp.Name)
+		existing, findErr := s.engine.Store().GetPermissionByName(ctx, wp.TenantID, wp.NamespacePath, wp.Name)
 		if findErr != nil || existing == nil {
 			return mapWardenError(err) // Return the original CreatePermission error.
 		}

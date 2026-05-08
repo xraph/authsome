@@ -119,7 +119,7 @@ func ToWardenPermission(p *Permission, tenantID string) *wardenperm.Permission {
 		// Warden DSL convention: <resource>:<action>. The check engine
 		// matches by (action, resource) tuple, not by name, so this is a
 		// cosmetic flip from authsome's old action:resource convention.
-		Name: p.Resource + ":" + p.Action,
+		Name:     p.Resource + ":" + p.Action,
 		Action:   p.Action,
 		Resource: p.Resource,
 	}

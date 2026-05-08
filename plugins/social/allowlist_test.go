@@ -240,9 +240,9 @@ func TestAttack_FrontendURL_NotAllowlisted(t *testing.T) {
 	// selectTrustedOrigin must return "" — the same outcome as if no
 	// frontend_url was supplied at all.
 	got := selectTrustedOrigin(context.Background(), mgr, appID,
-		"https://attacker.example",          // frontend_url
-		"https://attacker.example",          // Origin header
-		"https://attacker.example/landing",  // Referer header
+		"https://attacker.example",         // frontend_url
+		"https://attacker.example",         // Origin header
+		"https://attacker.example/landing", // Referer header
 	)
 	if got != "" {
 		t.Errorf("selectTrustedOrigin with attacker inputs = %q, want \"\" (no allowlist match)", got)

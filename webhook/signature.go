@@ -36,9 +36,9 @@ const DefaultSignatureTolerance = 5 * time.Minute
 // Errors returned by VerifySignature. Callers should match with
 // errors.Is so the signaling stays stable across error wrapping.
 var (
-	ErrMalformedHeader = errors.New("webhook: malformed signature header")
-	ErrUnknownVersion  = errors.New("webhook: unknown signature version")
-	ErrTimestampSkew   = errors.New("webhook: signature timestamp outside tolerance")
+	ErrMalformedHeader   = errors.New("webhook: malformed signature header")
+	ErrUnknownVersion    = errors.New("webhook: unknown signature version")
+	ErrTimestampSkew     = errors.New("webhook: signature timestamp outside tolerance")
 	ErrSignatureMismatch = errors.New("webhook: signature mismatch")
 )
 

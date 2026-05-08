@@ -5,12 +5,11 @@ package dashui
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import "github.com/a-h/templ"
-import templruntime "github.com/a-h/templ/runtime"
-
 import (
 	"strconv"
 
+	"github.com/a-h/templ"
+	templruntime "github.com/a-h/templ/runtime"
 	"github.com/xraph/forgeui/components/badge"
 	"github.com/xraph/forgeui/components/card"
 	"github.com/xraph/forgeui/components/table"

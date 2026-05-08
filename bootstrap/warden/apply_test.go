@@ -59,14 +59,14 @@ func TestApplyForApp_NonPlatform(t *testing.T) {
 	// Platform-only roles must NOT exist for a non-platform app.
 	platformOnlySlugs := []string{"platform-user", "platform-admin", "platform-owner"}
 	for _, slug := range platformOnlySlugs {
-		role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), slug)
+		role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), "platform", slug)
 		require.Error(t, err, "platform-only role %q must not be created on a non-platform app", slug)
 		require.Nil(t, role)
 	}
 
 	// App-scoped roles must exist.
 	for _, slug := range []string{"user", "admin", "owner"} {
-		role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), slug)
+		role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), "app", slug)
 		require.NoError(t, err, "expected app-scoped role %q to exist", slug)
 		require.NotNil(t, role)
 	}
@@ -83,7 +83,7 @@ func TestApplyForApp_DryRun(t *testing.T) {
 	require.NotEmpty(t, res.Created)
 
 	// Engine store should remain empty.
-	role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), "user")
+	role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), "app", "user")
 	require.Error(t, err, "DryRun must not write any roles")
 	require.Nil(t, role)
 }
@@ -116,7 +116,7 @@ func TestApplyForApp_NamespacePathStamping(t *testing.T) {
 		{"platform-owner", "platform"},
 	}
 	for _, tc := range cases {
-		role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), tc.slug)
+		role, err := eng.Store().GetRoleBySlug(ctx, appID.String(), tc.nsPath, tc.slug)
 		require.NoError(t, err, "role %q should exist", tc.slug)
 		require.Equal(t, tc.nsPath, role.NamespacePath, "role %q should be in namespace %q", tc.slug, tc.nsPath)
 	}

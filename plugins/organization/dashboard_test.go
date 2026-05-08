@@ -154,11 +154,11 @@ func TestOrgDelete_RequiresOwnerOrAdmin(t *testing.T) {
 // spyPermChecker records the (action, resource) pair it was called with and
 // returns a fixed allow. Used to assert canonical RBAC arg shapes.
 type spyPermChecker struct {
-	allow    bool
-	gotUser  id.UserID
-	gotAct   string
-	gotRes   string
-	calls    int
+	allow   bool
+	gotUser id.UserID
+	gotAct  string
+	gotRes  string
+	calls   int
 }
 
 func (s *spyPermChecker) HasPermission(_ context.Context, userID id.UserID, action, resource string) (bool, error) {
