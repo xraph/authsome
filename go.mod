@@ -203,3 +203,8 @@ require (
 replace github.com/xraph/warden => ../warden
 
 replace github.com/xraph/grove/drivers/mongodriver => ../grove/drivers/mongodriver
+
+// Local development: the contract package below depends on
+// dashauth.WithHTTP / ResponseWriterFromContext which haven't been
+// tagged in a forge release yet. Drop this replace once they ship.
+replace github.com/xraph/forge => ../../forge

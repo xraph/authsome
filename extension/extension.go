@@ -14,6 +14,8 @@ import (
 	"github.com/xraph/forge/extensions/auth"
 	dashboard "github.com/xraph/forge/extensions/dashboard"
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
+	dashcontract "github.com/xraph/forge/extensions/dashboard/contract"
+	"github.com/xraph/forge/extensions/dashboard/contract/dispatcher"
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 	"github.com/xraph/forge/extensions/dashboard/ui/shell"
 	"github.com/xraph/vessel"
@@ -22,6 +24,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
@@ -798,6 +801,36 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 	} else {
 		e.Logger().Info("authsome: registered as dashboard auth provider")
 	}
+}
+
+// RegisterContractContributor implements dashboard.ContractContributorAware.
+// It registers the `auth` contract contributor against the dashboard's
+// contract registry + dispatcher: declares auth.login + auth.logout command
+// intents and ships the /login graph route the dashboard's React shell
+// renders inside its AuthGate.
+//
+// Skipped in client mode — there's no local engine to wire. The upstream
+// authsome service exposes the contract contributor itself in that
+// scenario; the host dashboard discovers it via the contract registry's
+// remote-contributor flow.
+func (e *Extension) RegisterContractContributor(
+	disp *dispatcher.Dispatcher,
+	reg dashcontract.Registry,
+	wreg dashcontract.WardenRegistry,
+) error {
+	if e.clientMode {
+		e.Logger().Info("authsome: contract contributor not registered (client mode)")
+		return nil
+	}
+	if e.engine == nil {
+		e.Logger().Warn("authsome: engine not initialised; skipping contract contributor registration")
+		return nil
+	}
+	if err := authcontract.Register(disp, reg, wreg, authcontract.Deps{Engine: e.engine}); err != nil {
+		return fmt.Errorf("authsome: register contract contributor: %w", err)
+	}
+	e.Logger().Info("authsome: registered as contract contributor")
+	return nil
 }
 
 // DashboardUserDropdownActions implements dashboard.DashboardFooterContributor.
