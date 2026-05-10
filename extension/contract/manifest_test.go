@@ -16,8 +16,8 @@ func TestManifest_Loads(t *testing.T) {
 	if m.Contributor.Name != "auth" {
 		t.Errorf("contributor name = %q, want auth", m.Contributor.Name)
 	}
-	if got := len(m.Intents); got != 2 {
-		t.Errorf("intents = %d, want 2 (login + logout)", got)
+	if got := len(m.Intents); got != 3 {
+		t.Errorf("intents = %d, want 3 (login + logout + config)", got)
 	}
 	if got := len(m.Graph); got != 1 {
 		t.Errorf("graph routes = %d, want 1 (/login)", got)
@@ -43,25 +43,18 @@ func TestManifest_RegistersWithRegistry(t *testing.T) {
 	if err := reg.Register(m); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	// Sanity-check the /login graph route survived registration with the
-	// expected slot shape (form.edit > fields > 2x form.field).
+	// Sanity-check the /login graph route survived registration. Slice
+	// (l.5) shifted the route from a hardcoded form.edit to the dynamic
+	// auth.login.form intent backed by the auth.config query, so the
+	// expectation flips to verifying the data binding.
 	root, ok := reg.MergedGraph("auth", "/login")
 	if !ok {
 		t.Fatal("expected /login route to be registered")
 	}
-	if root.Intent != "form.edit" || root.Op != "auth.login" {
-		t.Errorf("unexpected /login root: intent=%s op=%s", root.Intent, root.Op)
+	if root.Intent != "auth.login.form" {
+		t.Errorf("unexpected /login root: intent=%s", root.Intent)
 	}
-	fields, ok := root.Slots["fields"]
-	if !ok {
-		t.Fatal("expected fields slot")
-	}
-	if len(fields) != 2 {
-		t.Errorf("expected 2 form.field children, got %d", len(fields))
-	}
-	for _, f := range fields {
-		if f.Intent != "form.field" {
-			t.Errorf("unexpected child intent: %s", f.Intent)
-		}
+	if root.Data == nil || root.Data.QueryRef != "queries.config" {
+		t.Errorf("expected data: queries.config, got %+v", root.Data)
 	}
 }

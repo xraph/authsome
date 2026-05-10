@@ -6,39 +6,31 @@ contributor:
     preferred: v1
   capabilities: [auth.read, auth.write]
 
-# Authsome owns two intents the Forge dashboard React shell consumes:
+# Authsome owns three intents the Forge dashboard React shell consumes:
 #  - auth.login    (command) — credentials in, session cookie out.
 #  - auth.logout   (command) — clears the dashboard auth_token cookie and
 #                              terminates the server-side session.
+#  - auth.config   (query)   — drives the /login form: brand, password
+#                              toggle, signup link, terms/privacy, and
+#                              the dynamic list of social providers
+#                              configured for the platform app.
 intents:
   - { name: auth.login,  kind: command, version: 1, capability: write }
   - { name: auth.logout, kind: command, version: 1, capability: write }
+  - { name: auth.config, kind: query,   version: 1, capability: read  }
+
+queries:
+  config:
+    intent: auth.config
+    cache: { staleTime: 60s }
 
 # /login is the page the dashboard's AuthGate renders when the principal
-# endpoint returns 401 with code=UNAUTHENTICATED. The graph node below
-# builds an authsome-branded form via the shell's form.edit + form.field
-# vocabulary; submitting the form triggers the auth.login command.
+# endpoint returns 401. The auth.login.form vocabulary intent (registered
+# in the React shell) reads this graph node, fetches the auth.config
+# query, and renders shadcn's login-04 layout — branded, password-only or
+# password+social, with terms/privacy footer.
 graph:
   - route: /login
-    intent: form.edit
+    intent: auth.login.form
     title: Sign in
-    op: auth.login
-    props:
-      submitLabel: Sign in
-    slots:
-      fields:
-        - intent: form.field
-          props:
-            name: email
-            label: Email
-            type: email
-            placeholder: you@example.com
-            required: true
-            autocomplete: email
-        - intent: form.field
-          props:
-            name: password
-            label: Password
-            type: password
-            required: true
-            autocomplete: current-password
+    data: queries.config

@@ -26,12 +26,42 @@ import (
 var manifestYAML []byte
 
 // Deps bundles what the contract handlers need at registration time.
-// Engine is required; CookieSecure overrides the auto-detected request scheme
-// when an upstream proxy strips it (rare — leave zero in production behind
-// a TLS-aware reverse proxy).
+// Engine is required; everything else is optional UI/operational tuning.
 type Deps struct {
-	Engine       *authsome.Engine
+	// Engine is the live authsome engine. Required.
+	Engine *authsome.Engine
+
+	// CookieSecure overrides the auto-detected request scheme when an
+	// upstream proxy strips it (rare — leave zero in production behind a
+	// TLS-aware reverse proxy).
 	CookieSecure *bool
+
+	// SocialBasePath overrides the URL prefix for social OAuth start
+	// endpoints. Defaults to "/v1/social" matching the social plugin's
+	// default route registration.
+	SocialBasePath string
+
+	// Brand / BrandLogoURL override the platform app's name + logo on the
+	// /login page. When empty the values fall back to App.Name / App.Logo
+	// resolved at handler time.
+	Brand        string
+	BrandLogoURL string
+
+	// SignupURL is the public-facing /signup link rendered above the login
+	// form. Empty hides the "Don't have an account? Sign up" line.
+	SignupURL   string
+	SignupLabel string
+
+	// TermsURL / PrivacyURL feed the legal footer beneath the form.
+	// Both empty hides the footer entirely.
+	TermsURL   string
+	PrivacyURL string
+
+	// RequiredRoles, if non-empty, gates dashboard access to users carrying
+	// at least one matching role. Authsome calls Extension.SetRequiredRoles
+	// with these values in RegisterDashboardAuth so the principal endpoint
+	// returns 403 PERMISSION_DENIED to anyone without them.
+	RequiredRoles []string
 }
 
 // Register loads the embedded manifest, validates it, registers the `auth`
@@ -64,6 +94,9 @@ func Register(
 	}
 	if err := dispatcher.RegisterCommand(d, c, "auth.logout", 1, logoutHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register auth.logout: %w", err)
+	}
+	if err := dispatcher.RegisterQuery(d, c, "auth.config", 1, configHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.config: %w", err)
 	}
 	return nil
 }

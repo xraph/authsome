@@ -68,6 +68,47 @@ type Config struct {
 	// auth strategy and App-scoped admin endpoints; without it,
 	// admin calls with the service API key return 401.
 	ServiceAppID string `json:"service_app_id" mapstructure:"service_app_id" yaml:"service_app_id"`
+
+	// Dashboard configures how authsome surfaces inside the Forge
+	// dashboard's contract path: branding on the /login page, links to
+	// terms/privacy/signup, and the optional required-role gate that
+	// keeps the dashboard locked down to specific user populations.
+	Dashboard DashboardIntegrationConfig `json:"dashboard" mapstructure:"dashboard" yaml:"dashboard"`
+}
+
+// DashboardIntegrationConfig collects the fields that flow into the
+// dashboard's auth.config query and the principal handler's role gate.
+// All fields are optional — empty values fall back to platform-app data
+// (App.Name, App.Logo) and an unrestricted access policy.
+type DashboardIntegrationConfig struct {
+	// Brand overrides the displayed name on the /login page. Defaults to
+	// the platform app's Name when empty.
+	Brand string `json:"brand" mapstructure:"brand" yaml:"brand"`
+
+	// BrandLogoURL overrides the logo image URL. Defaults to App.Logo.
+	BrandLogoURL string `json:"brand_logo_url" mapstructure:"brand_logo_url" yaml:"brand_logo_url"`
+
+	// SignupURL is the public-facing path the "Don't have an account?
+	// Sign up" link points to. Empty hides the line.
+	SignupURL string `json:"signup_url" mapstructure:"signup_url" yaml:"signup_url"`
+
+	// SignupLabel overrides the link label.
+	SignupLabel string `json:"signup_label" mapstructure:"signup_label" yaml:"signup_label"`
+
+	// TermsURL / PrivacyURL feed the legal footer beneath the form.
+	TermsURL   string `json:"terms_url" mapstructure:"terms_url" yaml:"terms_url"`
+	PrivacyURL string `json:"privacy_url" mapstructure:"privacy_url" yaml:"privacy_url"`
+
+	// SocialBasePath overrides the URL prefix for OAuth start endpoints.
+	// Defaults to "/v1/social" matching the social plugin's default.
+	SocialBasePath string `json:"social_base_path" mapstructure:"social_base_path" yaml:"social_base_path"`
+
+	// RequiredRoles, when non-empty, restricts dashboard access to users
+	// carrying at least one of the listed roles. Authsome calls
+	// dashExt.SetRequiredRoles in RegisterDashboardAuth so the principal
+	// endpoint returns 403 PERMISSION_DENIED for anyone without them and
+	// the React shell renders an "access denied" panel.
+	RequiredRoles []string `json:"required_roles" mapstructure:"required_roles" yaml:"required_roles"`
 }
 
 // BootstrapYAMLConfig holds bootstrap settings loadable from YAML.

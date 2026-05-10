@@ -796,6 +796,11 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 
 	dashExt.SetTenantResolver(dashauth.ScopeTenantResolver{})
 	dashExt.EnableAuth()
+	if len(e.config.Dashboard.RequiredRoles) > 0 {
+		dashExt.SetRequiredRoles(e.config.Dashboard.RequiredRoles)
+		e.Logger().Info("authsome: dashboard access gated by required roles",
+			log.Any("required_roles", e.config.Dashboard.RequiredRoles))
+	}
 	if e.clientMode {
 		e.Logger().Info("authsome: registered as dashboard auth provider (client mode)")
 	} else {
@@ -826,7 +831,18 @@ func (e *Extension) RegisterContractContributor(
 		e.Logger().Warn("authsome: engine not initialised; skipping contract contributor registration")
 		return nil
 	}
-	if err := authcontract.Register(disp, reg, wreg, authcontract.Deps{Engine: e.engine}); err != nil {
+	deps := authcontract.Deps{
+		Engine:         e.engine,
+		SocialBasePath: e.config.Dashboard.SocialBasePath,
+		Brand:          e.config.Dashboard.Brand,
+		BrandLogoURL:   e.config.Dashboard.BrandLogoURL,
+		SignupURL:      e.config.Dashboard.SignupURL,
+		SignupLabel:    e.config.Dashboard.SignupLabel,
+		TermsURL:       e.config.Dashboard.TermsURL,
+		PrivacyURL:     e.config.Dashboard.PrivacyURL,
+		RequiredRoles:  append([]string(nil), e.config.Dashboard.RequiredRoles...),
+	}
+	if err := authcontract.Register(disp, reg, wreg, deps); err != nil {
 		return fmt.Errorf("authsome: register contract contributor: %w", err)
 	}
 	e.Logger().Info("authsome: registered as contract contributor")
