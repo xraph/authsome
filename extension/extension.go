@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -16,6 +17,9 @@ import (
 	dashauth "github.com/xraph/forge/extensions/dashboard/auth"
 	dashcontract "github.com/xraph/forge/extensions/dashboard/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract/dispatcher"
+	contractloader "github.com/xraph/forge/extensions/dashboard/contract/loader"
+	contractremote "github.com/xraph/forge/extensions/dashboard/contract/remote"
+	contractserver "github.com/xraph/forge/extensions/dashboard/contract/server"
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 	"github.com/xraph/forge/extensions/dashboard/ui/shell"
 	"github.com/xraph/vessel"
@@ -94,6 +98,16 @@ type Extension struct {
 	useGrove   bool
 	clientMode bool               // true when operating as a remote client
 	client     *authclient.Client // non-nil in client mode
+
+	// Standalone contract surface — populated in Register() when authsome
+	// is running with an engine. Lets OTHER Forge dashboards discover this
+	// service as a remote contract contributor via its
+	// /_forge/contract/{manifest,dispatch} endpoints. Independent from
+	// RegisterContractContributor (which targets a colocated dashboard's
+	// dispatcher/registry).
+	contractReg  dashcontract.Registry
+	contractDisp *dispatcher.Dispatcher
+	contractWreg dashcontract.WardenRegistry
 }
 
 // New creates an AuthSome Forge extension with the given options.
@@ -517,6 +531,18 @@ func (e *Extension) init(fapp forge.App) error {
 				return err
 			}
 
+			// Slice (m): expose the contract contributor over HTTP at
+			// <basePath>/_forge/contract/{manifest,dispatch} so a remote
+			// dashboard can register us as a remote contract contributor and
+			// forward auth.login / auth.config / auth.logout envelopes here.
+			// Uses an independent contract registry + dispatcher so this
+			// surface stays isolated from any colocated dashboard's own
+			// dispatcher (which RegisterContractContributor targets
+			// separately).
+			if err := e.registerContractServer(groupedRouter); err != nil {
+				return err
+			}
+
 			e.Logger().Info("authsome: registered routes on forge router")
 		} else {
 			e.Logger().Warn("authsome: forge router not available, API routes not registered")
@@ -808,6 +834,121 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 	}
 }
 
+// registerRemoteContractContributor is the client-mode arm of
+// RegisterContractContributor. It treats the upstream authsome service as
+// a remote contract contributor: fetches its manifest from
+// <PortalURL>/authsome/_forge/contract/manifest, validates it, records the
+// endpoint on the dashboard's registry, and installs a forwarding
+// dispatcher so envelopes for the auth contributor flow to the upstream.
+//
+// The remote base URL is the PortalURL joined with the authsome BasePath
+// (default /authsome) because that's where the standalone authsome
+// service mounts its contract server. apiKey is the service-to-service
+// credential (ServiceAPIKey) — end-user identity flows in parallel via
+// X-Forwarded-Authorization, set by the forwarding dispatcher.
+func (e *Extension) registerRemoteContractContributor(
+	disp *dispatcher.Dispatcher,
+	reg dashcontract.Registry,
+	wreg dashcontract.WardenRegistry,
+) error {
+	portalURL := strings.TrimRight(e.config.PortalURL, "/")
+	if portalURL == "" {
+		e.Logger().Warn("authsome: client mode but PortalURL empty; skipping remote contract registration")
+		return nil
+	}
+	basePath := e.config.BasePath
+	if basePath == "" {
+		basePath = "/authsome"
+	}
+	remoteBaseURL := portalURL + basePath
+
+	// Use a short timeout — we don't want extension wire-up to block on a
+	// slow / unreachable portal. Failure here is not fatal: the host
+	// dashboard can still operate (other contributors stay functional);
+	// auth-gated routes just fail with "not registered" when the user
+	// tries them, which is no worse than the pre-slice-(m) baseline.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	m, err := contractremote.FetchManifest(ctx, remoteBaseURL, e.config.ServiceAPIKey, nil)
+	if err != nil {
+		e.Logger().Warn("authsome: fetch remote contract manifest failed; remote auth.* intents will be unavailable",
+			log.String("portal_url", e.config.PortalURL),
+			log.String("manifest_url", remoteBaseURL+contractremote.DefaultManifestPath),
+			log.String("error", err.Error()),
+		)
+		return nil //nolint:nilerr // non-fatal; surfaced via log
+	}
+	if err := contractloader.Validate(m, wreg); err != nil {
+		return fmt.Errorf("authsome: validate remote manifest: %w", err)
+	}
+	if err := reg.RegisterRemote(m, dashcontract.RemoteEndpoint{
+		BaseURL: remoteBaseURL,
+		APIKey:  e.config.ServiceAPIKey,
+	}); err != nil {
+		return fmt.Errorf("authsome: register remote contributor: %w", err)
+	}
+	// Install the forwarding dispatcher. The dispatcher reads endpoints
+	// from the registry per request, so this single install routes ALL
+	// remote contributors — including ones registered later by other
+	// extensions or by future auto-discovery. Idempotent against itself:
+	// repeated calls just replace the field with an equivalent value.
+	disp.SetRemoteDispatcher(contractremote.NewForwardingDispatcher(reg))
+	e.Logger().Info("authsome: registered upstream as remote contract contributor",
+		log.String("contributor", m.Contributor.Name),
+		log.String("remote_base", remoteBaseURL),
+	)
+	return nil
+}
+
+// registerContractServer stands up authsome's standalone contract surface:
+// a private registry + dispatcher with the auth.* handlers bound, plus the
+// HTTP server mounted at <basePath>/_forge/contract/{manifest,dispatch}.
+// This lets a remote Forge dashboard register the running authsome service
+// as a remote contract contributor via the slice (m) flow — the dashboard
+// fetches the manifest, registers it with RegisterRemote, and forwards
+// envelopes here at dispatch time.
+//
+// Skipped silently when the engine isn't available (client mode); the
+// upstream authsome service is the one exposing this endpoint in that
+// scenario, not us.
+func (e *Extension) registerContractServer(router forge.Router) error {
+	if e.engine == nil {
+		return nil
+	}
+	e.contractReg = dashcontract.NewRegistry()
+	e.contractWreg = dashcontract.NewWardenRegistry()
+	e.contractDisp = dispatcher.New(dispatcher.NoopMetricsEmitter{})
+	deps := authcontract.Deps{
+		Engine:         e.engine,
+		SocialBasePath: e.config.Dashboard.SocialBasePath,
+		Brand:          e.config.Dashboard.Brand,
+		BrandLogoURL:   e.config.Dashboard.BrandLogoURL,
+		SignupURL:      e.config.Dashboard.SignupURL,
+		SignupLabel:    e.config.Dashboard.SignupLabel,
+		TermsURL:       e.config.Dashboard.TermsURL,
+		PrivacyURL:     e.config.Dashboard.PrivacyURL,
+		RequiredRoles:  append([]string(nil), e.config.Dashboard.RequiredRoles...),
+	}
+	if err := authcontract.Register(e.contractDisp, e.contractReg, e.contractWreg, deps); err != nil {
+		return fmt.Errorf("authsome: stand up contract server: %w", err)
+	}
+	srv := contractserver.New(e.contractReg, e.contractWreg, e.contractDisp, dashcontract.NoopAuditEmitter{})
+	// router is already grouped under the configured basePath; the server's
+	// default prefix is "/_forge/contract" so endpoints land at
+	// <basePath>/_forge/contract/{manifest,dispatch}.
+	if err := router.GET(srv.ManifestPath(), srv.HandleManifest); err != nil {
+		return fmt.Errorf("authsome: mount contract manifest: %w", err)
+	}
+	if err := router.POST(srv.DispatchPath(), srv.HandleDispatch); err != nil {
+		return fmt.Errorf("authsome: mount contract dispatch: %w", err)
+	}
+	e.Logger().Info("authsome: contract server mounted",
+		log.String("manifest", srv.ManifestPath()),
+		log.String("dispatch", srv.DispatchPath()),
+	)
+	return nil
+}
+
 // RegisterContractContributor implements dashboard.ContractContributorAware.
 // It registers the `auth` contract contributor against the dashboard's
 // contract registry + dispatcher: declares auth.login + auth.logout command
@@ -824,8 +965,14 @@ func (e *Extension) RegisterContractContributor(
 	wreg dashcontract.WardenRegistry,
 ) error {
 	if e.clientMode {
-		e.Logger().Info("authsome: contract contributor not registered (client mode)")
-		return nil
+		// Slice (m): the upstream authsome service exposes the auth contract
+		// contributor at <PortalURL>/<authsome-base>/_forge/contract. Fetch
+		// its manifest, register it as a remote on the dashboard's registry,
+		// and install a forwarding dispatcher so auth.login / auth.config /
+		// auth.logout envelopes flow to the upstream over HTTP. Without this
+		// the dispatcher returns "intent auth.login not registered" because
+		// no local handler exists.
+		return e.registerRemoteContractContributor(disp, reg, wreg)
 	}
 	if e.engine == nil {
 		e.Logger().Warn("authsome: engine not initialised; skipping contract contributor registration")
