@@ -18,10 +18,17 @@ for pkg in ui/packages/react ui/packages/vue ui/packages/components ui/packages/
   echo "  Resolved workspace:* references in $pkg"
 done
 
-# Stamp version in all publishable packages
+# Stamp version in all publishable packages.
+#
+# We can't use `npm version` here: when invoked inside a workspace member
+# (e.g. ui/packages/core), npm walks up to the workspace root (ui/) and
+# engages workspace mode, which validates *all* workspace members —
+# including apps/storybook, whose package.json still uses the workspace:
+# protocol and trips EUNSUPPORTEDPROTOCOL. Edit package.json directly with
+# node to bypass that machinery; node is always present when npm is.
 for pkg in ui/packages/core ui/packages/react ui/packages/vue ui/packages/components ui/packages/nextjs sdk/typescript; do
   cd "$ROOT/$pkg"
-  npm version "$VERSION" --no-git-tag-version --allow-same-version
+  node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');"
   echo "  Set $pkg version to $VERSION"
 done
 
