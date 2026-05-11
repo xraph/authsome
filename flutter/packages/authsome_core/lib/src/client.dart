@@ -74,8 +74,18 @@ class AuthSomeClient extends generated.AuthClient {
   }
 
   /// Refresh session tokens using a refresh token string.
-  Future<TokenResponse> refreshWithToken(String refreshToken) {
-    return super.refresh(body: {'refresh_token': refreshToken});
+  ///
+  /// The codegen aliases this endpoint's response to the OAuth-shaped
+  /// TokenResponse (access_token/expires_in/token_type) because of a Go
+  /// struct-name collision, but the real backend returns a session-shaped
+  /// payload (session_token/refresh_token/expires_at). We make a raw HTTP
+  /// call and parse the real shape, mirroring [mfaChallenge].
+  Future<Session> refreshWithToken(String refreshToken) async {
+    final data = await _rawPost(
+      '/v1/refresh',
+      body: {'refresh_token': refreshToken},
+    );
+    return Session.fromJson(data);
   }
 
   /// Sign out with a token string.

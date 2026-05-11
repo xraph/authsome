@@ -29,14 +29,17 @@ export function openOAuthPopup(
  * so the caller typically just needs to redirect/reload after completion.
  */
 export async function handleSocialLogin(
-  // The codegen mis-types this endpoint's response (the social-OAuth
-  // StartResponse Go struct collides with the phone-auth StartResponse,
-  // and the wrong shape wins). The real backend response is {auth_url}.
-  // We type the response loosely here and cast at the assertion site.
+  // The codegen mis-types this endpoint on both sides: the social-OAuth
+  // Start{Request,Response} Go structs collide with the phone-auth pair,
+  // and the wrong shapes win (request gains a required `phone`, response
+  // loses `auth_url`). The real backend takes {app_id?, redirect_url?}
+  // and returns {auth_url}. The body is typed as `any` so this function
+  // accepts the real AuthClient; the response is cast at the assertion
+  // site below.
   client: {
     startOAuth: (
       provider: string,
-      body: { app_id?: string; redirect_url?: string },
+      body: any,
     ) => Promise<unknown>;
   },
   providerId: string,
