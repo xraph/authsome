@@ -64,6 +64,17 @@ func (p *githubProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*P
 		return nil, fmt.Errorf("social: github: decode user: %w", err)
 	}
 
+	// GitHub's /user endpoint only returns the user's *public* email. Accounts
+	// that keep their email private (the default) return an empty string here.
+	// Fall back to /user/emails to fetch the primary verified email. This
+	// requires the "user:email" scope (already requested by default above).
+	email := info.Email
+	if email == "" {
+		if primary, emailErr := p.fetchPrimaryEmail(ctx, client); emailErr == nil {
+			email = primary
+		}
+	}
+
 	name := info.Name
 	if name == "" {
 		name = info.Login
@@ -71,8 +82,51 @@ func (p *githubProvider) FetchUser(ctx context.Context, token *oauth2.Token) (*P
 
 	return &ProviderUser{
 		ProviderUserID: fmt.Sprintf("%d", info.ID),
-		Email:          info.Email,
+		Email:          email,
 		FirstName:      name,
 		AvatarURL:      info.AvatarURL,
 	}, nil
+}
+
+// fetchPrimaryEmail calls GitHub's /user/emails endpoint and returns the
+// user's primary verified email. Requires the "user:email" OAuth scope.
+// Returns an empty string (no error) if no verified primary is available.
+func (p *githubProvider) fetchPrimaryEmail(ctx context.Context, client *http.Client) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user/emails", http.NoBody)
+	if err != nil {
+		return "", fmt.Errorf("social: github: create emails request: %w", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("social: github: fetch emails: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort read
+		return "", fmt.Errorf("social: github: fetch emails: status %d: %s", resp.StatusCode, body)
+	}
+
+	var emails []struct {
+		Email    string `json:"email"`
+		Primary  bool   `json:"primary"`
+		Verified bool   `json:"verified"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&emails); err != nil {
+		return "", fmt.Errorf("social: github: decode emails: %w", err)
+	}
+
+	// Prefer primary + verified.
+	for _, e := range emails {
+		if e.Primary && e.Verified {
+			return e.Email, nil
+		}
+	}
+	// Fall back to any verified email.
+	for _, e := range emails {
+		if e.Verified {
+			return e.Email, nil
+		}
+	}
+	return "", nil
 }

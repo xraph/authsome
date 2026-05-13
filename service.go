@@ -291,7 +291,7 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 			if req.AppID.Prefix() != "" {
 				resolveOpts.AppID = req.AppID.String()
 			}
-			if dynVal, err := settings.Get(ctx, mgr, SettingRequireEmailVerification, resolveOpts); err == nil && dynVal {
+			if dynVal, dynErr := settings.Get(ctx, mgr, SettingRequireEmailVerification, resolveOpts); dynErr == nil && dynVal {
 				requireVerif = true
 			}
 		}
