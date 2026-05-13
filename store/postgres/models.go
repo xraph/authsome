@@ -198,6 +198,7 @@ type SessionModel struct {
 	EnvID                 string    `grove:"env_id,notnull"`
 	UserID                string    `grove:"user_id,notnull"`
 	OrgID                 string    `grove:"org_id"`
+	FamilyID              string    `grove:"family_id"`
 	Token                 string    `grove:"token,notnull"`
 	RefreshToken          string    `grove:"refresh_token,notnull"`
 	IPAddress             string    `grove:"ip_address"`
@@ -264,6 +265,13 @@ func toSession(m *SessionModel) (*session.Session, error) {
 		}
 		s.ImpersonatedBy = impID
 	}
+	if m.FamilyID != "" {
+		famID, err := id.ParseSessionFamilyID(m.FamilyID)
+		if err != nil {
+			return nil, err
+		}
+		s.FamilyID = famID
+	}
 	return s, nil
 }
 
@@ -291,6 +299,9 @@ func fromSession(s *session.Session) *SessionModel {
 	}
 	if s.ImpersonatedBy.Prefix() != "" {
 		m.ImpersonatedBy = s.ImpersonatedBy.String()
+	}
+	if s.FamilyID.Prefix() != "" {
+		m.FamilyID = s.FamilyID.String()
 	}
 	return m
 }
@@ -885,13 +896,26 @@ func toAPIKey(m *APIKeyModel) (*apikey.APIKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	envID, err := id.ParseEnvironmentID(m.EnvID)
-	if err != nil {
-		return nil, err
+	// env_id and user_id can be empty for legacy rows (dashboard
+	// pre-UserID-binding fix). Tolerate empty strings as zero IDs;
+	// the auth strategy emits a specific "no user binding" error
+	// for keys with Nil UserID so operators see exactly what to
+	// repair instead of a generic 401 with no diagnostic.
+	var envID id.EnvironmentID
+	if m.EnvID != "" {
+		parsed, perr := id.ParseEnvironmentID(m.EnvID)
+		if perr != nil {
+			return nil, perr
+		}
+		envID = parsed
 	}
-	userID, err := id.ParseUserID(m.UserID)
-	if err != nil {
-		return nil, err
+	var userID id.UserID
+	if m.UserID != "" {
+		parsed, perr := id.ParseUserID(m.UserID)
+		if perr != nil {
+			return nil, perr
+		}
+		userID = parsed
 	}
 	k := &apikey.APIKey{
 		ID:              keyID,
@@ -1324,6 +1348,7 @@ type AppClientConfigModel struct {
 	PasskeyEnabled           *bool           `grove:"passkey_enabled"`
 	MagicLinkEnabled         *bool           `grove:"magic_link_enabled"`
 	MFAEnabled               *bool           `grove:"mfa_enabled"`
+	MFARequired              *bool           `grove:"mfa_required"`
 	SSOEnabled               *bool           `grove:"sso_enabled"`
 	SocialEnabled            *bool           `grove:"social_enabled"`
 	WaitlistEnabled          *bool           `grove:"waitlist_enabled"`
@@ -1347,6 +1372,7 @@ func toAppClientConfigModel(c *appclientconfig.Config) *AppClientConfigModel {
 		PasskeyEnabled:           c.PasskeyEnabled,
 		MagicLinkEnabled:         c.MagicLinkEnabled,
 		MFAEnabled:               c.MFAEnabled,
+		MFARequired:              c.MFARequired,
 		SSOEnabled:               c.SSOEnabled,
 		SocialEnabled:            c.SocialEnabled,
 		WaitlistEnabled:          c.WaitlistEnabled,
@@ -1385,6 +1411,7 @@ func fromAppClientConfigModel(m *AppClientConfigModel) (*appclientconfig.Config,
 		PasskeyEnabled:           m.PasskeyEnabled,
 		MagicLinkEnabled:         m.MagicLinkEnabled,
 		MFAEnabled:               m.MFAEnabled,
+		MFARequired:              m.MFARequired,
 		SSOEnabled:               m.SSOEnabled,
 		SocialEnabled:            m.SocialEnabled,
 		WaitlistEnabled:          m.WaitlistEnabled,
@@ -1396,4 +1423,20 @@ func fromAppClientConfigModel(m *AppClientConfigModel) (*appclientconfig.Config,
 		CreatedAt:                m.CreatedAt,
 		UpdatedAt:                m.UpdatedAt,
 	}, nil
+}
+
+// ──────────────────────────────────────────────────
+// Revoked refresh-token model
+// ──────────────────────────────────────────────────
+
+// RevokedRefreshTokenModel is the on-disk representation used for
+// refresh-token replay detection. token_hash is the SHA-256 hex of a
+// previously-rotated or replay-flagged refresh token.
+type RevokedRefreshTokenModel struct {
+	grove.BaseModel `grove:"table:authsome_revoked_refresh_tokens,alias:rrt"`
+
+	TokenHash string    `grove:"token_hash,pk"`
+	FamilyID  string    `grove:"family_id,notnull"`
+	RevokedAt time.Time `grove:"revoked_at,notnull"`
+	Reason    string    `grove:"reason"`
 }

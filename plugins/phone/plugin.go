@@ -14,6 +14,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
@@ -21,6 +22,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/plugins/mfa"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -329,20 +331,37 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyRequest) (*VerifyRes
 		}
 	}
 
-	// Create session with per-app config or sensible defaults.
-	sessCfg := account.SessionConfig{
-		TokenTTL:        time.Hour,
-		RefreshTokenTTL: 30 * 24 * time.Hour,
-	}
-	if p.engine != nil {
-		sessCfg = p.engine.SessionConfigForApp(ctx.Context(), appID)
-	}
-	sess, err := account.NewSession(appID, u.ID, sessCfg)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: create session: %w", err))
-	}
-	if err := p.store.CreateSession(ctx.Context(), sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("phone auth: save session: %w", err))
+	// Mint the session through Engine.IssueSession so the centralized
+	// MFARequired gate fires for phone-OTP sign-ins too.
+	var sess *session.Session
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
+			User:       u,
+			AppID:      appID,
+			AuthMethod: "phone",
+			IPAddress:  ctx.Request().RemoteAddr,
+			UserAgent:  ctx.Request().UserAgent(),
+		})
+		if issueErr != nil {
+			return nil, issueErr
+		}
+		sess = result.Session
+	} else {
+		sessCfg := account.SessionConfig{
+			TokenTTL:        time.Hour,
+			RefreshTokenTTL: 30 * 24 * time.Hour,
+		}
+		if p.engine != nil {
+			sessCfg = p.engine.SessionConfigForApp(ctx.Context(), appID)
+		}
+		var newErr error
+		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
+		if newErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("phone auth: create session: %w", newErr))
+		}
+		if storeErr := p.store.CreateSession(ctx.Context(), sess); storeErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("phone auth: save session: %w", storeErr))
+		}
 	}
 
 	return &VerifyResponse{

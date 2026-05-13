@@ -17,7 +17,11 @@ import (
 
 // TopbarEnvSwitcher renders a compact environment switcher for the topbar.
 // Shows the current environment with a color dot and dropdown to switch.
-func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Environment, appSlug, currentPage, basePath string) templ.Component {
+// pagesPrefix is the URL prefix under which authsome pages are mounted on the
+// consumer (e.g. "/dashboard/ext/authsome/pages" or
+// "/dashboard/remote/authsome/pages"). Empty falls back to basePath +
+// "/ext/authsome/pages" for backwards compatibility.
+func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Environment, appSlug, currentPage, basePath, pagesPrefix string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -38,6 +42,10 @@ func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Envi
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
+		prefix := pagesPrefix
+		if prefix == "" {
+			prefix = basePath + "/ext/authsome/pages"
+		}
 		if len(all) > 0 {
 			templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -70,7 +78,7 @@ func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Envi
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("background-color:" + current.Color)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 18, Col: 95}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 28, Col: 95}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -83,7 +91,7 @@ func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Envi
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(current.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 19, Col: 24}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 29, Col: 24}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -171,7 +179,7 @@ func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Envi
 							var templ_7745c5c3_Var9 string
 							templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("background-color:" + env.Color)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 39, Col: 93}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 49, Col: 93}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 							if templ_7745c5c3_Err != nil {
@@ -184,7 +192,7 @@ func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Envi
 							var templ_7745c5c3_Var10 string
 							templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(env.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 40, Col: 37}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/env_switcher_topbar.templ`, Line: 50, Col: 37}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 							if templ_7745c5c3_Err != nil {
@@ -232,7 +240,7 @@ func TopbarEnvSwitcher(current *environment.Environment, all []*environment.Envi
 						})
 						templ_7745c5c3_Err = dropdown.Item(dropdown.ItemProps{
 							Attributes: templ.Attributes{
-								"hx-get":      basePath + "/ext/authsome/pages/" + appSlug + "/" + env.Slug + currentPage,
+								"hx-get":      prefix + "/" + appSlug + "/" + env.Slug + currentPage,
 								"hx-target":   "#content",
 								"hx-swap":     "innerHTML",
 								"hx-push-url": "true",

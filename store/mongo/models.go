@@ -18,6 +18,7 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/notification"
 	"github.com/xraph/authsome/organization"
+	"github.com/xraph/authsome/serviceaccount"
 	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/user"
@@ -184,6 +185,7 @@ type sessionModel struct {
 	EnvID                 string    `grove:"env_id"                    bson:"env_id"`
 	UserID                string    `grove:"user_id"                   bson:"user_id"`
 	OrgID                 string    `grove:"org_id"                    bson:"org_id,omitempty"`
+	FamilyID              string    `grove:"family_id"                 bson:"family_id,omitempty"`
 	Token                 string    `grove:"token"                     bson:"token"`
 	RefreshToken          string    `grove:"refresh_token"             bson:"refresh_token"`
 	IPAddress             string    `grove:"ip_address"                bson:"ip_address"`
@@ -221,6 +223,9 @@ func toSessionModel(s *session.Session) *sessionModel {
 	}
 	if s.ImpersonatedBy.Prefix() != "" {
 		m.ImpersonatedBy = s.ImpersonatedBy.String()
+	}
+	if s.FamilyID.Prefix() != "" {
+		m.FamilyID = s.FamilyID.String()
 	}
 	return m
 }
@@ -274,6 +279,13 @@ func fromSessionModel(m *sessionModel) (*session.Session, error) {
 			return nil, err
 		}
 		s.ImpersonatedBy = impID
+	}
+	if m.FamilyID != "" {
+		famID, err := id.ParseSessionFamilyID(m.FamilyID)
+		if err != nil {
+			return nil, err
+		}
+		s.FamilyID = famID
 	}
 	return s, nil
 }
@@ -813,21 +825,22 @@ func fromNotificationModel(m *notificationModel) (*notification.Notification, er
 type apiKeyModel struct {
 	grove.BaseModel `grove:"table:authsome_api_keys"`
 
-	ID              string     `grove:"id,pk"          bson:"_id"`
-	AppID           string     `grove:"app_id"         bson:"app_id"`
-	EnvID           string     `grove:"env_id"         bson:"env_id"`
-	UserID          string     `grove:"user_id"        bson:"user_id"`
-	Name            string     `grove:"name"           bson:"name"`
-	KeyHash         string     `grove:"key_hash"            bson:"key_hash"`
-	KeyPrefix       string     `grove:"key_prefix"          bson:"key_prefix"`
-	PublicKey       string     `grove:"public_key"          bson:"public_key"`
-	PublicKeyPrefix string     `grove:"public_key_prefix"   bson:"public_key_prefix"`
-	Scopes          string     `grove:"scopes"              bson:"scopes"`
-	ExpiresAt       *time.Time `grove:"expires_at"     bson:"expires_at,omitempty"`
-	LastUsedAt      *time.Time `grove:"last_used_at"   bson:"last_used_at,omitempty"`
-	Revoked         bool       `grove:"revoked"        bson:"revoked"`
-	CreatedAt       time.Time  `grove:"created_at"     bson:"created_at"`
-	UpdatedAt       time.Time  `grove:"updated_at"     bson:"updated_at"`
+	ID               string     `grove:"id,pk"                bson:"_id"`
+	AppID            string     `grove:"app_id"               bson:"app_id"`
+	EnvID            string     `grove:"env_id"               bson:"env_id"`
+	UserID           string     `grove:"user_id"              bson:"user_id"`
+	ServiceAccountID string     `grove:"service_account_id"   bson:"service_account_id,omitempty"`
+	Name             string     `grove:"name"                 bson:"name"`
+	KeyHash          string     `grove:"key_hash"             bson:"key_hash"`
+	KeyPrefix        string     `grove:"key_prefix"           bson:"key_prefix"`
+	PublicKey        string     `grove:"public_key"           bson:"public_key"`
+	PublicKeyPrefix  string     `grove:"public_key_prefix"    bson:"public_key_prefix"`
+	Scopes           string     `grove:"scopes"               bson:"scopes"`
+	ExpiresAt        *time.Time `grove:"expires_at"           bson:"expires_at,omitempty"`
+	LastUsedAt       *time.Time `grove:"last_used_at"         bson:"last_used_at,omitempty"`
+	Revoked          bool       `grove:"revoked"              bson:"revoked"`
+	CreatedAt        time.Time  `grove:"created_at"           bson:"created_at"`
+	UpdatedAt        time.Time  `grove:"updated_at"           bson:"updated_at"`
 }
 
 func toAPIKeyModel(k *apikey.APIKey) *apiKeyModel {
@@ -850,6 +863,9 @@ func toAPIKeyModel(k *apikey.APIKey) *apiKeyModel {
 	if len(k.Scopes) > 0 {
 		m.Scopes = strings.Join(k.Scopes, ",")
 	}
+	if !k.ServiceAccountID.IsNil() {
+		m.ServiceAccountID = k.ServiceAccountID.String()
+	}
 	return m
 }
 
@@ -863,9 +879,21 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 		return nil, err
 	}
 	envID, _ := id.ParseEnvironmentID(m.EnvID) //nolint:errcheck // best-effort parse
-	userID, err := id.ParseUserID(m.UserID)
-	if err != nil {
-		return nil, err
+	// Tolerate an empty user_id: legacy keys minted by the dashboard
+	// before the UserID-binding fix have an empty string here.
+	// Failing the model load would short-circuit GetAPIKeyByPrefix
+	// and surface as a generic 401 with no diagnostic AND skip the
+	// LastUsedAt update (so "api key usage isn't tracked" too).
+	// Returning a Nil UserID lets the auth strategy inspect the key
+	// and emit its specific "no user binding" error so operators
+	// can repair the row.
+	var userID id.UserID
+	if m.UserID != "" {
+		parsed, perr := id.ParseUserID(m.UserID)
+		if perr != nil {
+			return nil, perr
+		}
+		userID = parsed
 	}
 	k := &apikey.APIKey{
 		ID:              keyID,
@@ -886,7 +914,71 @@ func fromAPIKeyModel(m *apiKeyModel) (*apikey.APIKey, error) {
 	if m.Scopes != "" {
 		k.Scopes = strings.Split(m.Scopes, ",")
 	}
+	if m.ServiceAccountID != "" {
+		svcID, perr := id.ParseServiceAccountID(m.ServiceAccountID)
+		if perr != nil {
+			return nil, perr
+		}
+		k.ServiceAccountID = svcID
+	}
 	return k, nil
+}
+
+// ──────────────────────────────────────────────────
+// Service Account model
+// ──────────────────────────────────────────────────
+
+type serviceAccountModel struct {
+	grove.BaseModel `grove:"table:authsome_service_accounts"`
+
+	ID          string    `grove:"id,pk"       bson:"_id"`
+	AppID       string    `grove:"app_id"      bson:"app_id"`
+	Name        string    `grove:"name"        bson:"name"`
+	Description string    `grove:"description" bson:"description,omitempty"`
+	Scopes      string    `grove:"scopes"      bson:"scopes,omitempty"`
+	Active      bool      `grove:"active"      bson:"active"`
+	CreatedAt   time.Time `grove:"created_at"  bson:"created_at"`
+	UpdatedAt   time.Time `grove:"updated_at"  bson:"updated_at"`
+}
+
+func toServiceAccountModel(svc *serviceaccount.ServiceAccount) *serviceAccountModel {
+	m := &serviceAccountModel{
+		ID:          svc.ID.String(),
+		AppID:       svc.AppID.String(),
+		Name:        svc.Name,
+		Description: svc.Description,
+		Active:      svc.Active,
+		CreatedAt:   svc.CreatedAt,
+		UpdatedAt:   svc.UpdatedAt,
+	}
+	if len(svc.Scopes) > 0 {
+		m.Scopes = strings.Join(svc.Scopes, ",")
+	}
+	return m
+}
+
+func fromServiceAccountModel(m *serviceAccountModel) (*serviceaccount.ServiceAccount, error) {
+	svcID, err := id.ParseServiceAccountID(m.ID)
+	if err != nil {
+		return nil, err
+	}
+	appID, err := id.ParseAppID(m.AppID)
+	if err != nil {
+		return nil, err
+	}
+	svc := &serviceaccount.ServiceAccount{
+		ID:          svcID,
+		AppID:       appID,
+		Name:        m.Name,
+		Description: m.Description,
+		Active:      m.Active,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+	if m.Scopes != "" {
+		svc.Scopes = strings.Split(m.Scopes, ",")
+	}
+	return svc, nil
 }
 
 // ──────────────────────────────────────────────────
@@ -1176,6 +1268,7 @@ type appClientConfigModel struct {
 	PasskeyEnabled           *bool           `grove:"passkey_enabled"     bson:"passkey_enabled,omitempty"`
 	MagicLinkEnabled         *bool           `grove:"magic_link_enabled"  bson:"magic_link_enabled,omitempty"`
 	MFAEnabled               *bool           `grove:"mfa_enabled"         bson:"mfa_enabled,omitempty"`
+	MFARequired              *bool           `grove:"mfa_required"        bson:"mfa_required,omitempty"`
 	SSOEnabled               *bool           `grove:"sso_enabled"         bson:"sso_enabled,omitempty"`
 	SocialEnabled            *bool           `grove:"social_enabled"      bson:"social_enabled,omitempty"`
 	WaitlistEnabled          *bool           `grove:"waitlist_enabled"              bson:"waitlist_enabled,omitempty"`
@@ -1199,6 +1292,7 @@ func toAppClientConfigModel(c *appclientconfig.Config) *appClientConfigModel {
 		PasskeyEnabled:           c.PasskeyEnabled,
 		MagicLinkEnabled:         c.MagicLinkEnabled,
 		MFAEnabled:               c.MFAEnabled,
+		MFARequired:              c.MFARequired,
 		SSOEnabled:               c.SSOEnabled,
 		SocialEnabled:            c.SocialEnabled,
 		WaitlistEnabled:          c.WaitlistEnabled,
@@ -1237,6 +1331,7 @@ func fromAppClientConfigModel(m *appClientConfigModel) (*appclientconfig.Config,
 		PasskeyEnabled:           m.PasskeyEnabled,
 		MagicLinkEnabled:         m.MagicLinkEnabled,
 		MFAEnabled:               m.MFAEnabled,
+		MFARequired:              m.MFARequired,
 		SSOEnabled:               m.SSOEnabled,
 		SocialEnabled:            m.SocialEnabled,
 		WaitlistEnabled:          m.WaitlistEnabled,
@@ -1310,4 +1405,19 @@ func fromSettingModel(m *settingModel) (*settings.Setting, error) {
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}, nil
+}
+
+// ──────────────────────────────────────────────────
+// Revoked refresh-token model
+// ──────────────────────────────────────────────────
+
+// revokedRefreshTokenModel is the on-disk representation of
+// session.RevokedRefreshToken used for refresh-token replay detection.
+type revokedRefreshTokenModel struct {
+	grove.BaseModel `grove:"table:authsome_revoked_refresh_tokens"`
+
+	TokenHash string    `grove:"token_hash,pk" bson:"_id"`
+	FamilyID  string    `grove:"family_id"     bson:"family_id"`
+	RevokedAt time.Time `grove:"revoked_at"    bson:"revoked_at"`
+	Reason    string    `grove:"reason"        bson:"reason"`
 }

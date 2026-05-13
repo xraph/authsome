@@ -30,7 +30,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@authsome/ui-core": "^1.4.0"
+    "@authsome/ui-core": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.3.0"

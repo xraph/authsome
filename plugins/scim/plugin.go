@@ -7,6 +7,7 @@ import (
 
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/hook"
+	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
@@ -111,4 +112,35 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	return settings.RegisterTyped(m, "scim", SettingTokenExpiryDays)
+}
+
+// OnAfterOrgDelete removes every SCIM configuration scoped to the deleted
+// organization so we don't leave orphaned provisioning targets behind.
+// Failures are logged and the hook returns nil so other delete-cascade
+// listeners still run.
+func (p *Plugin) OnAfterOrgDelete(ctx context.Context, orgID id.OrgID) error {
+	if p.service == nil {
+		return nil
+	}
+	configs, err := p.service.ListConfigsByOrg(ctx, orgID)
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Warn("scim: list configs for deleted org failed",
+				log.String("org_id", orgID.String()),
+				log.Error(err))
+		}
+		return nil
+	}
+	for _, c := range configs {
+		if c == nil {
+			continue
+		}
+		if err := p.service.DeleteConfig(ctx, c.ID); err != nil && p.logger != nil {
+			p.logger.Warn("scim: delete config for deleted org failed",
+				log.String("org_id", orgID.String()),
+				log.String("config_id", c.ID.String()),
+				log.Error(err))
+		}
+	}
+	return nil
 }

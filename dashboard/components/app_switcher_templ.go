@@ -24,6 +24,19 @@ type AppSwitcherData struct {
 	CurrentEnvSlug string
 	CurrentPage    string
 	BasePath       string
+	// PageBase is the consumer-supplied URL prefix under which authsome pages are
+	// served (e.g. "/dashboard/ext/authsome/pages" or "/dashboard/remote/authsome/pages").
+	// Empty falls back to the legacy BasePath + "/ext/authsome/pages" literal.
+	PageBase string
+}
+
+// AppSwitcherPagesPrefix returns the URL prefix used for hx-get nav targets.
+func (d AppSwitcherData) AppSwitcherPagesPrefix() string {
+	if d.PageBase != "" {
+		return d.PageBase
+	}
+
+	return d.BasePath + "/ext/authsome/pages"
 }
 
 // AppSwitcher renders a dropdown for switching between apps in the sidebar header,
@@ -85,7 +98,7 @@ func AppSwitcher(data AppSwitcherData) templ.Component {
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(string([]rune(data.Current.Name)[0:1]))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 31, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 44, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 					if templ_7745c5c3_Err != nil {
@@ -98,7 +111,7 @@ func AppSwitcher(data AppSwitcherData) templ.Component {
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(data.Current.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 33, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 46, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -186,7 +199,7 @@ func AppSwitcher(data AppSwitcherData) templ.Component {
 							var templ_7745c5c3_Var9 string
 							templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(string([]rune(a.Name)[0:1]))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 54, Col: 37}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 67, Col: 37}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 							if templ_7745c5c3_Err != nil {
@@ -199,7 +212,7 @@ func AppSwitcher(data AppSwitcherData) templ.Component {
 							var templ_7745c5c3_Var10 string
 							templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 56, Col: 45}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `dashboard/components/app_switcher.templ`, Line: 69, Col: 45}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 							if templ_7745c5c3_Err != nil {
@@ -219,7 +232,7 @@ func AppSwitcher(data AppSwitcherData) templ.Component {
 						})
 						templ_7745c5c3_Err = dropdown.Item(dropdown.ItemProps{
 							Attributes: templ.Attributes{
-								"hx-get":      data.BasePath + "/ext/authsome/pages/" + a.Slug + "/" + data.CurrentEnvSlug + data.CurrentPage,
+								"hx-get":      data.AppSwitcherPagesPrefix() + "/" + a.Slug + "/" + data.CurrentEnvSlug + data.CurrentPage,
 								"hx-target":   "#content",
 								"hx-swap":     "innerHTML",
 								"hx-push-url": "true",

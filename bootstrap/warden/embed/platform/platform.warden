@@ -1,0 +1,52 @@
+// Platform-only roles — applied only to the platform app, never to user-
+// created apps. Provide cross-app access for operators of the authsome
+// deployment itself.
+//
+// Slugs are kebab-case to satisfy warden's slug convention (^[a-z][a-z0-9-]
+// {0,62}$). The matching constants in rbac/platform_roles.go must stay in
+// sync.
+//
+// Hierarchy: platform-user ← platform-admin ← platform-owner.
+
+warden config 1
+tenant ${APP_ID}
+app ${APP_ID}
+
+namespace "platform" {
+  role platform-user {
+    name        = "Platform User"
+    description = "Standard cross-app access"
+    grants = [
+      "user:read",
+      "session:read",
+      "session:create",
+      "session:delete",
+      "device:read",
+      "device:create",
+      "device:update",
+      "environment:read",
+    ]
+  }
+
+  role platform-admin : platform-user {
+    name        = "Platform Admin"
+    description = "Admin-level cross-app access"
+    grants     += [
+      "user:*",
+      "session:*",
+      "device:*",
+      "environment:*",
+      "org:*",
+      "document:*",
+      "role:*",
+      "permission:*",
+      "app:*",
+    ]
+  }
+
+  role platform-owner : platform-admin {
+    name        = "Platform Owner"
+    description = "Full cross-app platform access"
+    is_system   = true
+  }
+}

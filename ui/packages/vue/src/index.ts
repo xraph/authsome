@@ -4,6 +4,7 @@
 export type {
   AuthState,
   AuthConfig,
+  ClientConfig,
   User,
   Session,
   Organization,
@@ -17,7 +18,9 @@ export type {
 export {
   createAuthPlugin,
   useAuth,
+  useClientConfig,
   useUser,
   useOrganizations,
   useSessionToken,
+  type AuthSubmitOptions,
 } from "./composables";

@@ -62,6 +62,53 @@ type Config struct {
 	// ServiceAPIKey authenticates this service with the remote authsome server
 	// for service-to-service operations (e.g. org creation during bootstrap).
 	ServiceAPIKey string `json:"service_api_key" mapstructure:"service_api_key" yaml:"service_api_key"`
+
+	// ServiceAppID is the App ID the service binds to. Stamped as
+	// X-App-ID on every authclient request. Required by the API key
+	// auth strategy and App-scoped admin endpoints; without it,
+	// admin calls with the service API key return 401.
+	ServiceAppID string `json:"service_app_id" mapstructure:"service_app_id" yaml:"service_app_id"`
+
+	// Dashboard configures how authsome surfaces inside the Forge
+	// dashboard's contract path: branding on the /login page, links to
+	// terms/privacy/signup, and the optional required-role gate that
+	// keeps the dashboard locked down to specific user populations.
+	Dashboard DashboardIntegrationConfig `json:"dashboard" mapstructure:"dashboard" yaml:"dashboard"`
+}
+
+// DashboardIntegrationConfig collects the fields that flow into the
+// dashboard's auth.config query and the principal handler's role gate.
+// All fields are optional — empty values fall back to platform-app data
+// (App.Name, App.Logo) and an unrestricted access policy.
+type DashboardIntegrationConfig struct {
+	// Brand overrides the displayed name on the /login page. Defaults to
+	// the platform app's Name when empty.
+	Brand string `json:"brand" mapstructure:"brand" yaml:"brand"`
+
+	// BrandLogoURL overrides the logo image URL. Defaults to App.Logo.
+	BrandLogoURL string `json:"brand_logo_url" mapstructure:"brand_logo_url" yaml:"brand_logo_url"`
+
+	// SignupURL is the public-facing path the "Don't have an account?
+	// Sign up" link points to. Empty hides the line.
+	SignupURL string `json:"signup_url" mapstructure:"signup_url" yaml:"signup_url"`
+
+	// SignupLabel overrides the link label.
+	SignupLabel string `json:"signup_label" mapstructure:"signup_label" yaml:"signup_label"`
+
+	// TermsURL / PrivacyURL feed the legal footer beneath the form.
+	TermsURL   string `json:"terms_url" mapstructure:"terms_url" yaml:"terms_url"`
+	PrivacyURL string `json:"privacy_url" mapstructure:"privacy_url" yaml:"privacy_url"`
+
+	// SocialBasePath overrides the URL prefix for OAuth start endpoints.
+	// Defaults to "/v1/social" matching the social plugin's default.
+	SocialBasePath string `json:"social_base_path" mapstructure:"social_base_path" yaml:"social_base_path"`
+
+	// RequiredRoles, when non-empty, restricts dashboard access to users
+	// carrying at least one of the listed roles. Authsome calls
+	// dashExt.SetRequiredRoles in RegisterDashboardAuth so the principal
+	// endpoint returns 403 PERMISSION_DENIED for anyone without them and
+	// the React shell renders an "access denied" panel.
+	RequiredRoles []string `json:"required_roles" mapstructure:"required_roles" yaml:"required_roles"`
 }
 
 // BootstrapYAMLConfig holds bootstrap settings loadable from YAML.
@@ -87,8 +134,23 @@ type BootstrapYAMLConfig struct {
 	// Environments overrides the default environments to create.
 	Environments []BootstrapEnvYAML `json:"environments" mapstructure:"environments" yaml:"environments"`
 
-	// Roles overrides the default roles to create.
-	Roles []BootstrapRoleYAML `json:"roles" mapstructure:"roles" yaml:"roles"`
+	// WardenDir, when set, replaces authsome's embedded warden DSL files
+	// (bootstrap/warden/embed/) with .warden files loaded from this
+	// directory. The directory must contain a `shared/` subtree applied to
+	// every app; a `platform/` subtree is consulted only for the platform
+	// app and is optional. Use this to ship custom roles + permission
+	// catalogs without rebuilding the binary.
+	WardenDir string `json:"warden_dir" mapstructure:"warden_dir" yaml:"warden_dir"`
+
+	// InitialOwners is a list of email addresses that should automatically
+	// receive the platform-owner role on sign-up, regardless of whether they
+	// are the first user. Comparison is case-insensitive.
+	InitialOwners []string `json:"initial_owners" mapstructure:"initial_owners" yaml:"initial_owners"`
+
+	// InitialOwnerCount sets how many of the first N users to register are
+	// automatically promoted to platform-owner. Defaults to 3. Set to 1 for
+	// the original single-owner behaviour; set to 0 to disable.
+	InitialOwnerCount int `json:"initial_owner_count" mapstructure:"initial_owner_count" yaml:"initial_owner_count"`
 }
 
 // BootstrapEnvYAML describes an environment in YAML config.
@@ -97,13 +159,6 @@ type BootstrapEnvYAML struct {
 	Slug      string `json:"slug" mapstructure:"slug" yaml:"slug"`
 	Type      string `json:"type" mapstructure:"type" yaml:"type"` // development, staging, production
 	IsDefault bool   `json:"is_default" mapstructure:"is_default" yaml:"is_default"`
-}
-
-// BootstrapRoleYAML describes a role in YAML config.
-type BootstrapRoleYAML struct {
-	Name        string `json:"name" mapstructure:"name" yaml:"name"`
-	Slug        string `json:"slug" mapstructure:"slug" yaml:"slug"`
-	Description string `json:"description" mapstructure:"description" yaml:"description"`
 }
 
 // AppSessionConfigYAML holds per-app session config in YAML format.

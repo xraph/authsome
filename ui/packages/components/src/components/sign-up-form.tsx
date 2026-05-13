@@ -26,7 +26,8 @@ import {
   type SocialButtonLayout,
 } from "./social-buttons";
 import { handleSocialLogin } from "../lib/social-login";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MailCheck } from "lucide-react";
+import { TurnstileWidget } from "./turnstile-widget";
 
 export interface SignUpFormComponentProps {
   /** Callback invoked after a successful sign-up. */
@@ -227,11 +228,19 @@ export function SignUpForm({
     return [...fields].sort((a, b) => a.order - b.order);
   }, [config?.signup_fields]);
 
-  const [step, setStep] = useState<"email" | "details">("email");
+  const [step, setStep] = useState<"email" | "details" | "verify">("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+
+  // Captcha config (Turnstile only for now).
+  const captchaCfg = config?.captcha;
+  const captchaEnabled =
+    !!captchaCfg?.required &&
+    captchaCfg.provider === "turnstile" &&
+    !!captchaCfg.site_key;
 
   // Dynamic field values — keyed by field key.
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
@@ -288,7 +297,11 @@ export function SignUpForm({
         email,
         password,
         Object.keys(fields).length > 0 ? fields : undefined,
+        captchaToken ? { captchaToken } : undefined,
       );
+      // Email verification is required by default — never auto-route to a
+      // signed-in shell. Swap to the "check your inbox" panel instead.
+      setStep("verify");
       onSuccess?.();
     } catch (err) {
       setError(
@@ -349,6 +362,33 @@ export function SignUpForm({
               administrator.
             </p>
           )}
+        </div>
+      </AuthCard>
+    );
+  }
+
+  /* -- Verify: Check your inbox ----------------------------- */
+
+  if (step === "verify") {
+    return (
+      <AuthCard
+        title="Check your inbox"
+        description={`We sent a verification link to ${email}.`}
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <div className="grid gap-4">
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="rounded-full bg-muted p-3">
+              <MailCheck className="h-6 w-6 text-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Click the link in the email to verify your account, then sign in.
+            </p>
+          </div>
         </div>
       </AuthCard>
     );
@@ -494,10 +534,19 @@ export function SignUpForm({
             />
           </div>
 
+          {captchaEnabled && captchaCfg?.site_key && (
+            <TurnstileWidget
+              siteKey={captchaCfg.site_key}
+              onToken={setCaptchaToken}
+              onExpire={() => setCaptchaToken(null)}
+              onError={() => setCaptchaToken(null)}
+            />
+          )}
+
           <Button
             type="submit"
             className="w-full"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (captchaEnabled && !captchaToken)}
           >
             {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
             Create account

@@ -5,19 +5,21 @@ package components
 // This eliminates the double-request that would otherwise occur when clicking sidebar
 // links (which use bare paths like /users).
 // knownRoutesCSV is a comma-separated list of known page route prefixes (e.g. "/users,/sessions,/social-providers").
-templ ContextScript(appSlug, envSlug, knownRoutesCSV string) {
+// pagesPrefix is the URL prefix under which authsome pages are mounted (e.g. "/dashboard/ext/authsome/pages/" for local consumers, "/dashboard/remote/authsome/pages/" for discovered remote consumers). The interceptor uses it to detect authsome-bound HTMX requests.
+templ ContextScript(appSlug, envSlug, knownRoutesCSV, pagesPrefix string) {
 	<div
 		id="auth-context"
 		data-app-slug={ appSlug }
 		data-env-slug={ envSlug }
 		data-known-routes={ knownRoutesCSV }
+		data-pages-prefix={ pagesPrefix }
 		style="display:none"
 	></div>
 	@contextInterceptorScript()
 }
 
 // contextInterceptorScript registers the one-time HTMX interceptor.
-// It reads app/env slugs from the #auth-context element.
+// It reads app/env slugs and the pages prefix from the #auth-context element.
 templ contextInterceptorScript() {
 	<script>
 		(function() {
@@ -31,6 +33,7 @@ templ contextInterceptorScript() {
 				return {
 					appSlug: el.getAttribute('data-app-slug'),
 					envSlug: el.getAttribute('data-env-slug'),
+					pagesPrefix: el.getAttribute('data-pages-prefix') || '/ext/authsome/pages/',
 					knownRoutes: routesAttr ? routesAttr.split(',') : []
 				};
 			}
@@ -44,7 +47,7 @@ templ contextInterceptorScript() {
 				if (!ctx || !ctx.appSlug || !ctx.envSlug) return;
 
 				var path = evt.detail.path;
-				var pagesPrefix = '/ext/authsome/pages/';
+				var pagesPrefix = ctx.pagesPrefix;
 				var idx = path.indexOf(pagesPrefix);
 				if (idx === -1) return;
 

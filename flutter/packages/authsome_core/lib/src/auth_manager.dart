@@ -339,12 +339,7 @@ class AuthManager {
 
   Future<void> _refreshSession(String refreshToken) async {
     try {
-      final res = await _client.refreshWithToken(refreshToken);
-      final newSession = Session(
-        sessionToken: res.sessionToken,
-        refreshToken: res.refreshToken,
-        expiresAt: res.expiresAt,
-      );
+      final newSession = await _client.refreshWithToken(refreshToken);
       final user = await _client.getMeWithToken(newSession.sessionToken);
       await _persistSession(newSession);
       _setState(AuthAuthenticated(user: user, session: newSession));

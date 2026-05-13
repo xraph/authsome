@@ -11,6 +11,7 @@ import (
 
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	socialdash "github.com/xraph/authsome/plugins/social/dashui"
 )
 
@@ -152,12 +153,17 @@ func (p *Plugin) renderProviderDetail(ctx context.Context, params contributor.Pa
 	var data socialdash.ProviderDetailData
 	data.Name = providerName
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "social.provider.write"
+
 	// Handle form actions (POST via HTMX).
 	action := params.FormData["action"]
 	switch action {
 	case "add_provider":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error = p.handleAddProvider(ctx, providerName, params)
 			if data.Error == "" {
 				data.Success = "Provider configured successfully."
@@ -165,7 +171,7 @@ func (p *Plugin) renderProviderDetail(ctx context.Context, params contributor.Pa
 		}
 	case "update_provider":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error = p.handleUpdateProvider(ctx, providerName, params)
 			if data.Error == "" {
 				data.Success = "Provider updated successfully."
@@ -173,7 +179,7 @@ func (p *Plugin) renderProviderDetail(ctx context.Context, params contributor.Pa
 		}
 	case "toggle_provider":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error = p.handleToggleProvider(ctx, params)
 			if data.Error == "" {
 				data.Success = "Provider status updated."
@@ -181,7 +187,7 @@ func (p *Plugin) renderProviderDetail(ctx context.Context, params contributor.Pa
 		}
 	case "remove_provider":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error = p.handleRemoveProvider(ctx, params)
 			if data.Error == "" {
 				data.Success = "Provider removed."
@@ -190,7 +196,7 @@ func (p *Plugin) renderProviderDetail(ctx context.Context, params contributor.Pa
 	}
 
 	// Generate a fresh nonce for the form.
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 
 	// Determine current provider state.
 	if _, isCode := p.providers[providerName]; isCode {

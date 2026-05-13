@@ -3,10 +3,12 @@ package social
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html"
+	"html/template"
 	"net/http"
 	"net/url"
 	"sort"
@@ -17,13 +19,16 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/hook"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
+	"github.com/xraph/authsome/session"
 	"github.com/xraph/authsome/settings"
 	"github.com/xraph/authsome/store"
 	"github.com/xraph/authsome/user"
@@ -206,7 +211,10 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 	if err := settings.RegisterTyped(m, "social", SettingSessionRefreshTTLSeconds); err != nil {
 		return err
 	}
-	return settings.RegisterTyped(m, "social", SettingSocialProviders)
+	if err := settings.RegisterTyped(m, "social", SettingSocialProviders); err != nil {
+		return err
+	}
+	return settings.RegisterTyped(m, "social", SettingAllowedFrontendURLs)
 }
 
 // New creates a new social OAuth plugin.
@@ -251,6 +259,16 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	}
 	p.settingsMgr = engine.Settings()
 	p.basePath = engine.BasePath()
+
+	// If an OAuth store has been wired (via SetOAuthStore) and is not
+	// already encrypted, transparently wrap it so access/refresh tokens
+	// are encrypted at rest. Skipping when the engine's encryptor is a
+	// Noop is fine — wrapping is still semantically a passthrough.
+	if p.oauthStore != nil {
+		if _, already := p.oauthStore.(*EncryptedStore); !already {
+			p.oauthStore = NewEncryptedStore(p.oauthStore, engine.TokenEncryptor())
+		}
+	}
 
 	return nil
 }
@@ -411,24 +429,117 @@ func (p *Plugin) allProviderNames(ctx context.Context) []string {
 }
 
 // RegisterRoutes registers social OAuth HTTP endpoints on a forge.Router.
+//
+// Both endpoints get the same per-IP rate limit as the JSON sign-in
+// endpoint (default 5/window). Without this, an attacker can amplify
+// requests against the upstream OAuth provider — the start endpoint
+// generates state cookies and ceremony entries, the callback exchanges
+// tokens and hits the provider's siteverify-equivalent endpoint.
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/social", forge.WithGroupTags("Social OAuth"))
 
-	if err := g.POST("/:provider", p.handleStart,
+	startOpts := []forge.RouteOption{
 		forge.WithSummary("Start OAuth flow"),
 		forge.WithOperationID("startOAuth"),
 		forge.WithResponseSchema(http.StatusOK, "OAuth authorization URL", StartResponse{}),
 		forge.WithErrorResponses(),
-	); err != nil {
+	}
+	startOpts = append(startOpts, p.rateLimitOpts(rateLimitForStart)...)
+	if err := g.POST("/:provider", p.handleStart, startOpts...); err != nil {
 		return err
 	}
 
-	return g.GET("/:provider/callback", p.handleCallback,
+	callbackOpts := []forge.RouteOption{
 		forge.WithSummary("OAuth callback"),
 		forge.WithOperationID("oauthCallback"),
 		forge.WithResponseSchema(http.StatusOK, "Authentication result", CallbackResponse{}),
 		forge.WithErrorResponses(),
+	}
+	callbackOpts = append(callbackOpts, p.rateLimitOpts(rateLimitForCallback)...)
+	if err := g.GET("/:provider/callback", p.handleCallback, callbackOpts...); err != nil {
+		return err
+	}
+
+	admin := router.Group("/v1/admin/social", forge.WithGroupTags("Social OAuth Admin"))
+	if err := admin.GET("/providers", p.handleAdminListProviders,
+		forge.WithSummary("List social providers (admin)"),
+		forge.WithDescription("Returns the social providers configured at the resolved scope. When app_id is supplied, providers are merged from global + app overrides. Client secrets are masked."),
+		forge.WithOperationID("socialAdminListProviders"),
+		forge.WithRequestSchema(AdminListProvidersRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Providers", AdminListProvidersResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := admin.GET("/providers/catalog", p.handleAdminCatalog,
+		forge.WithSummary("List supported social providers"),
+		forge.WithDescription("Returns every provider this build of authsome can speak to (the static catalog). Use this to populate a 'pick a provider' UI before configuring credentials."),
+		forge.WithOperationID("socialAdminCatalog"),
+		forge.WithResponseSchema(http.StatusOK, "Catalog", AdminCatalogResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	if err := admin.PUT("/providers/:provider", p.handleAdminUpsertProvider,
+		forge.WithSummary("Configure a social provider (admin)"),
+		forge.WithDescription("Upserts the per-app provider configuration. Pass app_id to scope per-app; omit for global. Replaces any existing entry for the same provider name."),
+		forge.WithOperationID("socialAdminUpsertProvider"),
+		forge.WithRequestSchema(AdminUpsertProviderRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Provider stored", AdminProviderResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+	return admin.DELETE("/providers/:provider", p.handleAdminDeleteProvider,
+		forge.WithSummary("Delete a social provider (admin)"),
+		forge.WithOperationID("socialAdminDeleteProvider"),
+		forge.WithRequestSchema(AdminDeleteProviderRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Deleted", AdminDeleteProviderResponse{}),
+		forge.WithErrorResponses(),
 	)
+}
+
+// rateLimitTarget selects which configured limit to apply.
+type rateLimitTarget int
+
+const (
+	// rateLimitForStart caps OAuth-flow initiation; uses the engine's
+	// configured SignUpLimit (default 3/window) so a bot can't farm
+	// state-token allocations against the ceremony store.
+	rateLimitForStart rateLimitTarget = iota
+	// rateLimitForCallback caps the redirect-back endpoint. Uses the
+	// SignInLimit (default 5/window) — slightly more generous because
+	// browsers may retry on transient network errors during the OAuth
+	// bounce.
+	rateLimitForCallback
+)
+
+// rateLimitOpts returns a forge route option applying per-IP rate limits
+// to the social endpoint, or nil when rate limiting is disabled or the
+// engine isn't the concrete *authsome.Engine (e.g. test wiring).
+func (p *Plugin) rateLimitOpts(target rateLimitTarget) []forge.RouteOption {
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil
+	}
+	rl := eng.RateLimiter()
+	cfg := eng.Config().RateLimit
+	if rl == nil || !cfg.Enabled {
+		return nil
+	}
+	limit := cfg.SignUpLimit
+	if target == rateLimitForCallback {
+		limit = cfg.SignInLimit
+	}
+	if limit <= 0 {
+		return nil
+	}
+	return []forge.RouteOption{
+		forge.WithMiddleware(middleware.RateLimit(rl, middleware.RateLimitConfig{
+			Limit:  limit,
+			Window: cfg.Window(),
+		})),
+	}
 }
 
 // ──────────────────────────────────────────────────
@@ -436,8 +547,20 @@ func (p *Plugin) RegisterRoutes(router forge.Router) error {
 // ──────────────────────────────────────────────────
 
 // StartRequest contains the path parameter for starting OAuth.
+//
+// FrontendURL is the originating SPA's root (e.g. "https://app.example.com")
+// for split-origin deployments where the auth service runs on a different
+// host than the frontend. It serves two purposes:
+//  1. Trusted origin for validating RedirectURL when the request's Origin/Referer
+//     headers can't be relied on (CORS, server-to-server, popup contexts).
+//  2. Fallback redirect target when RedirectURL is empty or the auth flow
+//     fails before a redirect target can be resolved.
+//
+// RedirectURL is the post-auth destination — where to send the browser after
+// a successful login/signup. If empty, callers will fall back to FrontendURL.
 type StartRequest struct {
 	Provider    string `path:"provider"`
+	FrontendURL string `json:"frontend_url,omitempty" query:"frontend_url,omitempty"`
 	RedirectURL string `json:"redirect_url,omitempty" query:"redirect_url,omitempty"`
 }
 
@@ -455,6 +578,10 @@ type CallbackRequest struct {
 }
 
 // CallbackResponse is returned on successful OAuth authentication.
+//
+// RedirectURL and FrontendURL echo the values stashed in the OAuth state
+// during handleStart so non-browser callers (mobile apps, native flows) can
+// route the user without having to track them separately.
 type CallbackResponse struct {
 	User         any    `json:"user"`
 	SessionToken string `json:"session_token"`
@@ -462,6 +589,8 @@ type CallbackResponse struct {
 	ExpiresAt    any    `json:"expires_at"`
 	Provider     string `json:"provider"`
 	IsNewUser    bool   `json:"is_new_user"`
+	RedirectURL  string `json:"redirect_url,omitempty"`
+	FrontendURL  string `json:"frontend_url,omitempty"`
 }
 
 // ──────────────────────────────────────────────────
@@ -505,12 +634,31 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 		return nil, forge.InternalError(fmt.Errorf("failed to generate state: %w", err))
 	}
 
-	// Validate the redirect URL against the request origin to prevent open redirects.
-	origin := ctx.Request().Header.Get("Origin")
-	if origin == "" {
-		origin = ctx.Request().Header.Get("Referer")
+	// Validate the redirect URL. The trust authority is gated by the
+	// per-app auth.allowed_frontend_urls allowlist:
+	//   1. Caller-supplied frontend_url, IF its host is on the allowlist
+	//      (for split-origin deployments where the SPA and auth service
+	//      live on different hosts).
+	//   2. Origin / Referer header, IF its host is on the allowlist.
+	// Falling off both → safeRedirect can only accept relative paths.
+	// frontend_url itself must also be an absolute http(s) URL with no
+	// embedded credentials; relative paths are rejected because we'll use
+	// it as a fallback redirect target.
+	safeFrontend := sanitizeFrontendURL(req.FrontendURL)
+	if safeFrontend != "" && !isAllowedOrigin(ctx.Context(), p.settingsMgr, appID, safeFrontend) {
+		safeFrontend = ""
 	}
-	safeRedirect := sanitizeRedirectURL(req.RedirectURL, origin)
+	originForRedirect := safeFrontend
+	if originForRedirect == "" {
+		candidate := ctx.Request().Header.Get("Origin")
+		if candidate == "" {
+			candidate = ctx.Request().Header.Get("Referer")
+		}
+		if candidate != "" && isAllowedOrigin(ctx.Context(), p.settingsMgr, appID, candidate) {
+			originForRedirect = candidate
+		}
+	}
+	safeRedirect := sanitizeRedirectURL(req.RedirectURL, originForRedirect)
 
 	// Store the state for CSRF protection, including app and env IDs so the
 	// callback can resolve them without relying on global defaults.
@@ -519,22 +667,130 @@ func (p *Plugin) handleStart(ctx forge.Context, req *StartRequest) (*StartRespon
 	cfg := provider.OAuth2Config()
 	callbackURL := p.resolveCallbackURL(ctx.Request(), cfg.RedirectURL, req.Provider)
 
-	stateInfo := map[string]string{
-		"provider":     req.Provider,
-		"app_id":       appID.String(),
-		"env_id":       envIDStr,
-		"redirect_url": safeRedirect,
-		"callback_url": callbackURL,
+	// PKCE (RFC 7636): generate a per-flow verifier, derive its S256
+	// challenge, send the challenge in the auth URL, store the verifier
+	// in state, and present it on the token exchange. Closes the
+	// authorization-code-interception attack class — even if an attacker
+	// captures the redirect-back code (logs, browser history, hostile
+	// proxy), without the verifier they can't exchange it.
+	pkceVerifier, err := generateState()
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to generate PKCE verifier: %w", err))
 	}
-	stateData, _ := json.Marshal(stateInfo)                                               //nolint:errcheck // marshaling known types
-	_ = p.ceremonies.Set(ctx.Context(), "social:state:"+state, stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
+
+	// OIDC nonce (OpenID Connect Core §3.1.2.1): per-flow random value
+	// echoed back in the ID token's `nonce` claim. Verifying the claim
+	// matches what we stashed in state defeats ID-token replay. We send
+	// the nonce on every flow; providers that don't issue ID tokens
+	// silently ignore it.
+	oidcNonce, err := generateState()
+	if err != nil {
+		return nil, forge.InternalError(fmt.Errorf("failed to generate OIDC nonce: %w", err))
+	}
+
+	stateInfo := map[string]string{
+		"provider":      req.Provider,
+		"app_id":        appID.String(),
+		"env_id":        envIDStr,
+		"frontend_url":  safeFrontend,
+		"redirect_url":  safeRedirect,
+		"callback_url":  callbackURL,
+		"pkce_verifier": pkceVerifier,
+		"oidc_nonce":    oidcNonce,
+	}
+	stateData, _ := json.Marshal(stateInfo) //nolint:errcheck // marshaling known types
+	// Namespace the state key by app so a state minted for app A can't
+	// be replayed against app B's callback even if both share the same
+	// ceremony store. Closes the cross-tenant state-confusion attack
+	// surfaced in the Phase 1 audit.
+	_ = p.ceremonies.Set(ctx.Context(), socialStateKey(appID, state), stateData, 10*time.Minute) //nolint:errcheck // best-effort cache
 
 	// Clone the config so we don't mutate the provider's stored config.
 	authCfg := *cfg
 	authCfg.RedirectURL = callbackURL
-	authURL := authCfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	authURL := authCfg.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.SetAuthURLParam("code_challenge", pkceChallengeS256(pkceVerifier)),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+		oauth2.SetAuthURLParam("nonce", oidcNonce),
+	)
 
 	return &StartResponse{AuthURL: authURL}, nil
+}
+
+// socialStateKey is the ceremony-store key under which an OAuth state
+// envelope lives. Namespaced by app to prevent cross-tenant state replay
+// when the ceremony store is shared.
+func socialStateKey(appID id.AppID, state string) string {
+	return "social:state:" + appID.String() + ":" + state
+}
+
+// pkceChallengeS256 returns the RFC 7636 S256 code_challenge for verifier.
+// base64url-no-padding(SHA256(verifier)).
+func pkceChallengeS256(verifier string) string {
+	h := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+// loadOAuthState fetches the state envelope, trying the namespaced key
+// (Phase 2D) first and falling back to the legacy unnamespaced key for
+// states that were minted before the rollout. Returns the raw envelope
+// plus the appID under which it was found (empty when the legacy key
+// hit, so the caller can fall back to stateInfo["app_id"]).
+func (p *Plugin) loadOAuthState(ctx context.Context, appID id.AppID, state string) ([]byte, string, error) {
+	if !appID.IsNil() {
+		if data, err := p.ceremonies.Get(ctx, socialStateKey(appID, state)); err == nil {
+			_ = p.ceremonies.Delete(ctx, socialStateKey(appID, state)) //nolint:errcheck // best-effort
+			return data, appID.String(), nil
+		}
+	}
+	// Legacy key shape — for in-flight states minted before namespacing.
+	// Eligible for removal one TTL window after Phase 2D rolls.
+	legacyKey := "social:state:" + state
+	data, err := p.ceremonies.Get(ctx, legacyKey)
+	if err != nil {
+		return nil, "", err
+	}
+	_ = p.ceremonies.Delete(ctx, legacyKey) //nolint:errcheck // best-effort
+	return data, "", nil
+}
+
+// verifyOIDCNonce decodes the ID token's payload (no signature check —
+// signature verification is a separate hardening item) and returns true
+// iff the `nonce` claim equals the value stashed in state during
+// handleStart.
+//
+// Returns true when no ID token is present (provider isn't OIDC) so
+// non-OIDC providers (Twitter, GitHub legacy) keep working — those flows
+// don't carry a nonce in their callback shape.
+func verifyOIDCNonce(token *oauth2.Token, expectedNonce string) bool {
+	if expectedNonce == "" {
+		return true
+	}
+	idToken, _ := token.Extra("id_token").(string)
+	if idToken == "" {
+		// Provider didn't return an ID token; non-OIDC flow.
+		return true
+	}
+	parts := strings.Split(idToken, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		// Some providers pad — try standard decoding too.
+		payload, err = base64.URLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return false
+		}
+	}
+	var claims struct {
+		Nonce string `json:"nonce"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return false
+	}
+	return claims.Nonce == expectedNonce
 }
 
 // handleCallback processes the OAuth callback, exchanges the code for a token,
@@ -550,11 +806,16 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		return nil, forge.BadRequest("missing state parameter")
 	}
 
-	stateData, err := p.ceremonies.Get(ctx.Context(), "social:state:"+req.State)
+	// State is stored under a per-app key (Phase 2D); resolve the app
+	// from the request's scope first, falling back to the plugin-level
+	// default. We probe both the namespaced and legacy key shape so
+	// in-flight states minted before this change still complete during
+	// the rollout window.
+	candidateAppID, _ := p.resolveAppID(ctx) //nolint:errcheck // ok if zero — legacy probe handles it
+	stateData, stateAppID, err := p.loadOAuthState(ctx.Context(), candidateAppID, req.State)
 	if err != nil {
 		return nil, forge.BadRequest("invalid state parameter")
 	}
-	_ = p.ceremonies.Delete(ctx.Context(), "social:state:"+req.State) //nolint:errcheck // best-effort cleanup
 	var stateInfo map[string]string
 	if unmarshalErr := json.Unmarshal(stateData, &stateInfo); unmarshalErr != nil || stateInfo["provider"] != req.Provider {
 		return nil, forge.BadRequest("invalid state parameter")
@@ -562,6 +823,9 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 
 	// Resolve the app ID from the state (set during handleStart).
 	appIDStr := stateInfo["app_id"]
+	if appIDStr == "" {
+		appIDStr = stateAppID
+	}
 	if appIDStr == "" {
 		// Fallback for states created before app_id was stored.
 		appIDStr = p.appID
@@ -573,12 +837,12 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 
 	// Check for error from provider
 	if req.Error != "" {
-		return nil, forge.BadRequest(fmt.Sprintf("provider error: %s", req.Error))
+		return p.callbackError(ctx, stateInfo, fmt.Sprintf("provider error: %s", req.Error))
 	}
 
 	// Exchange code for token
 	if req.Code == "" {
-		return nil, forge.BadRequest("missing code parameter")
+		return p.callbackError(ctx, stateInfo, "missing code parameter")
 	}
 
 	cfg := provider.OAuth2Config()
@@ -589,9 +853,24 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if cbURL := stateInfo["callback_url"]; cbURL != "" {
 		exchangeCfg.RedirectURL = cbURL
 	}
-	token, err := exchangeCfg.Exchange(ctx.Context(), req.Code)
+	exchangeOpts := []oauth2.AuthCodeOption{}
+	if verifier := stateInfo["pkce_verifier"]; verifier != "" {
+		// Present the PKCE code_verifier on token exchange (RFC 7636).
+		// Providers that didn't accept the challenge ignore this field;
+		// providers that did require it will reject mismatches.
+		exchangeOpts = append(exchangeOpts, oauth2.SetAuthURLParam("code_verifier", verifier))
+	}
+	token, err := exchangeCfg.Exchange(ctx.Context(), req.Code, exchangeOpts...)
 	if err != nil {
 		return nil, forge.BadRequest("failed to exchange code")
+	}
+
+	// OIDC nonce verification (no-op for providers that don't issue
+	// ID tokens or weren't given a nonce). Done before any further
+	// processing so a tampered ID token can't reach the provider's
+	// FetchUser path.
+	if !verifyOIDCNonce(token, stateInfo["oidc_nonce"]) {
+		return nil, forge.BadRequest("invalid id_token nonce")
 	}
 
 	// Fetch user profile from provider
@@ -699,22 +978,46 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		}
 	}
 
-	// Resolve per-app session config, falling back to plugin config.
-	sessCfg := account.SessionConfig{
-		TokenTTL:        p.config.SessionTokenTTL,
-		RefreshTokenTTL: p.config.SessionRefreshTTL,
-	}
-	if p.engine != nil {
-		sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
-	}
-	sess, err := account.NewSession(appID, u.ID, sessCfg)
-	if err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", err))
-	}
-	sess.EnvID = envID
-
-	if err := p.store.CreateSession(goCtx, sess); err != nil {
-		return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
+	// Mint the session through Engine.IssueSession so the centralized
+	// MFARequired gate fires for OAuth callbacks too. Falls back to a
+	// direct mint if the engine isn't the concrete *authsome.Engine
+	// (e.g. test wiring without a full engine).
+	var sess *session.Session
+	if eng, ok := p.engine.(*authsome.Engine); ok && eng != nil {
+		result, issueErr := eng.IssueSession(goCtx, &authsome.IssueSessionRequest{
+			User:       u,
+			AppID:      appID,
+			EnvID:      envID,
+			AuthMethod: "social:" + req.Provider,
+			IPAddress:  ctx.Request().RemoteAddr,
+			UserAgent:  ctx.Request().UserAgent(),
+		})
+		if issueErr != nil {
+			// *authsome.MFARequiredError implements forge's
+			// StatusCode/ResponseBody so it renders as a 403 with the
+			// ticket envelope; other errors fall through as 500.
+			return nil, issueErr
+		}
+		sess = result.Session
+	} else {
+		// Fallback for tests that don't wire a full engine. Production
+		// always reaches the IssueSession branch.
+		sessCfg := account.SessionConfig{
+			TokenTTL:        p.config.SessionTokenTTL,
+			RefreshTokenTTL: p.config.SessionRefreshTTL,
+		}
+		if p.engine != nil {
+			sessCfg = p.engine.SessionConfigForApp(goCtx, appID)
+		}
+		var newErr error
+		sess, newErr = account.NewSession(appID, u.ID, sessCfg)
+		if newErr != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to create session: %w", newErr))
+		}
+		sess.EnvID = envID
+		if err := p.store.CreateSession(goCtx, sess); err != nil {
+			return nil, forge.InternalError(fmt.Errorf("failed to store session: %w", err))
+		}
 	}
 
 	isNewUser := u.CreatedAt.After(time.Now().Add(-5 * time.Second))
@@ -727,8 +1030,13 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	p.relayEvent(ctx.Context(), eventType, "", map[string]string{"user_id": u.ID.String(), "provider": req.Provider})
 	p.emitHook(ctx.Context(), hookAction, hook.ResourceUser, u.ID.String(), u.ID.String(), "")
 
-	// Set httpOnly session cookie for browser-based flows.
-	p.setSessionCookie(ctx, sess.Token, int(sessCfg.TokenTTL.Seconds()))
+	// Set httpOnly session cookie for browser-based flows. Cookie TTL
+	// mirrors the session token's remaining lifetime.
+	cookieTTL := int(time.Until(sess.ExpiresAt).Seconds())
+	if cookieTTL < 0 {
+		cookieTTL = 0
+	}
+	p.setSessionCookie(ctx, sess.Token, cookieTTL)
 
 	// Browser-based OAuth callbacks arrive as GET redirects. Respond with a
 	// small HTML page that closes the popup (or redirects to the stored
@@ -737,9 +1045,19 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 	if ctx.Request().Method == http.MethodGet {
 		redirectTarget := stateInfo["redirect_url"]
 		if redirectTarget == "" {
+			redirectTarget = stateInfo["frontend_url"]
+		}
+		if redirectTarget == "" {
 			redirectTarget = "/"
 		}
-		escapedRedirect := html.EscapeString(redirectTarget)
+		// The redirect target is interpolated into a JS string literal
+		// (`window.location.href="<value>"`), so we must use JS-escaping
+		// — html.EscapeString here would only stop </script> injection
+		// and leaves backslash, quote, newline, and U+2028/U+2029
+		// (which terminate JS string literals) unescaped. The sanitizer
+		// already strips most dangerous bytes upstream, but defense in
+		// depth: use template.JSEscapeString for the right context.
+		escapedRedirect := template.JSEscapeString(redirectTarget)
 
 		ctx.Response().Header().Set("Content-Type", "text/html; charset=utf-8")
 		ctx.Response().WriteHeader(http.StatusOK)
@@ -761,6 +1079,8 @@ func (p *Plugin) handleCallback(ctx forge.Context, req *CallbackRequest) (*Callb
 		ExpiresAt:    sess.ExpiresAt,
 		Provider:     req.Provider,
 		IsNewUser:    isNewUser,
+		RedirectURL:  stateInfo["redirect_url"],
+		FrontendURL:  stateInfo["frontend_url"],
 	}, nil
 }
 
@@ -822,74 +1142,31 @@ func (p *Plugin) UnlinkAuthMethod(ctx context.Context, userID id.UserID, provide
 // ──────────────────────────────────────────────────
 // Cookie helpers
 // ──────────────────────────────────────────────────
-
-// resolveCookieSetting is a helper that reads a string setting from the
-// settings manager, returning fallback when the key is unregistered or empty.
-func (p *Plugin) resolveCookieSetting(ctx context.Context, key, fallback string) string {
-	if p.settingsMgr == nil {
-		return fallback
-	}
-	raw, err := p.settingsMgr.Resolve(ctx, key, settings.ResolveOpts{})
-	if err != nil {
-		return fallback
-	}
-	var v string
-	if err := json.Unmarshal(raw, &v); err != nil || v == "" {
-		return fallback
-	}
-	return v
-}
-
-// resolveCookieSettingBool reads a boolean setting from the settings manager.
-func (p *Plugin) resolveCookieSettingBool(ctx context.Context, key string, fallback bool) bool {
-	if p.settingsMgr == nil {
-		return fallback
-	}
-	raw, err := p.settingsMgr.Resolve(ctx, key, settings.ResolveOpts{})
-	if err != nil {
-		return fallback
-	}
-	var v bool
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return fallback
-	}
-	return v
-}
+//
+// (removed: resolveCookieSetting / resolveCookieSettingBool — replaced by
+// authsome.SessionCookieTemplate which centralises cookie-attribute
+// resolution and __Host- prefix handling across the engine, social, and
+// dashboard auth pages.)
 
 // setSessionCookie sets an httpOnly session cookie on the response.
-// It reads cookie configuration from the dynamic settings system (same
-// settings used by the core API handlers) so the cookie name, domain,
-// path, and security flags stay consistent across all auth flows.
+// Resolves the full cookie configuration (name, domain, path, secure,
+// http_only, same_site, and the __Host- prefix opt-in) via
+// authsome.SessionCookieTemplate so the social plugin's cookie matches
+// the engine's and dashboard's exactly.
 func (p *Plugin) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 	goCtx := ctx.Context()
-
-	name := p.resolveCookieSetting(goCtx, "session.cookie_name", "authsome_session_token")
-	domain := p.resolveCookieSetting(goCtx, "session.cookie_domain", "")
-	cookiePath := p.resolveCookieSetting(goCtx, "session.cookie_path", "/")
-	httpOnly := p.resolveCookieSettingBool(goCtx, "session.cookie_http_only", true)
-	sameSiteStr := p.resolveCookieSetting(goCtx, "session.cookie_same_site", "lax")
-
-	sameSite := http.SameSiteLaxMode
-	switch sameSiteStr {
-	case "strict":
-		sameSite = http.SameSiteStrictMode
-	case "none":
-		sameSite = http.SameSiteNoneMode
+	mgr := p.engine.Settings()
+	if mgr == nil {
+		return
 	}
 
 	r := ctx.Request()
 	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 
-	http.SetCookie(ctx.Response(), &http.Cookie{
-		Name:     name,
-		Value:    token,
-		Path:     cookiePath,
-		Domain:   domain,
-		MaxAge:   maxAge,
-		HttpOnly: httpOnly,
-		Secure:   isHTTPS,
-		SameSite: sameSite,
-	})
+	c := authsome.SessionCookieTemplate(goCtx, mgr, p.appID, isHTTPS)
+	c.Value = token
+	c.MaxAge = maxAge
+	http.SetCookie(ctx.Response(), c)
 }
 
 // ──────────────────────────────────────────────────
@@ -932,49 +1209,33 @@ func (p *Plugin) resolveCallbackURL(r *http.Request, providerRedirectURL, provid
 	return base + prefix + "/v1/social/" + providerName + "/callback"
 }
 
-// sanitizeRedirectURL validates a redirect URL to prevent open-redirect attacks.
-// It allows relative paths unconditionally and absolute URLs only when the host
-// matches the request origin. Dangerous schemes and embedded credentials are blocked.
-func sanitizeRedirectURL(rawURL, requestOrigin string) string {
-	if rawURL == "" {
-		return ""
+// callbackError handles a callback failure once the OAuth state is known. For
+// browser-initiated GET callbacks it redirects the user back to the SPA with
+// an `error` query parameter so the frontend can render an error UI; for
+// non-browser callers it surfaces the error as a JSON 400. The fallback chain
+// for the redirect target is: redirect_url → frontend_url → forge.BadRequest.
+func (p *Plugin) callbackError(ctx forge.Context, stateInfo map[string]string, message string) (*CallbackResponse, error) {
+	if ctx.Request().Method != http.MethodGet {
+		return nil, forge.BadRequest(message)
 	}
-
-	parsed, err := url.Parse(rawURL)
+	target := stateInfo["redirect_url"]
+	if target == "" {
+		target = stateInfo["frontend_url"]
+	}
+	if target == "" {
+		return nil, forge.BadRequest(message)
+	}
+	parsed, err := url.Parse(target)
 	if err != nil {
-		return ""
+		return nil, forge.BadRequest(message)
 	}
+	q := parsed.Query()
+	q.Set("error", message)
+	parsed.RawQuery = q.Encode()
 
-	// Block dangerous schemes.
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "" && scheme != "http" && scheme != "https" {
-		return ""
-	}
-
-	// Block URLs with embedded credentials.
-	if parsed.User != nil {
-		return ""
-	}
-
-	// Relative paths (no host) are safe.
-	if parsed.Host == "" {
-		return rawURL
-	}
-
-	// Absolute URLs must match the request origin when the origin is known.
-	if requestOrigin != "" {
-		originParsed, oErr := url.Parse(requestOrigin)
-		if oErr == nil && strings.EqualFold(parsed.Host, originParsed.Host) {
-			return rawURL
-		}
-		// Origin is known but host does not match — block the redirect.
-		return ""
-	}
-
-	// No origin available (e.g. missing Origin/Referer headers in CORS).
-	// Allow the URL since it passed scheme and credential checks above.
-	// The redirect_url was provided by the caller, not an external party.
-	return rawURL
+	ctx.Response().Header().Set("Location", parsed.String())
+	ctx.Response().WriteHeader(http.StatusFound)
+	return nil, nil
 }
 
 // relayEvent sends a webhook event to EventRelay (nil-safe).
@@ -1001,4 +1262,291 @@ func (p *Plugin) emitHook(ctx context.Context, action, resource, resourceID, act
 		ActorID:    actorID,
 		Tenant:     tenant,
 	})
+}
+
+// ──────────────────────────────────────────────────
+// Admin: social provider management
+// ──────────────────────────────────────────────────
+
+// supportedProviderCatalog is the static list of providers this build
+// can speak. Sourced from the SettingSocialProviders dropdown so the
+// admin UI shows the same set the engine can actually wire.
+var supportedProviderCatalog = []AdminCatalogProvider{
+	{ID: "google", Name: "Google"},
+	{ID: "github", Name: "GitHub"},
+	{ID: "apple", Name: "Apple"},
+	{ID: "microsoft", Name: "Microsoft"},
+	{ID: "facebook", Name: "Facebook"},
+	{ID: "linkedin", Name: "LinkedIn"},
+	{ID: "discord", Name: "Discord"},
+	{ID: "slack", Name: "Slack"},
+	{ID: "twitter", Name: "Twitter"},
+	{ID: "spotify", Name: "Spotify"},
+	{ID: "twitch", Name: "Twitch"},
+	{ID: "gitlab", Name: "GitLab"},
+	{ID: "bitbucket", Name: "Bitbucket"},
+	{ID: "dropbox", Name: "Dropbox"},
+	{ID: "yahoo", Name: "Yahoo"},
+	{ID: "amazon", Name: "Amazon"},
+	{ID: "zoom", Name: "Zoom"},
+	{ID: "pinterest", Name: "Pinterest"},
+	{ID: "strava", Name: "Strava"},
+	{ID: "patreon", Name: "Patreon"},
+	{ID: "instagram", Name: "Instagram"},
+	{ID: "line", Name: "Line"},
+}
+
+// AdminCatalogProvider is one entry in the supported-provider catalog.
+type AdminCatalogProvider struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// AdminCatalogResponse is the response for GET /v1/admin/social/providers/catalog.
+type AdminCatalogResponse struct {
+	Providers []AdminCatalogProvider `json:"providers"`
+}
+
+// AdminProvider is the read-side shape for a configured provider.
+// ClientSecret is masked (returns the literal "***" when set, empty
+// when unset) so the admin UI can render "secret is configured" without
+// echoing the value back.
+type AdminProvider struct {
+	Name         string   `json:"name"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret,omitempty"`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      bool     `json:"enabled"`
+	HasSecret    bool     `json:"has_secret"`
+}
+
+// AdminListProvidersRequest binds the query for GET /v1/admin/social/providers.
+type AdminListProvidersRequest struct {
+	AppID string `query:"app_id" description:"App identifier; omit for global scope"`
+}
+
+// AdminListProvidersResponse is the listing response.
+type AdminListProvidersResponse struct {
+	Providers []AdminProvider `json:"providers"`
+}
+
+// AdminUpsertProviderRequest binds the path + body for PUT.
+type AdminUpsertProviderRequest struct {
+	Provider string `path:"provider" description:"Provider ID (google, github, ...)"`
+	AppID    string `query:"app_id" description:"App identifier; omit for global scope"`
+
+	ClientID     string   `json:"client_id"      description:"OAuth client ID"`
+	ClientSecret string   `json:"client_secret"  description:"OAuth client secret. Pass empty string to leave the existing value unchanged."`
+	RedirectURL  string   `json:"redirect_url,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+	Enabled      *bool    `json:"enabled,omitempty"`
+}
+
+// AdminProviderResponse is the response after upsert.
+type AdminProviderResponse struct {
+	Provider AdminProvider `json:"provider"`
+}
+
+// AdminDeleteProviderRequest binds the path + query for DELETE.
+type AdminDeleteProviderRequest struct {
+	Provider string `path:"provider" description:"Provider ID"`
+	AppID    string `query:"app_id"  description:"App identifier; omit for global scope"`
+}
+
+// AdminDeleteProviderResponse mirrors the StatusResponse shape.
+type AdminDeleteProviderResponse struct {
+	Status string `json:"status"`
+}
+
+// handleAdminListProviders returns the configured providers at the
+// resolved scope. With ?app_id, returns the merged view (global +
+// app overrides) so the UI shows what the public client-config
+// endpoint would return.
+func (p *Plugin) handleAdminListProviders(ctx forge.Context, req *AdminListProvidersRequest) (*AdminListProvidersResponse, error) {
+	if p.settingsMgr == nil {
+		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+	}
+	opts := settings.ResolveOpts{}
+	if v := strings.TrimSpace(req.AppID); v != "" {
+		opts.AppID = v
+	}
+	providers, err := settings.Get(ctx.Context(), p.settingsMgr, SettingSocialProviders, opts)
+	if err != nil {
+		// Cascade returns the default ([]) when no override exists; a
+		// real error means the store is broken.
+		return nil, forge.InternalError(fmt.Errorf("social: read providers: %w", err))
+	}
+	out := make([]AdminProvider, 0, len(providers))
+	for _, prov := range providers {
+		out = append(out, maskProvider(prov))
+	}
+	return &AdminListProvidersResponse{Providers: out}, nil
+}
+
+// handleAdminCatalog returns the static provider catalog.
+func (p *Plugin) handleAdminCatalog(_ forge.Context, _ *struct{}) (*AdminCatalogResponse, error) {
+	out := make([]AdminCatalogProvider, len(supportedProviderCatalog))
+	copy(out, supportedProviderCatalog)
+	return &AdminCatalogResponse{Providers: out}, nil
+}
+
+// handleAdminUpsertProvider replaces the entry for the named provider
+// at the requested scope. When ?app_id is supplied, the provider list
+// is read at App scope, mutated, and written back at App scope —
+// global is left untouched. Empty client_secret leaves the existing
+// stored secret unchanged so the UI can re-save without echoing it.
+func (p *Plugin) handleAdminUpsertProvider(ctx forge.Context, req *AdminUpsertProviderRequest) (*AdminProviderResponse, error) {
+	if p.settingsMgr == nil {
+		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+	}
+	name := strings.ToLower(strings.TrimSpace(req.Provider))
+	if name == "" {
+		return nil, forge.BadRequest("provider is required")
+	}
+	if !catalogContains(name) {
+		return nil, forge.BadRequest("unsupported provider; call GET /v1/admin/social/providers/catalog for the list")
+	}
+	if strings.TrimSpace(req.ClientID) == "" {
+		return nil, forge.BadRequest("client_id is required")
+	}
+
+	scope, scopeID := scopeFor(req.AppID)
+	current := p.readScope(ctx.Context(), scope, scopeID)
+
+	// Preserve the existing secret when caller passes empty string.
+	existingSecret := ""
+	for _, prov := range current {
+		if strings.EqualFold(prov.Name, name) {
+			existingSecret = prov.ClientSecret
+			break
+		}
+	}
+	secret := req.ClientSecret
+	if strings.TrimSpace(secret) == "" {
+		secret = existingSecret
+	}
+
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+
+	updated := ProviderSetting{
+		Name:         name,
+		ClientID:     req.ClientID,
+		ClientSecret: secret,
+		RedirectURL:  req.RedirectURL,
+		Scopes:       req.Scopes,
+		Enabled:      enabled,
+	}
+
+	out := replaceOrAppend(current, updated)
+	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
+		return nil, forge.InternalError(err)
+	}
+	return &AdminProviderResponse{Provider: maskProvider(updated)}, nil
+}
+
+// handleAdminDeleteProvider removes one provider entry from the list
+// at the requested scope. Idempotent — no error when the entry is
+// missing.
+func (p *Plugin) handleAdminDeleteProvider(ctx forge.Context, req *AdminDeleteProviderRequest) (*AdminDeleteProviderResponse, error) {
+	if p.settingsMgr == nil {
+		return nil, forge.InternalError(fmt.Errorf("social: settings manager not wired"))
+	}
+	name := strings.ToLower(strings.TrimSpace(req.Provider))
+	if name == "" {
+		return nil, forge.BadRequest("provider is required")
+	}
+	scope, scopeID := scopeFor(req.AppID)
+	current := p.readScope(ctx.Context(), scope, scopeID)
+	out := make([]ProviderSetting, 0, len(current))
+	for _, prov := range current {
+		if strings.EqualFold(prov.Name, name) {
+			continue
+		}
+		out = append(out, prov)
+	}
+	if err := p.writeScope(ctx.Context(), scope, scopeID, out); err != nil {
+		return nil, forge.InternalError(err)
+	}
+	return &AdminDeleteProviderResponse{Status: "deleted"}, nil
+}
+
+// readScope reads ProviderSetting list at exactly the named scope.
+// Returns the empty slice when nothing is stored — does NOT cascade
+// up so writes only touch the scope the caller asked for.
+func (p *Plugin) readScope(ctx context.Context, scope settings.Scope, scopeID string) []ProviderSetting {
+	if p.settingsMgr == nil || p.settingsMgr.Store() == nil {
+		return nil
+	}
+	s, err := p.settingsMgr.Store().GetSetting(ctx, SettingSocialProviders.Def.Key, scope, scopeID)
+	if err != nil || s == nil || len(s.Value) == 0 {
+		return nil
+	}
+	var out []ProviderSetting
+	if err := json.Unmarshal(s.Value, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+// writeScope serialises the provider list and writes it at the named scope.
+func (p *Plugin) writeScope(ctx context.Context, scope settings.Scope, scopeID string, providers []ProviderSetting) error {
+	if p.settingsMgr == nil {
+		return fmt.Errorf("social: settings manager not wired")
+	}
+	raw, err := json.Marshal(providers)
+	if err != nil {
+		return err
+	}
+	appID := ""
+	if scope == settings.ScopeApp {
+		appID = scopeID
+	}
+	return p.settingsMgr.Set(ctx, SettingSocialProviders.Def.Key, raw, scope, scopeID, appID, "", "admin")
+}
+
+func scopeFor(appID string) (settings.Scope, string) {
+	if v := strings.TrimSpace(appID); v != "" {
+		return settings.ScopeApp, v
+	}
+	return settings.ScopeGlobal, ""
+}
+
+func catalogContains(name string) bool {
+	for _, p := range supportedProviderCatalog {
+		if p.ID == name {
+			return true
+		}
+	}
+	return false
+}
+
+func replaceOrAppend(list []ProviderSetting, entry ProviderSetting) []ProviderSetting {
+	for i, prov := range list {
+		if strings.EqualFold(prov.Name, entry.Name) {
+			out := make([]ProviderSetting, len(list))
+			copy(out, list)
+			out[i] = entry
+			return out
+		}
+	}
+	return append(list, entry)
+}
+
+func maskProvider(p ProviderSetting) AdminProvider {
+	out := AdminProvider{
+		Name:        p.Name,
+		ClientID:    p.ClientID,
+		RedirectURL: p.RedirectURL,
+		Scopes:      p.Scopes,
+		Enabled:     p.Enabled,
+		HasSecret:   strings.TrimSpace(p.ClientSecret) != "",
+	}
+	if out.HasSecret {
+		out.ClientSecret = "***"
+	}
+	return out
 }

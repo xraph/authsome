@@ -20,23 +20,30 @@ eng, err := authsome.New(
         RPID: "myapp.com",
 
         // Relying Party display name — shown in the browser passkey UI.
-        RPName: "My Application",
+        RPDisplayName: "My Application",
 
-        // Allowed origins — must include your frontend's exact origin.
-        Origins: []string{
+        // Allowed origins — must include your frontend's exact origin
+        // (scheme + host + port). For production, set explicitly.
+        RPOrigins: []string{
             "https://myapp.com",
             "https://www.myapp.com",
         },
-
-        // Store for in-progress WebAuthn ceremony state.
-        // Required — use memory.New() for development.
-        CeremonyStore: ceremonyStore,
     })),
 )
 ```
 
+### Local development
+
+For `RPID: "localhost"` (or `"127.0.0.1"`) the plugin auto-trusts the request's `Origin` header on every ceremony, **as long as its host matches the configured RPID**. That means any localhost dev port — `http://localhost:3000`, `http://localhost:5173`, etc. — works without listing it in `RPOrigins`. The host check still rejects foreign origins, so this shortcut only loosens the *port* requirement, never the *host*.
+
+For non-localhost RPIDs, behavior is strict: the browser's origin must match an entry in `RPOrigins` (scheme, host, and port included) exactly.
+
+### Dynamic origins setting
+
+`passkey.rp_origins` (`[]string`) is a dynamic setting that adds extra allowed origins on top of `Config.RPOrigins`. Use it when origins differ between environments and you'd rather not rebuild the binary — e.g. set it from the dashboard or via your settings store for staging vs. prod.
+
 <Callout type="info">
-The `passkey` plugin requires a `ceremony.Store` to hold in-progress registration and authentication state between the challenge and response calls. Configure one with `WithCeremonyStore` or pass it directly to the plugin.
+The `passkey` plugin uses the engine's `ceremony.Store` to hold in-progress registration and authentication state between the challenge and response calls. The default in-memory store is used when none is configured by the engine.
 </Callout>
 
 ## FIDO2/WebAuthn overview

@@ -17,6 +17,14 @@ func (s *Store) CreateUser(ctx context.Context, u *user.User) error {
 
 	_, err := s.mdb.NewInsert(m).Exec(ctx)
 	if err != nil {
+		// Map duplicate-key violations to the account-level sentinels
+		// before wrapping. Without this, the API layer sees a generic
+		// error and returns 500 carrying the raw E11000 message —
+		// which leaks the index name and the existence of the
+		// colliding row.
+		if mapped := mapWriteErr(err); mapped != err {
+			return mapped
+		}
 		return fmt.Errorf("authsome/mongo: create user: %w", err)
 	}
 
@@ -116,6 +124,12 @@ func (s *Store) UpdateUser(ctx context.Context, u *user.User) error {
 		Filter(bson.M{"_id": m.ID}).
 		Exec(ctx)
 	if err != nil {
+		// A username/email change can violate a uniqueness constraint
+		// — surface the same sentinels CreateUser does so PATCH /me
+		// returns a 409 instead of a 500 with the raw E11000.
+		if mapped := mapWriteErr(err); mapped != err {
+			return mapped
+		}
 		return fmt.Errorf("authsome/mongo: update user: %w", err)
 	}
 

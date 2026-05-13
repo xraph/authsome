@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xraph/grove"
@@ -621,6 +622,11 @@ func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitati
 	return pgError(err)
 }
 
+func (s *Store) DeleteInvitation(ctx context.Context, invID id.InvitationID) error {
+	_, err := s.pg.NewDelete((*InvitationModel)(nil)).Where("id = ?", invID.String()).Exec(ctx)
+	return pgError(err)
+}
+
 func (s *Store) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	var models []InvitationModel
 	err := s.pg.NewSelect(&models).
@@ -901,6 +907,15 @@ func (s *Store) GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix st
 		Where("app_id = ?", appID.String()).
 		Where("key_prefix = ?", prefix).
 		Scan(ctx)
+	if err != nil {
+		return nil, pgError(err)
+	}
+	return toAPIKey(m)
+}
+
+func (s *Store) FindByPrefix(ctx context.Context, prefix string) (*apikey.APIKey, error) {
+	m := new(APIKeyModel)
+	err := s.pg.NewSelect(m).Where("key_prefix = ?", prefix).Scan(ctx)
 	if err != nil {
 		return nil, pgError(err)
 	}
@@ -1430,7 +1445,22 @@ func (s *Store) DeleteSettingsByNamespace(ctx context.Context, namespace string)
 // Helpers
 // ──────────────────────────────────────────────────
 
-// pgError maps sql.ErrNoRows to a standard sentinel and passes through other errors.
+// pgError maps low-level pg failures to the package-level sentinels
+// the rest of the codebase reasons about. Without this, a unique-
+// constraint violation on the (app_id, email) or (app_id, username)
+// index bubbles up as a 500 carrying the raw constraint name and the
+// colliding key value — leaking schema details and signaling that
+// the email/username exists.
+//
+// Recognized translations:
+//   - sql.ErrNoRows                  → store.ErrNotFound
+//   - 23505 unique_violation on the
+//     email index                    → account.ErrEmailTaken
+//   - 23505 on the username index    → account.ErrUsernameTaken
+//   - other 23505                    → store.ErrConflict (generic 409)
+//
+// Other errors pass through unchanged so unexpected failures still
+// surface their root cause in logs.
 func pgError(err error) error {
 	if err == nil {
 		return nil
@@ -1438,5 +1468,65 @@ func pgError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return store.ErrNotFound
 	}
+	// pgx surfaces the SQLSTATE via PgError.Code. We match by string
+	// since the codebase doesn't import pgx/pgconn directly elsewhere
+	// and a nil-safe substring check survives any wrapping the grove
+	// layer adds.
+	msg := err.Error()
+	if strings.Contains(msg, "SQLSTATE 23505") || strings.Contains(msg, "duplicate key value") {
+		switch {
+		case strings.Contains(msg, "username"):
+			return account.ErrUsernameTaken
+		case strings.Contains(msg, "email"):
+			return account.ErrEmailTaken
+		default:
+			return store.ErrConflict
+		}
+	}
 	return err
+}
+
+// WithTx is a best-effort no-op wrapper for now. Real backend transactions
+// require plumbing driver.Tx through every Store method, which is a multi-
+// day refactor deferred to a follow-up PR. Callers that need true atomic
+// cascade semantics should use the dedicated DeleteOrganizationCascade
+// method below — it uses PgTx natively without requiring the full
+// every-method-takes-a-tx refactor.
+func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
+	return fn(s)
+}
+
+// DeleteOrganizationCascade deletes the organization and all of its
+// dependent rows (members, teams, invitations) inside a single PgTx.
+// On any error the entire cascade rolls back; the orgs table is the
+// last delete so a failure mid-cascade leaves the org row visible
+// (callers can retry).
+func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error {
+	ptx, err := s.pg.BeginTxQuery(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("authsome/postgres: begin tx for org cascade: %w", err)
+	}
+	// defer Rollback after Commit is a no-op (the driver returns sql.ErrTxDone
+	// which we intentionally swallow — this is the standard Go pattern).
+	defer func() { _ = ptx.Rollback() }() //nolint:errcheck // best-effort rollback after commit
+
+	orgIDStr := orgID.String()
+
+	if _, err := ptx.NewDelete(&MemberModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete members: %w", pgError(err))
+	}
+	if _, err := ptx.NewDelete(&TeamModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete teams: %w", pgError(err))
+	}
+	if _, err := ptx.NewDelete(&InvitationModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete invitations: %w", pgError(err))
+	}
+	if _, err := ptx.NewDelete(&OrganizationModel{}).Where("id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/postgres: delete org row: %w", pgError(err))
+	}
+
+	if err := ptx.Commit(); err != nil {
+		return fmt.Errorf("authsome/postgres: commit org cascade: %w", err)
+	}
+	return nil
 }

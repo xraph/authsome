@@ -68,7 +68,7 @@ func EnvironmentDetailPage(env *environment.Environment) templ.Component {
 			Variant: button.VariantGhost,
 			Size:    button.SizeSm,
 			Attributes: templ.Attributes{
-				"hx-get":      "/environments",
+				"hx-get":      "../environments",
 				"hx-target":   "#content",
 				"hx-swap":     "innerHTML",
 				"hx-push-url": "true",

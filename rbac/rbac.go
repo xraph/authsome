@@ -70,11 +70,13 @@ func ToWardenRole(r *Role) *wardenrole.Role {
 	} else {
 		wr.ID = wardenid.NewRoleID()
 	}
-	if r.ParentID != "" {
-		if pid, err := convertToWardenRoleID(r.ParentID); err == nil {
-			wr.ParentID = &pid
-		}
-	}
+	// Parent linkage: warden's role model now uses ParentSlug as a natural
+	// key. Authsome still tracks ParentID externally; conversion of
+	// ParentID → ParentSlug requires a store lookup that this pure helper
+	// can't do. Bootstrap-time parent wiring lives in the warden DSL apply
+	// path (bootstrap/warden) which speaks ParentSlug directly. Runtime
+	// CRUD callers that need parent linkage should set the parent slug
+	// after creation via a follow-up store update.
 	// Store the EnvID in warden metadata so it survives the round-trip.
 	if r.EnvID != "" {
 		wr.Metadata = map[string]any{"env_id": r.EnvID}
@@ -97,9 +99,11 @@ func FromWardenRole(wr *wardenrole.Role) *Role {
 		CreatedAt:   wr.CreatedAt,
 		UpdatedAt:   wr.UpdatedAt,
 	}
-	if wr.ParentID != nil {
-		r.ParentID = wr.ParentID.String()
-	}
+	// Warden surfaces parent linkage via ParentSlug now (was ParentID). We
+	// store the slug into authsome's ParentID field as a best-effort hint
+	// for callers; downstream code that needs the resolved parent role
+	// must look it up by slug.
+	r.ParentID = wr.ParentSlug
 	// Restore EnvID from warden metadata if present.
 	if envID, ok := wr.Metadata["env_id"].(string); ok {
 		r.EnvID = envID
@@ -112,7 +116,10 @@ func ToWardenPermission(p *Permission, tenantID string) *wardenperm.Permission {
 	wp := &wardenperm.Permission{
 		TenantID: tenantID,
 		AppID:    tenantID,
-		Name:     p.Action + ":" + p.Resource,
+		// Warden DSL convention: <resource>:<action>. The check engine
+		// matches by (action, resource) tuple, not by name, so this is a
+		// cosmetic flip from authsome's old action:resource convention.
+		Name:     p.Resource + ":" + p.Action,
 		Action:   p.Action,
 		Resource: p.Resource,
 	}

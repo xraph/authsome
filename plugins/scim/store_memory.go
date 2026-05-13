@@ -144,6 +144,18 @@ func (s *MemoryStore) ListTokens(_ context.Context, configID id.SCIMConfigID) ([
 	return result, nil
 }
 
+func (s *MemoryStore) UpdateToken(_ context.Context, t *Token) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := t.ID.String()
+	if _, ok := s.tokens[key]; !ok {
+		return fmt.Errorf("scim: token %s not found", key)
+	}
+	cp := *t
+	s.tokens[key] = &cp
+	return nil
+}
+
 func (s *MemoryStore) DeleteToken(_ context.Context, tokenID id.SCIMTokenID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

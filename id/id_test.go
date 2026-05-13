@@ -47,6 +47,29 @@ func TestNewDeviceID_HasCorrectPrefix(t *testing.T) {
 	assert.True(t, strings.HasPrefix(id.String(), string(PrefixDevice)+"_"))
 }
 
+func TestNewSessionFamilyID_HasCorrectPrefix(t *testing.T) {
+	id := NewSessionFamilyID()
+	assert.True(t, strings.HasPrefix(id.String(), string(PrefixSessionFamily)+"_"))
+}
+
+func TestNewSessionFamilyID_Unique(t *testing.T) {
+	a := NewSessionFamilyID()
+	b := NewSessionFamilyID()
+	assert.NotEqual(t, a.String(), b.String())
+}
+
+func TestParseSessionFamilyID_RoundTrip(t *testing.T) {
+	original := NewSessionFamilyID()
+	parsed, err := ParseSessionFamilyID(original.String())
+	require.NoError(t, err)
+	assert.Equal(t, original.String(), parsed.String())
+}
+
+func TestParseSessionFamilyID_RejectsWrongPrefix(t *testing.T) {
+	_, err := ParseSessionFamilyID(NewUserID().String())
+	assert.Error(t, err)
+}
+
 // ──────────────────────────────────────────────────
 // Uniqueness
 // ──────────────────────────────────────────────────

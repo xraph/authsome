@@ -12,6 +12,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 // Client is an HTTP client for the AuthSome API.
@@ -19,20 +20,79 @@ type Client struct {
 	baseURL    string
 	token      string
 	apiKey     string
+	appID      string
 	httpClient *http.Client
+	// Lazy discovery: see do() + tryDiscoverAppID. Mutex (not Once)
+	// so a failed discovery — common during boot when upstream
+	// isn't ready yet — can be retried on the next call instead of
+	// permanently locking subsequent admin calls into 401.
+	appIDMu        sync.Mutex
+	appIDDiscovery error
+
+	// Synchronous configuration error from WithAPIKey/SetAPIKey
+	// (e.g. publishable key supplied where a secret was required).
+	// do() returns this before issuing any HTTP request so the caller
+	// sees the mistake at the call site.
+	apiKeyConfigErr error
+
+	// Optional callback invoked when lazy app-id discovery fails.
+	// Best-effort; must not block. See WithDiscoveryErrorHandler.
+	onDiscoveryError func(error)
 }
 
 // Option configures the AuthSome client.
 type Option func(*Client)
 
 // WithToken sets the session token for authenticated requests.
+//
+// Precedence with WithAPIKey: if both are set, the SDK sends ONLY
+// the session token in `Authorization: Bearer` and does NOT send
+// `X-API-Key`. Pick one — mixing the two confuses the server's
+// API-key strategy.
 func WithToken(token string) Option {
 	return func(c *Client) { c.token = token }
 }
 
-// WithAPIKey sets an API key for X-API-Key header authentication.
+// WithAPIKey sets an API key for service-account authentication.
+// The SDK sends the key as `X-API-Key`. Only secret keys are
+// accepted (`ask_`, `sk_test_`, `sk_stg_`, `sk_live_`); publishable
+// keys (`pk_*`) are rejected at configure time. The key MUST be
+// paired with the App ID it was minted under (see WithAppID).
 func WithAPIKey(key string) Option {
-	return func(c *Client) { c.apiKey = key }
+	return func(c *Client) {
+		if isPublicAPIKey(key) {
+			c.apiKey = ""
+			c.apiKeyConfigErr = fmt.Errorf("authclient: WithAPIKey requires a secret key (ask_/sk_*); publishable keys (pk_*) cannot authenticate")
+			return
+		}
+		c.apiKey = key
+		c.apiKeyConfigErr = nil
+	}
+}
+
+// WithDiscoveryErrorHandler installs a callback invoked whenever
+// the SDK's lazy app-id discovery attempt fails. Useful for
+// service-account clients running under orchestrators where
+// manifest fetches can race upstream startup. Best-effort; the
+// callback must not block.
+func WithDiscoveryErrorHandler(fn func(error)) Option {
+	return func(c *Client) { c.onDiscoveryError = fn }
+}
+
+// isPublicAPIKey reports whether the supplied key carries one of
+// the publishable-key prefixes. Inlined here so the SDK stays free
+// of any dependency on the server's apikey package.
+func isPublicAPIKey(key string) bool {
+	return strings.HasPrefix(key, "pk_test_") ||
+		strings.HasPrefix(key, "pk_stg_") ||
+		strings.HasPrefix(key, "pk_live_")
+}
+
+// WithAppID sets the App ID stamped onto every request as
+// X-App-ID. Required by the API key auth strategy and App-scoped
+// admin endpoints.
+func WithAppID(appID string) Option {
+	return func(c *Client) { c.appID = appID }
 }
 
 // WithHTTPClient sets a custom HTTP client.
@@ -75,11 +135,99 @@ func (c *Client) SetToken(token string) { c.token = token }
 // Token returns the current session token.
 func (c *Client) Token() string { return c.token }
 
-// SetAPIKey updates the API key.
-func (c *Client) SetAPIKey(key string) { c.apiKey = key }
+// SetAPIKey updates the API key. Same validation as WithAPIKey:
+// publishable keys (pk_*) are rejected.
+func (c *Client) SetAPIKey(key string) {
+	if isPublicAPIKey(key) {
+		c.apiKey = ""
+		c.apiKeyConfigErr = fmt.Errorf("authclient: SetAPIKey requires a secret key (ask_/sk_*); publishable keys (pk_*) cannot authenticate")
+		return
+	}
+	c.apiKey = key
+	c.apiKeyConfigErr = nil
+}
 
 // APIKey returns the current API key.
 func (c *Client) APIKey() string { return c.apiKey }
+
+// SetAppID updates the App ID stamped onto every request as
+// X-App-ID.
+func (c *Client) SetAppID(appID string) { c.appID = appID }
+
+// AppID returns the current App ID.
+func (c *Client) AppID() string { return c.appID }
+
+// tryDiscoverAppID makes a best-effort attempt to fetch the
+// platform App ID from /.well-known/authsome/manifest when an API
+// key is set but no App ID is configured. Retries on every call
+// until one succeeds (failed boot-time attempts must not lock
+// subsequent admin calls into 401). The well-known path is
+// mirrored onto both the root and grouped routers upstream so SDK
+// clients can reach it regardless of whether their baseURL
+// includes the extension's mount prefix. See client.go for full
+// doc.
+func (c *Client) tryDiscoverAppID(ctx context.Context) {
+	if c.appID != "" {
+		return
+	}
+	c.appIDMu.Lock()
+	defer c.appIDMu.Unlock()
+	if c.appID != "" {
+		return
+	}
+	manifestURL := c.baseURL + "/.well-known/authsome/manifest"
+	req, err := http.NewRequestWithContext(ctx, "GET", manifestURL, nil)
+	if err != nil {
+		c.appIDDiscovery = fmt.Errorf("build manifest request (url=%s): %w", manifestURL, err)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.appIDDiscovery = fmt.Errorf("fetch manifest (url=%s): %w", manifestURL, err)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		c.appIDDiscovery = fmt.Errorf("manifest status %d url=%s body=%q",
+			resp.StatusCode, manifestURL, string(snippet))
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	var manifest map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		c.appIDDiscovery = fmt.Errorf("decode manifest (url=%s): %w", manifestURL, err)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	if appID, ok := manifest["platform_app_id"].(string); ok && appID != "" {
+		c.appID = appID
+		c.appIDDiscovery = nil
+	} else {
+		c.appIDDiscovery = fmt.Errorf("manifest (url=%s) missing platform_app_id", manifestURL)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+	}
+}
+
+// notifyDiscoveryError fires the optional WithDiscoveryErrorHandler
+// callback. Best-effort: a panic in the hook is recovered so a
+// buggy callback can't take down the request path.
+func (c *Client) notifyDiscoveryError(err error) {
+	if c.onDiscoveryError == nil || err == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	c.onDiscoveryError(err)
+}
+
+// manifestPath is the canonical well-known manifest path. Lazy
+// discovery in do() skips firing for requests targeting this path
+// (the manifest is unauthenticated and self-discovering during a
+// discovery fetch is wasted work).
+const manifestPath = "/.well-known/authsome/manifest"
 
 // ──────────────────────────────────────────────────
 // Generated methods
@@ -144,16 +292,51 @@ type {{ .Name }}Params struct {
 // ──────────────────────────────────────────────────
 
 // ClientError represents an error response from the API.
+//
+// RawBody and Headers preserve the upstream response so callers can
+// surface useful diagnostics when the standard error envelope is
+// empty or unfamiliar (e.g. forge.HTTPError uses {code, error,
+// details} — Message resolves from the first non-empty of error /
+// message / details, and RawBody preserves the rest verbatim).
 type ClientError struct {
 	StatusCode int
 	Message    string
+	RawBody    []byte
+	Headers    map[string]string
 }
 
+const clientErrorBodySnippetMax = 256
+
 func (e *ClientError) Error() string {
-	return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	if e.Message != "" {
+		return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	}
+	if len(e.RawBody) > 0 {
+		snippet := string(e.RawBody)
+		if len(snippet) > clientErrorBodySnippetMax {
+			snippet = snippet[:clientErrorBodySnippetMax] + "…"
+		}
+		return fmt.Sprintf("authsome: %d body=%q", e.StatusCode, snippet)
+	}
+	return fmt.Sprintf("authsome: %d (empty body)", e.StatusCode)
+}
+
+func firstNonEmptyClientErrorMessage(s ...string) string {
+	for _, v := range s {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body []byte, result any) error {
+	// Surface configure-time validation errors before touching the
+	// network (e.g. WithAPIKey was called with a publishable key).
+	if c.apiKeyConfigErr != nil {
+		return c.apiKeyConfigErr
+	}
+
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
@@ -164,13 +347,31 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 		return fmt.Errorf("create request: %w", err)
 	}
 
+	// Lazy app-id discovery for service-account clients. Skip for
+	// the manifest path itself — it's unauthenticated and self-
+	// discovery would be wasted work.
+	if c.apiKey != "" && c.appID == "" && c.baseURL != "" && path != manifestPath {
+		c.tryDiscoverAppID(ctx)
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Send both Authorization (session token) and X-API-Key (API
+	// key) when both are configured — supports the
+	// service-account-key + per-request-user-token dual-credential
+	// pattern. Authsome's strategy chain handles both safely:
+	// session resolution runs only when the bearer token's prefix
+	// is NOT an API-key marker; the API-key strategy then reads
+	// Authorization (requires IsAPIKey to accept it) and otherwise
+	// falls back to X-API-Key.
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	if c.appID != "" {
+		req.Header.Set("X-App-ID", c.appID)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -180,13 +381,50 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		var errResp struct {
-			Error string `json:"error"`
+		// Read the body once into bytes so we can both attempt a
+		// structured decode AND preserve the raw payload for the
+		// caller. Cap at 8KiB — far more than any well-formed error
+		// envelope and bounded enough to not blow up logs.
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		var env struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+			Details string `json:"details"`
 		}
-		if decErr := json.NewDecoder(resp.Body).Decode(&errResp); decErr != nil {
-			errResp.Error = resp.Status
+		msg := ""
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &env) // best-effort
+			msg = firstNonEmptyClientErrorMessage(env.Error, env.Message, env.Details)
 		}
-		return &ClientError{StatusCode: resp.StatusCode, Message: errResp.Error}
+		// On 401 with no App ID set, surface the most-recent
+		// discovery error in the message so the operator can tell
+		// "the server rejected our key" apart from "we never figured
+		// out which App to ask for".
+		if resp.StatusCode == http.StatusUnauthorized && c.apiKey != "" && c.appID == "" {
+			c.appIDMu.Lock()
+			discErr := c.appIDDiscovery
+			c.appIDMu.Unlock()
+			hint := "X-App-ID was not sent (api key set, app id empty)"
+			if discErr != nil {
+				hint += "; manifest discovery error: " + discErr.Error()
+			} else {
+				hint += "; manifest discovery never ran for this request"
+			}
+			if msg != "" {
+				msg = msg + " [" + hint + "]"
+			} else {
+				msg = hint
+			}
+		}
+		return &ClientError{
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			RawBody:    raw,
+			Headers: map[string]string{
+				"Content-Type": resp.Header.Get("Content-Type"),
+				"X-Request-ID": resp.Header.Get("X-Request-ID"),
+			},
+		}
 	}
 
 	if result != nil && resp.StatusCode != http.StatusNoContent {

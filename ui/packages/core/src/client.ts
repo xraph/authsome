@@ -206,13 +206,20 @@ export class AuthClient extends GeneratedClient {
    *
    * The config describes which auth methods are enabled so SDK
    * components can auto-configure without manual props.
+   *
+   * Reads `baseURL` and `fetchFn` directly off the generated parent
+   * class — earlier generator templates kept a `this.config` ref but
+   * the current embedded template stores fields individually, so the
+   * old `(this as any).config.baseURL` shape produced `undefined` and
+   * the URL constructor threw.
    */
   async fetchClientConfig(publishableKey?: string): Promise<ClientConfig> {
-    const url = new URL("/v1/client-config", (this as any).config.baseURL);
+    const baseURL = (this as any).baseURL as string;
+    const fetchFn = ((this as any).fetchFn as typeof globalThis.fetch) ?? globalThis.fetch;
+    const url = new URL("/v1/client-config", baseURL);
     if (publishableKey) {
       url.searchParams.set("key", publishableKey);
     }
-    const fetchFn = (this as any).config.fetch ?? globalThis.fetch;
     const res = await fetchFn(url.toString(), {
       method: "GET",
       headers: { "Content-Type": "application/json" },

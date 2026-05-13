@@ -10,6 +10,7 @@ import (
 	"github.com/xraph/warden"
 	wardenassign "github.com/xraph/warden/assignment"
 	wardenid "github.com/xraph/warden/id"
+	wardenperm "github.com/xraph/warden/permission"
 	wardenrole "github.com/xraph/warden/role"
 )
 
@@ -83,11 +84,18 @@ func (s *WardenStore) GetRole(ctx context.Context, roleID string) (*Role, error)
 }
 
 func (s *WardenStore) GetRoleBySlug(ctx context.Context, appID, slug string) (*Role, error) {
-	wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, slug)
-	if err != nil {
-		return nil, mapWardenError(err)
+	// Warden now requires an explicit namespace path. Authsome roles can live
+	// in the root namespace ("") or in the "platform" namespace (DSL-seeded
+	// platform roles). Try root first for backward compat, then fall back to
+	// "platform" so DSL-created roles are always resolvable without the caller
+	// needing to know the namespace.
+	for _, ns := range []string{"", "platform"} {
+		wr, err := s.engine.Store().GetRoleBySlug(ctx, appID, ns, slug)
+		if err == nil {
+			return FromWardenRole(wr), nil
+		}
 	}
-	return FromWardenRole(wr), nil
+	return nil, ErrRoleNotFound
 }
 
 func (s *WardenStore) UpdateRole(ctx context.Context, r *Role) error {
@@ -141,7 +149,7 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	if err := s.engine.Store().CreatePermission(ctx, wp); err != nil {
 		// Permission may already exist (duplicate name+tenant). Look it up so we
 		// can still attach it to this role — AttachPermission is idempotent.
-		existing, findErr := s.engine.Store().GetPermissionByName(ctx, wp.TenantID, wp.Name)
+		existing, findErr := s.engine.Store().GetPermissionByName(ctx, wp.TenantID, wp.NamespacePath, wp.Name)
 		if findErr != nil || existing == nil {
 			return mapWardenError(err) // Return the original CreatePermission error.
 		}
@@ -149,8 +157,10 @@ func (s *WardenStore) AddPermission(ctx context.Context, p *Permission) error {
 	}
 
 	// Attach the permission to the role (idempotent — safe to call even if
-	// the link already exists).
-	if err := s.engine.Store().AttachPermission(ctx, roleID, wp.ID); err != nil {
+	// the link already exists). Warden's role-permission junction now uses
+	// natural keys (NamespacePath + Name) instead of permission IDs.
+	ref := wardenperm.Ref{NamespacePath: wp.NamespacePath, Name: wp.Name}
+	if err := s.engine.Store().AttachPermission(ctx, roleID, ref); err != nil {
 		return mapWardenError(err)
 	}
 
@@ -177,19 +187,14 @@ func (s *WardenStore) ListRolePermissions(ctx context.Context, roleID string) ([
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
 
-	// ListRolePermissions returns permission IDs, not full permission objects.
-	permIDs, err := s.engine.Store().ListRolePermissions(ctx, wRoleID)
+	// Warden's ListRolePermissions returns full Permission records now.
+	wperms, err := s.engine.Store().ListRolePermissions(ctx, wRoleID)
 	if err != nil {
 		return nil, mapWardenError(err)
 	}
 
-	perms := make([]*Permission, 0, len(permIDs))
-	for _, pid := range permIDs {
-		wp, err := s.engine.Store().GetPermission(ctx, pid)
-		if err != nil {
-			// Skip permissions that cannot be loaded (deleted concurrently, etc.).
-			continue
-		}
+	perms := make([]*Permission, 0, len(wperms))
+	for _, wp := range wperms {
 		perms = append(perms, FromWardenPermission(wp, roleID))
 	}
 	return perms, nil
@@ -254,7 +259,10 @@ func (s *WardenStore) ListUserRolesForApp(ctx context.Context, appID, userID str
 }
 
 func (s *WardenStore) listUserRolesWithTenant(ctx context.Context, tenantID, userID string) ([]*Role, error) {
-	roleIDs, err := s.engine.Store().ListRolesForSubject(ctx, tenantID, "user", userID)
+	// Pass nil namespacePaths → returns roles across every namespace in the
+	// tenant, which matches the previous "all roles for this subject"
+	// semantics.
+	roleIDs, err := s.engine.Store().ListRolesForSubject(ctx, tenantID, nil, "user", userID)
 	if err != nil {
 		return nil, mapWardenError(err)
 	}
@@ -291,7 +299,13 @@ func (s *WardenStore) GetRoleChildren(ctx context.Context, roleID string) ([]*Ro
 	if err != nil {
 		return nil, fmt.Errorf("rbac: invalid role id %q: %w", roleID, err)
 	}
-	children, err := s.engine.Store().ListChildRoles(ctx, wid)
+	// ListChildRoles is now keyed by (tenantID, parentSlug). Look the
+	// parent role up first to translate the ID we hold into those keys.
+	parent, err := s.engine.Store().GetRole(ctx, wid)
+	if err != nil {
+		return nil, mapWardenError(err)
+	}
+	children, err := s.engine.Store().ListChildRoles(ctx, parent.TenantID, parent.Slug)
 	if err != nil {
 		return nil, mapWardenError(err)
 	}
@@ -307,6 +321,10 @@ func (s *WardenStore) GetRoleChildren(ctx context.Context, roleID string) ([]*Ro
 // ──────────────────────────────────────────────────
 
 func (s *WardenStore) HasPermission(ctx context.Context, userID, action, resource string) (bool, error) {
+	// TODO(service-accounts): when service account RBAC is added, this method needs to
+	// accept a principal kind parameter and route service account permission checks
+	// to a warden.SubjectServiceAccount (or similar) subject kind rather than
+	// warden.SubjectUser. For now, service accounts use API-key-level scopes only.
 	result, err := s.engine.Check(ctx, &warden.CheckRequest{
 		Subject:  warden.Subject{Kind: warden.SubjectUser, ID: userID},
 		Action:   warden.Action{Name: action},

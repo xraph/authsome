@@ -53,6 +53,11 @@ var publicOperations = map[string]bool{
 	"forgotPassword": true,
 	"resetPassword":  true,
 	"verifyEmail":    true,
+	// Resend the verification link to a possibly-unauthenticated user
+	// who can't sign in until verified. Endpoint always returns 200
+	// regardless of whether the email is registered, preserving the
+	// enumeration-resistance contract.
+	"resendEmailVerification": true,
 
 	// Well-known / health
 	"getManifest": true,

@@ -2,11 +2,30 @@
 
 import type {
   ACSRequest,
+  AdminAppResponse,
+  AdminCatalogProvider,
+  AdminCatalogResponse,
+  AdminCreateConnectionResponse,
+  AdminDeleteAppRequest,
+  AdminDeleteConnectionResponse,
+  AdminDeleteProviderResponse,
+  AdminDeleteServiceAccountRequest,
   AdminDeleteUserRequest,
+  AdminGetServiceAccountRequest,
   AdminGetUserRequest,
   AdminImpersonateRequest,
+  AdminListConnectionsResponse,
   AdminListOrgsRequest,
+  AdminListProvidersResponse,
+  AdminListServiceAccountsRequest,
   AdminListUsersRequest,
+  AdminPlatformOwnerResponse,
+  AdminProvider,
+  AdminProviderResponse,
+  AdminRevokePlatformOwnerRequest,
+  AdminServiceAccountAPIKeyResponse,
+  AdminServiceAccountListResponse,
+  AdminServiceAccountResponse,
   AdminStatsRequest,
   AdminStatsResponse,
   AdminStopImpersonationRequest,
@@ -14,16 +33,22 @@ import type {
   AdminUserListResponse,
   AuthMethod,
   AuthResponse,
+  AuthorizeRequest,
   BulkError,
   BulkImportResult,
   BulkRevokeSessionsRequest,
   BulkRevokeSessionsResponse,
   CallbackRequest,
   CallbackResponse,
+  CancelSubscriptionRequest,
   ChallengeRequest,
   ChallengeResponse,
+  ChangePlanRequest,
+  CheckEntitlementRequest,
   CheckSlugRequest,
   ClientConfigBranding,
+  ClientConfigCaptcha,
+  ClientConfigEmailVerification,
   ClientConfigFieldValidation,
   ClientConfigMFA,
   ClientConfigResponse,
@@ -36,14 +61,23 @@ import type {
   ClientConfigToggle,
   CloneEnvironmentResponse,
   Config,
+  Connection,
+  Consent,
+  CouponResponse,
+  CreateClientResponse,
+  CreateCouponRequest,
   CreateKeyRequest,
   CreateKeyResponse,
+  CreatePlanRequest,
+  CreateSubscriptionRequest,
   CredentialInfo,
   Definition,
   DefinitionGroup,
   DeleteAccountRequest,
   DeleteAppClientConfigRequest,
   DeleteAppSessionConfigRequest,
+  DeleteClientRequest,
+  DeleteCouponRequest,
   DeleteDeviceRequest,
   DeleteOrgRequest,
   DeleteRequest,
@@ -52,44 +86,72 @@ import type {
   DeleteTeamRequest,
   DeleteWebhookRequest,
   Device,
+  DeviceAuthRequest,
+  DeviceAuthResponse,
+  DeviceCompleteRequest,
+  DeviceCompleteResponse,
   DeviceListResponse,
   DisableRequest,
   DisableResponse,
+  DiscoveryRequest,
+  DiscoveryResponse,
+  Email,
   EnrollRequest,
   EnrollResponse,
+  EntitlementResponse,
   Environment,
   EnvironmentListResponse,
   EnvironmentSettingsResponse,
   ExportDataRequest,
+  FeatureInput,
   ForgotPasswordResponse,
+  GetActiveSubRequest,
   GetAppClientConfigRequest,
   GetAppSessionConfigRequest,
   GetClientConfigRequest,
   GetDeviceRequest,
+  GetInvoiceRequest,
   GetMeRequest,
   GetOrgRequest,
+  GetPlanRequest,
   GetTeamRequest,
   GetWebhookRequest,
+  GroupRef,
+  GroupResource,
   HealthResponse,
+  IntrospectResponse,
+  IntrospectUser,
   Invitation,
   InvitationListResponse,
+  InvoiceResponse,
   KeyListItem,
   ListAuthMethodsRequest,
   ListAuthMethodsResponse,
+  ListClientsRequest,
+  ListClientsResponse,
+  ListConsentsRequest,
+  ListCouponsRequest,
+  ListCouponsResponse,
   ListDefinitionsResponse,
   ListDevicesRequest,
   ListEnvironmentsRequest,
   ListInvitationsRequest,
+  ListInvoicesRequest,
+  ListInvoicesResponse,
   ListKeysRequest,
   ListKeysResponse,
   ListMembersRequest,
   ListNamespaceDefinitionsRequest,
   ListOrgsRequest,
+  ListPlansRequest,
+  ListPlansResponse,
   ListRequest,
   ListResponse,
   ListRolesRequest,
   ListSessionsRequest,
   ListSettingsDefinitionsRequest,
+  ListSubscriptionsRequest,
+  ListSubscriptionsResponse,
   ListTeamsRequest,
   ListWebhooksRequest,
   LoginBeginRequest,
@@ -98,14 +160,21 @@ import type {
   LoginFinishResponse,
   LoginRequest,
   LoginResponse,
+  MarkInvoicePaidRequest,
   Member,
   MemberListResponse,
+  MemberRef,
+  Meta,
+  Name,
+  OAuth2Client,
   Object,
   ObjectFieldDef,
   OrgListResponse,
   Organization,
   Permission,
   PermissionListResponse,
+  PlanIDRequest,
+  PlanResponse,
   RecoveryRegenerateRequest,
   RecoveryRegenerateResponse,
   RecoveryVerifyRequest,
@@ -120,7 +189,9 @@ import type {
   ResolvedSetting,
   ResolvedSettingResponse,
   ResolvedSettingsResponse,
+  Response,
   RevokeKeyRequest,
+  RevokeRequest,
   RevokeSessionRequest,
   Role,
   RoleListResponse,
@@ -140,15 +211,24 @@ import type {
   StartRequest,
   StartResponse,
   StatusResponse,
+  SubIDRequest,
+  SwitchOrgResponse,
   Team,
   TeamListResponse,
+  TokenRequest,
   TokenResponse,
   TrustDeviceRequest,
   UIMetadata,
   UnenforceSettingRequest,
   UnlinkAuthMethodRequest,
   UnlinkAuthMethodResponse,
+  UsageItemResponse,
+  UsageSummaryRequest,
+  UsageSummaryResponse,
   User,
+  UserInfo,
+  UserInfoRequest,
+  UserResource,
   UserRoleListResponse,
   Validation,
   VerifyMFARequest,
@@ -156,27 +236,59 @@ import type {
   VerifyRequest,
   VerifyResponse,
   VisibilityCondition,
+  VoidInvoiceRequest,
   Webhook,
   WebhookListResponse,
+  scimGroupPathParam,
+  scimUserPathParam,
+  ScimCreateGroupRequest,
+  ScimReplaceGroupRequest,
+  ScimPatchGroupRequest,
+  ScimDeleteGroupRequest,
+  ScimCreateUserRequest,
+  ScimReplaceUserRequest,
+  ScimPatchUserRequest,
+  ScimDeleteUserRequest,
+  AdminCreateAppRequest,
   SetAppClientConfigRequest,
   SetAppSessionConfigRequest,
   AdminBulkRevokeSessionsRequest,
   AdminBulkImportUsersRequest,
+  CreateOAuth2ClientRequest,
+  DeleteOAuth2ClientRequest,
+  AdminGrantPlatformOwnerRequest,
+  AdminCreateServiceAccountRequest,
+  AdminCreateServiceAccountAPIKeyRequest,
   EnforceSettingRequest,
   SetSettingRequest,
+  SocialAdminUpsertProviderRequest,
+  SsoAdminCreateConnectionRequest,
+  SsoAdminUpdateConnectionRequest,
+  AdminCreateUserRequest,
+  AdminUpdateUserRequest,
   AdminBanUserRequest,
+  CreateBillingPlanRequest,
+  ActivateBillingPlanRequest,
+  ArchiveBillingPlanRequest,
+  ChangeSubscriptionPlanRequest,
+  PauseSubscriptionRequest,
+  ResumeSubscriptionRequest,
   ChangePasswordRequest,
+  GrantConsentRequest,
+  RevokeConsentRequest,
   CreateEnvironmentRequest,
   UpdateEnvironmentRequest,
   CloneEnvironmentRequest,
   UpdateEnvironmentSettingsRequest,
   ForgotPasswordRequest,
+  IntrospectTokenRequest,
   CreateAPIKeyRequest,
   RevokeAPIKeyRequest,
   SendMagicLinkRequest,
   VerifyMagicLinkRequest,
   UpdateMeRequest,
   DeleteMeRequest,
+  SwitchOrgRequest,
   ChallengeMFARequest,
   EnrollMFARequest,
   DisableMFARequest,
@@ -184,6 +296,10 @@ import type {
   VerifyRecoveryCodeRequest,
   SendSMSCodeRequest,
   VerifySMSCodeRequest,
+  Oauth2DeviceAuthorizeRequest,
+  Oauth2DeviceCompleteRequest,
+  Oauth2RevokeRequest,
+  Oauth2TokenRequest,
   CreateOrganizationRequest,
   AcceptInvitationRequest,
   DeclineInvitationRequest,
@@ -199,6 +315,8 @@ import type {
   PasskeyRegisterBeginRequest,
   PasskeyRegisterFinishRequest,
   DeletePasskeyRequest,
+  PhoneAuthStartRequest,
+  PhoneAuthVerifyRequest,
   RefreshRequest,
   ResetPasswordRequest,
   AuthsomeCreateRoleRequest,
@@ -213,6 +331,7 @@ import type {
   SsoCallbackRequest,
   StartSSOLoginRequest,
   VerifyEmailRequest,
+  ResendEmailVerificationRequest,
   CreateWebhookRequest,
   UpdateWebhookRequest,
 } from './api-types';
@@ -220,17 +339,38 @@ import type {
 export interface AuthClientConfig {
   /** Base URL of the AuthSome API (e.g., "https://api.example.com") */
   baseURL: string;
+  /**
+   * Publishable key (`pk_live_*` / `pk_test_*` / `pk_stg_*`) sent on every
+   * request as the X-Publishable-Key header. The server resolves this to
+   * the owning App on the public-auth path (signup, signin, forgot-
+   * password, resend-verification), so frontends never need to know — or
+   * send — the App's UUID. Without it, those endpoints reject with 400
+   * "app context required".
+   */
+  publishableKey?: string;
   /** Optional custom fetch implementation */
   fetch?: typeof globalThis.fetch;
 }
 
 export class AuthClient {
   private baseURL: string;
+  private publishableKey: string | undefined;
   private fetchFn: typeof globalThis.fetch;
 
-  constructor(config: AuthClientConfig | Pick<{ baseURL: string; fetch?: typeof globalThis.fetch }, 'baseURL' | 'fetch'>) {
+  constructor(config: AuthClientConfig | Pick<{ baseURL: string; publishableKey?: string; fetch?: typeof globalThis.fetch }, 'baseURL' | 'publishableKey' | 'fetch'>) {
     this.baseURL = config.baseURL.replace(/\/+$/, '');
+    this.publishableKey = (config as { publishableKey?: string }).publishableKey;
     this.fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis);
+  }
+
+  /** Set the publishable key sent on every request as X-Publishable-Key. */
+  setPublishableKey(key: string | undefined): void {
+    this.publishableKey = key;
+  }
+
+  /** Get the current publishable key. */
+  getPublishableKey(): string | undefined {
+    return this.publishableKey;
   }
 
   // ──────────────────────────────────────────────────
@@ -260,6 +400,258 @@ export class AuthClient {
       'GET',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * OpenID Connect Discovery
+   * GET /.well-known/openid-configuration
+   */
+  async oidcDiscovery(token: string): Promise<DiscoveryResponse> {
+    const path = "/.well-known/openid-configuration";
+    return this.request<DiscoveryResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * List SCIM Groups
+   * GET /scim/v2/Groups
+   */
+  async scimListGroups(token: string): Promise<ListResponse> {
+    const path = "/scim/v2/Groups";
+    return this.request<ListResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create SCIM Group
+   * POST /scim/v2/Groups
+   */
+  async scimCreateGroup(body: ScimCreateGroupRequest, token: string): Promise<GroupResource> {
+    const path = "/scim/v2/Groups";
+    return this.request<GroupResource>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get SCIM Group
+   * GET /scim/v2/Groups/{groupId}
+   */
+  async scimGetGroup(groupId: string, token: string): Promise<GroupResource> {
+    const path = `/scim/v2/Groups/${groupId}`;
+    return this.request<GroupResource>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Replace SCIM Group
+   * PUT /scim/v2/Groups/{groupId}
+   */
+  async scimReplaceGroup(groupId: string, body: ScimReplaceGroupRequest, token: string): Promise<GroupResource> {
+    const path = `/scim/v2/Groups/${groupId}`;
+    return this.request<GroupResource>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Patch SCIM Group
+   * PATCH /scim/v2/Groups/{groupId}
+   */
+  async scimPatchGroup(groupId: string, body: ScimPatchGroupRequest, token: string): Promise<GroupResource> {
+    const path = `/scim/v2/Groups/${groupId}`;
+    return this.request<GroupResource>(
+      'PATCH',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete SCIM Group
+   * DELETE /scim/v2/Groups/{groupId}
+   */
+  async scimDeleteGroup(groupId: string, body: ScimDeleteGroupRequest, token: string): Promise<Object> {
+    const path = `/scim/v2/Groups/${groupId}`;
+    return this.request<Object>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * SCIM Resource Types
+   * GET /scim/v2/ResourceTypes
+   */
+  async scimResourceTypes(token: string): Promise<Object> {
+    const path = "/scim/v2/ResourceTypes";
+    return this.request<Object>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * SCIM Schemas
+   * GET /scim/v2/Schemas
+   */
+  async scimSchemas(token: string): Promise<Object> {
+    const path = "/scim/v2/Schemas";
+    return this.request<Object>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * SCIM Service Provider Configuration
+   * GET /scim/v2/ServiceProviderConfig
+   */
+  async scimServiceProviderConfig(token: string): Promise<Object> {
+    const path = "/scim/v2/ServiceProviderConfig";
+    return this.request<Object>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * List SCIM Users
+   * GET /scim/v2/Users
+   */
+  async scimListUsers(token: string): Promise<ListResponse> {
+    const path = "/scim/v2/Users";
+    return this.request<ListResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create SCIM User
+   * POST /scim/v2/Users
+   */
+  async scimCreateUser(body: ScimCreateUserRequest, token: string): Promise<UserResource> {
+    const path = "/scim/v2/Users";
+    return this.request<UserResource>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get SCIM User
+   * GET /scim/v2/Users/{userId}
+   */
+  async scimGetUser(userId: string, token: string): Promise<UserResource> {
+    const path = `/scim/v2/Users/${userId}`;
+    return this.request<UserResource>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Replace SCIM User
+   * PUT /scim/v2/Users/{userId}
+   */
+  async scimReplaceUser(userId: string, body: ScimReplaceUserRequest, token: string): Promise<UserResource> {
+    const path = `/scim/v2/Users/${userId}`;
+    return this.request<UserResource>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Patch SCIM User
+   * PATCH /scim/v2/Users/{userId}
+   */
+  async scimPatchUser(userId: string, body: ScimPatchUserRequest, token: string): Promise<UserResource> {
+    const path = `/scim/v2/Users/${userId}`;
+    return this.request<UserResource>(
+      'PATCH',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete SCIM User
+   * DELETE /scim/v2/Users/{userId}
+   */
+  async scimDeleteUser(userId: string, body: ScimDeleteUserRequest, token: string): Promise<Object> {
+    const path = `/scim/v2/Users/${userId}`;
+    return this.request<Object>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Create application (admin)
+   * POST /v1/admin/apps
+   */
+  async adminCreateApp(body: AdminCreateAppRequest, token: string): Promise<AdminAppResponse> {
+    const path = "/v1/admin/apps";
+    return this.request<AdminAppResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete application (admin)
+   * DELETE /v1/admin/apps/{appId}
+   */
+  async adminDeleteApp(appId: string, body: AdminDeleteAppRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/admin/apps/${appId}`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
     );
   }
 
@@ -404,15 +796,154 @@ export class AuthClient {
   }
 
   /**
+   * List OAuth2 clients
+   * GET /v1/admin/oauth/clients
+   */
+  async listOAuth2Clients(token: string): Promise<ListClientsResponse> {
+    const path = "/v1/admin/oauth/clients";
+    return this.request<ListClientsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create OAuth2 client
+   * POST /v1/admin/oauth/clients
+   */
+  async createOAuth2Client(body: CreateOAuth2ClientRequest, token: string): Promise<CreateClientResponse> {
+    const path = "/v1/admin/oauth/clients";
+    return this.request<CreateClientResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete OAuth2 client
+   * DELETE /v1/admin/oauth/clients/{clientId}
+   */
+  async deleteOAuth2Client(clientId: string, body: DeleteOAuth2ClientRequest, token: string): Promise<void> {
+    const path = `/v1/admin/oauth/clients/${clientId}`;
+    return this.request<void>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * List organizations (admin)
    * GET /v1/admin/orgs
    */
-  async adminListOrgs(token: string): Promise<OrgListResponse> {
+  async adminListOrgs(): Promise<OrgListResponse> {
     const path = "/v1/admin/orgs";
     return this.request<OrgListResponse>(
       'GET',
       path,
       undefined,
+    );
+  }
+
+  /**
+   * Grant platform-owner role (admin)
+   * POST /v1/admin/platform/owners
+   */
+  async adminGrantPlatformOwner(body: AdminGrantPlatformOwnerRequest, token: string): Promise<AdminPlatformOwnerResponse> {
+    const path = "/v1/admin/platform/owners";
+    return this.request<AdminPlatformOwnerResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Revoke platform-owner role (admin)
+   * DELETE /v1/admin/platform/owners/{userID}
+   */
+  async adminRevokePlatformOwner(userID: string, body: AdminRevokePlatformOwnerRequest, token: string): Promise<AdminPlatformOwnerResponse> {
+    const path = `/v1/admin/platform/owners/${userID}`;
+    return this.request<AdminPlatformOwnerResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * List service accounts (admin)
+   * GET /v1/admin/service-accounts
+   */
+  async adminListServiceAccounts(token: string): Promise<AdminServiceAccountListResponse> {
+    const path = "/v1/admin/service-accounts";
+    return this.request<AdminServiceAccountListResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create service account (admin)
+   * POST /v1/admin/service-accounts
+   */
+  async adminCreateServiceAccount(body: AdminCreateServiceAccountRequest, token: string): Promise<AdminServiceAccountResponse> {
+    const path = "/v1/admin/service-accounts";
+    return this.request<AdminServiceAccountResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get service account (admin)
+   * GET /v1/admin/service-accounts/{serviceAccountId}
+   */
+  async adminGetServiceAccount(serviceAccountId: string, token: string): Promise<AdminServiceAccountResponse> {
+    const path = `/v1/admin/service-accounts/${serviceAccountId}`;
+    return this.request<AdminServiceAccountResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Delete service account (admin)
+   * DELETE /v1/admin/service-accounts/{serviceAccountId}
+   */
+  async adminDeleteServiceAccount(serviceAccountId: string, body: AdminDeleteServiceAccountRequest, token: string): Promise<StatusResponse> {
+    const path = `/v1/admin/service-accounts/${serviceAccountId}`;
+    return this.request<StatusResponse>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Create service account API key (admin)
+   * POST /v1/admin/service-accounts/{serviceAccountId}/api-keys
+   */
+  async adminCreateServiceAccountAPIKey(serviceAccountId: string, body: AdminCreateServiceAccountAPIKeyRequest, token: string): Promise<AdminServiceAccountAPIKeyResponse> {
+    const path = `/v1/admin/service-accounts/${serviceAccountId}/api-keys`;
+    return this.request<AdminServiceAccountAPIKeyResponse>(
+      'POST',
+      path,
+      body,
       token,
     );
   }
@@ -530,6 +1061,144 @@ export class AuthClient {
   }
 
   /**
+   * List social providers (admin)
+   * GET /v1/admin/social/providers
+   */
+  async socialAdminListProviders(app_id: string, token: string): Promise<AdminListProvidersResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = "/v1/admin/social/providers" + (qs ? `?${qs}` : '');
+    return this.request<AdminListProvidersResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * List supported social providers
+   * GET /v1/admin/social/providers/catalog
+   */
+  async socialAdminCatalog(token: string): Promise<AdminCatalogResponse> {
+    const path = "/v1/admin/social/providers/catalog";
+    return this.request<AdminCatalogResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Configure a social provider (admin)
+   * PUT /v1/admin/social/providers/{provider}
+   */
+  async socialAdminUpsertProvider(provider: string, body: SocialAdminUpsertProviderRequest, app_id: string, token: string): Promise<AdminProviderResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = `/v1/admin/social/providers/${provider}` + (qs ? `?${qs}` : '');
+    return this.request<AdminProviderResponse>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete a social provider (admin)
+   * DELETE /v1/admin/social/providers/{provider}
+   */
+  async socialAdminDeleteProvider(provider: string, app_id: string, token: string): Promise<AdminDeleteProviderResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = `/v1/admin/social/providers/${provider}` + (qs ? `?${qs}` : '');
+    return this.request<AdminDeleteProviderResponse>(
+      'DELETE',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * List SSO connections for an app (admin)
+   * GET /v1/admin/sso/connections
+   */
+  async ssoAdminListConnections(app_id: string, token: string): Promise<AdminListConnectionsResponse> {
+    const params = new URLSearchParams();
+    if (app_id !== undefined) params.set('app_id', String(app_id));
+    const qs = params.toString();
+    const path = "/v1/admin/sso/connections" + (qs ? `?${qs}` : '');
+    return this.request<AdminListConnectionsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create SSO connection (admin)
+   * POST /v1/admin/sso/connections
+   */
+  async ssoAdminCreateConnection(body: SsoAdminCreateConnectionRequest, token: string): Promise<AdminCreateConnectionResponse> {
+    const path = "/v1/admin/sso/connections";
+    return this.request<AdminCreateConnectionResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get SSO connection (admin)
+   * GET /v1/admin/sso/connections/{connectionId}
+   */
+  async ssoAdminGetConnection(connectionId: string, token: string): Promise<Connection> {
+    const path = `/v1/admin/sso/connections/${connectionId}`;
+    return this.request<Connection>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Update SSO connection (admin)
+   * PUT /v1/admin/sso/connections/{connectionId}
+   */
+  async ssoAdminUpdateConnection(connectionId: string, body: SsoAdminUpdateConnectionRequest, token: string): Promise<Connection> {
+    const path = `/v1/admin/sso/connections/${connectionId}`;
+    return this.request<Connection>(
+      'PUT',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete SSO connection (admin)
+   * DELETE /v1/admin/sso/connections/{connectionId}
+   */
+  async ssoAdminDeleteConnection(connectionId: string, token: string): Promise<AdminDeleteConnectionResponse> {
+    const path = `/v1/admin/sso/connections/${connectionId}`;
+    return this.request<AdminDeleteConnectionResponse>(
+      'DELETE',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
    * Get stats (admin)
    * GET /v1/admin/stats
    */
@@ -558,6 +1227,20 @@ export class AuthClient {
   }
 
   /**
+   * Create user (admin)
+   * POST /v1/admin/users/create
+   */
+  async adminCreateUser(body: AdminCreateUserRequest, token: string): Promise<User> {
+    const path = "/v1/admin/users/create";
+    return this.request<User>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * Get user (admin)
    * GET /v1/admin/users/{userId}
    */
@@ -567,6 +1250,20 @@ export class AuthClient {
       'GET',
       path,
       undefined,
+      token,
+    );
+  }
+
+  /**
+   * Update user (admin)
+   * PATCH /v1/admin/users/{userId}
+   */
+  async adminUpdateUser(userId: string, body: AdminUpdateUserRequest, token: string): Promise<User> {
+    const path = `/v1/admin/users/${userId}`;
+    return this.request<User>(
+      'PATCH',
+      path,
+      body,
       token,
     );
   }
@@ -614,6 +1311,300 @@ export class AuthClient {
   }
 
   /**
+   * List coupons
+   * GET /v1/billing/coupons
+   */
+  async listCoupons(token: string): Promise<ListCouponsResponse> {
+    const path = "/v1/billing/coupons";
+    return this.request<ListCouponsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create coupon
+   * POST /v1/billing/coupons
+   */
+  async createCoupon(body: CreateCouponRequest, token: string): Promise<CouponResponse> {
+    const path = "/v1/billing/coupons";
+    return this.request<CouponResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Delete coupon
+   * DELETE /v1/billing/coupons/{couponId}
+   */
+  async deleteCoupon(couponId: string, body: DeleteCouponRequest, token: string): Promise<void> {
+    const path = `/v1/billing/coupons/${couponId}`;
+    return this.request<void>(
+      'DELETE',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Check feature entitlement
+   * GET /v1/billing/entitlements/{featureKey}
+   */
+  async checkEntitlement(featureKey: string, token: string): Promise<EntitlementResponse> {
+    const path = `/v1/billing/entitlements/${featureKey}`;
+    return this.request<EntitlementResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * List invoices
+   * GET /v1/billing/invoices
+   */
+  async listInvoices(token: string): Promise<ListInvoicesResponse> {
+    const path = "/v1/billing/invoices";
+    return this.request<ListInvoicesResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Get invoice
+   * GET /v1/billing/invoices/{invoiceId}
+   */
+  async getInvoice(invoiceId: string, token: string): Promise<InvoiceResponse> {
+    const path = `/v1/billing/invoices/${invoiceId}`;
+    return this.request<InvoiceResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Mark invoice as paid
+   * POST /v1/billing/invoices/{invoiceId}/pay
+   */
+  async markInvoicePaid(invoiceId: string, body: MarkInvoicePaidRequest, token: string): Promise<void> {
+    const path = `/v1/billing/invoices/${invoiceId}/pay`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Void an invoice
+   * POST /v1/billing/invoices/{invoiceId}/void
+   */
+  async voidInvoice(invoiceId: string, body: VoidInvoiceRequest, token: string): Promise<void> {
+    const path = `/v1/billing/invoices/${invoiceId}/void`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * List billing plans
+   * GET /v1/billing/plans
+   */
+  async listBillingPlans(token: string): Promise<ListPlansResponse> {
+    const path = "/v1/billing/plans";
+    return this.request<ListPlansResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create billing plan
+   * POST /v1/billing/plans
+   */
+  async createBillingPlan(body: CreateBillingPlanRequest, token: string): Promise<PlanResponse> {
+    const path = "/v1/billing/plans";
+    return this.request<PlanResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get billing plan
+   * GET /v1/billing/plans/{planId}
+   */
+  async getBillingPlan(planId: string, token: string): Promise<PlanResponse> {
+    const path = `/v1/billing/plans/${planId}`;
+    return this.request<PlanResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Activate a billing plan
+   * POST /v1/billing/plans/{planId}/activate
+   */
+  async activateBillingPlan(planId: string, body: ActivateBillingPlanRequest, token: string): Promise<void> {
+    const path = `/v1/billing/plans/${planId}/activate`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Archive a billing plan
+   * POST /v1/billing/plans/{planId}/archive
+   */
+  async archiveBillingPlan(planId: string, body: ArchiveBillingPlanRequest, token: string): Promise<void> {
+    const path = `/v1/billing/plans/${planId}/archive`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * List subscriptions
+   * GET /v1/billing/subscriptions
+   */
+  async listSubscriptions(token: string): Promise<ListSubscriptionsResponse> {
+    const path = "/v1/billing/subscriptions";
+    return this.request<ListSubscriptionsResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Create subscription
+   * POST /v1/billing/subscriptions
+   */
+  async createSubscription(body: CreateSubscriptionRequest, token: string): Promise<Response> {
+    const path = "/v1/billing/subscriptions";
+    return this.request<Response>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get active subscription
+   * GET /v1/billing/subscriptions/active
+   */
+  async getActiveSubscription(token: string): Promise<Response> {
+    const path = "/v1/billing/subscriptions/active";
+    return this.request<Response>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
+   * Cancel subscription
+   * POST /v1/billing/subscriptions/{subId}/cancel
+   */
+  async cancelSubscription(subId: string, body: CancelSubscriptionRequest, token: string): Promise<void> {
+    const path = `/v1/billing/subscriptions/${subId}/cancel`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Change subscription plan
+   * POST /v1/billing/subscriptions/{subId}/change-plan
+   */
+  async changeSubscriptionPlan(subId: string, body: ChangeSubscriptionPlanRequest, token: string): Promise<void> {
+    const path = `/v1/billing/subscriptions/${subId}/change-plan`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Pause subscription
+   * POST /v1/billing/subscriptions/{subId}/pause
+   */
+  async pauseSubscription(subId: string, body: PauseSubscriptionRequest, token: string): Promise<void> {
+    const path = `/v1/billing/subscriptions/${subId}/pause`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Resume subscription
+   * POST /v1/billing/subscriptions/{subId}/resume
+   */
+  async resumeSubscription(subId: string, body: ResumeSubscriptionRequest, token: string): Promise<void> {
+    const path = `/v1/billing/subscriptions/${subId}/resume`;
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * Get usage summary
+   * GET /v1/billing/usage
+   */
+  async getUsageSummary(token: string): Promise<UsageSummaryResponse> {
+    const path = "/v1/billing/usage";
+    return this.request<UsageSummaryResponse>(
+      'GET',
+      path,
+      undefined,
+      token,
+    );
+  }
+
+  /**
    * Change password
    * POST /v1/change-password
    */
@@ -638,6 +1629,45 @@ export class AuthClient {
       path,
       undefined,
       token,
+    );
+  }
+
+  /**
+   * List consents
+   * GET /v1/consent
+   */
+  async listConsents(): Promise<ListResponse> {
+    const path = "/v1/consent";
+    return this.request<ListResponse>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Grant consent
+   * POST /v1/consent/grant
+   */
+  async grantConsent(body: GrantConsentRequest): Promise<Consent> {
+    const path = "/v1/consent/grant";
+    return this.request<Consent>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Revoke consent
+   * POST /v1/consent/revoke
+   */
+  async revokeConsent(body: RevokeConsentRequest): Promise<StatusResponse> {
+    const path = "/v1/consent/revoke";
+    return this.request<StatusResponse>(
+      'POST',
+      path,
+      body,
     );
   }
 
@@ -850,6 +1880,19 @@ export class AuthClient {
   }
 
   /**
+   * Introspect token
+   * POST /v1/introspect
+   */
+  async introspectToken(body: IntrospectTokenRequest): Promise<IntrospectResponse> {
+    const path = "/v1/introspect";
+    return this.request<IntrospectResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
    * List API keys
    * GET /v1/keys
    */
@@ -1002,6 +2045,20 @@ export class AuthClient {
   }
 
   /**
+   * Switch active organization
+   * POST /v1/me/switch-org
+   */
+  async switchOrg(body: SwitchOrgRequest, token: string): Promise<SwitchOrgResponse> {
+    const path = "/v1/me/switch-org";
+    return this.request<SwitchOrgResponse>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
    * MFA challenge
    * POST /v1/mfa/challenge
    */
@@ -1107,6 +2164,86 @@ export class AuthClient {
       'POST',
       path,
       body,
+    );
+  }
+
+  /**
+   * OAuth2 Authorization
+   * GET /v1/oauth/authorize
+   */
+  async oauth2Authorize(): Promise<void> {
+    const path = "/v1/oauth/authorize";
+    return this.request<void>(
+      'GET',
+      path,
+      undefined,
+    );
+  }
+
+  /**
+   * Device Authorization
+   * POST /v1/oauth/device/authorize
+   */
+  async oauth2DeviceAuthorize(body: Oauth2DeviceAuthorizeRequest): Promise<DeviceAuthResponse> {
+    const path = "/v1/oauth/device/authorize";
+    return this.request<DeviceAuthResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Complete device authorization
+   * POST /v1/oauth/device/complete
+   */
+  async oauth2DeviceComplete(body: Oauth2DeviceCompleteRequest): Promise<DeviceCompleteResponse> {
+    const path = "/v1/oauth/device/complete";
+    return this.request<DeviceCompleteResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Revoke token
+   * POST /v1/oauth/revoke
+   */
+  async oauth2Revoke(body: Oauth2RevokeRequest, token: string): Promise<void> {
+    const path = "/v1/oauth/revoke";
+    return this.request<void>(
+      'POST',
+      path,
+      body,
+      token,
+    );
+  }
+
+  /**
+   * OAuth2 Token
+   * POST /v1/oauth/token
+   */
+  async oauth2Token(body: Oauth2TokenRequest): Promise<TokenResponse> {
+    const path = "/v1/oauth/token";
+    return this.request<TokenResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * OIDC UserInfo
+   * GET /v1/oauth/userinfo
+   */
+  async oauth2UserInfo(token: string): Promise<UserInfo> {
+    const path = "/v1/oauth/userinfo";
+    return this.request<UserInfo>(
+      'GET',
+      path,
+      undefined,
+      token,
     );
   }
 
@@ -1378,10 +2515,10 @@ export class AuthClient {
 
   /**
    * List passkeys
-   * GET /v1/passkeys/
+   * GET /v1/passkeys
    */
   async listPasskeys(token: string): Promise<ListResponse> {
-    const path = "/v1/passkeys/";
+    const path = "/v1/passkeys";
     return this.request<ListResponse>(
       'GET',
       path,
@@ -1455,6 +2592,32 @@ export class AuthClient {
       path,
       body,
       token,
+    );
+  }
+
+  /**
+   * Start phone authentication
+   * POST /v1/phone/start
+   */
+  async phoneAuthStart(body: PhoneAuthStartRequest): Promise<StartResponse> {
+    const path = "/v1/phone/start";
+    return this.request<StartResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
+   * Verify phone OTP
+   * POST /v1/phone/verify
+   */
+  async phoneAuthVerify(body: PhoneAuthVerifyRequest): Promise<VerifyResponse> {
+    const path = "/v1/phone/verify";
+    return this.request<VerifyResponse>(
+      'POST',
+      path,
+      body,
     );
   }
 
@@ -1785,6 +2948,19 @@ export class AuthClient {
   }
 
   /**
+   * Resend email verification
+   * POST /v1/verify-email/resend
+   */
+  async resendEmailVerification(body: ResendEmailVerificationRequest): Promise<StatusResponse> {
+    const path = "/v1/verify-email/resend";
+    return this.request<StatusResponse>(
+      'POST',
+      path,
+      body,
+    );
+  }
+
+  /**
    * List webhooks
    * GET /v1/webhooks
    */
@@ -1873,6 +3049,9 @@ export class AuthClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    if (this.publishableKey) {
+      headers['X-Publishable-Key'] = this.publishableKey;
+    }
 
     const response = await this.fetchFn(`${this.baseURL}${path}`, {
       method,
@@ -1881,7 +3060,7 @@ export class AuthClient {
     });
 
     if (!response.ok) {
-      let apiError: { error?: string; code?: number } | undefined;
+      let apiError: { error?: string; code?: number; type?: string; [k: string]: unknown } | undefined;
       try {
         apiError = await response.json();
       } catch {
@@ -1890,6 +3069,8 @@ export class AuthClient {
       throw new AuthClientError(
         apiError?.error ?? `Request failed with status ${response.status}`,
         apiError?.code ?? response.status,
+        apiError?.type,
+        apiError, // full decoded body so callers can read extras like mfa_ticket / available_methods
       );
     }
 
@@ -1903,11 +3084,24 @@ export class AuthClient {
 
 export class AuthClientError extends Error {
   code?: number;
+  // Stable string error code from the backend envelope (e.g.
+  // "email_not_verified", "captcha_required", "mfa_required"). Lets
+  // the UI branch on specific failure modes instead of pattern-
+  // matching on the human-readable message.
+  type?: string;
+  // Full decoded JSON body when the response body was JSON. Lets
+  // callers read tagged extras the envelope carries beyond
+  // {error, code, type} — e.g. mfa_ticket and available_methods on
+  // a 403 with type:"mfa_required". Undefined when the body wasn't
+  // JSON.
+  details?: Record<string, unknown>;
 
-  constructor(message: string, code?: number) {
+  constructor(message: string, code?: number, type?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = 'AuthClientError';
     this.code = code;
+    this.type = type;
+    this.details = details;
   }
 }
 

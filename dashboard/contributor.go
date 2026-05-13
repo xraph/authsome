@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -9,11 +10,14 @@ import (
 
 	"github.com/a-h/templ"
 
+	log "github.com/xraph/go-utils/log"
+
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/dashboard/components"
 	"github.com/xraph/authsome/dashboard/pages"
@@ -22,6 +26,7 @@ import (
 	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
 	"github.com/xraph/authsome/rbac"
 	"github.com/xraph/authsome/session"
@@ -44,9 +49,17 @@ type Contributor struct {
 	engine     *authsome.Engine
 	plugins    []plugin.Plugin
 	pageRoutes map[string]bool // core + plugin page routes for URL parsing
+	audit      *Auditor
 }
 
 // New creates a new authsome dashboard contributor.
+//
+// Side effect: initialises the process-wide HMAC nonce signer used by
+// GenerateScopedNonce / ConsumeScopedNonce. The secret is derived from the
+// engine via Engine.NonceSecret(). If no secret is available (no HMAC JWT
+// configured and AUTHSOME_DASHBOARD_NONCE_SECRET unset), a random per-process
+// secret is generated and a warning is logged — scoped nonces still work
+// locally but will not survive a restart and are not shared across replicas.
 func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plugin.Plugin) *Contributor {
 	c := &Contributor{
 		manifest: manifest,
@@ -54,7 +67,47 @@ func New(manifest *contributor.Manifest, engine *authsome.Engine, plugins []plug
 		plugins:  plugins,
 	}
 	c.pageRoutes = c.buildPageRoutes()
+	if engine != nil {
+		c.audit = NewAuditor(engine.Chronicle())
+	} else {
+		c.audit = NewAuditor(nil)
+	}
+
+	initNonceSignerFromEngine(engine)
+
 	return c
+}
+
+// initNonceSignerFromEngine resolves a signing secret from the engine and
+// installs the dashboard's scoped-nonce signer. It never panics or aborts
+// startup; on misconfiguration it logs a warning and falls back to a
+// process-random secret so the dashboard remains functional in dev.
+func initNonceSignerFromEngine(engine *authsome.Engine) {
+	if engine == nil {
+		return
+	}
+	logger := engine.Logger()
+	secret := engine.NonceSecret()
+	if len(secret) < 16 {
+		fallback := make([]byte, 32)
+		if _, err := rand.Read(fallback); err != nil {
+			if logger != nil {
+				logger.Warn("authsome dashboard: scoped-nonce signer unavailable (random fallback failed)",
+					log.String("error", err.Error()),
+				)
+			}
+			return
+		}
+		if logger != nil {
+			logger.Warn("authsome dashboard: nonce signer using random per-process secret; set AUTHSOME_DASHBOARD_NONCE_SECRET or configure an HMAC JWT key for stable signing across restarts and replicas")
+		}
+		secret = fallback
+	}
+	if err := InitNonceSigner(secret); err != nil && logger != nil {
+		logger.Warn("authsome dashboard: scoped-nonce signer init failed",
+			log.String("error", err.Error()),
+		)
+	}
 }
 
 // buildPageRoutes merges core knownPageRoutes with routes contributed by
@@ -129,11 +182,18 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 		_, _, pageRoute = c.parseAppEnvRoute(route)
 	}
 
-	// If no app/env, redirect to default app/env URL.
+	// If no app/env, redirect to default app/env URL. Use the consumer-supplied
+	// PageBase so links resolve correctly whether authsome is mounted under
+	// /ext/authsome (local) or /remote/authsome (discovered remote).
 	if appSlug == "" || envSlug == "" {
 		defaultApp, defaultEnv := c.resolveDefaults(ctx)
-		redirectURL := fmt.Sprintf("%s/ext/authsome/pages/%s/%s%s",
-			params.BasePath, defaultApp.Slug, defaultEnv.Slug, route)
+		pageBase := params.PageBase
+		if pageBase == "" {
+			pageBase = params.BasePath + "/ext/authsome/pages"
+		}
+
+		redirectURL := fmt.Sprintf("%s/%s/%s%s",
+			pageBase, defaultApp.Slug, defaultEnv.Slug, route)
 		return htmxRedirect(redirectURL), nil
 	}
 
@@ -159,7 +219,21 @@ func (c *Contributor) RenderPage(ctx context.Context, route string, params contr
 	}
 
 	// Wrap the page component with the context script for HTMX nav link rewriting.
-	return withContextScript(comp, appSlug, envSlug, c.knownRoutesCSV()), nil
+	pagesPrefix := contextPagesPrefix(params)
+
+	return withContextScript(comp, appSlug, envSlug, c.knownRoutesCSV(), pagesPrefix), nil
+}
+
+// contextPagesPrefix returns the URL prefix for authsome pages, used by the htmx
+// interceptor to rewrite bare nav links into app/env-scoped URLs. Falls back to
+// the legacy /ext/authsome/pages/ literal when params.PageBase is unset (older
+// consumers).
+func contextPagesPrefix(params contributor.Params) string {
+	if params.PageBase != "" {
+		return params.PageBase + "/"
+	}
+
+	return "/ext/authsome/pages/"
 }
 
 // renderPageRoute dispatches to the correct page renderer based on the page route.
@@ -228,7 +302,7 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 	case "/roles/detail":
 		return c.renderRoleDetail(ctx, appID, params)
 	case "/apps":
-		return c.renderApps(ctx)
+		return c.renderApps(ctx, params)
 	case "/apps/create":
 		return c.renderAppCreate(ctx, params)
 	default:
@@ -237,9 +311,9 @@ func (c *Contributor) renderPageRoute(ctx context.Context, pageRoute string, app
 }
 
 // withContextScript wraps a page component with the auth context script for HTMX nav rewriting.
-func withContextScript(page templ.Component, appSlug, envSlug, knownRoutesCSV string) templ.Component {
+func withContextScript(page templ.Component, appSlug, envSlug, knownRoutesCSV, pagesPrefix string) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
-		if err := components.ContextScript(appSlug, envSlug, knownRoutesCSV).Render(ctx, w); err != nil {
+		if err := components.ContextScript(appSlug, envSlug, knownRoutesCSV, pagesPrefix).Render(ctx, w); err != nil {
 			return err
 		}
 		return page.Render(ctx, w)
@@ -385,21 +459,31 @@ func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, para
 			// Use a zero admin ID for dashboard actions (bridge handles auth).
 			adminID := userID // placeholder; dashboard is authenticated via middleware
 
+			actorID, _ := middleware.UserIDFrom(ctx)
+
 			switch action {
 			case "ban":
 				reason := params.FormData["reason"]
+				c.audit.Record(ctx, "user.ban", bridge.SeverityWarning,
+					actorID.String(), userID.String(),
+					map[string]string{"reason": reason})
 				if banErr := c.engine.AdminBanUser(ctx, adminID, userID, reason, nil); banErr != nil {
 					actionError = "Failed to ban user: " + banErr.Error()
 				} else {
 					actionSuccess = "User has been banned."
 				}
 			case "unban":
+				c.audit.Record(ctx, "user.unban", bridge.SeverityInfo,
+					actorID.String(), userID.String(), nil)
 				if unbanErr := c.engine.AdminUnbanUser(ctx, adminID, userID); unbanErr != nil {
 					actionError = "Failed to unban user: " + unbanErr.Error()
 				} else {
 					actionSuccess = "User has been unbanned."
 				}
 			case "delete":
+				c.audit.Record(ctx, "user.delete", bridge.SeverityCritical,
+					actorID.String(), userID.String(),
+					map[string]string{"app_id": appID.String()})
 				if delErr := c.engine.AdminDeleteUser(ctx, adminID, userID); delErr != nil {
 					actionError = "Failed to delete user: " + delErr.Error()
 				} else {
@@ -411,6 +495,8 @@ func (c *Contributor) renderUserDetail(ctx context.Context, appID id.AppID, para
 					return pages.UsersPage(users, "", "../users"), nil
 				}
 			case "revoke-sessions":
+				c.audit.Record(ctx, "user.revoke-sessions", bridge.SeverityWarning,
+					actorID.String(), userID.String(), nil)
 				if count, revokeErr := c.engine.AdminBulkRevokeSessions(ctx, adminID, userID); revokeErr != nil {
 					actionError = "Failed to revoke sessions: " + revokeErr.Error()
 				} else {
@@ -606,7 +692,13 @@ func (c *Contributor) renderEnvironmentDetail(ctx context.Context, _ id.AppID, p
 
 	env, err := c.engine.GetEnvironment(ctx, envID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, contributor.ErrPageNotFound
+		}
 		return nil, fmt.Errorf("dashboard: resolve environment: %w", err)
+	}
+	if env == nil {
+		return nil, contributor.ErrPageNotFound
 	}
 
 	// Resolve effective settings: type defaults + per-environment overrides.
@@ -921,13 +1013,19 @@ func (c *Contributor) renderRoleDetail(ctx context.Context, _ id.AppID, params c
 	return pages.RoleDetailPage(data), nil
 }
 
-func (c *Contributor) renderApps(ctx context.Context) (templ.Component, error) {
+func (c *Contributor) renderApps(ctx context.Context, params contributor.Params) (templ.Component, error) {
 	apps, err := c.engine.ListApps(ctx)
 	if err != nil {
 		apps = nil
 	}
 
-	return pages.AppsPage(apps), nil
+	return pages.AppsPage(pages.AppsPageData{
+		Apps:           apps,
+		CurrentAppSlug: AppSlugFromContext(ctx),
+		CurrentEnvSlug: EnvSlugFromContext(ctx),
+		BasePath:       params.BasePath,
+		PageBase:       params.PageBase,
+	}), nil
 }
 
 func (c *Contributor) renderAppCreate(ctx context.Context, params contributor.Params) (templ.Component, error) {

@@ -13,11 +13,46 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/account"
+	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/dashboard/auth"
 	"github.com/xraph/authsome/formconfig"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/user"
 )
+
+// captchaCheck is a small wrapper around middleware.VerifyCaptchaForRequest
+// for the auth-pages flow. Returns (allowed, userMessage). userMessage is
+// empty when allowed=true, and a human-friendly string otherwise — meant to
+// be passed straight to the templ error renderer.
+//
+// This deliberately reuses the JSON-API middleware's verifier and settings
+// resolution so a deployment can configure captcha once at the engine level
+// and have it apply to BOTH the JSON API and the dashboard's HTML forms.
+func (a *authPages) captchaCheck(r *http.Request, action string) (bool, string) {
+	mgr := a.engine.Settings()
+	if mgr == nil {
+		return true, ""
+	}
+	res := middleware.VerifyCaptchaForRequest(r.Context(), middleware.CaptchaOptions{
+		Settings:  mgr,
+		Chronicle: a.engine.Chronicle(),
+		Logger:    a.engine.Logger(),
+	}, r, a.defaultAppID(), action)
+	if res.Allowed {
+		return true, ""
+	}
+	switch res.RejectCode {
+	case "captcha_required":
+		return false, "Please complete the captcha challenge"
+	case "captcha_invalid":
+		return false, "Captcha challenge failed. Please try again."
+	case "captcha_unavailable":
+		return false, "Captcha verification temporarily unavailable. Please try again in a moment."
+	default:
+		return false, "Captcha verification failed"
+	}
+}
 
 // authPages implements dashauth.AuthPageProvider for the authsome extension.
 type authPages struct {
@@ -93,19 +128,26 @@ func forgotPasswordLinks(basePath string) auth.ForgotPasswordPageLinks {
 func (a *authPages) RenderAuthPage(ctx *router.PageContext, pageType dashauth.AuthPageType) (templ.Component, error) {
 	switch pageType {
 	case dashauth.PageLogin:
-		return auth.LoginPage(loginLinks(a.basePath)), nil
+		links := loginLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.LoginPage(links), nil
 	case dashauth.PageRegister:
 		return a.renderRegisterPage(ctx, "", nil, nil)
 	case dashauth.PageForgotPassword:
-		return auth.ForgotPasswordPage(forgotPasswordLinks(a.basePath)), nil
+		links := forgotPasswordLinks(a.basePath)
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+		return auth.ForgotPasswordPage(links), nil
 	default:
 		return nil, nil
 	}
 }
 
 // renderRegisterPage renders either the dynamic or static register page.
-func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) { //nolint:unparam // may receive values in future
+func (a *authPages) renderRegisterPage(ctx *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) {
 	links := registerLinks(a.basePath)
+	if ctx != nil && ctx.ResponseWriter != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+	}
 	appID := a.defaultAppID()
 
 	// Try to load a dynamic form config for this app.
@@ -137,6 +179,7 @@ func (a *authPages) renderRegisterPage(_ *router.PageContext, errorMsg string, v
 		ErrorMsg:  errorMsg,
 		Values:    values,
 		FieldErrs: fieldErrs,
+		CSRFToken: links.CSRFToken,
 	}), nil
 }
 
@@ -171,7 +214,19 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 	links := loginLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.LoginError("Invalid form data", links), nil
+	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		// 303 See Other to GET — fresh token issued; no form state in history.
+		return a.basePath + "/login", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+
+	if allowed, msg := a.captchaCheck(r, "signin"); !allowed {
+		return "", auth.LoginError(msg, links), nil
 	}
 
 	email := r.FormValue("email")
@@ -205,7 +260,7 @@ func (a *authPages) handleLogin(ctx *router.PageContext) (string, templ.Componen
 		return "", auth.LoginError(msg, links), nil
 	}
 
-	setSessionCookie(ctx, sess.Token, isSecureRequest(r))
+	setSessionCookie(ctx, a.engine, sess.Token, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -215,6 +270,16 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 
 	if err := r.ParseForm(); err != nil {
 		comp, _ := a.renderRegisterPage(ctx, "Invalid form data", nil, nil) //nolint:errcheck // best-effort render
+		return "", comp, nil
+	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		// 303 See Other to GET — fresh token issued; no form state in history.
+		return a.basePath + "/register", nil, nil
+	}
+
+	if allowed, msg := a.captchaCheck(r, "signup"); !allowed {
+		comp, _ := a.renderRegisterPage(ctx, msg, nil, nil) //nolint:errcheck // best-effort render
 		return "", comp, nil
 	}
 
@@ -276,7 +341,7 @@ func (a *authPages) handleRegister(ctx *router.PageContext) (string, templ.Compo
 		_ = a.engine.Store().UpdateUser(r.Context(), u) //nolint:errcheck // best-effort
 	}
 
-	setSessionCookie(ctx, sess.Token, isSecureRequest(r))
+	setSessionCookie(ctx, a.engine, sess.Token, isSecureRequest(r))
 
 	return a.basePath + "/", nil, nil
 }
@@ -286,7 +351,19 @@ func (a *authPages) handleForgotPassword(ctx *router.PageContext) (string, templ
 	links := forgotPasswordLinks(a.basePath)
 
 	if err := r.ParseForm(); err != nil {
+		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
 		return "", auth.ForgotPasswordError("Invalid form data", links), nil
+	}
+
+	if !dashboard.VerifyFormCSRFToken(r, r.FormValue(dashboard.FormCSRFFormField)) {
+		// 303 See Other to GET — fresh token issued; no form state in history.
+		return a.basePath + "/forgot-password", nil, nil
+	}
+
+	links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)
+
+	if allowed, msg := a.captchaCheck(r, "forgot_password"); !allowed {
+		return "", auth.ForgotPasswordError(msg, links), nil
 	}
 
 	email := r.FormValue("email")
@@ -311,34 +388,82 @@ func (a *authPages) handleLogout(ctx *router.PageContext) (string, templ.Compone
 		}
 	}
 
-	clearSessionCookie(ctx, isSecureRequest(r))
+	clearSessionCookie(ctx, a.engine, isSecureRequest(r))
 
 	return a.basePath + "/login", nil, nil
 }
 
-// setSessionCookie writes the dashboard auth_token cookie.
-func setSessionCookie(ctx *router.PageContext, token string, secure bool) {
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   secure,
-	})
+// dashboardCookieName is the dashboard's session cookie name. It's a
+// separate cookie from the engine's session_token (which uses the
+// session.cookie_name setting and may be __Host-prefixed); this one is
+// scoped to the dashboard auth flow only.
+const dashboardCookieName = "auth_token"
+
+// setSessionCookie writes the dashboard auth_token cookie. SameSite and
+// HttpOnly come from the cookie-config settings cascade so the dashboard
+// behaves consistently with the engine's session cookie. The __Host- prefix
+// opt-in is also honoured: when SettingCookieUseHostPrefix is true, the
+// cookie name becomes "__Host-auth_token" with Secure forced on and Domain
+// forced empty.
+func setSessionCookie(ctx *router.PageContext, eng *authsome.Engine, token string, secure bool) {
+	c := dashboardCookieTemplate(ctx, eng, secure)
+	c.Value = token
+	http.SetCookie(ctx.ResponseWriter, c)
 }
 
-// clearSessionCookie expires the dashboard auth_token cookie.
-func clearSessionCookie(ctx *router.PageContext, secure bool) {
-	http.SetCookie(ctx.ResponseWriter, &http.Cookie{
-		Name:     "auth_token",
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   secure,
-	})
+// clearSessionCookie expires the dashboard auth_token cookie. Mirrors
+// setSessionCookie's attributes so the browser actually replaces the
+// existing cookie (a different Path/Domain/SameSite would leave the
+// original in place).
+func clearSessionCookie(ctx *router.PageContext, eng *authsome.Engine, secure bool) {
+	c := dashboardCookieTemplate(ctx, eng, secure)
+	c.Value = ""
+	c.MaxAge = -1
+	http.SetCookie(ctx.ResponseWriter, c)
+}
+
+// dashboardCookieTemplate builds the dashboard cookie envelope using the
+// engine's settings cascade. Falls back to safe defaults (SameSite=Lax,
+// HttpOnly=true, Path=/) when the engine isn't fully wired (tests).
+func dashboardCookieTemplate(ctx *router.PageContext, eng *authsome.Engine, secure bool) *http.Cookie {
+	if eng == nil {
+		return &http.Cookie{
+			Name:     dashboardCookieName,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   secure,
+		}
+	}
+	mgr := eng.Settings()
+	if mgr == nil {
+		return &http.Cookie{
+			Name:     dashboardCookieName,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Secure:   secure,
+		}
+	}
+	// Reuse SessionCookieTemplate but force the dashboard-specific name.
+	// SessionCookieTemplate already handles SameSite, HttpOnly, Path, the
+	// __Host- prefix, and Secure-forcing under the prefix toggle.
+	c := authsome.SessionCookieTemplate(ctx.Request.Context(), mgr, "", secure)
+	// Replace the engine's cookie name with the dashboard's, preserving
+	// the __Host- prefix when it's been applied.
+	c.Name = applyHostPrefix(c.Name, dashboardCookieName)
+	return c
+}
+
+// applyHostPrefix transfers the __Host- prefix from a templated name to
+// a dashboard-specific name. If templated is "__Host-authsome_session_token"
+// the dashboard name becomes "__Host-auth_token"; otherwise it stays plain.
+func applyHostPrefix(templated, baseName string) string {
+	const hostPrefix = "__Host-"
+	if strings.HasPrefix(templated, hostPrefix) {
+		return hostPrefix + baseName
+	}
+	return baseName
 }
 
 // authChecker implements dashauth.AuthChecker for the authsome extension.

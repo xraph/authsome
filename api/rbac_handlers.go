@@ -367,15 +367,27 @@ func (a *API) handleUnassignRole(ctx forge.Context, req *UnassignRoleRequest) (*
 	return nil, ctx.JSON(http.StatusOK, resp)
 }
 
-func (a *API) handleListUserRoles(ctx forge.Context, _ *ListUserRolesRequest) (*UserRoleListResponse, error) {
+func (a *API) handleListUserRoles(ctx forge.Context, req *ListUserRolesRequest) (*UserRoleListResponse, error) {
 	userID, err := id.ParseUserID(ctx.Param("userId"))
 	if err != nil {
 		return nil, forge.BadRequest(fmt.Sprintf("invalid user id: %v", err))
 	}
 
-	roles, err := a.engine.ListUserRoles(ctx.Context(), userID)
-	if err != nil {
-		return nil, mapError(err)
+	var roles []*rbac.Role
+	if req != nil && req.AppID != "" {
+		appID, err := id.ParseAppID(req.AppID)
+		if err != nil {
+			return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+		}
+		roles, err = a.engine.ListUserRolesInApp(ctx.Context(), appID, userID)
+		if err != nil {
+			return nil, mapError(err)
+		}
+	} else {
+		roles, err = a.engine.ListUserRoles(ctx.Context(), userID)
+		if err != nil {
+			return nil, mapError(err)
+		}
 	}
 
 	if roles == nil {

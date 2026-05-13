@@ -19,7 +19,9 @@ import {
   type SocialButtonLayout,
 } from "./social-buttons";
 import { handleSocialLogin } from "../lib/social-login";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MailCheck } from "lucide-react";
+import { TurnstileWidget } from "./turnstile-widget";
+import { AuthClientError } from "@authsome/ui-core";
 
 export interface SignInFormComponentProps {
   /** Callback invoked after a successful sign-in. */
@@ -28,6 +30,14 @@ export interface SignInFormComponentProps {
   signUpUrl?: string;
   /** URL to the forgot-password page. Renders a "Forgot password?" link. */
   forgotPasswordUrl?: string;
+  /**
+   * URL to the dedicated email verification view. When set, sign-in attempts
+   * that fail with `email_not_verified` navigate here (with `?email=`
+   * appended) instead of swapping to the inline resend panel. Pair with the
+   * `<SignIn>` composite, which exposes this view at
+   * `${path}/verify-email`.
+   */
+  verifyEmailUrl?: string;
   /** Social/OAuth providers to display below the form. */
   socialProviders?: SocialProvider[];
   /** Callback when a social provider button is clicked. Overrides the built-in popup flow. */
@@ -61,6 +71,7 @@ export function SignInForm({
   onSuccess,
   signUpUrl,
   forgotPasswordUrl,
+  verifyEmailUrl,
   socialProviders: socialProvidersProp,
   onSocialLogin: onSocialLoginProp,
   socialLayout,
@@ -71,7 +82,7 @@ export function SignInForm({
   variant,
   className,
 }: SignInFormComponentProps) {
-  const { signIn, client } = useAuth();
+  const { signIn, client, resendVerification } = useAuth();
   const { config } = useClientConfig();
 
   // Auto-derive social providers from client config when not explicitly provided.
@@ -104,11 +115,21 @@ export function SignInForm({
   const hasSocial =
     socialProviders && socialProviders.length > 0 && onSocialLogin;
 
-  const [step, setStep] = useState<"email" | "password">("email");
+  const [step, setStep] = useState<"email" | "password" | "verify">("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">(
+    "idle",
+  );
+
+  const captchaCfg = config?.captcha;
+  const captchaEnabled =
+    !!captchaCfg?.required &&
+    captchaCfg.provider === "turnstile" &&
+    !!captchaCfg.site_key;
 
   const handleEmailContinue = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -128,9 +149,34 @@ export function SignInForm({
     setIsSubmitting(true);
 
     try {
-      await signIn(email, password);
+      await signIn(
+        email,
+        password,
+        captchaToken ? { captchaToken } : undefined,
+      );
       onSuccess?.();
     } catch (err) {
+      // Surface "email_not_verified" via a dedicated panel, not a generic
+      // error message. When a verifyEmailUrl is provided, navigate the
+      // browser to the dedicated OTP-based verification view (and kick off
+      // a resend in the background so the user has a fresh code on
+      // arrival). Otherwise fall back to the inline resend panel.
+      if (
+        err instanceof AuthClientError &&
+        err.type === "email_not_verified"
+      ) {
+        if (verifyEmailUrl && typeof window !== "undefined") {
+          void resendVerification(email).catch(() => {
+            // Best-effort: the verify view also exposes a Resend button.
+          });
+          const sep = verifyEmailUrl.includes("?") ? "&" : "?";
+          window.location.href =
+            verifyEmailUrl + sep + "email=" + encodeURIComponent(email);
+          return;
+        }
+        setStep("verify");
+        return;
+      }
       setError(
         err instanceof Error
           ? err.message
@@ -138,6 +184,16 @@ export function SignInForm({
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResendStatus("idle");
+    try {
+      await resendVerification(email);
+      setResendStatus("sent");
+    } catch {
+      setResendStatus("error");
     }
   };
 
@@ -200,6 +256,60 @@ export function SignInForm({
               administrator.
             </p>
           )}
+        </div>
+      </AuthCard>
+    );
+  }
+
+  /* ── Verify: account needs email verification ──────── */
+
+  if (step === "verify") {
+    return (
+      <AuthCard
+        title="Verify your email"
+        description={`Your account at ${email} hasn't been verified yet.`}
+        logo={logo}
+        footer={footer}
+        align={align}
+        variant={variant}
+        className={cn(className)}
+      >
+        <div className="grid gap-4">
+          <div className="flex flex-col items-center gap-3 py-2 text-center">
+            <div className="rounded-full bg-muted p-3">
+              <MailCheck className="h-6 w-6 text-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Click the verification link we emailed you, then sign in again.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleResend}
+            disabled={resendStatus === "sent"}
+          >
+            {resendStatus === "sent"
+              ? "Verification email sent"
+              : "Resend verification email"}
+          </Button>
+          {resendStatus === "error" && (
+            <ErrorDisplay error="Could not resend the email. Please try again." />
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setStep("email");
+              setPassword("");
+              setError(null);
+              setResendStatus("idle");
+            }}
+            className="inline-flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Use a different email
+          </button>
         </div>
       </AuthCard>
     );
@@ -326,10 +436,19 @@ export function SignInForm({
             />
           </div>
 
+          {captchaEnabled && captchaCfg?.site_key && (
+            <TurnstileWidget
+              siteKey={captchaCfg.site_key}
+              onToken={setCaptchaToken}
+              onExpire={() => setCaptchaToken(null)}
+              onError={() => setCaptchaToken(null)}
+            />
+          )}
+
           <Button
             type="submit"
             className="w-full"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (captchaEnabled && !captchaToken)}
           >
             {isSubmitting && <LoadingSpinner size="sm" className="mr-2" />}
             Continue

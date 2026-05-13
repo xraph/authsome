@@ -20,7 +20,13 @@ import { Smartphone, KeyRound, ShieldCheck } from "lucide-react";
 type MFAMethod = "totp" | "sms" | "recovery";
 
 export interface MFAChallengeFormStyledProps {
-  enrollmentId: string;
+  /**
+   * @deprecated The MFA consolidation made the enrollment-id irrelevant
+   * to the challenge submission — the AuthManager carries the ticket
+   * internally and looks up the enrollment server-side. Older callers
+   * that still pass this prop are tolerated; the value is ignored.
+   */
+  enrollmentId?: string;
   onSuccess?: () => void;
   /** Optional logo element rendered above the title. */
   logo?: React.ReactNode;
@@ -34,13 +40,15 @@ export interface MFAChallengeFormStyledProps {
 // ── TOTP View ──────────────────────────────────────────
 
 function TOTPView({
-  enrollmentId,
   onSuccess,
 }: {
-  enrollmentId: string;
   onSuccess?: () => void;
 }) {
-  const { submitMFACode } = useAuth();
+  // Use submitMFAChallenge — the post-consolidation entry that
+  // reads the ticket from AuthState rather than receiving an
+  // enrollmentId. submitMFACode is now a deprecated shim and the
+  // component should not depend on it.
+  const { submitMFAChallenge } = useAuth();
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -51,7 +59,7 @@ function TOTPView({
       setError(null);
       setIsSubmitting(true);
       try {
-        await submitMFACode(enrollmentId, otpCode);
+        await submitMFAChallenge(otpCode);
         onSuccess?.();
       } catch (err) {
         const message =
@@ -62,7 +70,7 @@ function TOTPView({
         setIsSubmitting(false);
       }
     },
-    [enrollmentId, isSubmitting, onSuccess, submitMFACode],
+    [isSubmitting, onSuccess, submitMFAChallenge],
   );
 
   return (
@@ -437,7 +445,7 @@ const METHOD_META: Record<MFAMethod, { title: string; description: string }> = {
 };
 
 export function MFAChallengeForm({
-  enrollmentId,
+  enrollmentId: _enrollmentId,
   onSuccess,
   logo,
   className,
@@ -475,7 +483,7 @@ export function MFAChallengeForm({
       {/* key ensures clean state reset when switching methods */}
       <div key={currentMethod}>
         {currentMethod === "totp" && (
-          <TOTPView enrollmentId={enrollmentId} onSuccess={onSuccess} />
+          <TOTPView onSuccess={onSuccess} />
         )}
         {currentMethod === "sms" && <SMSView onSuccess={onSuccess} />}
         {currentMethod === "recovery" && <RecoveryView onSuccess={onSuccess} />}

@@ -225,9 +225,12 @@ export function PasskeyList({
     setIsLoading(true);
 
     try {
-      const { credentials } = await client.listPasskeys(
+      // The codegen collapses multiple Go "ListResponse" structs into one
+      // TS type and the consents-list shape wins. The real passkey
+      // endpoint returns {credentials}; cast to the actual shape here.
+      const { credentials } = (await client.listPasskeys(
         session.session_token,
-      );
+      )) as unknown as { credentials: CredentialInfo[] };
       setCredentials(credentials);
     } catch (err) {
       setError(

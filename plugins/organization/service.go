@@ -28,6 +28,15 @@ func (p *Plugin) CreateOrganization(ctx context.Context, o *organization.Organiz
 	}
 
 	if err := p.store.CreateOrganization(ctx, o); err != nil {
+		if p.logger != nil {
+			p.logger.Error("organization store: create failed",
+				log.String("org_id", o.ID.String()),
+				log.String("app_id", o.AppID.String()),
+				log.String("env_id", o.EnvID.String()),
+				log.String("slug", o.Slug),
+				log.String("error", err.Error()),
+			)
+		}
 		return fmt.Errorf("organization: create organization: %w", err)
 	}
 
@@ -40,6 +49,13 @@ func (p *Plugin) CreateOrganization(ctx context.Context, o *organization.Organiz
 		UpdatedAt: o.UpdatedAt,
 	}
 	if err := p.store.CreateMember(ctx, member); err != nil {
+		if p.logger != nil {
+			p.logger.Error("organization store: add owner member failed",
+				log.String("org_id", o.ID.String()),
+				log.String("user_id", o.CreatedBy.String()),
+				log.String("error", err.Error()),
+			)
+		}
 		return fmt.Errorf("organization: add owner member: %w", err)
 	}
 
@@ -74,9 +90,17 @@ func (p *Plugin) UpdateOrganization(ctx context.Context, o *organization.Organiz
 	return nil
 }
 
-// DeleteOrganization deletes an organization.
+// DeleteOrganization deletes an organization and all of its dependent records
+// (members, teams, invitations) before emitting the AfterOrgDelete hook so
+// other plugins (subscription, SCIM, …) can clean up their own org-scoped data.
+//
+// The cascade is delegated to Store.DeleteOrganizationCascade, which each
+// backend implements with its native transaction primitive (PgTx / SqliteTx /
+// MongoTx) so a midway failure rolls back atomically. EmitAfterOrgDelete only
+// fires once the cascade returns nil, so downstream plugins never see an event
+// for an org that wasn't actually deleted.
 func (p *Plugin) DeleteOrganization(ctx context.Context, orgID id.OrgID) error {
-	if err := p.store.DeleteOrganization(ctx, orgID); err != nil {
+	if err := p.store.DeleteOrganizationCascade(ctx, orgID); err != nil {
 		return fmt.Errorf("organization: delete organization: %w", err)
 	}
 	p.plugins.EmitAfterOrgDelete(ctx, orgID)
@@ -368,6 +392,49 @@ func (p *Plugin) IsOrgSlugAvailable(ctx context.Context, appID id.AppID, slug st
 	return false, nil
 }
 
+// canDeleteOrg returns true when actor is allowed to delete org. The creator
+// (org.CreatedBy) always passes as a convenience — note "creator" is not
+// "owner"; the permission-check path is the canonical authority for non-
+// creator actors. Otherwise the actor must hold the engine-level
+// "org.delete" permission on the "org" resource type.
+//
+// RBAC convention: PermissionChecker.HasPermission's third arg is the
+// resource TYPE (e.g. "org"), not an instance ID. rbac/warden_store.go
+// forwards this directly as warden.Resource.Type, and middleware/rbac.go
+// follows the same shape (e.g. HasPermission(..., "manage", "app")).
+// Passing an instance ID here would mean no admin role grant could ever
+// match.
+func (p *Plugin) canDeleteOrg(ctx context.Context, actor id.UserID, org *organization.Organization) bool {
+	if org == nil {
+		return false
+	}
+	// id.UserID is a typed ULID; treat the zero value as "no actor".
+	var zero id.UserID
+	if actor == zero {
+		return false
+	}
+	if actor == org.CreatedBy {
+		return true
+	}
+	if p.permChecker == nil {
+		return false
+	}
+	ok, err := p.permChecker.HasPermission(ctx, actor, "org.delete", "org")
+	return err == nil && ok
+}
+
+// chronicleOrNil returns the cached chronicle, falling back to the engine's
+// current chronicle (so tests that swap the chronicle via Engine.SetChronicle
+// after OnInit are still observed).
+func (p *Plugin) chronicleOrNil() bridge.Chronicle {
+	if p.engine != nil {
+		if ch := p.engine.Chronicle(); ch != nil {
+			return ch
+		}
+	}
+	return p.chronicle
+}
+
 // ──────────────────────────────────────────────────
 // Internal helpers
 // ──────────────────────────────────────────────────
@@ -393,4 +460,22 @@ func (p *Plugin) resolveAppID(raw string) (id.AppID, error) {
 		return id.ParseAppID(raw)
 	}
 	return id.ParseAppID(p.defaultAppID)
+}
+
+// resolveDefaultEnv looks up the default environment for an app. Used
+// when an org-create call comes in without env_id resolved on the
+// request context (e.g. a client that doesn't pass X-Environment-ID
+// and skipped the EnvironmentMiddleware). Surfaces a non-nil error
+// when the app has no default env configured — the caller should
+// translate that into a 4xx rather than letting the store's NOT NULL
+// constraint blow up with a 500.
+func (p *Plugin) resolveDefaultEnv(ctx context.Context, appID id.AppID) (id.EnvironmentID, error) {
+	env, err := p.store.GetDefaultEnvironment(ctx, appID)
+	if err != nil {
+		return id.EnvironmentID{}, fmt.Errorf("get default env: %w", err)
+	}
+	if env == nil {
+		return id.EnvironmentID{}, fmt.Errorf("app %s has no default environment", appID)
+	}
+	return env.ID, nil
 }

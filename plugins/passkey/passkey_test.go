@@ -2,6 +2,8 @@ package passkey
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -187,6 +189,98 @@ func TestWebAuthnUser_FallbackToEmail(t *testing.T) {
 // ──────────────────────────────────────────────────
 // Credential conversion
 // ──────────────────────────────────────────────────
+
+// ──────────────────────────────────────────────────
+// waForRequest — per-request origin handling
+// ──────────────────────────────────────────────────
+
+func newRequestWithOrigin(origin string) *http.Request {
+	r := httptest.NewRequest(http.MethodPost, "/v1/passkeys/register/finish", nil)
+	if origin != "" {
+		r.Header.Set("Origin", origin)
+	}
+	return r
+}
+
+func TestWaForRequest_LocalhostAcceptsAnyPort(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+	require.NotNil(t, p.wa)
+
+	wa := p.waForRequest(newRequestWithOrigin("http://localhost:3000"))
+	require.NotNil(t, wa)
+	// Must be a different (per-origin) instance, not the base p.wa.
+	assert.NotSame(t, p.wa, wa, "expected a per-origin webauthn instance for localhost dev mode")
+}
+
+func TestWaForRequest_LocalhostMismatchedHostFallsBack(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+	require.NotNil(t, p.wa)
+
+	// Origin host (evil.com) does not match RPID (localhost) — must NOT be
+	// added to RPOrigins. Falls back to the base config.
+	wa := p.waForRequest(newRequestWithOrigin("http://evil.com:3000"))
+	assert.Same(t, p.wa, wa, "evil origins must not produce a new webauthn instance")
+}
+
+func TestWaForRequest_NonLocalhostUnchanged(t *testing.T) {
+	p := New(Config{RPID: "example.com", RPOrigins: []string{"https://example.com"}})
+	require.NotNil(t, p.wa)
+
+	// Even if the request comes from localhost, a production RPID stays strict.
+	wa := p.waForRequest(newRequestWithOrigin("http://localhost:3000"))
+	assert.Same(t, p.wa, wa)
+}
+
+func TestWaForRequest_MissingOriginHeaderFallsBack(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+	require.NotNil(t, p.wa)
+
+	wa := p.waForRequest(newRequestWithOrigin(""))
+	assert.Same(t, p.wa, wa, "missing Origin header should not change webauthn instance")
+}
+
+func TestWaForRequest_NilRequest(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+	require.NotNil(t, p.wa)
+	assert.Same(t, p.wa, p.waForRequest(nil))
+}
+
+func TestWaForRequest_CachesPerOrigin(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+
+	wa1 := p.waForRequest(newRequestWithOrigin("http://localhost:3000"))
+	wa2 := p.waForRequest(newRequestWithOrigin("http://localhost:3000"))
+	assert.Same(t, wa1, wa2, "identical request origins must hit the cache")
+
+	wa3 := p.waForRequest(newRequestWithOrigin("http://localhost:5173"))
+	assert.NotSame(t, wa1, wa3, "different origins should produce different cached instances")
+}
+
+func TestWaForRequest_RefererFallback(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/passkeys/register/finish", nil)
+	r.Header.Set("Referer", "http://localhost:4321/some/path?q=1")
+	wa := p.waForRequest(r)
+	assert.NotSame(t, p.wa, wa, "Referer should be used when Origin is absent")
+}
+
+func TestNew_NonLocalhostDefaultsToHTTPS(t *testing.T) {
+	p := New(Config{RPID: "example.com"})
+	require.Len(t, p.config.RPOrigins, 1)
+	assert.Equal(t, "https://example.com", p.config.RPOrigins[0])
+}
+
+func TestNew_LocalhostLeavesOriginsEmpty(t *testing.T) {
+	p := New(Config{RPID: "localhost"})
+	assert.Empty(t, p.config.RPOrigins, "localhost RPID should not get a static origin default; per-request resolution handles it")
+}
+
+func TestAllowedOrigins_NoSettingsManager(t *testing.T) {
+	p := New(Config{RPID: "example.com", RPOrigins: []string{"https://example.com", "https://example.com"}})
+	got := p.allowedOrigins(context.Background())
+	assert.Equal(t, []string{"https://example.com"}, got, "duplicates must be deduped")
+}
 
 func TestCredential_FieldsPopulated(t *testing.T) {
 	c := &Credential{

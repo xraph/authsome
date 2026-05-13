@@ -62,6 +62,25 @@ func (s *Store) GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix st
 	return fromAPIKeyModel(&m)
 }
 
+// FindByPrefix returns an API key by prefix alone, ignoring app scoping.
+// Used by the introspection endpoint where the caller doesn't know the appID.
+func (s *Store) FindByPrefix(ctx context.Context, prefix string) (*apikey.APIKey, error) {
+	var m apiKeyModel
+
+	err := s.mdb.NewFind(&m).
+		Filter(bson.M{"key_prefix": prefix}).
+		Scan(ctx)
+	if err != nil {
+		if isNoDocuments(err) {
+			return nil, store.ErrNotFound
+		}
+
+		return nil, fmt.Errorf("authsome/mongo: find api key by prefix: %w", err)
+	}
+
+	return fromAPIKeyModel(&m)
+}
+
 // GetAPIKeyByPublicKey returns an API key by app ID and public key.
 func (s *Store) GetAPIKeyByPublicKey(ctx context.Context, appID id.AppID, publicKey string) (*apikey.APIKey, error) {
 	var m apiKeyModel

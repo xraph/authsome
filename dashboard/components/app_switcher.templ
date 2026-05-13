@@ -16,6 +16,19 @@ type AppSwitcherData struct {
 	CurrentEnvSlug string
 	CurrentPage    string
 	BasePath       string
+	// PageBase is the consumer-supplied URL prefix under which authsome pages are
+	// served (e.g. "/dashboard/ext/authsome/pages" or "/dashboard/remote/authsome/pages").
+	// Empty falls back to the legacy BasePath + "/ext/authsome/pages" literal.
+	PageBase string
+}
+
+// AppSwitcherPagesPrefix returns the URL prefix used for hx-get nav targets.
+func (d AppSwitcherData) AppSwitcherPagesPrefix() string {
+	if d.PageBase != "" {
+		return d.PageBase
+	}
+
+	return d.BasePath + "/ext/authsome/pages"
 }
 
 // AppSwitcher renders a dropdown for switching between apps in the sidebar header,
@@ -44,7 +57,7 @@ templ AppSwitcher(data AppSwitcherData) {
 					for _, a := range data.All {
 						@dropdown.Item(dropdown.ItemProps{
 							Attributes: templ.Attributes{
-								"hx-get":      data.BasePath + "/ext/authsome/pages/" + a.Slug + "/" + data.CurrentEnvSlug + data.CurrentPage,
+								"hx-get":      data.AppSwitcherPagesPrefix() + "/" + a.Slug + "/" + data.CurrentEnvSlug + data.CurrentPage,
 								"hx-target":   "#content",
 								"hx-swap":     "innerHTML",
 								"hx-push-url": "true",

@@ -12,27 +12,110 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 // Client is an HTTP client for the AuthSome API.
 type Client struct {
-	baseURL    string
-	token      string
-	apiKey     string
-	httpClient *http.Client
+	baseURL        string
+	token          string
+	apiKey         string
+	appID          string
+	publishableKey string
+	httpClient     *http.Client
+	// Lazy discovery: see do() + tryDiscoverAppID. Mutex (not Once)
+	// so a failed discovery — common during boot when upstream
+	// isn't ready yet — can be retried on the next call instead of
+	// permanently locking subsequent admin calls into 401.
+	appIDMu        sync.Mutex
+	appIDDiscovery error
+
+	// Synchronous configuration error from WithAPIKey/SetAPIKey
+	// (e.g. publishable key supplied where a secret was required).
+	// do() returns this before issuing any HTTP request so the caller
+	// sees the mistake at the call site.
+	apiKeyConfigErr error
+
+	// Optional callback invoked when lazy app-id discovery fails.
+	// Best-effort; must not block. See WithDiscoveryErrorHandler.
+	onDiscoveryError func(error)
 }
 
 // Option configures the AuthSome client.
 type Option func(*Client)
 
 // WithToken sets the session token for authenticated requests.
+//
+// Precedence with WithAPIKey: if both are set, the SDK sends ONLY
+// the session token in `Authorization: Bearer` and does NOT send
+// `X-API-Key`. Pick one — mixing the two confuses the server's
+// API-key strategy.
 func WithToken(token string) Option {
 	return func(c *Client) { c.token = token }
 }
 
-// WithAPIKey sets an API key for X-API-Key header authentication.
+// WithAPIKey sets an API key for service-account authentication.
+// The SDK sends the key as `X-API-Key`. Only secret keys are
+// accepted (`ask_`, `sk_test_`, `sk_stg_`, `sk_live_`); publishable
+// keys (`pk_*`) are rejected at configure time. The key MUST be
+// paired with the App ID it was minted under (see WithAppID).
 func WithAPIKey(key string) Option {
-	return func(c *Client) { c.apiKey = key }
+	return func(c *Client) {
+		if isPublicAPIKey(key) {
+			c.apiKey = ""
+			c.apiKeyConfigErr = fmt.Errorf("authclient: WithAPIKey requires a secret key (ask_/sk_*); publishable keys (pk_*) cannot authenticate")
+			return
+		}
+		c.apiKey = key
+		c.apiKeyConfigErr = nil
+	}
+}
+
+// WithDiscoveryErrorHandler installs a callback invoked whenever
+// the SDK's lazy app-id discovery attempt fails. Useful for
+// service-account clients running under orchestrators where
+// manifest fetches can race upstream startup. Best-effort; the
+// callback must not block.
+func WithDiscoveryErrorHandler(fn func(error)) Option {
+	return func(c *Client) { c.onDiscoveryError = fn }
+}
+
+// isPublicAPIKey reports whether the supplied key carries one of
+// the publishable-key prefixes. Inlined here so the SDK stays free
+// of any dependency on the server's apikey package.
+func isPublicAPIKey(key string) bool {
+	return strings.HasPrefix(key, "pk_test_") ||
+		strings.HasPrefix(key, "pk_stg_") ||
+		strings.HasPrefix(key, "pk_live_")
+}
+
+// WithAppID sets the App ID stamped onto every request as
+// X-App-ID. Required by the API key auth strategy and App-scoped
+// admin endpoints.
+func WithAppID(appID string) Option {
+	return func(c *Client) { c.appID = appID }
+}
+
+// WithPublishableKey sets the publishable key (`pk_live_*` / `pk_test_*` /
+// `pk_stg_*`) stamped onto every request as X-Publishable-Key. The server
+// resolves this header to an App on the public-auth path (signup, signin,
+// forgot-password, resend-verification), so unauthenticated frontends do
+// not need to know — or send — the App's UUID.
+//
+// Only publishable keys are accepted; secret keys (sk_*, ask_*) supplied
+// here are rejected because they would be silently exposed in any caller
+// that thinks it's wiring a frontend client. Use WithAPIKey for secrets.
+func WithPublishableKey(key string) Option {
+	return func(c *Client) {
+		key = strings.TrimSpace(key)
+		if key != "" && !isPublicAPIKey(key) {
+			// Quietly drop instead of panicking — keep the SDK
+			// non-destructive at construction time. Calls fail
+			// closed on the server with "app context required".
+			return
+		}
+		c.publishableKey = key
+	}
 }
 
 // WithHTTPClient sets a custom HTTP client.
@@ -75,11 +158,113 @@ func (c *Client) SetToken(token string) { c.token = token }
 // Token returns the current session token.
 func (c *Client) Token() string { return c.token }
 
-// SetAPIKey updates the API key.
-func (c *Client) SetAPIKey(key string) { c.apiKey = key }
+// SetAPIKey updates the API key. Same validation as WithAPIKey:
+// publishable keys (pk_*) are rejected.
+func (c *Client) SetAPIKey(key string) {
+	if isPublicAPIKey(key) {
+		c.apiKey = ""
+		c.apiKeyConfigErr = fmt.Errorf("authclient: SetAPIKey requires a secret key (ask_/sk_*); publishable keys (pk_*) cannot authenticate")
+		return
+	}
+	c.apiKey = key
+	c.apiKeyConfigErr = nil
+}
 
 // APIKey returns the current API key.
 func (c *Client) APIKey() string { return c.apiKey }
+
+// SetAppID updates the App ID stamped onto every request as
+// X-App-ID.
+func (c *Client) SetAppID(appID string) { c.appID = appID }
+
+// AppID returns the current App ID.
+func (c *Client) AppID() string { return c.appID }
+
+// SetPublishableKey updates the publishable key sent as X-Publishable-Key.
+// Same validation as WithPublishableKey: secret keys (sk_*, ask_*) are
+// silently dropped instead of being put on the wire.
+func (c *Client) SetPublishableKey(key string) {
+	key = strings.TrimSpace(key)
+	if key != "" && !isPublicAPIKey(key) {
+		return
+	}
+	c.publishableKey = key
+}
+
+// PublishableKey returns the current publishable key.
+func (c *Client) PublishableKey() string { return c.publishableKey }
+
+// tryDiscoverAppID makes a best-effort attempt to fetch the
+// platform App ID from /.well-known/authsome/manifest when an API
+// key is set but no App ID is configured. Retries on every call
+// until one succeeds (failed boot-time attempts must not lock
+// subsequent admin calls into 401). The well-known path is
+// mirrored onto both the root and grouped routers upstream so SDK
+// clients can reach it regardless of whether their baseURL
+// includes the extension's mount prefix. See client.go for full
+// doc.
+func (c *Client) tryDiscoverAppID(ctx context.Context) {
+	if c.appID != "" {
+		return
+	}
+	c.appIDMu.Lock()
+	defer c.appIDMu.Unlock()
+	if c.appID != "" {
+		return
+	}
+	manifestURL := c.baseURL + "/.well-known/authsome/manifest"
+	req, err := http.NewRequestWithContext(ctx, "GET", manifestURL, nil)
+	if err != nil {
+		c.appIDDiscovery = fmt.Errorf("build manifest request (url=%s): %w", manifestURL, err)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.appIDDiscovery = fmt.Errorf("fetch manifest (url=%s): %w", manifestURL, err)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		c.appIDDiscovery = fmt.Errorf("manifest status %d url=%s body=%q",
+			resp.StatusCode, manifestURL, string(snippet))
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	var manifest map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		c.appIDDiscovery = fmt.Errorf("decode manifest (url=%s): %w", manifestURL, err)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+		return
+	}
+	if appID, ok := manifest["platform_app_id"].(string); ok && appID != "" {
+		c.appID = appID
+		c.appIDDiscovery = nil
+	} else {
+		c.appIDDiscovery = fmt.Errorf("manifest (url=%s) missing platform_app_id", manifestURL)
+		c.notifyDiscoveryError(c.appIDDiscovery)
+	}
+}
+
+// notifyDiscoveryError fires the optional WithDiscoveryErrorHandler
+// callback. Best-effort: a panic in the hook is recovered so a
+// buggy callback can't take down the request path.
+func (c *Client) notifyDiscoveryError(err error) {
+	if c.onDiscoveryError == nil || err == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	c.onDiscoveryError(err)
+}
+
+// manifestPath is the canonical well-known manifest path. Lazy
+// discovery in do() skips firing for requests targeting this path
+// (the manifest is unauthenticated and self-discovering during a
+// discovery fetch is wasted work).
+const manifestPath = "/.well-known/authsome/manifest"
 
 // ──────────────────────────────────────────────────
 // Generated methods
@@ -110,288 +295,6 @@ func (c *Client) OidcDiscovery(ctx context.Context) (*DiscoveryResponse, error) 
 	path := "/.well-known/openid-configuration"
 	var result DiscoveryResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// AdminListOrgs — List organizations (admin)
-func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
-	path := "/v1/admin/orgs"
-	var result OrgListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ListOrganizations — List organizations
-func (c *Client) ListOrganizations(ctx context.Context) (*OrgListResponse, error) {
-	path := "/v1/orgs"
-	var result OrgListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// CreateOrganization — Create organization
-func (c *Client) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest) (*Organization, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs"
-	var result Organization
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// CheckOrgSlug — Check slug availability
-func (c *Client) CheckOrgSlug(ctx context.Context) (*SlugAvailableResponse, error) {
-	path := "/v1/orgs/check-slug"
-	var result SlugAvailableResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// AcceptInvitation — Accept invitation
-func (c *Client) AcceptInvitation(ctx context.Context, req *AcceptInvitationRequest) (*Member, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/invitations/accept"
-	var result Member
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// DeclineInvitation — Decline invitation
-func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/invitations/decline"
-	var result StatusResponse
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// GetOrganization — Get organization
-func (c *Client) GetOrganization(ctx context.Context, orgId string) (*Organization, error) {
-	path := "/v1/orgs/{orgId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result Organization
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// UpdateOrganization — Update organization
-func (c *Client) UpdateOrganization(ctx context.Context, orgId string, req *UpdateOrganizationRequest) (*Organization, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result Organization
-	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// DeleteOrganization — Delete organization
-func (c *Client) DeleteOrganization(ctx context.Context, orgId string, req *DeleteOrganizationRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ListInvitations — List invitations
-func (c *Client) ListInvitations(ctx context.Context, orgId string) (*InvitationListResponse, error) {
-	path := "/v1/orgs/{orgId}/invitations"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result InvitationListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// CreateInvitation — Create invitation
-func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *CreateInvitationRequest) (*Invitation, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/invitations"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result Invitation
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// SwitchOrg sets the calling user's active organization on their
-// session. The user must be a member of orgID. An empty orgID clears
-// the active org. Returns the updated session ID and OrgID.
-func (c *Client) SwitchOrg(ctx context.Context, orgID string) (*SwitchOrgResponse, error) {
-	body, err := json.Marshal(&SwitchOrgRequest{OrgID: orgID})
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	var result SwitchOrgResponse
-	if err := c.do(ctx, "POST", "/v1/me/switch-org", body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ListMembers — List members
-func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
-	path := "/v1/orgs/{orgId}/members"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result MemberListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// AddMember — Add member
-func (c *Client) AddMember(ctx context.Context, orgId string, req *AddMemberRequest) (*Member, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/members"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result Member
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// UpdateMember — Update member role
-func (c *Client) UpdateMember(ctx context.Context, orgId string, memberId string, req *UpdateMemberRequest) (*Member, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/members/{memberId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	path = strings.Replace(path, "{memberId}", memberId, 1)
-	var result Member
-	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// RemoveMember — Remove member
-func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string, req *RemoveMemberRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/members/{memberId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	path = strings.Replace(path, "{memberId}", memberId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// ListTeams — List teams
-func (c *Client) ListTeams(ctx context.Context, orgId string) (*TeamListResponse, error) {
-	path := "/v1/orgs/{orgId}/teams"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result TeamListResponse
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// CreateTeam — Create team
-func (c *Client) CreateTeam(ctx context.Context, orgId string, req *CreateTeamRequest) (*Team, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/teams"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	var result Team
-	if err := c.do(ctx, "POST", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// GetTeam — Get team
-func (c *Client) GetTeam(ctx context.Context, orgId string, teamId string) (*Team, error) {
-	path := "/v1/orgs/{orgId}/teams/{teamId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	path = strings.Replace(path, "{teamId}", teamId, 1)
-	var result Team
-	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// UpdateTeam — Update team
-func (c *Client) UpdateTeam(ctx context.Context, orgId string, teamId string, req *UpdateTeamRequest) (*Team, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/teams/{teamId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	path = strings.Replace(path, "{teamId}", teamId, 1)
-	var result Team
-	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-// DeleteTeam — Delete team
-func (c *Client) DeleteTeam(ctx context.Context, orgId string, teamId string, req *DeleteTeamRequest) (*StatusResponse, error) {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-	path := "/v1/orgs/{orgId}/teams/{teamId}"
-	path = strings.Replace(path, "{orgId}", orgId, 1)
-	path = strings.Replace(path, "{teamId}", teamId, 1)
-	var result StatusResponse
-	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -587,6 +490,35 @@ func (c *Client) ScimDeleteUser(ctx context.Context, userId string, req *ScimDel
 	return &result, nil
 }
 
+// AdminCreateApp — Create application (admin)
+func (c *Client) AdminCreateApp(ctx context.Context, req *AdminCreateAppRequest) (*AdminAppResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/apps"
+	var result AdminAppResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminDeleteApp — Delete application (admin)
+func (c *Client) AdminDeleteApp(ctx context.Context, appId string, req *AdminDeleteAppRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/apps/{appId}"
+	path = strings.Replace(path, "{appId}", appId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // GetAppClientConfig — Get per-app client config overrides
 func (c *Client) GetAppClientConfig(ctx context.Context, appId string) (*Config, error) {
 	path := "/v1/admin/apps/{appId}/client-config"
@@ -761,6 +693,16 @@ func (c *Client) DeleteOAuth2Client(ctx context.Context, clientId string, req *D
 	return c.do(ctx, "DELETE", path, body, nil)
 }
 
+// AdminListOrgs — List organizations (admin)
+func (c *Client) AdminListOrgs(ctx context.Context) (*OrgListResponse, error) {
+	path := "/v1/admin/orgs"
+	var result OrgListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListSettingsDefinitions — List all setting definitions
 func (c *Client) ListSettingsDefinitions(ctx context.Context) (*ListDefinitionsResponse, error) {
 	path := "/v1/admin/settings/definitions"
@@ -863,6 +805,117 @@ func (c *Client) DeleteSetting(ctx context.Context, key string, req *DeleteSetti
 	return &result, nil
 }
 
+// SsoAdminCreateConnection — Create SSO connection (admin)
+func (c *Client) SsoAdminCreateConnection(ctx context.Context, req *SsoAdminCreateConnectionRequest) (*AdminCreateConnectionResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/sso/connections"
+	var result AdminCreateConnectionResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminListConnections — List SSO connections for an app (admin)
+func (c *Client) SsoAdminListConnections(ctx context.Context, appID string) (*SsoAdminListConnectionsResponse, error) {
+	path := "/v1/admin/sso/connections?app_id=" + appID
+	var result SsoAdminListConnectionsResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminGetConnection — Get SSO connection (admin)
+func (c *Client) SsoAdminGetConnection(ctx context.Context, connectionID string) (*SsoConnection, error) {
+	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
+	var result SsoConnection
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminUpdateConnection — Update SSO connection (admin)
+func (c *Client) SsoAdminUpdateConnection(ctx context.Context, connectionID string, req *SsoAdminUpdateConnectionRequest) (*SsoConnection, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
+	var result SsoConnection
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SsoAdminDeleteConnection — Delete SSO connection (admin)
+func (c *Client) SsoAdminDeleteConnection(ctx context.Context, connectionID string) (*StatusResponse, error) {
+	path := strings.Replace("/v1/admin/sso/connections/{connectionId}", "{connectionId}", connectionID, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminCatalog — List supported social providers
+func (c *Client) SocialAdminCatalog(ctx context.Context) (*SocialAdminCatalogResponse, error) {
+	path := "/v1/admin/social/providers/catalog"
+	var result SocialAdminCatalogResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminListProviders — List configured social providers (admin)
+func (c *Client) SocialAdminListProviders(ctx context.Context, appID string) (*SocialAdminListProvidersResponse, error) {
+	path := "/v1/admin/social/providers"
+	if appID != "" {
+		path += "?app_id=" + appID
+	}
+	var result SocialAdminListProvidersResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminUpsertProvider — Configure a social provider (admin)
+func (c *Client) SocialAdminUpsertProvider(ctx context.Context, provider, appID string, req *SocialAdminUpsertProviderRequest) (*SocialAdminProviderResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := strings.Replace("/v1/admin/social/providers/{provider}", "{provider}", provider, 1)
+	if appID != "" {
+		path += "?app_id=" + appID
+	}
+	var result SocialAdminProviderResponse
+	if err := c.do(ctx, "PUT", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// SocialAdminDeleteProvider — Delete a social provider (admin)
+func (c *Client) SocialAdminDeleteProvider(ctx context.Context, provider, appID string) (*StatusResponse, error) {
+	path := strings.Replace("/v1/admin/social/providers/{provider}", "{provider}", provider, 1)
+	if appID != "" {
+		path += "?app_id=" + appID
+	}
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // AdminGetStats — Get stats (admin)
 func (c *Client) AdminGetStats(ctx context.Context) (*AdminStatsResponse, error) {
 	path := "/v1/admin/stats"
@@ -883,12 +936,87 @@ func (c *Client) AdminListUsers(ctx context.Context) (*AdminUserListResponse, er
 	return &result, nil
 }
 
+// AdminListUsersInApp lists users scoped to a specific App. Supplies
+// the app_id, email, cursor, and limit query params understood by the
+// /v1/admin/users handler. Empty fields are omitted from the URL.
+func (c *Client) AdminListUsersInApp(ctx context.Context, appID, email, cursor string, limit int) (*AdminUserListResponse, error) {
+	path := "/v1/admin/users"
+	q := []string{}
+	if appID != "" {
+		q = append(q, "app_id="+appID)
+	}
+	if email != "" {
+		q = append(q, "email="+email)
+	}
+	if cursor != "" {
+		q = append(q, "cursor="+cursor)
+	}
+	if limit > 0 {
+		q = append(q, fmt.Sprintf("limit=%d", limit))
+	}
+	if len(q) > 0 {
+		path += "?" + strings.Join(q, "&")
+	}
+	var result AdminUserListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminCreateUser — Create user (admin)
+func (c *Client) AdminCreateUser(ctx context.Context, req *AdminCreateUserRequest) (*User, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/users/create"
+	var result User
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminCopyUser — Copy user to another app (admin). Reuses the source
+// user's stored password hash so the duplicate authenticates with the
+// original password. 409 from the API means the target app already
+// has a user with that email — callers should treat that as
+// idempotent.
+func (c *Client) AdminCopyUser(ctx context.Context, req *AdminCopyUserRequest) (*User, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/users/copy"
+	var result User
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // AdminGetUser — Get user (admin)
 func (c *Client) AdminGetUser(ctx context.Context, userId string) (*User, error) {
 	path := "/v1/admin/users/{userId}"
 	path = strings.Replace(path, "{userId}", userId, 1)
 	var result User
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AdminUpdateUser — Update user (admin)
+func (c *Client) AdminUpdateUser(ctx context.Context, userId string, req *AdminUpdateUserRequest) (*User, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/admin/users/{userId}"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	var result User
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -1573,6 +1701,20 @@ func (c *Client) ExportUserData(ctx context.Context) (*map[string]any, error) {
 	return &result, nil
 }
 
+// SwitchOrg — Switch active organization
+func (c *Client) SwitchOrg(ctx context.Context, req *SwitchOrgRequest) (*SwitchOrgResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/me/switch-org"
+	var result SwitchOrgResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ChallengeMFA — MFA challenge
 func (c *Client) ChallengeMFA(ctx context.Context, req *ChallengeMFARequest) (*ChallengeResponse, error) {
 	body, err := json.Marshal(req)
@@ -1753,6 +1895,263 @@ func (c *Client) Oauth2UserInfo(ctx context.Context) (*UserInfo, error) {
 	return &result, nil
 }
 
+// ListOrganizations — List organizations
+func (c *Client) ListOrganizations(ctx context.Context) (*OrgListResponse, error) {
+	path := "/v1/orgs"
+	var result OrgListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrganization — Create organization
+func (c *Client) CreateOrganization(ctx context.Context, req *CreateOrganizationRequest) (*Organization, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs"
+	var result Organization
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CheckOrgSlug — Check slug availability
+func (c *Client) CheckOrgSlug(ctx context.Context) (*SlugAvailableResponse, error) {
+	path := "/v1/orgs/check-slug"
+	var result SlugAvailableResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AcceptInvitation — Accept invitation
+func (c *Client) AcceptInvitation(ctx context.Context, req *AcceptInvitationRequest) (*Member, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/invitations/accept"
+	var result Member
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeclineInvitation — Decline invitation
+func (c *Client) DeclineInvitation(ctx context.Context, req *DeclineInvitationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/invitations/decline"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetOrganization — Get organization
+func (c *Client) GetOrganization(ctx context.Context, orgId string) (*Organization, error) {
+	path := "/v1/orgs/{orgId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Organization
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateOrganization — Update organization
+func (c *Client) UpdateOrganization(ctx context.Context, orgId string, req *UpdateOrganizationRequest) (*Organization, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Organization
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteOrganization — Delete organization
+func (c *Client) DeleteOrganization(ctx context.Context, orgId string, req *DeleteOrganizationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListInvitations — List invitations
+func (c *Client) ListInvitations(ctx context.Context, orgId string) (*InvitationListResponse, error) {
+	path := "/v1/orgs/{orgId}/invitations"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result InvitationListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateInvitation — Create invitation
+func (c *Client) CreateInvitation(ctx context.Context, orgId string, req *CreateInvitationRequest) (*Invitation, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/invitations"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Invitation
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListMembers — List members
+func (c *Client) ListMembers(ctx context.Context, orgId string) (*MemberListResponse, error) {
+	path := "/v1/orgs/{orgId}/members"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result MemberListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AddMember — Add member
+func (c *Client) AddMember(ctx context.Context, orgId string, req *AddMemberRequest) (*Member, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/members"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Member
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateMember — Update member role
+func (c *Client) UpdateMember(ctx context.Context, orgId string, memberId string, req *UpdateMemberRequest) (*Member, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/members/{memberId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{memberId}", memberId, 1)
+	var result Member
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RemoveMember — Remove member
+func (c *Client) RemoveMember(ctx context.Context, orgId string, memberId string, req *RemoveMemberRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/members/{memberId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{memberId}", memberId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListTeams — List teams
+func (c *Client) ListTeams(ctx context.Context, orgId string) (*TeamListResponse, error) {
+	path := "/v1/orgs/{orgId}/teams"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result TeamListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateTeam — Create team
+func (c *Client) CreateTeam(ctx context.Context, orgId string, req *CreateTeamRequest) (*Team, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/teams"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	var result Team
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetTeam — Get team
+func (c *Client) GetTeam(ctx context.Context, orgId string, teamId string) (*Team, error) {
+	path := "/v1/orgs/{orgId}/teams/{teamId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{teamId}", teamId, 1)
+	var result Team
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateTeam — Update team
+func (c *Client) UpdateTeam(ctx context.Context, orgId string, teamId string, req *UpdateTeamRequest) (*Team, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/teams/{teamId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{teamId}", teamId, 1)
+	var result Team
+	if err := c.do(ctx, "PATCH", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteTeam — Delete team
+func (c *Client) DeleteTeam(ctx context.Context, orgId string, teamId string, req *DeleteTeamRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/orgs/{orgId}/teams/{teamId}"
+	path = strings.Replace(path, "{orgId}", orgId, 1)
+	path = strings.Replace(path, "{teamId}", teamId, 1)
+	var result StatusResponse
+	if err := c.do(ctx, "DELETE", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListPasskeys — List passkeys
 func (c *Client) ListPasskeys(ctx context.Context) (*ListResponse, error) {
 	path := "/v1/passkeys"
@@ -1893,6 +2292,24 @@ func (c *Client) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (
 // AuthsomeListRoles — List roles
 func (c *Client) AuthsomeListRoles(ctx context.Context) (*RoleListResponse, error) {
 	path := "/v1/roles"
+	var result RoleListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// AuthsomeListRolesInApp — List roles scoped to an explicit app_id.
+// The bare AuthsomeListRoles uses whatever app the engine derives from
+// the call's auth context (which falls back to the configured default
+// app); this variant lets cross-app admin clients (e.g. TwinOS studio,
+// which runs one query per workspace) target a specific app without
+// switching credentials.
+func (c *Client) AuthsomeListRolesInApp(ctx context.Context, appID string) (*RoleListResponse, error) {
+	path := "/v1/roles"
+	if appID != "" {
+		path = path + "?app_id=" + appID
+	}
 	var result RoleListResponse
 	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
 		return nil, err
@@ -2168,6 +2585,25 @@ func (c *Client) AuthsomeListUserRoles(ctx context.Context, userId string) (*Use
 	return &result, nil
 }
 
+// AuthsomeListUserRolesInApp — List user roles scoped to an explicit
+// app_id. The bare AuthsomeListUserRoles uses the engine's platform
+// app, which is wrong for cross-app admin tooling: TwinOS studio's
+// API key authenticates against the platform app but role assignments
+// live in per-workspace apps. Pass the workspace's AppID here so the
+// engine's ListUserRolesInApp queries the right tenant.
+func (c *Client) AuthsomeListUserRolesInApp(ctx context.Context, userId, appID string) (*UserRoleListResponse, error) {
+	path := "/v1/users/{userId}/roles"
+	path = strings.Replace(path, "{userId}", userId, 1)
+	if appID != "" {
+		path = path + "?app_id=" + appID
+	}
+	var result UserRoleListResponse
+	if err := c.do(ctx, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // VerifyEmail — Verify email
 func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*StatusResponse, error) {
 	body, err := json.Marshal(req)
@@ -2175,6 +2611,20 @@ func (c *Client) VerifyEmail(ctx context.Context, req *VerifyEmailRequest) (*Sta
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	path := "/v1/verify-email"
+	var result StatusResponse
+	if err := c.do(ctx, "POST", path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResendEmailVerification — Resend email verification
+func (c *Client) ResendEmailVerification(ctx context.Context, req *ResendEmailVerificationRequest) (*StatusResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+	path := "/v1/verify-email/resend"
 	var result StatusResponse
 	if err := c.do(ctx, "POST", path, body, &result); err != nil {
 		return nil, err
@@ -2256,16 +2706,51 @@ func (c *Client) DeleteWebhook(ctx context.Context, webhookId string, req *Delet
 // ──────────────────────────────────────────────────
 
 // ClientError represents an error response from the API.
+//
+// RawBody and Headers preserve the upstream response so callers can
+// surface useful diagnostics when the standard error envelope is
+// empty or unfamiliar (e.g. forge.HTTPError uses {code, error,
+// details} — Message resolves from the first non-empty of error /
+// message / details, and RawBody preserves the rest verbatim).
 type ClientError struct {
 	StatusCode int
 	Message    string
+	RawBody    []byte
+	Headers    map[string]string
 }
 
+const clientErrorBodySnippetMax = 256
+
 func (e *ClientError) Error() string {
-	return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	if e.Message != "" {
+		return fmt.Sprintf("authsome: %d %s", e.StatusCode, e.Message)
+	}
+	if len(e.RawBody) > 0 {
+		snippet := string(e.RawBody)
+		if len(snippet) > clientErrorBodySnippetMax {
+			snippet = snippet[:clientErrorBodySnippetMax] + "…"
+		}
+		return fmt.Sprintf("authsome: %d body=%q", e.StatusCode, snippet)
+	}
+	return fmt.Sprintf("authsome: %d (empty body)", e.StatusCode)
+}
+
+func firstNonEmptyClientErrorMessage(s ...string) string {
+	for _, v := range s {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body []byte, result any) error {
+	// Surface configure-time validation errors before touching the
+	// network (e.g. WithAPIKey was called with a publishable key).
+	if c.apiKeyConfigErr != nil {
+		return c.apiKeyConfigErr
+	}
+
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
@@ -2276,13 +2761,34 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 		return fmt.Errorf("create request: %w", err)
 	}
 
+	// Lazy app-id discovery for service-account clients. Skip for
+	// the manifest path itself — it's unauthenticated and self-
+	// discovery would be wasted work.
+	if c.apiKey != "" && c.appID == "" && c.baseURL != "" && path != manifestPath {
+		c.tryDiscoverAppID(ctx)
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Send both Authorization (session token) and X-API-Key (API
+	// key) when both are configured — supports the
+	// service-account-key + per-request-user-token dual-credential
+	// pattern. Authsome's strategy chain handles both safely:
+	// session resolution runs only when the bearer token's prefix
+	// is NOT an API-key marker; the API-key strategy then reads
+	// Authorization (requires IsAPIKey to accept it) and otherwise
+	// falls back to X-API-Key.
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	if c.appID != "" {
+		req.Header.Set("X-App-ID", c.appID)
+	}
+	if c.publishableKey != "" {
+		req.Header.Set("X-Publishable-Key", c.publishableKey)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -2292,13 +2798,50 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, resul
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		var errResp struct {
-			Error string `json:"error"`
+		// Read the body once into bytes so we can both attempt a
+		// structured decode AND preserve the raw payload for the
+		// caller. Cap at 8KiB — far more than any well-formed error
+		// envelope and bounded enough to not blow up logs.
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		var env struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+			Details string `json:"details"`
 		}
-		if decErr := json.NewDecoder(resp.Body).Decode(&errResp); decErr != nil {
-			errResp.Error = resp.Status
+		msg := ""
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &env) // best-effort
+			msg = firstNonEmptyClientErrorMessage(env.Error, env.Message, env.Details)
 		}
-		return &ClientError{StatusCode: resp.StatusCode, Message: errResp.Error}
+		// On 401 with no App ID set, surface the most-recent
+		// discovery error in the message so the operator can tell
+		// "the server rejected our key" apart from "we never figured
+		// out which App to ask for".
+		if resp.StatusCode == http.StatusUnauthorized && c.apiKey != "" && c.appID == "" {
+			c.appIDMu.Lock()
+			discErr := c.appIDDiscovery
+			c.appIDMu.Unlock()
+			hint := "X-App-ID was not sent (api key set, app id empty)"
+			if discErr != nil {
+				hint += "; manifest discovery error: " + discErr.Error()
+			} else {
+				hint += "; manifest discovery never ran for this request"
+			}
+			if msg != "" {
+				msg = msg + " [" + hint + "]"
+			} else {
+				msg = hint
+			}
+		}
+		return &ClientError{
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			RawBody:    raw,
+			Headers: map[string]string{
+				"Content-Type": resp.Header.Get("Content-Type"),
+				"X-Request-ID": resp.Header.Get("X-Request-ID"),
+			},
+		}
 	}
 
 	if result != nil && resp.StatusCode != http.StatusNoContent {

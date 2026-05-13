@@ -4,13 +4,35 @@ package api
 
 import (
 	"net/http"
+	"os"
+	"strconv"
 
 	"github.com/xraph/forge"
 	log "github.com/xraph/go-utils/log"
 
 	authsome "github.com/xraph/authsome"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/sdkgen/openapi"
 )
+
+// securityHeaderOptionsFromEnv reads AUTHSOME_HSTS_MAX_AGE and
+// AUTHSOME_HSTS_INCLUDE_SUBDOMAINS for opt-in transport pinning. Local
+// dev leaves both unset and gets non-HSTS defaults.
+func securityHeaderOptionsFromEnv() middleware.SecurityHeadersOptions {
+	opts := middleware.SecurityHeadersOptions{}
+	if v := os.Getenv("AUTHSOME_HSTS_MAX_AGE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			opts.HSTSMaxAgeSeconds = n
+		}
+	}
+	if os.Getenv("AUTHSOME_HSTS_INCLUDE_SUBDOMAINS") == "1" {
+		opts.HSTSIncludeSubdomains = true
+	}
+	if os.Getenv("AUTHSOME_HSTS_PRELOAD") == "1" {
+		opts.HSTSPreload = true
+	}
+	return opts
+}
 
 // API wires all AuthSome HTTP handlers together.
 type API struct {
@@ -51,6 +73,20 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 	// Capture the router so handleOpenAPI can use its dynamic spec.
 	a.router = router
 
+	// Apply baseline security headers to every JSON API response.
+	// CSP is omitted (irrelevant for application/json). HSTS is opt-in
+	// via AUTHSOME_HSTS_MAX_AGE so local-dev (HTTP) doesn't get pinned.
+	router.Use(middleware.SecurityHeadersForAPI(securityHeaderOptionsFromEnv()))
+
+	// Resolve X-Publishable-Key (or ?publishable_key=) into an App on the
+	// request context. Applied globally because it is a no-op when no key
+	// is present, and because public-auth handlers (signup, signin,
+	// forgot-password) must know the app *before* the body is consumed.
+	// Without this, the resolveAppID helper used to silently fall back to
+	// the platform app, routing non-platform tenants' users into the
+	// platform pool.
+	router.Use(middleware.PublishableKeyMiddleware(a.engine, a.engine.Logger()))
+
 	// Well-known and JWKS routes must be registered on the root router
 	// (not the grouped router) so they appear at /.well-known/* instead
 	// of being nested under the extension group prefix.
@@ -66,6 +102,23 @@ func (a *API) RegisterRoutes(router forge.Router) error {
 	}
 	for _, fn := range rootRegisterers {
 		if err := fn(rootRouter); err != nil {
+			return err
+		}
+	}
+
+	// Mirror well-known onto the grouped router (in addition to the
+	// root mount above) so SDK clients whose baseURL includes the
+	// extension's mount prefix (e.g. http://host:7902/authsome) can
+	// reach the manifest at <baseURL>/.well-known/authsome/manifest.
+	// Without this mirror, c.baseURL+"/.well-known/authsome/manifest"
+	// 404s and the API key strategy never gets the App ID it needs.
+	//
+	// Skip the mirror when rootRouter and the grouped router are the
+	// same instance (no distinct grouping in standalone test mode);
+	// otherwise the second registration panics with "route already
+	// handles GET".
+	if rootRouter != router {
+		if err := a.registerWellKnownRoutes(router); err != nil {
 			return err
 		}
 	}
@@ -145,6 +198,18 @@ func (a *API) handleManifest(ctx forge.Context, _ *struct{}) (*map[string]any, e
 			{"method": "GET", "path": "/devices", "auth": "session"},
 			{"method": "DELETE", "path": "/devices/{id}", "auth": "session"},
 		},
+	}
+	// Surface the platform App ID + slug so service-account clients
+	// can auto-discover them at boot — Authsome's API key strategy
+	// requires X-App-ID, and asking every operator to copy/paste the
+	// App ID into env is a footgun. The manifest is unauthenticated
+	// and idempotent so this is safe to expose.
+	if appID := a.engine.PlatformAppID(); !appID.IsNil() {
+		manifest["platform_app_id"] = appID.String()
+		if app, err := a.engine.GetApp(ctx.Context(), appID); err == nil && app != nil {
+			manifest["platform_app_slug"] = app.Slug
+			manifest["platform_app_name"] = app.Name
+		}
 	}
 	return nil, ctx.JSON(http.StatusOK, manifest)
 }

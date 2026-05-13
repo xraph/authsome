@@ -12,6 +12,7 @@ import (
 
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/settings"
 
 	scimdash "github.com/xraph/authsome/plugins/scim/dashui"
@@ -206,16 +207,21 @@ func (p *Plugin) renderSCIMList(ctx context.Context, params contributor.Params) 
 	appID := p.resolveAppID(ctx)
 	var data scimdash.SCIMListPageData
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "scim.config.create"
+
 	// Handle form actions.
 	action := params.FormData["action"]
 	if action == "create" {
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error, data.Success = p.handleCreateConfig(ctx, appID, params)
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 
 	// Fetch configs.
 	if p.scimStore != nil {
@@ -273,22 +279,27 @@ func (p *Plugin) renderSCIMDetail(ctx context.Context, params contributor.Params
 
 	var data scimdash.SCIMDetailPageData
 
+	// Phase 2C.2: scoped CSRF nonce bound to the actor's session.
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "scim.config.write"
+
 	// Handle form actions.
 	action := params.FormData["action"]
 	switch action {
 	case "create_token":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error, data.Success, data.NewToken = p.handleCreateToken(ctx, configID, params)
 		}
 	case "revoke_token":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			p.handleRevokeToken(ctx, params)
 		}
 	case "update_settings":
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, nonce) {
 			data.Error, data.Success = p.handleUpdateConfigSettings(ctx, cfg, params)
 			// Re-fetch.
 			if updated, fetchErr := p.service.GetConfig(ctx, configID); fetchErr == nil {
@@ -297,7 +308,7 @@ func (p *Plugin) renderSCIMDetail(ctx context.Context, params contributor.Params
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 	data.Config = toConfigView(cfg)
 
 	// Resolve org name.

@@ -10,12 +10,14 @@ import (
 	"github.com/xraph/authsome/id"
 )
 
-// Context keys for embedding app/env IDs, slugs, and page route in context.
+// Context keys for embedding app/env IDs, slugs, page route, and consumer
+// page-base prefix in context.
 type appIDContextKey struct{}
 type envIDContextKey struct{}
 type appSlugContextKey struct{}
 type envSlugContextKey struct{}
 type pageRouteContextKey struct{}
+type pageBaseContextKey struct{}
 
 // WithAppID returns a context with the resolved app ID embedded.
 // Dashboard plugins can extract this via AppIDFromContext to scope
@@ -71,6 +73,21 @@ func WithPageRoute(ctx context.Context, route string) context.Context {
 // PageRouteFromContext extracts the current page route from context.
 func PageRouteFromContext(ctx context.Context) string {
 	v, _ := ctx.Value(pageRouteContextKey{}).(string) //nolint:errcheck // type assertion
+	return v
+}
+
+// WithPageBase returns a context with the consumer-supplied page-base prefix
+// embedded. The page base is the URL prefix under which authsome pages are
+// served on the consumer (e.g. "/dashboard/ext/authsome/pages" or
+// "/dashboard/remote/authsome/pages") and is used by switchers and redirects
+// to emit links that resolve back to the consumer's URL space.
+func WithPageBase(ctx context.Context, pageBase string) context.Context {
+	return context.WithValue(ctx, pageBaseContextKey{}, pageBase)
+}
+
+// PageBaseFromContext extracts the consumer-supplied page-base prefix.
+func PageBaseFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(pageBaseContextKey{}).(string) //nolint:errcheck // type assertion
 	return v
 }
 

@@ -234,6 +234,67 @@ func TestNeedsRehash(t *testing.T) {
 	assert.False(t, account.NeedsRehash(bcryptHash, account.PasswordPolicy{}))
 }
 
+func TestNeedsRehash_Argon2ParamsBumped(t *testing.T) {
+	t.Parallel()
+	weak := account.Argon2Params{
+		Memory: 32 * 1024, Iterations: 2, Parallelism: 1,
+		SaltLength: 16, KeyLength: 32,
+	}
+	weakHash, err := account.HashPasswordArgon2("test", weak)
+	require.NoError(t, err)
+
+	// Policy demands stronger params than the stored hash uses → needs rehash.
+	stronger := account.Argon2Params{
+		Memory: 64 * 1024, Iterations: 3, Parallelism: 2,
+		SaltLength: 16, KeyLength: 32,
+	}
+	policy := account.PasswordPolicy{Algorithm: "argon2id", Argon2Params: stronger}
+	assert.True(t, account.NeedsRehash(weakHash, policy),
+		"hash with weaker memory/iterations than policy must trigger rehash on login")
+
+	// Policy matches the stored params → no rehash.
+	policySame := account.PasswordPolicy{Algorithm: "argon2id", Argon2Params: weak}
+	assert.False(t, account.NeedsRehash(weakHash, policySame))
+
+	// Policy weaker than stored → no rehash (we never weaken on login).
+	weaker := account.Argon2Params{
+		Memory: 16 * 1024, Iterations: 1, Parallelism: 1,
+		SaltLength: 16, KeyLength: 32,
+	}
+	policyWeaker := account.PasswordPolicy{Algorithm: "argon2id", Argon2Params: weaker}
+	assert.False(t, account.NeedsRehash(weakHash, policyWeaker),
+		"a stored hash stronger than current policy must NOT be rehashed down")
+}
+
+func TestNeedsRehash_BcryptCostBumped(t *testing.T) {
+	t.Parallel()
+	cheap, err := account.HashPassword("test", 4)
+	require.NoError(t, err)
+
+	policyExpensive := account.PasswordPolicy{Algorithm: "bcrypt", BcryptCost: 12}
+	assert.True(t, account.NeedsRehash(cheap, policyExpensive),
+		"bcrypt hash with cost lower than policy must trigger rehash")
+
+	policySame := account.PasswordPolicy{Algorithm: "bcrypt", BcryptCost: 4}
+	assert.False(t, account.NeedsRehash(cheap, policySame))
+}
+
+func TestNeedsRehash_MalformedArgon2HashLeftAlone(t *testing.T) {
+	t.Parallel()
+	policy := account.PasswordPolicy{Algorithm: "argon2id", Argon2Params: account.DefaultArgon2Params()}
+	assert.False(t, account.NeedsRehash("$argon2id$totally-malformed", policy),
+		"malformed argon2 hashes must be left alone — better than fail-closed on a corrupted row")
+}
+
+func TestNeedsRehash_MalformedBcryptHashLeftAlone(t *testing.T) {
+	t.Parallel()
+	// Bcrypt policy + a non-argon2 string that bcrypt.Cost rejects:
+	// must NOT trigger rehash (corrupted row, leave it for ops to fix).
+	policy := account.PasswordPolicy{Algorithm: "bcrypt", BcryptCost: 12}
+	assert.False(t, account.NeedsRehash("not-a-valid-hash", policy),
+		"corrupted bcrypt hash must be left alone")
+}
+
 func TestHashPasswordWithPolicy(t *testing.T) {
 	// bcrypt
 	hash, err := account.HashPasswordWithPolicy("test123", account.PasswordPolicy{BcryptCost: 10})

@@ -10,10 +10,13 @@ import (
 	log "github.com/xraph/go-utils/log"
 
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 
 	"github.com/xraph/forge"
 	"github.com/xraph/warden"
+	wardenassign "github.com/xraph/warden/assignment"
+	wardenid "github.com/xraph/warden/id"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/apikey"
@@ -38,6 +41,22 @@ import (
 func (e *Engine) SignUp(ctx context.Context, req *account.SignUpRequest) (*user.User, *session.Session, error) {
 	if err := e.requireStarted(); err != nil {
 		return nil, nil, err
+	}
+
+	// Defense-in-depth: validate that the AppID points to an existing
+	// app. The publishable-key middleware already guarantees this when
+	// pk_* is on the request, but a server-to-server caller may supply
+	// req.AppID directly without that middleware ever running. Without
+	// this check, an arbitrary AppID would be silently written onto the
+	// user row, producing orphaned users that no app can list or admin.
+	if req.AppID.IsNil() {
+		return nil, nil, fmt.Errorf("authsome: signup: app id is required")
+	}
+	if _, getErr := e.store.GetApp(ctx, req.AppID); getErr != nil {
+		if errors.Is(getErr, store.ErrNotFound) {
+			return nil, nil, fmt.Errorf("authsome: signup: app %s not found", req.AppID)
+		}
+		return nil, nil, fmt.Errorf("authsome: signup: load app: %w", getErr)
 	}
 
 	// Check if signup is disabled for this app.
@@ -296,6 +315,12 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		}
 	}
 
+	// MFARequired enforcement is now handled inside Engine.IssueSession
+	// (the centralized chokepoint every login path goes through). The
+	// previous inline check here was a transitional safety net; with
+	// SignIn delegating session minting to IssueSession below, the gate
+	// fires there and we don't need a duplicate here.
+
 	// Check password expiration
 	if e.config.Password.MaxAgeDays > 0 && u.PasswordChangedAt != nil {
 		maxAge := time.Duration(e.config.Password.MaxAgeDays) * 24 * time.Hour
@@ -320,44 +345,34 @@ func (e *Engine) SignIn(ctx context.Context, req *account.SignInRequest) (*user.
 		}
 	}
 
-	// Create session (using per-app + per-env config; JWT if configured)
-	sess, err := e.newSession(req.AppID, u.ID, e.sessionConfigForApp(ctx, req.AppID, req.EnvID))
+	// Delegate session minting to IssueSession — the centralized
+	// chokepoint that enforces MFARequired and emits session-create
+	// hooks/audit. SignIn keeps the signin-specific telemetry below
+	// (after-signin plugin hook, signin audit) since those describe
+	// the auth event rather than the session itself.
+	result, err := e.IssueSession(ctx, &IssueSessionRequest{
+		User:       u,
+		AppID:      req.AppID,
+		EnvID:      req.EnvID,
+		AuthMethod: "password",
+		IPAddress:  req.IPAddress,
+		UserAgent:  req.UserAgent,
+	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("authsome: create session token: %w", err)
+		return u, nil, err
 	}
+	sess := result.Session
 
-	// Bind session to device (registers or finds device via fingerprint upsert)
-	e.bindSessionToDevice(ctx, sess, req.AppID, req.EnvID, req.IPAddress, req.UserAgent)
-
-	// Plugin: before session create
-	if hookErr := e.plugins.EmitBeforeSessionCreate(ctx, sess); hookErr != nil {
-		return nil, nil, fmt.Errorf("authsome: before session create: %w", hookErr)
-	}
-
-	if storeErr := e.store.CreateSession(ctx, sess); storeErr != nil {
-		return nil, nil, fmt.Errorf("authsome: create session: %w", storeErr)
-	}
-
-	// Plugin: after session create + after signin
-	e.plugins.EmitAfterSessionCreate(ctx, sess)
+	// Plugin: after signin (signin-specific; IssueSession already
+	// fired BeforeSessionCreate/AfterSessionCreate).
 	e.plugins.EmitAfterSignIn(ctx, u, sess)
 
-	// Global hook bus
-	e.hooks.Emit(ctx, &hook.Event{
-		Action:     hook.ActionSignIn,
-		Resource:   hook.ResourceSession,
-		ResourceID: sess.ID.String(),
-		ActorID:    u.ID.String(),
-		Tenant:     req.AppID.String(),
-		Metadata: map[string]string{
-			"email":      u.Email,
-			"user_name":  u.Name(),
-			"session_id": sess.ID.String(),
-		},
+	// Audit the signin event itself. IssueSession already emitted an
+	// "issue_session" audit row for the session record; this one
+	// captures the signin-as-auth-event with the password method.
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signin", "session", sess.ID.String(), u.ID.String(), req.AppID.String(), "auth", map[string]string{
+		"auth_method": "password",
 	})
-
-	// Audit
-	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "signin", "session", sess.ID.String(), u.ID.String(), req.AppID.String(), "auth", nil)
 
 	// Relay
 	e.relayEvent(ctx, "auth.signin", req.AppID.String(), map[string]string{
@@ -421,10 +436,59 @@ type RefreshOpts struct {
 	UserAgent string
 }
 
+// hashRefreshToken returns the canonical hex-encoded SHA-256 of a refresh
+// token. This is the only form of the token that ever reaches the
+// revoked-set tables — we never persist the raw secret.
+func hashRefreshToken(tok string) string {
+	sum := sha256.Sum256([]byte(tok))
+	return hex.EncodeToString(sum[:])
+}
+
 // Refresh generates new tokens for an existing session using the refresh token.
 // When RefreshOpts are provided and session binding is enabled, the client IP
 // and/or User-Agent are validated against the session's stored values.
+//
+// Replay detection (RFC 6819 §5.2.2.3): every successful rotation records
+// the OLD refresh-token hash as revoked. If a previously-rotated token is
+// presented again, the entire session family is revoked, an audit event is
+// recorded, and a generic ErrInvalidCredentials is returned (the caller must
+// not learn that replay was the reason).
 func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...RefreshOpts) (*session.Session, error) {
+	presentedHash := hashRefreshToken(refreshToken)
+
+	// Replay check: if the presented token's hash is already in the
+	// revoked set, this is either a leaked token being replayed or a
+	// double-spend. Either way: cascade-revoke the family and refuse.
+	if revoked, _ := e.store.IsRefreshTokenRevoked(ctx, presentedHash); revoked { //nolint:errcheck // err treated as "not revoked"
+		var ipAddr, userAgent string
+		if len(opts) > 0 {
+			ipAddr = opts[0].IPAddress
+			userAgent = opts[0].UserAgent
+		}
+		familyID, ferr := e.store.GetRevokedRefreshTokenFamily(ctx, presentedHash)
+		if ferr == nil && !familyID.IsNil() {
+			if rerr := e.store.RevokeRefreshTokenFamily(ctx, familyID, session.RevokeReasonReplayDetected); rerr != nil {
+				e.logger.Warn("authsome: revoke refresh-token family failed",
+					log.String("family_id", familyID.String()),
+					log.String("error", rerr.Error()),
+				)
+			}
+		}
+		md := map[string]string{
+			"family_id":  familyID.String(),
+			"ip":         ipAddr,
+			"user_agent": userAgent,
+		}
+		e.hooks.Emit(ctx, &hook.Event{
+			Action:   hook.ActionRefreshTokenReplayed,
+			Resource: hook.ResourceSession,
+			Metadata: md,
+		})
+		e.audit(ctx, bridge.SeverityWarning, bridge.OutcomeFailure,
+			"refresh_token_replayed", "session", "", "", "", "auth", md)
+		return nil, account.ErrInvalidCredentials
+	}
+
 	sess, err := e.store.GetSessionByRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return nil, account.ErrInvalidCredentials
@@ -458,7 +522,17 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 		}
 	}
 
-	// Generate new tokens (using per-app + per-env config if available)
+	// Lazily backfill FamilyID for legacy sessions that pre-date Phase 3E.2.
+	// Without a family, replay-cascade can't link siblings — but a single
+	// session is still safer than refusing every legacy refresh.
+	if sess.FamilyID.IsNil() {
+		sess.FamilyID = id.NewSessionFamilyID()
+	}
+	familyID := sess.FamilyID
+
+	// Generate new tokens (using per-app + per-env config if available).
+	// account.RefreshSession mutates sess in place; the new RefreshToken
+	// inherits the same FamilyID by virtue of leaving the field untouched.
 	cfg := e.sessionConfigForApp(ctx, sess.AppID, sess.EnvID)
 	if err := account.RefreshSession(sess, cfg); err != nil {
 		return nil, fmt.Errorf("authsome: refresh session: %w", err)
@@ -466,6 +540,17 @@ func (e *Engine) Refresh(ctx context.Context, refreshToken string, opts ...Refre
 
 	if err := e.store.UpdateSession(ctx, sess); err != nil {
 		return nil, fmt.Errorf("authsome: update session: %w", err)
+	}
+
+	// Record the OLD refresh-token hash as rotated. A subsequent Refresh
+	// call presenting this same token will trigger the replay branch above.
+	if cfg.RotateRefreshToken {
+		if mErr := e.store.MarkRefreshTokenRevoked(ctx, presentedHash, familyID, session.RevokeReasonRotated); mErr != nil {
+			e.logger.Warn("authsome: mark refresh-token revoked failed",
+				log.String("family_id", familyID.String()),
+				log.String("error", mErr.Error()),
+			)
+		}
 	}
 
 	// Plugin: after session refresh
@@ -750,6 +835,25 @@ func (e *Engine) savePasswordHistory(ctx context.Context, userID id.UserID, oldH
 	}
 }
 
+// mfaPluginInspector is implemented by the MFA plugin to expose enrollment lookups.
+type mfaPluginInspector interface {
+	HasMFA(ctx context.Context, userID id.UserID) bool
+}
+
+// userHasVerifiedMFA returns true when the MFA plugin reports a verified factor
+// for the user. Returns false when the plugin is not registered.
+func (e *Engine) userHasVerifiedMFA(ctx context.Context, userID id.UserID) bool {
+	for _, p := range e.plugins.Plugins() {
+		if p.Name() != "mfa" {
+			continue
+		}
+		if inspector, ok := p.(mfaPluginInspector); ok {
+			return inspector.HasMFA(ctx, userID)
+		}
+	}
+	return false
+}
+
 // lockoutKey builds a scoped lockout key from a sign-in request.
 func (e *Engine) lockoutKey(req *account.SignInRequest) string {
 	identifier := req.Email
@@ -996,6 +1100,87 @@ func (e *Engine) ChangePassword(ctx context.Context, userID id.UserID, currentPa
 		"user_id": u.ID.String(),
 	})
 
+	return nil
+}
+
+// EmailVerificationTTL is the lifetime of a freshly issued email
+// verification token. 24h is the default operators expect for "click
+// the link in your inbox" flows; the token can always be reissued.
+const EmailVerificationTTL = 24 * time.Hour
+
+// SendEmailVerification mints a fresh email-verification token for a
+// known user, persists it, and emits the auth.email_verification_requested
+// hook so subscribers (notification plugin, custom mailers) can deliver
+// the verification link. Caller-side code should use this instead of
+// touching the verification store directly so the hook always fires.
+//
+// Returns the new token so callers that bypass the hook (e.g. tests
+// driving the engine in-process) can complete the flow inline.
+func (e *Engine) SendEmailVerification(ctx context.Context, u *user.User) (string, error) {
+	if err := e.requireStarted(); err != nil {
+		return "", err
+	}
+	if u == nil {
+		return "", fmt.Errorf("authsome: send email verification: nil user")
+	}
+	v, err := account.NewVerification(ctx, u.AppID, u.ID, account.VerificationEmail, EmailVerificationTTL)
+	if err != nil {
+		return "", fmt.Errorf("authsome: build verification: %w", err)
+	}
+	if storeErr := e.store.CreateVerification(ctx, v); storeErr != nil {
+		return "", fmt.Errorf("authsome: persist verification: %w", storeErr)
+	}
+
+	e.hooks.Emit(ctx, &hook.Event{
+		Action:     hook.ActionEmailVerificationRequested,
+		Resource:   hook.ResourceUser,
+		ResourceID: u.ID.String(),
+		ActorID:    u.ID.String(),
+		Tenant:     u.AppID.String(),
+		Metadata: map[string]string{
+			"email":              u.Email,
+			"verification_token": v.Token,
+			"expires_at":         v.ExpiresAt.UTC().Format(time.RFC3339),
+		},
+	})
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "email_verification_requested",
+		"user", u.ID.String(), u.ID.String(), u.AppID.String(), "auth", nil)
+	return v.Token, nil
+}
+
+// ResendEmailVerification is the public, enumeration-safe entry
+// point used by the dashboard "resend verification email" CTA and
+// by POST /v1/verify-email/resend. It returns nil whether or not a
+// matching user exists or is already verified — leaking either
+// signal would let an unauthenticated probe enumerate registered
+// addresses (the same trap closed on /v1/signup in Phase 2A).
+//
+// Callers that legitimately need the lookup outcome (e.g. an
+// authenticated user re-requesting their own verification email)
+// should call SendEmailVerification directly with a hydrated user.
+func (e *Engine) ResendEmailVerification(ctx context.Context, appID id.AppID, email string) error {
+	if err := e.requireStarted(); err != nil {
+		return err
+	}
+	if email == "" {
+		return nil
+	}
+	u, err := e.store.GetUserByEmail(ctx, appID, email)
+	if err != nil || u == nil {
+		// Silent no-op: don't reveal that the email is unregistered.
+		return nil
+	}
+	if u.EmailVerified {
+		// Silent no-op: don't reveal verified-vs-unverified state.
+		return nil
+	}
+	if _, sendErr := e.SendEmailVerification(ctx, u); sendErr != nil {
+		// Log but don't surface to the caller — same enumeration
+		// reasoning. Operators can correlate via audit/log.
+		e.logger.Warn("authsome: resend verification email failed",
+			log.String("user_id", u.ID.String()),
+			log.String("error", sendErr.Error()))
+	}
 	return nil
 }
 
@@ -1427,6 +1612,65 @@ func (e *Engine) ListUserRoles(ctx context.Context, userID id.UserID) ([]*rbac.R
 	return e.rbacStore().ListUserRoles(ctx, userID.String())
 }
 
+// ListUserRolesInApp returns the roles assigned to userID within the
+// given appID. Use this when the caller's session app differs from the
+// app the role assignments live in (e.g. cross-app admin tooling like
+// TwinOS studio, where each workspace owns a separate Authsome App
+// but the calling API key authenticates against the platform App).
+func (e *Engine) ListUserRolesInApp(ctx context.Context, appID id.AppID, userID id.UserID) ([]*rbac.Role, error) {
+	return e.rbacStore().ListUserRolesForApp(ctx, appID.String(), userID.String())
+}
+
+// ListUsersWithRole returns the user IDs of all subjects that hold the named
+// role slug within the given app. It queries the warden assignments store
+// directly because the rbac.Store interface exposes only a user→roles
+// direction, not the reverse. Returns an empty slice (not an error) when no
+// assignments exist.
+func (e *Engine) ListUsersWithRole(ctx context.Context, appID id.AppID, roleSlug string) ([]id.UserID, error) {
+	if e.wardenEng == nil {
+		return nil, fmt.Errorf("rbac: warden engine not initialized")
+	}
+
+	// Resolve the role so we have its warden ID.
+	role, err := e.GetRoleBySlug(ctx, appID, roleSlug)
+	if err != nil || role == nil {
+		return nil, fmt.Errorf("authsome: role %q not found in app %s: %w", roleSlug, appID, err)
+	}
+
+	// Parse the role ID into a warden RoleID. The role ID stored in
+	// rbac.Role.ID is in warden format ("role_xxx").
+	wRoleID, parseErr := wardenid.ParseRoleID(role.ID)
+	if parseErr != nil {
+		// Fallback: try stripping the authsome prefix and re-parsing.
+		parts := strings.SplitN(role.ID, "_", 2)
+		if len(parts) == 2 {
+			wRoleID, parseErr = wardenid.ParseRoleID(string(wardenid.PrefixRole) + "_" + parts[1])
+		}
+		if parseErr != nil {
+			return nil, fmt.Errorf("authsome: invalid role id %q: %w", role.ID, parseErr)
+		}
+	}
+
+	assignments, err := e.wardenEng.Store().ListAssignments(ctx, &wardenassign.ListFilter{
+		TenantID:    appID.String(),
+		RoleID:      &wRoleID,
+		SubjectKind: "user",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("authsome: list assignments for role %q: %w", roleSlug, err)
+	}
+
+	userIDs := make([]id.UserID, 0, len(assignments))
+	for _, a := range assignments {
+		uid, parseErr := id.ParseUserID(a.SubjectID)
+		if parseErr != nil {
+			continue // skip malformed entries
+		}
+		userIDs = append(userIDs, uid)
+	}
+	return userIDs, nil
+}
+
 // GetRoleChildren returns the direct child roles of a parent role.
 func (e *Engine) GetRoleChildren(ctx context.Context, roleID id.RoleID) ([]*rbac.Role, error) {
 	return e.rbacStore().GetRoleChildren(ctx, roleID.String())
@@ -1502,9 +1746,13 @@ func (e *Engine) EnsureDefaultRole(ctx context.Context, appID id.AppID, userID i
 	})
 }
 
-// promoteFirstUserToOwner assigns the platform_owner (or app owner) role to
-// the first user created for an app. This must live in the engine so it works
-// regardless of entry point (API handler, dashboard, SDK, etc.).
+// promoteFirstUserToOwner assigns the platform_owner role to the signing-up
+// user when either:
+//   - this is the very first user in the platform app (original behaviour), or
+//   - the user's email is listed in bootstrapCfg.InitialOwners (case-insensitive).
+//
+// This must live in the engine so it works regardless of entry point (API
+// handler, dashboard, SDK, etc.).
 func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, userID id.UserID) {
 	if !e.hasRBACStore() {
 		return
@@ -1520,9 +1768,34 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 		return
 	}
 
-	list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: 2})
-	if err != nil || list == nil || len(list.Users) != 1 {
-		return // Not the first user.
+	// Determine whether this user should be promoted.
+	shouldPromote := false
+
+	// Case 1: one of the first N users in the platform app (N = InitialOwnerCount).
+	ownerCount := e.bootstrapCfg.InitialOwnerCount
+	if ownerCount > 0 {
+		list, err := e.store.ListUsers(ctx, &user.Query{AppID: appID, Limit: ownerCount + 1})
+		if err == nil && list != nil && len(list.Users) <= ownerCount {
+			shouldPromote = true
+		}
+	}
+
+	// Case 2: email is in the InitialOwners list (case-insensitive).
+	if !shouldPromote && len(e.bootstrapCfg.InitialOwners) > 0 {
+		u, lookupErr := e.store.GetUser(ctx, userID)
+		if lookupErr == nil && u != nil {
+			email := strings.ToLower(strings.TrimSpace(u.Email))
+			for _, owner := range e.bootstrapCfg.InitialOwners {
+				if strings.ToLower(strings.TrimSpace(owner)) == email {
+					shouldPromote = true
+					break
+				}
+			}
+		}
+	}
+
+	if !shouldPromote {
+		return
 	}
 
 	ownerRole, err := e.GetRoleBySlug(ctx, appID, rbac.PlatformOwnerSlug)
@@ -1538,37 +1811,36 @@ func (e *Engine) promoteFirstUserToOwner(ctx context.Context, appID id.AppID, us
 		UserID: userID.String(),
 		RoleID: ownerRole.ID,
 	}); err != nil {
-		e.logger.Warn("authsome: failed to promote first user to platform_owner",
+		e.logger.Warn("authsome: failed to promote user to platform_owner",
 			log.String("user_id", userID.String()),
 			log.String("error", err.Error()),
 		)
 		return
 	}
 
-	e.logger.Info("authsome: promoted first user to platform_owner",
+	e.logger.Info("authsome: promoted user to platform_owner",
 		log.String("user_id", userID.String()),
 		log.String("app_id", appID.String()),
 	)
 }
 
 // ensureWardenScope ensures the context has a warden tenant scope set.
-// Warden's scopeFromContext uses forge.Scope.OrgID() as the tenant, but for
-// app-scoped sessions (no org) this is empty while roles are stored with
-// tenant_id = appID. We always inject the explicit warden tenant values so
-// that Warden falls back to the app ID when OrgID is absent.
+// All RBAC roles (platform-owner, platform-admin, platform-user, and any
+// app-specific roles) are stored in warden with tenant_id = appID — not
+// the org ID. We therefore always use appID as the warden tenant so that
+// role lookups succeed regardless of whether the session is org-scoped.
+// When org-level RBAC is introduced, this function should be extended to
+// check both tenants or use namespace paths for org isolation.
 func (e *Engine) ensureWardenScope(ctx context.Context) context.Context {
 	if e.wardenEng == nil {
 		return ctx
 	}
 
-	// If forge scope is set, derive the warden tenant from it. Use OrgID if
-	// present (org-scoped), otherwise fall back to AppID (app-scoped).
+	// If a forge scope is present, always use the app ID as the warden
+	// tenant. Org scope does not change where roles are stored.
 	if s, ok := forge.ScopeFrom(ctx); ok {
-		tenantID := s.OrgID()
-		if tenantID == "" {
-			tenantID = s.AppID()
-		}
-		return warden.WithTenant(ctx, s.AppID(), tenantID)
+		appID := s.AppID()
+		return warden.WithTenant(ctx, appID, appID)
 	}
 
 	// No forge scope at all — inject the platform app ID as tenant.
@@ -1847,6 +2119,78 @@ func (e *Engine) AdminCreateUser(ctx context.Context, adminID id.UserID, appID i
 	})
 
 	return u, nil
+}
+
+// AdminCopyUserToApp creates a new user record in targetAppID by
+// reusing the source user's email, profile fields, and stored password
+// hash — so the imported user can authenticate with their original
+// password without ever exposing the hash outside the engine. Returns
+// account.ErrEmailTaken if the target app already has a user with the
+// same email (caller can treat as idempotent), or a wrapped store
+// error otherwise.
+//
+// envID is resolved to the target app's default environment when
+// callers pass a zero EnvironmentID.
+func (e *Engine) AdminCopyUserToApp(ctx context.Context, adminID, sourceUserID id.UserID, targetAppID id.AppID, envID id.EnvironmentID) (*user.User, error) {
+	src, err := e.store.GetUser(ctx, sourceUserID)
+	if err != nil {
+		return nil, fmt.Errorf("authsome: admin copy user: load source: %w", err)
+	}
+	if src.PasswordHash == "" {
+		return nil, fmt.Errorf("authsome: admin copy user: source has no password hash; passwordless users cannot be copied")
+	}
+
+	if src.AppID == targetAppID {
+		return nil, fmt.Errorf("authsome: admin copy user: source and target apps are identical")
+	}
+
+	if _, err := e.store.GetUserByEmail(ctx, targetAppID, src.Email); err == nil {
+		return nil, account.ErrEmailTaken
+	}
+
+	if envID.IsNil() {
+		if env, envErr := e.GetDefaultEnvironment(ctx, targetAppID); envErr == nil && env != nil {
+			envID = env.ID
+		}
+	}
+
+	now := time.Now()
+	dup := &user.User{
+		ID:            id.NewUserID(),
+		AppID:         targetAppID,
+		EnvID:         envID,
+		Email:         src.Email,
+		EmailVerified: src.EmailVerified,
+		FirstName:     src.FirstName,
+		LastName:      src.LastName,
+		Username:      src.Username,
+		Phone:         src.Phone,
+		PhoneVerified: src.PhoneVerified,
+		PasswordHash:  src.PasswordHash,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := e.store.CreateUser(ctx, dup); err != nil {
+		return nil, fmt.Errorf("authsome: admin copy user: %w", err)
+	}
+
+	e.EnsureDefaultRole(ctx, targetAppID, dup.ID)
+
+	e.audit(ctx, bridge.SeverityInfo, bridge.OutcomeSuccess, "admin_copy_user", "user", dup.ID.String(), adminID.String(), targetAppID.String(), "admin", map[string]string{
+		"source_user_id": sourceUserID.String(),
+		"source_app_id":  src.AppID.String(),
+	})
+
+	e.relayEvent(ctx, "admin.user.copied", targetAppID.String(), map[string]string{
+		"user_id":        dup.ID.String(),
+		"source_user_id": sourceUserID.String(),
+		"source_app_id":  src.AppID.String(),
+		"admin_id":       adminID.String(),
+		"email":          dup.Email,
+	})
+
+	return dup, nil
 }
 
 // ──────────────────────────────────────────────────

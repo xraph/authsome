@@ -19,6 +19,7 @@ type Store interface {
 	// Token CRUD
 	CreateToken(ctx context.Context, t *Token) error
 	GetToken(ctx context.Context, tokenID id.SCIMTokenID) (*Token, error)
+	UpdateToken(ctx context.Context, t *Token) error
 	ListTokens(ctx context.Context, configID id.SCIMConfigID) ([]*Token, error)
 	DeleteToken(ctx context.Context, tokenID id.SCIMTokenID) error
 	FindTokenByHash(ctx context.Context, tokenHash string) (*Token, *SCIMConfig, error)

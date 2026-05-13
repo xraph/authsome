@@ -116,6 +116,55 @@ func (s *Service) RevokeToken(ctx context.Context, tokenID id.SCIMTokenID) error
 	return s.store.DeleteToken(ctx, tokenID)
 }
 
+// RotateToken issues a fresh bearer token for the same SCIM config and
+// schedules the old token for expiry after a grace window. During the
+// grace window both tokens authenticate so in-flight provisioning runs
+// don't fail; once the grace expires the old token is rejected by
+// ValidateToken (via Token.IsExpired). The new token's plaintext is
+// returned to the caller exactly once — operators must persist it
+// before discarding the response.
+//
+// Grace must be ≥ 1 minute and ≤ 30 days; values outside that range
+// are clamped to the bound, so a misconfigured rotation can't either
+// instantly invalidate the old token (locking out a long-running job)
+// nor leave it valid indefinitely.
+//
+// If the old token's existing ExpiresAt is already sooner than
+// now + grace, it is left unchanged — rotation never extends the
+// lifetime of a token that was already on a tighter expiry.
+func (s *Service) RotateToken(ctx context.Context, oldTokenID id.SCIMTokenID, newName string, grace time.Duration) (string, *Token, error) {
+	const minGrace = time.Minute
+	const maxGrace = 30 * 24 * time.Hour
+	if grace < minGrace {
+		grace = minGrace
+	}
+	if grace > maxGrace {
+		grace = maxGrace
+	}
+
+	old, err := s.store.GetToken(ctx, oldTokenID)
+	if err != nil {
+		return "", nil, fmt.Errorf("scim: rotate token: %w", err)
+	}
+
+	graceExpiry := time.Now().Add(grace)
+	if old.ExpiresAt == nil || old.ExpiresAt.After(graceExpiry) {
+		old.ExpiresAt = &graceExpiry
+		if err := s.store.UpdateToken(ctx, old); err != nil {
+			return "", nil, fmt.Errorf("scim: rotate token: shorten old expiry: %w", err)
+		}
+	}
+
+	if newName == "" {
+		newName = old.Name + " (rotated)"
+	}
+	plaintext, newToken, err := s.GenerateToken(ctx, old.ConfigID, newName, nil)
+	if err != nil {
+		return "", nil, fmt.Errorf("scim: rotate token: issue new: %w", err)
+	}
+	return plaintext, newToken, nil
+}
+
 // ValidateToken checks a bearer token against stored hashes.
 // Returns the matching token and its associated config, or an error.
 func (s *Service) ValidateToken(ctx context.Context, plaintext string) (*Token, *SCIMConfig, error) {

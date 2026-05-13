@@ -11,6 +11,7 @@ import (
 
 	"github.com/xraph/forge"
 
+	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/ceremony"
 	"github.com/xraph/authsome/hook"
@@ -64,6 +65,10 @@ type Plugin struct {
 	hooks      *hook.Bus
 	logger     log.Logger
 	ceremonies ceremony.Store
+	// engine is the host engine reference, captured during OnInit, used
+	// by the /v1/mfa/challenge handler to issue real sessions after a
+	// ticket+code round-trip via Engine.IssueSession.
+	engine plugin.Engine
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -101,6 +106,7 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}
+	p.engine = engine
 
 	return nil
 }
@@ -234,15 +240,24 @@ type VerifyMFAResponse struct {
 	RecoveryCodes []string `json:"recovery_codes,omitempty"`
 }
 
-// ChallengeRequest is the request body for MFA challenge during sign-in.
+// ChallengeRequest is the request body for MFA challenge during the
+// sign-in MFA gate. The mfa_ticket is what /v1/signin (or any other
+// session-issuing endpoint) returned in the 403 body when MFA was
+// required; the code is the user's TOTP digits or recovery code.
 type ChallengeRequest struct {
-	Code string `json:"code"`
+	Ticket string `json:"mfa_ticket" description:"Ticket returned by /v1/signin when MFA was required"`
+	Code   string `json:"code"       description:"TOTP code from the user's authenticator (6 digits) or recovery code"`
 }
 
-// ChallengeResponse is returned on successful MFA challenge.
+// ChallengeResponse is the AuthResponse-shaped body returned on a
+// successful MFA challenge. The shape matches /v1/signin's success
+// response so SDK consumers can persist a session via the same code
+// path regardless of whether the MFA gate fired.
 type ChallengeResponse struct {
-	ChallengePassed bool   `json:"challenge_passed"`
-	Method          string `json:"method"`
+	User         any    `json:"user"          description:"User object"`
+	SessionToken string `json:"session_token" description:"Session token"`
+	RefreshToken string `json:"refresh_token" description:"Refresh token"`
+	ExpiresAt    string `json:"expires_at"    description:"Token expiration time (RFC3339)"`
 }
 
 // DisableRequest is an empty request for disabling MFA.
@@ -427,38 +442,118 @@ func (p *Plugin) handleVerify(ctx forge.Context, req *VerifyMFARequest) (*Verify
 	}, nil
 }
 
-// handleChallenge verifies a TOTP code for a challenge (used during sign-in MFA step).
+// handleChallenge completes the sign-in MFA round-trip. Accepts the
+// ticket previously returned by /v1/signin (or any other session-
+// issuing endpoint that hit the MFARequired gate) plus the user's
+// TOTP code. On success, consumes the ticket and issues a real
+// session via Engine.IssueSession with MFAJustVerified=true so the
+// gate doesn't fire a second time.
+//
+// Endpoint is unauthenticated by design: the user is mid-signin and
+// has no valid session yet — that's the whole point of the gate. The
+// ticket itself is the auth credential for this single endpoint, and
+// it's single-use after a correct code.
+//
+// On bad code: ticket is NOT consumed, so the user can retry within
+// the 5-minute TTL. Brute-force protection comes from the existing
+// rate-limit middleware on this route, not from one-shot ticket
+// invalidation.
+//
+// Type-asserts p.engine to *authsome.Engine to reach IssueSession /
+// LoadMFATicket / ConsumeMFATicket. The plugin.Engine interface
+// deliberately doesn't surface those — adding them would force a
+// public surface change every plugin would inherit. The assertion is
+// safe in production wiring; in test wiring without a concrete engine
+// the handler returns 501.
 func (p *Plugin) handleChallenge(ctx forge.Context, req *ChallengeRequest) (*ChallengeResponse, error) {
-	userID, ok := middleware.UserIDFrom(ctx.Context())
-	if !ok || userID.Prefix() == "" {
-		return nil, forge.Unauthorized("authentication required")
+	if req.Ticket == "" || req.Code == "" {
+		return nil, forge.BadRequest("mfa_ticket and code required")
 	}
 
-	if req.Code == "" {
-		return nil, forge.BadRequest("code required")
+	eng, ok := p.engine.(*authsome.Engine)
+	if !ok || eng == nil {
+		return nil, forge.NewHTTPError(http.StatusNotImplemented,
+			"mfa challenge requires the concrete authsome.Engine; this plugin was wired against a stub")
 	}
+
+	payload, err := eng.LoadMFATicket(ctx.Context(), req.Ticket)
+	if err != nil {
+		return nil, forge.Unauthorized("invalid or expired ticket")
+	}
+	userID := payload.UserID
 
 	enrollment, err := p.store.GetEnrollment(ctx.Context(), userID, "totp")
-	if err != nil {
-		return nil, forge.NotFound("no MFA enrollment found")
+	if err != nil || enrollment == nil {
+		return nil, forge.Unauthorized("no MFA enrollment for user")
 	}
-
 	if !enrollment.Verified {
-		return nil, forge.BadRequest("MFA enrollment not yet verified")
+		return nil, forge.Unauthorized("MFA enrollment not yet verified")
 	}
 
 	if !ValidateTOTP(req.Code, enrollment.Secret) {
+		// Don't consume the ticket on bad code — the user retries within
+		// the 5-minute TTL. Rate-limiting prevents brute force.
 		return nil, forge.Unauthorized("invalid TOTP code")
 	}
 
-	p.audit(ctx.Context(), hook.ActionMFAChallenge, "mfa", enrollment.ID.String(), userID.String(), "", bridge.OutcomeSuccess)
-	p.relayEvent(ctx.Context(), "auth.mfa.challenged", "", map[string]string{"user_id": userID.String(), "method": "totp"})
-	p.emitHook(ctx.Context(), hook.ActionMFAChallenge, "mfa", enrollment.ID.String(), userID.String(), "")
+	// Code is good. Consume the ticket (single-use) before minting the
+	// real session so a race that re-uses the ticket can't double-spend.
+	if consumeErr := eng.ConsumeMFATicket(ctx.Context(), req.Ticket); consumeErr != nil {
+		p.logger.Warn("mfa: consume ticket failed",
+			log.String("ticket_prefix", safePrefix(req.Ticket)),
+			log.Error(consumeErr),
+		)
+		return nil, forge.InternalError(consumeErr)
+	}
+
+	u, err := eng.GetUser(ctx.Context(), userID)
+	if err != nil || u == nil {
+		return nil, forge.InternalError(fmt.Errorf("mfa: load user %s after challenge: %w", userID, err))
+	}
+
+	result, issueErr := eng.IssueSession(ctx.Context(), &authsome.IssueSessionRequest{
+		User:            u,
+		AppID:           payload.AppID,
+		EnvID:           payload.EnvID,
+		AuthMethod:      payload.AuthMethod + "+mfa",
+		IPAddress:       ctx.Request().RemoteAddr,
+		UserAgent:       ctx.Request().UserAgent(),
+		MFAJustVerified: true,
+	})
+	if issueErr != nil {
+		return nil, forge.InternalError(fmt.Errorf("mfa: issue session: %w", issueErr))
+	}
+
+	appIDStr := payload.AppID.String()
+	p.audit(ctx.Context(), hook.ActionMFAChallenge, "mfa", enrollment.ID.String(),
+		userID.String(), appIDStr, bridge.OutcomeSuccess)
+	p.relayEvent(ctx.Context(), "auth.mfa.challenged", appIDStr, map[string]string{
+		"user_id": userID.String(),
+		"method":  "totp",
+	})
+	p.emitHook(ctx.Context(), hook.ActionMFAChallenge, "mfa", enrollment.ID.String(),
+		userID.String(), appIDStr)
+
+	expires := ""
+	if result.Session != nil {
+		expires = result.Session.ExpiresAt.UTC().Format(time.RFC3339)
+	}
 
 	return &ChallengeResponse{
-		ChallengePassed: true,
-		Method:          "totp",
+		User:         result.User,
+		SessionToken: result.Session.Token,
+		RefreshToken: result.Session.RefreshToken,
+		ExpiresAt:    expires,
 	}, nil
+}
+
+// safePrefix returns the first 8 chars of a ticket so it can appear
+// in logs without leaking the secret in full.
+func safePrefix(s string) string {
+	if len(s) <= 8 {
+		return s
+	}
+	return s[:8] + "…"
 }
 
 // handleDisable removes MFA enrollment for the authenticated user.

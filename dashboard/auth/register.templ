@@ -7,9 +7,13 @@ import (
 	"github.com/xraph/forgeui/icons"
 )
 
-// RegisterPageLinks holds navigation paths for the register page.
+// RegisterPageLinks holds navigation paths and the per-request CSRF token
+// for the register page. CSRFToken mirrors the value in the
+// dashboard.FormCSRFCookieName cookie and is embedded as a hidden form
+// field so the POST handler can verify the double-submit pair.
 type RegisterPageLinks struct {
 	LoginPath string
+	CSRFToken string
 }
 
 // RegisterPage renders the dashboard signup form.
@@ -21,6 +25,7 @@ templ RegisterPage(links RegisterPageLinks) {
 	<h2 class="text-lg font-semibold text-center">Create account</h2>
 	<p class="text-sm text-muted-foreground text-center mb-4">Enter your details to create a new account</p>
 	<form method="POST" class="space-y-4">
+		<input type="hidden" name="csrf_token" value={ links.CSRFToken }/>
 		<div class="grid grid-cols-2 gap-3">
 			<div class="space-y-2">
 				@label.Label(label.Props{For: "first_name"}) {
@@ -96,6 +101,7 @@ templ RegisterError(errorMsg string, links RegisterPageLinks) {
 	<h2 class="text-lg font-semibold text-center">Create account</h2>
 	<p class="text-sm text-muted-foreground text-center mb-4">Enter your details to create a new account</p>
 	<form method="POST" class="space-y-4">
+		<input type="hidden" name="csrf_token" value={ links.CSRFToken }/>
 		if errorMsg != "" {
 			<div class="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
 				{ errorMsg }

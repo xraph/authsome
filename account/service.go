@@ -29,6 +29,7 @@ var (
 	ErrPasswordExpired    = errors.New("account: password has expired and must be changed")
 	ErrPasswordReused     = errors.New("account: password was recently used and cannot be reused")
 	ErrEmailNotVerified   = errors.New("account: email address must be verified before signing in")
+	ErrMFARequired        = errors.New("account: MFA challenge required to complete sign-in")
 )
 
 // PasswordPolicy configures password validation rules.
@@ -110,15 +111,51 @@ func CheckPassword(hash, password string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
 
-// NeedsRehash returns true if the hash was produced by a different algorithm
-// than the one currently configured in the policy. This enables transparent
-// migration from bcrypt to argon2id (or vice versa) on successful login.
+// NeedsRehash returns true if the hash should be regenerated using
+// the current policy. It triggers in three cases:
+//
+//  1. Algorithm changed (e.g. bcrypt → argon2id or vice versa).
+//  2. Argon2id hash uses parameters weaker than the policy currently
+//     demands (memory, iterations, or parallelism). Operators bumping
+//     these values to keep up with hardware progress get transparent
+//     rehash on next login without forcing a password reset.
+//  3. Bcrypt hash uses a cost lower than the policy's BcryptCost.
+//
+// Returns false for unparseable hashes — better to leave a working
+// hash alone than to fail-closed and force a reset on a corrupted row.
 func NeedsRehash(hash string, policy PasswordPolicy) bool {
 	switch policy.Algorithm {
 	case "argon2id":
-		return !IsArgon2Hash(hash)
+		if !IsArgon2Hash(hash) {
+			return true
+		}
+		stored, _, _, err := decodeArgon2Hash(hash)
+		if err != nil {
+			return false
+		}
+		want := policy.Argon2Params
+		if want.Memory == 0 {
+			want = DefaultArgon2Params()
+		}
+		if stored.Memory < want.Memory ||
+			stored.Iterations < want.Iterations ||
+			stored.Parallelism < want.Parallelism {
+			return true
+		}
+		return false
 	default: // "bcrypt"
-		return IsArgon2Hash(hash)
+		if IsArgon2Hash(hash) {
+			return true
+		}
+		storedCost, err := bcrypt.Cost([]byte(hash))
+		if err != nil {
+			return false
+		}
+		wantCost := policy.BcryptCost
+		if wantCost == 0 {
+			wantCost = bcrypt.DefaultCost
+		}
+		return storedCost < wantCost
 	}
 }
 
@@ -146,6 +183,7 @@ func NewSession(appID id.AppID, userID id.UserID, cfg SessionConfig) (*session.S
 		ID:                    id.NewSessionID(),
 		AppID:                 appID,
 		UserID:                userID,
+		FamilyID:              id.NewSessionFamilyID(),
 		Token:                 token,
 		RefreshToken:          refreshToken,
 		LastActivityAt:        now,

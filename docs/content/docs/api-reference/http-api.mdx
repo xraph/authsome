@@ -5,6 +5,17 @@ description: Complete reference for all Authsome REST endpoints — authenticati
 
 All endpoints are registered under the configurable `BasePath` (default `/v1/auth`) and return JSON. Authentication is via `Authorization: Bearer <session_token>` header unless noted otherwise. Tenant resolution depends on your Forge middleware configuration.
 
+## App context resolution
+
+Every public-auth endpoint (`/signup`, `/signin`, `/forgot-password`, `/verify-email/resend`) needs to know **which app** the request belongs to. Send one of:
+
+- **`X-Publishable-Key: pk_live_…` header** — recommended for frontends. The server resolves the publishable key to its owning app and routes the request there. The official SDKs (`@authsome/sdk` for TypeScript, `authclient` for Go, `authsome` for Dart) accept a `publishableKey` config option and stamp this header on every request automatically.
+- **`app_id` body field** — for server-to-server callers that don't carry a publishable key.
+
+If both are sent, the publishable key wins; a body `app_id` that disagrees with the resolved key is rejected with `400 app_id does not match publishable key` to fail closed on misconfigured callers.
+
+If neither is sent, the endpoint returns `400 app context required: send X-Publishable-Key header or app_id in the body`. There is no longer a silent fallback to the platform app — that fallback used to mis-route non-platform tenants' users into the platform pool.
+
 ## Authentication
 
 ### `POST /signup`
@@ -19,10 +30,12 @@ Create a user account and return a session.
   "password": "string (required)",
   "name": "string",
   "username": "string",
-  "app_id": "string",
+  "app_id": "string (required if no X-Publishable-Key header)",
   "metadata": {}
 }
 ```
+
+Send `X-Publishable-Key: pk_*` instead of `app_id` to let the server resolve the app.
 
 **Response** `201 Created`
 
@@ -57,11 +70,11 @@ Authenticate with email/username and password.
   "email": "string",
   "username": "string",
   "password": "string (required)",
-  "app_id": "string"
+  "app_id": "string (required if no X-Publishable-Key header)"
 }
 ```
 
-One of `email` or `username` is required.
+One of `email` or `username` is required. Send `X-Publishable-Key` to let the server resolve the app — see [App context resolution](#app-context-resolution).
 
 **Response** `200 OK` — same structure as signup response.
 

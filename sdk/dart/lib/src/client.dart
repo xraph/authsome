@@ -14,9 +14,18 @@ class AuthClientConfig {
   /// Optional HTTP client (defaults to a new [http.Client]).
   final http.Client? httpClient;
 
+  /// Publishable key (`pk_live_*` / `pk_test_*` / `pk_stg_*`) sent on every
+  /// request as the X-Publishable-Key header. The server resolves this to
+  /// the owning App on the public-auth path (signup, signin, forgot-
+  /// password, resend-verification), so frontends never need to know — or
+  /// send — the App's UUID. Without it, those endpoints reject with 400
+  /// "app context required".
+  final String? publishableKey;
+
   const AuthClientConfig({
     required this.baseUrl,
     this.httpClient,
+    this.publishableKey,
   });
 }
 
@@ -25,11 +34,13 @@ class AuthClient {
   final String _baseUrl;
   final http.Client _httpClient;
   final bool _ownsClient;
+  String? _publishableKey;
 
   AuthClient(AuthClientConfig config)
       : _baseUrl = config.baseUrl.replaceAll(RegExp(r'/+$'), ''),
         _httpClient = config.httpClient ?? http.Client(),
-        _ownsClient = config.httpClient == null;
+        _ownsClient = config.httpClient == null,
+        _publishableKey = config.publishableKey;
 
   /// Convenience constructor from base URL string.
   factory AuthClient.fromUrl(String baseUrl) {
@@ -38,6 +49,12 @@ class AuthClient {
 
   /// Access the underlying config values.
   String get baseUrl => _baseUrl;
+
+  /// Update the publishable key sent on every request as X-Publishable-Key.
+  set publishableKey(String? key) => _publishableKey = key;
+
+  /// The publishable key currently in use, if any.
+  String? get publishableKey => _publishableKey;
 
   /// Close the HTTP client (only if we created it).
   void close() {
@@ -272,6 +289,32 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// Create application (admin)
+  /// POST /v1/admin/apps
+  Future<AdminAppResponse> adminCreateApp({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/apps';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminAppResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete application (admin)
+  /// DELETE /v1/admin/apps/{appId}
+  Future<StatusResponse> adminDeleteApp({required String appId, required AdminDeleteAppRequest body, required String token}) async {
+    final path = '/v1/admin/apps/$appId';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get per-app client config overrides
   /// GET /v1/admin/apps/{appId}/client-config
   Future<Config> getAppClientConfig({required String appId, required String token}) async {
@@ -414,12 +457,12 @@ class AuthClient {
 
   /// Create OAuth2 client
   /// POST /v1/admin/oauth/clients
-  Future<CreateClientResponse> createOAuth2Client({required CreateClientRequest body, required String token}) async {
+  Future<CreateClientResponse> createOAuth2Client({required Map<String, dynamic> body, required String token}) async {
     final path = '/v1/admin/oauth/clients';
     final res = await _request(
 'POST',
       path,
-      body: body.toJson(),
+      body: body,
       token: token,
     );
     return CreateClientResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -439,14 +482,102 @@ class AuthClient {
 
   /// List organizations (admin)
   /// GET /v1/admin/orgs
-  Future<OrgListResponse> adminListOrgs({required String token}) async {
+  Future<OrgListResponse> adminListOrgs() async {
     final path = '/v1/admin/orgs';
+    final res = await _request(
+'GET',
+      path,
+    );
+    return OrgListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Grant platform-owner role (admin)
+  /// POST /v1/admin/platform/owners
+  Future<AdminPlatformOwnerResponse> adminGrantPlatformOwner({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/platform/owners';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminPlatformOwnerResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Revoke platform-owner role (admin)
+  /// DELETE /v1/admin/platform/owners/{userID}
+  Future<AdminPlatformOwnerResponse> adminRevokePlatformOwner({required String userID, required AdminRevokePlatformOwnerRequest body, required String token}) async {
+    final path = '/v1/admin/platform/owners/$userID';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return AdminPlatformOwnerResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List service accounts (admin)
+  /// GET /v1/admin/service-accounts
+  Future<AdminServiceAccountListResponse> adminListServiceAccounts({required String token}) async {
+    final path = '/v1/admin/service-accounts';
     final res = await _request(
 'GET',
       path,
       token: token,
     );
-    return OrgListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+    return AdminServiceAccountListResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create service account (admin)
+  /// POST /v1/admin/service-accounts
+  Future<AdminServiceAccountResponse> adminCreateServiceAccount({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/service-accounts';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminServiceAccountResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get service account (admin)
+  /// GET /v1/admin/service-accounts/{serviceAccountId}
+  Future<AdminServiceAccountResponse> adminGetServiceAccount({required String serviceAccountId, required String token}) async {
+    final path = '/v1/admin/service-accounts/$serviceAccountId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return AdminServiceAccountResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete service account (admin)
+  /// DELETE /v1/admin/service-accounts/{serviceAccountId}
+  Future<StatusResponse> adminDeleteServiceAccount({required String serviceAccountId, required AdminDeleteServiceAccountRequest body, required String token}) async {
+    final path = '/v1/admin/service-accounts/$serviceAccountId';
+    final res = await _request(
+'DELETE',
+      path,
+      body: body.toJson(),
+      token: token,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create service account API key (admin)
+  /// POST /v1/admin/service-accounts/{serviceAccountId}/api-keys
+  Future<AdminServiceAccountAPIKeyResponse> adminCreateServiceAccountAPIKey({required String serviceAccountId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/service-accounts/$serviceAccountId/api-keys';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminServiceAccountAPIKeyResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// List all setting definitions
@@ -549,6 +680,137 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// List social providers (admin)
+  /// GET /v1/admin/social/providers
+  Future<AdminListProvidersResponse> socialAdminListProviders({required String appId, required String token}) async {
+    final path = '/v1/admin/social/providers';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'GET',
+      '$path$queryString',
+      token: token,
+    );
+    return AdminListProvidersResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List supported social providers
+  /// GET /v1/admin/social/providers/catalog
+  Future<AdminCatalogResponse> socialAdminCatalog({required String token}) async {
+    final path = '/v1/admin/social/providers/catalog';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return AdminCatalogResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Configure a social provider (admin)
+  /// PUT /v1/admin/social/providers/{provider}
+  Future<AdminProviderResponse> socialAdminUpsertProvider({required String provider, required Map<String, dynamic> body, required String appId, required String token}) async {
+    final path = '/v1/admin/social/providers/$provider';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'PUT',
+      '$path$queryString',
+      body: body,
+      token: token,
+    );
+    return AdminProviderResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete a social provider (admin)
+  /// DELETE /v1/admin/social/providers/{provider}
+  Future<AdminDeleteProviderResponse> socialAdminDeleteProvider({required String provider, required String appId, required String token}) async {
+    final path = '/v1/admin/social/providers/$provider';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'DELETE',
+      '$path$queryString',
+      token: token,
+    );
+    return AdminDeleteProviderResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// List SSO connections for an app (admin)
+  /// GET /v1/admin/sso/connections
+  Future<AdminListConnectionsResponse> ssoAdminListConnections({required String appId, required String token}) async {
+    final path = '/v1/admin/sso/connections';
+    final queryParams = <String, String>{};
+    queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
+    final res = await _request(
+'GET',
+      '$path$queryString',
+      token: token,
+    );
+    return AdminListConnectionsResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Create SSO connection (admin)
+  /// POST /v1/admin/sso/connections
+  Future<AdminCreateConnectionResponse> ssoAdminCreateConnection({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/sso/connections';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return AdminCreateConnectionResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Get SSO connection (admin)
+  /// GET /v1/admin/sso/connections/{connectionId}
+  Future<Connection> ssoAdminGetConnection({required String connectionId, required String token}) async {
+    final path = '/v1/admin/sso/connections/$connectionId';
+    final res = await _request(
+'GET',
+      path,
+      token: token,
+    );
+    return Connection.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update SSO connection (admin)
+  /// PUT /v1/admin/sso/connections/{connectionId}
+  Future<Connection> ssoAdminUpdateConnection({required String connectionId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/sso/connections/$connectionId';
+    final res = await _request(
+'PUT',
+      path,
+      body: body,
+      token: token,
+    );
+    return Connection.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Delete SSO connection (admin)
+  /// DELETE /v1/admin/sso/connections/{connectionId}
+  Future<AdminDeleteConnectionResponse> ssoAdminDeleteConnection({required String connectionId, required String token}) async {
+    final path = '/v1/admin/sso/connections/$connectionId';
+    final res = await _request(
+'DELETE',
+      path,
+      token: token,
+    );
+    return AdminDeleteConnectionResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get stats (admin)
   /// GET /v1/admin/stats
   Future<AdminStatsResponse> adminGetStats({required String token}) async {
@@ -573,6 +835,19 @@ class AuthClient {
     return AdminUserListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Create user (admin)
+  /// POST /v1/admin/users/create
+  Future<User> adminCreateUser({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/users/create';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return User.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Get user (admin)
   /// GET /v1/admin/users/{userId}
   Future<User> adminGetUser({required String userId, required String token}) async {
@@ -580,6 +855,19 @@ class AuthClient {
     final res = await _request(
 'GET',
       path,
+      token: token,
+    );
+    return User.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
+  /// Update user (admin)
+  /// PATCH /v1/admin/users/{userId}
+  Future<User> adminUpdateUser({required String userId, required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/users/$userId';
+    final res = await _request(
+'PATCH',
+      path,
+      body: body,
       token: token,
     );
     return User.fromJson(Map<String, dynamic>.from(res as Map));
@@ -906,38 +1194,35 @@ class AuthClient {
 
   /// List consents
   /// GET /v1/consent
-  Future<ListResponse> listConsents({required String token}) async {
+  Future<ListResponse> listConsents() async {
     final path = '/v1/consent';
     final res = await _request(
 'GET',
       path,
-      token: token,
     );
     return ListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Grant consent
   /// POST /v1/consent/grant
-  Future<Consent> grantConsent({required Map<String, dynamic> body, required String token}) async {
+  Future<Consent> grantConsent({required Map<String, dynamic> body}) async {
     final path = '/v1/consent/grant';
     final res = await _request(
 'POST',
       path,
       body: body,
-      token: token,
     );
     return Consent.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
   /// Revoke consent
   /// POST /v1/consent/revoke
-  Future<StatusResponse> revokeConsent({required Map<String, dynamic> body, required String token}) async {
+  Future<StatusResponse> revokeConsent({required Map<String, dynamic> body}) async {
     final path = '/v1/consent/revoke';
     final res = await _request(
 'POST',
       path,
       body: body,
-      token: token,
     );
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -1275,6 +1560,19 @@ class AuthClient {
     return Map<String, dynamic>.from(res as Map);
   }
 
+  /// Switch active organization
+  /// POST /v1/me/switch-org
+  Future<SwitchOrgResponse> switchOrg({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/me/switch-org';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return SwitchOrgResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// MFA challenge
   /// POST /v1/mfa/challenge
   Future<ChallengeResponse> challengeMFA({required ChallengeRequest body}) async {
@@ -1400,13 +1698,12 @@ class AuthClient {
 
   /// Complete device authorization
   /// POST /v1/oauth/device/complete
-  Future<DeviceCompleteResponse> oauth2DeviceComplete({required DeviceCompleteRequest body, required String token}) async {
+  Future<DeviceCompleteResponse> oauth2DeviceComplete({required DeviceCompleteRequest body}) async {
     final path = '/v1/oauth/device/complete';
     final res = await _request(
 'POST',
       path,
       body: body.toJson(),
-      token: token,
     );
     return DeviceCompleteResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
@@ -2080,6 +2377,18 @@ class AuthClient {
     return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Resend email verification
+  /// POST /v1/verify-email/resend
+  Future<StatusResponse> resendEmailVerification({required Map<String, dynamic> body}) async {
+    final path = '/v1/verify-email/resend';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+    );
+    return StatusResponse.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// List webhooks
   /// GET /v1/webhooks
   Future<WebhookListResponse> listWebhooks({required String token}) async {
@@ -2161,6 +2470,9 @@ class AuthClient {
 
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
+    }
+    if (_publishableKey != null && _publishableKey!.isNotEmpty) {
+      headers['X-Publishable-Key'] = _publishableKey!;
     }
 
     final encodedBody = body != null ? jsonEncode(body) : null;

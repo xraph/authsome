@@ -98,14 +98,27 @@ const (
 	ActionWebhookUpdate = "webhook.update"
 	ActionWebhookDelete = "webhook.delete"
 
-	ActionPasswordReset          = "auth.password_reset"
-	ActionPasswordChange         = "auth.password_change"
-	ActionEmailVerify            = "auth.email_verify"
-	ActionMFAEnroll              = "auth.mfa.enroll"
-	ActionMFAChallenge           = "auth.mfa.challenge"
-	ActionMFARecoveryUsed        = "auth.mfa.recovery_used"
-	ActionMFARecoveryRegenerated = "auth.mfa.recovery_regenerated"
-	ActionAccountLocked          = "auth.account_locked"
+	ActionPasswordReset  = "auth.password_reset"
+	ActionPasswordChange = "auth.password_change"
+	ActionEmailVerify    = "auth.email_verify"
+	// ActionEmailVerificationRequested fires when the engine mints a
+	// fresh email-verification token. Subscribers (notification plugin,
+	// custom mailers) read Metadata["verification_token"] to render the
+	// link the user clicks. Distinct from ActionEmailVerify which
+	// fires on successful verification.
+	ActionEmailVerificationRequested = "auth.email_verification_requested"
+	ActionMFAEnroll                  = "auth.mfa.enroll"
+	ActionMFAChallenge               = "auth.mfa.challenge"
+	ActionMFARecoveryUsed            = "auth.mfa.recovery_used"
+	ActionMFARecoveryRegenerated     = "auth.mfa.recovery_regenerated"
+	ActionAccountLocked              = "auth.account_locked"
+	// ActionRefreshTokenReplayed fires when a refresh-token presented to
+	// Engine.Refresh has already been rotated, indicating a leaked token
+	// is being replayed. The engine cascade-revokes the entire session
+	// family (RFC 6819 §5.2.2.3) and emits this hook with metadata
+	// {family_id, ip, user_agent}. The actor is intentionally left blank —
+	// the caller is by definition not trusted.
+	ActionRefreshTokenReplayed = "auth.refresh_token_replayed"
 
 	ActionRoleCreate   = "rbac.role.create"
 	ActionRoleUpdate   = "rbac.role.update"

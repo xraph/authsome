@@ -97,6 +97,7 @@ func (a *API) handleSetAppClientConfig(ctx forge.Context, req *SetAppClientConfi
 		PasskeyEnabled:           req.PasskeyEnabled,
 		MagicLinkEnabled:         req.MagicLinkEnabled,
 		MFAEnabled:               req.MFAEnabled,
+		MFARequired:              req.MFARequired,
 		SSOEnabled:               req.SSOEnabled,
 		SocialEnabled:            req.SocialEnabled,
 		WaitlistEnabled:          req.WaitlistEnabled,

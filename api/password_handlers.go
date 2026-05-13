@@ -52,12 +52,23 @@ func (a *API) registerPasswordRoutes(router forge.Router) error {
 		return err
 	}
 
-	return g.POST("/verify-email", a.handleVerifyEmail,
+	if err := g.POST("/verify-email", a.handleVerifyEmail,
 		forge.WithSummary("Verify email"),
 		forge.WithDescription("Verifies a user's email address using a verification token."),
 		forge.WithOperationID("verifyEmail"),
 		forge.WithRequestSchema(VerifyEmailRequest{}),
 		forge.WithResponseSchema(http.StatusOK, "Email verified", StatusResponse{}),
+		forge.WithErrorResponses(),
+	); err != nil {
+		return err
+	}
+
+	return g.POST("/verify-email/resend", a.handleResendVerification,
+		forge.WithSummary("Resend email verification"),
+		forge.WithDescription("Issues a fresh email verification token and emits the auth.email_verification_requested hook so a delivery handler (notification plugin or custom mailer) can send the link. Always returns 200 to avoid email-existence enumeration; callers cannot tell whether the email was registered or already verified."),
+		forge.WithOperationID("resendEmailVerification"),
+		forge.WithRequestSchema(ResendVerificationRequest{}),
+		forge.WithResponseSchema(http.StatusOK, "Verification queued", StatusResponse{}),
 		forge.WithErrorResponses(),
 	)
 }
@@ -71,9 +82,9 @@ func (a *API) handleForgotPassword(ctx forge.Context, req *ForgotPasswordRequest
 		return nil, forge.BadRequest("email is required")
 	}
 
-	appID, err := a.resolveAppID(req.AppID)
+	appID, err := a.resolvePublicAppID(ctx, req.AppID)
 	if err != nil {
-		return nil, forge.BadRequest("invalid app_id")
+		return nil, err
 	}
 
 	// ForgotPassword returns nil, nil for unknown emails (avoids email enumeration).
@@ -126,4 +137,23 @@ func (a *API) handleVerifyEmail(ctx forge.Context, req *VerifyEmailRequest) (*St
 
 	resp := &StatusResponse{Status: "email verified"}
 	return nil, ctx.JSON(http.StatusOK, resp)
+}
+
+func (a *API) handleResendVerification(ctx forge.Context, req *ResendVerificationRequest) (*StatusResponse, error) {
+	// Anti-enumeration: never surface "no such user" or "already
+	// verified" — both leak the same registration signal /v1/signup
+	// closes off. We always return 200 with the same body. A missing
+	// app context (no pk header, no app_id body) is also folded into
+	// the same 200 — emitting a 400 here would let an attacker
+	// distinguish "endpoint shape is wrong" from "nothing to do",
+	// which still narrows the search space.
+	if req.Email == "" {
+		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "ok"})
+	}
+	appID, err := a.resolvePublicAppID(ctx, req.AppID)
+	if err != nil {
+		return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "ok"})
+	}
+	_ = a.engine.ResendEmailVerification(ctx.Context(), appID, req.Email) //nolint:errcheck // best-effort, error-suppressed by design
+	return nil, ctx.JSON(http.StatusOK, &StatusResponse{Status: "ok"})
 }

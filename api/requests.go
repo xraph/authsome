@@ -8,21 +8,23 @@ import "github.com/xraph/authsome/environment"
 
 // SignUpRequest binds the body for POST /signup.
 type SignUpRequest struct {
-	AppID     string            `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
-	Email     string            `json:"email" description:"User email address"`
-	Password  string            `json:"password" description:"User password"`
-	FirstName string            `json:"first_name,omitempty" description:"First/given name"`
-	LastName  string            `json:"last_name,omitempty" description:"Last/family name"`
-	Username  string            `json:"username,omitempty" description:"Unique username"`
-	Metadata  map[string]string `json:"metadata,omitempty" description:"Custom signup form field values"`
+	AppID        string            `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email        string            `json:"email" description:"User email address"`
+	Password     string            `json:"password" description:"User password"`
+	FirstName    string            `json:"first_name,omitempty" description:"First/given name"`
+	LastName     string            `json:"last_name,omitempty" description:"Last/family name"`
+	Username     string            `json:"username,omitempty" description:"Unique username"`
+	Metadata     map[string]string `json:"metadata,omitempty" description:"Custom signup form field values"`
+	CaptchaToken string            `json:"captcha_token,omitempty" description:"Cloudflare Turnstile / hCaptcha challenge token; required when the app has captcha enabled (auth.captcha_required setting). Can also be sent via X-Captcha-Token header."`
 }
 
 // SignInRequest binds the body for POST /signin.
 type SignInRequest struct {
-	AppID    string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
-	Email    string `json:"email,omitempty" description:"User email address"`
-	Username string `json:"username,omitempty" description:"Username (alternative to email)"`
-	Password string `json:"password" description:"User password"`
+	AppID        string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email        string `json:"email,omitempty" description:"User email address"`
+	Username     string `json:"username,omitempty" description:"Username (alternative to email)"`
+	Password     string `json:"password" description:"User password"`
+	CaptchaToken string `json:"captcha_token,omitempty" description:"Cloudflare Turnstile / hCaptcha challenge token; required when the app has captcha enabled (auth.captcha_required setting). Can also be sent via X-Captcha-Token header."`
 }
 
 // SignOutRequest is an empty request for POST /signout (session from context).
@@ -58,6 +60,16 @@ type ChangePasswordRequest struct {
 // VerifyEmailRequest binds the body for POST /verify-email.
 type VerifyEmailRequest struct {
 	Token string `json:"token" description:"Email verification token"`
+}
+
+// ResendVerificationRequest binds the body for POST /verify-email/resend.
+//
+// The endpoint always returns 200 — caller cannot tell whether the email
+// is registered or already verified — so this struct deliberately has no
+// hard-required fields. An empty body is accepted (and silently no-ops).
+type ResendVerificationRequest struct {
+	AppID string `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Email string `json:"email" description:"Email address of the account requesting a fresh verification token"`
 }
 
 // ---------------------------------------------------------------------------
@@ -268,9 +280,15 @@ type UnassignRoleRequest struct {
 	UserID string `json:"user_id" description:"User identifier"`
 }
 
-// ListUserRolesRequest binds the path for GET /users/:userId/roles.
+// ListUserRolesRequest binds path + query for GET /users/:userId/roles.
+// AppID is optional — when set the listing scopes to that app instead of
+// the engine's platform app. Cross-app admin clients (e.g. TwinOS studio,
+// where roles live in per-workspace apps but the calling API key
+// authenticates against the platform app) MUST pass app_id; without it
+// the engine queries the wrong tenant and returns an empty list.
 type ListUserRolesRequest struct {
 	UserID string `path:"userId" description:"User identifier"`
+	AppID  string `query:"app_id" description:"Optional app scope; defaults to the platform app" optional:"true"`
 }
 
 // RoleListResponse wraps a list of roles.
@@ -301,9 +319,9 @@ type ForgotPasswordResponse struct {
 // AdminListUsersRequest binds query params for GET /admin/users.
 type AdminListUsersRequest struct {
 	AppID  string `query:"app_id" description:"Application ID"`
-	Email  string `query:"email" description:"Filter by email (partial match)"`
-	Cursor string `query:"cursor" description:"Pagination cursor"`
-	Limit  int    `query:"limit" description:"Maximum number of results (default 20, max 100)"`
+	Email  string `query:"email" description:"Filter by email (partial match)" optional:"true"`
+	Cursor string `query:"cursor" description:"Pagination cursor" optional:"true"`
+	Limit  int    `query:"limit" description:"Maximum number of results (default 20, max 100)" default:"20" optional:"true"`
 }
 
 // AdminGetUserRequest binds the path for GET /admin/users/:userId.
@@ -347,6 +365,46 @@ type AdminCreateUserRequest struct {
 	Username  string `json:"username,omitempty" description:"Unique username"`
 }
 
+// AdminCopyUserRequest binds the body for POST /admin/users/copy.
+// Provisions a duplicate of source_user_id under target_app_id while
+// reusing the source user's stored password hash so the copy can
+// authenticate with the original password. Used by TwinOS studio's
+// "Add existing user" flow to lift an end-user from one workspace's
+// Authsome App into another's.
+type AdminCopyUserRequest struct {
+	SourceUserID string `json:"source_user_id" description:"User to duplicate"`
+	TargetAppID  string `json:"target_app_id" description:"Authsome App that will hold the duplicate"`
+	EnvID        string `json:"env_id,omitempty" description:"Optional target environment; falls back to the App's default environment"`
+}
+
+// AdminCreateAppRequest binds the body for POST /admin/apps. Used
+// by platform-admin clients (e.g. TwinOS studio) to spin up a fresh
+// App per tenant. Slug must be globally unique within the Authsome
+// instance — caller is responsible for adding a tenant-derived
+// suffix to avoid collisions.
+type AdminCreateAppRequest struct {
+	Name string `json:"name" description:"Human-readable app name"`
+	Slug string `json:"slug" description:"URL-safe app slug (globally unique)"`
+	Logo string `json:"logo,omitempty" description:"App logo URL"`
+}
+
+// AdminAppResponse is the create response for POST /admin/apps.
+// Includes the generated PublishableKey so the caller can hand it
+// to the frontend without a follow-up read.
+type AdminAppResponse struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Slug           string `json:"slug"`
+	Logo           string `json:"logo,omitempty"`
+	PublishableKey string `json:"publishable_key,omitempty"`
+	IsPlatform     bool   `json:"is_platform"`
+}
+
+// AdminDeleteAppRequest binds the path for DELETE /admin/apps/:appId.
+type AdminDeleteAppRequest struct {
+	AppID string `path:"appId" description:"Application identifier to delete"`
+}
+
 // AdminStatsRequest is an empty request for GET /admin/stats.
 type AdminStatsRequest struct {
 	AppID string `query:"app_id" description:"Application ID"`
@@ -375,6 +433,25 @@ type AdminImpersonateRequest struct {
 
 // AdminStopImpersonationRequest is an empty request for POST /admin/impersonate/stop.
 type AdminStopImpersonationRequest struct{}
+
+// AdminGrantPlatformOwnerRequest binds the body for POST /admin/platform/owners.
+// Either user_id or email must be provided.
+type AdminGrantPlatformOwnerRequest struct {
+	UserID string `json:"user_id,omitempty" description:"User identifier (mutually exclusive with email)"`
+	Email  string `json:"email,omitempty" description:"User email address (mutually exclusive with user_id)"`
+}
+
+// AdminRevokePlatformOwnerRequest binds the path for DELETE /admin/platform/owners/:userID.
+type AdminRevokePlatformOwnerRequest struct {
+	UserID string `path:"userID" description:"User identifier to revoke platform-owner role from"`
+}
+
+// AdminPlatformOwnerResponse is returned by grant/revoke platform owner endpoints.
+type AdminPlatformOwnerResponse struct {
+	UserID string `json:"user_id"`
+	RoleID string `json:"role_id"`
+	Status string `json:"status"`
+}
 
 // ---------------------------------------------------------------------------
 // GDPR / Account deletion requests
@@ -516,6 +593,7 @@ type SetAppClientConfigRequest struct {
 	PasskeyEnabled           *bool    `json:"passkey_enabled,omitempty" description:"Enable passkey auth (nil = inherit)"`
 	MagicLinkEnabled         *bool    `json:"magic_link_enabled,omitempty" description:"Enable magic link auth (nil = inherit)"`
 	MFAEnabled               *bool    `json:"mfa_enabled,omitempty" description:"Enable MFA (nil = inherit)"`
+	MFARequired              *bool    `json:"mfa_required,omitempty" description:"Require MFA on every sign-in (nil = false)"`
 	SSOEnabled               *bool    `json:"sso_enabled,omitempty" description:"Enable SSO (nil = inherit)"`
 	SocialEnabled            *bool    `json:"social_enabled,omitempty" description:"Enable social auth (nil = inherit)"`
 	WaitlistEnabled          *bool    `json:"waitlist_enabled,omitempty" description:"Enable waitlist (nil = inherit)"`
@@ -570,4 +648,42 @@ type IntrospectUser struct {
 	FirstName string `json:"first_name,omitempty" description:"First name"`
 	LastName  string `json:"last_name,omitempty" description:"Last name"`
 	Username  string `json:"username,omitempty" description:"Username"`
+}
+
+// ---------------------------------------------------------------------------
+// Service Account admin requests
+// ---------------------------------------------------------------------------
+
+// AdminCreateServiceAccountRequest binds the body for POST /admin/service-accounts.
+type AdminCreateServiceAccountRequest struct {
+	AppID       string   `json:"app_id,omitempty" description:"Application ID (optional, uses default)"`
+	Name        string   `json:"name" description:"Service account name (unique per app)"`
+	Description string   `json:"description,omitempty" description:"Human-readable description"`
+	Scopes      []string `json:"scopes,omitempty" description:"Default scopes for API keys minted for this service account"`
+}
+
+// AdminListServiceAccountsRequest binds query params for GET /admin/service-accounts.
+type AdminListServiceAccountsRequest struct {
+	AppID  string `query:"app_id" description:"Application ID"`
+	Limit  int    `query:"limit,omitempty" description:"Maximum number of results (default 20, max 100)"`
+	Cursor string `query:"cursor,omitempty" description:"Pagination cursor"`
+}
+
+// AdminGetServiceAccountRequest binds the path for GET /admin/service-accounts/:serviceAccountId.
+type AdminGetServiceAccountRequest struct {
+	ServiceAccountID string `path:"serviceAccountId" description:"Service account ID"`
+}
+
+// AdminDeleteServiceAccountRequest binds the path for DELETE /admin/service-accounts/:serviceAccountId.
+type AdminDeleteServiceAccountRequest struct {
+	ServiceAccountID string `path:"serviceAccountId" description:"Service account ID"`
+}
+
+// AdminCreateServiceAccountAPIKeyRequest binds path + body for
+// POST /admin/service-accounts/:serviceAccountId/api-keys.
+type AdminCreateServiceAccountAPIKeyRequest struct {
+	ServiceAccountID string   `path:"serviceAccountId" description:"Service account ID"`
+	Name             string   `json:"name" description:"API key name"`
+	Scopes           []string `json:"scopes,omitempty" description:"Scopes for this key"`
+	ExpiresAt        *string  `json:"expires_at,omitempty" description:"Optional expiration time (RFC 3339)"`
 }

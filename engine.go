@@ -7,8 +7,11 @@ package authsome
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	log "github.com/xraph/go-utils/log"
@@ -89,6 +92,11 @@ type Engine struct {
 	ledger       bridge.Ledger
 	metrics      bridge.MetricsCollector
 
+	// tokenEncryptor encrypts at-rest secrets such as third-party OAuth
+	// access/refresh tokens. Defaults to bridge.NoopEncryptor when no
+	// AUTHSOME_TOKEN_ENCRYPTION_KEY is configured (dev mode).
+	tokenEncryptor bridge.Encryptor
+
 	// Ceremony state store for multi-instance auth ceremonies
 	ceremonyStore ceremony.Store
 
@@ -155,6 +163,16 @@ func NewEngine(opts ...Option) (*Engine, error) {
 		return nil, fmt.Errorf("authsome: failed to register core session settings: %w", err)
 	}
 
+	// Register captcha settings (Phase 2B.2).
+	if err := registerCaptchaSettings(e.settingsMgr); err != nil {
+		return nil, fmt.Errorf("authsome: failed to register captcha settings: %w", err)
+	}
+
+	// Resolve token encryptor: WithTokenEncryptor wins, otherwise read env.
+	if e.tokenEncryptor == nil {
+		e.tokenEncryptor = resolveTokenEncryptor(e.logger)
+	}
+
 	// Register pending plugins
 	for _, p := range e.pendingPlugins {
 		e.plugins.Register(p)
@@ -196,6 +214,19 @@ func (e *Engine) requireStarted() error {
 // capability detection (JWT, strategies) and the cookie-to-header bridge.
 // Called once during InitPlugins so both the extension and plugins share
 // the same middleware instance.
+//
+// Strategy registration timing — IMPORTANT: this method runs DURING
+// InitPlugins, BEFORE plugin OnInit hooks fire and BEFORE Engine.Start
+// auto-registers plugin-provided strategies. So at build time
+// `e.HasStrategies()` is always false and `e.Strategies()` returns an
+// empty registry. We deliberately ignore HasStrategies as a switch
+// guard and always pass the registry pointer into the middleware —
+// the registry is allocated up front and the middleware reads it
+// lazily on each request, so strategies registered AFTER this build
+// are picked up automatically. Choosing the bare `AuthMiddleware`
+// variant here would permanently strip strategy support from every
+// request and turn every API-key call into a 401 with the unhelpful
+// "no strategy ran" debug_reason.
 func (e *Engine) buildAuthMiddleware() {
 	var inner forge.Middleware
 
@@ -204,8 +235,7 @@ func (e *Engine) buildAuthMiddleware() {
 		JWTSessionChecker:  e.jwtSessionChecker,
 	}
 
-	switch {
-	case e.HasJWT():
+	if e.HasJWT() {
 		inner = middleware.AuthMiddlewareWithJWT(
 			e.ResolveSessionByToken,
 			e.ResolveUser,
@@ -214,18 +244,15 @@ func (e *Engine) buildAuthMiddleware() {
 			e.Logger(),
 			bindCfg,
 		)
-	case e.HasStrategies():
+	} else {
+		// Always pass the strategies registry — even when empty at
+		// build time it will be populated by Start before the first
+		// request lands. The registry pointer is stable; the
+		// middleware iterates it on each request.
 		inner = middleware.AuthMiddlewareWithStrategies(
 			e.ResolveSessionByToken,
 			e.ResolveUser,
 			e.Strategies(),
-			e.Logger(),
-			bindCfg,
-		)
-	default:
-		inner = middleware.AuthMiddleware(
-			e.ResolveSessionByToken,
-			e.ResolveUser,
 			e.Logger(),
 			bindCfg,
 		)
@@ -640,6 +667,10 @@ func (e *Engine) SessionConfigForApp(ctx context.Context, appID id.AppID, envIDs
 // Chronicle returns the audit trail bridge (may be nil).
 func (e *Engine) Chronicle() bridge.Chronicle { return e.chronicle }
 
+// SetChronicle replaces the chronicle implementation. Intended for tests;
+// not safe for concurrent use after Start.
+func (e *Engine) SetChronicle(ch bridge.Chronicle) { e.chronicle = ch }
+
 // Authorizer returns the authorization bridge (may be nil).
 func (e *Engine) Authorizer() bridge.Authorizer { return e.authorizer }
 
@@ -660,6 +691,18 @@ func (e *Engine) Herald() bridge.Herald { return e.heraldBridge }
 
 // Vault returns the secrets/feature-flag/config bridge (may be nil).
 func (e *Engine) Vault() bridge.Vault { return e.vault }
+
+// TokenEncryptor returns the at-rest Encryptor used for sensitive opaque
+// payloads such as third-party OAuth access/refresh tokens. Always non-nil
+// after NewEngine — falls back to bridge.NoopEncryptor when no key is
+// configured. Plugins that persist provider tokens should wrap their store
+// using this encryptor (see plugins/social.NewEncryptedStore).
+func (e *Engine) TokenEncryptor() bridge.Encryptor {
+	if e.tokenEncryptor == nil {
+		return bridge.NoopEncryptor{}
+	}
+	return e.tokenEncryptor
+}
 
 // Dispatcher returns the job queue bridge (may be nil).
 func (e *Engine) Dispatcher() bridge.Dispatcher { return e.dispatcher }
@@ -779,8 +822,19 @@ type ClientConfigResponse struct {
 	EmailVerification   *ClientConfigEmailVerification `json:"email_verification,omitempty"`
 	DeviceAuthorization *ClientConfigToggle            `json:"device_authorization,omitempty"`
 	Waitlist            *ClientConfigToggle            `json:"waitlist,omitempty"`
+	Captcha             *ClientConfigCaptcha           `json:"captcha,omitempty"`
 	SupportedPlugins    []string                       `json:"supported_plugins"`
 	SignupFields        []ClientConfigSignupField      `json:"signup_fields,omitempty"`
+}
+
+// ClientConfigCaptcha tells the frontend whether — and how — to render
+// a captcha challenge before submitting auth forms. Mirrors the
+// auth.captcha_* settings; only public-safe fields are exposed (the
+// secret_key is intentionally NOT included).
+type ClientConfigCaptcha struct {
+	Required bool   `json:"required"`
+	Provider string `json:"provider,omitempty"`
+	SiteKey  string `json:"site_key,omitempty"`
 }
 
 // ClientConfigEmailVerification represents email verification settings.
@@ -814,8 +868,9 @@ type ClientConfigSocialProvider struct {
 
 // ClientConfigMFA represents the MFA configuration.
 type ClientConfigMFA struct {
-	Enabled bool     `json:"enabled"`
-	Methods []string `json:"methods"`
+	Enabled  bool     `json:"enabled"`
+	Required bool     `json:"required"`
+	Methods  []string `json:"methods"`
 }
 
 // ClientConfigSSO represents the SSO configuration.
@@ -916,6 +971,7 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		socialEnabled    bool
 		passkeyEnabled   bool
 		mfaEnabled       bool
+		mfaRequired      bool
 		magicLinkEnabled bool
 		ssoEnabled       bool
 		waitlistEnabled  bool
@@ -972,6 +1028,9 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 			&waitlistEnabled,
 			&socialProviders, &ssoConnections, &mfaMethods,
 		)
+		if overrides.MFARequired != nil {
+			mfaRequired = *overrides.MFARequired
+		}
 	}
 
 	// Signup is enabled by default unless explicitly disabled.
@@ -994,8 +1053,9 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		mfaMethods = []string{}
 	}
 	resp.MFA = &ClientConfigMFA{
-		Enabled: mfaEnabled,
-		Methods: mfaMethods,
+		Enabled:  mfaEnabled,
+		Required: mfaRequired,
+		Methods:  mfaMethods,
 	}
 
 	if ssoConnections == nil {
@@ -1071,7 +1131,37 @@ func (e *Engine) ClientConfig(ctx context.Context, appID id.AppID) *ClientConfig
 		}
 	}
 
+	// Captcha: per-app setting. Always emit the section so the frontend
+	// can branch on resp.Captcha.Required without conditional checks.
+	// Site key is public by design (visible in the rendered widget); the
+	// secret key is loaded server-side only and NEVER returned here.
+	resp.Captcha = e.clientConfigCaptcha(ctx, appID)
+
 	return resp
+}
+
+// clientConfigCaptcha resolves the public-safe captcha config for an
+// app. Returns Required=false / empty fields when settings can't be
+// resolved — captcha defaults to off so a settings-store outage never
+// locks new signups out.
+func (e *Engine) clientConfigCaptcha(ctx context.Context, appID id.AppID) *ClientConfigCaptcha {
+	out := &ClientConfigCaptcha{}
+	mgr := e.Settings()
+	if mgr == nil {
+		return out
+	}
+	resolveOpts := settings.ResolveOpts{AppID: appID.String()}
+
+	if v, err := settings.Get(ctx, mgr, SettingCaptchaRequired, resolveOpts); err == nil {
+		out.Required = v
+	}
+	if v, err := settings.Get(ctx, mgr, SettingCaptchaProvider, resolveOpts); err == nil {
+		out.Provider = v
+	}
+	if v, err := settings.Get(ctx, mgr, SettingCaptchaSiteKey, resolveOpts); err == nil {
+		out.SiteKey = v
+	}
+	return out
 }
 
 // applyClientConfigOverrides applies per-app overrides to the client config.
@@ -1301,6 +1391,44 @@ func (e *Engine) UnlinkAuthMethod(ctx context.Context, userID id.UserID, provide
 type Metrics struct {
 	PluginsLoaded int `json:"plugins_loaded"`
 	Strategies    int `json:"strategies"`
+}
+
+// NonceSecret returns the dashboard nonce signing secret.
+//
+// It is derived from the first available HMAC JWT signing key (i.e. an entry
+// in jwtFormats whose SigningKey is a []byte) by HMAC-SHA256 with the
+// info string "authsome:dashboard:nonce-v1" — a single-step HKDF-Expand
+// equivalent that domain-separates the nonce key from the JWT key without
+// adding a new dependency.
+//
+// If no HMAC JWT key is available (e.g. RSA/ES256 only, or no JWT at all),
+// it falls back to the AUTHSOME_DASHBOARD_NONCE_SECRET environment variable.
+// If that is also empty, it returns nil and the caller (the dashboard
+// contributor) is expected to log a warning and either generate a random
+// per-process secret or leave the signer uninitialised.
+func (e *Engine) NonceSecret() []byte {
+	const info = "authsome:dashboard:nonce-v1"
+
+	for _, jwtFmt := range e.jwtFormats {
+		if jwtFmt == nil {
+			continue
+		}
+		if key, ok := jwtFmt.HMACKey(); ok && len(key) > 0 {
+			h := hmac.New(sha256.New, key)
+			h.Write([]byte(info))
+			return h.Sum(nil)
+		}
+	}
+
+	if env := os.Getenv("AUTHSOME_DASHBOARD_NONCE_SECRET"); env != "" {
+		// Domain-separate even the env-var path so a future reuse of the
+		// same env var elsewhere does not cross-contaminate.
+		h := hmac.New(sha256.New, []byte(env))
+		h.Write([]byte(info))
+		return h.Sum(nil)
+	}
+
+	return nil
 }
 
 // Metrics returns the current engine metrics.

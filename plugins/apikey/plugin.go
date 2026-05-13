@@ -400,9 +400,13 @@ func (p *Plugin) handleRevoke(ctx forge.Context, req *RevokeKeyRequest) (*struct
 		return nil, forge.InternalError(fmt.Errorf("failed to revoke key: %w", err))
 	}
 
-	p.audit(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), key.UserID.String(), "", bridge.OutcomeSuccess)
-	p.relayEvent(ctx.Context(), "apikey.revoked", "", map[string]string{"user_id": key.UserID.String()})
-	p.emitHook(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), key.UserID.String(), "")
+	principalID := key.UserID.String()
+	if key.UserID.IsNil() && !key.ServiceAccountID.IsNil() {
+		principalID = key.ServiceAccountID.String()
+	}
+	p.audit(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), principalID, "", bridge.OutcomeSuccess)
+	p.relayEvent(ctx.Context(), "apikey.revoked", "", map[string]string{"user_id": principalID})
+	p.emitHook(ctx.Context(), hook.ActionAPIKeyRevoke, hook.ResourceAPIKey, key.ID.String(), principalID, "")
 
 	return nil, ctx.NoContent(http.StatusNoContent)
 }
@@ -475,9 +479,32 @@ func (s *apikeyStrategy) Authenticate(ctx context.Context, r *http.Request) (*st
 	key.LastUsedAt = &now
 	_ = s.store.UpdateAPIKey(ctx, key) //nolint:errcheck // best-effort update
 
+	// Handle service-account keys: create a synthetic session without a user.
+	if !key.ServiceAccountID.IsNil() {
+		syntheticSession := &session.Session{
+			ID:               id.NewSessionID(),
+			AppID:            key.AppID,
+			EnvID:            key.EnvID,
+			CreatedAt:        now,
+			ExpiresAt:        now.Add(24 * time.Hour),
+			PrincipalKind:    "service_account",
+			ServiceAccountID: key.ServiceAccountID,
+		}
+		return &strategy.Result{Session: syntheticSession}, nil
+	}
+
 	// Resolve the user associated with this API key.
 	if s.resolveUser == nil {
 		return nil, fmt.Errorf("apikey: user resolver not configured")
+	}
+	// Reject keys that were created without a user binding (a bug
+	// in an older dashboard handler used to mint these). Without an
+	// explicit guard, resolveUser("") below returns a generic
+	// not-found error that surfaces as the unhelpful
+	// "authentication required" 401 — we'd rather state the
+	// specific cause so operators can re-mint the key correctly.
+	if key.UserID.IsNil() {
+		return nil, fmt.Errorf("apikey: key %s has no user binding (re-mint via /v1/keys or the dashboard)", key.KeyPrefix)
 	}
 	u, err := s.resolveUser(key.UserID.String())
 	if err != nil {

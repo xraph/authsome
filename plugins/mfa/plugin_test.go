@@ -431,79 +431,27 @@ func TestHandleVerify_Unauthenticated(t *testing.T) {
 // Challenge endpoint tests
 // ──────────────────────────────────────────────────
 
-func TestHandleChallenge_Success(t *testing.T) {
-	p, s := newTestPlugin(t)
-
+// TestHandleChallenge_RequiresTicket pins the new ticket-based
+// contract for /v1/mfa/challenge: missing the mfa_ticket field
+// returns 400 unconditionally — even with a valid code and an
+// enrolled user — because the endpoint is no longer a step-up
+// auth surface for already-signed-in users; it's the second leg
+// of the sign-in MFA gate. The full happy-path round-trip
+// (sign-in → ticket → challenge → session) is exercised in
+// api/api_test.go where the real engine is wired.
+func TestHandleChallenge_RequiresTicket(t *testing.T) {
+	p, _ := newTestPlugin(t)
 	mux := forge.NewRouter()
-	err := p.RegisterRoutes(mux)
-	require.NoError(t, err)
+	require.NoError(t, p.RegisterRoutes(mux))
 
-	userID := id.NewUserID()
-
-	key, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: "user@test.com"})
-	require.NoError(t, err)
-
-	enrollment := &mfa.Enrollment{
-		ID:        id.NewMFAID(),
-		UserID:    userID,
-		Method:    "totp",
-		Secret:    key.Secret(),
-		Verified:  true, // Already verified
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	err = s.CreateEnrollment(context.Background(), enrollment)
-	require.NoError(t, err)
-
-	code, err := mfa.GenerateTOTPCode(key.Secret())
-	require.NoError(t, err)
-
-	body := jsonBody(t, map[string]string{"code": code})
-	req := authedRequest(t, "POST", "/v1/mfa/challenge", body, userID)
+	body := jsonBody(t, map[string]string{"code": "123456"})
+	req, _ := http.NewRequest("POST", "/v1/mfa/challenge", body)
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var resp map[string]any
-	err = json.NewDecoder(rec.Body).Decode(&resp)
-	require.NoError(t, err)
-	assert.Equal(t, true, resp["challenge_passed"])
-}
-
-func TestHandleChallenge_NotVerified(t *testing.T) {
-	p, s := newTestPlugin(t)
-
-	mux := forge.NewRouter()
-	err := p.RegisterRoutes(mux)
-	require.NoError(t, err)
-
-	userID := id.NewUserID()
-
-	key, err := mfa.GenerateTOTPKey(mfa.TOTPConfig{Issuer: "TestApp", AccountName: "user@test.com"})
-	require.NoError(t, err)
-
-	enrollment := &mfa.Enrollment{
-		ID:        id.NewMFAID(),
-		UserID:    userID,
-		Method:    "totp",
-		Secret:    key.Secret(),
-		Verified:  false, // Not yet verified
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	err = s.CreateEnrollment(context.Background(), enrollment)
-	require.NoError(t, err)
-
-	code, err := mfa.GenerateTOTPCode(key.Secret())
-	require.NoError(t, err)
-
-	body := jsonBody(t, map[string]string{"code": code})
-	req := authedRequest(t, "POST", "/v1/mfa/challenge", body, userID)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, http.StatusBadRequest, rec.Code,
+		"missing mfa_ticket must 400 before any TOTP work happens; body=%s", rec.Body.String())
 }
 
 // ──────────────────────────────────────────────────
@@ -640,31 +588,24 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 	mux.ServeHTTP(verifyRec, verifyReq)
 	require.Equal(t, http.StatusOK, verifyRec.Code)
 
-	// Step 3: Challenge with valid code
-	code2, err := mfa.GenerateTOTPCode(secret)
-	require.NoError(t, err)
-
-	challengeBody := jsonBody(t, map[string]string{"code": code2})
-	challengeReq := authedRequest(t, "POST", "/v1/mfa/challenge", challengeBody, userID)
-	challengeRec := httptest.NewRecorder()
-	mux.ServeHTTP(challengeRec, challengeReq)
-	require.Equal(t, http.StatusOK, challengeRec.Code)
+	// Step 3: Challenge step skipped at the plugin level — the new
+	// ticket-based contract requires a real *authsome.Engine and is
+	// covered end-to-end in api/api_test.go's TestSignIn_MFARequired*
+	// tests where a full engine is wired. Here we just confirm the
+	// route is wired and rejects an unticketed call.
+	noTicketBody := jsonBody(t, map[string]string{"code": "000000"})
+	noTicketReq, _ := http.NewRequest("POST", "/v1/mfa/challenge", noTicketBody)
+	noTicketReq.Header.Set("Content-Type", "application/json")
+	noTicketRec := httptest.NewRecorder()
+	mux.ServeHTTP(noTicketRec, noTicketReq)
+	require.Equal(t, http.StatusBadRequest, noTicketRec.Code,
+		"challenge without mfa_ticket must 400; body=%s", noTicketRec.Body.String())
 
 	// Step 4: Disable
 	disableReq := authedRequest(t, "DELETE", "/v1/mfa/enrollment", nil, userID)
 	disableRec := httptest.NewRecorder()
 	mux.ServeHTTP(disableRec, disableReq)
 	assert.Equal(t, http.StatusOK, disableRec.Code)
-
-	// Step 5: Challenge should now fail (no enrollment)
-	code3, err := mfa.GenerateTOTPCode(secret)
-	require.NoError(t, err)
-
-	challengeBody2 := jsonBody(t, map[string]string{"code": code3})
-	challengeReq2 := authedRequest(t, "POST", "/v1/mfa/challenge", challengeBody2, userID)
-	challengeRec2 := httptest.NewRecorder()
-	mux.ServeHTTP(challengeRec2, challengeReq2)
-	assert.Equal(t, http.StatusNotFound, challengeRec2.Code)
 }
 
 // ──────────────────────────────────────────────────

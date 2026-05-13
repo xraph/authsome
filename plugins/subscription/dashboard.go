@@ -13,6 +13,7 @@ import (
 
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/settings"
 
 	"github.com/xraph/ledger/coupon"
@@ -198,9 +199,13 @@ func (p *Plugin) DashboardOrgDetailTabs(_ context.Context, _ id.OrgID) []dashboa
 }
 
 func (p *Plugin) renderOrgBillingTab(ctx context.Context, orgID id.OrgID) templ.Component {
-	appID := p.resolveAppID(ctx)
 	data := subdash.OrgBillingTabData{}
 
+	if p.ledger == nil {
+		return subdash.OrgBillingTab(data)
+	}
+
+	appID := p.resolveAppID(ctx)
 	sub, err := p.ledger.GetActiveSubscription(ctx, orgID.String(), appID)
 	if err == nil && sub != nil {
 		data.HasSub = true
@@ -212,30 +217,32 @@ func (p *Plugin) renderOrgBillingTab(ctx context.Context, orgID id.OrgID) templ.
 		}
 		data.Subscription = &sv
 
-		// Usage.
-		if summaries, err := p.service.GetUsageSummary(ctx, sub.TenantID, sub.AppID); err == nil {
-			data.Usage = make([]subdash.UsageView, 0, len(summaries))
-			for _, u := range summaries {
-				pct := 0
-				if u.Limit > 0 {
-					pct = int(float64(u.Used) / float64(u.Limit) * 100)
-					if pct > 100 {
-						pct = 100
+		if p.service != nil {
+			// Usage.
+			if summaries, err := p.service.GetUsageSummary(ctx, sub.TenantID, sub.AppID); err == nil {
+				data.Usage = make([]subdash.UsageView, 0, len(summaries))
+				for _, u := range summaries {
+					pct := 0
+					if u.Limit > 0 {
+						pct = int(float64(u.Used) / float64(u.Limit) * 100)
+						if pct > 100 {
+							pct = 100
+						}
 					}
+					data.Usage = append(data.Usage, subdash.UsageView{
+						FeatureKey: u.FeatureKey, FeatureName: u.FeatureName, FeatureType: u.FeatureType,
+						Used: u.Used, Limit: u.Limit, Remaining: u.Remaining,
+						Period: u.Period, Percentage: pct,
+					})
 				}
-				data.Usage = append(data.Usage, subdash.UsageView{
-					FeatureKey: u.FeatureKey, FeatureName: u.FeatureName, FeatureType: u.FeatureType,
-					Used: u.Used, Limit: u.Limit, Remaining: u.Remaining,
-					Period: u.Period, Percentage: pct,
-				})
 			}
-		}
 
-		// Invoices.
-		if invoices, err := p.service.ListInvoices(ctx, sub.TenantID, sub.AppID); err == nil {
-			data.Invoices = make([]subdash.InvoiceView, 0, len(invoices))
-			for _, inv := range invoices {
-				data.Invoices = append(data.Invoices, toInvoiceView(inv))
+			// Invoices.
+			if invoices, err := p.service.ListInvoices(ctx, sub.TenantID, sub.AppID); err == nil {
+				data.Invoices = make([]subdash.InvoiceView, 0, len(invoices))
+				for _, inv := range invoices {
+					data.Invoices = append(data.Invoices, toInvoiceView(inv))
+				}
 			}
 		}
 	}
@@ -251,23 +258,27 @@ func (p *Plugin) renderPlansPage(ctx context.Context, params contributor.Params)
 	appID := p.resolveAppID(ctx)
 	var data subdash.PlansPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.plan.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "create":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashCreatePlan(ctx, appID, params)
 		}
 	case "archive":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			p.handleDashArchivePlan(ctx, params)
 		}
 	case "activate":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			p.handleDashActivatePlan(ctx, params)
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 	data.Tab = params.QueryParams["tab"]
 	if data.Tab == "" {
 		data.Tab = "plans"
@@ -317,52 +328,56 @@ func (p *Plugin) renderPlanDetail(ctx context.Context, params contributor.Params
 
 	var data subdash.PlanDetailPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.plan.detail.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "add_feature":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashAddFeature(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
 			}
 		}
 	case "remove_feature":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashRemoveFeature(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
 			}
 		}
 	case "update_pricing":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashUpdatePricing(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
 			}
 		}
 	case "update_info":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashUpdatePlanInfo(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
 			}
 		}
 	case "edit_feature":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashEditFeature(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
 			}
 		}
 	case "add_tier":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashAddTier(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
 			}
 		}
 	case "remove_tier":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashRemoveTier(ctx, pl, params)
 			if pl2, err := p.service.GetPlan(ctx, planID); err == nil {
 				pl = pl2
@@ -370,7 +385,7 @@ func (p *Plugin) renderPlanDetail(ctx context.Context, params contributor.Params
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 	data.Plan = toPlanDetailView(pl)
 	data.Plan.SubscriberCount = p.service.CountSubscribers(ctx, pl.ID, pl.AppID)
 
@@ -395,33 +410,37 @@ func (p *Plugin) renderSubscriptionsPage(ctx context.Context, params contributor
 	appID := p.resolveAppID(ctx)
 	var data subdash.SubscriptionsPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.list.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "cancel":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			p.handleDashAction(ctx, params.FormData["sub_id"], func(subID ledgerid.SubscriptionID) error {
 				return p.service.CancelSubscription(ctx, subID, false)
 			})
 		}
 	case "create":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashCreateSub(ctx, appID, params)
 		}
 	case "pause":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			p.handleDashAction(ctx, params.FormData["sub_id"], func(subID ledgerid.SubscriptionID) error {
 				return p.service.PauseSubscription(ctx, subID)
 			})
 		}
 	case "resume":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			p.handleDashAction(ctx, params.FormData["sub_id"], func(subID ledgerid.SubscriptionID) error {
 				return p.service.ResumeSubscription(ctx, subID)
 			})
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 	data.StatusFilter = params.QueryParams["status"]
 
 	if p.ledgerStore != nil {
@@ -484,10 +503,14 @@ func (p *Plugin) renderSubscriptionDetail(ctx context.Context, params contributo
 
 	var data subdash.SubscriptionDetailPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.detail.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "change_plan":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			newPlanIDStr := params.FormData["plan_id"]
 			if newPlanID, err := ledgerid.ParsePlanID(newPlanIDStr); err == nil {
 				if err := p.service.ChangePlan(ctx, subID, newPlanID); err != nil {
@@ -501,7 +524,7 @@ func (p *Plugin) renderSubscriptionDetail(ctx context.Context, params contributo
 			}
 		}
 	case "cancel":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if err := p.service.CancelSubscription(ctx, subID, false); err != nil {
 				data.Error = fmt.Sprintf("Failed to cancel: %v", err)
 			} else {
@@ -512,7 +535,7 @@ func (p *Plugin) renderSubscriptionDetail(ctx context.Context, params contributo
 			}
 		}
 	case "pause":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if err := p.service.PauseSubscription(ctx, subID); err != nil {
 				data.Error = fmt.Sprintf("Failed to pause: %v", err)
 			} else {
@@ -523,7 +546,7 @@ func (p *Plugin) renderSubscriptionDetail(ctx context.Context, params contributo
 			}
 		}
 	case "resume":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if err := p.service.ResumeSubscription(ctx, subID); err != nil {
 				data.Error = fmt.Sprintf("Failed to resume: %v", err)
 			} else {
@@ -535,7 +558,7 @@ func (p *Plugin) renderSubscriptionDetail(ctx context.Context, params contributo
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 	data.ActiveTab = params.QueryParams["tab"]
 	if data.ActiveTab == "" {
 		data.ActiveTab = "overview"
@@ -630,10 +653,14 @@ func (p *Plugin) renderInvoiceDetail(ctx context.Context, params contributor.Par
 
 	var data subdash.InvoiceDetailPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.invoice.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "mark_paid":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			ref := params.FormData["payment_ref"]
 			if ref == "" {
 				ref = "dashboard"
@@ -648,7 +675,7 @@ func (p *Plugin) renderInvoiceDetail(ctx context.Context, params contributor.Par
 			}
 		}
 	case "void":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if err := p.service.MarkInvoiceVoided(ctx, invID, params.FormData["reason"]); err != nil {
 				data.Error = fmt.Sprintf("Failed to void invoice: %v", err)
 			} else {
@@ -660,7 +687,7 @@ func (p *Plugin) renderInvoiceDetail(ctx context.Context, params contributor.Par
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 	data.Invoice = toInvoiceView(inv)
 	data.LineItems = make([]subdash.LineItemView, 0, len(inv.LineItems))
 	for _, li := range inv.LineItems {
@@ -681,19 +708,23 @@ func (p *Plugin) renderCouponsPage(ctx context.Context, params contributor.Param
 	appID := p.resolveAppID(ctx)
 	var data subdash.CouponsPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.coupon.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "create":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashCreateCoupon(ctx, appID, params)
 		}
 	case "delete":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			p.handleDashDeleteCoupon(ctx, params)
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 
 	if p.ledgerStore != nil {
 		coupons, err := p.service.ListCoupons(ctx, appID)
@@ -715,14 +746,18 @@ func (p *Plugin) renderFeaturesPage(ctx context.Context, params contributor.Para
 	appID := p.resolveAppID(ctx)
 	var data subdash.CatalogFeaturesPageData
 
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessIDStr := sessionID.String()
+	const formScope = "subscription.feature.write"
+
 	action := params.FormData["action"]
 	switch action {
 	case "create":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			data.Error, data.Success = p.handleDashCreateCatalogFeature(ctx, appID, params)
 		}
 	case "archive":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if fid, err := ledgerid.ParseFeatureID(params.FormData["feature_id"]); err == nil {
 				if err := p.service.ArchiveCatalogFeature(ctx, fid); err != nil {
 					data.Error = fmt.Sprintf("Failed to archive feature: %v", err)
@@ -732,7 +767,7 @@ func (p *Plugin) renderFeaturesPage(ctx context.Context, params contributor.Para
 			}
 		}
 	case "activate":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if fid, err := ledgerid.ParseFeatureID(params.FormData["feature_id"]); err == nil {
 				f, err := p.service.GetCatalogFeature(ctx, fid)
 				if err != nil {
@@ -749,7 +784,7 @@ func (p *Plugin) renderFeaturesPage(ctx context.Context, params contributor.Para
 			}
 		}
 	case "delete":
-		if dashboard.ConsumeNonce(params.FormData["nonce"]) {
+		if dashboard.ConsumeScopedNonce(sessIDStr, formScope, params.FormData["nonce"]) {
 			if fid, err := ledgerid.ParseFeatureID(params.FormData["feature_id"]); err == nil {
 				if err := p.service.DeleteCatalogFeature(ctx, fid); err != nil {
 					data.Error = fmt.Sprintf("Failed to delete feature: %v", err)
@@ -760,7 +795,7 @@ func (p *Plugin) renderFeaturesPage(ctx context.Context, params contributor.Para
 		}
 	}
 
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessIDStr, formScope)
 
 	if p.ledgerStore != nil {
 		features, err := p.service.ListCatalogFeatures(ctx, appID)

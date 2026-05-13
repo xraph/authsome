@@ -2,6 +2,9 @@ package passkey
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+	"sync"
 	"time"
 
 	log "github.com/xraph/go-utils/log"
@@ -42,7 +45,9 @@ var (
 		settings.WithDescription("Relying party display name shown to users during WebAuthn ceremonies"),
 		settings.WithCategory("Passkey / WebAuthn"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldText),
 		settings.WithPlaceholder("AuthSome"),
+		settings.WithUIValidation(formconfig.Validation{Required: true, MaxLen: 100}),
 		settings.WithHelpText("The name users see when registering or authenticating with passkeys"),
 		settings.WithOrder(10),
 	)
@@ -53,9 +58,30 @@ var (
 		settings.WithDescription("Relying party identifier (typically the domain name)"),
 		settings.WithCategory("Passkey / WebAuthn"),
 		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldText),
 		settings.WithPlaceholder("example.com"),
-		settings.WithHelpText("Must match the domain where passkeys are used"),
+		settings.WithUIValidation(formconfig.Validation{
+			Required: true,
+			MaxLen:   253,
+			// Hostname (RFC 1123) or "localhost" / "127.0.0.1" / "::1".
+			Pattern: `^(localhost|127\.0\.0\.1|::1|([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*)$`,
+		}),
+		settings.WithHelpText("Must match the effective domain users browse to. Use 'localhost' for dev."),
 		settings.WithOrder(20),
+	)
+
+	// SettingRPOrigins controls the allowed origins for WebAuthn ceremonies.
+	// When empty, origins are derived from RPID (and the request origin for
+	// localhost dev mode — see Plugin.waForRequest).
+	SettingRPOrigins = settings.Define("passkey.rp_origins", []string{},
+		settings.WithDisplayName("RP Origins"),
+		settings.WithDescription("Allowed origins for WebAuthn ceremonies (e.g. https://app.example.com)"),
+		settings.WithCategory("Passkey / WebAuthn"),
+		settings.WithScopes(settings.ScopeGlobal, settings.ScopeApp),
+		settings.WithInputType(formconfig.FieldTextarea),
+		settings.WithPlaceholder("https://app.example.com\nhttps://www.example.com"),
+		settings.WithHelpText("One origin per line. Each must include scheme and port. Leave empty to use Config defaults; localhost dev auto-trusts the request origin regardless of port."),
+		settings.WithOrder(25),
 	)
 
 	// SettingSessionTimeoutSeconds controls the WebAuthn ceremony timeout.
@@ -90,14 +116,16 @@ type Config struct {
 
 // Plugin is the passkey/WebAuthn plugin.
 type Plugin struct {
-	config     Config
-	store      Store
-	wa         *webauthn.WebAuthn
-	ceremonies ceremony.Store
-	chronicle  bridge.Chronicle
-	relay      bridge.EventRelay
-	hooks      *hook.Bus
-	logger     log.Logger
+	config       Config
+	store        Store
+	wa           *webauthn.WebAuthn
+	ceremonies   ceremony.Store
+	chronicle    bridge.Chronicle
+	relay        bridge.EventRelay
+	hooks        *hook.Bus
+	logger       log.Logger
+	settingsMgr  *settings.Manager
+	originWAOnce sync.Map // map[string]*webauthn.WebAuthn — per-origin webauthn cache for localhost dev
 }
 
 // DeclareSettings implements plugin.SettingsProvider.
@@ -106,6 +134,9 @@ func (p *Plugin) DeclareSettings(m *settings.Manager) error {
 		return err
 	}
 	if err := settings.RegisterTyped(m, "passkey", SettingRPID); err != nil {
+		return err
+	}
+	if err := settings.RegisterTyped(m, "passkey", SettingRPOrigins); err != nil {
 		return err
 	}
 	return settings.RegisterTyped(m, "passkey", SettingSessionTimeoutSeconds)
@@ -126,27 +157,41 @@ func New(cfg ...Config) *Plugin {
 	if c.SessionTimeout == 0 {
 		c.SessionTimeout = 5 * time.Minute
 	}
-	if len(c.RPOrigins) == 0 {
-		scheme := "https"
-		if c.RPID == "localhost" || c.RPID == "127.0.0.1" {
-			scheme = "http"
-		}
-		c.RPOrigins = []string{scheme + "://" + c.RPID}
+	// Auto-default RPOrigins for non-localhost RPIDs only. For localhost
+	// variants, leave RPOrigins empty — waForRequest fills it in per-request
+	// from the actual browser Origin header so any dev port "just works".
+	if len(c.RPOrigins) == 0 && !isLocalhostHost(c.RPID) {
+		c.RPOrigins = []string{"https://" + c.RPID}
 	}
 	p := &Plugin{
 		config:     c,
 		ceremonies: ceremony.NewMemory(),
 	}
 	// Eagerly initialize WebAuthn so the plugin works even without OnInit.
+	// For localhost with no RPOrigins, supply a placeholder so webauthn.New
+	// doesn't reject the empty list; per-request resolution will override.
+	baseOrigins := c.RPOrigins
+	if len(baseOrigins) == 0 {
+		baseOrigins = []string{"http://" + c.RPID}
+	}
 	wa, err := webauthn.New(&webauthn.Config{
 		RPDisplayName: c.RPDisplayName,
 		RPID:          c.RPID,
-		RPOrigins:     c.RPOrigins,
+		RPOrigins:     baseOrigins,
 	})
 	if err == nil {
 		p.wa = wa
 	}
 	return p
+}
+
+// isLocalhostHost reports whether host is a localhost variant (case-insensitive).
+func isLocalhostHost(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }
 
 // Name returns the plugin name.
@@ -155,10 +200,16 @@ func (p *Plugin) Name() string { return "passkey" }
 // OnInit initializes the WebAuthn library and optionally extracts bridges
 // and the ceremony store from the engine.
 func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
+	baseOrigins := p.config.RPOrigins
+	if len(baseOrigins) == 0 {
+		// Localhost path: supply a placeholder so webauthn.New accepts the
+		// config; the real origin is resolved per-request in waForRequest.
+		baseOrigins = []string{"http://" + p.config.RPID}
+	}
 	wa, err := webauthn.New(&webauthn.Config{
 		RPDisplayName: p.config.RPDisplayName,
 		RPID:          p.config.RPID,
-		RPOrigins:     p.config.RPOrigins,
+		RPOrigins:     baseOrigins,
 	})
 	if err != nil {
 		return err
@@ -171,12 +222,137 @@ func (p *Plugin) OnInit(_ context.Context, engine plugin.Engine) error {
 		p.hooks = engine.Hooks()
 		p.logger = engine.Logger()
 		p.ceremonies = engine.CeremonyStore()
+		p.settingsMgr = engine.Settings()
 	}
 	if p.ceremonies == nil {
 		p.ceremonies = ceremony.NewMemory()
 	}
 
 	return nil
+}
+
+// waForRequest returns a *webauthn.WebAuthn appropriate for validating r.
+//
+// For non-localhost RPIDs the configured p.wa is returned unchanged unless
+// the dynamic passkey.rp_origins setting adds origins beyond Config.RPOrigins.
+//
+// For localhost / 127.0.0.1 / ::1, the request's Origin (or Referer) header
+// is parsed and — if its host matches the configured RPID — added to the
+// allowed RPOrigins for the resulting per-request webauthn instance. The
+// host check ensures an attacker cannot inject an arbitrary Origin to trick
+// the server into accepting a foreign-origin assertion.
+func (p *Plugin) waForRequest(r *http.Request) *webauthn.WebAuthn {
+	if r == nil {
+		return p.wa
+	}
+
+	// Start from the static config-defined origins.
+	origins := append([]string(nil), p.config.RPOrigins...)
+	modified := false
+
+	// Merge dynamic settings overrides.
+	if p.settingsMgr != nil {
+		if dyn, err := settings.Get(r.Context(), p.settingsMgr, SettingRPOrigins, settings.ResolveOpts{}); err == nil {
+			for _, o := range dyn {
+				before := len(origins)
+				origins = appendUnique(origins, o)
+				if len(origins) != before {
+					modified = true
+				}
+			}
+		}
+	}
+
+	// Localhost dev mode: trust the request's own origin when host matches RPID.
+	if isLocalhostHost(p.config.RPID) {
+		if reqOrigin := requestOrigin(r); reqOrigin != "" {
+			if parsed, err := url.Parse(reqOrigin); err == nil && parsed.Hostname() == p.config.RPID {
+				candidate := parsed.Scheme + "://" + parsed.Host
+				before := len(origins)
+				origins = appendUnique(origins, candidate)
+				if len(origins) != before {
+					modified = true
+				}
+			}
+		}
+	}
+
+	if !modified || len(origins) == 0 {
+		return p.wa
+	}
+
+	cacheKey := joinOrigins(origins)
+	if cached, ok := p.originWAOnce.Load(cacheKey); ok {
+		if w, ok := cached.(*webauthn.WebAuthn); ok {
+			return w
+		}
+	}
+	wa, err := webauthn.New(&webauthn.Config{
+		RPDisplayName: p.config.RPDisplayName,
+		RPID:          p.config.RPID,
+		RPOrigins:     origins,
+	})
+	if err != nil {
+		return p.wa
+	}
+	p.originWAOnce.Store(cacheKey, wa)
+	return wa
+}
+
+// allowedOrigins returns the merged static origins (Config.RPOrigins +
+// dynamic passkey.rp_origins setting). Used for diagnostics and tests; does
+// not include any per-request origin.
+func (p *Plugin) allowedOrigins(ctx context.Context) []string {
+	out := make([]string, 0, len(p.config.RPOrigins)+2)
+	for _, o := range p.config.RPOrigins {
+		out = appendUnique(out, o)
+	}
+	if p.settingsMgr != nil {
+		dyn, err := settings.Get(ctx, p.settingsMgr, SettingRPOrigins, settings.ResolveOpts{})
+		if err == nil {
+			for _, o := range dyn {
+				out = appendUnique(out, o)
+			}
+		}
+	}
+	return out
+}
+
+// requestOrigin returns the request's Origin header, falling back to the
+// scheme+host portion of the Referer header.
+func requestOrigin(r *http.Request) string {
+	if o := r.Header.Get("Origin"); o != "" {
+		return o
+	}
+	if ref := r.Header.Get("Referer"); ref != "" {
+		if u, err := url.Parse(ref); err == nil && u.Host != "" {
+			return u.Scheme + "://" + u.Host
+		}
+	}
+	return ""
+}
+
+func appendUnique(dst []string, v string) []string {
+	if v == "" {
+		return dst
+	}
+	for _, x := range dst {
+		if x == v {
+			return dst
+		}
+	}
+	return append(dst, v)
+}
+
+func joinOrigins(origins []string) string {
+	out := ""
+	for i, o := range origins {
+		if i > 0 {
+			out += "|"
+		}
+		out += o
+	}
+	return out
 }
 
 // MigrationGroups implements plugin.MigrationProvider.

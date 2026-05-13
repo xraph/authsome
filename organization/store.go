@@ -30,6 +30,7 @@ type Store interface {
 	GetInvitation(ctx context.Context, invID id.InvitationID) (*Invitation, error)
 	GetInvitationByToken(ctx context.Context, token string) (*Invitation, error)
 	UpdateInvitation(ctx context.Context, inv *Invitation) error
+	DeleteInvitation(ctx context.Context, invID id.InvitationID) error
 	ListInvitations(ctx context.Context, orgID id.OrgID) ([]*Invitation, error)
 
 	// Teams
@@ -38,4 +39,32 @@ type Store interface {
 	UpdateTeam(ctx context.Context, t *Team) error
 	DeleteTeam(ctx context.Context, teamID id.TeamID) error
 	ListTeams(ctx context.Context, orgID id.OrgID) ([]*Team, error)
+
+	// WithTx runs fn inside a single store transaction. The fn receives a
+	// Store handle scoped to the transaction; on error, all writes via that
+	// handle are rolled back. Implementations that don't yet support real
+	// backend transactions (postgres/sqlite/mongo at time of writing) execute
+	// fn against the parent store with best-effort semantics — callers should
+	// treat partial-failure recovery as a future-work gap, but new code is
+	// expected to use this entry point so we have one place to lift to real
+	// transactions later.
+	WithTx(ctx context.Context, fn func(tx Store) error) error
+
+	// DeleteOrganizationCascade deletes the organization and all of its
+	// dependent rows (members, teams, invitations) in a single backend-
+	// native transaction, so a partial failure rolls back atomically.
+	//
+	// This is the production-correct alternative to manually wrapping
+	// list+delete loops in WithTx — for the SQL/Mongo backends, plumbing
+	// a transaction through every Store method is a multi-day refactor;
+	// this entry point lets each backend execute the cascade as a
+	// single atomic operation using its native primitive (PgTx for
+	// postgres, SqliteTx for sqlite, mongo.Session for mongo) without
+	// requiring tx-scoped versions of every other Store method.
+	//
+	// Memory store falls back to the WithTx snapshot/restore semantics.
+	//
+	// Returns nil if the organization doesn't exist (idempotent — a
+	// double-delete is a no-op).
+	DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error
 }

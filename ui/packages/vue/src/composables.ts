@@ -17,7 +17,6 @@ import {
   computed,
   inject,
   onMounted,
-  onUnmounted,
   readonly,
   ref,
   type App,
@@ -28,7 +27,7 @@ import {
   AuthManager,
   type AuthConfig,
   type AuthState,
-  type AuthClient,
+  type ClientConfig,
   type User,
   type Session,
   type Organization,
@@ -40,6 +39,11 @@ const AUTH_KEY: InjectionKey<AuthManager> = Symbol("authsome");
 
 /** Injection key for the reactive auth state. */
 const AUTH_STATE_KEY: InjectionKey<Ref<AuthState>> = Symbol("authsome:state");
+
+/** Injection key for the reactive client config. */
+const AUTH_CONFIG_KEY: InjectionKey<Ref<ClientConfig | null>> = Symbol(
+  "authsome:config",
+);
 
 /**
  * Creates a Vue plugin that provides AuthSome authentication.
@@ -54,13 +58,18 @@ export function createAuthPlugin(config: AuthConfig) {
     install(app: App) {
       const manager = new AuthManager(config);
       const state = ref<AuthState>(manager.getState());
+      const clientConfig = ref<ClientConfig | null>(manager.getClientConfig());
 
       manager.subscribe((s) => {
         state.value = s;
       });
+      manager.subscribeConfig((c) => {
+        clientConfig.value = c;
+      });
 
       app.provide(AUTH_KEY, manager);
       app.provide(AUTH_STATE_KEY, state);
+      app.provide(AUTH_CONFIG_KEY, clientConfig);
 
       // Initialize on mount (hydrate from storage).
       void manager.initialize();
@@ -84,15 +93,30 @@ function useAuthState(): Ref<AuthState> {
   return state;
 }
 
+function useAuthConfig(): Ref<ClientConfig | null> {
+  const cfg = inject(AUTH_CONFIG_KEY);
+  if (!cfg) {
+    throw new Error("useClientConfig requires the authsome plugin. Call app.use(createAuthPlugin(...)).");
+  }
+  return cfg;
+}
+
+/** Optional second arg for sign-in / sign-up to attach a captcha token. */
+export interface AuthSubmitOptions {
+  captchaToken?: string;
+}
+
 /**
  * Main auth composable providing state and actions.
  */
 export function useAuth() {
   const manager = useManager();
   const state = useAuthState();
+  const clientConfig = useAuthConfig();
 
   const isAuthenticated = computed(() => state.value.status === "authenticated");
   const isLoading = computed(() => state.value.status === "loading");
+  const isConfigLoaded = computed(() => clientConfig.value !== null);
 
   const user = computed<User | null>(() =>
     state.value.status === "authenticated" ? state.value.user : null,
@@ -106,18 +130,43 @@ export function useAuth() {
     state.value.status === "error" ? state.value.error : null,
   );
 
-  async function signIn(email: string, password: string) {
-    await manager.signIn({ email, password });
+  async function signIn(
+    email: string,
+    password: string,
+    options?: AuthSubmitOptions,
+  ) {
+    await manager.signIn({
+      email,
+      password,
+      captcha_token: options?.captchaToken,
+    });
   }
 
-  async function signUp(email: string, password: string, fields?: Record<string, string>) {
+  async function signUp(
+    email: string,
+    password: string,
+    fields?: Record<string, string>,
+    options?: AuthSubmitOptions,
+  ) {
     const { first_name, last_name, username, ...rest } = fields ?? {};
     const metadata = Object.keys(rest).length > 0 ? rest : undefined;
-    await manager.signUp({ email, password, first_name, last_name, username, metadata });
+    await manager.signUp({
+      email,
+      password,
+      first_name,
+      last_name,
+      username,
+      metadata,
+      captcha_token: options?.captchaToken,
+    });
   }
 
   async function signOut() {
     await manager.signOut();
+  }
+
+  async function resendVerification(email: string) {
+    await manager.resendVerification(email);
   }
 
   async function submitMFACode(enrollmentId: string, code: string) {
@@ -130,8 +179,10 @@ export function useAuth() {
 
   return {
     state: readonly(state),
+    clientConfig: readonly(clientConfig),
     isAuthenticated,
     isLoading,
+    isConfigLoaded,
     user,
     session,
     error,
@@ -139,8 +190,31 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
+    resendVerification,
     submitMFACode,
     submitRecoveryCode,
+  };
+}
+
+/**
+ * Composable returning the auto-discovered client configuration.
+ *
+ * Includes feature flags such as `social`, `passkeys`, `email_verification`,
+ * and `captcha`. Useful for templates that need to gate UI on backend config.
+ *
+ * ```ts
+ * const { config, isLoaded } = useClientConfig();
+ * if (config.value?.captcha?.required) {
+ *   // render Turnstile
+ * }
+ * ```
+ */
+export function useClientConfig() {
+  const config = useAuthConfig();
+  const isLoaded = computed(() => config.value !== null);
+  return {
+    config: readonly(config),
+    isLoaded,
   };
 }
 
@@ -151,9 +225,6 @@ export function useUser() {
   const { user: authUser, isLoading, session } = useAuth();
   const manager = useManager();
   const localUser = ref<User | null>(authUser.value);
-
-  // Keep in sync with auth state.
-  const stopWatch = computed(() => authUser.value);
 
   async function reload() {
     if (!session.value) return;

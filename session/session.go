@@ -9,20 +9,34 @@ import (
 
 // Session represents an authenticated user session.
 type Session struct {
-	ID                    id.SessionID     `json:"id"`
-	AppID                 id.AppID         `json:"app_id"`
-	EnvID                 id.EnvironmentID `json:"env_id"`
-	UserID                id.UserID        `json:"user_id"`
-	OrgID                 id.OrgID         `json:"org_id,omitempty"`
-	Token                 string           `json:"-"`
-	RefreshToken          string           `json:"-"`
-	IPAddress             string           `json:"ip_address,omitempty"`
-	UserAgent             string           `json:"user_agent,omitempty"`
-	DeviceID              id.DeviceID      `json:"device_id,omitempty"`
-	ImpersonatedBy        id.UserID        `json:"impersonated_by,omitempty"`
-	LastActivityAt        time.Time        `json:"last_activity_at,omitempty"`
-	ExpiresAt             time.Time        `json:"expires_at"`
-	RefreshTokenExpiresAt time.Time        `json:"refresh_token_expires_at"`
-	CreatedAt             time.Time        `json:"created_at"`
-	UpdatedAt             time.Time        `json:"updated_at"`
+	ID     id.SessionID     `json:"id"`
+	AppID  id.AppID         `json:"app_id"`
+	EnvID  id.EnvironmentID `json:"env_id"`
+	UserID id.UserID        `json:"user_id"`
+	OrgID  id.OrgID         `json:"org_id,omitempty"`
+	// FamilyID groups sessions descended from a single sign-in via
+	// successive refresh-token rotations. All sessions sharing a FamilyID
+	// can be revoked together when refresh-token replay is detected
+	// (RFC 6819 §5.2.2.3). Fresh sign-ins start a new family; rotations
+	// inherit the parent's FamilyID. Zero-value on legacy rows is allowed.
+	FamilyID              id.SessionFamilyID `json:"family_id,omitempty"`
+	Token                 string             `json:"-"`
+	RefreshToken          string             `json:"-"`
+	IPAddress             string             `json:"ip_address,omitempty"`
+	UserAgent             string             `json:"user_agent,omitempty"`
+	DeviceID              id.DeviceID        `json:"device_id,omitempty"`
+	ImpersonatedBy        id.UserID          `json:"impersonated_by,omitempty"`
+	LastActivityAt        time.Time          `json:"last_activity_at,omitempty"`
+	ExpiresAt             time.Time          `json:"expires_at"`
+	RefreshTokenExpiresAt time.Time          `json:"refresh_token_expires_at"`
+	CreatedAt             time.Time          `json:"created_at"`
+	UpdatedAt             time.Time          `json:"updated_at"`
+
+	// PrincipalKind identifies the type of principal that owns this session.
+	// Valid values are "user" and "service_account". Empty string means "user"
+	// for backwards compatibility with existing sessions.
+	PrincipalKind string `json:"principal_kind,omitempty"`
+	// ServiceAccountID is set when PrincipalKind is "service_account".
+	// UserID is left as the zero value in that case.
+	ServiceAccountID id.ServiceAccountID `json:"service_account_id,omitempty"`
 }

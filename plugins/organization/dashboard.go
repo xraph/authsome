@@ -2,6 +2,7 @@ package organization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,10 +11,14 @@ import (
 
 	"github.com/xraph/forge/extensions/dashboard/contributor"
 
+	"github.com/xraph/authsome/bridge"
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
+	"github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/organization"
 	"github.com/xraph/authsome/plugins/organization/dashui"
+	"github.com/xraph/authsome/store"
+	"github.com/xraph/authsome/user"
 )
 
 // Compile-time interface checks.
@@ -130,17 +135,25 @@ func (p *Plugin) renderOrgCreate(ctx context.Context, params contributor.Params)
 
 	var data dashui.CreateOrgPageData
 
-	// Handle form actions (POST).
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	sessionIDStr := sessionID.String()
+
+	// Handle form actions (POST). Uses the HMAC-bound scoped nonce
+	// (Phase 1.4); legacy ConsumeNonce fell back to a global single-use
+	// map that wasn't bound to the user's session — a stolen nonce from
+	// one admin's session could be replayed against another via CSRF.
 	action := params.FormData["action"]
 	if action == "create" {
 		nonce := params.FormData["nonce"]
-		if dashboard.ConsumeNonce(nonce) {
+		if dashboard.ConsumeScopedNonce(sessionIDStr, "org.create", nonce) {
 			data.CreatedOrg, data.Error = p.handleDashboardCreateOrg(ctx, appID, params)
+		} else {
+			data.Error = "Form expired or invalid, please try again."
 		}
 	}
 
 	// Generate a fresh nonce for the next form render.
-	data.FormNonce = dashboard.GenerateNonce()
+	data.FormNonce = dashboard.GenerateScopedNonce(sessionIDStr, "org.create")
 
 	// Collect plugin-contributed form fields.
 	data.PluginFields = p.collectOrgCreateFormFields(ctx)
@@ -198,7 +211,47 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 
 	org, err := p.GetOrganization(ctx, orgID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, contributor.ErrPageNotFound
+		}
 		return nil, fmt.Errorf("organization dashboard: resolve organization: %w", err)
+	}
+	if org == nil {
+		return nil, contributor.ErrPageNotFound
+	}
+
+	var actionSuccess, actionError string
+	actorID, _ := middleware.UserIDFrom(ctx)
+	sessionID, _ := middleware.SessionIDFrom(ctx)
+	if action := params.FormData["action"]; action == "delete" {
+		nonce := params.FormData["nonce"]
+		switch {
+		case !dashboard.ConsumeScopedNonce(sessionID.String(), "org.delete", nonce):
+			actionError = "Form expired or invalid, please try again."
+		case !p.canDeleteOrg(ctx, actorID, org):
+			actionError = "You don't have permission to delete this organization."
+		default:
+			// Audit BEFORE delete so the attempt is recorded even if the
+			// cascade fails partway through.
+			if ch := p.chronicleOrNil(); ch != nil {
+				_ = ch.Record(ctx, &bridge.AuditEvent{
+					Action:     "org.delete",
+					Severity:   bridge.SeverityCritical,
+					ActorID:    actorID.String(),
+					ResourceID: org.ID.String(),
+					Outcome:    bridge.OutcomeSuccess,
+					Metadata: map[string]string{
+						"slug":   org.Slug,
+						"app_id": org.AppID.String(),
+					},
+				})
+			}
+			if delErr := p.DeleteOrganization(ctx, orgID); delErr != nil {
+				actionError = "Failed to delete organization: " + delErr.Error()
+			} else {
+				return p.renderOrgList(ctx, params)
+			}
+		}
 	}
 
 	members, err := p.ListMembers(ctx, orgID)
@@ -215,6 +268,8 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 	if err != nil {
 		invitations = nil
 	}
+
+	userByID := p.loadMemberUsers(ctx, members)
 
 	// Collect legacy plugin-contributed sections (rendered in Overview tab).
 	pluginSections := p.collectOrgDetailSections(ctx, orgID)
@@ -233,12 +288,39 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 		Members:        members,
 		Teams:          teams,
 		Invitations:    invitations,
+		UserByID:       userByID,
 		PluginSections: pluginSections,
 		PluginTabs:     pluginTabs,
 		ActiveTab:      activeTab,
+		FormNonce:      dashboard.GenerateScopedNonce(sessionID.String(), "org.delete"),
+		Success:        actionSuccess,
+		Error:          actionError,
 	}
 
 	return dashui.OrgDetailPage(data), nil
+}
+
+// loadMemberUsers fetches the user record for each org member. Lookup errors
+// are tolerated — the templ falls back to the raw ID when an entry is missing.
+func (p *Plugin) loadMemberUsers(ctx context.Context, members []*organization.Member) map[id.UserID]*user.User {
+	if len(members) == 0 || p.engine == nil {
+		return nil
+	}
+	out := make(map[id.UserID]*user.User, len(members))
+	for _, m := range members {
+		if m == nil {
+			continue
+		}
+		if _, ok := out[m.UserID]; ok {
+			continue
+		}
+		u, err := p.engine.GetUser(ctx, m.UserID)
+		if err != nil || u == nil {
+			continue
+		}
+		out[m.UserID] = u
+	}
+	return out
 }
 
 // ──────────────────────────────────────────────────

@@ -84,6 +84,11 @@ type Engine interface {
 	Mailer() bridge.Mailer
 	SMSSender() bridge.SMSSender
 	Ledger() bridge.Ledger
+	// TokenEncryptor returns the at-rest Encryptor used for sensitive
+	// opaque payloads such as third-party OAuth access/refresh tokens.
+	// Always non-nil — falls back to bridge.NoopEncryptor when no key
+	// is configured (with a startup warning).
+	TokenEncryptor() bridge.Encryptor
 
 	// ── Session / token ──
 

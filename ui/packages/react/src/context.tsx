@@ -42,12 +42,33 @@ export interface AuthContextValue {
   isConfigLoaded: boolean;
 
   /** Sign in with email & password. */
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (
+    email: string,
+    password: string,
+    options?: { captchaToken?: string },
+  ) => Promise<void>;
   /** Sign up with email & password and optional extra fields. */
-  signUp: (email: string, password: string, fields?: Record<string, string>) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fields?: Record<string, string>,
+    options?: { captchaToken?: string },
+  ) => Promise<void>;
   /** Sign out. */
   signOut: () => Promise<void>;
-  /** Submit MFA code. */
+  /** Resend a verification email for the given address. */
+  resendVerification: (email: string) => Promise<void>;
+  /**
+   * Submit the MFA challenge code against the ticket carried in the
+   * mfa_required state. The post-consolidation entry — call this from
+   * the challenge form, NOT submitMFACode.
+   */
+  submitMFAChallenge: (code: string) => Promise<void>;
+  /**
+   * @deprecated Use submitMFAChallenge(code). The enrollmentId is
+   * ignored — the ticket carried in AuthState is the only credential
+   * the server needs to look up the enrollment.
+   */
   submitMFACode: (enrollmentId: string, code: string) => Promise<void>;
   /** Submit MFA recovery code. */
   submitRecoveryCode: (code: string) => Promise<void>;
@@ -99,20 +120,48 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
   }, [manager]);
 
   const signIn = useCallback(
-    (email: string, password: string) => manager.signIn({ email, password }),
+    (email: string, password: string, options?: { captchaToken?: string }) =>
+      manager.signIn({
+        email,
+        password,
+        captcha_token: options?.captchaToken,
+      }),
     [manager],
   );
 
   const signUp = useCallback(
-    (email: string, password: string, fields?: Record<string, string>) => {
+    (
+      email: string,
+      password: string,
+      fields?: Record<string, string>,
+      options?: { captchaToken?: string },
+    ) => {
       const { first_name, last_name, username, ...rest } = fields ?? {};
       const metadata = Object.keys(rest).length > 0 ? rest : undefined;
-      return manager.signUp({ email, password, first_name, last_name, username, metadata });
+      return manager.signUp({
+        email,
+        password,
+        first_name,
+        last_name,
+        username,
+        metadata,
+        captcha_token: options?.captchaToken,
+      });
     },
     [manager],
   );
 
   const signOut = useCallback(() => manager.signOut(), [manager]);
+
+  const resendVerification = useCallback(
+    (email: string) => manager.resendVerification(email),
+    [manager],
+  );
+
+  const submitMFAChallenge = useCallback(
+    (code: string) => manager.submitMFAChallenge(code),
+    [manager],
+  );
 
   const submitMFACode = useCallback(
     (enrollmentId: string, code: string) => manager.submitMFACode(enrollmentId, code),
@@ -151,12 +200,14 @@ export function AuthProvider({ children, ...config }: AuthProviderProps) {
       signIn,
       signUp,
       signOut,
+      resendVerification,
+      submitMFAChallenge,
       submitMFACode,
       submitRecoveryCode,
       sendSMSCode,
       submitSMSCode,
     };
-  }, [state, manager, clientConfig, signIn, signUp, signOut, submitMFACode, submitRecoveryCode, sendSMSCode, submitSMSCode]);
+  }, [state, manager, clientConfig, signIn, signUp, signOut, resendVerification, submitMFAChallenge, submitMFACode, submitRecoveryCode, sendSMSCode, submitSMSCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

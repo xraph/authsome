@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	log "github.com/xraph/go-utils/log"
 
@@ -17,6 +18,7 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
+	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/id"
 	authmw "github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -38,6 +40,13 @@ import (
 
 // DefaultAppID is the TypeID used for the test application.
 const DefaultAppID = "aapp_01jf0000000000000000000000"
+
+// DefaultPublishableKey is the publishable key seeded onto the default
+// test app and pre-configured on the returned authclient so that SDK
+// tests routing through /v1/signup et al. resolve to the seeded app
+// without each test having to wire up a key. Stable across test runs;
+// not a secret.
+const DefaultPublishableKey = "pk_test_authsome_testutil_default"
 
 // TestServer wraps a full AuthSome engine with an httptest.Server and a
 // pre-configured SDK client. All stores are in-memory.
@@ -84,6 +93,29 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 	}
 
 	store := memory.New()
+
+	// Seed the platform app at the configured AppID BEFORE engine.Start
+	// runs. Bootstrap then adopts it via GetAppBySlug("platform"), so
+	// engine.PlatformAppID() == cfg.appID after Start. Without this seed
+	// the engine.SignUp app-existence check (added alongside the
+	// publishable-key fix) rejects signups against the constant AppID.
+	parsedAppID, parseErr := id.ParseAppID(cfg.appID)
+	if parseErr != nil {
+		t.Fatalf("testutil: parse app id %q: %v", cfg.appID, parseErr)
+	}
+	seedNow := time.Now()
+	if seedErr := store.CreateApp(context.Background(), &app.App{
+		ID:             parsedAppID,
+		Name:           "Platform",
+		Slug:           "platform",
+		PublishableKey: DefaultPublishableKey,
+		IsPlatform:     true,
+		CreatedAt:      seedNow,
+		UpdatedAt:      seedNow,
+	}); seedErr != nil {
+		t.Fatalf("testutil: seed platform app: %v", seedErr)
+	}
+
 	logger := log.NewNoopLogger()
 
 	wardenEng, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
@@ -161,7 +193,14 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 
 	server := httptest.NewServer(wrappedHandler)
 
-	client := authclient.NewClient(server.URL, authclient.WithSessionCookies())
+	client := authclient.NewClient(server.URL,
+		authclient.WithSessionCookies(),
+		// Stamp X-Publishable-Key on every request so HTTP-driven SDK
+		// tests route to the seeded app via the publishable-key
+		// middleware. Without this the strict resolver rejects
+		// /v1/signup et al. with "app context required".
+		authclient.WithPublishableKey(DefaultPublishableKey),
+	)
 
 	ts := &TestServer{
 		Engine:    engine,

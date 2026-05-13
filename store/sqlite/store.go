@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xraph/grove"
@@ -621,6 +622,11 @@ func (s *Store) UpdateInvitation(ctx context.Context, inv *organization.Invitati
 	return sqliteError(err)
 }
 
+func (s *Store) DeleteInvitation(ctx context.Context, invID id.InvitationID) error {
+	_, err := s.sdb.NewDelete((*InvitationModel)(nil)).Where("id = ?", invID.String()).Exec(ctx)
+	return sqliteError(err)
+}
+
 func (s *Store) ListInvitations(ctx context.Context, orgID id.OrgID) ([]*organization.Invitation, error) {
 	var models []InvitationModel
 	err := s.sdb.NewSelect(&models).
@@ -901,6 +907,15 @@ func (s *Store) GetAPIKeyByPrefix(ctx context.Context, appID id.AppID, prefix st
 		Where("app_id = ?", appID.String()).
 		Where("key_prefix = ?", prefix).
 		Scan(ctx)
+	if err != nil {
+		return nil, sqliteError(err)
+	}
+	return toAPIKey(m)
+}
+
+func (s *Store) FindByPrefix(ctx context.Context, prefix string) (*apikey.APIKey, error) {
+	m := new(APIKeyModel)
+	err := s.sdb.NewSelect(m).Where("key_prefix = ?", prefix).Scan(ctx)
 	if err != nil {
 		return nil, sqliteError(err)
 	}
@@ -1423,7 +1438,21 @@ func (s *Store) DeleteSettingsByNamespace(ctx context.Context, namespace string)
 // Helpers
 // ──────────────────────────────────────────────────
 
-// sqliteError maps sql.ErrNoRows to a standard sentinel and passes through other errors.
+// sqliteError maps low-level sqlite failures to package-level
+// sentinels. Mirrors pgError so the API layer's mapError sees the
+// same surface regardless of backend.
+//
+// Recognized translations:
+//   - sql.ErrNoRows                   → store.ErrNotFound
+//   - UNIQUE constraint failed
+//     (...email)                      → account.ErrEmailTaken
+//   - UNIQUE constraint failed
+//     (...username)                   → account.ErrUsernameTaken
+//   - other UNIQUE constraint failed  → store.ErrConflict
+//
+// SQLite reports unique violations as "UNIQUE constraint failed:
+// table.column" — substring-matching the column name picks the
+// right sentinel.
 func sqliteError(err error) error {
 	if err == nil {
 		return nil
@@ -1431,5 +1460,59 @@ func sqliteError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return store.ErrNotFound
 	}
+	msg := err.Error()
+	if strings.Contains(msg, "UNIQUE constraint failed") {
+		switch {
+		case strings.Contains(msg, "username"):
+			return account.ErrUsernameTaken
+		case strings.Contains(msg, "email"):
+			return account.ErrEmailTaken
+		default:
+			return store.ErrConflict
+		}
+	}
 	return err
+}
+
+// WithTx is a best-effort no-op wrapper for now. Real backend transactions
+// require plumbing driver.Tx through every Store method, which is a multi-
+// day refactor deferred to a follow-up PR. Callers that need true atomic
+// cascade semantics should use the dedicated DeleteOrganizationCascade
+// method below — it uses SqliteTx natively without requiring the full
+// every-method-takes-a-tx refactor.
+func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
+	return fn(s)
+}
+
+// DeleteOrganizationCascade deletes the organization and all of its
+// dependent rows (members, teams, invitations) inside a single SqliteTx.
+// On any error the entire cascade rolls back; the orgs row is the last
+// delete so a failure mid-cascade leaves the org row visible (callers
+// can retry).
+func (s *Store) DeleteOrganizationCascade(ctx context.Context, orgID id.OrgID) error {
+	stx, err := s.sdb.BeginTxQuery(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("authsome/sqlite: begin tx for org cascade: %w", err)
+	}
+	defer func() { _ = stx.Rollback() }() //nolint:errcheck // best-effort rollback after commit
+
+	orgIDStr := orgID.String()
+
+	if _, err := stx.NewDelete(&MemberModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete members: %w", sqliteError(err))
+	}
+	if _, err := stx.NewDelete(&TeamModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete teams: %w", sqliteError(err))
+	}
+	if _, err := stx.NewDelete(&InvitationModel{}).Where("org_id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete invitations: %w", sqliteError(err))
+	}
+	if _, err := stx.NewDelete(&OrganizationModel{}).Where("id = ?", orgIDStr).Exec(ctx); err != nil {
+		return fmt.Errorf("authsome/sqlite: delete org row: %w", sqliteError(err))
+	}
+
+	if err := stx.Commit(); err != nil {
+		return fmt.Errorf("authsome/sqlite: commit org cascade: %w", err)
+	}
+	return nil
 }

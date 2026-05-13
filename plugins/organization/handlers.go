@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/xraph/forge"
+	log "github.com/xraph/go-utils/log"
 
 	"github.com/xraph/authsome/account"
 	"github.com/xraph/authsome/authprovider"
@@ -273,9 +274,26 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 		return nil, forge.BadRequest("invalid app_id")
 	}
 
+	// Resolve the env to stamp on the new org. Order:
+	//   1. Active env from the environment middleware (header / detection
+	//      / app default) — most callers go through this path.
+	//   2. App's default environment as a final fallback. This keeps
+	//      legacy clients (and tests that don't wire the middleware)
+	//      working without surfacing a confusing FK violation from the
+	//      store on a NOT NULL env_id column.
+	envID, ok := middleware.EnvIDFrom(ctx.Context())
+	if !ok || envID.IsNil() {
+		resolved, rerr := p.resolveDefaultEnv(ctx.Context(), appID)
+		if rerr != nil {
+			return nil, forge.BadRequest("no environment for app")
+		}
+		envID = resolved
+	}
+
 	o := &organization.Organization{
 		ID:        id.NewOrgID(),
 		AppID:     appID,
+		EnvID:     envID,
 		Name:      req.Name,
 		Slug:      req.Slug,
 		Logo:      req.Logo,
@@ -283,7 +301,20 @@ func (p *Plugin) handleCreateOrg(ctx forge.Context, req *CreateOrgRequest) (*org
 	}
 
 	if err := p.CreateOrganization(ctx.Context(), o); err != nil {
-		return nil, mapError(err)
+		// Structured log so the next 500 carries the org context
+		// (id, app, env, slug, creator) regardless of which layer
+		// blew up. Inner store errors are also logged in service.go.
+		if p.logger != nil {
+			p.logger.Error("organization handler: create failed",
+				log.String("org_id", o.ID.String()),
+				log.String("app_id", o.AppID.String()),
+				log.String("env_id", o.EnvID.String()),
+				log.String("slug", o.Slug),
+				log.String("created_by", o.CreatedBy.String()),
+				log.String("error", err.Error()),
+			)
+		}
+		return nil, p.mapError(err)
 	}
 
 	return o, ctx.JSON(http.StatusCreated, o)
@@ -683,9 +714,31 @@ func (p *Plugin) handleAdminListOrgs(ctx forge.Context, req *AdminListOrgsReques
 // Error mapping
 // ──────────────────────────────────────────────────
 
+// mapError converts a service-layer error into a forge HTTP error.
+// Free function form retained for handlers that don't have plugin
+// receiver access; new call sites prefer (*Plugin).mapError so the
+// error gets logged with structured context before being collapsed
+// to a generic 500.
 func mapError(err error) error {
 	if err == nil {
 		return nil
+	}
+	return forge.InternalError(err)
+}
+
+// mapError on *Plugin logs the underlying error before mapping it
+// to forge.InternalError. Handlers that have already logged the
+// error with rich field context (org_id, app_id, etc.) can still
+// call this — the duplicate `error` line is cheap and keeps the
+// final cause adjacent to the HTTP-conversion boundary.
+func (p *Plugin) mapError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if p != nil && p.logger != nil {
+		p.logger.Error("organization plugin: handler error",
+			log.String("error", err.Error()),
+		)
 	}
 	return forge.InternalError(err)
 }

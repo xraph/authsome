@@ -1,0 +1,36 @@
+schemaVersion: 1
+contributor:
+  name: auth
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+
+# Authsome owns three intents the Forge dashboard React shell consumes:
+#  - auth.login    (command) — credentials in, session cookie out.
+#  - auth.logout   (command) — clears the dashboard auth_token cookie and
+#                              terminates the server-side session.
+#  - auth.config   (query)   — drives the /login form: brand, password
+#                              toggle, signup link, terms/privacy, and
+#                              the dynamic list of social providers
+#                              configured for the platform app.
+intents:
+  - { name: auth.login,  kind: command, version: 1, capability: write }
+  - { name: auth.logout, kind: command, version: 1, capability: write }
+  - { name: auth.config, kind: query,   version: 1, capability: read  }
+
+queries:
+  config:
+    intent: auth.config
+    cache: { staleTime: 60s }
+
+# /login is the page the dashboard's AuthGate renders when the principal
+# endpoint returns 401. The auth.login.form vocabulary intent (registered
+# in the React shell) reads this graph node, fetches the auth.config
+# query, and renders shadcn's login-04 layout — branded, password-only or
+# password+social, with terms/privacy footer.
+graph:
+  - route: /login
+    intent: auth.login.form
+    title: Sign in
+    data: queries.config

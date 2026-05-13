@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -70,6 +71,22 @@ func (e *Extension) registerContributorProtocol(r forge.Router) error {
 		return fmt.Errorf("authsome: register contributor pages wildcard route: %w", err)
 	}
 
+	// POST handlers re-render the same routes with FormData populated from
+	// the request body. The dashboard host (Portal) proxies form
+	// submissions through these so contributor pages with `<form method="POST">`
+	// or `hx-post` work in client mode.
+	pagesPost := pagePostHandler(contrib)
+	if err := r.POST(contributorProtocolPrefix+"/pages", pagesPost,
+		forge.WithSchemaExclude(),
+	); err != nil {
+		return fmt.Errorf("authsome: register contributor pages POST route: %w", err)
+	}
+	if err := r.POST(contributorProtocolPrefix+"/pages/*filepath", pagesPost,
+		forge.WithSchemaExclude(),
+	); err != nil {
+		return fmt.Errorf("authsome: register contributor pages POST wildcard route: %w", err)
+	}
+
 	if err := r.GET(contributorProtocolPrefix+"/widgets/:id", widgetHandler(contrib),
 		forge.WithSchemaExclude(),
 	); err != nil {
@@ -113,6 +130,45 @@ func pageHandler(c *authdash.Contributor) forge.Handler {
 	}
 }
 
+// pagePostHandler handles form submissions proxied from the host dashboard.
+// It parses the request body (url-encoded or multipart) into a FormData map
+// and re-renders the same page with that data — contributor pages with
+// `<form method="POST">` route through this handler.
+func pagePostHandler(c *authdash.Contributor) forge.Handler {
+	return func(ctx forge.Context) error {
+		filepath := ctx.Param("filepath")
+		route := "/" + filepath
+		if filepath == "" {
+			route = "/"
+		}
+
+		req := ctx.Request()
+		formData := make(map[string]string)
+
+		// ParseForm handles both application/x-www-form-urlencoded and
+		// multipart bodies (transparently calling ParseMultipartForm when
+		// the Content-Type indicates multipart).
+		if err := req.ParseForm(); err == nil {
+			for k, v := range req.PostForm {
+				if len(v) > 0 {
+					formData[k] = v[0]
+				}
+			}
+		}
+
+		params := contributor.Params{
+			Route:       route,
+			BasePath:    req.URL.Query().Get(basePathQueryParam),
+			PageBase:    pageBaseFromContext(ctx),
+			QueryParams: queryParamMap(req),
+			FormData:    formData,
+		}
+
+		comp, err := c.RenderPage(req.Context(), route, params)
+		return writeFragment(ctx, comp, err)
+	}
+}
+
 func widgetHandler(c *authdash.Contributor) forge.Handler {
 	return func(ctx forge.Context) error {
 		comp, err := c.RenderWidget(ctx.Request().Context(), ctx.Param("id"))
@@ -152,6 +208,10 @@ func queryParamMap(r *http.Request) map[string]string {
 // can display its own error fragment.
 func writeFragment(ctx forge.Context, comp templ.Component, renderErr error) error {
 	if renderErr != nil {
+		if errors.Is(renderErr, contributor.ErrPageNotFound) {
+			ctx.Status(http.StatusNotFound)
+			return nil
+		}
 		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		ctx.Status(http.StatusInternalServerError)
 		_, _ = ctx.Response().Write([]byte("authsome: render failed: " + renderErr.Error())) //nolint:errcheck // best-effort

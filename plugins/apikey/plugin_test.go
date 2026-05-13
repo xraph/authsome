@@ -45,19 +45,20 @@ type mockEngine struct {
 // Compile-time check.
 var _ plugin.Engine = (*mockEngine)(nil)
 
-func (m *mockEngine) Store() store.Store            { return nil }
-func (m *mockEngine) DB() *grove.DB                 { return nil }
-func (m *mockEngine) Plugins() *plugin.Registry     { return nil }
-func (m *mockEngine) Plugin(_ string) plugin.Plugin { return nil }
-func (m *mockEngine) Hooks() *hook.Bus              { return nil }
-func (m *mockEngine) Logger() log.Logger            { return m.logger }
-func (m *mockEngine) Settings() *settings.Manager   { return nil }
-func (m *mockEngine) Chronicle() bridge.Chronicle   { return nil }
-func (m *mockEngine) Relay() bridge.EventRelay      { return nil }
-func (m *mockEngine) Herald() bridge.Herald         { return nil }
-func (m *mockEngine) Mailer() bridge.Mailer         { return nil }
-func (m *mockEngine) SMSSender() bridge.SMSSender   { return nil }
-func (m *mockEngine) Ledger() bridge.Ledger         { return nil }
+func (m *mockEngine) Store() store.Store               { return nil }
+func (m *mockEngine) DB() *grove.DB                    { return nil }
+func (m *mockEngine) Plugins() *plugin.Registry        { return nil }
+func (m *mockEngine) Plugin(_ string) plugin.Plugin    { return nil }
+func (m *mockEngine) Hooks() *hook.Bus                 { return nil }
+func (m *mockEngine) Logger() log.Logger               { return m.logger }
+func (m *mockEngine) Settings() *settings.Manager      { return nil }
+func (m *mockEngine) Chronicle() bridge.Chronicle      { return nil }
+func (m *mockEngine) Relay() bridge.EventRelay         { return nil }
+func (m *mockEngine) Herald() bridge.Herald            { return nil }
+func (m *mockEngine) Mailer() bridge.Mailer            { return nil }
+func (m *mockEngine) SMSSender() bridge.SMSSender      { return nil }
+func (m *mockEngine) Ledger() bridge.Ledger            { return nil }
+func (m *mockEngine) TokenEncryptor() bridge.Encryptor { return bridge.NoopEncryptor{} }
 func (m *mockEngine) SessionConfigForApp(_ context.Context, _ id.AppID, _ ...id.EnvironmentID) account.SessionConfig {
 	return account.SessionConfig{}
 }

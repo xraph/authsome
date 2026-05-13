@@ -8,6 +8,7 @@ import (
 	"github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/id"
 	pkdash "github.com/xraph/authsome/plugins/passkey/dashui"
+	"github.com/xraph/authsome/settings"
 )
 
 // Compile-time interface checks.
@@ -31,14 +32,34 @@ func (p *Plugin) DashboardWidgets(_ context.Context) []dashboard.PluginWidget {
 	}
 }
 
-// DashboardSettingsPanel returns the passkey settings panel.
-func (p *Plugin) DashboardSettingsPanel(_ context.Context) templ.Component {
-	return pkdash.SettingsPanel(
-		p.config.RPDisplayName,
-		p.config.RPID,
-		p.config.RPOrigins,
-		p.config.SessionTimeout.String(),
-	)
+// DashboardSettingsPanel returns the passkey settings summary panel. Values
+// are resolved from the dynamic settings store (cascading global → app), with
+// the static Config{} as fallback when the settings manager is unavailable.
+func (p *Plugin) DashboardSettingsPanel(ctx context.Context) templ.Component {
+	data := pkdash.SettingsPanelData{
+		RPDisplayName:  p.config.RPDisplayName,
+		RPID:           p.config.RPID,
+		RPOrigins:      p.config.RPOrigins,
+		SessionTimeout: int(p.config.SessionTimeout.Seconds()),
+	}
+
+	if p.settingsMgr != nil {
+		opts := settings.ResolveOpts{}
+		if v, err := settings.Get(ctx, p.settingsMgr, SettingRPDisplayName, opts); err == nil && v != "" {
+			data.RPDisplayName = v
+		}
+		if v, err := settings.Get(ctx, p.settingsMgr, SettingRPID, opts); err == nil && v != "" {
+			data.RPID = v
+		}
+		if v, err := settings.Get(ctx, p.settingsMgr, SettingRPOrigins, opts); err == nil && len(v) > 0 {
+			data.RPOrigins = v
+		}
+		if v, err := settings.Get(ctx, p.settingsMgr, SettingSessionTimeoutSeconds, opts); err == nil && v > 0 {
+			data.SessionTimeout = v
+		}
+	}
+
+	return pkdash.SettingsPanel(data)
 }
 
 // DashboardPages returns extra page routes for passkeys.
