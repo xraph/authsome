@@ -28,7 +28,6 @@ import (
 
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
-	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/authsome/app"
 	"github.com/xraph/authsome/appsessionconfig"
 	"github.com/xraph/authsome/bridge"
@@ -39,6 +38,7 @@ import (
 	"github.com/xraph/authsome/bridge/relayadapter"
 	authdash "github.com/xraph/authsome/dashboard"
 	"github.com/xraph/authsome/environment"
+	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/lockout"
 	"github.com/xraph/authsome/middleware"
