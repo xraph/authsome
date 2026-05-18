@@ -9,18 +9,18 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
-	github.com/xraph/chronicle v1.5.0
-	github.com/xraph/forge v1.6.1
+	github.com/xraph/chronicle v1.5.1
+	github.com/xraph/forge v1.6.4
 	github.com/xraph/forgeui v1.4.1
-	github.com/xraph/grove v1.5.1
-	github.com/xraph/grove/drivers/mongodriver v1.5.1
-	github.com/xraph/grove/drivers/pgdriver v1.5.1
-	github.com/xraph/grove/drivers/sqlitedriver v1.5.1
-	github.com/xraph/herald v1.5.0
-	github.com/xraph/keysmith v1.5.0
-	github.com/xraph/relay v1.5.0
+	github.com/xraph/grove v1.5.2
+	github.com/xraph/grove/drivers/mongodriver v1.5.2
+	github.com/xraph/grove/drivers/pgdriver v1.5.2
+	github.com/xraph/grove/drivers/sqlitedriver v1.5.2
+	github.com/xraph/herald v1.5.1
+	github.com/xraph/keysmith v1.5.1
+	github.com/xraph/relay v1.5.2
 	github.com/xraph/vessel v1.0.2
-	github.com/xraph/warden v1.5.0
+	github.com/xraph/warden v1.5.1
 	go.jetify.com/typeid/v2 v2.0.0-alpha.3
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/crypto v0.48.0
@@ -185,9 +185,9 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.35.0 // indirect
-	k8s.io/apimachinery v0.35.0 // indirect
-	k8s.io/client-go v0.35.0 // indirect
+	k8s.io/api v0.35.5 // indirect
+	k8s.io/apimachinery v0.35.5 // indirect
+	k8s.io/client-go v0.35.5 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
@@ -196,15 +196,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-// Local development: pick up the warden DSL package which lives in the
-// sibling forgery checkout but hasn't been released as a tagged version
-// yet.
-replace github.com/xraph/warden => ../warden
-
-replace github.com/xraph/grove/drivers/mongodriver => ../grove/drivers/mongodriver
-
-// Local development: the contract package below depends on
-// dashauth.WithHTTP / ResponseWriterFromContext which haven't been
-// tagged in a forge release yet. Drop this replace once they ship.
-replace github.com/xraph/forge => ../../forge
