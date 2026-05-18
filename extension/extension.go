@@ -243,7 +243,7 @@ func (e *Extension) initClientMode(fapp forge.App) error {
 	// identity (the common dev case) is still tolerated — failures
 	// during the retry window are logged but never block app boot.
 	if err := forge.OnBeforeRun(fapp, "authsome-register-remote-dashboard", func(hookCtx context.Context, app forge.App) error {
-		dashExt, err := vessel.InjectType[*dashboard.Extension](app.Container())
+		dashExt, err := vessel.Inject[*dashboard.Extension](app.Container())
 		if err != nil {
 			logger.Info("authsome: dashboard extension not present, skipping remote registration")
 

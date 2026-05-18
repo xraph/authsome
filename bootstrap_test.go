@@ -26,7 +26,7 @@ import (
 // newBootstrapEngine creates an engine with bootstrap enabled so that the
 // platform app and roles are created, platformAppID is set, and sign-ups
 // can trigger promoteFirstUserToOwner.
-func newBootstrapEngine(t *testing.T, bootstrapOpts ...authsome.BootstrapOption) (*authsome.Engine, *memory.Store) {
+func newBootstrapEngine(t *testing.T, bootstrapOpts ...authsome.BootstrapOption) (*authsome.Engine, *memory.Store) { //nolint:unparam // store return retained for future tests
 	t.Helper()
 	s := memory.New()
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
@@ -228,7 +228,7 @@ func TestBootstrap_InitialOwnerCount_PromotesFirstN(t *testing.T) {
 	require.False(t, appID.IsNil())
 
 	emails := []string{"u1@example.com", "u2@example.com", "u3@example.com", "u4@example.com"}
-	var users []id.UserID
+	users := make([]id.UserID, 0, len(emails))
 	for i, email := range emails {
 		u, _, err := eng.SignUp(ctx, &account.SignUpRequest{
 			AppID:     appID,

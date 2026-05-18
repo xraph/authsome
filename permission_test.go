@@ -55,7 +55,7 @@ func signUpOnPlatform(t *testing.T, eng *authsome.Engine, email string) id.UserI
 }
 
 // hasRole returns true if the user has the given slug in their role list.
-func hasRole(t *testing.T, eng *authsome.Engine, userID id.UserID, slug string) bool {
+func hasRole(t *testing.T, eng *authsome.Engine, userID id.UserID, slug string) bool { //nolint:unparam // slug kept parameterised for future role assertions
 	t.Helper()
 	roles, err := eng.ListUserRoles(context.Background(), userID)
 	require.NoError(t, err)

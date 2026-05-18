@@ -21,6 +21,15 @@ import (
 	"github.com/xraph/authsome/user"
 )
 
+// authPages implements dashauth.AuthPageProvider for the authsome extension.
+type authPages struct {
+	engine   *authsome.Engine
+	basePath string // dashboard base path (e.g. "/dashboard")
+}
+
+// Ensure authPages implements AuthPageProvider at compile time.
+var _ dashauth.AuthPageProvider = (*authPages)(nil)
+
 // captchaCheck is a small wrapper around middleware.VerifyCaptchaForRequest
 // for the auth-pages flow. Returns (allowed, userMessage). userMessage is
 // empty when allowed=true, and a human-friendly string otherwise — meant to
@@ -29,7 +38,7 @@ import (
 // This deliberately reuses the JSON-API middleware's verifier and settings
 // resolution so a deployment can configure captcha once at the engine level
 // and have it apply to BOTH the JSON API and the dashboard's HTML forms.
-func (a *authPages) captchaCheck(r *http.Request, action string) (bool, string) {
+func (a *authPages) captchaCheck(r *http.Request, action string) (allowed bool, message string) {
 	mgr := a.engine.Settings()
 	if mgr == nil {
 		return true, ""
@@ -53,15 +62,6 @@ func (a *authPages) captchaCheck(r *http.Request, action string) (bool, string) 
 		return false, "Captcha verification failed"
 	}
 }
-
-// authPages implements dashauth.AuthPageProvider for the authsome extension.
-type authPages struct {
-	engine   *authsome.Engine
-	basePath string // dashboard base path (e.g. "/dashboard")
-}
-
-// Ensure authPages implements AuthPageProvider at compile time.
-var _ dashauth.AuthPageProvider = (*authPages)(nil)
 
 // AuthPages returns the list of auth pages this provider contributes.
 func (a *authPages) AuthPages() []dashauth.AuthPageDescriptor {
@@ -143,7 +143,7 @@ func (a *authPages) RenderAuthPage(ctx *router.PageContext, pageType dashauth.Au
 }
 
 // renderRegisterPage renders either the dynamic or static register page.
-func (a *authPages) renderRegisterPage(ctx *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) {
+func (a *authPages) renderRegisterPage(ctx *router.PageContext, errorMsg string, values, fieldErrs map[string]string) (templ.Component, error) { //nolint:unparam // fieldErrs retained for future field-level errors
 	links := registerLinks(a.basePath)
 	if ctx != nil && ctx.ResponseWriter != nil {
 		links.CSRFToken = dashboard.GenerateFormCSRFToken(ctx.ResponseWriter)

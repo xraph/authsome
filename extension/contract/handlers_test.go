@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,10 +13,10 @@ import (
 
 // withHTTPCtx returns a ctx populated as the contract transport would
 // populate it before dispatching a command (slice l added this).
-func withHTTPCtx(t *testing.T) (context.Context, http.ResponseWriter, *http.Request) {
+func withHTTPCtx(t *testing.T) (context.Context, http.ResponseWriter, *http.Request) { //nolint:unparam // writer return retained for future tests
 	t.Helper()
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/api/dashboard/v1", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/dashboard/v1", nil)
 	r.RemoteAddr = "127.0.0.1:1234"
 	ctx := dashauth.WithHTTP(context.Background(), w, r)
 	return ctx, w, r
@@ -30,8 +31,8 @@ func TestLoginHandler_BadRequestOnEmptyCredentials(t *testing.T) {
 	}
 	for _, in := range cases {
 		_, err := h(ctx, in, dashcontract.Principal{})
-		ce, ok := err.(*dashcontract.Error)
-		if !ok || ce.Code != dashcontract.CodeBadRequest {
+		var ce *dashcontract.Error
+		if !errors.As(err, &ce) || ce.Code != dashcontract.CodeBadRequest {
 			t.Errorf("expected CodeBadRequest for %+v, got %v", in, err)
 		}
 	}
@@ -41,8 +42,8 @@ func TestLoginHandler_UnavailableWhenEngineNil(t *testing.T) {
 	ctx, _, _ := withHTTPCtx(t)
 	h := loginHandler(Deps{Engine: nil})
 	_, err := h(ctx, LoginInput{Email: "alice@example.com", Password: "x"}, dashcontract.Principal{})
-	ce, ok := err.(*dashcontract.Error)
-	if !ok || ce.Code != dashcontract.CodeUnavailable {
+	var ce *dashcontract.Error
+	if !errors.As(err, &ce) || ce.Code != dashcontract.CodeUnavailable {
 		t.Errorf("expected CodeUnavailable, got %v", err)
 	}
 }
@@ -52,12 +53,9 @@ func TestLoginHandler_InternalWhenNoHTTPCtx(t *testing.T) {
 	// can't be silently dropped.
 	h := loginHandler(Deps{Engine: nil})
 	_, err := h(context.Background(), LoginInput{Email: "x@y", Password: "p"}, dashcontract.Principal{})
-	ce, ok := err.(*dashcontract.Error)
 	// Order matters in the handler: empty-cred and engine-nil checks fire
 	// before the http context check, so we have to use a request that
 	// passes those first.
-	_ = ce
-	_ = ok
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -67,8 +65,8 @@ func TestLogoutHandler_UnavailableWhenEngineNil(t *testing.T) {
 	ctx, _, _ := withHTTPCtx(t)
 	h := logoutHandler(Deps{Engine: nil})
 	_, err := h(ctx, struct{}{}, dashcontract.Principal{})
-	ce, ok := err.(*dashcontract.Error)
-	if !ok || ce.Code != dashcontract.CodeUnavailable {
+	var ce *dashcontract.Error
+	if !errors.As(err, &ce) || ce.Code != dashcontract.CodeUnavailable {
 		t.Errorf("expected CodeUnavailable, got %v", err)
 	}
 }

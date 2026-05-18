@@ -74,12 +74,14 @@ func TestAuditor_RecordWithOutcomeOverrides(t *testing.T) {
 }
 
 func TestAuditor_NilAuditorSafe(t *testing.T) {
+	t.Helper()
 	var a *dashboard.Auditor
 	// Must not panic.
 	a.Record(context.Background(), "x", bridge.SeverityInfo, "", "", nil)
 }
 
 func TestAuditor_NilChronicleSafe(t *testing.T) {
+	t.Helper()
 	a := dashboard.NewAuditor(nil)
 	// Must not panic.
 	a.Record(context.Background(), "x", bridge.SeverityInfo, "", "", nil)

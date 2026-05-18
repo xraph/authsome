@@ -150,8 +150,8 @@ func (s *Service) RotateToken(ctx context.Context, oldTokenID id.SCIMTokenID, ne
 	graceExpiry := time.Now().Add(grace)
 	if old.ExpiresAt == nil || old.ExpiresAt.After(graceExpiry) {
 		old.ExpiresAt = &graceExpiry
-		if err := s.store.UpdateToken(ctx, old); err != nil {
-			return "", nil, fmt.Errorf("scim: rotate token: shorten old expiry: %w", err)
+		if updErr := s.store.UpdateToken(ctx, old); updErr != nil {
+			return "", nil, fmt.Errorf("scim: rotate token: shorten old expiry: %w", updErr)
 		}
 	}
 

@@ -39,19 +39,19 @@ func SessionCookieTemplate(ctx context.Context, mgr *settings.Manager, appID str
 		resolveOpts.AppID = appID
 	}
 
-	name, _ := settings.Get(ctx, mgr, SettingCookieName, resolveOpts)
+	name, _ := settings.Get(ctx, mgr, SettingCookieName, resolveOpts) //nolint:errcheck // best-effort
 	if strings.TrimSpace(name) == "" {
 		name = "authsome_session_token"
 	}
-	domain, _ := settings.Get(ctx, mgr, SettingCookieDomain, resolveOpts)
-	cookiePath, _ := settings.Get(ctx, mgr, SettingCookiePath, resolveOpts)
+	domain, _ := settings.Get(ctx, mgr, SettingCookieDomain, resolveOpts)   //nolint:errcheck // best-effort
+	cookiePath, _ := settings.Get(ctx, mgr, SettingCookiePath, resolveOpts) //nolint:errcheck // best-effort
 	if cookiePath == "" {
 		cookiePath = "/"
 	}
-	secureSetting, _ := settings.Get(ctx, mgr, SettingCookieSecure, resolveOpts)
-	httpOnly, _ := settings.Get(ctx, mgr, SettingCookieHTTPOnly, resolveOpts)
-	sameSiteStr, _ := settings.Get(ctx, mgr, SettingCookieSameSite, resolveOpts)
-	useHostPrefix, _ := settings.Get(ctx, mgr, SettingCookieUseHostPrefix, resolveOpts)
+	secureSetting, _ := settings.Get(ctx, mgr, SettingCookieSecure, resolveOpts)        //nolint:errcheck // best-effort
+	httpOnly, _ := settings.Get(ctx, mgr, SettingCookieHTTPOnly, resolveOpts)           //nolint:errcheck // best-effort
+	sameSiteStr, _ := settings.Get(ctx, mgr, SettingCookieSameSite, resolveOpts)        //nolint:errcheck // best-effort
+	useHostPrefix, _ := settings.Get(ctx, mgr, SettingCookieUseHostPrefix, resolveOpts) //nolint:errcheck // best-effort
 
 	secure := secureSetting && isHTTPS
 

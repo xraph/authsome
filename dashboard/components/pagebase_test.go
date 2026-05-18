@@ -204,10 +204,10 @@ func hxGetSnippet(html string) string {
 
 	rest := html[idx+end+1:]
 
-	close := strings.Index(rest, `"`)
-	if close < 0 {
+	closeIdx := strings.Index(rest, `"`)
+	if closeIdx < 0 {
 		return html[idx:]
 	}
 
-	return html[idx : idx+end+1+close+1]
+	return html[idx : idx+end+1+closeIdx+1]
 }

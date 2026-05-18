@@ -1492,7 +1492,7 @@ func pgError(err error) error {
 // cascade semantics should use the dedicated DeleteOrganizationCascade
 // method below — it uses PgTx natively without requiring the full
 // every-method-takes-a-tx refactor.
-func (s *Store) WithTx(ctx context.Context, fn func(tx organization.Store) error) error {
+func (s *Store) WithTx(_ context.Context, fn func(tx organization.Store) error) error {
 	return fn(s)
 }
 

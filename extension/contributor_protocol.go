@@ -214,7 +214,7 @@ func writeFragment(ctx forge.Context, comp templ.Component, renderErr error) err
 		}
 		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		ctx.Status(http.StatusInternalServerError)
-		_, _ = ctx.Response().Write([]byte("authsome: render failed: " + renderErr.Error())) //nolint:errcheck // best-effort
+		_, _ = ctx.Response().Write([]byte("authsome: render failed: " + renderErr.Error())) //nolint:errcheck,gosec // G705: content-type is text/plain
 		return nil
 	}
 	if comp == nil {
@@ -226,7 +226,7 @@ func writeFragment(ctx forge.Context, comp templ.Component, renderErr error) err
 	var buf bytes.Buffer
 	if err := comp.Render(context.Background(), &buf); err != nil {
 		ctx.Status(http.StatusInternalServerError)
-		_, _ = ctx.Response().Write([]byte("authsome: render failed: " + err.Error())) //nolint:errcheck // best-effort
+		_, _ = ctx.Response().Write([]byte("authsome: render failed: " + err.Error())) //nolint:errcheck,gosec // G705: internal error message, not user input
 		return nil
 	}
 	_, _ = ctx.Response().Write(buf.Bytes()) //nolint:errcheck // best-effort

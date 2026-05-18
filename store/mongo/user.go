@@ -22,7 +22,7 @@ func (s *Store) CreateUser(ctx context.Context, u *user.User) error {
 		// error and returns 500 carrying the raw E11000 message —
 		// which leaks the index name and the existence of the
 		// colliding row.
-		if mapped := mapWriteErr(err); mapped != err {
+		if mapped := mapWriteErr(err); mapped != err { //nolint:errorlint // intentional identity check — mapWriteErr returns the input untouched when no mapping applies
 			return mapped
 		}
 		return fmt.Errorf("authsome/mongo: create user: %w", err)
@@ -127,7 +127,7 @@ func (s *Store) UpdateUser(ctx context.Context, u *user.User) error {
 		// A username/email change can violate a uniqueness constraint
 		// — surface the same sentinels CreateUser does so PATCH /me
 		// returns a 409 instead of a 500 with the raw E11000.
-		if mapped := mapWriteErr(err); mapped != err {
+		if mapped := mapWriteErr(err); mapped != err { //nolint:errorlint // intentional identity check — mapWriteErr returns the input untouched when no mapping applies
 			return mapped
 		}
 		return fmt.Errorf("authsome/mongo: update user: %w", err)

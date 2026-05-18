@@ -130,9 +130,6 @@ func isJWT(token string) bool {
 // its own AppID, EnvID, and UserID, which we surface in the response.
 func (a *API) introspectAPIKey(ctx forge.Context, token string, inactive *IntrospectResponse) (*IntrospectResponse, error) {
 	store := a.engine.APIKeyStore()
-	if store == nil {
-		return inactive, nil
-	}
 
 	prefix := extractAPIKeyPrefix(token)
 	if prefix == "" {

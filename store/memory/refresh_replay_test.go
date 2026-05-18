@@ -119,8 +119,8 @@ func TestRefreshReplay_RevokeFamilyCascade(t *testing.T) {
 
 	// Both sibling refresh-token hashes are now in the revoked set.
 	for _, tok := range []string{"refreshA", "refreshB"} {
-		revoked, err := s.IsRefreshTokenRevoked(ctx(), hashTok(tok))
-		require.NoError(t, err)
+		revoked, revokedErr := s.IsRefreshTokenRevoked(ctx(), hashTok(tok))
+		require.NoError(t, revokedErr)
 		assert.Truef(t, revoked, "expected refresh hash for %q to be revoked", tok)
 	}
 

@@ -159,7 +159,6 @@ func (e *captchaTestEnv) setSecret(t *testing.T, secret string) {
 // stubVerifier is a captcha.Verifier whose Verify call delegates to a
 // caller-provided function. Tracks call count for cache assertions.
 type stubVerifier struct {
-	id        string
 	callCount int32
 	fn        func(ctx context.Context, token, remoteIP, action string) (*captcha.Result, error)
 }

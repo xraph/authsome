@@ -273,8 +273,8 @@ func (e *Engine) LoadMFATicket(ctx context.Context, ticket string) (*MFATicketPa
 		return nil, err
 	}
 	var pl mfaTicketPayload
-	if err := json.Unmarshal(raw, &pl); err != nil {
-		return nil, fmt.Errorf("authsome: decode mfa ticket: %w", err)
+	if decodeErr := json.Unmarshal(raw, &pl); decodeErr != nil {
+		return nil, fmt.Errorf("authsome: decode mfa ticket: %w", decodeErr)
 	}
 	uid, err := id.ParseUserID(pl.UserID)
 	if err != nil {

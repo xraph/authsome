@@ -69,7 +69,7 @@ func SignBody(secret []byte, ts time.Time, body []byte) string {
 // logging at debug, often a clock-drift symptom) from "MAC didn't
 // match" (worth alerting — either a misconfigured secret or an
 // attacker probing).
-func VerifySignature(secret []byte, body []byte, header string, tolerance time.Duration) error {
+func VerifySignature(secret, body []byte, header string, tolerance time.Duration) error {
 	return verifySignatureAt(secret, body, header, tolerance, time.Now())
 }
 

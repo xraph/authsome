@@ -3,6 +3,7 @@ package contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -85,11 +86,11 @@ func TestEndToEnd_RemoteAuthLoginRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch manifest: %v", err)
 	}
-	if err := loader.Validate(m, hostWreg); err != nil {
-		t.Fatalf("validate: %v", err)
+	if validateErr := loader.Validate(m, hostWreg); validateErr != nil {
+		t.Fatalf("validate: %v", validateErr)
 	}
-	if err := hostReg.RegisterRemote(m, dashcontract.RemoteEndpoint{BaseURL: remoteBase}); err != nil {
-		t.Fatalf("register remote: %v", err)
+	if regErr := hostReg.RegisterRemote(m, dashcontract.RemoteEndpoint{BaseURL: remoteBase}); regErr != nil {
+		t.Fatalf("register remote: %v", regErr)
 	}
 	hostDisp.SetRemoteDispatcher(remote.NewForwardingDispatcher(hostReg))
 
@@ -165,8 +166,8 @@ func TestEndToEnd_HostFallsThroughOnUnknownIntent(t *testing.T) {
 		Envelope: "v1", Kind: dashcontract.KindQuery,
 		Contributor: "unknown", Intent: "x", IntentVersion: 1,
 	}, dashcontract.Principal{})
-	ce, ok := err.(*dashcontract.Error)
-	if !ok || ce.Code != dashcontract.CodeNotFound {
+	var ce *dashcontract.Error
+	if !errors.As(err, &ce) || ce.Code != dashcontract.CodeNotFound {
 		t.Errorf("expected CodeNotFound for unknown contributor, got %v", err)
 	}
 }

@@ -375,9 +375,9 @@ func (a *API) handleListUserRoles(ctx forge.Context, req *ListUserRolesRequest) 
 
 	var roles []*rbac.Role
 	if req != nil && req.AppID != "" {
-		appID, err := id.ParseAppID(req.AppID)
-		if err != nil {
-			return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", err))
+		appID, parseErr := id.ParseAppID(req.AppID)
+		if parseErr != nil {
+			return nil, forge.BadRequest(fmt.Sprintf("invalid app_id: %v", parseErr))
 		}
 		roles, err = a.engine.ListUserRolesInApp(ctx.Context(), appID, userID)
 		if err != nil {

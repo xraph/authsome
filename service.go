@@ -835,25 +835,6 @@ func (e *Engine) savePasswordHistory(ctx context.Context, userID id.UserID, oldH
 	}
 }
 
-// mfaPluginInspector is implemented by the MFA plugin to expose enrollment lookups.
-type mfaPluginInspector interface {
-	HasMFA(ctx context.Context, userID id.UserID) bool
-}
-
-// userHasVerifiedMFA returns true when the MFA plugin reports a verified factor
-// for the user. Returns false when the plugin is not registered.
-func (e *Engine) userHasVerifiedMFA(ctx context.Context, userID id.UserID) bool {
-	for _, p := range e.plugins.Plugins() {
-		if p.Name() != "mfa" {
-			continue
-		}
-		if inspector, ok := p.(mfaPluginInspector); ok {
-			return inspector.HasMFA(ctx, userID)
-		}
-	}
-	return false
-}
-
 // lockoutKey builds a scoped lockout key from a sign-in request.
 func (e *Engine) lockoutKey(req *account.SignInRequest) string {
 	identifier := req.Email

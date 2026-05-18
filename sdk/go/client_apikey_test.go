@@ -16,7 +16,7 @@ import (
 // without this guard the SDK would silently fire a doomed request
 // and surface a confusing 401.
 func TestWithAPIKey_RejectsPublishableKey(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		// Should never be hit — config error must short-circuit do().
 		t.Fatalf("unexpected request to %s", r.URL.Path)
 	}))
@@ -38,7 +38,7 @@ func TestWithAPIKey_RejectsPublishableKey(t *testing.T) {
 // the imperative setter — operators who switch keys at runtime
 // shouldn't be able to silently downgrade to a publishable key.
 func TestSetAPIKey_RejectsPublishableKey(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		t.Fatalf("unexpected request to %s", r.URL.Path)
 	}))
 	defer srv.Close()

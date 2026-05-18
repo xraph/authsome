@@ -82,7 +82,7 @@ func newOrgTestSetup(t *testing.T) *orgTestSetup {
 // POST-style action=delete payload. Returns the actionError surfaced by the
 // handler (extracted via a side channel: re-render on failure path returns
 // the org-detail page; on success it returns the org-list page).
-func (s *orgTestSetup) submitDelete(t *testing.T, ctx context.Context, nonce string) (returnedListPage bool) {
+func (s *orgTestSetup) submitDelete(ctx context.Context, t *testing.T, nonce string) {
 	t.Helper()
 	params := forgecontrib.Params{
 		PathParams:  map[string]string{"id": s.org.ID.String()},
@@ -95,25 +95,20 @@ func (s *orgTestSetup) submitDelete(t *testing.T, ctx context.Context, nonce str
 	comp, err := s.plugin.DashboardRenderPage(ctx, "/organizations/detail", params)
 	require.NoError(t, err)
 	require.NotNil(t, comp)
-	// On the success path renderOrgDetail returns renderOrgList output. We
-	// can't easily distinguish by templ type, so callers verify the org's
-	// store presence instead.
-	_, exists := s.orgExists(t)
-	return !exists
 }
 
-func (s *orgTestSetup) orgExists(t *testing.T) (*organization.Organization, bool) {
+func (s *orgTestSetup) orgExists(t *testing.T) bool {
 	t.Helper()
 	o, err := s.plugin.GetOrganization(context.Background(), s.org.ID)
 	if err != nil {
 		// Not-found is a clean signal here.
 		var notFound interface{ Error() string }
 		if errors.As(err, &notFound) {
-			return nil, false
+			return false
 		}
-		return nil, false
+		return false
 	}
-	return o, o != nil
+	return o != nil
 }
 
 func ctxAs(actor id.UserID, sessionID id.SessionID) context.Context {
@@ -134,9 +129,9 @@ func TestOrgDelete_RequiresOwnerOrAdmin(t *testing.T) {
 	nonce := dashboard.GenerateScopedNonce(strangerSess.String(), "org.delete")
 	require.NotEmpty(t, nonce)
 
-	s.submitDelete(t, ctxAs(stranger, strangerSess), nonce)
+	s.submitDelete(ctxAs(stranger, strangerSess), t, nonce)
 
-	if _, ok := s.orgExists(t); !ok {
+	if ok := s.orgExists(t); !ok {
 		t.Fatalf("stranger delete should have been refused; org is gone")
 	}
 	secutil.AssertNoAuditEvent(t, s.ch, "org.delete")
@@ -144,9 +139,9 @@ func TestOrgDelete_RequiresOwnerOrAdmin(t *testing.T) {
 	// Owner submits with a fresh nonce on their own session.
 	ownerSess := id.NewSessionID()
 	ownerNonce := dashboard.GenerateScopedNonce(ownerSess.String(), "org.delete")
-	s.submitDelete(t, ctxAs(s.owner, ownerSess), ownerNonce)
+	s.submitDelete(ctxAs(s.owner, ownerSess), t, ownerNonce)
 
-	if _, ok := s.orgExists(t); ok {
+	if ok := s.orgExists(t); ok {
 		t.Fatalf("owner delete should have removed the org")
 	}
 }
@@ -181,7 +176,7 @@ func TestOrgDelete_PermissionCheckUsesResourceType(t *testing.T) {
 
 	sess := id.NewSessionID()
 	nonce := dashboard.GenerateScopedNonce(sess.String(), "org.delete")
-	s.submitDelete(t, ctxAs(admin, sess), nonce)
+	s.submitDelete(ctxAs(admin, sess), t, nonce)
 
 	require.Equal(t, 1, spy.calls, "permission checker must be consulted exactly once")
 	assert.Equal(t, admin, spy.gotUser)
@@ -190,7 +185,7 @@ func TestOrgDelete_PermissionCheckUsesResourceType(t *testing.T) {
 		"resource arg must be the TYPE %q, not the instance ID; codebase convention is rbac/warden_store.go forwards this as warden.Resource.Type",
 		"org")
 
-	if _, ok := s.orgExists(t); ok {
+	if ok := s.orgExists(t); ok {
 		t.Fatalf("admin with allow=true should have deleted org")
 	}
 }
@@ -210,9 +205,9 @@ func TestOrgDelete_AdminWithPermissionCanDelete(t *testing.T) {
 
 	sess := id.NewSessionID()
 	nonce := dashboard.GenerateScopedNonce(sess.String(), "org.delete")
-	s.submitDelete(t, ctxAs(admin, sess), nonce)
+	s.submitDelete(ctxAs(admin, sess), t, nonce)
 
-	if _, ok := s.orgExists(t); ok {
+	if ok := s.orgExists(t); ok {
 		t.Fatalf("admin with org.delete permission should have deleted org")
 	}
 }
@@ -222,7 +217,7 @@ func TestOrgDelete_AuditEventOnSuccess(t *testing.T) {
 
 	sess := id.NewSessionID()
 	nonce := dashboard.GenerateScopedNonce(sess.String(), "org.delete")
-	s.submitDelete(t, ctxAs(s.owner, sess), nonce)
+	s.submitDelete(ctxAs(s.owner, sess), t, nonce)
 
 	secutil.AssertAuditEvent(t, s.ch, "org.delete", func(ev *bridge.AuditEvent) {
 		assert.Equal(t, bridge.SeverityCritical, ev.Severity)
@@ -240,10 +235,10 @@ func TestOrgDelete_NoAuditEventOnRejection(t *testing.T) {
 	stranger := id.NewUserID()
 	sess := id.NewSessionID()
 	nonce := dashboard.GenerateScopedNonce(sess.String(), "org.delete")
-	s.submitDelete(t, ctxAs(stranger, sess), nonce)
+	s.submitDelete(ctxAs(stranger, sess), t, nonce)
 
 	secutil.AssertNoAuditEvent(t, s.ch, "org.delete")
-	if _, ok := s.orgExists(t); !ok {
+	if ok := s.orgExists(t); !ok {
 		t.Fatalf("rejected delete must not remove the org")
 	}
 }
@@ -254,8 +249,8 @@ func TestOrgDelete_ScopedNonceRequired(t *testing.T) {
 	sess := id.NewSessionID()
 	// Mint nonce for the WRONG scope.
 	wrongScope := dashboard.GenerateScopedNonce(sess.String(), "org.create")
-	s.submitDelete(t, ctxAs(s.owner, sess), wrongScope)
-	if _, ok := s.orgExists(t); !ok {
+	s.submitDelete(ctxAs(s.owner, sess), t, wrongScope)
+	if ok := s.orgExists(t); !ok {
 		t.Fatalf("wrong-scope nonce must not consume; org should remain")
 	}
 	secutil.AssertNoAuditEvent(t, s.ch, "org.delete")
@@ -263,8 +258,8 @@ func TestOrgDelete_ScopedNonceRequired(t *testing.T) {
 	// Mint nonce for a DIFFERENT session.
 	otherSess := id.NewSessionID()
 	otherNonce := dashboard.GenerateScopedNonce(otherSess.String(), "org.delete")
-	s.submitDelete(t, ctxAs(s.owner, sess), otherNonce)
-	if _, ok := s.orgExists(t); !ok {
+	s.submitDelete(ctxAs(s.owner, sess), t, otherNonce)
+	if ok := s.orgExists(t); !ok {
 		t.Fatalf("cross-session nonce must not consume; org should remain")
 	}
 	secutil.AssertNoAuditEvent(t, s.ch, "org.delete")
@@ -281,9 +276,9 @@ func TestAttack_CSRF_StolenScopedNonce_OrgDelete(t *testing.T) {
 	// Attacker submits with their own session context.
 	attacker := id.NewUserID()
 	attackerSess := id.NewSessionID()
-	s.submitDelete(t, ctxAs(attacker, attackerSess), stolen)
+	s.submitDelete(ctxAs(attacker, attackerSess), t, stolen)
 
-	if _, ok := s.orgExists(t); !ok {
+	if ok := s.orgExists(t); !ok {
 		t.Fatalf("CSRF replay across sessions must be rejected; org is gone")
 	}
 	secutil.AssertNoAuditEvent(t, s.ch, "org.delete")

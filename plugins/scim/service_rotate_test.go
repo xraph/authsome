@@ -10,7 +10,7 @@ import (
 	"github.com/xraph/authsome/id"
 )
 
-func newRotationService(t *testing.T) (*Service, *MemoryStore, *SCIMConfig) {
+func newRotationService(t *testing.T) (*Service, *MemoryStore, *SCIMConfig) { //nolint:unparam // store return retained for future tests
 	t.Helper()
 	store := NewMemoryStore()
 	svc := &Service{store: store}

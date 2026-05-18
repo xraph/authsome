@@ -438,24 +438,28 @@ func (p *Plugin) allProviderNames(ctx context.Context) []string {
 func (p *Plugin) RegisterRoutes(router forge.Router) error {
 	g := router.Group("/v1/social", forge.WithGroupTags("Social OAuth"))
 
-	startOpts := []forge.RouteOption{
+	startRateOpts := p.rateLimitOpts(rateLimitForStart)
+	startOpts := make([]forge.RouteOption, 0, 4+len(startRateOpts))
+	startOpts = append(startOpts,
 		forge.WithSummary("Start OAuth flow"),
 		forge.WithOperationID("startOAuth"),
 		forge.WithResponseSchema(http.StatusOK, "OAuth authorization URL", StartResponse{}),
 		forge.WithErrorResponses(),
-	}
-	startOpts = append(startOpts, p.rateLimitOpts(rateLimitForStart)...)
+	)
+	startOpts = append(startOpts, startRateOpts...)
 	if err := g.POST("/:provider", p.handleStart, startOpts...); err != nil {
 		return err
 	}
 
-	callbackOpts := []forge.RouteOption{
+	callbackRateOpts := p.rateLimitOpts(rateLimitForCallback)
+	callbackOpts := make([]forge.RouteOption, 0, 4+len(callbackRateOpts))
+	callbackOpts = append(callbackOpts,
 		forge.WithSummary("OAuth callback"),
 		forge.WithOperationID("oauthCallback"),
 		forge.WithResponseSchema(http.StatusOK, "Authentication result", CallbackResponse{}),
 		forge.WithErrorResponses(),
-	}
-	callbackOpts = append(callbackOpts, p.rateLimitOpts(rateLimitForCallback)...)
+	)
+	callbackOpts = append(callbackOpts, callbackRateOpts...)
 	if err := g.GET("/:provider/callback", p.handleCallback, callbackOpts...); err != nil {
 		return err
 	}
@@ -737,9 +741,9 @@ func pkceChallengeS256(verifier string) string {
 // states that were minted before the rollout. Returns the raw envelope
 // plus the appID under which it was found (empty when the legacy key
 // hit, so the caller can fall back to stateInfo["app_id"]).
-func (p *Plugin) loadOAuthState(ctx context.Context, appID id.AppID, state string) ([]byte, string, error) {
+func (p *Plugin) loadOAuthState(ctx context.Context, appID id.AppID, state string) (envelope []byte, foundAppID string, err error) {
 	if !appID.IsNil() {
-		if data, err := p.ceremonies.Get(ctx, socialStateKey(appID, state)); err == nil {
+		if data, getErr := p.ceremonies.Get(ctx, socialStateKey(appID, state)); getErr == nil {
 			_ = p.ceremonies.Delete(ctx, socialStateKey(appID, state)) //nolint:errcheck // best-effort
 			return data, appID.String(), nil
 		}
@@ -767,7 +771,8 @@ func verifyOIDCNonce(token *oauth2.Token, expectedNonce string) bool {
 	if expectedNonce == "" {
 		return true
 	}
-	idToken, _ := token.Extra("id_token").(string)
+	idToken, _ := token.Extra("id_token").(string) //nolint:errcheck // type assertion: empty string handled below
+
 	if idToken == "" {
 		// Provider didn't return an ID token; non-OIDC flow.
 		return true
@@ -1508,7 +1513,7 @@ func (p *Plugin) writeScope(ctx context.Context, scope settings.Scope, scopeID s
 	return p.settingsMgr.Set(ctx, SettingSocialProviders.Def.Key, raw, scope, scopeID, appID, "", "admin")
 }
 
-func scopeFor(appID string) (settings.Scope, string) {
+func scopeFor(appID string) (scope settings.Scope, scopeID string) {
 	if v := strings.TrimSpace(appID); v != "" {
 		return settings.ScopeApp, v
 	}

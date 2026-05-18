@@ -684,7 +684,7 @@ func init() {
 				if err != nil {
 					return fmt.Errorf("find platform-admin roles: %w", err)
 				}
-				defer cursor.Close(ctx) //nolint:errcheck
+				defer cursor.Close(ctx)
 
 				type minimalRole struct {
 					ID         string  `bson:"_id"`

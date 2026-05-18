@@ -63,7 +63,7 @@ func (a *Auditor) RecordWithOutcome(
 	if actorID == "" {
 		actorID = unknownActor
 	}
-	_ = a.chronicle.Record(ctx, &bridge.AuditEvent{
+	_ = a.chronicle.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // audit best-effort
 		Action:     action,
 		Severity:   severity,
 		Outcome:    outcome,

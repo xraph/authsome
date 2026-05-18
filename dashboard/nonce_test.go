@@ -200,7 +200,7 @@ func FuzzScopedNonceVerify(f *testing.F) {
 	mac.Write([]byte("scope"))
 	f.Add(base64.RawURLEncoding.EncodeToString(tsBytes) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
 
-	f.Fuzz(func(t *testing.T, token string) {
+	f.Fuzz(func(_ *testing.T, token string) {
 		// Must never panic. Random bytes must never be accepted as a valid
 		// nonce for ("sess", "scope") — the only way a fuzzer-generated
 		// string could legitimately verify is by accident producing the same

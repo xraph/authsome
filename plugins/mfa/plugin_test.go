@@ -445,7 +445,7 @@ func TestHandleChallenge_RequiresTicket(t *testing.T) {
 	require.NoError(t, p.RegisterRoutes(mux))
 
 	body := jsonBody(t, map[string]string{"code": "123456"})
-	req, _ := http.NewRequest("POST", "/v1/mfa/challenge", body)
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/challenge", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -594,7 +594,7 @@ func TestFullFlow_EnrollVerifyChallengeDisable(t *testing.T) {
 	// tests where a full engine is wired. Here we just confirm the
 	// route is wired and rejects an unticketed call.
 	noTicketBody := jsonBody(t, map[string]string{"code": "000000"})
-	noTicketReq, _ := http.NewRequest("POST", "/v1/mfa/challenge", noTicketBody)
+	noTicketReq, _ := http.NewRequestWithContext(context.Background(), "POST", "/v1/mfa/challenge", noTicketBody)
 	noTicketReq.Header.Set("Content-Type", "application/json")
 	noTicketRec := httptest.NewRecorder()
 	mux.ServeHTTP(noTicketRec, noTicketReq)

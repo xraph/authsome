@@ -81,7 +81,7 @@ func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, v.endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTransientFailure, err)
+		return nil, fmt.Errorf("%w: %w", ErrTransientFailure, err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
@@ -90,9 +90,9 @@ func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action 
 	if err != nil {
 		// Preserve context errors so callers can detect cancellation/timeout.
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, fmt.Errorf("%w: %v", ctxErr, err)
+			return nil, fmt.Errorf("%w: %w", ctxErr, err)
 		}
-		return nil, fmt.Errorf("%w: %v", ErrTransientFailure, err)
+		return nil, fmt.Errorf("%w: %w", ErrTransientFailure, err)
 	}
 	defer resp.Body.Close()
 
@@ -102,7 +102,7 @@ func (v *TurnstileVerifier) Verify(ctx context.Context, token, remoteIP, action 
 
 	var out turnstileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTransientFailure, err)
+		return nil, fmt.Errorf("%w: %w", ErrTransientFailure, err)
 	}
 
 	if !out.Success {

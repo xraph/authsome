@@ -506,8 +506,8 @@ func (a *API) handleAdminCopyUser(ctx forge.Context, req *AdminCopyUserRequest) 
 
 	envID := id.EnvironmentID{}
 	if strings.TrimSpace(req.EnvID) != "" {
-		parsed, err := id.ParseEnvironmentID(req.EnvID)
-		if err != nil {
+		parsed, parseErr := id.ParseEnvironmentID(req.EnvID)
+		if parseErr != nil {
 			return nil, forge.BadRequest("invalid env_id")
 		}
 		envID = parsed
@@ -605,16 +605,16 @@ func (a *API) handleGrantPlatformOwner(ctx forge.Context, req *AdminGrantPlatfor
 	// Resolve target user.
 	var targetUserID id.UserID
 	if req.UserID != "" {
-		parsed, err := id.ParseUserID(req.UserID)
-		if err != nil {
+		parsed, parseErr := id.ParseUserID(req.UserID)
+		if parseErr != nil {
 			return nil, forge.BadRequest("invalid user_id")
 		}
 		targetUserID = parsed
 	} else {
 		// Look up by email within the platform app.
-		u, err := a.engine.Store().GetUserByEmail(ctx.Context(), appID, strings.ToLower(strings.TrimSpace(req.Email)))
-		if err != nil {
-			return nil, mapError(err)
+		u, lookupErr := a.engine.Store().GetUserByEmail(ctx.Context(), appID, strings.ToLower(strings.TrimSpace(req.Email)))
+		if lookupErr != nil {
+			return nil, mapError(lookupErr)
 		}
 		targetUserID = u.ID
 	}

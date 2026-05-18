@@ -850,7 +850,6 @@ func (p *Plugin) audit(ctx context.Context, action, resource, resourceID, actorI
 	})
 }
 
-//nolint:unparam // consistent audit/event API
 func (p *Plugin) relayEvent(ctx context.Context, eventType, tenantID string, data map[string]string) {
 	if p.relay == nil {
 		return

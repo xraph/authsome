@@ -339,7 +339,7 @@ func TestSignup_DoesNotLeakEmailExistence(t *testing.T) {
 
 	// First signup must succeed.
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyA))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusCreated, rec.Code, "first signup must succeed; body=%s", rec.Body.String())
@@ -347,7 +347,7 @@ func TestSignup_DoesNotLeakEmailExistence(t *testing.T) {
 	// Second signup with the SAME email must NOT return 409 and the body
 	// must NOT contain "taken" / "exists" / similar enumeration markers.
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA))
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyA))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusCreated, rec.Code, "duplicate signup must mirror fresh signup status; body=%s", rec.Body.String())

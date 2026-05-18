@@ -41,7 +41,7 @@ const (
 	colFormConfigs          = "authsome_form_configs"
 	colBrandingConfigs      = "authsome_branding_configs"
 	colAppSessionConfigs    = "authsome_app_session_configs"
-	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens" //nolint:gosec // G101: not a credential
+	colRevokedRefreshTokens = "authsome_revoked_refresh_tokens"
 	colServiceAccounts      = "authsome_service_accounts"
 )
 
@@ -132,7 +132,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 		// Drop the tracking collections so a fresh orchestrator run
 		// can rebuild them.
 		if dropErr := s.resetMigrationTracking(ctx); dropErr != nil {
-			return fmt.Errorf("authsome/mongo: migration tracking corrupted (%w) and reset failed: %v", err, dropErr)
+			return fmt.Errorf("authsome/mongo: migration tracking corrupted (%w) and reset failed: %w", err, dropErr)
 		}
 
 		// Build a fresh executor + orchestrator after the reset and
@@ -204,7 +204,7 @@ func createIndexesReshapeConflicting(ctx context.Context, coll *mongo.Collection
 	}
 	if dropErr := coll.Indexes().DropOne(ctx, conflicting); dropErr != nil {
 		if !mongoIsIndexNotFound(dropErr) {
-			return fmt.Errorf("drop conflicting index %q: %w (original: %v)", conflicting, dropErr, err)
+			return fmt.Errorf("drop conflicting index %q: %w (original: %w)", conflicting, dropErr, err)
 		}
 	}
 	if _, retryErr := coll.Indexes().CreateMany(ctx, models); retryErr != nil {

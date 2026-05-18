@@ -17,7 +17,7 @@ func newMockServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 }
 
 func TestTurnstile_VerifyValidTokenSucceeds(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"success":true,"challenge_ts":"2026-01-01T00:00:00Z","hostname":"example.com","action":"signup"}`)
 	})
@@ -37,7 +37,7 @@ func TestTurnstile_VerifyValidTokenSucceeds(t *testing.T) {
 
 func TestTurnstile_VerifyMissingTokenRejects(t *testing.T) {
 	called := false
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		_, _ = io.WriteString(w, `{"success":true}`)
 	})
@@ -59,7 +59,7 @@ func TestTurnstile_VerifyMissingTokenRejects(t *testing.T) {
 }
 
 func TestTurnstile_VerifyInvalidTokenRejects(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["invalid-input-response"]}`)
 	})
 	defer srv.Close()
@@ -77,7 +77,7 @@ func TestTurnstile_VerifyInvalidTokenRejects(t *testing.T) {
 }
 
 func TestTurnstile_VerifyDuplicateTokenRejects(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["timeout-or-duplicate"]}`)
 	})
 	defer srv.Close()
@@ -91,7 +91,7 @@ func TestTurnstile_VerifyDuplicateTokenRejects(t *testing.T) {
 }
 
 func TestTurnstile_VerifyOtherErrorPreservesCodes(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["internal-error","custom-code"]}`)
 	})
 	defer srv.Close()
@@ -110,7 +110,7 @@ func TestTurnstile_VerifyOtherErrorPreservesCodes(t *testing.T) {
 }
 
 func TestTurnstile_VerifyMissingInputSecretIsVerifyError(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["missing-input-secret"]}`)
 	})
 	defer srv.Close()
@@ -126,7 +126,7 @@ func TestTurnstile_VerifyMissingInputSecretIsVerifyError(t *testing.T) {
 }
 
 func TestTurnstile_VerifyBadRequestIsVerifyError(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["bad-request"]}`)
 	})
 	defer srv.Close()
@@ -142,7 +142,7 @@ func TestTurnstile_VerifyBadRequestIsVerifyError(t *testing.T) {
 }
 
 func TestTurnstile_VerifyMissingInputResponseIsMissingToken(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["missing-input-response"]}`)
 	})
 	defer srv.Close()
@@ -156,7 +156,7 @@ func TestTurnstile_VerifyMissingInputResponseIsMissingToken(t *testing.T) {
 }
 
 func TestTurnstile_VerifyHTTPErrorIsTransient(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 	defer srv.Close()
@@ -170,7 +170,7 @@ func TestTurnstile_VerifyHTTPErrorIsTransient(t *testing.T) {
 }
 
 func TestTurnstile_VerifyMalformedJSONIsTransient(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `not-json`)
 	})
 	defer srv.Close()
@@ -221,7 +221,7 @@ func TestTurnstile_VerifySendsExpectedFormFields(t *testing.T) {
 }
 
 func TestTurnstile_VerifyContextCancellationPropagates(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(2 * time.Second)
 		_, _ = io.WriteString(w, `{"success":true}`)
 	})
@@ -315,7 +315,7 @@ func parseFormHas(body, key string) (string, bool) {
 // action does not match the caller-supplied action, Verify returns
 // *VerifyError with codes=[action-mismatch].
 func TestTurnstile_VerifyActionMismatchRejects(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":true,"action":"login"}`)
 	})
 	defer srv.Close()
@@ -340,7 +340,7 @@ func TestTurnstile_VerifyActionMismatchRejects(t *testing.T) {
 // action matches the caller-supplied action, Verify returns a non-nil Result
 // and a nil error.
 func TestTurnstile_VerifyActionMatchSucceeds(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":true,"action":"signup","hostname":"example.com","challenge_ts":"2026-01-01T00:00:00Z"}`)
 	})
 	defer srv.Close()
@@ -364,7 +364,7 @@ func TestTurnstile_VerifyActionMatchSucceeds(t *testing.T) {
 // an empty action, the verifier does not enforce any action check (regardless
 // of what the response contains).
 func TestTurnstile_VerifyEmptyActionAccepts(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":true,"action":"login"}`)
 	})
 	defer srv.Close()
@@ -381,7 +381,7 @@ func TestTurnstile_VerifyEmptyActionAccepts(t *testing.T) {
 // returned *Result has the parsed challenge_ts, hostname, and action fields
 // populated from the provider response.
 func TestTurnstile_VerifyReturnsResultOnSuccess(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":true,"challenge_ts":"2026-01-01T00:00:00Z","hostname":"example.com","action":"signup","cdata":"opaque-data"}`)
 	})
 	defer srv.Close()
@@ -413,7 +413,7 @@ func TestTurnstile_VerifyReturnsResultOnSuccess(t *testing.T) {
 // TestTurnstile_VerifyReturnsResultOnFailure asserts that on failure the
 // returned Result is nil; codes are inspected via *VerifyError.
 func TestTurnstile_VerifyReturnsResultOnFailure(t *testing.T) {
-	srv := newMockServer(t, func(w http.ResponseWriter, r *http.Request) {
+	srv := newMockServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"success":false,"error-codes":["invalid-input-response"]}`)
 	})
 	defer srv.Close()

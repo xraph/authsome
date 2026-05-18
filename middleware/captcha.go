@@ -28,11 +28,11 @@ const (
 
 // captchaTokenHeader is the canonical header for the captcha challenge token.
 // Same name accepted by Cloudflare Turnstile and hCaptcha widget integrations.
-const captchaTokenHeader = "X-Captcha-Token"
+const captchaTokenHeader = "X-Captcha-Token" //nolint:gosec // G101: header name, not a credential
 
 // captchaTokenFormField is the form/query fallback for HTML form posts where
 // adding a custom header isn't ergonomic.
-const captchaTokenFormField = "captcha_token"
+const captchaTokenFormField = "captcha_token" //nolint:gosec // G101: form field name, not a credential
 
 // CaptchaOptions configures CaptchaMiddleware.
 type CaptchaOptions struct {
@@ -109,11 +109,11 @@ func VerifyCaptchaForRequest(ctx context.Context, opts CaptchaOptions, r *http.R
 		}
 	}
 
-	provider, _ := captchaResolveString(ctx, opts.Settings, captchaSettingProvider, resolveOpts)
+	provider, _ := captchaResolveString(ctx, opts.Settings, captchaSettingProvider, resolveOpts) //nolint:errcheck // best-effort
 	if provider == "" {
 		provider = "turnstile"
 	}
-	secret, _ := captchaResolveString(ctx, opts.Settings, captchaSettingSecretKey, resolveOpts)
+	secret, _ := captchaResolveString(ctx, opts.Settings, captchaSettingSecretKey, resolveOpts) //nolint:errcheck // best-effort
 
 	verifier, err := opts.VerifierFor(provider, secret)
 	if err != nil {
@@ -225,11 +225,11 @@ func CaptchaMiddleware(opts CaptchaOptions) forge.Middleware {
 					"missing-token")
 			}
 
-			provider, _ := captchaResolveString(ctx.Context(), opts.Settings, captchaSettingProvider, resolveOpts)
+			provider, _ := captchaResolveString(ctx.Context(), opts.Settings, captchaSettingProvider, resolveOpts) //nolint:errcheck // best-effort
 			if provider == "" {
 				provider = "turnstile"
 			}
-			secret, _ := captchaResolveString(ctx.Context(), opts.Settings, captchaSettingSecretKey, resolveOpts)
+			secret, _ := captchaResolveString(ctx.Context(), opts.Settings, captchaSettingSecretKey, resolveOpts) //nolint:errcheck // best-effort
 
 			cacheKey := appID.String() + "|" + provider + "|" + secret
 			verifier, err := captchaVerifierFromCache(&cache, cacheKey, provider, secret, opts.VerifierFor)
@@ -309,14 +309,14 @@ func captchaClientIP(r *http.Request) string {
 
 func captchaVerifierFromCache(cache *sync.Map, key, provider, secret string, factory func(string, string) (captcha.Verifier, error)) (captcha.Verifier, error) {
 	if v, ok := cache.Load(key); ok {
-		return v.(captcha.Verifier), nil
+		return v.(captcha.Verifier), nil //nolint:errcheck // type assertion: stored values are always Verifier
 	}
 	v, err := factory(provider, secret)
 	if err != nil {
 		return nil, err
 	}
 	actual, _ := cache.LoadOrStore(key, v)
-	return actual.(captcha.Verifier), nil
+	return actual.(captcha.Verifier), nil //nolint:errcheck // type assertion: stored values are always Verifier
 }
 
 func captchaHandleVerifyError(ctx forge.Context, opts CaptchaOptions, err error) error {
@@ -386,7 +386,7 @@ func captchaRecordAudit(opts CaptchaOptions, ctx forge.Context, outcome, reason 
 	if outcome == "failure" {
 		severity = bridge.SeverityWarning
 	}
-	_ = opts.Chronicle.Record(ctx.Context(), &bridge.AuditEvent{
+	_ = opts.Chronicle.Record(ctx.Context(), &bridge.AuditEvent{ //nolint:errcheck // audit best-effort
 		Action:   "captcha.verify",
 		Severity: severity,
 		Outcome:  outcome,

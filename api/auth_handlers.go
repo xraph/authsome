@@ -205,7 +205,7 @@ func (a *API) consumeDummyHashBudget(password string) {
 			KeyLength:   cfg.Argon2.KeyLength,
 		},
 	}
-	_, _ = account.HashPasswordWithPolicy(password, policy)
+	_, _ = account.HashPasswordWithPolicy(password, policy) //nolint:errcheck // dummy hash for timing budget
 }
 
 // syntheticSignupResponse returns a response shaped exactly like a real

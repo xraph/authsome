@@ -2,6 +2,7 @@ package authsome
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -85,7 +86,7 @@ func (e *Engine) DeleteServiceAccount(ctx context.Context, svcID id.ServiceAccou
 	}
 
 	if err := e.store.DeleteServiceAccount(ctx, svcID); err != nil {
-		if err == store.ErrNotFound {
+		if errors.Is(err, store.ErrNotFound) {
 			return fmt.Errorf("authsome: service account not found")
 		}
 		return fmt.Errorf("authsome: delete service account: %w", err)

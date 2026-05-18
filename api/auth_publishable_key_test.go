@@ -51,7 +51,7 @@ const tenantPublishableKey = "pk_test_authsome_tenant_default"
 // tenant app (tenantAppIDStr / tenantPublishableKey). The returned handler
 // is the bare http.Handler — callers attach the X-Publishable-Key header
 // themselves so each test can drive a specific routing branch.
-func newMultiAppAPI(t *testing.T) (http.Handler, *authsome.Engine) {
+func newMultiAppAPI(t *testing.T) (http.Handler, *authsome.Engine) { //nolint:unparam // engine return retained for future tests
 	t.Helper()
 	s := memory.New()
 	seedTestPlatformApp(t, s)
@@ -89,7 +89,7 @@ func newMultiAppAPI(t *testing.T) (http.Handler, *authsome.Engine) {
 
 // signupBody helps build a /v1/signup body without polluting tests with
 // boilerplate; signup field set is small but the marshal is repetitive.
-func signupBody(t *testing.T, email, password, appID string) *bytes.Buffer {
+func signupBody(t *testing.T, email, password, appID string) *bytes.Buffer { //nolint:unparam // password kept parameterised for future variants
 	t.Helper()
 	body := map[string]string{"email": email, "password": password}
 	if appID != "" {

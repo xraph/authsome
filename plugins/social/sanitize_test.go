@@ -160,7 +160,7 @@ func FuzzSanitizeRedirectURL(f *testing.F) {
 		if strings.ContainsRune(out, '\\') {
 			t.Fatalf("output contains backslash: %q (input %q origin %q)", out, raw, origin)
 		}
-		if !(strings.HasPrefix(out, "/") || strings.HasPrefix(out, "http://") || strings.HasPrefix(out, "https://")) {
+		if !strings.HasPrefix(out, "/") && !strings.HasPrefix(out, "http://") && !strings.HasPrefix(out, "https://") {
 			t.Fatalf("output not safe-prefixed: %q (input %q origin %q)", out, raw, origin)
 		}
 	})
@@ -185,7 +185,7 @@ func FuzzSanitizeFrontendURL(f *testing.F) {
 			return
 		}
 		lo := strings.ToLower(got)
-		if !(strings.HasPrefix(lo, "http://") || strings.HasPrefix(lo, "https://")) {
+		if !strings.HasPrefix(lo, "http://") && !strings.HasPrefix(lo, "https://") {
 			t.Fatalf("non-absolute http(s) output: raw=%q got=%q", raw, got)
 		}
 	})

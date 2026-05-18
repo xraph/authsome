@@ -234,7 +234,7 @@ func (p *Plugin) renderOrgDetail(ctx context.Context, params contributor.Params)
 			// Audit BEFORE delete so the attempt is recorded even if the
 			// cascade fails partway through.
 			if ch := p.chronicleOrNil(); ch != nil {
-				_ = ch.Record(ctx, &bridge.AuditEvent{
+				_ = ch.Record(ctx, &bridge.AuditEvent{ //nolint:errcheck // audit best-effort
 					Action:     "org.delete",
 					Severity:   bridge.SeverityCritical,
 					ActorID:    actorID.String(),

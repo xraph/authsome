@@ -62,20 +62,21 @@ func NewTestEngine(t *testing.T, opts ...authsome.Option) *authsome.Engine {
 	w, err := warden.NewEngine(warden.WithStore(wardenmem.New()))
 	require.NoError(t, err, "secutil: build warden engine")
 
-	base := []authsome.Option{
+	all := make([]authsome.Option, 0, 4+len(opts))
+	all = append(all,
 		authsome.WithStore(s),
 		authsome.WithWarden(w),
 		authsome.WithDisableMigrate(),
 		authsome.WithAppID(testAppID),
-	}
-	all := append(base, opts...)
+	)
+	all = append(all, opts...)
 
 	eng, err := authsome.NewEngine(all...)
 	require.NoError(t, err, "secutil: build authsome engine")
 
 	ctx := context.Background()
 	require.NoError(t, eng.Start(ctx), "secutil: start authsome engine")
-	t.Cleanup(func() { _ = eng.Stop(context.Background()) })
+	t.Cleanup(func() { _ = eng.Stop(context.Background()) }) //nolint:errcheck // cleanup best-effort
 
 	return eng
 }
@@ -91,7 +92,7 @@ func AttackRequest(t *testing.T, method, target string, body []byte) *http.Reque
 	if body != nil {
 		rdr = bytes.NewReader(body)
 	}
-	req := httptest.NewRequest(method, target, rdr)
+	req := httptest.NewRequestWithContext(context.Background(), method, target, rdr)
 
 	// Defensive: strip headers httptest.NewRequest may set, and anything a
 	// caller might inadvertently inherit. We want a hostile, minimal request.

@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,8 +15,8 @@ func TestConfigHandler_NilEngineUnavailable(t *testing.T) {
 	ctx, _, _ := withHTTPCtx(t)
 	h := configHandler(Deps{Engine: nil})
 	_, err := h(ctx, struct{}{}, dashcontract.Principal{})
-	ce, ok := err.(*dashcontract.Error)
-	if !ok || ce.Code != dashcontract.CodeUnavailable {
+	var ce *dashcontract.Error
+	if !errors.As(err, &ce) || ce.Code != dashcontract.CodeUnavailable {
 		t.Errorf("expected CodeUnavailable, got %v", err)
 	}
 }
