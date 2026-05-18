@@ -54,7 +54,7 @@ func TestSetAPIKey_RejectsPublishableKey(t *testing.T) {
 // TestWithAPIKey_AcceptsSecretKeys ensures the guard does not
 // over-reject — every legitimate secret prefix must be accepted.
 func TestWithAPIKey_AcceptsSecretKeys(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"platform_app_id":"app_x"}`))
 	}))
@@ -79,7 +79,7 @@ func TestWithAPIKey_AcceptsSecretKeys(t *testing.T) {
 // wrapper; the auto-generated AdminCreateApp returns the raw
 // ClientError unchanged so non-Go SDK consumers see uniform shapes.
 func TestAdminCreateAppWithHint_Wraps403WithPermissionHint(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"error":"insufficient permissions"}`))

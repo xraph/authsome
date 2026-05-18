@@ -24,7 +24,7 @@ func mockUpstream(t *testing.T) (string, *[]dashcontract.Request, func()) {
 	t.Helper()
 	captured := []dashcontract.Request{}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/authsome/_forge/contract/manifest", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/authsome/_forge/contract/manifest", func(w http.ResponseWriter, _ *http.Request) {
 		// Hand-rolled minimal auth manifest mirroring the real one. We can't
 		// invoke our own Register() here because it requires a live engine;
 		// the wire path is the same regardless of which dispatcher is
