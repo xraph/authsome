@@ -19,6 +19,7 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/api"
 	"github.com/xraph/authsome/app"
+	"github.com/xraph/authsome/environment"
 	"github.com/xraph/authsome/id"
 	authmw "github.com/xraph/authsome/middleware"
 	"github.com/xraph/authsome/plugin"
@@ -114,6 +115,24 @@ func NewTestServer(t *testing.T, opts ...ServerOption) *TestServer {
 		UpdatedAt:      seedNow,
 	}); seedErr != nil {
 		t.Fatalf("testutil: seed platform app: %v", seedErr)
+	}
+
+	// Seed a default environment for the platform app so handlers that
+	// require an environment (e.g. organization create) can resolve one
+	// without each test having to wire it up. Tests that don't call
+	// WithBootstrap won't get bootstrap-driven env seeding for free.
+	defaultEnv := &environment.Environment{
+		ID:        id.NewEnvironmentID(),
+		AppID:     parsedAppID,
+		Name:      "Development",
+		Slug:      "development",
+		Type:      environment.TypeDevelopment,
+		IsDefault: true,
+		CreatedAt: seedNow,
+		UpdatedAt: seedNow,
+	}
+	if seedErr := store.CreateEnvironment(context.Background(), defaultEnv); seedErr != nil {
+		t.Fatalf("testutil: seed default environment: %v", seedErr)
 	}
 
 	logger := log.NewNoopLogger()

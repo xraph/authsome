@@ -9,6 +9,7 @@
 package rbac
 
 import (
+	"strings"
 	"time"
 
 	wardenassign "github.com/xraph/warden/assignment"
@@ -16,6 +17,14 @@ import (
 	wardenperm "github.com/xraph/warden/permission"
 	wardenrole "github.com/xraph/warden/role"
 )
+
+// envIDToNamespace converts an authsome environment id (e.g. "aenv_01jf...")
+// into a warden namespace segment. Warden namespace segments must match
+// `^[a-z][a-z0-9-]{0,62}$`; TypeIDs only contain '_' as a separator, so a
+// single replacement yields a valid segment and a stable per-env scope.
+func envIDToNamespace(envID string) string {
+	return strings.ReplaceAll(envID, "_", "-")
+}
 
 // Role represents a named collection of permissions.
 type Role struct {
@@ -77,8 +86,13 @@ func ToWardenRole(r *Role) *wardenrole.Role {
 	// path (bootstrap/warden) which speaks ParentSlug directly. Runtime
 	// CRUD callers that need parent linkage should set the parent slug
 	// after creation via a follow-up store update.
-	// Store the EnvID in warden metadata so it survives the round-trip.
+	// Scope env-owned roles into a per-environment warden namespace so
+	// cloning a role with the same slug into a sibling env doesn't collide
+	// with the source role's (tenant, ns="", slug) uniqueness key.
+	// Bootstrap-seeded roles (no EnvID) stay at the tenant root / "platform"
+	// namespace where GetRoleBySlug looks for them.
 	if r.EnvID != "" {
+		wr.NamespacePath = envIDToNamespace(r.EnvID)
 		wr.Metadata = map[string]any{"env_id": r.EnvID}
 	}
 	return wr
