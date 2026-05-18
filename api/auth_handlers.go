@@ -386,7 +386,7 @@ func (a *API) resolveCookieConfig(ctx forge.Context) cookieConfig {
 // setSessionCookie sets the httpOnly session token cookie on the response.
 func (a *API) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 	cc := a.resolveCookieConfig(ctx)
-	http.SetCookie(ctx.Response(), &http.Cookie{
+	cookie := &http.Cookie{ // #nosec G124 -- secure/httpOnly/sameSite resolved dynamically via cookieConfig
 		Name:     cc.Name,
 		Value:    token,
 		Path:     cc.Path,
@@ -395,13 +395,14 @@ func (a *API) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 		HttpOnly: cc.HTTPOnly,
 		Secure:   cc.Secure,
 		SameSite: cc.SameSite,
-	})
+	}
+	http.SetCookie(ctx.Response(), cookie)
 }
 
 // deleteSessionCookie clears the session cookie.
 func (a *API) deleteSessionCookie(ctx forge.Context) {
 	cc := a.resolveCookieConfig(ctx)
-	http.SetCookie(ctx.Response(), &http.Cookie{
+	cookie := &http.Cookie{ // #nosec G124 -- secure/httpOnly/sameSite resolved dynamically via cookieConfig
 		Name:     cc.Name,
 		Value:    "",
 		Path:     cc.Path,
@@ -410,7 +411,8 @@ func (a *API) deleteSessionCookie(ctx forge.Context) {
 		HttpOnly: cc.HTTPOnly,
 		Secure:   cc.Secure,
 		SameSite: cc.SameSite,
-	})
+	}
+	http.SetCookie(ctx.Response(), cookie)
 }
 
 // sessionTokenMaxAge returns the session token TTL in seconds from engine config.

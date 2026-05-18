@@ -75,7 +75,7 @@ func SessionCookieTemplate(ctx context.Context, mgr *settings.Manager, appID str
 		sameSite = http.SameSiteNoneMode
 	}
 
-	return &http.Cookie{
+	cookie := &http.Cookie{ // #nosec G124 -- secure/httpOnly/sameSite resolved dynamically from settings
 		Name:     name,
 		Path:     cookiePath,
 		Domain:   domain,
@@ -83,4 +83,5 @@ func SessionCookieTemplate(ctx context.Context, mgr *settings.Manager, appID str
 		Secure:   secure,
 		SameSite: sameSite,
 	}
+	return cookie
 }

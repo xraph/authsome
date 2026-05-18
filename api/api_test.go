@@ -368,7 +368,7 @@ func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
 	// First signup creates user A with password P.
 	bodyA := []byte(`{"email":"hijack-a@example.com","password":"SecureP@ss1"}`)
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)).WithContext(context.Background()))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)))
 	require.Equal(t, http.StatusCreated, rec.Code)
 	var first map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&first))
@@ -378,7 +378,7 @@ func TestSignup_DuplicateDoesNotLogInExistingUser(t *testing.T) {
 	// Second signup uses the SAME email and a DIFFERENT password.
 	bodyB := []byte(`{"email":"hijack-a@example.com","password":"WRONGp@ss1"}`)
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyB)).WithContext(context.Background()))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyB)))
 	require.Equal(t, http.StatusCreated, rec.Code)
 	var second map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&second))
@@ -404,14 +404,14 @@ func TestSignup_DuplicateRunsDummyHash(t *testing.T) {
 	// First, create the user.
 	bodyA := []byte(`{"email":"timing@example.com","password":"SecureP@ss1"}`)
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(bodyA)))
 	require.Equal(t, http.StatusCreated, rec.Code)
 
 	// Time a fresh signup (different email, same password length).
 	freshBody := []byte(`{"email":"new1@example.com","password":"SecureP@ss1"}`)
 	freshStart := time.Now()
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(freshBody)))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(freshBody)))
 	freshDuration := time.Since(freshStart)
 	require.Equal(t, http.StatusCreated, rec.Code)
 
@@ -419,7 +419,7 @@ func TestSignup_DuplicateRunsDummyHash(t *testing.T) {
 	dupBody := []byte(`{"email":"timing@example.com","password":"DifferentP@ss2"}`)
 	dupStart := time.Now()
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(dupBody)))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(dupBody)))
 	dupDuration := time.Since(dupStart)
 	require.Equal(t, http.StatusCreated, rec.Code)
 
@@ -445,7 +445,7 @@ func TestSignup_DuplicateReturnsPlausibleTokenShape(t *testing.T) {
 	// First signup.
 	body := []byte(`{"email":"shape@example.com","password":"SecureP@ss1"}`)
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(body)))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(body)))
 	require.Equal(t, http.StatusCreated, rec.Code)
 	var first map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&first))
@@ -454,7 +454,7 @@ func TestSignup_DuplicateReturnsPlausibleTokenShape(t *testing.T) {
 
 	// Duplicate.
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(body)))
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(body)))
 	require.Equal(t, http.StatusCreated, rec.Code)
 	var dup map[string]any
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&dup))
@@ -565,14 +565,14 @@ func TestSignIn_UnverifiedEmail_Returns403WithStableCode(t *testing.T) {
 	// Sign up — engine creates user with EmailVerified=false.
 	body := []byte(`{"email":"unverified@example.com","password":"SecureP@ss1"}`)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusCreated, rec.Code, "signup must succeed; body=%s", rec.Body.String())
 
 	// Now sign in — must return 403, NOT 500.
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/signin", bytes.NewReader(body))
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
@@ -639,7 +639,7 @@ func TestSignIn_MFARequired_Returns403WithTicket(t *testing.T) {
 
 	body := []byte(`{"email":"mfa-locked@example.com","password":"SecureP@ss1"}`)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/signin", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
@@ -1047,7 +1047,7 @@ func TestIntrospect_APIKey_ValidSecretKey(t *testing.T) {
 	require.NoError(t, store.CreateAPIKey(ctx, keyRow))
 
 	body, _ := json.Marshal(map[string]string{"token": secretKey})
-	req := httptest.NewRequest(http.MethodPost, "/v1/introspect", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -1069,7 +1069,7 @@ func TestIntrospect_APIKey_PublicKeyRejected(t *testing.T) {
 	require.NoError(t, err)
 
 	body, _ := json.Marshal(map[string]string{"token": publicKey})
-	req := httptest.NewRequest(http.MethodPost, "/v1/introspect", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -1104,7 +1104,7 @@ func TestIntrospect_APIKey_RevokedReturnsInactive(t *testing.T) {
 	require.NoError(t, eng.APIKeyStore().CreateAPIKey(ctx, keyRow))
 
 	body, _ := json.Marshal(map[string]string{"token": secretKey})
-	req := httptest.NewRequest(http.MethodPost, "/v1/introspect", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/introspect", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -1140,7 +1140,7 @@ func TestResendVerification_AlwaysReturns200(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/verify-email/resend", strings.NewReader(tc.body))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/verify-email/resend", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "application/json")
 			router.ServeHTTP(rec, req)
 
@@ -1194,7 +1194,7 @@ func TestResendVerification_CreatesTokenForExistingUnverifiedUser(t *testing.T) 
 
 	body := []byte(`{"email":"resend-target@example.com"}`)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/verify-email/resend", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/verify-email/resend", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -1237,7 +1237,7 @@ func TestResendVerification_NoHookForVerifiedUser(t *testing.T) {
 
 	body := []byte(`{"email":"already-verified@example.com"}`)
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/verify-email/resend", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/verify-email/resend", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -1333,7 +1333,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 
 	// Step 1: signin → 403 + ticket.
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/signin",
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
 		bytes.NewReader([]byte(`{"email":"mfa-roundtrip@example.com","password":"SecureP@ss1"}`)))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
@@ -1350,7 +1350,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 	require.NoError(t, err)
 	chBody, _ := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": code})
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(chBody))
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(chBody))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
@@ -1371,7 +1371,7 @@ func TestSignIn_MFAChallenge_RoundTripIssuesSession(t *testing.T) {
 
 	// Step 4: replay the same ticket — must fail (single-use).
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(chBody))
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(chBody))
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusUnauthorized, rec.Code,
@@ -1426,7 +1426,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	router := withTestKey(rootRouter.Handler())
 
 	rec := httptest.NewRecorder()
-	siReq := httptest.NewRequest(http.MethodPost, "/v1/signin",
+	siReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
 		bytes.NewReader([]byte(`{"email":"mfa-retry@example.com","password":"SecureP@ss1"}`)))
 	siReq.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, siReq)
@@ -1440,7 +1440,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	// Bad code first.
 	badBody, _ := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": "000000"})
 	rec = httptest.NewRecorder()
-	badReq := httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(badBody))
+	badReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(badBody))
 	badReq.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, badReq)
 	require.Equal(t, http.StatusUnauthorized, rec.Code, "bad code must 401")
@@ -1449,7 +1449,7 @@ func TestMFAChallenge_BadCodeKeepsTicketUsable(t *testing.T) {
 	code, _ := mfa.GenerateTOTPCode(totpKey.Secret())
 	goodBody, _ := json.Marshal(map[string]string{"mfa_ticket": ticket, "code": code})
 	rec = httptest.NewRecorder()
-	goodReq := httptest.NewRequest(http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(goodBody))
+	goodReq := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/mfa/challenge", bytes.NewReader(goodBody))
 	goodReq.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, goodReq)
 	require.Equal(t, http.StatusOK, rec.Code,
