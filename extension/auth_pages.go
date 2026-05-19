@@ -406,7 +406,7 @@ const dashboardCookieName = "auth_token"
 // cookie name becomes "__Host-auth_token" with Secure forced on and Domain
 // forced empty.
 func setSessionCookie(ctx *router.PageContext, eng *authsome.Engine, token string, secure bool) {
-	c := dashboardCookieTemplate(ctx, eng, secure)
+	c := dashboardCookieTemplate(ctx, eng, secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	c.Value = token
 	http.SetCookie(ctx.ResponseWriter, c)
 }
@@ -416,7 +416,7 @@ func setSessionCookie(ctx *router.PageContext, eng *authsome.Engine, token strin
 // existing cookie (a different Path/Domain/SameSite would leave the
 // original in place).
 func clearSessionCookie(ctx *router.PageContext, eng *authsome.Engine, secure bool) {
-	c := dashboardCookieTemplate(ctx, eng, secure)
+	c := dashboardCookieTemplate(ctx, eng, secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	c.Value = ""
 	c.MaxAge = -1
 	http.SetCookie(ctx.ResponseWriter, c)

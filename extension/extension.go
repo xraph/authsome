@@ -765,7 +765,7 @@ func (e *Extension) cookieSetter() middleware.CookieSetter {
 		r := ctx.Request()
 		isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 
-		c := authsome.SessionCookieTemplate(goCtx, mgr, appIDStr, isHTTPS)
+		c := authsome.SessionCookieTemplate(goCtx, mgr, appIDStr, isHTTPS) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 		c.Value = token
 		c.MaxAge = maxAge
 		http.SetCookie(ctx.Response(), c)
