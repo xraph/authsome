@@ -195,7 +195,7 @@ func TestWebAuthnUser_FallbackToEmail(t *testing.T) {
 // ──────────────────────────────────────────────────
 
 func newRequestWithOrigin(origin string) *http.Request {
-	r := httptest.NewRequest(http.MethodPost, "/v1/passkeys/register/finish", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/passkeys/register/finish", nil)
 	if origin != "" {
 		r.Header.Set("Origin", origin)
 	}
@@ -259,7 +259,7 @@ func TestWaForRequest_CachesPerOrigin(t *testing.T) {
 func TestWaForRequest_RefererFallback(t *testing.T) {
 	p := New(Config{RPID: "localhost"})
 
-	r := httptest.NewRequest(http.MethodPost, "/v1/passkeys/register/finish", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/passkeys/register/finish", nil)
 	r.Header.Set("Referer", "http://localhost:4321/some/path?q=1")
 	wa := p.waForRequest(r)
 	assert.NotSame(t, p.wa, wa, "Referer should be used when Origin is absent")

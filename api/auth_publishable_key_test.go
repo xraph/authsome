@@ -107,7 +107,7 @@ func TestSignup_PublishableKeyResolvesNonPlatformApp(t *testing.T) {
 	handler, _ := newMultiAppAPI(t)
 
 	body := signupBody(t, "tenant-user@example.com", "SecureP@ss1", "")
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, tenantPublishableKey)
 
@@ -132,7 +132,7 @@ func TestSignup_BodyAppIDStillWorks(t *testing.T) {
 	handler, _ := newMultiAppAPI(t)
 
 	body := signupBody(t, "s2s-user@example.com", "SecureP@ss1", tenantAppIDStr)
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -153,7 +153,7 @@ func TestSignup_PublishableKeyAndMatchingAppID(t *testing.T) {
 	handler, _ := newMultiAppAPI(t)
 
 	body := signupBody(t, "consistent@example.com", "SecureP@ss1", tenantAppIDStr)
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, tenantPublishableKey)
 
@@ -171,7 +171,7 @@ func TestSignup_PublishableKeyAndMismatchedAppIDFailsClosed(t *testing.T) {
 	handler, _ := newMultiAppAPI(t)
 
 	body := signupBody(t, "mismatch@example.com", "SecureP@ss1", testAppIDStr)
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, tenantPublishableKey)
 
@@ -189,7 +189,7 @@ func TestSignup_NoAppContextRejectsWith400(t *testing.T) {
 	handler, _ := newMultiAppAPI(t)
 
 	body := signupBody(t, "no-context@example.com", "SecureP@ss1", "")
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := httptest.NewRecorder()
@@ -209,7 +209,7 @@ func TestSignup_UnknownPublishableKeyRejectsWith400(t *testing.T) {
 	handler, _ := newMultiAppAPI(t)
 
 	body := signupBody(t, "bad-key@example.com", "SecureP@ss1", "")
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, "pk_test_does_not_exist")
 
@@ -228,7 +228,7 @@ func TestSignin_PublishableKeyRoutesToTenantApp(t *testing.T) {
 
 	// Sign up via tenant pk.
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/signup",
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signup",
 		signupBody(t, "signin-tenant@example.com", "SecureP@ss1", ""))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, tenantPublishableKey)
@@ -237,7 +237,7 @@ func TestSignin_PublishableKeyRoutesToTenantApp(t *testing.T) {
 
 	// Signin via the same tenant pk → ok.
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/signin",
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
 		signupBody(t, "signin-tenant@example.com", "SecureP@ss1", ""))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, tenantPublishableKey)
@@ -248,7 +248,7 @@ func TestSignin_PublishableKeyRoutesToTenantApp(t *testing.T) {
 	// is anti-enumeration so the exact error is intentionally generic;
 	// we only assert it's not a success.
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/signin",
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/signin",
 		signupBody(t, "signin-tenant@example.com", "SecureP@ss1", ""))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, testPublishableKey)
@@ -267,7 +267,7 @@ func TestForgotPassword_RoutesByPublishableKey(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/forgot-password", bytes.NewBuffer(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/forgot-password", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(middleware.PublishableKeyHeader, tenantPublishableKey)
 	handler.ServeHTTP(rec, req)
@@ -276,7 +276,7 @@ func TestForgotPassword_RoutesByPublishableKey(t *testing.T) {
 
 	// Without a pk and without app_id → 400.
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/forgot-password", bytes.NewBuffer(body))
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/forgot-password", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code,

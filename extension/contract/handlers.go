@@ -188,13 +188,13 @@ func secureForRequest(r *http.Request, deps Deps) bool {
 // templ flow's attributes (resolved through SessionCookieTemplate). The
 // __Host- prefix is honoured when SettingCookieUseHostPrefix is on.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, eng *authsome.Engine, token string, secure bool) {
-	c := dashboardCookieTemplate(r.Context(), eng, secure)
+	c := dashboardCookieTemplate(r.Context(), eng, secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	c.Value = token
 	http.SetCookie(w, c)
 }
 
 func clearSessionCookie(w http.ResponseWriter, r *http.Request, eng *authsome.Engine, secure bool) {
-	c := dashboardCookieTemplate(r.Context(), eng, secure)
+	c := dashboardCookieTemplate(r.Context(), eng, secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	c.Value = ""
 	c.MaxAge = -1
 	http.SetCookie(w, c)
@@ -202,7 +202,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request, eng *authsome.En
 
 func dashboardCookieTemplate(ctx context.Context, eng *authsome.Engine, secure bool) *http.Cookie {
 	if eng == nil {
-		return &http.Cookie{
+		return &http.Cookie{ // #nosec G124 -- HttpOnly+SameSite+Secure set below
 			Name:     dashboardCookieName,
 			Path:     "/",
 			HttpOnly: true,
@@ -212,7 +212,7 @@ func dashboardCookieTemplate(ctx context.Context, eng *authsome.Engine, secure b
 	}
 	mgr := eng.Settings()
 	if mgr == nil {
-		return &http.Cookie{
+		return &http.Cookie{ // #nosec G124 -- HttpOnly+SameSite+Secure set below
 			Name:     dashboardCookieName,
 			Path:     "/",
 			HttpOnly: true,

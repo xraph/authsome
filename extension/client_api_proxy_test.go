@@ -1,6 +1,7 @@
 package extension
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -48,7 +49,7 @@ func TestBuildClientAPIProxy_ForwardsAuthCookieAsBearer(t *testing.T) {
 		t.Fatalf("mount prefix = %q, want /authsome/v1/*", mount)
 	}
 
-	req := httptest.NewRequest(http.MethodPut,
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut,
 		"http://dashboard.local/authsome/v1/admin/settings/values/auth.require_email_verification",
 		strings.NewReader(`{"value":true,"scope":"global"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -100,7 +101,7 @@ func TestBuildClientAPIProxy_PreservesExplicitAuthorization(t *testing.T) {
 		t.Fatalf("buildClientAPIProxy: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet,
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
 		"http://dashboard.local/authsome/v1/admin/settings/definitions", nil)
 	req.Header.Set("Authorization", "Bearer explicit-sdk-token")
 	req.AddCookie(&http.Cookie{Name: "auth_token", Value: "cookie-token"})
@@ -138,7 +139,7 @@ func TestBuildClientAPIProxy_NoAuthWhenAbsent(t *testing.T) {
 		t.Fatalf("buildClientAPIProxy: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet,
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet,
 		"http://dashboard.local/authsome/v1/admin/settings/definitions", nil)
 	rec := httptest.NewRecorder()
 	proxy.ServeHTTP(rec, req)

@@ -695,7 +695,7 @@ func TestRequireAuth_DebugReasonGated(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/protected", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -719,7 +719,7 @@ func TestRequireAuth_DebugReasonOptIn(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/protected", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

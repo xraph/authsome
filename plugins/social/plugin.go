@@ -1168,7 +1168,7 @@ func (p *Plugin) setSessionCookie(ctx forge.Context, token string, maxAge int) {
 	r := ctx.Request()
 	isHTTPS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 
-	c := authsome.SessionCookieTemplate(goCtx, mgr, p.appID, isHTTPS)
+	c := authsome.SessionCookieTemplate(goCtx, mgr, p.appID, isHTTPS) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	c.Value = token
 	c.MaxAge = maxAge
 	http.SetCookie(ctx.Response(), c)

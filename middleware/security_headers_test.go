@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,7 +28,7 @@ func TestSecurityHeaders_DefaultsApplied(t *testing.T) {
 	t.Parallel()
 	router := newSecHeadersRouter(t, middleware.SecurityHeadersOptions{})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -50,7 +51,7 @@ func TestSecurityHeaders_HSTSOptIn(t *testing.T) {
 		HSTSPreload:           true,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -67,7 +68,7 @@ func TestSecurityHeaders_HSTSPreloadRequiresIncludeSubdomains(t *testing.T) {
 		HSTSPreload:       true,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -82,7 +83,7 @@ func TestSecurityHeaders_DisableCSP(t *testing.T) {
 		DisableCSP: true,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -100,7 +101,7 @@ func TestSecurityHeaders_CustomOverrides(t *testing.T) {
 		PermissionsPolicy: "camera=()",
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -119,7 +120,7 @@ func TestSecurityHeadersForAPI_DropsCSP(t *testing.T) {
 		return ctx.NoContent(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -135,7 +136,7 @@ func TestSecurityHeaders_NoMutationOnNextError(t *testing.T) {
 		return ctx.JSON(http.StatusInternalServerError, map[string]string{"error": "x"})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/boom", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/boom", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

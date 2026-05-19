@@ -212,7 +212,7 @@ func TestCaptchaMiddleware_PassThroughWhenNotRequired(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -230,7 +230,7 @@ func TestCaptchaMiddleware_RequiresTokenWhenRequired(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
@@ -248,7 +248,7 @@ func TestCaptchaMiddleware_AcceptsValidToken(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "valid-token")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -266,7 +266,7 @@ func TestCaptchaMiddleware_RejectsInvalidToken(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "bad-token")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -285,7 +285,7 @@ func TestCaptchaMiddleware_DuplicateTokenRejects(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "replayed-token")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -304,7 +304,7 @@ func TestCaptchaMiddleware_TransientFailureReturns503(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "tok")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -327,7 +327,7 @@ func TestCaptchaMiddleware_TokenFromHeaderOrForm(t *testing.T) {
 
 	// Form fallback (no header).
 	body := strings.NewReader("captcha_token=form-tok")
-	req := httptest.NewRequest(http.MethodPost, "/test", body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -336,7 +336,7 @@ func TestCaptchaMiddleware_TokenFromHeaderOrForm(t *testing.T) {
 
 	// Header takes precedence.
 	body = strings.NewReader("captcha_token=form-tok")
-	req = httptest.NewRequest(http.MethodPost, "/test", body)
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Captcha-Token", "header-tok")
 	rec = httptest.NewRecorder()
@@ -357,7 +357,7 @@ func TestCaptchaMiddleware_VerifierCachedAcrossRequests(t *testing.T) {
 	}, &factoryCalls)
 
 	for i := 0; i < 3; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 		req.Header.Set("X-Captcha-Token", "t")
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
@@ -378,7 +378,7 @@ func TestCaptchaMiddleware_VerifierRebuiltOnSecretRotation(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, &factoryCalls)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "t")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -387,7 +387,7 @@ func TestCaptchaMiddleware_VerifierRebuiltOnSecretRotation(t *testing.T) {
 
 	env.setSecret(t, "new-secret-value")
 
-	req = httptest.NewRequest(http.MethodGet, "/test", nil)
+	req = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "t")
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -430,7 +430,7 @@ func TestCaptchaMiddleware_RecordsAuditEventOnFailure(t *testing.T) {
 		Action:      "signup",
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "bad")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -457,7 +457,7 @@ func TestCaptchaMiddleware_RecordsAuditEventOnSuccess(t *testing.T) {
 		Action:      "signin",
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "ok")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -482,7 +482,7 @@ func TestCaptchaMiddleware_RemoteIPExtractedFromHeader(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "t")
 	req.Header.Set("X-Forwarded-For", "203.0.113.5, 10.0.0.1")
 	rec := httptest.NewRecorder()
@@ -503,7 +503,7 @@ func TestCaptchaMiddleware_NoActionPassesEmptyToVerifier(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "t")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -531,7 +531,7 @@ func TestCaptchaMiddleware_AppScopedSetting(t *testing.T) {
 		VerifierFor: func(string, string) (captcha.Verifier, error) { return stub, nil },
 	}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	req.Header.Set("X-Captcha-Token", "t")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)

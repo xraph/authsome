@@ -72,7 +72,7 @@ func TestLogoutHandler_UnavailableWhenEngineNil(t *testing.T) {
 }
 
 func TestExtractToken_BearerHeader(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	r.Header.Set("Authorization", "Bearer abc123")
 	if got := extractToken(r); got != "abc123" {
 		t.Errorf("bearer extraction failed: %q", got)
@@ -80,7 +80,7 @@ func TestExtractToken_BearerHeader(t *testing.T) {
 }
 
 func TestExtractToken_Cookie(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	r.AddCookie(&http.Cookie{Name: dashboardCookieName, Value: "tok-from-cookie"})
 	if got := extractToken(r); got != "tok-from-cookie" {
 		t.Errorf("cookie extraction failed: %q", got)
@@ -88,7 +88,7 @@ func TestExtractToken_Cookie(t *testing.T) {
 }
 
 func TestExtractToken_HostPrefixCookie(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	r.AddCookie(&http.Cookie{Name: "__Host-" + dashboardCookieName, Value: "tok-host"})
 	if got := extractToken(r); got != "tok-host" {
 		t.Errorf("__Host- prefix extraction failed: %q", got)
@@ -105,7 +105,7 @@ func TestApplyHostPrefix(t *testing.T) {
 }
 
 func TestSecureForRequest(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	if secureForRequest(r, Deps{}) {
 		t.Errorf("plain HTTP request should be insecure")
 	}
@@ -120,7 +120,7 @@ func TestSecureForRequest(t *testing.T) {
 }
 
 func TestClientIP(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	r.RemoteAddr = "10.0.0.1:5555"
 	if got := clientIP(r); got != "10.0.0.1" {
 		t.Errorf("RemoteAddr extraction wrong: %q", got)

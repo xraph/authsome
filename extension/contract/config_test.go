@@ -1,6 +1,7 @@
 package contract
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -71,7 +72,7 @@ func TestProjectSocialProviders_LabelsAndPaths(t *testing.T) {
 }
 
 func TestProjectSocialProviders_AbsoluteURLFromRequest(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "https://dashboard.example.com/some/path", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "https://dashboard.example.com/some/path", nil)
 	r.Host = "dashboard.example.com"
 	in := []social.ProviderSetting{{Name: "google", Enabled: true}}
 	out := projectSocialProviders(in, r, "/v1/social")
@@ -82,7 +83,7 @@ func TestProjectSocialProviders_AbsoluteURLFromRequest(t *testing.T) {
 }
 
 func TestProjectSocialProviders_HonoursSocialBaseOverride(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "https://example.com/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/", nil)
 	r.Host = "example.com"
 	in := []social.ProviderSetting{{Name: "github", Enabled: true}}
 	out := projectSocialProviders(in, r, "/auth/social")

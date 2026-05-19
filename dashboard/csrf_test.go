@@ -1,6 +1,7 @@
 package dashboard_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -52,7 +53,7 @@ func TestFormCSRF_VerifyMatchesCookieAndForm(t *testing.T) {
 	w := httptest.NewRecorder()
 	tok := dashboard.GenerateFormCSRFToken(w)
 
-	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	r.AddCookie(&http.Cookie{Name: dashboard.FormCSRFCookieName, Value: tok})
 
 	if !dashboard.VerifyFormCSRFToken(r, tok) {
@@ -61,14 +62,14 @@ func TestFormCSRF_VerifyMatchesCookieAndForm(t *testing.T) {
 }
 
 func TestFormCSRF_VerifyRejectsMissingCookie(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	if dashboard.VerifyFormCSRFToken(r, "anything") {
 		t.Fatal("expected verify to fail with no cookie")
 	}
 }
 
 func TestFormCSRF_VerifyRejectsMissingForm(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	r.AddCookie(&http.Cookie{Name: dashboard.FormCSRFCookieName, Value: "abc"})
 	if dashboard.VerifyFormCSRFToken(r, "") {
 		t.Fatal("expected verify to fail with empty form value")
@@ -76,7 +77,7 @@ func TestFormCSRF_VerifyRejectsMissingForm(t *testing.T) {
 }
 
 func TestFormCSRF_VerifyRejectsMismatch(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	r.AddCookie(&http.Cookie{Name: dashboard.FormCSRFCookieName, Value: "cookieval"})
 	if dashboard.VerifyFormCSRFToken(r, "formval") {
 		t.Fatal("expected mismatched token to fail")
@@ -91,7 +92,7 @@ func TestFormCSRF_VerifyConstantTime(t *testing.T) {
 	if len(a) != len(b) {
 		t.Fatal("test setup: tokens must be equal length")
 	}
-	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	r.AddCookie(&http.Cookie{Name: dashboard.FormCSRFCookieName, Value: a})
 	if dashboard.VerifyFormCSRFToken(r, b) {
 		t.Fatal("equal-length mismatch must fail")
