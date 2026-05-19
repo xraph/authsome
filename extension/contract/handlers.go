@@ -220,7 +220,7 @@ func dashboardCookieTemplate(ctx context.Context, eng *authsome.Engine, secure b
 			Secure:   secure,
 		}
 	}
-	c := authsome.SessionCookieTemplate(ctx, mgr, "", secure)
+	c := authsome.SessionCookieTemplate(ctx, mgr, "", secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	c.Name = applyHostPrefix(c.Name, dashboardCookieName)
 	return c
 }

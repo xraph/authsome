@@ -427,7 +427,7 @@ func clearSessionCookie(ctx *router.PageContext, eng *authsome.Engine, secure bo
 // HttpOnly=true, Path=/) when the engine isn't fully wired (tests).
 func dashboardCookieTemplate(ctx *router.PageContext, eng *authsome.Engine, secure bool) *http.Cookie {
 	if eng == nil {
-		return &http.Cookie{
+		return &http.Cookie{ // #nosec G124 -- HttpOnly+SameSite+Secure set explicitly
 			Name:     dashboardCookieName,
 			Path:     "/",
 			HttpOnly: true,
@@ -437,7 +437,7 @@ func dashboardCookieTemplate(ctx *router.PageContext, eng *authsome.Engine, secu
 	}
 	mgr := eng.Settings()
 	if mgr == nil {
-		return &http.Cookie{
+		return &http.Cookie{ // #nosec G124 -- HttpOnly+SameSite+Secure set explicitly
 			Name:     dashboardCookieName,
 			Path:     "/",
 			HttpOnly: true,
@@ -448,7 +448,7 @@ func dashboardCookieTemplate(ctx *router.PageContext, eng *authsome.Engine, secu
 	// Reuse SessionCookieTemplate but force the dashboard-specific name.
 	// SessionCookieTemplate already handles SameSite, HttpOnly, Path, the
 	// __Host- prefix, and Secure-forcing under the prefix toggle.
-	c := authsome.SessionCookieTemplate(ctx.Request.Context(), mgr, "", secure)
+	c := authsome.SessionCookieTemplate(ctx.Request.Context(), mgr, "", secure) // #nosec G124 -- template sets HttpOnly+SameSite+Secure
 	// Replace the engine's cookie name with the dashboard's, preserving
 	// the __Host- prefix when it's been applied.
 	c.Name = applyHostPrefix(c.Name, dashboardCookieName)
