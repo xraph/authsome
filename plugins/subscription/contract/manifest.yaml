@@ -1,0 +1,20 @@
+schemaVersion: 1
+contributor:
+  name: subscription
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+  # Library contributor for now. The /plans page and /plans/:id detail
+  # stay declared on the auth contributor's manifest. Subscriptions is
+  # likely to graduate to an app-owning contributor (slug: billing)
+  # once the broader subscription dashboard (invoices/coupons/features)
+  # lands; for now keep the surface minimal so the move from auth →
+  # plugin is a no-op for users.
+
+intents:
+  - { name: plans.list,         kind: query,   version: 1, capability: read  }
+  - { name: plans.detail,       kind: query,   version: 1, capability: read  }
+  - { name: plans.archive,      kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
+  - { name: plans.activate,     kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
+  - { name: subscriptions.list, kind: query,   version: 1, capability: read  }

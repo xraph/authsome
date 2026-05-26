@@ -837,30 +837,30 @@ func (e *Extension) RegisterDashboardAuth(dashExt *dashboard.Extension) {
 // registerRemoteContractContributor is the client-mode arm of
 // RegisterContractContributor. It treats the upstream authsome service as
 // a remote contract contributor: fetches its manifest from
-// <PortalURL>/authsome/_forge/contract/manifest, validates it, records the
+// <PortalURL>/_forge/contract/manifest, validates it, records the
 // endpoint on the dashboard's registry, and installs a forwarding
 // dispatcher so envelopes for the auth contributor flow to the upstream.
 //
-// The remote base URL is the PortalURL joined with the authsome BasePath
-// (default /authsome) because that's where the standalone authsome
-// service mounts its contract server. apiKey is the service-to-service
-// credential (ServiceAPIKey) — end-user identity flows in parallel via
-// X-Forwarded-Authorization, set by the forwarding dispatcher.
+// PortalURL is used verbatim as the remote base URL — it already points at
+// the authsome service's mount (e.g. http://identity:7902/authsome), the
+// same form passed to authclient.NewClient and the legacy dashboard
+// contributor fetch. The contract server's HandleManifest is mounted at
+// <basePath>/_forge/contract/manifest on the upstream, so appending only
+// /_forge/contract/manifest reaches it.
+//
+// apiKey is the service-to-service credential (ServiceAPIKey) — end-user
+// identity flows in parallel via X-Forwarded-Authorization, set by the
+// forwarding dispatcher.
 func (e *Extension) registerRemoteContractContributor(
 	disp *dispatcher.Dispatcher,
 	reg dashcontract.Registry,
 	wreg dashcontract.WardenRegistry,
 ) error {
-	portalURL := strings.TrimRight(e.config.PortalURL, "/")
-	if portalURL == "" {
+	remoteBaseURL := strings.TrimRight(e.config.PortalURL, "/")
+	if remoteBaseURL == "" {
 		e.Logger().Warn("authsome: client mode but PortalURL empty; skipping remote contract registration")
 		return nil
 	}
-	basePath := e.config.BasePath
-	if basePath == "" {
-		basePath = "/authsome"
-	}
-	remoteBaseURL := portalURL + basePath
 
 	// Use a short timeout — we don't want extension wire-up to block on a
 	// slow / unreachable portal. Failure here is not fatal: the host
@@ -871,7 +871,10 @@ func (e *Extension) registerRemoteContractContributor(
 	defer cancel()
 	m, err := contractremote.FetchManifest(ctx, remoteBaseURL, e.config.ServiceAPIKey, nil)
 	if err != nil {
-		e.Logger().Warn("authsome: fetch remote contract manifest failed; remote auth.* intents will be unavailable",
+		// Error (not Warn) because this is the only signal that auth.* will
+		// 404 at request time; operators need to see it in default log
+		// views. Still non-fatal — see comment above.
+		e.Logger().Error("authsome: fetch remote contract manifest failed; remote auth.* intents will be unavailable",
 			log.String("portal_url", e.config.PortalURL),
 			log.String("manifest_url", remoteBaseURL+contractremote.DefaultManifestPath),
 			log.String("error", err.Error()),
@@ -992,6 +995,27 @@ func (e *Extension) RegisterContractContributor(
 	if err := authcontract.Register(disp, reg, wreg, deps); err != nil {
 		return fmt.Errorf("authsome: register contract contributor: %w", err)
 	}
+
+	// Iterate plugins in registration order and invoke RegisterContract
+	// on any that opt into the contract surface. Order matters because
+	// `extends` blocks resolve against previously-registered manifests;
+	// the auth contributor itself must be first (above) and host-owning
+	// plugins (organization, etc.) must precede the plugins that extend
+	// them. The plugin registry preserves insertion order, so the
+	// loop's natural order is the loaded order.
+	if pluginReg := e.engine.Plugins(); pluginReg != nil {
+		for _, p := range pluginReg.Plugins() {
+			cc, ok := p.(plugin.ContractContributor)
+			if !ok {
+				continue
+			}
+			if err := cc.RegisterContract(disp, reg, wreg, e.engine); err != nil {
+				return fmt.Errorf("authsome: plugin %s contract registration: %w", p.Name(), err)
+			}
+			e.Logger().Info("authsome: plugin registered contract contributor", log.String("plugin", p.Name()))
+		}
+	}
+
 	e.Logger().Info("authsome: registered as contract contributor")
 	return nil
 }

@@ -108,6 +108,19 @@ func (a *clientAuthPages) handleLogin(ctx *router.PageContext) (string, templ.Co
 	return a.basePath + "/", nil, nil
 }
 
+// defaultAppID returns the SDK client's discovered app ID (the upstream
+// platform app, populated at boot by discoverPlatformAppID). On a cold
+// start where boot-time discovery hasn't completed yet, falls back to a
+// best-effort manifest fetch so the first /register or /forgot-password
+// hit isn't permanently broken by a slow upstream.
+func (a *clientAuthPages) defaultAppID(ctx context.Context) string {
+	if id := a.client.AppID(); id != "" {
+		return id
+	}
+	_, _ = a.client.GetManifest(ctx) //nolint:errcheck // best-effort discovery
+	return a.client.AppID()
+}
+
 func (a *clientAuthPages) handleRegister(ctx *router.PageContext) (string, templ.Component, error) {
 	r := ctx.Request
 	links := registerLinks(a.basePath)
@@ -141,6 +154,7 @@ func (a *clientAuthPages) handleRegister(ctx *router.PageContext) (string, templ
 	}
 
 	req := &authclient.SignUpRequest{
+		AppID:     a.defaultAppID(r.Context()),
 		Email:     email,
 		Password:  password,
 		FirstName: firstName,
@@ -186,6 +200,7 @@ func (a *clientAuthPages) handleForgotPassword(ctx *router.PageContext) (string,
 
 	// Always show success to prevent email enumeration; ignore errors.
 	_, _ = a.client.ForgotPassword(r.Context(), &authclient.ForgotPasswordRequest{ //nolint:errcheck // best-effort send
+		AppID: a.defaultAppID(r.Context()),
 		Email: email,
 	})
 

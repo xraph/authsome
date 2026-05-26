@@ -2,6 +2,8 @@ module github.com/xraph/authsome
 
 go 1.25.7
 
+replace github.com/xraph/forge => ../../forge
+
 require (
 	github.com/a-h/templ v0.3.1001
 	github.com/go-webauthn/webauthn v0.15.0

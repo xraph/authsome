@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: scim
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /enterprise/scim
+    intent: page.shell
+    title: SCIM
+    nav: { group: Enterprise, icon: refresh-cw, priority: 0 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: scim
+            scope: app

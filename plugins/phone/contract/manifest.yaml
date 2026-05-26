@@ -1,0 +1,22 @@
+schemaVersion: 1
+contributor:
+  name: phone
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+  # Library contributor — settings auto-discover via settings.tabs.
+
+intents: []
+
+graph:
+  - route: /auth/phone
+    intent: page.shell
+    title: Phone
+    nav: { group: Auth, icon: smartphone, priority: 2 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: phone
+            scope: app

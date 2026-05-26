@@ -1,0 +1,29 @@
+schemaVersion: 1
+contributor:
+  name: email
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+  # No `app:` block — library contributor. The plugin's settings
+  # auto-appear in the auth contributor's /settings page via the
+  # settings.tabs auto-discovery (email.* keys are declared by
+  # email.Plugin.DeclareSettings at plugin init).
+
+intents: []
+
+graph:
+  # Direct deep-link page for email settings. Uses the same
+  # settings.panel renderer as the global /settings page, scoped to
+  # the email namespace. The scope picker is hidden — the surrounding
+  # nav implies "current app".
+  - route: /auth/email
+    intent: page.shell
+    title: Email
+    nav: { group: Auth, icon: mail, priority: 1 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: email
+            scope: app

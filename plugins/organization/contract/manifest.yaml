@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: organization
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+  # No `app:` block — for now organization stays as a library
+  # contributor and the /organizations page lives on the auth
+  # contributor's manifest. A future iteration may promote this to an
+  # app-owning contributor (slug: organizations) when the org dashboard
+  # gains its own sub-navigation.
+
+intents:
+  - { name: orgs.list,         kind: query,   version: 1, capability: read  }
+  - { name: orgs.detail,       kind: query,   version: 1, capability: read  }
+  - { name: orgs.create,       kind: command, version: 1, capability: write, invalidates: [orgs.list] }
+  - { name: orgs.update,       kind: command, version: 1, capability: write, invalidates: [orgs.list, orgs.detail] }
+  - { name: orgs.delete,       kind: command, version: 1, capability: write, invalidates: [orgs.list] }
+  - { name: orgs.members,      kind: query,   version: 1, capability: read  }
+  - { name: orgs.removeMember, kind: command, version: 1, capability: write, invalidates: [orgs.members] }

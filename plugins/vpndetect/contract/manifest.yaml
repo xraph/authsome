@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: vpndetect
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/vpn-detect
+    intent: page.shell
+    title: VPN Detect
+    nav: { group: Security, icon: eye-off, priority: 6 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: vpndetect
+            scope: app

@@ -1,0 +1,17 @@
+schemaVersion: 1
+contributor:
+  name: apikey
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+  # Library contributor — no `app:` block. The /apikeys list page stays
+  # on the auth contributor (the route was migrated under the C.5
+  # phase); the apikey plugin only owns the intent handlers + its own
+  # auto-discovered settings (when DeclareSettings is added).
+
+intents:
+  - { name: apikeys.list,   kind: query,   version: 1, capability: read  }
+  - { name: apikeys.detail, kind: query,   version: 1, capability: read  }
+  - { name: apikeys.create, kind: command, version: 1, capability: write, invalidates: [apikeys.list] }
+  - { name: apikeys.revoke, kind: command, version: 1, capability: write, invalidates: [apikeys.list, apikeys.detail] }

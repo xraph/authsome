@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: riskengine
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/risk
+    intent: page.shell
+    title: Risk Engine
+    nav: { group: Security, icon: shield-alert, priority: 0 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: riskengine
+            scope: app

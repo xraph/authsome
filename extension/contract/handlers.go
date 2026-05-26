@@ -143,6 +143,33 @@ func defaultAppID(eng *authsome.Engine) id.AppID {
 	return parsed
 }
 
+// AppIDFromPrincipal resolves the active app ID a plugin handler should
+// scope its query to, given the request principal. Plugins reuse this
+// helper instead of reimplementing the app-resolution lookup so that
+// templui's dashboard.AppIDFromContext semantics carry over to the
+// contract path: prefer an explicit app claim on the principal (when
+// the dashboard's app switcher has set one), falling back to the
+// engine's platform app.
+//
+// Exported so plugin contract packages can call it. Plugins should
+// receive the engine via their own Deps struct rather than referencing
+// the auth contributor's deps directly.
+func AppIDFromPrincipal(p contract.Principal, eng *authsome.Engine) id.AppID {
+	if eng == nil {
+		return id.AppID{}
+	}
+	// Principal claims may carry an explicit app override set by the
+	// dashboard's app switcher (Phase C.17 wires this server-side).
+	// The Claims map is the canonical surface for per-request scoping;
+	// "app_id" is the convention.
+	if raw, ok := p.Claims["app_id"].(string); ok && raw != "" {
+		if parsed, err := id.ParseAppID(raw); err == nil && !parsed.IsNil() {
+			return parsed
+		}
+	}
+	return defaultAppID(eng)
+}
+
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		if i := strings.IndexByte(xff, ','); i > 0 {

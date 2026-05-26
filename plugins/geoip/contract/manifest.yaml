@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: geoip
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/geoip
+    intent: page.shell
+    title: Geo IP
+    nav: { group: Security, icon: globe, priority: 2 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: geoip
+            scope: app

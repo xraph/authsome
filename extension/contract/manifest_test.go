@@ -16,11 +16,15 @@ func TestManifest_Loads(t *testing.T) {
 	if m.Contributor.Name != "auth" {
 		t.Errorf("contributor name = %q, want auth", m.Contributor.Name)
 	}
-	if got := len(m.Intents); got != 3 {
-		t.Errorf("intents = %d, want 3 (login + logout + config)", got)
+	// 59 intents: 56 prior + 3 from Phase C.14 (auth.signup,
+	// auth.forgotPassword, auth.resetPassword).
+	if got := len(m.Intents); got != 59 {
+		t.Errorf("intents = %d, want 59 (with C.14 auth pages)", got)
 	}
-	if got := len(m.Graph); got != 1 {
-		t.Errorf("graph routes = %d, want 1 (/login)", got)
+	// 31 top-level graph routes: 28 prior + Phase C.14 /signup,
+	// /forgot-password, /reset-password.
+	if got := len(m.Graph); got != 31 {
+		t.Errorf("graph routes = %d, want 31 (with C.14 anonymous auth pages)", got)
 	}
 }
 

@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: impossibletravel
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/impossible-travel
+    intent: page.shell
+    title: Impossible Travel
+    nav: { group: Security, icon: plane, priority: 4 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: impossibletravel
+            scope: app

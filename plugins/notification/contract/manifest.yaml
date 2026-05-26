@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: notification
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /notifications
+    intent: page.shell
+    title: Notifications
+    nav: { group: Configuration, icon: bell, priority: 3 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: notification
+            scope: app

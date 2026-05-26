@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: anomaly
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/anomaly
+    intent: page.shell
+    title: Anomaly Detection
+    nav: { group: Security, icon: activity, priority: 1 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: anomaly
+            scope: app

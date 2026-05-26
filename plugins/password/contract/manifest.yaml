@@ -1,0 +1,43 @@
+schemaVersion: 1
+contributor:
+  name: password
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+  # No `app:` block — password is a library contributor. The plugin's
+  # settings auto-appear in the auth contributor's /settings page via
+  # the settings.tabs auto-discovery; the only thing the plugin needs
+  # for that to work is to call DeclareSettings on its plugin struct
+  # (which it already does in plugin.go).
+
+intents:
+  # password.policy is the read-only "live policy" projection used by
+  # admin dashboards that want to surface the effective hash algorithm
+  # alongside the current min length and special-char requirement. The
+  # settings tabs renderer ignores it — it reads the underlying
+  # settings.* intents directly. Plugins may still ship this so other
+  # surfaces (e.g. a security overview widget) can bind to a single
+  # query rather than three.
+  - { name: password.policy, kind: query, version: 1, capability: read }
+
+queries:
+  passwordPolicy:
+    intent: password.policy
+    cache: { staleTime: 60s }
+
+graph:
+  # Direct deep-link page for password settings. Uses the same
+  # settings.panel renderer as the global /settings page, just scoped
+  # to the password namespace and with the scope picker hidden (the
+  # tab-strip context disambiguates).
+  - route: /auth/password
+    intent: page.shell
+    title: Password
+    nav: { group: Auth, icon: lock, priority: 0 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: password
+            scope: app

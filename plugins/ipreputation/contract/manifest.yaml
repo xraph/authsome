@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: ipreputation
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/ip-reputation
+    intent: page.shell
+    title: IP Reputation
+    nav: { group: Security, icon: shield, priority: 5 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: ipreputation
+            scope: app

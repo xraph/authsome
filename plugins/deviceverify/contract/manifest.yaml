@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: deviceverify
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /security/device-verify
+    intent: page.shell
+    title: Device Verify
+    nav: { group: Security, icon: badge-check, priority: 7 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: deviceverify
+            scope: app

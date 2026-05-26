@@ -1,0 +1,21 @@
+schemaVersion: 1
+contributor:
+  name: oauth2provider
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read]
+
+intents: []
+
+graph:
+  - route: /auth/oauth2
+    intent: page.shell
+    title: OAuth2 Provider
+    nav: { group: Auth, icon: package, priority: 7 }
+    slots:
+      main:
+        - intent: settings.panel
+          props:
+            namespace: oauth2provider
+            scope: app

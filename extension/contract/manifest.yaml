@@ -5,6 +5,17 @@ contributor:
     supports: [v1]
     preferred: v1
   capabilities: [auth.read, auth.write]
+  # Opt into the dashboard's app switcher as "Authsome". priority: 10
+  # places it after the pilot's Forge app (priority 0). The slug
+  # "authsome" namespaces routes under /@authsome/* on the wire (manifest
+  # routes themselves stay unprefixed). home is the unprefixed route the
+  # switcher navigates to — it's projected to /@authsome/users at read time.
+  app:
+    displayName: Authsome
+    slug: authsome
+    icon: shield
+    priority: 10
+    home: /
 
 # Authsome owns three intents the Forge dashboard React shell consumes:
 #  - auth.login    (command) — credentials in, session cookie out.
@@ -19,9 +30,181 @@ intents:
   - { name: auth.logout, kind: command, version: 1, capability: write }
   - { name: auth.config, kind: query,   version: 1, capability: read  }
 
+  # Phase C.1 — Users dashboard.
+  - { name: users.list,   kind: query,   version: 1, capability: read  }
+  - { name: users.detail, kind: query,   version: 1, capability: read  }
+  - { name: users.create, kind: command, version: 1, capability: write }
+  - { name: users.update, kind: command, version: 1, capability: write }
+  - { name: users.ban,    kind: command, version: 1, capability: write, invalidates: [users.list, users.detail] }
+  - { name: users.unban,  kind: command, version: 1, capability: write, invalidates: [users.list, users.detail] }
+  - { name: users.delete, kind: command, version: 1, capability: write, invalidates: [users.list] }
+
+  # Phase C.2 — Apps
+  - { name: apps.list,   kind: query,   version: 1, capability: read  }
+  - { name: apps.detail, kind: query,   version: 1, capability: read  }
+  - { name: apps.create, kind: command, version: 1, capability: write }
+  - { name: apps.update, kind: command, version: 1, capability: write }
+  - { name: apps.delete, kind: command, version: 1, capability: write, invalidates: [apps.list] }
+
+  # Phase C.3 — Sessions
+  - { name: sessions.list,        kind: query,   version: 1, capability: read  }
+  - { name: sessions.detail,      kind: query,   version: 1, capability: read  }
+  - { name: sessions.revoke,      kind: command, version: 1, capability: write, invalidates: [sessions.list, sessions.detail] }
+  - { name: sessions.bulkRevoke,  kind: command, version: 1, capability: write, invalidates: [sessions.list] }
+
+  # Phase C.4 — Roles & RBAC
+  - { name: roles.list,     kind: query,   version: 1, capability: read  }
+  - { name: roles.detail,   kind: query,   version: 1, capability: read  }
+  - { name: roles.create,   kind: command, version: 1, capability: write }
+  - { name: roles.update,   kind: command, version: 1, capability: write }
+  - { name: roles.delete,   kind: command, version: 1, capability: write, invalidates: [roles.list] }
+  - { name: roles.assign,   kind: command, version: 1, capability: write }
+  - { name: roles.unassign, kind: command, version: 1, capability: write }
+
+  # Phase C.5 — API Keys: intent declarations moved to the apikey
+  # plugin manifest (plugins/apikey/contract/manifest.yaml). The
+  # `/apikeys` page below references those intents by name only —
+  # cross-contributor binding resolves at registration time.
+
+
+  # Phase C.6 — Devices
+  - { name: devices.list,   kind: query,   version: 1, capability: read  }
+  - { name: devices.detail, kind: query,   version: 1, capability: read  }
+  - { name: devices.trust,  kind: command, version: 1, capability: write, invalidates: [devices.list, devices.detail] }
+  - { name: devices.delete, kind: command, version: 1, capability: write, invalidates: [devices.list] }
+
+  # Phase C.7 — Environments
+  - { name: environments.list,       kind: query,   version: 1, capability: read  }
+  - { name: environments.detail,     kind: query,   version: 1, capability: read  }
+  - { name: environments.create,     kind: command, version: 1, capability: write }
+  - { name: environments.update,     kind: command, version: 1, capability: write }
+  - { name: environments.delete,     kind: command, version: 1, capability: write, invalidates: [environments.list] }
+  - { name: environments.clone,      kind: command, version: 1, capability: write, invalidates: [environments.list] }
+  - { name: environments.setDefault, kind: command, version: 1, capability: write, invalidates: [environments.list, environments.detail] }
+
+  # Phase C.8 — Webhooks
+  - { name: webhooks.list,   kind: query,   version: 1, capability: read  }
+  - { name: webhooks.detail, kind: query,   version: 1, capability: read  }
+  - { name: webhooks.create, kind: command, version: 1, capability: write, invalidates: [webhooks.list] }
+  - { name: webhooks.update, kind: command, version: 1, capability: write, invalidates: [webhooks.list, webhooks.detail] }
+  - { name: webhooks.delete, kind: command, version: 1, capability: write, invalidates: [webhooks.list] }
+
+  # Phase C.9 — Form Configs
+  - { name: formConfigs.list,         kind: query,   version: 1, capability: read  }
+  - { name: formConfigs.signup,       kind: query,   version: 1, capability: read  }
+  - { name: formConfigs.saveSignup,   kind: command, version: 1, capability: write, invalidates: [formConfigs.list, formConfigs.signup] }
+  - { name: formConfigs.deleteSignup, kind: command, version: 1, capability: write, invalidates: [formConfigs.list, formConfigs.signup] }
+
+  # Phase C.10 + D.2.5 — Settings. The namespaces / namespace queries
+  # drive the settings.tabs + settings.panel renderers. The legacy
+  # list / detail queries stay registered for one release for callers
+  # that haven't migrated yet; mark them deprecated in v2.
+  - { name: settings.namespaces, kind: query,   version: 1, capability: read  }
+  - { name: settings.namespace,  kind: query,   version: 1, capability: read  }
+  - { name: settings.list,       kind: query,   version: 1, capability: read  }
+  - { name: settings.detail,     kind: query,   version: 1, capability: read  }
+  - { name: settings.update,     kind: command, version: 1, capability: write, invalidates: [settings.list, settings.detail, settings.namespace] }
+  - { name: settings.enforce,    kind: command, version: 1, capability: write, invalidates: [settings.namespace, settings.detail] }
+  - { name: settings.unenforce,  kind: command, version: 1, capability: write, invalidates: [settings.namespace, settings.detail] }
+
+  # Phase C.11 — Organizations: intent declarations moved to the
+  # organization plugin manifest (plugins/organization/contract/manifest.yaml).
+  # The `/organizations` page below references those intents by name only.
+
+
+  # Phase C.12 — Overview dashboard. Two queries: a single-call counter
+  # bundle for the stat tiles, and a recent-signups list for the
+  # dashboard.recentlist widget.
+  - { name: overview.stats,         kind: query, version: 1, capability: read }
+  - { name: overview.recentSignups, kind: query, version: 1, capability: read }
+
+  # Phase C.13 — Credentials.
+  - { name: credentials.detail, kind: query, version: 1, capability: read }
+
+  # Phase C.14 — Anonymous auth pages. Signup creates a user + session
+  # in one round-trip; forgot-password issues a reset link; reset-password
+  # consumes the link's token and sets the new password. All three are
+  # callable without an active session.
+  - { name: auth.signup,         kind: command, version: 1, capability: write }
+  - { name: auth.forgotPassword, kind: command, version: 1, capability: write }
+  - { name: auth.resetPassword,  kind: command, version: 1, capability: write }
+
+  # Phase C.14 — Subscriptions: intent declarations moved to the
+  # subscription plugin manifest (plugins/subscription/contract/manifest.yaml).
+  # The `/plans` pages below reference those intents by name only.
+
 queries:
   config:
     intent: auth.config
+    cache: { staleTime: 60s }
+  userList:
+    intent: users.list
+    cache: { staleTime: 30s }
+  userDetail:
+    intent: users.detail
+    cache: { staleTime: 30s }
+  appList:
+    intent: apps.list
+    cache: { staleTime: 30s }
+  appDetail:
+    intent: apps.detail
+    cache: { staleTime: 30s }
+  sessionList:
+    intent: sessions.list
+    cache: { staleTime: 15s }
+  roleList:
+    intent: roles.list
+    cache: { staleTime: 30s }
+  roleDetail:
+    intent: roles.detail
+    cache: { staleTime: 30s }
+  apikeyList:
+    intent: apikeys.list
+    cache: { staleTime: 30s }
+  deviceList:
+    intent: devices.list
+    cache: { staleTime: 30s }
+  deviceDetail:
+    intent: devices.detail
+    cache: { staleTime: 30s }
+  envList:
+    intent: environments.list
+    cache: { staleTime: 30s }
+  envDetail:
+    intent: environments.detail
+    cache: { staleTime: 30s }
+  webhookList:
+    intent: webhooks.list
+    cache: { staleTime: 30s }
+  formConfigList:
+    intent: formConfigs.list
+    cache: { staleTime: 60s }
+  signupForm:
+    intent: formConfigs.signup
+    cache: { staleTime: 60s }
+  settingsList:
+    intent: settings.list
+    cache: { staleTime: 60s }
+  settingsNamespaces:
+    intent: settings.namespaces
+    cache: { staleTime: 60s }
+  orgList:
+    intent: orgs.list
+    cache: { staleTime: 30s }
+  orgDetail:
+    intent: orgs.detail
+    cache: { staleTime: 30s }
+  planList:
+    intent: plans.list
+    cache: { staleTime: 60s }
+  overviewStats:
+    intent: overview.stats
+    cache: { staleTime: 15s }
+  recentSignups:
+    intent: overview.recentSignups
+    cache: { staleTime: 15s }
+  credentials:
+    intent: credentials.detail
     cache: { staleTime: 60s }
 
 # /login is the page the dashboard's AuthGate renders when the principal
@@ -34,3 +217,725 @@ graph:
     intent: auth.login.form
     title: Sign in
     data: queries.config
+
+  # Phase C.14 — Anonymous auth pages. Each route binds to a shell-side
+  # form renderer the user already added to forge/extensions/dashboard
+  # /contract/shell/src/intents. The auth contributor declares both the
+  # routes and the underlying commands; the AuthGate recognises these
+  # routes as anonymous (no principal required) and skips its sign-in
+  # redirect for them.
+  - route: /signup
+    intent: auth.signup-form
+    title: Create account
+    props:
+      op: auth.signup
+      brand: Authsome
+      signInURL: /login
+
+  - route: /forgot-password
+    intent: auth.forgot-password-form
+    title: Reset your password
+    props:
+      op: auth.forgotPassword
+      brand: Authsome
+      signInURL: /login
+
+  - route: /reset-password
+    intent: auth.reset-password-form
+    title: Set a new password
+    props:
+      op: auth.resetPassword
+      brand: Authsome
+      signInURL: /login
+      tokenParam: token
+
+  # Phase C.12 — Overview. Four stat tiles + a recent-signups list.
+  # The route is the app home (contributor.app.home: /), so signing in
+  # from /login lands here.
+  - route: /
+    intent: page.shell
+    title: Overview
+    nav: { group: Overview, icon: layout-dashboard, priority: 0 }
+    slots:
+      main:
+        - intent: dashboard.grid
+          slots:
+            widgets:
+              - intent: dashboard.stat
+                data: queries.overviewStats
+                props:
+                  label: Users
+                  icon: users
+                  valueField: users
+              - intent: dashboard.stat
+                data: queries.overviewStats
+                props:
+                  label: Active sessions
+                  icon: activity
+                  valueField: sessions
+              - intent: dashboard.stat
+                data: queries.overviewStats
+                props:
+                  label: Devices
+                  icon: server
+                  valueField: devices
+              - intent: dashboard.stat
+                data: queries.overviewStats
+                props:
+                  label: Plugins
+                  icon: package
+                  valueField: plugins
+              - intent: dashboard.recentlist
+                data: queries.recentSignups
+                props:
+                  title: Recent signups
+                  limit: 10
+                  detailHref: /users/:id
+                  viewAllHref: /users
+                  columns:
+                    - { field: email,     label: Email }
+                    - { field: firstName, label: "First name" }
+                    - { field: lastName,  label: "Last name" }
+                    - { field: createdAt, label: Created }
+                  emptyMessage: "No signups yet."
+
+  # Phase C.13 — Credentials. Read-only page surfacing the platform
+  # app's publishable key and environment for SDK integration.
+  - route: /credentials
+    intent: page.shell
+    title: Credentials
+    nav: { group: Developer, icon: key, priority: 0 }
+    slots:
+      main:
+        - intent: resource.detail
+          data: queries.credentials
+          props:
+            title: SDK Credentials
+            fields:
+              - appName
+              - appSlug
+              - appId
+              - publishableKey
+              - envName
+              - envSlug
+              - envId
+              - isPlatform
+
+  # Phase C.1 — Users dashboard. List view with detail drawer + per-row
+  # ban/unban/delete actions; deep-link detail at /users/:id; create form
+  # at /users/create.
+  - route: /users
+    intent: page.shell
+    title: Users
+    nav: { group: People, icon: users, priority: 0 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.userList
+          props:
+            columns:
+              - { field: email,         label: Email }
+              - { field: firstName,     label: "First name" }
+              - { field: lastName,      label: "Last name" }
+              - { field: emailVerified, label: Verified }
+              - { field: banned,        label: Banned }
+              - { field: createdAt,     label: Created }
+            emptyMessage: "No users yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Ban
+                      op: users.ban
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.button
+                      title: Unban
+                      op: users.unban
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.divider
+                    - intent: action.button
+                      title: Delete
+                      op: users.delete
+                      payload:
+                        id: { from: parent.id }
+
+  # Phase C.18 — User creation form. Uses the existing users.create
+  # command handler. form.edit.fields is extensible so the organization
+  # plugin can splice in an org_id selector for admin-driven invites.
+  - route: /users/create
+    intent: page.shell
+    title: Create user
+    slots:
+      main:
+        - intent: form.edit
+          op: users.create
+          props: { submitLabel: "Create user" }
+          slots:
+            fields:
+              - intent: form.field
+                props: { name: email,     label: "Email",      kind: email,    required: true }
+              - intent: form.field
+                props: { name: password,  label: "Password",   kind: password, required: true }
+              - intent: form.field
+                props: { name: firstName, label: "First name" }
+              - intent: form.field
+                props: { name: lastName,  label: "Last name" }
+              - intent: form.field
+                props: { name: username,  label: "Username" }
+
+  # Phase C.16 — Rich user detail. Composes resource.detail's four new
+  # slots into the equivalent of the templui user_detail layout: avatar
+  # header with status badges, entity-scoped action menu, sections for
+  # sessions / devices / metadata, and an extensions slot that plugins
+  # (apikey, mfa, passkey, social, …) inject into via `extends`.
+  - route: /users/:id
+    intent: page.shell
+    title: User
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: users.detail
+            params:
+              id: { from: route.id }
+          slots:
+            header:
+              - intent: detail.header
+                props:
+                  titleField: email
+                  subtitleField: displayName
+                  imageField: image
+                  fallbackIcon: user
+            actions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Ban user
+                      op: users.ban
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.button
+                      title: Unban user
+                      op: users.unban
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.divider
+                    - intent: action.button
+                      title: Delete user
+                      op: users.delete
+                      payload:
+                        id: { from: parent.id }
+            sections:
+              - intent: detail.section
+                props: { title: "Sessions", icon: key-round }
+                slots:
+                  content:
+                    - intent: resource.list
+                      data:
+                        intent: sessions.list
+                        params:
+                          userId: { from: route.id }
+                      props:
+                        columns:
+                          - { field: id,             label: ID }
+                          - { field: ipAddress,      label: IP }
+                          - { field: userAgent,      label: "User agent" }
+                          - { field: lastActivityAt, label: "Last activity" }
+                          - { field: expiresAt,      label: Expires }
+                        emptyMessage: "No active sessions."
+                      slots:
+                        rowActions:
+                          - intent: action.menu
+                            slots:
+                              items:
+                                - intent: action.button
+                                  title: Revoke
+                                  op: sessions.revoke
+                                  payload:
+                                    id: { from: parent.id }
+              - intent: detail.section
+                props: { title: "Devices", icon: server }
+                slots:
+                  content:
+                    - intent: resource.list
+                      data:
+                        intent: devices.list
+                        params:
+                          userId: { from: route.id }
+                      props:
+                        columns:
+                          - { field: name,       label: Name }
+                          - { field: browser,    label: Browser }
+                          - { field: os,         label: OS }
+                          - { field: ipAddress,  label: IP }
+                          - { field: trusted,    label: Trusted }
+                          - { field: lastSeenAt, label: "Last seen" }
+                        emptyMessage: "No registered devices."
+                      slots:
+                        rowActions:
+                          - intent: action.menu
+                            slots:
+                              items:
+                                - intent: action.button
+                                  title: Trust
+                                  op: devices.trust
+                                  payload:
+                                    id: { from: parent.id }
+                                - intent: action.button
+                                  title: Delete
+                                  op: devices.delete
+                                  payload:
+                                    id: { from: parent.id }
+            extensions: []
+
+  # Phase C.2 — Apps
+  - route: /apps
+    intent: page.shell
+    title: Apps
+    nav: { group: Platform, icon: package, priority: 0 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.appList
+          props:
+            columns:
+              - { field: name,       label: Name }
+              - { field: slug,       label: Slug }
+              - { field: isPlatform, label: Platform }
+              - { field: createdAt,  label: Created }
+            emptyMessage: "No apps yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Delete
+                      op: apps.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /apps/:id
+    intent: page.shell
+    title: App
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: apps.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.18 — App creation form. Uses the existing apps.create
+  # command handler; manifest just describes the form fields. The
+  # form.edit.fields slot is extensible so plugins can splice in extra
+  # fields without forking this route.
+  - route: /apps/create
+    intent: page.shell
+    title: Create app
+    slots:
+      main:
+        - intent: form.edit
+          op: apps.create
+          props: { submitLabel: "Create app" }
+          slots:
+            fields:
+              - intent: form.field
+                props: { name: name,       label: "Name",        required: true }
+              - intent: form.field
+                props: { name: slug,       label: "Slug",        required: true }
+              - intent: form.field
+                props: { name: logo,       label: "Logo URL" }
+              - intent: form.field
+                props: { name: isPlatform, label: "Platform app", kind: checkbox, description: "Mark this app as the platform app (only one allowed)." }
+
+  # Phase C.3 — Sessions (user-scoped; the standalone page renders an
+  # empty state until a user is selected — full UX needs a user-picker
+  # we haven't built yet).
+  - route: /sessions
+    intent: page.shell
+    title: Sessions
+    nav: { group: Security, icon: activity, priority: 0 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.sessionList
+          props:
+            columns:
+              - { field: id,             label: ID }
+              - { field: userId,         label: User }
+              - { field: ipAddress,      label: IP }
+              - { field: userAgent,      label: "User agent" }
+              - { field: lastActivityAt, label: "Last activity" }
+              - { field: expiresAt,      label: Expires }
+            emptyMessage: "Select a user to view their sessions (search coming soon)."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Revoke
+                      op: sessions.revoke
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /sessions/:id
+    intent: page.shell
+    title: Session
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: sessions.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.4 — Roles & RBAC
+  - route: /roles
+    intent: page.shell
+    title: Roles
+    nav: { group: Identity, icon: shield, priority: 1 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.roleList
+          props:
+            columns:
+              - { field: name,        label: Name }
+              - { field: slug,        label: Slug }
+              - { field: description, label: Description }
+              - { field: createdAt,   label: Created }
+            emptyMessage: "No roles yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Delete
+                      op: roles.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /roles/:id
+    intent: page.shell
+    title: Role
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: roles.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.5 — API Keys
+  - route: /apikeys
+    intent: page.shell
+    title: API Keys
+    nav: { group: Security, icon: package, priority: 1 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.apikeyList
+          props:
+            columns:
+              - { field: name,       label: Name }
+              - { field: keyPrefix,  label: Prefix }
+              - { field: revoked,    label: Revoked }
+              - { field: lastUsedAt, label: "Last used" }
+              - { field: createdAt,  label: Created }
+            emptyMessage: "No API keys yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Revoke
+                      op: apikeys.revoke
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /apikeys/:id
+    intent: page.shell
+    title: API Key
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: apikeys.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.6 — Devices
+  - route: /devices
+    intent: page.shell
+    title: Devices
+    nav: { group: Security, icon: server, priority: 2 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.deviceList
+          props:
+            columns:
+              - { field: userId,     label: User }
+              - { field: name,       label: Name }
+              - { field: browser,    label: Browser }
+              - { field: os,         label: OS }
+              - { field: ipAddress,  label: IP }
+              - { field: trusted,    label: Trusted }
+              - { field: lastSeenAt, label: "Last seen" }
+            emptyMessage: "No devices yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Trust
+                      op: devices.trust
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.button
+                      title: Delete
+                      op: devices.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /devices/:id
+    intent: page.shell
+    title: Device
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: devices.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.7 — Environments
+  - route: /environments
+    intent: page.shell
+    title: Environments
+    nav: { group: Platform, icon: server, priority: 1 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.envList
+          props:
+            columns:
+              - { field: name,      label: Name }
+              - { field: slug,      label: Slug }
+              - { field: type,      label: Type }
+              - { field: isDefault, label: Default }
+              - { field: createdAt, label: Created }
+            emptyMessage: "No environments yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: "Set default"
+                      op: environments.setDefault
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.divider
+                    - intent: action.button
+                      title: Delete
+                      op: environments.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /environments/:id
+    intent: page.shell
+    title: Environment
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: environments.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.8 — Webhooks
+  - route: /webhooks
+    intent: page.shell
+    title: Webhooks
+    nav: { group: Infrastructure, icon: activity, priority: 0 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.webhookList
+          props:
+            columns:
+              - { field: url,       label: URL }
+              - { field: active,    label: Active }
+              - { field: createdAt, label: Created }
+            emptyMessage: "No webhooks yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Delete
+                      op: webhooks.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /webhooks/:id
+    intent: page.shell
+    title: Webhook
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: webhooks.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.9 — Form Configs
+  - route: /signup-forms
+    intent: page.shell
+    title: Signup Form
+    nav: { group: Configuration, icon: package, priority: 0 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.formConfigList
+          props:
+            columns:
+              - { field: formType,  label: Type }
+              - { field: version,   label: Version }
+              - { field: active,    label: Active }
+              - { field: createdAt, label: Created }
+            emptyMessage: "No form configs yet."
+            # Singleton today (one row per form type, only `signup`
+            # implemented); no per-row detail page worth navigating to.
+            disableRowNav: true
+
+  # Phase C.10 + D.2.5 — Settings. The settings.tabs renderer fetches
+  # the plugin namespace list and renders one tab per plugin. Each tab
+  # body is a settings.panel that auto-renders the category cards +
+  # form fields from each Definition's UIMetadata, with override /
+  # enforced badges and inline-save per category. This replaces the
+  # earlier resource.list "table of every key" UX and removes the
+  # standalone /settings/:key JSON editor route — editing is inline.
+  - route: /settings
+    intent: page.shell
+    title: Settings
+    nav: { group: Configuration, icon: package, priority: 1 }
+    slots:
+      main:
+        - intent: settings.tabs
+          data: queries.settingsNamespaces
+          props:
+            defaultScope: app
+
+  # Phase C.15 — Signup-form visual editor. v1 ships as JSON over
+  # editor.formBuilder (delegates to editor.code with a banner). Future
+  # iteration swaps the JSON surface for drag-and-drop without changing
+  # the manifest. The page is wired to /signup-forms/edit (the existing
+  # /signup-forms list route stays as-is).
+  - route: /signup-forms/edit
+    intent: page.shell
+    title: Edit signup form
+    slots:
+      main:
+        - intent: editor.formBuilder
+          data: queries.signupForm
+          op: formConfigs.saveSignup
+          props:
+            saveLabel: "Save signup form"
+            deleteLabel: "Delete signup form"
+            deleteOp: formConfigs.deleteSignup
+            valueField: definition
+
+  # Phase C.11 — Organizations (plugin)
+  - route: /organizations
+    intent: page.shell
+    title: Organizations
+    nav: { group: Identity, icon: users, priority: 2 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.orgList
+          props:
+            columns:
+              - { field: name,      label: Name }
+              - { field: slug,      label: Slug }
+              - { field: createdAt, label: Created }
+            emptyMessage: "No organizations yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Delete
+                      op: orgs.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /organizations/:id
+    intent: page.shell
+    title: Organization
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: orgs.detail
+            params:
+              id: { from: route.id }
+
+  # Phase C.14 — Subscription plans (plugin)
+  - route: /plans
+    intent: page.shell
+    title: Plans
+    nav: { group: Configuration, icon: package, priority: 2 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.planList
+          props:
+            columns:
+              - { field: name,        label: Name }
+              - { field: slug,        label: Slug }
+              - { field: currency,    label: Currency }
+              - { field: status,      label: Status }
+              - { field: trialDays,   label: "Trial days" }
+              - { field: description, label: Description }
+            emptyMessage: "No plans yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Activate
+                      op: plans.activate
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.button
+                      title: Archive
+                      op: plans.archive
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /plans/:id
+    intent: page.shell
+    title: Plan
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: plans.detail
+            params:
+              id: { from: route.id }
