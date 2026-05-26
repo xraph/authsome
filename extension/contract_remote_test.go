@@ -105,4 +105,3 @@ func TestRegisterRemoteContractContributor_PortalURLWithBasePath(t *testing.T) {
 		t.Errorf("dispatch endpoint hits = %d, want 1", dispatchHits)
 	}
 }
-

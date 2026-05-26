@@ -31,8 +31,12 @@ type EnvDetail struct {
 	UpdatedAt   string            `json:"updatedAt"`
 }
 
-type EnvListResponse struct{ Environments []EnvSummary `json:"environments"` }
-type GetEnvInput struct{ ID string `json:"id"` }
+type EnvListResponse struct {
+	Environments []EnvSummary `json:"environments"`
+}
+type GetEnvInput struct {
+	ID string `json:"id"`
+}
 type CreateEnvInput struct {
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
@@ -46,14 +50,18 @@ type UpdateEnvInput struct {
 	Description *string `json:"description,omitempty"`
 	Color       *string `json:"color,omitempty"`
 }
-type DeleteEnvInput struct{ ID string `json:"id"` }
+type DeleteEnvInput struct {
+	ID string `json:"id"`
+}
 type CloneEnvInput struct {
 	SourceID string `json:"sourceId"`
 	Name     string `json:"name"`
 	Slug     string `json:"slug"`
 	Type     string `json:"type,omitempty"`
 }
-type SetDefaultEnvInput struct{ ID string `json:"id"` }
+type SetDefaultEnvInput struct {
+	ID string `json:"id"`
+}
 
 func envsListHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contract.Principal) (EnvListResponse, error) {
 	return func(ctx context.Context, _ struct{}, _ contract.Principal) (EnvListResponse, error) {

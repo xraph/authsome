@@ -54,7 +54,9 @@ type UpdateAppInput struct {
 	Logo *string `json:"logo,omitempty"`
 }
 
-type DeleteAppInput struct{ ID string `json:"id"` }
+type DeleteAppInput struct {
+	ID string `json:"id"`
+}
 
 func appsListHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contract.Principal) (AppListResponse, error) {
 	return func(ctx context.Context, _ struct{}, _ contract.Principal) (AppListResponse, error) {

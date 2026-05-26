@@ -40,15 +40,23 @@ type SessionDetail struct {
 	UpdatedAt             string `json:"updatedAt,omitempty"`
 }
 
-type GetSessionInput struct{ ID string `json:"id"` }
+type GetSessionInput struct {
+	ID string `json:"id"`
+}
 
 type SessionsListInput struct {
 	UserID string `json:"userId,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
 }
-type SessionsListResponse struct{ Sessions []SessionSummary `json:"sessions"` }
-type RevokeSessionInput struct{ ID string `json:"id"` }
-type BulkRevokeSessionsInput struct{ UserID string `json:"userId"` }
+type SessionsListResponse struct {
+	Sessions []SessionSummary `json:"sessions"`
+}
+type RevokeSessionInput struct {
+	ID string `json:"id"`
+}
+type BulkRevokeSessionsInput struct {
+	UserID string `json:"userId"`
+}
 type BulkRevokeResponse struct {
 	OK    bool `json:"ok"`
 	Count int  `json:"count"`

@@ -19,8 +19,9 @@ import (
 	"github.com/xraph/authsome/apikey"
 	"github.com/xraph/authsome/id"
 
-	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract"
+
+	authcontract "github.com/xraph/authsome/extension/contract"
 )
 
 // ────────────────────────────────────────────────────────────────────

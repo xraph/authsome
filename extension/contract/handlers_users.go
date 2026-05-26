@@ -114,8 +114,12 @@ type BanUserInput struct {
 }
 
 // UnbanUserInput / DeleteUserInput share the same id-only shape.
-type UnbanUserInput struct{ ID string `json:"id"` }
-type DeleteUserInput struct{ ID string `json:"id"` }
+type UnbanUserInput struct {
+	ID string `json:"id"`
+}
+type DeleteUserInput struct {
+	ID string `json:"id"`
+}
 
 // AckResponse is the canonical reply for mutating commands that don't
 // project a payload of their own — the shell's react-query invalidator
@@ -330,15 +334,15 @@ func projectUserDetail(u *user.User) UserDetail {
 		return UserDetail{}
 	}
 	d := UserDetail{
-		UserSummary: projectUserSummary(u),
-		DisplayName: u.Name(),
-		Phone:       u.Phone,
+		UserSummary:   projectUserSummary(u),
+		DisplayName:   u.Name(),
+		Phone:         u.Phone,
 		PhoneVerified: u.PhoneVerified,
-		Image:       u.Image,
-		BanReason:   u.BanReason,
-		UpdatedAt:   u.UpdatedAt.UTC().Format(time.RFC3339),
-		AppID:       u.AppID.String(),
-		EnvID:       u.EnvID.String(),
+		Image:         u.Image,
+		BanReason:     u.BanReason,
+		UpdatedAt:     u.UpdatedAt.UTC().Format(time.RFC3339),
+		AppID:         u.AppID.String(),
+		EnvID:         u.EnvID.String(),
 	}
 	if u.BanExpires != nil {
 		d.BanExpiresAt = u.BanExpires.UTC().Format(time.RFC3339)

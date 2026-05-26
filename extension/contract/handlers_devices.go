@@ -33,10 +33,18 @@ type DeviceListInput struct {
 	UserID string `json:"userId,omitempty"`
 	Limit  int    `json:"limit,omitempty"`
 }
-type DeviceListResponse struct{ Devices []DeviceSummary `json:"devices"` }
-type GetDeviceInput struct{ ID string `json:"id"` }
-type TrustDeviceInput struct{ ID string `json:"id"` }
-type DeleteDeviceInput struct{ ID string `json:"id"` }
+type DeviceListResponse struct {
+	Devices []DeviceSummary `json:"devices"`
+}
+type GetDeviceInput struct {
+	ID string `json:"id"`
+}
+type TrustDeviceInput struct {
+	ID string `json:"id"`
+}
+type DeleteDeviceInput struct {
+	ID string `json:"id"`
+}
 
 func devicesListHandler(deps Deps) func(ctx context.Context, in DeviceListInput, _ contract.Principal) (DeviceListResponse, error) {
 	return func(ctx context.Context, in DeviceListInput, _ contract.Principal) (DeviceListResponse, error) {

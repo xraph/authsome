@@ -18,8 +18,9 @@ import (
 	authsome "github.com/xraph/authsome"
 	"github.com/xraph/authsome/settings"
 
-	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract"
+
+	authcontract "github.com/xraph/authsome/extension/contract"
 )
 
 // Setting keys are duplicated here as string constants to avoid an

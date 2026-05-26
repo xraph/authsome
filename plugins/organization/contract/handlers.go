@@ -13,8 +13,9 @@ import (
 	"github.com/xraph/authsome/id"
 	"github.com/xraph/authsome/organization"
 
-	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract"
+
+	authcontract "github.com/xraph/authsome/extension/contract"
 )
 
 // ────────────────────────────────────────────────────────────────────
@@ -137,8 +138,8 @@ func orgsCreateHandler(deps Deps) func(ctx context.Context, in CreateOrgInput, p
 			return ackResponse{}, &contract.Error{Code: contract.CodeBadRequest, Message: "name and slug are required"}
 		}
 		o := &organization.Organization{
-			AppID:     authcontract.AppIDFromPrincipal(p, deps.Engine),
-			Name:      name, Slug: slug, Logo: in.Logo,
+			AppID: authcontract.AppIDFromPrincipal(p, deps.Engine),
+			Name:  name, Slug: slug, Logo: in.Logo,
 			CreatedBy: creatorID,
 		}
 		if err := deps.Plugin.CreateOrganization(ctx, o); err != nil {

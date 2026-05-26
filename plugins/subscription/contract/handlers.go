@@ -13,8 +13,9 @@ import (
 	"github.com/xraph/ledger/plan"
 	"github.com/xraph/ledger/subscription"
 
-	authcontract "github.com/xraph/authsome/extension/contract"
 	"github.com/xraph/forge/extensions/dashboard/contract"
+
+	authcontract "github.com/xraph/authsome/extension/contract"
 )
 
 // ────────────────────────────────────────────────────────────────────

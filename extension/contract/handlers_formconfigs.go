@@ -24,9 +24,9 @@ type FormConfigSummary struct {
 
 type FormConfigDetail struct {
 	FormConfigSummary
-	AppID     string              `json:"appId,omitempty"`
+	AppID     string                 `json:"appId,omitempty"`
 	Fields    []formconfig.FormField `json:"fields,omitempty"`
-	UpdatedAt string              `json:"updatedAt"`
+	UpdatedAt string                 `json:"updatedAt"`
 }
 
 type FormConfigListResponse struct {

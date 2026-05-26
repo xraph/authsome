@@ -35,8 +35,12 @@ type PermissionRecord struct {
 	Resource string `json:"resource"`
 }
 
-type RoleListResponse struct{ Roles []RoleSummary `json:"roles"` }
-type GetRoleInput struct{ ID string `json:"id"` }
+type RoleListResponse struct {
+	Roles []RoleSummary `json:"roles"`
+}
+type GetRoleInput struct {
+	ID string `json:"id"`
+}
 type CreateRoleInput struct {
 	Name        string `json:"name"`
 	Slug        string `json:"slug"`
@@ -47,7 +51,9 @@ type UpdateRoleInput struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 }
-type DeleteRoleInput struct{ ID string `json:"id"` }
+type DeleteRoleInput struct {
+	ID string `json:"id"`
+}
 type AssignRoleInput struct {
 	UserID string `json:"userId"`
 	RoleID string `json:"roleId"`

@@ -27,9 +27,13 @@ type WebhookDetail struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-type GetWebhookInput struct{ ID string `json:"id"` }
+type GetWebhookInput struct {
+	ID string `json:"id"`
+}
 
-type WebhookListResponse struct{ Webhooks []WebhookSummary `json:"webhooks"` }
+type WebhookListResponse struct {
+	Webhooks []WebhookSummary `json:"webhooks"`
+}
 type CreateWebhookInput struct {
 	URL    string   `json:"url"`
 	Events []string `json:"events"`
@@ -40,7 +44,9 @@ type UpdateWebhookInput struct {
 	Events *[]string `json:"events,omitempty"`
 	Active *bool     `json:"active,omitempty"`
 }
-type DeleteWebhookInput struct{ ID string `json:"id"` }
+type DeleteWebhookInput struct {
+	ID string `json:"id"`
+}
 
 func webhooksListHandler(deps Deps) func(ctx context.Context, _ struct{}, _ contract.Principal) (WebhookListResponse, error) {
 	return func(ctx context.Context, _ struct{}, _ contract.Principal) (WebhookListResponse, error) {
