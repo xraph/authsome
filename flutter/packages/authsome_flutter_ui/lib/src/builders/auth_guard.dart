@@ -55,7 +55,11 @@ class AuthGuard extends StatelessWidget {
       AuthAuthenticated() => child,
       AuthLoading() || AuthIdle() =>
         loading ?? const Center(child: CircularProgressIndicator()),
-      AuthUnauthenticated() || AuthError() || AuthMfaRequired() =>
+      AuthUnauthenticated() ||
+      AuthError() ||
+      AuthMfaRequired() ||
+      AuthEmailNotVerified() ||
+      AuthVerificationPending() =>
         fallback ?? const SizedBox.shrink(),
     };
   }

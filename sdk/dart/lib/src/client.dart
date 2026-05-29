@@ -835,6 +835,19 @@ class AuthClient {
     return AdminUserListResponse.fromJson(Map<String, dynamic>.from(res as Map));
   }
 
+  /// Copy user to another app (admin)
+  /// POST /v1/admin/users/copy
+  Future<User> adminCopyUser({required Map<String, dynamic> body, required String token}) async {
+    final path = '/v1/admin/users/copy';
+    final res = await _request(
+'POST',
+      path,
+      body: body,
+      token: token,
+    );
+    return User.fromJson(Map<String, dynamic>.from(res as Map));
+  }
+
   /// Create user (admin)
   /// POST /v1/admin/users/create
   Future<User> adminCreateUser({required Map<String, dynamic> body, required String token}) async {
@@ -2355,11 +2368,16 @@ class AuthClient {
 
   /// List user roles
   /// GET /v1/users/{userId}/roles
-  Future<UserRoleListResponse> authsomeListUserRoles({required String userId, required String token}) async {
+  Future<UserRoleListResponse> authsomeListUserRoles({required String userId, required String token, String? appId}) async {
     final path = '/v1/users/$userId/roles';
+    final queryParams = <String, String>{};
+    if (appId != null) queryParams['app_id'] = appId.toString();
+    final queryString = queryParams.isNotEmpty
+        ? '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}'
+        : '';
     final res = await _request(
 'GET',
-      path,
+      '$path$queryString',
       token: token,
     );
     return UserRoleListResponse.fromJson(Map<String, dynamic>.from(res as Map));
@@ -2496,16 +2514,28 @@ class AuthClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       String errorMessage;
       int? errorCode;
+      String? errorType;
+      Map<String, dynamic>? errorDetails;
       try {
         final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
         errorMessage = (errorBody['error'] as String?) ??
             'Request failed with status ${response.statusCode}';
         errorCode = (errorBody['code'] as int?) ?? response.statusCode;
+        errorType = errorBody['type'] as String?;
+        final rawDetails = errorBody['details'];
+        if (rawDetails is Map) {
+          errorDetails = Map<String, dynamic>.from(rawDetails);
+        }
       } catch (_) {
         errorMessage = 'Request failed with status ${response.statusCode}';
         errorCode = response.statusCode;
       }
-      throw AuthClientException(errorMessage, code: errorCode);
+      throw AuthClientException(
+        errorMessage,
+        code: errorCode,
+        type: errorType,
+        details: errorDetails,
+      );
     }
 
     if (response.statusCode == 204 || response.body.isEmpty) {
@@ -2517,12 +2547,33 @@ class AuthClient {
 }
 
 /// Exception thrown by the AuthSome API client.
+///
+/// Mirrors React `AuthClientError` from `ui/packages/core/src/auth.ts` —
+/// carries the structured `type` and `details` envelope so callers can
+/// branch on machine-readable error categories instead of string-matching
+/// the human-readable [message]. Convenience getters live in
+/// `package:authsome_core/src/exceptions.dart`.
 class AuthClientException implements Exception {
   final String message;
   final int? code;
 
-  const AuthClientException(this.message, {this.code});
+  /// Machine-readable error category from the server envelope, e.g.
+  /// `"mfa_required"`, `"email_not_verified"`, `"captcha_required"`.
+  final String? type;
+
+  /// Optional structured payload from the server envelope. For
+  /// `"mfa_required"` this typically carries `mfa_ticket` and
+  /// `available_methods`.
+  final Map<String, dynamic>? details;
+
+  const AuthClientException(
+    this.message, {
+    this.code,
+    this.type,
+    this.details,
+  });
 
   @override
-  String toString() => 'AuthClientException($code): $message';
+  String toString() =>
+      'AuthClientException($code${type != null ? ', $type' : ''}): $message';
 }

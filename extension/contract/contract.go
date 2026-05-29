@@ -315,6 +315,42 @@ func Register(
 	if err := dispatcher.RegisterCommand(d, c, "auth.resetPassword", 1, resetPasswordHandler(deps)); err != nil {
 		return fmt.Errorf("authsome/contract: register auth.resetPassword: %w", err)
 	}
+	// First-run bootstrap + dynamic signup (form-config-driven).
+	if err := dispatcher.RegisterQuery(d, c, "auth.setupStatus", 1, setupStatusHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.setupStatus: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "auth.setup", 1, setupHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.setup: %w", err)
+	}
+	if err := dispatcher.RegisterQuery(d, c, "auth.dynamicConfig", 1, dynamicConfigHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.dynamicConfig: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "auth.dynamicRegister", 1, dynamicRegisterHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.dynamicRegister: %w", err)
+	}
+	// Per-app feature toggles backed by appclientconfig (Sign-in
+	// Methods panel from the templui dashboard).
+	if err := dispatcher.RegisterQuery(d, c, "auth.featureToggles", 1, featureTogglesHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.featureToggles: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "auth.toggleFeature", 1, toggleFeatureHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register auth.toggleFeature: %w", err)
+	}
+
+	// Phase C.17 — App + environment switcher. Three intents back the
+	// dashboard chrome's switcher: apps.context (read the current
+	// app+env + the available lists), apps.switch / environments.switch
+	// (set the active selection via cookies the auth resolver projects
+	// onto principal claims).
+	if err := dispatcher.RegisterQuery(d, c, "apps.context", 1, appsContextHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register apps.context: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "apps.switch", 1, appsSwitchHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register apps.switch: %w", err)
+	}
+	if err := dispatcher.RegisterCommand(d, c, "environments.switch", 1, environmentsSwitchHandler(deps)); err != nil {
+		return fmt.Errorf("authsome/contract: register environments.switch: %w", err)
+	}
 
 	// Phase C.14 — Subscriptions: moved to the subscription plugin
 	// (plugins/subscription/contract). The /plans pages stay declared

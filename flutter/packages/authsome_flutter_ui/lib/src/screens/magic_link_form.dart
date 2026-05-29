@@ -49,7 +49,14 @@ class MagicLinkForm extends StatefulWidget {
   /// Success description (default: "We've sent a sign-in link to {email}").
   final String? successDescriptionText;
 
+  /// Optional injected [AuthNotifier]. Test seam.
+  final AuthNotifier? auth;
+
+  /// Title + description text alignment within the [AuthCard].
+  final AuthCardAlign align;
+
   const MagicLinkForm({
+    this.auth,
     this.onSuccess,
     this.onSignInTap,
     this.logo,
@@ -61,6 +68,7 @@ class MagicLinkForm extends StatefulWidget {
     this.signInLabel = 'Back to sign in',
     this.successTitleText = 'Check your email',
     this.successDescriptionText,
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -74,6 +82,22 @@ class _MagicLinkFormState extends State<MagicLinkForm> {
   String? _error;
   bool _isSubmitting = false;
   bool _isSent = false;
+
+  AuthNotifier? _auth;
+  bool _missingProvider = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_auth == null && !_missingProvider) {
+      final injected = widget.auth ?? AuthProvider.maybeOf(context);
+      if (injected == null) {
+        _missingProvider = true;
+        return;
+      }
+      _auth = injected;
+    }
+  }
 
   @override
   void dispose() {
@@ -94,8 +118,7 @@ class _MagicLinkFormState extends State<MagicLinkForm> {
     });
 
     try {
-      final auth = context.auth;
-      await auth.client.sendMagicLink(body: SendRequest(email: email));
+      await _auth!.client.sendMagicLink(body: SendRequest(email: email));
       if (mounted) {
         setState(() {
           _isSent = true;
@@ -115,6 +138,20 @@ class _MagicLinkFormState extends State<MagicLinkForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (_missingProvider) {
+      return AuthCard(
+        title: widget.titleText,
+        description: widget.descriptionText,
+        logo: widget.logo,
+        align: widget.align,
+        child: const ErrorDisplay(
+          error:
+              'AuthProvider not found in widget tree. Wrap your app in '
+              'AuthProvider, or pass an `auth:` notifier to MagicLinkForm.',
+        ),
+      );
+    }
+
     final theme = AuthTheme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -127,6 +164,7 @@ class _MagicLinkFormState extends State<MagicLinkForm> {
       title: widget.titleText,
       description: widget.descriptionText,
       logo: widget.logo,
+      align: widget.align,
       footer: _buildFooter(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -172,6 +210,7 @@ class _MagicLinkFormState extends State<MagicLinkForm> {
       title: widget.successTitleText,
       description: description,
       logo: widget.logo,
+      align: widget.align,
       footer: _buildFooter(context),
       child: Column(
         mainAxisSize: MainAxisSize.min,

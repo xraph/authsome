@@ -35,7 +35,14 @@ class AuthSomeClient extends generated.AuthClient {
     return AuthSomeClient._(
       baseUrl,
       httpClient,
-      AuthClientConfig(baseUrl: config.baseUrl, httpClient: httpClient),
+      // Forward every field — dropping `publishableKey` here was the
+      // bug that made TwinOS-style backends reject sign-in with
+      // "app context required: send publishable key".
+      AuthClientConfig(
+        baseUrl: config.baseUrl,
+        httpClient: httpClient,
+        publishableKey: config.publishableKey,
+      ),
     );
   }
 
@@ -137,6 +144,33 @@ class AuthSomeClient extends generated.AuthClient {
     return AuthResponse.fromJson(data);
   }
 
+  /// Begin a passkey login ceremony. Returns the raw options map (with
+  /// base64url-encoded binary fields) as the server provides it — the
+  /// caller is responsible for decoding it via [prepareRequestOptions]
+  /// before handing it to a [PasskeyAuthenticator].
+  Future<Map<String, dynamic>> passkeyLoginBeginWithEmail({
+    String? email,
+  }) async {
+    final res = await super.passkeyLoginBegin(
+      body: LoginBeginRequest(email: email),
+    );
+    return Map<String, dynamic>.from(res.options);
+  }
+
+  /// Finish a passkey login by POSTing the serialized credential to
+  /// `/v1/passkeys/login/finish`. Bypasses the generated empty
+  /// [LoginFinishRequest] (a codegen quirk) so the credential map
+  /// actually reaches the wire.
+  Future<AuthResponse> passkeyLoginFinishWithCredential(
+    Map<String, dynamic> credential,
+  ) async {
+    final data = await _rawPost(
+      '/v1/passkeys/login/finish',
+      body: credential,
+    );
+    return AuthResponse.fromJson(data);
+  }
+
   /// Fetch client configuration from the backend.
   ///
   /// The config describes which auth methods are enabled so SDK
@@ -183,6 +217,13 @@ class AuthSomeClient extends generated.AuthClient {
     };
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
+    }
+    // Mirror the publishable-key header behaviour of the generated
+    // request helper — public auth endpoints (passkey login begin/finish)
+    // reach the wire via _rawPost and would otherwise lose app context.
+    final pk = publishableKey;
+    if (pk != null && pk.isNotEmpty) {
+      headers['X-Publishable-Key'] = pk;
     }
 
     final response = await _http.post(

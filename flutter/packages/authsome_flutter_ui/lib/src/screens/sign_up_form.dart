@@ -63,7 +63,17 @@ class SignUpForm extends StatefulWidget {
   /// Sign-in link label (default: "Already have an account? Sign in").
   final String signInLabel;
 
+  /// Optional injected [AuthNotifier]. When null, the form resolves the
+  /// notifier from the surrounding [AuthProvider]. Test seam.
+  final AuthNotifier? auth;
+
+  /// Title + description text alignment within the [AuthCard]. Defaults to
+  /// [AuthCardAlign.center]; pass [AuthCardAlign.left] for a flush-left
+  /// layout that matches a product-style sign-up.
+  final AuthCardAlign align;
+
   const SignUpForm({
+    this.auth,
     this.onSuccess,
     this.onSignInTap,
     this.socialProviders,
@@ -77,6 +87,7 @@ class SignUpForm extends StatefulWidget {
     this.continueLabel = 'Continue',
     this.signUpLabel = 'Sign up',
     this.signInLabel = 'Already have an account? Sign in',
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -95,12 +106,18 @@ class _SignUpFormState extends State<SignUpForm> {
   bool _isSubmitting = false;
 
   AuthNotifier? _auth;
+  bool _missingProvider = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_auth == null) {
-      _auth = context.auth;
+    if (_auth == null && !_missingProvider) {
+      final injected = widget.auth ?? AuthProvider.maybeOf(context);
+      if (injected == null) {
+        _missingProvider = true;
+        return;
+      }
+      _auth = injected;
       _auth!.addListener(_onAuthStateChanged);
     }
   }
@@ -197,6 +214,20 @@ class _SignUpFormState extends State<SignUpForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (_missingProvider) {
+      return AuthCard(
+        title: widget.titleText,
+        description: widget.descriptionText,
+        logo: widget.logo,
+        align: widget.align,
+        child: const ErrorDisplay(
+          error:
+              'AuthProvider not found in widget tree. Wrap your app in '
+              'AuthProvider, or pass an `auth:` notifier to SignUpForm.',
+        ),
+      );
+    }
+
     final theme = AuthTheme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final providers = _resolveSocialProviders();
@@ -205,6 +236,7 @@ class _SignUpFormState extends State<SignUpForm> {
       title: widget.titleText,
       description: widget.descriptionText,
       logo: widget.logo,
+      align: widget.align,
       footer: _buildFooter(context),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),

@@ -125,9 +125,22 @@ intents:
   # in one round-trip; forgot-password issues a reset link; reset-password
   # consumes the link's token and sets the new password. All three are
   # callable without an active session.
-  - { name: auth.signup,         kind: command, version: 1, capability: write }
-  - { name: auth.forgotPassword, kind: command, version: 1, capability: write }
-  - { name: auth.resetPassword,  kind: command, version: 1, capability: write }
+  - { name: auth.signup,           kind: command, version: 1, capability: write }
+  - { name: auth.forgotPassword,   kind: command, version: 1, capability: write }
+  - { name: auth.resetPassword,    kind: command, version: 1, capability: write }
+  - { name: auth.setupStatus,      kind: query,   version: 1, capability: read  }
+  - { name: auth.setup,            kind: command, version: 1, capability: write }
+  - { name: auth.dynamicConfig,    kind: query,   version: 1, capability: read  }
+  - { name: auth.dynamicRegister,  kind: command, version: 1, capability: write }
+  - { name: auth.featureToggles,   kind: query,   version: 1, capability: read  }
+  - { name: auth.toggleFeature,    kind: command, version: 1, capability: write, invalidates: [auth.featureToggles] }
+
+  # Phase C.17 — App + environment switcher. apps.context drives the
+  # chrome switcher dropdowns; the two switch commands set cookies the
+  # auth resolver projects onto principal claims.
+  - { name: apps.context,        kind: query,   version: 1, capability: read  }
+  - { name: apps.switch,         kind: command, version: 1, capability: write, invalidates: [apps.context] }
+  - { name: environments.switch, kind: command, version: 1, capability: write, invalidates: [apps.context] }
 
   # Phase C.14 — Subscriptions: intent declarations moved to the
   # subscription plugin manifest (plugins/subscription/contract/manifest.yaml).
@@ -158,9 +171,7 @@ queries:
   roleDetail:
     intent: roles.detail
     cache: { staleTime: 30s }
-  apikeyList:
-    intent: apikeys.list
-    cache: { staleTime: 30s }
+  # apikeyList moved to the apikey plugin manifest.
   deviceList:
     intent: devices.list
     cache: { staleTime: 30s }
@@ -188,15 +199,8 @@ queries:
   settingsNamespaces:
     intent: settings.namespaces
     cache: { staleTime: 60s }
-  orgList:
-    intent: orgs.list
-    cache: { staleTime: 30s }
-  orgDetail:
-    intent: orgs.detail
-    cache: { staleTime: 30s }
-  planList:
-    intent: plans.list
-    cache: { staleTime: 60s }
+  # orgList / orgDetail moved to the organization plugin manifest.
+  # planList moved to the subscription plugin manifest.
   overviewStats:
     intent: overview.stats
     cache: { staleTime: 15s }
@@ -205,6 +209,9 @@ queries:
     cache: { staleTime: 15s }
   credentials:
     intent: credentials.detail
+    cache: { staleTime: 60s }
+  dynamicConfig:
+    intent: auth.dynamicConfig
     cache: { staleTime: 60s }
 
 # /login is the page the dashboard's AuthGate renders when the principal
@@ -248,6 +255,22 @@ graph:
       brand: Authsome
       signInURL: /login
       tokenParam: token
+
+  - route: /setup
+    intent: auth.setup-form
+    title: Welcome to Authsome
+    props:
+      op: auth.setup
+      brand: Authsome
+
+  - route: /dynamic-register
+    intent: auth.dynamic-signup-form
+    title: Create your account
+    data: queries.dynamicConfig
+    props:
+      op: auth.dynamicRegister
+      brand: Authsome
+      signInURL: /login
 
   # Phase C.12 — Overview. Four stat tiles + a recent-signups list.
   # The route is the app home (contributor.app.home: /), so signing in
@@ -634,44 +657,10 @@ graph:
             params:
               id: { from: route.id }
 
-  # Phase C.5 — API Keys
-  - route: /apikeys
-    intent: page.shell
-    title: API Keys
-    nav: { group: Security, icon: package, priority: 1 }
-    slots:
-      main:
-        - intent: resource.list
-          data: queries.apikeyList
-          props:
-            columns:
-              - { field: name,       label: Name }
-              - { field: keyPrefix,  label: Prefix }
-              - { field: revoked,    label: Revoked }
-              - { field: lastUsedAt, label: "Last used" }
-              - { field: createdAt,  label: Created }
-            emptyMessage: "No API keys yet."
-          slots:
-            rowActions:
-              - intent: action.menu
-                slots:
-                  items:
-                    - intent: action.button
-                      title: Revoke
-                      op: apikeys.revoke
-                      payload:
-                        id: { from: parent.id }
-
-  - route: /apikeys/:id
-    intent: page.shell
-    title: API Key
-    slots:
-      main:
-        - intent: resource.detail
-          data:
-            intent: apikeys.detail
-            params:
-              id: { from: route.id }
+  # Phase C.5 — API Keys: page declarations moved to the apikey plugin
+  # manifest (plugins/apikey/contract/manifest.yaml) so the routes only
+  # appear when the apikey plugin is actually loaded — otherwise the
+  # /apikeys page would bind to apikeys.list and 404 at render time.
 
   # Phase C.6 — Devices
   - route: /devices
@@ -838,6 +827,23 @@ graph:
           data: queries.settingsNamespaces
           props:
             defaultScope: app
+            customSections:
+              - key: sign-in-methods
+                label: "Sign-in methods"
+                pinned: true
+                intent: feature.toggles
+                props:
+                  bare: true
+
+  # Phase C.10 + appclientconfig — Standalone Features page surfacing
+  # the same sign-in-methods toggles for direct deep-linking.
+  - route: /features
+    intent: page.shell
+    title: Features
+    nav: { group: Configuration, icon: toggle-right, priority: 0 }
+    slots:
+      main:
+        - intent: feature.toggles
 
   # Phase C.15 — Signup-form visual editor. v1 ships as JSON over
   # editor.formBuilder (delegates to editor.code with a banner). Future
@@ -858,84 +864,9 @@ graph:
             deleteOp: formConfigs.deleteSignup
             valueField: definition
 
-  # Phase C.11 — Organizations (plugin)
-  - route: /organizations
-    intent: page.shell
-    title: Organizations
-    nav: { group: Identity, icon: users, priority: 2 }
-    slots:
-      main:
-        - intent: resource.list
-          data: queries.orgList
-          props:
-            columns:
-              - { field: name,      label: Name }
-              - { field: slug,      label: Slug }
-              - { field: createdAt, label: Created }
-            emptyMessage: "No organizations yet."
-          slots:
-            rowActions:
-              - intent: action.menu
-                slots:
-                  items:
-                    - intent: action.button
-                      title: Delete
-                      op: orgs.delete
-                      payload:
-                        id: { from: parent.id }
+  # Phase C.11 — Organizations: pages moved to the organization plugin
+  # manifest (plugins/organization/contract/manifest.yaml) so they only
+  # appear when the plugin is loaded.
 
-  - route: /organizations/:id
-    intent: page.shell
-    title: Organization
-    slots:
-      main:
-        - intent: resource.detail
-          data:
-            intent: orgs.detail
-            params:
-              id: { from: route.id }
-
-  # Phase C.14 — Subscription plans (plugin)
-  - route: /plans
-    intent: page.shell
-    title: Plans
-    nav: { group: Configuration, icon: package, priority: 2 }
-    slots:
-      main:
-        - intent: resource.list
-          data: queries.planList
-          props:
-            columns:
-              - { field: name,        label: Name }
-              - { field: slug,        label: Slug }
-              - { field: currency,    label: Currency }
-              - { field: status,      label: Status }
-              - { field: trialDays,   label: "Trial days" }
-              - { field: description, label: Description }
-            emptyMessage: "No plans yet."
-          slots:
-            rowActions:
-              - intent: action.menu
-                slots:
-                  items:
-                    - intent: action.button
-                      title: Activate
-                      op: plans.activate
-                      payload:
-                        id: { from: parent.id }
-                    - intent: action.button
-                      title: Archive
-                      op: plans.archive
-                      payload:
-                        id: { from: parent.id }
-
-  - route: /plans/:id
-    intent: page.shell
-    title: Plan
-    slots:
-      main:
-        - intent: resource.detail
-          data:
-            intent: plans.detail
-            params:
-              id: { from: route.id }
+  # Phase C.14 — Subscription plans: pages moved to the subscription
+  # plugin manifest (plugins/subscription/contract/manifest.yaml).

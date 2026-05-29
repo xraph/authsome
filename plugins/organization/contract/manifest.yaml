@@ -5,11 +5,10 @@ contributor:
     supports: [v1]
     preferred: v1
   capabilities: [auth.read, auth.write]
-  # No `app:` block — for now organization stays as a library
-  # contributor and the /organizations page lives on the auth
-  # contributor's manifest. A future iteration may promote this to an
-  # app-owning contributor (slug: organizations) when the org dashboard
-  # gains its own sub-navigation.
+  # Library contributor — the /organizations pages live here so the
+  # nav entry only appears when the organization plugin is loaded
+  # (avoids "orgs.list not registered" on deployments without the
+  # plugin enabled).
 
 intents:
   - { name: orgs.list,         kind: query,   version: 1, capability: read  }
@@ -19,3 +18,71 @@ intents:
   - { name: orgs.delete,       kind: command, version: 1, capability: write, invalidates: [orgs.list] }
   - { name: orgs.members,      kind: query,   version: 1, capability: read  }
   - { name: orgs.removeMember, kind: command, version: 1, capability: write, invalidates: [orgs.members] }
+
+queries:
+  orgList:
+    intent: orgs.list
+    cache: { staleTime: 30s }
+  orgDetail:
+    intent: orgs.detail
+    cache: { staleTime: 30s }
+
+graph:
+  - route: /organizations
+    intent: page.shell
+    title: Organizations
+    nav: { group: Identity, icon: users, priority: 2 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.orgList
+          props:
+            columns:
+              - { field: name,      label: Name }
+              - { field: slug,      label: Slug }
+              - { field: createdAt, label: Created }
+            emptyMessage: "No organizations yet. Click “Create organization” to add one."
+          slots:
+            header:
+              - intent: atom.link
+                props:
+                  href: /organizations/create
+                  text: "Create organization"
+                  variant: primary
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Delete
+                      op: orgs.delete
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /organizations/:id
+    intent: page.shell
+    title: Organization
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: orgs.detail
+            params:
+              id: { from: route.id }
+
+  - route: /organizations/create
+    intent: page.shell
+    title: Create organization
+    slots:
+      main:
+        - intent: form.edit
+          op: orgs.create
+          props: { submitLabel: "Create organization" }
+          slots:
+            fields:
+              - intent: form.field
+                props: { name: name, label: "Name", required: true, placeholder: "Acme Inc." }
+              - intent: form.field
+                props: { name: slug, label: "Slug", required: true, placeholder: "acme",      description: "URL-safe identifier used in API paths." }
+              - intent: form.field
+                props: { name: logo, label: "Logo URL",                                         description: "Optional logo image URL." }

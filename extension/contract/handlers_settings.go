@@ -261,12 +261,9 @@ func settingsUpdateHandler(deps Deps) func(ctx context.Context, in UpdateSetting
 		if mgr == nil {
 			return AckResponse{}, &contract.Error{Code: contract.CodeUnavailable, Message: "settings manager not configured"}
 		}
-		adminID, err := principalUserID(p)
-		if err != nil {
-			return AckResponse{}, err
-		}
+		updatedBy := principalAttribution(p)
 		scope, scopeID, appID, orgID := writeScopeFromInput(in.Scope, in.AppID, in.OrgID, in.UserID, deps, p)
-		if err := mgr.Set(ctx, key, in.Value, scope, scopeID, appID, orgID, adminID.String()); err != nil {
+		if err := mgr.Set(ctx, key, in.Value, scope, scopeID, appID, orgID, updatedBy); err != nil {
 			return AckResponse{}, mapEngineError(err)
 		}
 		return AckResponse{OK: true, ID: key}, nil
@@ -286,12 +283,9 @@ func settingsEnforceHandler(deps Deps) func(ctx context.Context, in EnforceSetti
 		if mgr == nil {
 			return AckResponse{}, &contract.Error{Code: contract.CodeUnavailable, Message: "settings manager not configured"}
 		}
-		adminID, err := principalUserID(p)
-		if err != nil {
-			return AckResponse{}, err
-		}
+		updatedBy := principalAttribution(p)
 		scope, scopeID, appID, orgID := writeScopeFromInput(in.Scope, in.AppID, in.OrgID, in.UserID, deps, p)
-		if err := mgr.Enforce(ctx, key, in.Value, scope, scopeID, appID, orgID, adminID.String()); err != nil {
+		if err := mgr.Enforce(ctx, key, in.Value, scope, scopeID, appID, orgID, updatedBy); err != nil {
 			return AckResponse{}, mapEngineError(err)
 		}
 		return AckResponse{OK: true, ID: key}, nil
@@ -592,6 +586,23 @@ func namespaceDisplayName(ns string) string {
 	}
 	out := string(runes)
 	return strings.ReplaceAll(out, "-", " ")
+}
+
+// principalAttribution returns the principal's Subject for audit /
+// updatedBy attribution. Returns "" for anonymous requests rather
+// than rejecting — write authorisation belongs in the intent's
+// requires predicate, not in handler-level subject parsing.
+//
+// The settings.Manager treats updatedBy as opaque audit metadata; it
+// doesn't validate the string as a UserID. principalUserID (used by
+// users.* / sessions.* handlers) enforces a stricter parse because
+// those handlers feed the actor into engine.Admin* calls which DO
+// require a real id.UserID. Settings writes don't.
+func principalAttribution(p contract.Principal) string {
+	if p.User == nil {
+		return ""
+	}
+	return p.User.Subject
 }
 
 // Override the unused-import sentinel guards if any types end up

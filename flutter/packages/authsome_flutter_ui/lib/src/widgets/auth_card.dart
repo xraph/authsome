@@ -7,8 +7,22 @@ import 'package:flutter/material.dart';
 
 import '../theme/auth_theme.dart';
 
-/// Layout wrapper for auth forms — centered card with title, description,
-/// optional logo, and footer.
+/// Horizontal alignment of the title + description text inside an [AuthCard].
+///
+/// Mirrors the React `align` prop on the shared web sign-in components: the
+/// form fields themselves are always full-width, but the heading copy can sit
+/// flush-left for a denser product feel or stay centered for the default
+/// marketing-style layout.
+enum AuthCardAlign {
+  /// Title and description are centered (default).
+  center,
+
+  /// Title and description are flush-left.
+  left,
+}
+
+/// Layout wrapper for auth forms — a centered Material 3 card with title,
+/// description, optional logo, and footer.
 class AuthCard extends StatelessWidget {
   /// Card title text.
   final String title;
@@ -28,6 +42,11 @@ class AuthCard extends StatelessWidget {
   /// Maximum width (overrides [AuthThemeData.cardMaxWidth]).
   final double? maxWidth;
 
+  /// Horizontal alignment of the title + description. Defaults to
+  /// [AuthCardAlign.center]. Use [AuthCardAlign.left] to match a flush-left
+  /// product layout.
+  final AuthCardAlign align;
+
   const AuthCard({
     required this.title,
     this.description,
@@ -35,6 +54,7 @@ class AuthCard extends StatelessWidget {
     this.footer,
     required this.child,
     this.maxWidth,
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -43,6 +63,15 @@ class AuthCard extends StatelessWidget {
     final theme = AuthTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
+
+    final textAlign =
+        align == AuthCardAlign.left ? TextAlign.start : TextAlign.center;
+    // Logo centring is unchanged for left-aligned layouts — the React
+    // equivalent keeps the brand mark in the top-left of the card, so a
+    // left-aligned heading + a flush-left logo read as one visual block.
+    final logoAlignment = align == AuthCardAlign.left
+        ? Alignment.centerLeft
+        : Alignment.center;
 
     return Center(
       child: ConstrainedBox(
@@ -60,7 +89,7 @@ class AuthCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (logo != null) ...[
-                  Center(child: logo!),
+                  Align(alignment: logoAlignment, child: logo!),
                   SizedBox(height: theme.fieldSpacing),
                 ],
                 Text(
@@ -68,7 +97,7 @@ class AuthCard extends StatelessWidget {
                   style: textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
-                  textAlign: TextAlign.center,
+                  textAlign: textAlign,
                 ),
                 if (description != null) ...[
                   const SizedBox(height: 8),
@@ -77,7 +106,7 @@ class AuthCard extends StatelessWidget {
                     style: textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
-                    textAlign: TextAlign.center,
+                    textAlign: textAlign,
                   ),
                 ],
                 SizedBox(height: theme.sectionSpacing),

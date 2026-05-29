@@ -55,6 +55,9 @@ class EmailVerificationForm extends StatefulWidget {
   /// Cooldown duration in seconds (default: 60).
   final int cooldownSeconds;
 
+  /// Title + description text alignment within the [AuthCard].
+  final AuthCardAlign align;
+
   const EmailVerificationForm({
     required this.email,
     this.onSuccess,
@@ -67,6 +70,7 @@ class EmailVerificationForm extends StatefulWidget {
     this.successDescriptionText =
         'Your email has been verified successfully',
     this.cooldownSeconds = 60,
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -170,6 +174,7 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
       title: widget.titleText,
       description: description,
       logo: widget.logo,
+      align: widget.align,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -206,6 +211,7 @@ class _EmailVerificationFormState extends State<EmailVerificationForm> {
       title: widget.successTitleText,
       description: widget.successDescriptionText,
       logo: widget.logo,
+      align: widget.align,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

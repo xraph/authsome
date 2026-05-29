@@ -3,6 +3,8 @@
 /// Ports the TypeScript types from `ui/packages/core/src/types.ts`.
 library;
 
+import 'package:http/http.dart' as http;
+
 // Re-export generated API types.
 export 'generated/api_types.dart';
 
@@ -66,10 +68,43 @@ class AuthUnauthenticated extends AuthState {
 }
 
 /// MFA challenge required before full authentication.
+///
+/// Ticket-based — mirrors React `AuthState.mfa_required` from
+/// `ui/packages/core/src/auth.ts`. The [mfaTicket] is the server-issued
+/// handle the next leg of the flow must present when verifying the code.
 class AuthMfaRequired extends AuthState {
-  final Session session;
+  final String email;
+  final String mfaTicket;
+  final List<String> availableMethods;
 
-  const AuthMfaRequired({required this.session});
+  /// Legacy session token field. Populated only when the server emitted a
+  /// partial session alongside the challenge (older flow); newer flows
+  /// rely on [mfaTicket] alone. Will be removed once all backends emit the
+  /// ticket envelope.
+  @Deprecated('Use mfaTicket instead — preserved for back-compat only')
+  final Session? session;
+
+  const AuthMfaRequired({
+    required this.email,
+    required this.mfaTicket,
+    required this.availableMethods,
+    // ignore: deprecated_member_use_from_same_package
+    this.session,
+  });
+}
+
+/// Sign-in attempted but the account's email is not yet verified.
+/// The form should switch to the inline verification panel.
+class AuthEmailNotVerified extends AuthState {
+  final String email;
+  const AuthEmailNotVerified({required this.email});
+}
+
+/// Sign-up completed; awaiting email verification before the session
+/// becomes active. Mirrors React `verification_pending`.
+class AuthVerificationPending extends AuthState {
+  final String email;
+  const AuthVerificationPending({required this.email});
 }
 
 /// An error occurred during authentication.
@@ -320,7 +355,10 @@ class AuthConfig {
   /// Base URL of the AuthSome API (e.g., "https://api.example.com").
   final String baseUrl;
 
-  /// Publishable key for auto-discovering enabled auth methods.
+  /// Publishable key for auto-discovering enabled auth methods AND for
+  /// the public auth path (signup, signin, forgot-password, …). When
+  /// set, the SDK sends it on every request as the `X-Publishable-Key`
+  /// header so the backend can resolve the owning App.
   final String? publishableKey;
 
   /// Pre-fetched client config (useful for SSR / startup optimization).
@@ -329,6 +367,11 @@ class AuthConfig {
   /// Storage implementation for persisting tokens.
   /// Defaults to in-memory storage if not provided.
   final TokenStorage? storage;
+
+  /// Optional HTTP client override. Lets tests inject a mock client and
+  /// production apps wire in interceptors / connection pools. Defaults
+  /// to a fresh [http.Client] when null.
+  final http.Client? httpClient;
 
   /// Callback invoked when the auth state changes.
   final void Function(AuthState state)? onStateChange;
@@ -341,6 +384,7 @@ class AuthConfig {
     this.publishableKey,
     this.initialClientConfig,
     this.storage,
+    this.httpClient,
     this.onStateChange,
     this.onError,
   });

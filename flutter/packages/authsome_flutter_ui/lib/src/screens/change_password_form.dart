@@ -56,6 +56,9 @@ class ChangePasswordForm extends StatefulWidget {
   /// Success description (default: "Your password has been updated successfully").
   final String successDescriptionText;
 
+  /// Title + description text alignment within the [AuthCard].
+  final AuthCardAlign align;
+
   const ChangePasswordForm({
     this.onSuccess,
     this.titleText = 'Change password',
@@ -71,6 +74,7 @@ class ChangePasswordForm extends StatefulWidget {
     this.successTitleText = 'Password changed',
     this.successDescriptionText =
         'Your password has been updated successfully',
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -160,6 +164,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     return AuthCard(
       title: widget.titleText,
       description: widget.descriptionText,
+      align: widget.align,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -210,6 +215,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     return AuthCard(
       title: widget.successTitleText,
       description: widget.successDescriptionText,
+      align: widget.align,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

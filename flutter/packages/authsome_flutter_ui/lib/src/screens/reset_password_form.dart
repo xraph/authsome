@@ -53,8 +53,15 @@ class ResetPasswordForm extends StatefulWidget {
   /// Mismatch error (default: "Passwords do not match").
   final String mismatchError;
 
+  /// Optional injected [AuthNotifier]. Test seam.
+  final AuthNotifier? auth;
+
+  /// Title + description text alignment within the [AuthCard].
+  final AuthCardAlign align;
+
   const ResetPasswordForm({
     required this.token,
+    this.auth,
     this.onSuccess,
     this.logo,
     this.titleText = 'Reset password',
@@ -66,6 +73,7 @@ class ResetPasswordForm extends StatefulWidget {
     this.successDescriptionText =
         'Your password has been reset successfully',
     this.mismatchError = 'Passwords do not match',
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -80,6 +88,22 @@ class _ResetPasswordFormState extends State<ResetPasswordForm> {
   String? _error;
   bool _isSubmitting = false;
   bool _isSuccess = false;
+
+  AuthNotifier? _auth;
+  bool _missingProvider = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_auth == null && !_missingProvider) {
+      final injected = widget.auth ?? AuthProvider.maybeOf(context);
+      if (injected == null) {
+        _missingProvider = true;
+        return;
+      }
+      _auth = injected;
+    }
+  }
 
   @override
   void dispose() {
@@ -107,8 +131,7 @@ class _ResetPasswordFormState extends State<ResetPasswordForm> {
     });
 
     try {
-      final auth = context.auth;
-      await auth.client.resetPassword(body: {
+      await _auth!.client.resetPassword(body: {
         'token': widget.token,
         'password': password,
       });
@@ -131,6 +154,20 @@ class _ResetPasswordFormState extends State<ResetPasswordForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (_missingProvider) {
+      return AuthCard(
+        title: widget.titleText,
+        description: widget.descriptionText,
+        logo: widget.logo,
+        align: widget.align,
+        child: const ErrorDisplay(
+          error:
+              'AuthProvider not found in widget tree. Wrap your app in '
+              'AuthProvider, or pass an `auth:` notifier to ResetPasswordForm.',
+        ),
+      );
+    }
+
     final theme = AuthTheme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -142,6 +179,7 @@ class _ResetPasswordFormState extends State<ResetPasswordForm> {
       title: widget.titleText,
       description: widget.descriptionText,
       logo: widget.logo,
+      align: widget.align,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -185,6 +223,7 @@ class _ResetPasswordFormState extends State<ResetPasswordForm> {
       title: widget.successTitleText,
       description: widget.successDescriptionText,
       logo: widget.logo,
+      align: widget.align,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

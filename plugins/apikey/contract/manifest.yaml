@@ -5,13 +5,83 @@ contributor:
     supports: [v1]
     preferred: v1
   capabilities: [auth.read, auth.write]
-  # Library contributor — no `app:` block. The /apikeys list page stays
-  # on the auth contributor (the route was migrated under the C.5
-  # phase); the apikey plugin only owns the intent handlers + its own
-  # auto-discovered settings (when DeclareSettings is added).
+  # Library contributor. Nav entries projected under whichever app is
+  # active (the shell's sidebar filter passes library-contributor items
+  # through regardless of active app).
 
 intents:
   - { name: apikeys.list,   kind: query,   version: 1, capability: read  }
   - { name: apikeys.detail, kind: query,   version: 1, capability: read  }
   - { name: apikeys.create, kind: command, version: 1, capability: write, invalidates: [apikeys.list] }
   - { name: apikeys.revoke, kind: command, version: 1, capability: write, invalidates: [apikeys.list, apikeys.detail] }
+
+queries:
+  apikeyList:
+    intent: apikeys.list
+    cache: { staleTime: 30s }
+
+graph:
+  - route: /apikeys
+    intent: page.shell
+    title: API Keys
+    nav: { group: Security, icon: key, priority: 1 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.apikeyList
+          props:
+            columns:
+              - { field: name,       label: Name }
+              - { field: keyPrefix,  label: Prefix }
+              - { field: revoked,    label: Revoked }
+              - { field: lastUsedAt, label: "Last used" }
+              - { field: createdAt,  label: Created }
+            emptyMessage: "No API keys yet. Click “Create API key” to mint one."
+          slots:
+            header:
+              - intent: atom.link
+                props:
+                  href: /apikeys/create
+                  text: "Create API key"
+                  variant: primary
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Revoke
+                      op: apikeys.revoke
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /apikeys/:id
+    intent: page.shell
+    title: API Key
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: apikeys.detail
+            params:
+              id: { from: route.id }
+
+  # /apikeys/create: name + userId + scopes form. apikeys.create
+  # returns the plaintext secret in the response body — admins must
+  # copy it from the network panel until a one-time secret modal is
+  # added in a follow-up.
+  - route: /apikeys/create
+    intent: page.shell
+    title: Create API key
+    slots:
+      main:
+        - intent: form.edit
+          op: apikeys.create
+          props: { submitLabel: "Create API key" }
+          slots:
+            fields:
+              - intent: form.field
+                props: { name: name,   label: "Name",     required: true, placeholder: "e.g. CI deploy key", description: "A human-readable label for this API key." }
+              - intent: form.field
+                props: { name: userId, label: "User ID",  required: true, placeholder: "user_…",            description: "The user this key acts on behalf of." }
+              - intent: form.field
+                props: { name: scopes, label: "Scopes",   kind: textarea,                                  description: "Comma-separated list of scopes (e.g. read:users,write:apps). Leave blank for all." }

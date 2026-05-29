@@ -1,9 +1,15 @@
 name: authsome
-description: Dart SDK for Authsome authentication
-version: 0.1.0
+description: >-
+  Dart client SDK for the Authsome authentication platform. Provides a typed
+  HTTP client and request/response models for sign-in, sessions, MFA, magic
+  links, password reset, and account management.
+version: 1.5.0
+repository: https://github.com/xraph/authsome
+homepage: https://github.com/xraph/authsome
+issue_tracker: https://github.com/xraph/authsome/issues
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   http: ^1.2.0

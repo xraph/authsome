@@ -29,4 +29,6 @@ export 'package:authsome_core/authsome_core.dart';
 
 // Flutter-specific exports.
 export 'src/auth_provider.dart';
+export 'src/auth_router_scope.dart';
+export 'src/passkey/default_passkey_authenticator.dart';
 export 'src/secure_token_storage.dart';

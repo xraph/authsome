@@ -29,6 +29,10 @@
 /// ```
 library;
 
+// This builder wraps the legacy enrollmentId-based MFA flow; deprecated
+// member access is intentional to keep the old contract working.
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:authsome_flutter/authsome_flutter.dart';
 

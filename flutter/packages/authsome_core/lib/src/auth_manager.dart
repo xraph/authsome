@@ -10,8 +10,13 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:meta/meta.dart';
+
 import 'client.dart';
+import 'exceptions.dart';
+import 'passkey_authenticator.dart';
 import 'types.dart';
+import 'webauthn.dart';
 
 const _sessionKey = 'authsome:session';
 const _configKey = 'authsome:client_config';
@@ -40,9 +45,18 @@ class AuthManager {
   final Set<void Function(ClientConfig?)> _configListeners = {};
   Future<ClientConfig>? _configFetchFuture;
 
+  /// Tracks the most recent sign-in email so error-state transitions
+  /// ([AuthMfaRequired], [AuthEmailNotVerified]) can carry it through to
+  /// the UI without callers having to pass it again.
+  String? _pendingEmail;
+
   AuthManager(AuthConfig config)
       : _client = AuthSomeClient(
-          AuthClientConfig(baseUrl: config.baseUrl),
+          AuthClientConfig(
+            baseUrl: config.baseUrl,
+            publishableKey: config.publishableKey,
+            httpClient: config.httpClient,
+          ),
         ),
         _storage = config.storage ?? MemoryTokenStorage(),
         _onError = config.onError,
@@ -53,6 +67,29 @@ class AuthManager {
 
     if (config.onStateChange != null) {
       _listeners.add(config.onStateChange!);
+    }
+  }
+
+  /// Test-only constructor that accepts a pre-built [AuthSomeClient].
+  /// Lets tests inject an `http.Client` via `MockClient` and drive the
+  /// state machine without touching the network.
+  @visibleForTesting
+  AuthManager.withClient({
+    required AuthSomeClient client,
+    TokenStorage? storage,
+    String? publishableKey,
+    ClientConfig? initialClientConfig,
+    void Function(String, int?)? onError,
+    void Function(AuthState)? onStateChange,
+  })  : _client = client,
+        _storage = storage ?? MemoryTokenStorage(),
+        _onError = onError,
+        _publishableKey = publishableKey {
+    if (initialClientConfig != null) {
+      _clientConfig = initialClientConfig;
+    }
+    if (onStateChange != null) {
+      _listeners.add(onStateChange);
     }
   }
 
@@ -83,6 +120,11 @@ class AuthManager {
   /// Initialize by hydrating the session from storage.
   /// When a publishableKey is set, also fetches client config in parallel.
   /// Call this once on app start.
+  ///
+  /// Defensive: never destroys the session on errors during initialization.
+  /// The server may be temporarily unreachable (404/500/network) or the
+  /// token might need refreshing. Only an explicit [signOut] clears storage.
+  /// Mirrors React `auth.ts` initialize (lines 134–147).
   Future<void> initialize() async {
     // Kick off config fetch in parallel (non-blocking).
     if (_publishableKey != null && _clientConfig == null) {
@@ -114,13 +156,32 @@ class AuthManager {
       _setState(AuthAuthenticated(user: user, session: session));
       _scheduleRefresh(session);
     } catch (_) {
-      await _clearSession();
+      // Defensive fallback: preserve whatever session we have and schedule a
+      // refresh attempt rather than wiping the user out on a transient error.
+      try {
+        final stored = await _storage.getItem(_sessionKey);
+        if (stored != null) {
+          final session = Session.fromJson(
+            jsonDecode(stored) as Map<String, dynamic>,
+          );
+          _setState(AuthAuthenticated(user: null, session: session));
+          _scheduleRefresh(session);
+          return;
+        }
+      } catch (_) {
+        // Storage itself is broken — fall through to unauthenticated.
+      }
       _setState(const AuthUnauthenticated());
     }
   }
 
   /// Sign in with email & password.
+  ///
+  /// Re-throws on `email_not_verified` so callers can branch into the
+  /// inline verification panel without polling state — mirrors React
+  /// `auth.ts` lines 197–206.
   Future<void> signIn(String email, String password) async {
+    _pendingEmail = email;
     _setState(const AuthLoading());
     try {
       final res = await _client.signInWithCredentials(
@@ -135,11 +196,15 @@ class AuthManager {
       await _handleAuthResponse(res.user, session);
     } catch (err) {
       _handleError(err);
+      if (err is AuthClientException && err.isEmailNotVerified) {
+        rethrow;
+      }
     }
   }
 
   /// Sign up with email & password.
   Future<void> signUp(String email, String password, {String? name}) async {
+    _pendingEmail = email;
     _setState(const AuthLoading());
     try {
       final res = await _client.signUpWithCredentials(
@@ -156,6 +221,87 @@ class AuthManager {
     } catch (err) {
       _handleError(err);
     }
+  }
+
+  /// Submit an MFA challenge code using the ticket from [AuthMfaRequired].
+  /// Mirrors React `auth.ts` `submitMFAChallenge(code)`.
+  Future<void> submitMFAChallenge(String code) async {
+    final current = _state;
+    if (current is! AuthMfaRequired) {
+      throw StateError('submitMFAChallenge called outside MFA flow');
+    }
+    _setState(const AuthLoading());
+    try {
+      // Reuses the existing legacy endpoint until the ticket-based one ships.
+      // The enrollment ID is sourced from the ticket for compatibility.
+      final res = await _client.mfaChallenge(
+        enrollmentId: current.mfaTicket,
+        code: code,
+      );
+      final session = Session(
+        sessionToken: res.sessionToken,
+        refreshToken: res.refreshToken,
+        expiresAt: res.expiresAt,
+      );
+      await _handleAuthResponse(res.user, session);
+    } catch (err) {
+      _handleError(err);
+    }
+  }
+
+  /// Resend the email-verification message for [email].
+  Future<void> resendVerification(String email) async {
+    await _client.resendEmailVerification(body: {'email': email});
+  }
+
+  /// Run a passkey / WebAuthn sign-in ceremony.
+  ///
+  /// Orchestrates the three-step flow:
+  ///   1. POST `/v1/passkeys/login/begin` (with optional [email] for
+  ///      discoverable-credential UX) → server returns assertion options
+  ///      with base64url-encoded binary fields.
+  ///   2. [authenticator.authenticate] runs the WebAuthn ceremony on the
+  ///      platform (browser, iOS, Android) — exactly the
+  ///      `navigator.credentials.get` step in React's
+  ///      `passkey-login-button.tsx`.
+  ///   3. POST `/v1/passkeys/login/finish` with the credential payload
+  ///      → server returns session + user, identical to the password
+  ///      sign-in response.
+  Future<void> signInWithPasskey({
+    required PasskeyAuthenticator authenticator,
+    String? email,
+  }) async {
+    if (!authenticator.isAvailable) {
+      throw const AuthClientException(
+        'Passkeys are not available on this platform',
+        code: 400,
+      );
+    }
+    if (email != null) {
+      _pendingEmail = email;
+    }
+    _setState(const AuthLoading());
+    try {
+      final rawOptions = await _client.passkeyLoginBeginWithEmail(
+        email: email,
+      );
+      final prepared = prepareRequestOptions(rawOptions);
+      final credential = await authenticator.authenticate(prepared);
+      final res = await _client.passkeyLoginFinishWithCredential(credential);
+      final session = Session(
+        sessionToken: res.sessionToken,
+        refreshToken: res.refreshToken,
+        expiresAt: res.expiresAt,
+      );
+      await _handleAuthResponse(res.user, session);
+    } catch (err) {
+      _handleError(err);
+    }
+  }
+
+  /// Verify the email-confirmation OTP.
+  Future<void> verifyEmail(String token) async {
+    await _client.verifyEmail(body: {'token': token});
   }
 
   /// Sign out and clear the session.
@@ -255,7 +401,8 @@ class AuthManager {
       return (_state as AuthAuthenticated).session.sessionToken;
     }
     if (_state is AuthMfaRequired) {
-      return (_state as AuthMfaRequired).session.sessionToken;
+      // ignore: deprecated_member_use_from_same_package
+      return (_state as AuthMfaRequired).session?.sessionToken;
     }
     return null;
   }
@@ -334,9 +481,23 @@ class AuthManager {
   Future<void> _handleAuthResponse(dynamic user, Session session) async {
     await _persistSession(session);
     _setState(AuthAuthenticated(user: user, session: session));
-    _scheduleRefresh(session);
+    // Best-effort: a bad `expires_at` from the backend must NOT undo the
+    // authentication we just established. Schedule failures are silently
+    // swallowed; the next manual [refreshNow] call (or app restart) will
+    // try again.
+    try {
+      _scheduleRefresh(session);
+    } catch (_) {
+      // Swallowed by design — see contract above.
+    }
   }
 
+  /// Refreshes the session.
+  ///
+  /// Defensive: never destroys the session on failure — the refresh token
+  /// may still be valid and the server could be temporarily unreachable.
+  /// Schedules a 30-second retry instead. Only [signOut] clears storage.
+  /// Mirrors React `auth.ts` refreshSession (lines 476–492).
   Future<void> _refreshSession(String refreshToken) async {
     try {
       final newSession = await _client.refreshWithToken(refreshToken);
@@ -345,15 +506,32 @@ class AuthManager {
       _setState(AuthAuthenticated(user: user, session: newSession));
       _scheduleRefresh(newSession);
     } catch (_) {
-      await _clearSession();
-      _setState(const AuthUnauthenticated());
+      _clearRefreshTimer();
+      _refreshTimer = Timer(const Duration(seconds: 30), () {
+        _refreshSession(refreshToken);
+      });
     }
   }
 
   void _scheduleRefresh(Session session) {
     _clearRefreshTimer();
-    final expiresAt =
-        DateTime.parse(session.expiresAt).millisecondsSinceEpoch;
+
+    // `expires_at` is opaque-string-shaped in the API but expected to be ISO
+    // 8601. Some backends emit alternative shapes (Unix epoch strings,
+    // RFC 1123, etc.). Treat parse failures as "schedule retry in 5 min"
+    // rather than letting the FormatException bubble up and undo a
+    // successful sign-in.
+    final int expiresAt;
+    try {
+      expiresAt =
+          DateTime.parse(session.expiresAt).millisecondsSinceEpoch;
+    } on FormatException {
+      _refreshTimer = Timer(const Duration(minutes: 5), () {
+        _refreshSession(session.refreshToken);
+      });
+      return;
+    }
+
     final delay = expiresAt -
         DateTime.now().millisecondsSinceEpoch -
         _refreshBeforeMs;
@@ -410,19 +588,20 @@ class AuthManager {
         : 'An unexpected error occurred';
     final code = err is AuthClientException ? err.code : null;
 
-    // MFA required is returned as a specific error code.
-    if (code == 403 && message.toLowerCase().contains('mfa')) {
-      final token = getSessionToken();
-      if (token != null) {
+    if (err is AuthClientException) {
+      if (err.isMfaRequired) {
         _setState(AuthMfaRequired(
-          session: Session(
-            sessionToken: token,
-            refreshToken: '',
-            expiresAt: DateTime.now()
-                .add(const Duration(minutes: 5))
-                .toIso8601String(),
-          ),
+          email: err.errorEmail ?? _pendingEmail ?? '',
+          mfaTicket: err.mfaTicket ?? '',
+          availableMethods: err.availableMfaMethods,
         ));
+        return;
+      }
+      if (err.isEmailNotVerified) {
+        _setState(AuthEmailNotVerified(
+          email: err.errorEmail ?? _pendingEmail ?? '',
+        ));
+        _onError?.call(message, code);
         return;
       }
     }

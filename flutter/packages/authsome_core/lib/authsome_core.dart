@@ -11,6 +11,9 @@ library authsome_core;
 export 'src/types.dart';
 export 'src/client.dart';
 export 'src/auth_manager.dart';
+export 'src/exceptions.dart';
+export 'src/passkey_authenticator.dart';
+export 'src/webauthn.dart' show prepareRequestOptions, prepareCreationOptions, serializeAssertion;
 export 'src/generated/api_client.dart'
     show AuthClient, AuthClientConfig, AuthClientException;
 export 'src/generated/api_types.dart';

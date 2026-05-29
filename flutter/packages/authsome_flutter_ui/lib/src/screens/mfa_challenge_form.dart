@@ -37,8 +37,18 @@ enum MfaMethod {
 ///
 /// A method switcher at the bottom allows toggling between available methods.
 class MfaChallengeForm extends StatefulWidget {
-  /// The MFA enrollment ID for TOTP verification.
-  final String enrollmentId;
+  /// Optional injected [AuthNotifier]. When null, the form resolves the
+  /// notifier from the surrounding [AuthProvider]. Test seam.
+  final AuthNotifier? auth;
+
+  /// Legacy enrollment ID for the old TOTP flow. Prefer the ticket-based
+  /// flow driven by [AuthMfaRequired] state — this is kept only so call
+  /// sites still on the old contract keep compiling.
+  @Deprecated(
+    'Pass nothing; the form now reads the ticket from AuthMfaRequired '
+    'state and calls AuthNotifier.submitMFAChallenge instead.',
+  )
+  final String? enrollmentId;
 
   /// Called when MFA verification succeeds.
   final VoidCallback? onSuccess;
@@ -89,8 +99,13 @@ class MfaChallengeForm extends StatefulWidget {
   /// Recovery switcher label (default: "Use recovery code").
   final String recoverySwitcherLabel;
 
+  /// Title + description text alignment within the [AuthCard].
+  final AuthCardAlign align;
+
   const MfaChallengeForm({
-    required this.enrollmentId,
+    this.auth,
+    // ignore: deprecated_member_use_from_same_package
+    this.enrollmentId,
     this.onSuccess,
     this.methods,
     this.defaultMethod,
@@ -108,6 +123,7 @@ class MfaChallengeForm extends StatefulWidget {
     this.totpSwitcherLabel = 'Use authenticator app',
     this.smsSwitcherLabel = 'Use SMS',
     this.recoverySwitcherLabel = 'Use recovery code',
+    this.align = AuthCardAlign.center,
     super.key,
   });
 
@@ -131,12 +147,18 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
   Timer? _resendTimer;
 
   AuthNotifier? _auth;
+  bool _missingProvider = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_auth == null) {
-      _auth = context.auth;
+    if (_auth == null && !_missingProvider) {
+      final injected = widget.auth ?? AuthProvider.maybeOf(context);
+      if (injected == null) {
+        _missingProvider = true;
+        return;
+      }
+      _auth = injected;
       _auth!.addListener(_onAuthStateChanged);
       _availableMethods = _resolveMethods();
       _activeMethod = widget.defaultMethod ?? _availableMethods.first;
@@ -210,7 +232,18 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
     });
 
     try {
-      await _auth!.submitMFACode(widget.enrollmentId, code);
+      final state = _auth!.state;
+      if (state is AuthMfaRequired && state.mfaTicket.isNotEmpty) {
+        await _auth!.submitMFAChallenge(code);
+        // ignore: deprecated_member_use_from_same_package
+      } else if (widget.enrollmentId != null) {
+        // ignore: deprecated_member_use, deprecated_member_use_from_same_package
+        await _auth!.submitMFACode(widget.enrollmentId!, code);
+      } else {
+        throw StateError(
+          'No MFA ticket in state and no enrollmentId provided',
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -323,12 +356,26 @@ class _MfaChallengeFormState extends State<MfaChallengeForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (_missingProvider) {
+      return AuthCard(
+        title: widget.titleText,
+        logo: widget.logo,
+        align: widget.align,
+        child: const ErrorDisplay(
+          error:
+              'AuthProvider not found in widget tree. Wrap your app in '
+              'AuthProvider, or pass an `auth:` notifier to MfaChallengeForm.',
+        ),
+      );
+    }
+
     final theme = AuthTheme.of(context);
 
     return AuthCard(
       title: widget.titleText,
       description: _description,
       logo: widget.logo,
+      align: widget.align,
       footer: _buildMethodSwitcher(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -97,24 +97,44 @@ func (s *Store) Migrate(ctx context.Context, extraGroups ...*migrate.Group) erro
 	return s.ensureBaselineIndexes(ctx)
 }
 
-// runMigrationsWithSelfHeal runs the orchestrator. If the run fails
-// with "cannot decode objectID into an integer type" (an upstream
-// inconsistency in grove/mongodriver/mongomigrate where RecordApplied
-// writes ObjectID _ids but ListApplied decodes _id as int64), the
-// grove_migrations collection is unreadable and no further progress
-// can be made.
+// staleLockThreshold is how long a migration lock must be held before
+// runMigrationsWithSelfHeal will break it. Every authsome migration is
+// either a no-op or a CreateCollection / CreateIndexes / collMod call
+// that finishes in seconds, so 5 minutes is well past any legitimate
+// in-flight migration window and well within the patience operators
+// will have for a wedged boot loop.
+const staleLockThreshold = 5 * time.Minute
+
+// mongomigrateLockCollection / mongomigrateLockID mirror the unexported
+// constants in grove/mongodriver/mongomigrate. They must stay in lock-
+// step with that package; if upstream renames them, breakStaleMigrationLock
+// silently turns into a no-op and stale locks resume wedging boot.
+const (
+	mongomigrateLockCollection = "grove_migration_locks"
+	mongomigrateLockID         = "grove_migration_lock"
+)
+
+// runMigrationsWithSelfHeal runs the orchestrator with two recovery
+// paths layered on top:
 //
-// Recovery: drop the grove_migrations + grove_migration_locks
-// collections so the orchestrator treats nothing as applied, then
-// retry once. Every migration in Migrations is idempotent
-// (CreateCollection no-ops if present; CreateIndexes returns
-// IndexKeySpecsConflict for shape conflicts which ensureBaselineIndexes
-// already swallows; the fix_username_index_partial_filter repair
-// tolerates IndexNotFound on its drop step) so the re-run is safe.
+//  1. Stale lock recovery. If the run fails with ErrLockHeld, the lock
+//     document is inspected; if it's older than staleLockThreshold the
+//     lock is force-cleared via a conditional update (keyed on the
+//     observed locked_at) and the run is retried once. This covers the
+//     common dev/CI failure mode where a previous process crashed
+//     before its deferred ReleaseLock could run — there is no TTL on
+//     the mongomigrate lock, so without this it stays held forever.
 //
-// We log a warning at recovery time so operators know history was
-// reset; if any non-idempotent plugin migration was previously
-// applied, the operator must investigate via the audit log.
+//  2. Decode-corruption recovery. If the run fails with "cannot decode
+//     objectID into an integer type" (an upstream inconsistency in
+//     grove/mongodriver/mongomigrate where RecordApplied writes
+//     ObjectID _ids but ListApplied decodes _id as int64), both
+//     tracking collections are dropped and the run is retried once.
+//     Every migration in Migrations is idempotent (CreateCollection
+//     no-ops if present; CreateIndexes returns IndexKeySpecsConflict
+//     for shape conflicts which ensureBaselineIndexes already swallows;
+//     fix_username_index_partial_filter tolerates IndexNotFound on its
+//     drop step) so the re-run is safe.
 func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate.Group) error {
 	executor, err := migrate.NewExecutorFor(s.mdb)
 	if err != nil {
@@ -122,31 +142,101 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 	}
 
 	orch := migrate.NewOrchestrator(executor, groups...)
-	if _, err := orch.Migrate(ctx); err != nil {
-		if !mongoIsMigrationDecodeCorruption(err) {
+	_, err = orch.Migrate(ctx)
+	if err == nil {
+		return nil
+	}
+
+	// Self-heal #1: stale lock from a crashed process.
+	if migrate.IsLockError(err) {
+		broken, breakErr := s.breakStaleMigrationLock(ctx)
+		if breakErr != nil {
+			return fmt.Errorf("authsome/mongo: migration failed: %w (and breaking stale lock failed: %w)", err, breakErr)
+		}
+		if !broken {
+			// Lock is fresh — assume another process is legitimately
+			// running and propagate so the operator sees it.
 			return fmt.Errorf("authsome/mongo: migration failed: %w", err)
 		}
-
-		// Self-heal: the grove_migrations collection has incompatible
-		// docs (ObjectID _ids vs the library's int64 expectation).
-		// Drop the tracking collections so a fresh orchestrator run
-		// can rebuild them.
-		if dropErr := s.resetMigrationTracking(ctx); dropErr != nil {
-			return fmt.Errorf("authsome/mongo: migration tracking corrupted (%w) and reset failed: %w", err, dropErr)
-		}
-
-		// Build a fresh executor + orchestrator after the reset and
-		// retry once.
 		retryExec, retryErr := migrate.NewExecutorFor(s.mdb)
 		if retryErr != nil {
-			return fmt.Errorf("authsome/mongo: rebuild executor after tracking reset: %w", retryErr)
+			return fmt.Errorf("authsome/mongo: rebuild executor after breaking stale lock: %w", retryErr)
 		}
 		retryOrch := migrate.NewOrchestrator(retryExec, groups...)
 		if _, err := retryOrch.Migrate(ctx); err != nil {
-			return fmt.Errorf("authsome/mongo: migration retry after tracking reset failed: %w", err)
+			return fmt.Errorf("authsome/mongo: migration retry after breaking stale lock: %w", err)
 		}
+		return nil
+	}
+
+	// Self-heal #2: grove_migrations decode corruption.
+	if !mongoIsMigrationDecodeCorruption(err) {
+		return fmt.Errorf("authsome/mongo: migration failed: %w", err)
+	}
+	if dropErr := s.resetMigrationTracking(ctx); dropErr != nil {
+		return fmt.Errorf("authsome/mongo: migration tracking corrupted (%w) and reset failed: %w", err, dropErr)
+	}
+	retryExec, retryErr := migrate.NewExecutorFor(s.mdb)
+	if retryErr != nil {
+		return fmt.Errorf("authsome/mongo: rebuild executor after tracking reset: %w", retryErr)
+	}
+	retryOrch := migrate.NewOrchestrator(retryExec, groups...)
+	if _, err := retryOrch.Migrate(ctx); err != nil {
+		return fmt.Errorf("authsome/mongo: migration retry after tracking reset failed: %w", err)
 	}
 	return nil
+}
+
+// breakStaleMigrationLock inspects the grove_migration_locks document
+// and force-clears it iff it's held and older than staleLockThreshold.
+//
+// The clear is a conditional update keyed on the observed locked_at —
+// if a different process happened to acquire the lock between our read
+// and our write, the filter no longer matches and the update is a
+// no-op, so we never accidentally break a fresh, legitimate lock.
+//
+// Returns (true, nil) when a stale lock was broken; (false, nil) when
+// the lock is absent, unlocked, or fresh.
+func (s *Store) breakStaleMigrationLock(ctx context.Context) (bool, error) {
+	coll := s.mdb.Collection(mongomigrateLockCollection)
+
+	var lockDoc struct {
+		Locked   bool       `bson:"locked"`
+		LockedAt *time.Time `bson:"locked_at"`
+	}
+	if err := coll.FindOne(ctx, bson.M{"_id": mongomigrateLockID}).Decode(&lockDoc); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return false, nil
+		}
+		return false, fmt.Errorf("read migration lock: %w", err)
+	}
+
+	if !lockDoc.Locked {
+		return false, nil
+	}
+	// locked=true with no locked_at is inconsistent state from an
+	// interrupted write — treat as stale.
+	if lockDoc.LockedAt != nil && time.Since(*lockDoc.LockedAt) < staleLockThreshold {
+		return false, nil
+	}
+
+	filter := bson.M{"_id": mongomigrateLockID, "locked": true}
+	if lockDoc.LockedAt != nil {
+		filter["locked_at"] = *lockDoc.LockedAt
+	} else {
+		filter["locked_at"] = nil
+	}
+	res, err := coll.UpdateOne(ctx, filter, bson.M{
+		"$set": bson.M{
+			"locked":    false,
+			"locked_at": nil,
+			"locked_by": nil,
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("clear stale migration lock: %w", err)
+	}
+	return res.ModifiedCount > 0, nil
 }
 
 // resetMigrationTracking drops the grove_migrations and
@@ -157,7 +247,7 @@ func (s *Store) runMigrationsWithSelfHeal(ctx context.Context, groups []*migrate
 // Tolerates collection-not-found so the helper is safe to invoke on
 // a deployment that never had the tracking collections at all.
 func (s *Store) resetMigrationTracking(ctx context.Context) error {
-	for _, col := range []string{"grove_migrations", "grove_migration_locks"} {
+	for _, col := range []string{"grove_migrations", mongomigrateLockCollection} {
 		if err := s.mdb.Collection(col).Drop(ctx); err != nil {
 			// NamespaceNotFound (code 26) means the collection didn't
 			// exist — that's fine.

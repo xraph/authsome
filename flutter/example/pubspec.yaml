@@ -1,0 +1,32 @@
+name: authsome_example
+description: Runnable demo app for the AuthSome Flutter packages.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.10.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  authsome_core: '>=0.1.0 <2.0.0'
+  authsome_flutter: '>=0.1.0 <2.0.0'
+  authsome_flutter_ui: '>=0.1.0 <2.0.0'
+  go_router: ^14.0.0
+  flutter_dotenv: ^5.2.1
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env

@@ -28,6 +28,7 @@ export 'src/widgets/error_display.dart';
 export 'src/widgets/loading_indicator.dart';
 export 'src/widgets/or_divider.dart';
 export 'src/widgets/otp_input.dart';
+export 'src/widgets/passkey_login_button.dart';
 export 'src/widgets/password_input.dart';
 export 'src/widgets/social_buttons.dart';
 

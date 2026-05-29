@@ -5,12 +5,10 @@ contributor:
     supports: [v1]
     preferred: v1
   capabilities: [auth.read, auth.write]
-  # Library contributor for now. The /plans page and /plans/:id detail
-  # stay declared on the auth contributor's manifest. Subscriptions is
-  # likely to graduate to an app-owning contributor (slug: billing)
-  # once the broader subscription dashboard (invoices/coupons/features)
-  # lands; for now keep the surface minimal so the move from auth →
-  # plugin is a no-op for users.
+  # Library contributor for now. /plans + /plans/:id live here so the
+  # nav entry only renders when the subscription plugin is loaded —
+  # otherwise the bound `plans.list` / `plans.detail` queries would
+  # 404 at the dispatcher.
 
 intents:
   - { name: plans.list,         kind: query,   version: 1, capability: read  }
@@ -18,3 +16,53 @@ intents:
   - { name: plans.archive,      kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
   - { name: plans.activate,     kind: command, version: 1, capability: write, invalidates: [plans.list, plans.detail] }
   - { name: subscriptions.list, kind: query,   version: 1, capability: read  }
+
+queries:
+  planList:
+    intent: plans.list
+    cache: { staleTime: 60s }
+
+graph:
+  - route: /plans
+    intent: page.shell
+    title: Plans
+    nav: { group: Configuration, icon: package, priority: 2 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.planList
+          props:
+            columns:
+              - { field: name,        label: Name }
+              - { field: slug,        label: Slug }
+              - { field: currency,    label: Currency }
+              - { field: status,      label: Status }
+              - { field: trialDays,   label: "Trial days" }
+              - { field: description, label: Description }
+            emptyMessage: "No plans yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Activate
+                      op: plans.activate
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.button
+                      title: Archive
+                      op: plans.archive
+                      payload:
+                        id: { from: parent.id }
+
+  - route: /plans/:id
+    intent: page.shell
+    title: Plan
+    slots:
+      main:
+        - intent: resource.detail
+          data:
+            intent: plans.detail
+            params:
+              id: { from: route.id }

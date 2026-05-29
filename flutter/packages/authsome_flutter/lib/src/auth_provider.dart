@@ -93,6 +93,7 @@ class AuthNotifier extends ChangeNotifier {
       return (_state as AuthAuthenticated).session;
     }
     if (_state is AuthMfaRequired) {
+      // ignore: deprecated_member_use
       return (_state as AuthMfaRequired).session;
     }
     return null;
@@ -123,13 +124,38 @@ class AuthNotifier extends ChangeNotifier {
   /// Sign out.
   Future<void> signOut() => _manager.signOut();
 
-  /// Submit MFA code.
+  /// Submit MFA code using the ticket carried by [AuthMfaRequired].
+  /// Mirrors React `auth.ts` `submitMFAChallenge(code)`.
+  Future<void> submitMFAChallenge(String code) =>
+      _manager.submitMFAChallenge(code);
+
+  /// Legacy MFA submission keyed by enrollment ID.
+  @Deprecated('Use submitMFAChallenge(code) which reads the ticket from state')
   Future<void> submitMFACode(String enrollmentId, String code) =>
       _manager.submitMFACode(enrollmentId, code);
 
   /// Submit MFA recovery code.
   Future<void> submitRecoveryCode(String code) =>
       _manager.submitRecoveryCode(code);
+
+  /// Resend the email-verification message for [email].
+  Future<void> resendVerification(String email) =>
+      _manager.resendVerification(email);
+
+  /// Verify the email-confirmation OTP / token.
+  Future<void> verifyEmail(String token) => _manager.verifyEmail(token);
+
+  /// Run a passkey sign-in ceremony. The default
+  /// [PasskeyAuthenticator] is web-only; on iOS/Android consumers can
+  /// pass a custom one (e.g. backed by the `passkeys` corbado package).
+  Future<void> signInWithPasskey({
+    required PasskeyAuthenticator authenticator,
+    String? email,
+  }) =>
+      _manager.signInWithPasskey(
+        authenticator: authenticator,
+        email: email,
+      );
 
   /// Send SMS code for MFA verification.
   Future<SmsSendResult> sendSMSCode() => _manager.sendSMSCode();
@@ -168,17 +194,34 @@ class AuthNotifier extends ChangeNotifier {
 /// )
 /// ```
 class AuthProvider extends StatefulWidget {
-  /// Auth configuration.
-  final AuthConfig config;
+  /// Auth configuration. Null when the widget was constructed via
+  /// [AuthProvider.test] with a pre-built notifier.
+  final AuthConfig? config;
+
+  /// Externally supplied notifier (test seam). When non-null, the provider
+  /// uses it directly instead of constructing one from [config] and will
+  /// NOT dispose it (ownership remains with the test).
+  final AuthNotifier? injectedNotifier;
 
   /// Child widget.
   final Widget child;
 
   const AuthProvider({
-    required this.config,
+    required AuthConfig this.config,
     required this.child,
     super.key,
-  });
+  }) : injectedNotifier = null;
+
+  /// Test-only constructor that wires a pre-built [AuthNotifier] directly
+  /// into the inherited scope. Lets widget tests assert on resolution via
+  /// [BuildContext.auth] without spinning up a real HTTP client.
+  @visibleForTesting
+  const AuthProvider.test({
+    required AuthNotifier notifier,
+    required this.child,
+    super.key,
+  })  : config = null,
+        injectedNotifier = notifier;
 
   /// Get the [AuthNotifier] from the widget tree.
   ///
@@ -209,18 +252,25 @@ class AuthProvider extends StatefulWidget {
 
 class _AuthProviderState extends State<AuthProvider> {
   late AuthNotifier _notifier;
+  bool _ownsNotifier = true;
 
   @override
   void initState() {
     super.initState();
-    _notifier = AuthNotifier(widget.config);
-    // Hydrate from storage on mount (matches React useEffect).
-    _notifier.initialize();
+    final injected = widget.injectedNotifier;
+    if (injected != null) {
+      _notifier = injected;
+      _ownsNotifier = false;
+    } else {
+      _notifier = AuthNotifier(widget.config!);
+      // Hydrate from storage on mount (matches React useEffect).
+      _notifier.initialize();
+    }
   }
 
   @override
   void dispose() {
-    _notifier.dispose();
+    if (_ownsNotifier) _notifier.dispose();
     super.dispose();
   }
 

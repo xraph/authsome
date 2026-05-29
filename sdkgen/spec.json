@@ -13733,6 +13733,202 @@
         ]
       }
     },
+    "/v1/admin/users/copy": {
+      "post": {
+        "description": "Provisions a new user record in target_app_id reusing the source user's email, profile, and stored password hash. The duplicated user can authenticate with their original password. 409 when the target app already has a user with the same email. Requires platform-admin role.",
+        "operationId": "adminCopyUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "env_id": {
+                    "description": "Optional target environment; falls back to the App's default environment",
+                    "type": "string"
+                  },
+                  "source_user_id": {
+                    "description": "User to duplicate",
+                    "type": "string"
+                  },
+                  "target_app_id": {
+                    "description": "Authsome App that will hold the duplicate",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source_user_id",
+                  "target_app_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Copied user"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "code": {
+                      "description": "HTTP status code",
+                      "type": "integer"
+                    },
+                    "details": {
+                      "description": "Additional error details",
+                      "type": "string"
+                    },
+                    "error": {
+                      "description": "Error message",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Copy user to another app (admin)",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/admin/users/create": {
       "post": {
         "description": "Creates a new user without going through the signup flow. The user is created with email verified. Requires admin role.",
@@ -36208,6 +36404,15 @@
             "required": true,
             "schema": {
               "description": "User identifier",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional app scope; defaults to the platform app",
+            "in": "query",
+            "name": "app_id",
+            "schema": {
+              "description": "Optional app scope; defaults to the platform app",
               "type": "string"
             }
           }

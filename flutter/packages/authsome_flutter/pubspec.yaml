@@ -14,8 +14,14 @@ resolution: workspace
 dependencies:
   flutter:
     sdk: flutter
-  authsome_core: ^0.1.0
+  authsome_core: '>=0.1.0 <2.0.0'
   flutter_secure_storage: ^9.0.0
+  # Web-only typed bindings for navigator.credentials.get. The package is
+  # safe to depend on cross-platform — symbols are no-ops outside of Web.
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.4

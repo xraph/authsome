@@ -16,15 +16,17 @@ func TestManifest_Loads(t *testing.T) {
 	if m.Contributor.Name != "auth" {
 		t.Errorf("contributor name = %q, want auth", m.Contributor.Name)
 	}
-	// 59 intents: 56 prior + 3 from Phase C.14 (auth.signup,
-	// auth.forgotPassword, auth.resetPassword).
-	if got := len(m.Intents); got != 59 {
-		t.Errorf("intents = %d, want 59 (with C.14 auth pages)", got)
+	// 68 intents: 66 prior + 2 new feature-toggle intents
+	// (auth.featureToggles, auth.toggleFeature). apikeys.* are owned
+	// by the apikey plugin manifest, not declared here.
+	if got := len(m.Intents); got != 68 {
+		t.Errorf("intents = %d, want 68 (with feature toggles)", got)
 	}
-	// 31 top-level graph routes: 28 prior + Phase C.14 /signup,
-	// /forgot-password, /reset-password.
-	if got := len(m.Graph); got != 31 {
-		t.Errorf("graph routes = %d, want 31 (with C.14 anonymous auth pages)", got)
+	// 28 top-level graph routes: 32 prior - 4 routes that moved to
+	// their owning plugins (/organizations, /organizations/:id, /plans,
+	// /plans/:id).
+	if got := len(m.Graph); got != 28 {
+		t.Errorf("graph routes = %d, want 28 (org + plan pages moved to plugins)", got)
 	}
 }
 

@@ -20,8 +20,8 @@ func TestManifest_Loads(t *testing.T) {
 	if got := len(m.Intents); got != 7 {
 		t.Errorf("intents = %d, want 7 (list/detail/create/update/delete/members/removeMember)", got)
 	}
-	if got := len(m.Graph); got != 0 {
-		t.Errorf("graph routes = %d, want 0 (page stays on auth contributor)", got)
+	if got := len(m.Graph); got != 3 {
+		t.Errorf("graph routes = %d, want 3 (/organizations + /:id + /create)", got)
 	}
 }
 
