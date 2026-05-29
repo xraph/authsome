@@ -326,10 +326,10 @@ func setupHandler(deps Deps) func(ctx context.Context, in SetupInput, _ contract
 // the FieldSpec list the auth.dynamic-signup-form renderer feeds into
 // organism.dynamic-form.
 type DynamicConfigResponse struct {
-	Title       string                `json:"title,omitempty"`
-	Description string                `json:"description,omitempty"`
+	Title       string                 `json:"title,omitempty"`
+	Description string                 `json:"description,omitempty"`
 	Fields      []formconfig.FormField `json:"fields,omitempty"`
-	Active      bool                  `json:"active"`
+	Active      bool                   `json:"active"`
 }
 
 // DynamicRegisterInput is the wire shape for auth.dynamicRegister.

@@ -1,0 +1,49 @@
+schemaVersion: 1
+contributor:
+  name: consent
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+  # Library contributor. The /compliance/consent page lives here so
+  # admins can audit + revoke consent records app-wide.
+
+intents:
+  - { name: consent.list,         kind: query,   version: 1, capability: read  }
+  - { name: consent.userConsents, kind: query,   version: 1, capability: read  }
+  - { name: consent.grant,        kind: command, version: 1, capability: write, invalidates: [consent.list, consent.userConsents] }
+  - { name: consent.revoke,       kind: command, version: 1, capability: write, invalidates: [consent.list, consent.userConsents] }
+
+queries:
+  consentList:
+    intent: consent.list
+    cache: { staleTime: 30s }
+
+graph:
+  - route: /compliance/consent
+    intent: page.shell
+    title: Consent
+    nav: { group: Compliance, icon: shield-check, priority: 0 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.consentList
+          props:
+            columns:
+              - { field: purpose,   label: Purpose }
+              - { field: userId,    label: User }
+              - { field: granted,   label: Granted }
+              - { field: version,   label: Version }
+              - { field: grantedAt, label: "Granted at" }
+            emptyMessage: "No consent records yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Revoke
+                      op: consent.revoke
+                      payload:
+                        userId:  { from: parent.userId }
+                        purpose: { from: parent.purpose }

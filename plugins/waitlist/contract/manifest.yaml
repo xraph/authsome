@@ -1,0 +1,59 @@
+schemaVersion: 1
+contributor:
+  name: waitlist
+  envelope:
+    supports: [v1]
+    preferred: v1
+  capabilities: [auth.read, auth.write]
+  # Library contributor. /waitlist hosts the admin review queue.
+
+intents:
+  - { name: waitlist.list,    kind: query,   version: 1, capability: read  }
+  - { name: waitlist.detail,  kind: query,   version: 1, capability: read  }
+  - { name: waitlist.approve, kind: command, version: 1, capability: write, invalidates: [waitlist.list, waitlist.counts, waitlist.detail] }
+  - { name: waitlist.reject,  kind: command, version: 1, capability: write, invalidates: [waitlist.list, waitlist.counts, waitlist.detail] }
+  - { name: waitlist.delete,  kind: command, version: 1, capability: write, invalidates: [waitlist.list, waitlist.counts] }
+  - { name: waitlist.counts,  kind: query,   version: 1, capability: read  }
+
+queries:
+  waitlistList:
+    intent: waitlist.list
+    cache: { staleTime: 30s }
+
+graph:
+  - route: /waitlist
+    intent: page.shell
+    title: Waitlist
+    nav: { group: Compliance, icon: clock, priority: 1 }
+    slots:
+      main:
+        - intent: resource.list
+          data: queries.waitlistList
+          props:
+            columns:
+              - { field: email,     label: Email }
+              - { field: name,      label: Name }
+              - { field: status,    label: Status }
+              - { field: createdAt, label: Created }
+            emptyMessage: "No waitlist entries yet."
+          slots:
+            rowActions:
+              - intent: action.menu
+                slots:
+                  items:
+                    - intent: action.button
+                      title: Approve
+                      op: waitlist.approve
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.button
+                      title: Reject
+                      op: waitlist.reject
+                      payload:
+                        id: { from: parent.id }
+                    - intent: action.divider
+                    - intent: action.button
+                      title: Delete
+                      op: waitlist.delete
+                      payload:
+                        id: { from: parent.id }

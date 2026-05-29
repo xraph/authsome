@@ -236,4 +236,3 @@ func isKnownFeature(key string) bool {
 	}
 	return false
 }
-
